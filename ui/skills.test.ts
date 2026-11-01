@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { clearCache } from "./api/skills.ts";
-import { serve } from "./server.ts";
+import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/skills.js";
 // @ts-ignore
@@ -12,8 +12,7 @@ import { view as skillView } from "./views/skill.js";
 const today = new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number, time = "10:00:00") => new Date(Date.parse(today) - n * 86400_000).toISOString().slice(0, 10) + `T${time}.000Z`;
 
-let tmp: string, lf: ReturnType<typeof Bun.serve>, app: Awaited<ReturnType<typeof serve>>, down = false, hits = 0, asked: URL[] = [];
-const saved: Record<string, string | undefined> = {};
+let tmp: string, lf: ReturnType<typeof Bun.serve>, stopApp: () => void, restoreEnv: () => void, appAt: (path: string) => Promise<Response>, down = false, hits = 0, asked: URL[] = [];
 const ob = (o: any): any => ({ type: o.name === "turn" ? "AGENT" : "TOOL", level: "DEFAULT", ...o });
 const observations = [
   // t1: aleph project, Skill tool call, then Read + Bash + a failing Edit in the same turn; Read before the skill does not count
@@ -70,19 +69,16 @@ beforeAll(async () => {
       return new Response("not found", { status: 404 });
     },
   });
-  for (const [k, val] of Object.entries({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SKILLS_DIR: join(tmp, "skills"), ALEPH_SKILLS_STORE: join(tmp, "store.json"), ALEPH_REPOS: join(tmp, "repos.json") })) {
-    saved[k] = process.env[k];
-    process.env[k] = val;
-  }
-  app = await serve(0, { warm: false });
+  restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SKILLS_DIR: join(tmp, "skills"), ALEPH_SKILLS_STORE: join(tmp, "store.json"), ALEPH_REPOS: join(tmp, "repos.json") });
+  ({ stop: stopApp, at: appAt } = await withServer({ warm: false }));
 });
 afterAll(() => {
-  app.stop(true); lf.stop(true);
-  for (const [k, val] of Object.entries(saved)) val === undefined ? delete process.env[k] : (process.env[k] = val);
+  stopApp(); lf.stop(true);
+  restoreEnv();
 });
 beforeEach(() => { clearCache(); rmSync(join(tmp, "store.json"), { force: true }); down = false; asked = []; });
 
-const get = async (p: string) => { const r = await fetch(`http://127.0.0.1:${app.port}${p}`); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
+const get = async (p: string) => { const r = await appAt(p); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
 test("a Skill tool call and a slash command each count as one use", async () => {
   const { status, body } = await get("/api/skills");
@@ -244,23 +240,22 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
       return Response.json({ data: u.pathname === "/api/public/traces" && page === 1 ? traces : data, meta: { totalPages: 4 } });
     },
   });
-  const before = process.env.LANGFUSE_BASE_URL;
-  process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${paged.port}`;
+  const restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${paged.port}` });
   clearCache();
-  const warmed = await serve(0);
+  const { server: warmed, at, stop } = await withServer();
   try {
     await warmed.warmed["skills.ts"]; // the end of the skills warm-up, not a clock
     expect(calls).toBe(12); // 3 lists x 4 pages
     expect(peak["/api/public/traces"]).toBeGreaterThan(1);
     expect(peak["/api/public/observations"]).toBeGreaterThan(1);
     const seen = calls;
-    const r = await fetch(`http://127.0.0.1:${warmed.port}/api/skills`);
+    const r = await at("/api/skills");
     expect(r.status).toBe(200);
     expect(((await r.json()) as any).skills.length).toBeGreaterThan(0);
     expect(calls).toBe(seen);
   } finally {
-    warmed.stop(true); paged.stop(true);
-    process.env.LANGFUSE_BASE_URL = before;
+    stop(); paged.stop(true);
+    restoreEnv();
   }
 });
 

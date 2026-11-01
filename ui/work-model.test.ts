@@ -6,7 +6,7 @@ import { readList, writeList } from "../todo/lib/store.ts";
 import { add, addPart, find, setStatus } from "../todo/lib/todo.ts";
 import { writeAsk } from "../jobs/lib/ask.ts";
 import { state } from "./state.ts";
-import { serve } from "./server.ts";
+import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import { renderLanes, renderNeeds } from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
@@ -14,9 +14,8 @@ import { renderIssue } from "./views/issues.js";
 
 // /api/state on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).
-let base: string, runsDir: string, factory: string, server: Awaited<ReturnType<typeof serve>>;
+let base: string, runsDir: string, factory: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const getJson = async (p: string) => (await fetch(`http://127.0.0.1:${server.port}${p}`)).json() as Promise<any>;
-const saved: Record<string, string | undefined> = {};
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 const sh = (cwd: string, ...args: string[]) => {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -47,10 +46,7 @@ beforeAll(async () => {
   sh(store, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(store, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, checks: [] } }));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: runsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: store, ALEPH_FACTORY_DIR: factory })) {
-    saved[k] = process.env[k]; process.env[k] = v;
-  }
-  Object.assign(process.env, gitEnv);
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: store, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     // fac-1: three goals; .1 is done, .2 builds, .3 runs after .2.
     const one = add(doc, "Three goals", { request: "Do three things.\n" });
@@ -71,11 +67,11 @@ beforeAll(async () => {
   run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", condition: "awaiting", on: "fac-5", ask: { kind: "input", reason: "triage-failed", question: "Triage gave no verdict.", options: [], why: [] } });
   run("20261031-000003-fac-fac-2.1-build", { kind: "build", job: "fac-2.1-r", name: "fac-2.1-r", condition: "awaiting", on: "fac-2.1", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "ask", reason: "judgement" } });
   run("20261031-000004-fac-fac-1.1-build", { kind: "build", job: "fac-1.1", name: "fac-1.1", condition: "landed", on: "fac-1.1", commit: "abcdef1234567", ended: ago(1) });
-  server = await serve(0, { warm: false });
+  ({ server, stop } = await withServer({ warm: false }));
 });
 afterAll(() => {
-  server?.stop(true);
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  stop?.();
+  restoreEnv?.();
   rmSync(base, { recursive: true, force: true });
 });
 

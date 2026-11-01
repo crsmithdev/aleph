@@ -2,24 +2,24 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serve } from "./server.ts";
+import { withEnv, withServer } from "./test-server.ts";
 
 let dir: string;
-const saved: Record<string, string | undefined> = {};
-const servers: Awaited<ReturnType<typeof serve>>[] = [];
+let restoreEnv: () => void;
+const stops: (() => void)[] = [];
 const sessions = () => join(dir, "ui-sessions.json");
 const tokens = () => (existsSync(sessions()) ? JSON.parse(readFileSync(sessions(), "utf8")) : []);
-const start = async () => { const s = await serve(0, { warm: false }); servers.push(s); return (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${s.port}${p}`, init); };
+const start = async () => { const s = await withServer({ warm: false }); stops.push(s.stop); return s.at; };
 const login = (at: Awaited<ReturnType<typeof start>>, password: string) =>
   at("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "aleph-ui-auth-"));
-  for (const [k, v] of Object.entries({ ALEPH_UI_PASSWORD: "hunter2", ALEPH_FACTORY_DIR: dir, ALEPH_JOBS_DIR: join(dir, "jobs"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_ISSUES: join(dir, "items") })) { saved[k] = process.env[k]; process.env[k] = v; }
+  restoreEnv = withEnv({ ALEPH_UI_PASSWORD: "hunter2", ALEPH_FACTORY_DIR: dir, ALEPH_JOBS_DIR: join(dir, "jobs"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_ISSUES: join(dir, "items") });
 });
 afterAll(() => {
-  for (const s of servers) s.stop(true);
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  for (const stop of stops) stop();
+  restoreEnv();
   rmSync(dir, { recursive: true, force: true });
 });
 

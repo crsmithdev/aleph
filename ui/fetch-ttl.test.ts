@@ -5,11 +5,11 @@ import { join } from "node:path";
 import { add } from "../todo/lib/todo.ts";
 import { cacheFetches, readFetched, readList, readLists, uiFetchTtl, writeList } from "../todo/lib/store.ts";
 import { routes } from "./api/issues.ts";
-import { serve } from "./server.ts";
+import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
-const saved: Record<string, string | undefined> = {};
+let restoreEnv: () => void;
 const fetches = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "fetch").length;
 const doneCount = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "done").length;
 /** Wait until every fetch the shim has logged has ended. */
@@ -40,15 +40,12 @@ beforeAll(() => {
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), name, job: name, repo, on: `${repo}-1` }));
   }
-  for (const [k, v] of Object.entries({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "30" })) {
-    saved[k] = process.env[k];
-    process.env[k] = v;
-  }
+  restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "30" });
   cacheFetches(uiFetchTtl());
 });
 afterAll(() => {
   cacheFetches(0);
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -136,8 +133,8 @@ test("with the cache on and warm, a write fetches synchronously once and a read 
 
 test("serve() leaves the cache off: only the UI process turns it on, in its main block", async () => {
   cacheFetches(0);
-  const server = await serve(0, { warm: false });
-  server.stop();
+  const { stop } = await withServer({ warm: false });
+  stop();
   const before = fetches();
   readList({ key: "a" });
   readList({ key: "a" });

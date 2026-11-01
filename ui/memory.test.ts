@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync 
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serve } from "./server.ts";
+import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { clearCache, warm } from "./api/memory.ts";
 // @ts-ignore plain JS, shared with the page
 import { md } from "./lib.js";
@@ -12,8 +12,7 @@ import * as v from "./views/memory.js";
 // @ts-ignore
 import { view as noteView } from "./views/memory-note.js";
 
-let base: string, server: Awaited<ReturnType<typeof serve>>;
-const saved: Record<string, string | undefined> = {};
+let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const at = (p: string) => fetch(`http://127.0.0.1:${server.port}${p}`);
 const today = new Date().toISOString().slice(0, 10);
 
@@ -38,10 +37,10 @@ beforeAll(async () => {
   mkdirSync(hand);
   writeFileSync(join(hand, "current.md"), "# Handoff\n\n## Intent\n\nFinish the memory tab.\n");
   writeFileSync(join(hand, "2026-10-01-120000-x.md"), "## Intent\nOld work.\n");
-  saved.ALEPH_HANDOFFS_DIR = process.env.ALEPH_HANDOFFS_DIR; process.env.ALEPH_HANDOFFS_DIR = hand;
+  const restoreHandoffs = withEnv({ ALEPH_HANDOFFS_DIR: hand });
   writeFileSync(join(root, "daily", `${today}.md`), `# ${today}\n\n- 10:00 write [[Use Bun]] — why\n- 10:05 write [[Other trap]] — why\n`);
   // A closed port makes `vault misses` fail whatever keys a dotenv file supplies; the cache is cleared so no answer from an earlier file in this worker is served.
-  for (const [k, val] of Object.entries({ ALEPH_VAULT: root, LANGFUSE_BASE_URL: "http://127.0.0.1:9", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" })) { saved[k] = process.env[k]; process.env[k] = val; }
+  const restoreVault = withEnv({ ALEPH_VAULT: root, LANGFUSE_BASE_URL: "http://127.0.0.1:9", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" });
   // memoryTypes reads the repo registry, the work store and the job runs: point them at small fixtures so the first request is quick and the TTL test's clock is not spent on the network or ~/.aleph.
   const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd, stdio: "ignore" });
   git(base, "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
@@ -50,13 +49,14 @@ beforeAll(async () => {
   git(join(base, "items"), "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), "{}");
   mkdirSync(join(base, "jobs"));
-  for (const [k, val] of Object.entries({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") })) { saved[k] = process.env[k]; process.env[k] = val; }
+  const restoreStore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") });
+  restoreEnv = () => { restoreStore(); restoreVault(); restoreHandoffs(); };
   clearCache();
-  server = await serve(0);
+  ({ server, stop } = await withServer());
 });
 afterAll(() => {
-  server.stop(true);
-  for (const [k, val] of Object.entries(saved)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
+  stop();
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 

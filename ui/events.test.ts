@@ -2,28 +2,23 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serve } from "./server.ts";
+import { withEnv, withServer, type TestServer } from "./test-server.ts";
 
 let base: string, runs: string, factory: string, ref: string;
-let server: Awaited<ReturnType<typeof serve>>;
-const saved: Record<string, string | undefined> = {};
-const KEYS = ["ALEPH_JOBS_DIR", "ALEPH_ISSUES", "ALEPH_FACTORY_DIR"];
+let server: TestServer, stop: () => void, restoreEnv: () => void;
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-events-"));
   runs = join(base, "runs"); factory = join(base, "factory");
   ref = join(base, "issues", ".git", "refs", "remotes", "origin");
   for (const d of [join(runs, "old"), factory, ref]) mkdirSync(d, { recursive: true });
-  for (const k of KEYS) saved[k] = process.env[k];
-  process.env.ALEPH_JOBS_DIR = runs;
-  process.env.ALEPH_ISSUES = join(base, "issues");
-  process.env.ALEPH_FACTORY_DIR = factory;
-  server = await serve(0, { warm: false });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runs, ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
+  ({ server, stop } = await withServer({ warm: false }));
 });
 
 afterAll(() => {
-  server.stop(true);
-  for (const k of KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+  stop();
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 

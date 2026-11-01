@@ -6,7 +6,7 @@ import { readList, setAsk, writeList } from "../todo/lib/store.ts";
 import { add, addPart, setStatus, type Doc } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
 import { readAsk } from "../jobs/lib/ask.ts";
-import { serve } from "./server.ts";
+import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
 // @ts-ignore
@@ -15,8 +15,7 @@ import { view as issueView } from "./views/issue.js";
 /** An item stored as a goal: `kind: goal` on a plain number. */
 const seedGoal = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
 
-let base: string, server: Awaited<ReturnType<typeof serve>>, jobsDir: string, argvFile: string, stdinFile: string;
-const saved: Record<string, string | undefined> = {};
+let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, jobsDir: string, argvFile: string, stdinFile: string;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -59,11 +58,7 @@ beforeAll(async () => {
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > ${argvFile}\ncat > ${stdinFile}\necho '{"repo":"fac","added":7}'\n`);
   chmodSync(fake, 0o755);
-  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake })) {
-    saved[k] = process.env[k];
-    process.env[k] = val;
-  }
-  Object.assign(process.env, gitEnv);
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     seedGoal(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
     add(doc, "plain task", { labels: ["bug"] });
@@ -75,11 +70,11 @@ beforeAll(async () => {
   writeList({ key: "oth" }, "seed", (doc) => { add(doc, "other thing"); return true; }, true);
   run("20261027-000001-a", { job: "fac-1", name: "fac-1", repo: "fac", condition: "landed", on: "fac-1" });
   run("20261027-000002-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "running", on: "oth-1" });
-  server = await serve(0, { warm: false });
+  ({ server, stop } = await withServer({ warm: false }));
 });
 afterAll(() => {
-  server.stop(true);
-  for (const [k, val] of Object.entries(saved)) if (val === undefined) delete process.env[k]; else process.env[k] = val;
+  stop();
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 

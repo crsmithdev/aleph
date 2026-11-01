@@ -4,20 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
 import { add } from "../todo/lib/todo.ts";
-import { serve } from "./server.ts";
+import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 // @ts-ignore plain JS, shared with the page
 import { view as oneView } from "./views/project.js";
 
-let base: string, server: Awaited<ReturnType<typeof serve>>;
-const saved: Record<string, string | undefined> = {};
+let base: string, stop: () => void, restoreEnv: () => void, at: (path: string) => Promise<Response>;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
   return p.stdout.toString().trim();
 }
-const at = (p: string) => fetch(`http://127.0.0.1:${server.port}${p}`);
 const note = (kind: string, scope: string, updated: string) =>
   `---\nkind: ${kind}\nscope: ${scope}\nconfidence: measured\nupdated: ${updated}\nsupersedes: []\nsources: []\n---\nbody\n`;
 
@@ -53,21 +51,17 @@ beforeAll(async () => {
   writeFileSync(join(vault, "wiki", "A fact.md"), note("concept", "fac", "2026-10-01"));
   writeFileSync(join(vault, "wiki", "B fact.md"), note("gotcha", "fac", "2026-10-20"));
   writeFileSync(join(vault, "wiki", "C fact.md"), note("concept", "plain", "2026-10-05"));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_VAULT: vault })) {
-    saved[k] = process.env[k];
-    process.env[k] = v;
-  }
-  Object.assign(process.env, gitEnv);
+  restoreEnv = withEnv({ ...gitEnv, ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_VAULT: vault });
   writeList({ key: "fac" }, "seed", (doc) => {
     add(doc, "a goal", { spec: "Do it." });
     add(doc, "plain issue");
     return true;
   }, true);
-  server = await serve(0, { warm: false });
+  ({ stop, at } = await withServer({ warm: false }));
 });
 afterAll(() => {
-  server.stop(true);
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  stop();
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 

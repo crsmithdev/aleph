@@ -4,18 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { add } from "../todo/lib/todo.ts";
 import { writeList } from "../todo/lib/store.ts";
-import { serve } from "./server.ts";
+import { withEnv, withServer } from "./test-server.ts";
 import { stateBuilds } from "./state-load.ts";
 
 // /api/state is built in a worker (ui/state-load.ts). ALEPH_STATE_SLOW_MS makes each build sleep that long first, so the
 // assertions on the timer, the shared builds and the fresh state hold whatever the machine's speed.
 const SLOW = 800;
 
-let base: string, jobs: string, server: Awaited<ReturnType<typeof serve>>;
-const saved: Record<string, string | undefined> = {};
+let base: string, jobs: string, stop: () => void, restoreEnv: () => void, at: (path: string) => Promise<Response>;
 const ident = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd, env: { ...process.env, ...ident } }); if (p.exitCode) throw new Error(p.stderr.toString()); };
-const get = (p = "/api/state") => fetch(`http://127.0.0.1:${server.port}${p}`);
+const get = (p = "/api/state") => at(p);
 const names = (body: any): string[] => body.running.map((j: any) => j.name).sort();
 
 let seq = 0;
@@ -37,18 +36,15 @@ beforeAll(async () => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ demo: { path: repo, main: "main", sandbox: true, checks: [] } }));
-  for (const [k, v] of Object.entries({ ...ident, ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_STATE_SLOW_MS: String(SLOW) })) {
-    saved[k] = process.env[k];
-    process.env[k] = v;
-  }
+  restoreEnv = withEnv({ ...ident, ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_STATE_SLOW_MS: String(SLOW) });
   writeList({ key: "demo" }, "fixture", (doc) => { add(doc, "a goal", { request: "## Goal\nx" }); return true; }, true);
   writeRun("demo-1");
-  server = await serve(0, { warm: false });
+  ({ stop, at } = await withServer({ warm: false }));
 });
 
 afterAll(() => {
-  server.stop(true);
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  stop();
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 

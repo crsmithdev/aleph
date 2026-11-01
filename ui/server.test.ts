@@ -2,11 +2,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serve } from "./server.ts";
+import { withEnv, withServer, type TestServer } from "./test-server.ts";
 
-let base: string, server: Awaited<ReturnType<typeof serve>>, pageDir: string, apiDir: string;
-const saved: Record<string, string | undefined> = {};
-const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.port}${p}`, init);
+let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, pageDir: string, apiDir: string;
 
 const run = (o: object) => JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), ...o });
 
@@ -18,21 +16,18 @@ beforeAll(async () => {
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "state.json"), run({ name, job: name, repo }));
   }
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") })) {
-    saved[k] = process.env[k];
-    process.env[k] = v;
-  }
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
   // A view added the way a view goal adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
   for (const f of ["index.html", "lib.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
   mkdirSync(apiDir);
   writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "work", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
   writeFileSync(join(apiDir, "_test.ts"), `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
-  server = await serve(0, { warm: false, pageDir, apiDir });
+  ({ server, stop, at } = await withServer({ warm: false, pageDir, apiDir }));
 });
 afterAll(() => {
-  server.stop(true);
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  stop();
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -113,16 +108,15 @@ test("every API answer carries the server's version; the page and its modules ar
 
 test("x-aleph-login is on every API answer behind the gate, and absent without a password", async () => {
   expect((await at("/api/_test/x")).headers.get("x-aleph-login")).toBeNull();
-  process.env.ALEPH_UI_PASSWORD = "hunter2";
-  const gated = await serve(0, { warm: false });
+  const restorePassword = withEnv({ ALEPH_UI_PASSWORD: "hunter2" });
+  const { at: g, stop: stopGated } = await withServer({ warm: false });
   try {
-    const g = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${gated.port}${p}`, init);
     const ok = await g("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "hunter2" }) });
     const cookie = ok.headers.get("set-cookie")!.split(";")[0];
     expect((await g("/api/state", { headers: { cookie } })).headers.get("x-aleph-login")).toBe("1");
   } finally {
-    gated.stop(true);
-    delete process.env.ALEPH_UI_PASSWORD;
+    stopGated();
+    restorePassword();
   }
 });
 
@@ -130,8 +124,8 @@ test("x-aleph-version changes when a page file changes, is added or is removed",
   const pages = mkdtempSync(join(tmpdir(), "aleph-ui-pages-"));
   mkdirSync(join(pages, "views"));
   for (const f of ["index.html", "lib.js", "decision.js", "views/a.js"]) writeFileSync(join(pages, f), "one");
-  const s = await serve(0, { warm: false, pageDir: pages, apiDir });
-  const v = async () => (await fetch(`http://127.0.0.1:${s.port}/api/_test/x`)).headers.get("x-aleph-version");
+  const { at: atPages, stop: stopPages } = await withServer({ warm: false, pageDir: pages, apiDir });
+  const v = async () => (await atPages("/api/_test/x")).headers.get("x-aleph-version");
   try {
     const first = await v();
     expect(first).toBeTruthy();
@@ -145,7 +139,7 @@ test("x-aleph-version changes when a page file changes, is added or is removed",
     rmSync(join(pages, "views", "b.js"));
     expect(await v()).not.toBe(added);
   } finally {
-    s.stop(true);
+    stopPages();
     rmSync(pages, { recursive: true, force: true });
   }
 });

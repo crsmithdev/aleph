@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { serve } from "./server.ts";
+import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
 // @ts-ignore
@@ -13,8 +13,7 @@ function sh(cwd: string, ...args: string[]) {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
 }
-let base: string, server: Awaited<ReturnType<typeof serve>>;
-const saved: Record<string, string | undefined> = {};
+let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const getJson = async (p: string) => (await fetch(`http://127.0.0.1:${server.port}${p}`)).json() as Promise<any>;
 
 beforeAll(async () => {
@@ -33,16 +32,12 @@ beforeAll(async () => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ a: { path: a }, b: { path: b }, c: { path: c } }));
-  for (const [k, val] of Object.entries({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory") })) {
-    saved[k] = process.env[k];
-    process.env[k] = val;
-  }
-  Object.assign(process.env, gitEnv);
-  server = await serve(0, { warm: false });
+  restoreEnv = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ...gitEnv });
+  ({ server, stop } = await withServer({ warm: false }));
 });
 afterAll(() => {
-  server.stop(true);
-  for (const [k, val] of Object.entries(saved)) if (val === undefined) delete process.env[k]; else process.env[k] = val;
+  stop();
+  restoreEnv();
   rmSync(base, { recursive: true, force: true });
 });
 
