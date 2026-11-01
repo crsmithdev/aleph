@@ -87,6 +87,6 @@ test("links in the clone's fixture are not followed: nothing outside dest is wri
 test("the hand-written Status state has only keys that /api/state really sends", async () => {
   const real = await get("/api/state");
   const extra = (mine: object, theirs: object) => Object.keys(mine).filter((k) => !(k in theirs));
-  expect(extra(handWritten, real).filter((k) => k !== "needs")).toEqual([]);
+  expect(extra(handWritten, real)).toEqual([]);
   expect(extra(handWritten.factory, real.factory)).toEqual([]);
 });
