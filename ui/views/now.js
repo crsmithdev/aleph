@@ -123,6 +123,7 @@ const ALERTS = [
   [/ CI on main has failed/, "GitHub CI is broken"],
   [/main is red/, "the build is failing on main"],
   [/sandbox probe/, "the sandbox is broken"],
+  [/the factory tick has stopped/, "the factory tick has stopped"],
   [/^Held: /, JOBS_UNHEALTHY],
   [/did not land|land run of/, "lands are stuck"],
   [/can start, but no run started/, "queued jobs are not starting"],
@@ -253,11 +254,18 @@ export function renderNeeds(s) {
     group("awaiting", "Awaiting you", asks.length, asks.join(""), list) + group("jobs-stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
 }
 
+/** How long past due a next tick may be before the tick counts as dead: covers an old state and a late timer. */
+const TICK_GRACE_MS = 5 * 60_000;
+
 /** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */
 function errorLines(s) {
   const f = s.factory;
   const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l));
   if (f.probe && !f.probe.ok && !(f.health || []).some((l) => /probe/.test(l))) out.push(`the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
+  if (f.nextTick !== undefined && f.tickInProgress !== true) {
+    if (f.nextTick === null) out.push("the factory tick has stopped: aleph-tick.timer has no next run");
+    else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`the factory tick has stopped: aleph-tick.timer was due at ${f.nextTick}`);
+  }
   if (f.hold && !s.stuck.some((j) => f.hold.includes(j.name))) out.push(f.hold);
   return [...new Set(out)];
 }

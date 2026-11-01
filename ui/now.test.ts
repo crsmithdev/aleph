@@ -856,3 +856,20 @@ test("without the out-of-date input the sentence is unchanged", () => {
   expect(r.renderLede(calmState, false)).toBe(r.renderLede(calmState));
   expect(said({})).toBe("Everything is running smoothly.");
 });
+
+test("a dead factory tick says the alert, in red", () => {
+  const dead = "Alert: the factory tick has stopped.";
+  for (const o of [{ nextTick: null }, { nextTick: "2026-10-27T16:54:59Z" }]) {
+    expect(said(o)).toBe(dead);
+    expect(r.renderLede({ ...calmState, factory: { ...calmState.factory, ...o } })).toContain('class="say error"');
+  }
+  const fine = "Everything is running smoothly.";
+  for (const o of [{ nextTick: "2026-10-27T17:12:00Z" }, { nextTick: "2026-10-27T16:56:00Z" }, { nextTick: null, tickInProgress: true }, { nextTick: "2026-10-27T16:00:00Z", tickInProgress: true }]) expect(said(o)).toBe(fine);
+  expect(said({ paused: true, nextTick: null })).toBe("Alert: the factory tick has stopped; the factory is paused.");
+});
+
+test("the tick alert ranks after the probe and before the queued-jobs alert, and reads as a Check row", () => {
+  const o = { nextTick: null, probe: { at: "x", ok: false, failed: ["no network"] }, health: ["health: 2 goals can start, but no run started in 15 minutes"] };
+  expect(said(o)).toBe("Alert: the sandbox is broken; the factory tick has stopped; queued jobs are not starting.");
+  expect(withAttn(withFactory({ nextTick: null }))).toContain("Check: the factory tick has stopped: aleph-tick.timer has no next run");
+});
