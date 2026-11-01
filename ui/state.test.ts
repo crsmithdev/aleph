@@ -327,12 +327,14 @@ describe("the review fixture", () => {
       for (const key of Object.keys(registry)) {
         const doc = readList({ key })!;
         for (const item of doc.items) {
-          const id = `${key}-${item.id}`;
+          const id = `${key}-${refOf(item)}`;
           const p = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "status", id, "--json"], { env: { ...process.env, ...env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
           expect(p.exitCode, `${id}: ${p.stderr}`).toBe(0);
           const stage = JSON.parse(p.stdout.toString()).stage as string;
           stages[stage] = (stages[stage] ?? 0) + 1;
           if (incoming.has(id)) expect(incoming.get(id), id).toBe(stage);
+          // A part has no list entry of its own: the lists hold its parent.
+          if (item.sub !== undefined) continue;
           // A planned goal is held out of Waiting; a job's own list holds an item whose stage came from the job.
           const lists = held(id, key, item);
           const want = LIST_OF[stage];
@@ -348,7 +350,7 @@ describe("the review fixture", () => {
       for (const [k, v] of Object.entries(savedEnv)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
       rmSync(home, { recursive: true, force: true });
     }
-  // One `jobs/cli.ts status` process per fixture item (31 here, about 120 ms each), so it needs more than the 5 s default under load. Matches the 30 s the test script uses.
+  // One `jobs/cli.ts status` process per fixture item (34 here, about 120 ms each), so it needs more than the 5 s default under load. Matches the 30 s the test script uses.
   }, 30000);
 });
 

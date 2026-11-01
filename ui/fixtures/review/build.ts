@@ -7,7 +7,7 @@
 import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { writeList } from "../../../todo/lib/store.ts";
-import { add, note, setStatus } from "../../../todo/lib/todo.ts";
+import { add, addPart, note, setStatus } from "../../../todo/lib/todo.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };
@@ -33,7 +33,7 @@ function copyPlain(from: string, to: string): void {
   }
 }
 
-interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; due?: string; notes?: string[];
+interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; due?: string; notes?: string[]; parts?: { title: string; spec: string; status?: string }[];
   /** The new-shape fields, written as the item's own: `kind`, `source`, `route`, `issue`, `goals`, `after`, `areas`, `ask` and the ask's `reason` and `question`. */
   kind?: string; source?: string; route?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string }
 
@@ -88,6 +88,10 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
           for (const k of NEW_SHAPE) if (r[k] !== undefined) item.fm[k] = r[k];
           for (const n of r.notes ?? []) note(item, n);
           if (r.status && r.status !== "open") setStatus(item, r.status as "done" | "dropped");
+          for (const p of r.parts ?? []) {
+            const part = addPart(doc, item, { title: p.title, spec: p.spec });
+            if (p.status && p.status !== "open") setStatus(part, p.status as "done" | "dropped");
+          }
         }
         return true;
       }, true);

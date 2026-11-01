@@ -197,6 +197,22 @@
       "title": "Approve the schema change",
       "kind": "goal",
       "source": "chris"
+    },
+    {
+      "title": "Split the export into stages",
+      "source": "chris",
+      "body": "The export runs as one step, so a failure loses all of it.",
+      "parts": [
+        {
+          "title": "Write the export manifest",
+          "spec": "Write a manifest of the files an export will produce.",
+          "status": "done"
+        },
+        {
+          "title": "Export each file in turn",
+          "spec": "Export the files in the manifest one at a time."
+        }
+      ]
     }
   ],
   "tools": [
