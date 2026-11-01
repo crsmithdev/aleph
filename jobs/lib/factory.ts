@@ -15,7 +15,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, onOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
-import { allJobs, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { allJobs, checkedBy, lookMinutes, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { startReview } from "./review.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -637,7 +637,7 @@ const RERUN_OPTIONS = [
 ];
 
 type Case = "killed" | "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
-const INFRA = /^(job lock busy|fetch failed|systemd-run failed|worktree gone|bundle failed)/;
+const INFRA = /^(job lock busy|fetch failed|systemd-run failed|worktree gone|bundle failed|hidden checks unreadable)/;
 /** A baseline that has not answered yet (see `baseline`): the claim is waited on, not decided. */
 const UNCHECKED = /^main (is unchecked|baseline running)/;
 
@@ -1161,13 +1161,28 @@ function noteSource(title: string): string | undefined {
   return undefined;
 }
 
+/** Insertions plus deletions in a `git show --shortstat` line. */
+export const changedLinesOf = (stat: string): number =>
+  [...stat.matchAll(/(\d+) (?:insertion|deletion)/g)].reduce((a, m) => a + Number(m[1]), 0);
+
+/** The heading a run's report entry goes under. */
+const laneOf = (e: Entry): string =>
+  e.run.condition === "landed" ? "delivered" : isAwaiting(e.run.condition) ? "needs you" : e.run.condition === "stuck" || e.run.condition === "failed" ? "stuck" : "other";
+
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
   const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
   const head = `${r.repo}/${r.name} ${r.condition}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
-  if (r.condition === "landed" && r.commit) lines.push(`  commit ${r.commit.slice(0, 7)}`);
+  if (r.condition === "landed" && r.commit) {
+    lines.push(`  commit ${r.commit.slice(0, 7)}`);
+    const j = allJobs().find((x) => x[0].run.job === r.job);
+    if (j) lines.push(`  checked by: ${checkedBy(j).join(", ") || "nothing recorded"}`);
+    const repo = r.repo ? loadRegistry()[r.repo] : undefined;
+    const stat = repo ? git(repo.path, "show", "--shortstat", "--format=", r.commit).out : "";
+    if (stat) lines.push(`  look: about ${lookMinutes(changedLinesOf(stat), !!j?.some((x) => x.run.checks?.some((c) => c.name === "hidden" && c.total)))} min (estimate)`);
+  }
   if (needs === "held" || needs === "review") {
     if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
     lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
@@ -1255,7 +1270,11 @@ function cameDue(): string[] {
 /** The runs the report has not shown, oldest first; each is then marked shown, and the last line counts the day's runs. */
 function runLines(now: number): string[] {
   const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.condition !== "running" && !(isLive(e.folder) || isStarting(e)));
-  const lines = fresh.map(entry);
+  const lines: string[] = [];
+  for (const lane of ["delivered", "needs you", "stuck", "other"]) {
+    const here = fresh.filter((e) => laneOf(e) === lane);
+    if (here.length) lines.push(`${lane}:`, ...here.map(entry));
+  }
   for (const e of fresh) updateRun(e.folder, { shown: true });
   const today = runsToday(now);
   if (lines.length) lines.push(`runs in the last 24 hours: ${today.length} of ${DAY_CAP()}, ${money(spentToday(now))} at the API price${paused() ? "; the factory is paused" : ""}`);

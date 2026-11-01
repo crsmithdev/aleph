@@ -511,7 +511,7 @@ const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" dat
   `<button type="submit" class="cmd">Add note</button> <span class="form-msg" role="status"></span></form>`;
 
 /** Machine note prefixes, matched after the `- ` and the stamp are removed. */
-const MACHINE = /^(?:triage|acceptance|planner|standing|always|firefighter|its goals are all done):/;
+const MACHINE = /^(?:triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
 /** The notes a person or a run needs to read, which stay visible. */
 const READ = /^(?:triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
 /** True when a note line is a machine line: the prefix at the start of the text after the `- ` and the stamp. */

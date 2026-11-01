@@ -187,6 +187,8 @@ function hiddenDirs(key: string, id: number | string): string[] {
 export function readHidden(repo: Place, id: number | string): Record<string, string> {
   const dir = storeDir();
   fetch(dir);
+  // A failed ls-tree also means "no such folder", so an unreadable store has to be told apart first.
+  if (!git(dir, "rev-parse", "--verify", "-q", `origin/${MAIN}`).ok) throw new Error(`no origin/${MAIN} in the work store`);
   for (const where of hiddenDirs(repo.key, id)) {
     const ls = git(dir, "ls-tree", "--name-only", `origin/${MAIN}:${where}`);
     const names = ls.ok ? ls.out.split("\n").filter(Boolean) : [];

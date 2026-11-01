@@ -117,6 +117,19 @@ export interface JobView {
   lost?: true;
 }
 
+/** What checked a job, in the order it ran: its checks, then the reviewers that left a file. Deterministic checks and model judges are named apart. */
+export function checkedBy(j: Job): string[] {
+  const checks = j.findLast((e) => e.run.checks?.length)?.run.checks ?? [];
+  const names = checks.filter((c) => c.ok).map((c) => (c.name === "hidden" && c.total ? `hidden ${c.passed ?? 0}/${c.total}` : c.name));
+  const has = (f: string) => j.some((e) => existsSync(join(e.folder, f)));
+  return [...names, ...(has("review.md") ? ["reviewer"] : []), ...(has(join("browser", "report.md")) ? ["browser review"] : [])];
+}
+
+/** Minutes a spot check of a delivery should take, an estimate: one, one per 200 changed lines, and one more when no sealed check ran. */
+export function lookMinutes(changedLines: number, sealed: boolean): number {
+  return 1 + Math.ceil(changedLines / 200) + (sealed ? 0 : 1);
+}
+
 export function view(j: Job): JobView {
   const last = lastReal(j);
   const r = last.run;

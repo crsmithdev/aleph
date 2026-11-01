@@ -1,10 +1,24 @@
 # Goal to shipped
 
-Written 2026-10-25. Version 4, 2026-10-27: version 3 plus the decisions of the
-seed spec ([`2026-10-26-seed-factory.md`](2026-10-26-seed-factory.md), v3,
-`4f31309`) and the memory research. Not built. Each piece gets its own spec in
-this folder; this file stays the map. Versions 1 to 3 are in git (`4e0da45`,
-`2c6942d`, `f31014b`).
+Written 2026-10-25. Version 5, 2026-11-01. The seed, the planner, the land,
+acceptance, memory and the UI are built; non-code goals are not. Each piece has
+its own spec in this folder; this file stays the map. Versions 1 to 4 are in git.
+
+Version 5 changes (Chris, 1 Nov, after a walk through the loop against the code):
+
+- The grill is not a stage. `/aleph:goal` is one way to file a goal and is
+  used sometimes. Items also come from the browser, from triage and from the
+  chat, and none of these pass a grill. What a goal must hold is the
+  checkable part: the end state and an Oracle.
+- No per-goal budget in dollars. A budget returns only as a share of usage.
+- Voice leaves this plan. Sidetone can add it later and separately.
+- The rubric, the judge and delivery enter together as goal kinds. The
+  worker-evaluator contract is dropped, because the Oracle says what will be
+  checked. Calibration waits until a judge has scores to compare.
+- A fresh author writes each goal's hidden checks, so acceptance is not only
+  the Oracle the worker read.
+- The report needs no model. It gives lanes, what checked each delivery and an
+  estimate of the time to look.
 
 Version 4 changes:
 
@@ -13,7 +27,7 @@ Version 4 changes:
   the UI, non-code goals, the rest of routing, memory, then Sidetone.
 - The factory runs always on, in parallel with Chris. The seed starts runs
   from a 30-minute timer.
-- The work store is Backlog.md files in a private repo at `~/.aleph/items`.
+- The work store is Backlog.md files in a private repo at `~/.aleph/issues`.
 - Workers and checks run under `srt`, Anthropic's sandbox-runtime.
 - The memory piece takes the memory research's rules.
 - "`aleph land` is the only path to `main`" becomes "the factory's only path
@@ -90,21 +104,24 @@ Per Goal) sets these limits:
 
 | # | Stage | What happens | Who |
 |---|---|---|---|
-| 1 | Intake | A goal arrives from Sidetone, the CLI or the UI | Chris |
-| 2 | Grill | Five to ten questions about the product, never the implementation, each with a recommended answer | planner model, Chris |
-| 3 | Spec | The planner expands the goal into a product spec: what done means, the grading criteria, where it is delivered, the budget | planner model |
-| 4 | Decompose | Tasks, each sized to finish in one run | planner model |
+| 1 | Intake | An item arrives from the chat, the CLI or the UI; `/aleph:goal` is an optional grill in front of it | Chris |
+| 2 | Spec | What done means, how it is checked and, for a non-code goal, its kind and where it is delivered | triage, or the session that files it |
+| 3 | Decompose | Tasks, each sized to finish in one run; large goals only | planner model |
+| 4 | Seal | A fresh author writes hidden checks from the goal alone; they must fail on `main` to count | author model |
 | 5 | Make | One worker per task, in its own isolated workspace | worker model |
-| 6 | Check | Code: lint, tests, no edits to existing tests, a fresh reviewer. Writing and research: the rubric, a fresh judge, source checks. Capped fix rounds | deterministic, reviewer model |
+| 6 | Check | Code: tests, the hidden checks, a fresh reviewer that judges test edits. Writing and research: the rubric, a fresh judge, source checks. Capped fix rounds | deterministic, reviewer model |
 | 7 | Deliver | Code lands on `origin/main` through the factory's land; documents go to their place (a draft branch, a doc, an artifact, the vault) | deterministic |
-| 8 | Accept | Run the goal's hidden checks against the delivered thing | deterministic, judge model |
-| 9 | Report | The report: delivered, needs a look, stuck, waiting | report model |
+| 8 | Accept | Run the Oracle again on `main` | deterministic |
+| 9 | Report | The report: delivered, needs you, stuck, with what checked each delivery and the time to look | deterministic |
 
-Stages 4 to 8 repeat until the goal's checks pass, the budget ends, or a task
+Stages 3 to 8 repeat until the goal's checks pass, the budget ends, or a task
 is stuck after its fix rounds. A stuck task goes to the report, not into a
 retry loop.
 
 ## Goal, grill and spec stay at the product level
+
+This section applies when `/aleph:goal` is used. It is not a requirement on
+items that arrive another way.
 
 This follows Anthropic's harness for long-running apps
 (https://www.anthropic.com/engineering/harness-design-long-running-apps).
@@ -190,8 +207,8 @@ which is how Ona's factory ended in chores. The rule:
   and every night. This replaces the corpus's `git clone --shared` in
   bubblewrap (to-do 25). `srt` has not run on this machine yet; the fallback
   is Docker with `--network none`.
-- **Work store.** One Backlog.md file per item in a private git repo at
-  `~/.aleph/items`. `aleph todo` keeps its commands and writes there; no
+- **Work store.** Items in a private git repo at `~/.aleph/issues`, written
+  only through `aleph issue`; no
   product repo's `main` moves when an item changes.
 - **Held paths.** Only the factory's own gate is held for Chris: the land
   code, the gate hooks, identity `CLAUDE.md`, the build files, and edits to
@@ -263,7 +280,7 @@ type its owner, store and gate, and defines milestone 1.
 | Procedural | rules, skills, workflows | skills, `CLAUDE.md`, hooks | repeated corrections mined from traces become rules or checks; the goal-kind templates (code, writing, research) are procedures |
 | Retrieval | search over stored material | `vault recall` (substring) | log recall misses; add embeddings only if misses are frequent |
 | Parametric | what the model knows | the model | nothing stored that the model already knows; the routing table (piece 3) picks the model whose knowledge a stage needs |
-| Prospective | future intentions | `aleph todo`, `aleph job` | the work store's goals and tasks (Backlog.md in `~/.aleph/items`); the factory's timer; questions waiting for Chris |
+| Prospective | future intentions | `aleph todo`, `aleph job` | the work store's goals and tasks (Backlog.md in `~/.aleph/issues`); the factory's timer; questions waiting for Chris |
 
 Each finished goal writes what it learned: decisions into the goal's own docs,
 durable facts into the vault through a reviewer.
@@ -310,7 +327,7 @@ accounting must price every model in use first (to-do 28).
 
 The unit of work grows from a line in `docs/todo.md` to an item with a parent
 goal, a state, links to runs and deliveries, and a history. The seed builds
-the first half: Backlog.md files in `~/.aleph/items`, with Backlog.md's board
+the first half: Backlog.md files in `~/.aleph/issues`, with Backlog.md's board
 until the UI exists. Then a UI whose front page is the report: delivered, needs a look, stuck, waiting. It shows the
 evidence for each delivery, so a spot check takes minutes. Old aleph's UI
 (`~/aleph-old/src/ui`) is a source of components, not a base. The UI's spec is
@@ -318,7 +335,8 @@ evidence for each delivery, so a spot check takes minutes. Old aleph's UI
 
 ### 5. Sidetone desktop app (Sidetone to-do 93)
 
-The control surface for Chris's input. Start a goal and answer its grill by
+Out of this plan since version 5: Sidetone can add it later and separately.
+The reasoning stays as a record. The control surface for Chris's input. Start a goal and answer its grill by
 voice, hear the report, and approve or reject what waits. It is a client of the
 work store and the factory; it owns no state. It reuses Sidetone's bridge for
 speech. Because Chris's input is the constraint, voice is the cheapest input
@@ -328,14 +346,13 @@ channel, but it is built last: the corpus has no evidence on voice intake.
 
 Each detailed plan settles these with Chris. Recommendations are not decisions.
 The seed settled three of version 3's open decisions: the work store
-(Backlog.md in `~/.aleph/items`), the budget (subscription only, 12 runs in
+(Backlog.md in `~/.aleph/issues`), the budget (subscription only, 12 runs in
 any 24 hours; Jev through OpenRouter is the one paid API) and isolation (`srt`).
 
 | Decision | Options | Recommendation |
 |---|---|---|
 | Delivery without a yes | drafts and local or preview only; also public | Drafts and local or preview only |
 | Non-code checks | rubric and judge only; also a second model's review | Rubric and judge, with sources checked by fetch for research |
-| Desktop app | Electron; Tauri; a web app in a desktop shell | Decide in piece 5's plan |
 
 ## References
 

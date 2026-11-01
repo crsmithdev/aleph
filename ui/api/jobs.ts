@@ -1,7 +1,8 @@
 /** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
 import { git } from "../../jobs/lib/git.ts";
 import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
-import { allJobs, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
+import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
+import { changedLinesOf } from "../../jobs/lib/factory.ts";
 import { jobProjector, type Job } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
@@ -10,6 +11,8 @@ export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "pla
 export interface JobDetail extends Job {
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
   checksLog?: string; stderr?: string; trace?: string;
+  /** What checked the job; a delivery's minutes to spot-check it, an estimate. */
+  checkedBy?: string[]; look?: number;
 }
 
 const DAY = 24 * 3600_000;
@@ -106,6 +109,11 @@ export const routes: Routes = {
     if (review !== undefined) detail.review = review;
     if (checksLog !== undefined) detail.checksLog = lastLines(checksLog);
     if (stderr !== undefined) detail.stderr = lastLines(stderr);
+    const by = checkedBy(runs);
+    if (by.length) detail.checkedBy = by;
+    const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
+    const shortstat = landedIn ? git(landedIn.path, "show", "--shortstat", "--format=", v.commit!).out : "";
+    if (shortstat) detail.look = lookMinutes(changedLinesOf(shortstat), !!v.hidden);
     // The branch's diff stat while it exists, else the stat the run kept.
     const range = branchRange(runs);
     const s = range && git(range.path, "diff", "--stat", range.base, range.ref);

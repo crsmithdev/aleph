@@ -63,7 +63,7 @@ export function resultLine(key: string, id: number | string): string | null {
   const r = readRecord(key, id);
   if (!r) return null;
   if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
-  if (r.result === "skipped") return "acceptance: skipped, no runnable command";
+  if (r.result === "skipped") return "acceptance: skipped, no runnable command: only the checks at the land covered it";
   if (r.retest) return `acceptance: fail, waits for a rerun: ${r.command}`;
   return `acceptance: fail${r.fails >= 2 ? " twice" : ", rerun"}: ${r.command}`;
 }
@@ -169,13 +169,13 @@ export function oracleCommands(body: string): string[] {
 /** `infra` marks a fault of the sandbox, not a result of the command: the acceptance is not run. */
 export interface Ran { code: number; output: string; infra?: boolean }
 /** Run one command on the commit `sha` of the repo's main. */
-export type Runner = (repo: Repo, sha: string, command: string) => Promise<Ran>;
+export type Runner = (repo: Repo, sha: string, command: string, hidden?: Record<string, string>) => Promise<Ran>;
 
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 /** The default runner: the commit goes in as a bundle, and the repo's setup and then the command run under srt, as the checks do. */
 let calls = 0;
-export const sandboxRunner: Runner = async (repo, sha, command) => {
+export const sandboxRunner: Runner = async (repo, sha, command, hidden) => {
   // Each call has its own folder and ref, so overlapping runs for one repo cannot remove or overwrite each other's files.
   const uid = `${process.pid}-${++calls}`;
   const run = makeRunFolder(`accept-${repo.key}-${uid}`);
@@ -184,9 +184,14 @@ export const sandboxRunner: Runner = async (repo, sha, command) => {
     git(repo.path, "update-ref", ref, sha);
     const b = git(repo.path, "bundle", "create", join(run, "out", "accept.bundle"), ref);
     if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}`, infra: true };
+    if (hidden) {
+      mkdirSync(join(run, "out", "hidden"), { recursive: true });
+      for (const [name, text] of Object.entries(hidden)) writeFileSync(join(run, "out", "hidden", name), text);
+    }
     const script = [
       "set -e", "git init -q .", `git fetch -q ../out/accept.bundle ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
       `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; touch ../checklog/setup-failed; echo 1 > ../checklog/code; exit 0; }`,
+      ...(hidden ? ["cp -r ../out/hidden .hidden"] : []),
       `timeout -k 30 1200 bash -c ${q(command)} > ../checklog/out.log 2>&1; echo $? > ../checklog/code`,
     ].join("\n");
     const logs = join(run, "stdout.log");

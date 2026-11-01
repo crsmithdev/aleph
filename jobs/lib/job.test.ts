@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, allJobs, batch, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markAsked, markRescued, asked, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
+import { addNote, allJobs, batch, checkedBy, lookMinutes, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markAsked, markRescued, asked, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
 import { isOpen, writeRun, type Run } from "./ledger.ts";
 
 let base: string;
@@ -169,5 +169,24 @@ describe("facts runs", () => {
     expect(stateOf(j)).toBe("landed");
     expect(lastReal(j).run).toMatchObject({ kind: "land", check: "open" });
     expect(view(j).check).toBe("open");
+  });
+});
+
+describe("the evidence of a delivery", () => {
+  test("checkedBy names the checks that passed, the hidden counts and the reviewers that left a file", () => {
+    const f = run("20261101-000001-a", "20261101-000001-a", { checks: [{ name: "tests", ok: true, seconds: 1 }, { name: "hidden", ok: true, seconds: 1, passed: 2, total: 2 }, { name: "types", ok: false, seconds: 1 }] }, { "review.md": "land" });
+    mkdirSync(join(f, "browser"));
+    writeFileSync(join(f, "browser", "report.md"), "fine");
+    expect(checkedBy(allJobs()[0])).toEqual(["tests", "hidden 2/2", "reviewer", "browser review"]);
+  });
+  test("a job with nothing recorded has no evidence", () => {
+    run("20261101-000002-b", "20261101-000002-b");
+    expect(checkedBy(allJobs()[0])).toEqual([]);
+  });
+  test("lookMinutes grows with the diff and drops one with a sealed check", () => {
+    expect(lookMinutes(0, true)).toBe(1);
+    expect(lookMinutes(1, true)).toBe(2);
+    expect(lookMinutes(200, false)).toBe(3);
+    expect(lookMinutes(201, false)).toBe(4);
   });
 });

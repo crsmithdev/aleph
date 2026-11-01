@@ -2,14 +2,16 @@
 name: goal
 description: >
   Turn a goal of one or two sentences into a goal issue for the factory: a
-  short product-level grill, then one issue with its spec in the work store.
-  Use when Chris runs /aleph:goal or asks the factory to build something.
+  short grill, then one issue with its spec in the work store. Use when Chris
+  runs /aleph:goal. It is optional: items also come from the browser, triage
+  and the chat, without a grill.
   NOT for: a design tree (use /aleph:grill-me), a spec (use /aleph:to-spec).
 ---
 
 The factory (`docs/specs/2026-10-26-seed-factory.md`) runs one sandboxed
-worker per open issue with a spec, with no plan stage and nobody to ask. The issue
-is all the worker gets, so it must say what done is and how to check it.
+worker per open issue with a spec, with nobody to ask; a planner splits a large
+goal first. The issue is all the worker gets, so it must say what done is and
+how to check it.
 
 ## 1. Read before you ask
 
@@ -25,13 +27,18 @@ web. Put the value and its source URL in the recommended answer.
 ## 2. Ask, with one AskUserQuestion call
 
 Ask at most four questions, all in one call. Each has 2-4 options, and
-exactly one is first and marked "(Recommended)". Ask only what changes the
-issue; take the rest from the code.
+exactly one is first and marked "(Recommended)". Ask only about the product:
+what it must do, for whom, what good looks like and what it must not do. Work
+out the Edit surface and the Time box yourself and write them into the issue.
+Propose the Oracle yourself, and ask only when the end state has more than one
+reasonable check.
 
 - **Goal**: the end state, as Chris would check it.
 - **Edit surface**: the files or folders the run may change.
-- **Oracle**: the check that proves it, which the worker cannot edit: a new
-  test that asserts the end state, a command whose output proves it, or a
+- **Oracle**: acceptance runs only commands in backticks that start with
+  `bun test`, `bun run` or `bunx tsc`; any other Oracle is skipped on `main`.
+  So name one of those when the repo can. The check proves the end state, and
+  the worker cannot edit it: a new test that asserts the end state, a command whose output proves it, or a
   value with its source URL. The factory runs the repo's checks from
   `~/.aleph/repos.json` after every run, so an oracle names only real
   commands, for example `bun test <file>`, never a command that does not
@@ -79,6 +86,5 @@ commit, and no triage run starts. When it runs after another, add
 `--after <id>`. An existing issue takes a spec with
 `aleph issue edit <repo> <id> --spec -`.
 
-Then say the issue number (`<repo>-<n>`) and that the next timer tick (every 30 minutes)
-starts the run. `aleph report` at the next session start shows the result,
+Then say the issue number (`<repo>-<n>`) and that the dispatch starts the run at once. `aleph report` at the next session start shows the result,
 and the worker's `DEFAULT:` lines show the questions it answered itself.

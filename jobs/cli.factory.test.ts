@@ -40,6 +40,10 @@ describe("a factory run", () => {
     const r = await aleph(["land", "fitem"]);
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", condition: "landed" });
+    const shown = (await aleph(["report"])).stdout;
+    expect(shown).toContain("delivered:");
+    expect(shown).toContain("checked by: tests");
+    expect(shown).toMatch(/look: about \d+ min \(estimate\)/);
     expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fitem.txt\n\nIssue: fac-${id}\nJob: ${j.json.job}`);
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main").trim()).toBe(`Issue: fac-${id}\nJob: ${j.json.job}`);
     expect(readFileSync(join(base, "trees"), "utf8").trim().split("\n").at(-1)).toBe(remoteGit("rev-parse", "main^{tree}"));

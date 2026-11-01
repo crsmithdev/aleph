@@ -390,3 +390,14 @@ describe("the writers of the new shape", () => {
     expect(store.afterOf(item(r, "1.2" as any))).toEqual([`${r.key}-1.1`]);
   });
 });
+
+describe("readHidden", () => {
+  test("an item with no hidden files reads as none, and a store with no origin/main throws", () => {
+    const r = repo([{ title: "Check" }]);
+    expect(store.readHidden(r, 1)).toEqual({});
+    const saved = process.env.ALEPH_ISSUES;
+    process.env.ALEPH_ISSUES = mkdtempSync(join(tmpdir(), "no-store-"));
+    sh(process.env.ALEPH_ISSUES, "git", "init", "-q");
+    try { expect(() => store.readHidden(r, 1)).toThrow("work store"); } finally { process.env.ALEPH_ISSUES = saved; }
+  });
+});

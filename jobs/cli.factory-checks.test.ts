@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { noteFlake } from "../todo/lib/store.ts";
 import { aleph, base, items, fakeLog, file, jobsDir, seedItem, specFile, state, told, setup, teardown } from "./cli.helpers";
@@ -52,6 +52,56 @@ describe("a factory run's checks", () => {
       expect(readFileSync(join(jobsDir, rs[2].id, "land.log"), "utf8")).toContain("checks skipped");
       expect(runsLeft()).toEqual([]);
     }, 60_000);
+
+    describe("a fresh author", () => {
+      const reg = () => { const r = JSON.parse(readFileSync(join(base, "repos.json"), "utf8")); r.fac.author = true; const f = join(base, "repos-author.json"); writeFileSync(f, JSON.stringify(r)); return f; };
+      const fakeAuthor = (name: string, reply: unknown) => {
+        const f = join(base, `author-${name}.sh`);
+        writeFileSync(f, `#!/bin/sh\ncat > ${base}/author-${name}.in\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: JSON.stringify(reply), total_cost_usd: 0.25 })}\nEOF\n`);
+        chmodSync(f, 0o755);
+        return f;
+      };
+      const sealedTest = (file: string) => `import { expect, test } from "bun:test";\nimport { existsSync } from "node:fs";\n// SECRET-SEALED-LINE\ntest("sealed", () => { expect(existsSync("${file}")).toBe(true); });\n`;
+      const goalWith = (title: string) => seedItem("fac", title, { kind: "goal", issue: "fac-1", after: [] }, "## Goal\nEnd state one.\n\n## Oracle\nORACLE-TEXT\n");
+      const notes = async (id: number) => (await aleph(["issue", "show", "fac", String(id)])).stdout;
+
+      test("tests that fail on main become hidden checks the run must pass, and the worker never sees them", async () => {
+        const id = goalWith("sealed goal");
+        const r = await fjob("seal1", "commit sealed-a.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("a", { files: { "a.test.ts": sealedTest("sealed-a.txt") } }) }, ["--on", String(id)]);
+        expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
+        expect(state(r.json.run).checks.at(-1)).toMatchObject({ ok: true, passed: 1, total: 1 });
+        expect(state(r.json.run).cost).toBeGreaterThanOrEqual(0.25);
+        expect(file(r.json.run, "prompt.md")).not.toContain("SECRET-SEALED-LINE");
+        expect(await notes(id)).toContain("sealed checks: 1 file from a fresh author");
+        const asked = readFileSync(join(base, "author-a.in"), "utf8");
+        expect(asked).toContain("End state one.");
+        expect(asked).not.toContain("ORACLE-TEXT");
+      }, 60_000);
+
+      test("tests that pass on main are thrown away, the note says why, and the run goes on with no hidden check", async () => {
+        const id = goalWith("trivial goal");
+        const r = await fjob("seal2", "commit seal2.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("b", { files: { "b.test.ts": `import { test } from "bun:test"; test("nothing", () => {});\n` } }) }, ["--on", String(id)]);
+        expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
+        expect(await notes(id)).toContain("sealed checks: none: no test fails on main");
+      }, 60_000);
+
+      test("a file that cannot load is thrown away", async () => {
+        const id = goalWith("unloadable goal");
+        const r = await fjob("seal3", "commit seal3.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("c", { files: { "c.test.ts": `import { x } from "./no-such-module.ts";\nimport { test } from "bun:test"; test("x", () => { x(); });\n` } }) }, ["--on", String(id)]);
+        expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
+        expect(await notes(id)).toContain("sealed checks: none: a file does not load on main");
+      }, 60_000);
+
+      test("an author that gives no files leaves its reason, and a goal gets one attempt", async () => {
+        const id = goalWith("untestable goal");
+        const env = { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("d", { files: {}, reason: "it is a page layout" }) };
+        await fjob("seal4", "commit seal4.txt", env, ["--on", String(id)]);
+        expect(await notes(id)).toContain("sealed checks: none: it is a page layout");
+        rmSync(join(base, "author-d.in"));
+        await fjob("seal5", "commit seal5.txt", env, ["--on", String(id)]);
+        expect(existsSync(join(base, "author-d.in"))).toBe(false);
+      }, 60_000);
+    });
 
     test("an item with no hidden files runs the same checks as before", async () => {
       const id = (await aleph(["issue", "add", "fac", "no hidden"])).json.added;

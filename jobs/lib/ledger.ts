@@ -92,6 +92,8 @@ export interface Repo {
   held: string[];
   /** The command of the hidden check, run on `.hidden/` in the check clone. */
   hiddenRun: string;
+  /** A fresh author writes each goal's hidden checks before its first worker run. */
+  author?: boolean;
 }
 
 export const OPEN: State[] = ["running", "passed", "awaiting", "failed", "stuck"];
@@ -110,7 +112,7 @@ export function loadRegistry(): Record<string, Repo> {
     repos[key] = {
       key, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
       setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
-      sandbox: r.sandbox ?? false, held: r.held ?? [], hiddenRun: r.hiddenRun ?? "bun test ./.hidden",
+      sandbox: r.sandbox ?? false, held: r.held ?? [], hiddenRun: r.hiddenRun ?? "bun test ./.hidden", author: r.author ?? false,
     };
   }
   return repos;

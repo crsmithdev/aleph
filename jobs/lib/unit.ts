@@ -3,6 +3,7 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with state.json, then `exit`, then the news.
  */
+import { seal } from "./author.ts";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -449,8 +450,13 @@ async function land(id: string, folder: string, run: Run, repo: Repo, env: Recor
         let why: string | null;
         if (repo.sandbox) {
           const hidden: Record<string, string> = {};
-          for (const i of items) for (const [name, text] of Object.entries(hiddenOf(repo, i.m.run))) hidden[name in hidden ? `${i.m.run.on ?? onOf(i.m.run)}-${name}` : name] = text;
-          why = await sandboxChecks(id, folder, repo, tip, changed, phase, hidden);
+          let readable = true;
+          for (const i of items) {
+            const files = hiddenOf(repo, i.m.run);
+            if (!files) { readable = false; break; }
+            for (const [name, text] of Object.entries(files)) hidden[name in hidden ? `${i.m.run.on ?? onOf(i.m.run)}-${name}` : name] = text;
+          }
+          why = readable ? await sandboxChecks(id, folder, repo, tip, changed, phase, hidden) : HIDDEN_UNREADABLE;
         } else {
           const owner = items.map((i) => i.m.run).find((r) => r.worktree && existsSync(r.worktree)) ?? first;
           why = await worktreeChecks(folder, owner, repo, env, tip, changed, phase);
@@ -636,11 +642,13 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
   return null;
 }
 
-/** The hidden files of the run's item, or none: a read of the work store that fails gives none, as a repo without an item has none. */
-function hiddenOf(repo: Repo, run: Run): Record<string, string> {
+const HIDDEN_UNREADABLE = "hidden checks unreadable";
+
+/** The hidden files of the run's item, none for a run with no item, or null when the work store cannot be read: such a run must not pass without them. */
+function hiddenOf(repo: Repo, run: Run): Record<string, string> | null {
   const id = onOf(run);
   if (id === undefined) return {};
-  try { return readHidden(repo, id); } catch { return {}; }
+  try { return readHidden(repo, id); } catch { return null; }
 }
 
 /** The checks on a land's squash commit: the commit goes in as a bundle. */
@@ -957,6 +965,12 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (!b.ok) return stuck(`bundle failed: ${b.out}`);
     const text = prompt(id, folder, run, repo);
     writeFileSync(join(folder, "prompt.md"), text);
+    const goalId = onOf(run);
+    let authorCost: number | undefined;
+    if (repo.author && !prev && goalId !== undefined) {
+      phase("sealed checks");
+      authorCost = await seal(repo, goalId);
+    }
     const argv = [process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       ...(run.model ? ["--model", run.model] : [])];
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
@@ -990,7 +1004,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     child = null;
     const o = agentOutcome(readFileSync(join(folder, "output.log"), "utf8"));
     writeFileSync(join(folder, "result.md"), o.result);
-    const facts: Partial<Outcome> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
+    const spent = (o.cost ?? 0) + (authorCost ?? 0);
+    const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
     if (w.stalled) return stuck(stallReason(), facts);
@@ -1015,7 +1030,9 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit", facts);
-    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
+    const hidden = hiddenOf(repo, run);
+    if (!hidden) return stuck(HIDDEN_UNREADABLE, facts);
+    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder), hidden);
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
       const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
@@ -1135,7 +1152,9 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no commit");
     const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit");
-    const failed = await checksInSandbox(folder, dir, "out/out.bundle", ref, repo, changed, phase, recorder(folder), hiddenOf(repo, run));
+    const hidden = hiddenOf(repo, run);
+    if (!hidden) return stuck(HIDDEN_UNREADABLE);
+    const failed = await checksInSandbox(folder, dir, "out/out.bundle", ref, repo, changed, phase, recorder(folder), hidden);
     if (failed) return stuck(failed);
     return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out });
   } finally {
