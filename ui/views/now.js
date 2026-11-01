@@ -14,9 +14,18 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s) => `<div class="page sp">${renderStatusLine(s)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable("week"), usable("day"))}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf("week"))}</section></div>`,
+  render: (s) => { lastState = s; return `<div class="page sp">${renderStatusLine(s, outOfDateNow)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable("week"), usable("day"))}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf("week"))}</section></div>`; },
+  // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
+  outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".lede .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s) => mountStatus(root, s),
 };
+
+let lastState = null, outOfDateNow = false;
+export const STALE_MS = 3 * 60 * 1000;
+/** True when the last refresh failed, or the last good response is more than 3 minutes old. goodAt and now are the browser's clock (ms). */
+export function isOutOfDate({ failed, goodAt, now }) {
+  return !!failed || (goodAt != null && now - goodAt > STALE_MS);
+}
 
 const EFFICIENCY = "#/status/efficiency", PERFORMANCE = "#/status/performance";
 
@@ -88,8 +97,8 @@ export function renderUsage(s) {
 }
 
 /** The status line: the time, the status sentence, Pause or Resume. */
-export function renderStatusLine(s) {
-  return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}${renderControls(s)}</p>`;
+export function renderStatusLine(s, stale = false) {
+  return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}${renderControls(s)}</p>`;
 }
 
 /** The 7-day % since the last reset as an SVG polyline over the 0-100 % scale. */
@@ -119,7 +128,7 @@ const ALERTS = [
 const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
 
 /** The status sentence: "Alert: " and what is wrong, or the fine sentence, then what asks for you; at most MAX_SAID parts, each a link. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
-export function renderLede(s) {
+export function renderLede(s, stale = false) {
   const f = s.factory;
   const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
   if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
@@ -131,6 +140,7 @@ export function renderLede(s) {
   if (f.paused && alert) said.push(["the factory is paused", ""]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) said.push(["the day cap is reached", ""]);
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
+  if (stale) return `<span class="say error">Alert: this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
   if (alert) return `<span class="say error">Alert: ${parts}.</span>`;
   const lead = f.paused ? "The factory is paused" : FINE;
   return `<span class="say ${parts || f.paused ? "warning" : "fine"}">${lead}${parts ? `; ${parts}` : ""}.</span>`;

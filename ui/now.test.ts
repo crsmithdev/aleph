@@ -20,7 +20,7 @@ const att = (s: any) => {
   const issues = needsIssues.map((i: any) => ({ ...i, ...(REASON[i.reason] ? { reason: REASON[i.reason] } : {}) }));
   return { ...rest, ...(waiting ? { queued: waiting } : {}), asks: attend({ runs: needs.map(asked), issues }, {}, s.proposals ?? []).items };
 };
-const r: any = { ...view, renderJobs: (s: any) => view.renderNeeds(att(s)) + view.renderLanes(att(s)), renderLede: (s: any) => view.renderLede(att(s)), view: { ...view.view, render: (s: any, p?: any, q?: any) => view.view.render(att(s), p, q) } };
+const r: any = { ...view, renderJobs: (s: any) => view.renderNeeds(att(s)) + view.renderLanes(att(s)), renderLede: (s: any, o?: boolean) => view.renderLede(att(s), o), view: { ...view.view, render: (s: any, p?: any, q?: any) => view.view.render(att(s), p, q) } };
 
 // @ts-ignore
 import { landCard } from "./views/cards.js";
@@ -798,4 +798,35 @@ test("the Weekly usage tile shows the snapshot's age only while stale", () => {
   expect(r.renderTiles({ ...st, usage: { now, stale: true } }, WEEK, DAY)).toContain("as of 40m ago");
   expect(r.renderTiles({ ...st, usage: { now, stale: false } }, WEEK, DAY)).not.toContain("as of");
   expect(r.renderUsage({ ...st, usage: { now, stale: true } })).toContain("as of 40m ago");
+});
+
+const OOD = "Alert: this status is out of date.";
+const strip = (h: string) => h.replace(/<[^>]*>/g, "");
+test("out-of-date data says so, in place of the fine and the paused sentence", () => {
+  const h = r.renderLede(calmState, true);
+  expect(strip(h)).toBe(OOD);
+  expect(h).toContain('class="say error"');
+  const p = r.renderLede({ ...calmState, factory: { ...calmState.factory, paused: true } }, true);
+  expect(strip(p)).toBe(OOD);
+});
+
+test("the out-of-date part comes first and survives MAX_SAID", () => {
+  const s = { ...calmState, health: { ...(calmState as any).health }, asks: [{ kind: "approval" }, { kind: "input" }], stuck: [{}] };
+  const base = said({}, { stuck: [{}], asks: [{ kind: "approval" }, { kind: "input" }] });
+  const h = strip(r.renderLede(s, true));
+  expect(h.startsWith(OOD.slice(0, -1) + "; ")).toBe(true);
+  expect(h.split("; ").length).toBe(base.split("; ").length + 1);
+});
+
+test("isOutOfDate", () => {
+  const t = 1_000_000;
+  expect(r.isOutOfDate({ failed: true, goodAt: t, now: t })).toBe(true);
+  expect(r.isOutOfDate({ failed: false, goodAt: t, now: t + 180_001 })).toBe(true);
+  expect(r.isOutOfDate({ failed: false, goodAt: t, now: t + 180_000 })).toBe(false);
+  expect(r.isOutOfDate({ failed: false, goodAt: t + 5, now: t + 10 })).toBe(false);
+});
+
+test("without the out-of-date input the sentence is unchanged", () => {
+  expect(r.renderLede(calmState, false)).toBe(r.renderLede(calmState));
+  expect(said({})).toBe("Everything is running smoothly.");
 });

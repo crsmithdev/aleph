@@ -892,6 +892,15 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
       `<li${v.sub ? ' class="sub"' : ""}><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
   }
 
+  // Out-of-date check for a view with `outOfDate`: the browser's clock, from the last good response (or the route's start).
+  let goodAt = Date.now(), failed = false, wasOut = false;
+  function checkOut() {
+    const v = shown?.view;
+    if (!v?.outOfDate) return;
+    const out = failed || Date.now() - goodAt > 3 * 60 * 1000;
+    if (out !== wasOut) { wasOut = out; v.outOfDate($("view"), out); }
+  }
+
   async function load(route, first) {
     const { view, params, query } = route;
     let data = null;
@@ -902,8 +911,11 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
         if (!res.ok) throw new Error(failMessage(url, res.status, await res.text().catch(() => "")));
         data = await res.json();
         $("offline").hidden = true;
+        if (route === shown) { goodAt = Date.now(); failed = false; }
       } catch (e) {
         if (route !== shown) return;
+        failed = true;
+        checkOut();
         if (first) $("view").innerHTML = `<div class="page">${error(`Could not load ${view.title}: ${e.message}`)}</div>`;
         else $("offline").hidden = false;
         return;
@@ -922,6 +934,9 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
     // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
     try { mountView(view, $("view"), data, query); }
     catch (e) { console.error(view.title, "mount failed", e); }
+    // A good response clears the alert.
+    wasOut = false;
+    if (view.outOfDate) view.outOfDate($("view"), false);
   }
 
   // One reload at a time; events that come during it make one more. A push does not re-render while the reader types or has a button armed: `refresh` catches up.
@@ -969,12 +984,14 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
     }
     document.title = `${m.view.title} · aleph`;
     $("view").innerHTML = loading(m.view.title);
+    goodAt = Date.now(); failed = false; wasOut = false;
     load(shown, true);
     if (m.view.refresh) timer = setInterval(() => load(m, false), m.view.refresh * 1000);
   }
 
   // Elapsed times tick every second between refreshes: m:ss since the element's data-since.
   setInterval(() => {
+    checkOut();
     document.querySelectorAll("#view .elapsed[data-since]").forEach((el) => {
       const t = Math.max(0, Math.floor((Date.now() - Date.parse(el.dataset.since)) / 1000));
       el.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
