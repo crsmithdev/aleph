@@ -132,14 +132,18 @@ function systemctlUser(...args: string[]): { ok: boolean; out: string } {
 export function tickTimer(): { nextTick: string | null; tickInProgress: boolean } {
   const t = systemctlUser("show", "aleph-tick.timer", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic");
   if (!t.ok) return { nextTick: null, tickInProgress: false };
-  for (const l of t.out.split("\n")) {
-    const v = l.slice(l.indexOf("=") + 1).trim();
-    if (!l.includes("=") || !v || v === "0" || v === "n/a" || v === "infinity") continue;
-    const m = v.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?: (UTC|GMT|Z))?/);
-    if (!m) continue;
-    const d = new Date(m[3] ? `${m[1]}T${m[2]}Z` : `${m[1]}T${m[2]}`);
-    if (!Number.isNaN(d.getTime())) return { nextTick: d.toISOString(), tickInProgress: false };
-  }
+  const lines = t.out.split("\n");
+  const value = (key: string) => lines.find((l) => l.startsWith(`${key}=`))?.slice(key.length + 1).trim() ?? "";
+  const set = (v: string) => !!v && v !== "0" && v !== "n/a" && v !== "infinity";
+  const dated = (text: string): string | null => {
+    const m = text.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?: (UTC|GMT|Z))?/);
+    const d = m && new Date(m[3] ? `${m[1]}T${m[2]}Z` : `${m[1]}T${m[2]}`);
+    return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+  };
+  // An OnUnitActiveSec timer has only a monotonic elapse, as time since boot: list-timers gives it as a date.
+  const real = value("NextElapseUSecRealtime");
+  const next = set(real) ? dated(real) : set(value("NextElapseUSecMonotonic")) ? dated(systemctlUser("list-timers", "aleph-tick.timer", "--no-pager").out) : null;
+  if (next) return { nextTick: next, tickInProgress: false };
   // A oneshot service reports `activating` while it runs (exit 3): read the word, ignore the exit code.
   const state = systemctlUser("is-active", "aleph-tick.service").out.split("\n")[0]?.trim();
   return { nextTick: null, tickInProgress: state === "activating" || state === "active" };

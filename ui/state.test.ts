@@ -436,6 +436,11 @@ describe("factory.nextTick and tickInProgress read systemctl show and is-active"
     expect(withSystemctl(`[ "$2" = show ] && echo 'NextElapseUSecRealtime=Fri 2026-10-30 18:00:00 UTC' && echo NextElapseUSecMonotonic=0 && exit 0\nexit 1`))
       .toEqual({ nextTick: "2026-10-30T18:00:00.000Z", tickInProgress: false });
   });
+  test("a monotonic elapse alone is the next tick, read from list-timers", () => {
+    const show = `[ "$2" = show ] && printf 'NextElapseUSecRealtime=\\nNextElapseUSecMonotonic=1d 18h 33min\\n' && exit 0`;
+    expect(withSystemctl(`${show}\n[ "$2" = list-timers ] && echo 'Sun 2026-11-01 17:29:05 UTC 2min left Sun 2026-11-01 17:24:05 UTC 3min ago aleph-tick.timer aleph-tick.service' && exit 0\nexit 1`))
+      .toEqual({ nextTick: "2026-11-01T17:29:05.000Z", tickInProgress: false });
+  });
   test("no next elapse and the service activating is a tick in progress", () => {
     expect(withSystemctl(`${noNext}\necho activating; exit 3`)).toEqual({ nextTick: null, tickInProgress: true });
   });
