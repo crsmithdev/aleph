@@ -520,7 +520,7 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .med .v { font: 600 20px/1.2 var(--sans); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
 .med .quiet { font-size: var(--fs-xs); color: var(--muted); }
 .med .p90 { font: 600 15.3px/1.2 var(--metric); color: var(--muted); font-variant-numeric: lining-nums tabular-nums; }
-.meds.phases { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.meds.phases { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .meds.eff { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .sh.sub h2 { font-size: var(--fs-md); }
 .abar { display: flex; height: 40px; gap: 14px; }
@@ -544,12 +544,13 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .bracket.missed { color: var(--stuck); }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
 .notcounted { margin: 6px 0 16px; font-size: var(--fs-sm); }
-.charts3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.charts3 { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
 .chartbox { margin: 0; min-width: 0; }
 .chartbox figcaption { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .speedchart { height: 100px; width: 100%; }
 @media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .meds > .med:nth-child(n) { border-left: 1px solid var(--rule); padding-left: 16px; } .meds > .med:nth-child(3n+1) { border-left: 0; padding-left: 0; } .charts3 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1020px) { .meds.eff { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1020px) { .meds.phases, .charts3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
 /* ---------- narrow ---------- */
 @media (max-width: 1020px) {
@@ -561,7 +562,7 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
   .flow { flex-direction: column; }
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .meds, .meds.eff { grid-template-columns: minmax(0, 1fr); }
-  .meds.phases { grid-template-columns: minmax(0, 1fr); }
+  .meds.phases, .charts3 { grid-template-columns: minmax(0, 1fr); }
   .meds > .med:nth-child(n) { border-left: 0; padding-left: 0; }
   .lede { flex-wrap: wrap; }
   .lede .say { flex-basis: 100%; }

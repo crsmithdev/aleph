@@ -97,13 +97,13 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
   expect((await get("?window=year")).status).toBe(400);
 });
 
-test("the view: three phase cards; charts; efficiency with reruns and the wasted share", () => {
+test("the view: five phase cards; charts; efficiency with reruns and the wasted share", () => {
   const d = speed("day", now);
   const h = renderSpeedTop(d);
-  for (const k of ["intake", "implement", "land"]) expect(h).toContain(`data-chart="${k}"`);
+  for (const k of ["intake", "queue", "implement", "land", "lead"]) expect(h).toContain(`data-chart="${k}"`);
   expect(h.indexOf('class="meds phases"')).toBeLessThan(h.indexOf('class="charts3"'));
-  expect(h.match(/class="med"/g)?.length).toBe(3);
-  const one = renderPhases({ phases: { intake: { count: 0, p50: 0, p90: 0 }, implement: { count: 3, p50: 1200, p90: 1800 }, land: { count: 1, p50: 43, p90: 43 } } });
+  expect(h.match(/class="med"/g)?.length).toBe(5);
+  const one = renderPhases({ phases: { intake: { count: 0, p50: 0, p90: 0 }, queue: { count: 0, p50: 0, p90: 0 }, lead: { count: 0, p50: 0, p90: 0 }, implement: { count: 3, p50: 1200, p90: 1800 }, land: { count: 1, p50: 43, p90: 43 } } });
   expect(one).toContain('<span class="k">Intake (0)</span><span class="v">– p50</span><span class="p90">– p90</span>');
   expect(one).toContain('<span class="k">Implement (3)</span><span class="v">20m 00s p50</span><span class="p90">30m 00s p90</span>');
   expect(one).toContain('<span class="k">Land (1)</span><span class="v">43s p50</span><span class="p90">43s p90</span>');
@@ -280,4 +280,20 @@ test("runs read their issue from on: a goal run counts under its issue, an issue
   expect(w.goals.week).toBe(0.2); // both runs under the one key ox-860
   run({ ...a("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) });
   expect(speed("week", now, fit).goals.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
+});
+
+test("phases: queue runs from the first goal to the issue's first agent start, lead from the issue to its last land", () => {
+  const r = (n: number, kind: string, state: string, a: number, b: number, repo = "fx") => ({ kind, job: `${repo}-${n}-${a}`, name: "x", repo, on: `${repo}-${n}`, state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
+  const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", null], ["fx-3", 1000_000]]), goal: new Map<string, number | null>([["fx-1", 1060_000], ["fx-2", 1060_000], ["fx-3", null]]) };
+  const p = phases([
+    r(1, "build", "stuck", 1660_000, 1700_000), r(1, "build", "passed", 1800_000, 1900_000),
+    r(1, "land", "landed", 2000_000, 2100_000), r(1, "land", "landed", 3000_000, 4600_000),
+    // fx-2 has a bulk issue time, so a queue and no lead; fx-3 has a bulk goal time, so a lead and no queue.
+    r(2, "build", "passed", 1120_000, 1200_000), r(2, "land", "landed", 1300_000, 1400_000),
+    r(3, "build", "passed", 1120_000, 1200_000), r(3, "land", "landed", 1300_000, 1400_000),
+  ], f, 0, 9_999_000);
+  expect(p.queue).toEqual({ count: 2, p50: 60, p90: 600 }); // fx-1 600, fx-2 60
+  expect(p.lead).toEqual({ count: 2, p50: 400, p90: 3600 }); // fx-1 3600, fx-3 400
+  const later = phases([r(1, "build", "passed", 1660_000, 1700_000)], f, 2000_000, 9_999_000);
+  expect(later.queue.count).toBe(0);
 });

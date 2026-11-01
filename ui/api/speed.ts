@@ -26,13 +26,14 @@ export const MAX_RUN = 4 * HOUR;
 export const KINDS = ["agent", "land", "triage", "plan"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
-export type Phase = "intake" | "implement" | "land";
+export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
+const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
 export interface Speed {
   window: Window;
   /** Land runs that landed in the window: the issues done. */
   done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
-  /** Intake: issue created to first goal queued. Implement: job's first agent start to its last finish. Land: finish to landed. Each counts in the window where it ends. */
+  /** Intake: issue created to first goal queued. Queue: first goal queued to the issue's first agent start. Implement: job's first agent start to its last finish. Land: finish to landed. Lead: issue created to its last land. Each counts in the window where it ends. */
   phases: Record<Phase, Pct>;
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
@@ -228,10 +229,10 @@ export function filed(dir = storeDir()): Filed {
   return filedAt;
 }
 
-/** The three phases of the work over `runs` and the store's history, for what ended in `since`..`now`: each one's end time and seconds. */
+/** The phases of the work over `runs` and the store's history, for what ended in `since`..`now`: each one's end time and seconds. */
 export function phaseTimes(runs: Run[], { issue, goal }: Filed, since: number, now: number): Record<Phase, { at: number; secs: number }[]> {
   const inWindow = (t: number) => t >= since && t <= now;
-  const intake: { at: number; secs: number }[] = [], implement: { at: number; secs: number }[] = [], land: { at: number; secs: number }[] = [];
+  const intake: { at: number; secs: number }[] = [], queue: { at: number; secs: number }[] = [], implement: { at: number; secs: number }[] = [], land: { at: number; secs: number }[] = [], lead: { at: number; secs: number }[] = [];
   for (const [key, queued] of goal) {
     const created = issue.get(key);
     if (queued != null && created != null && inWindow(queued)) intake.push({ at: queued, secs: (queued - created) / 1000 });
@@ -248,13 +249,35 @@ export function phaseTimes(runs: Run[], { issue, goal }: Filed, since: number, n
     if (inWindow(finished)) implement.push({ at: finished, secs: (finished - started) / 1000 });
     if (inWindow(landed)) land.push({ at: landed, secs: (landed - finished) / 1000 });
   }
-  return { intake, implement, land };
+  // Queue and Lead are per issue. A run older than its filing (a file added again) has no such span.
+  const firstStart = new Map<string, number>(), lastLand = new Map<string, number>();
+  for (const r of runs) {
+    const n = issueOf(r);
+    if (n === undefined) continue;
+    const key = `${r.repo}-${n}`;
+    if (isAgent(r)) {
+      const a = Date.parse(r.started);
+      if (a < (firstStart.get(key) ?? Infinity)) firstStart.set(key, a);
+    } else if (r.kind === "land" && (r.state === "landed" || r.state === "done")) {
+      const b = Date.parse(r.ended ?? "");
+      if (b > (lastLand.get(key) ?? -Infinity)) lastLand.set(key, b);
+    }
+  }
+  for (const [key, started] of firstStart) {
+    const queued = goal.get(key);
+    if (queued != null && started >= queued && inWindow(started)) queue.push({ at: started, secs: (started - queued) / 1000 });
+  }
+  for (const [key, landed] of lastLand) {
+    const created = issue.get(key);
+    if (created != null && landed >= created && inWindow(landed)) lead.push({ at: landed, secs: (landed - created) / 1000 });
+  }
+  return { intake, queue, implement, land, lead };
 }
 
 /** Each phase's count, p50 and p90 over `phaseTimes`. */
 export function phases(runs: Run[], filings: Filed, since: number, now: number): Speed["phases"] {
   const t = phaseTimes(runs, filings, since, now);
-  return { intake: stat(t.intake.map((x) => x.secs)), implement: stat(t.implement.map((x) => x.secs)), land: stat(t.land.map((x) => x.secs)) };
+  return Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(t[k].map((x) => x.secs))])) as Speed["phases"];
 }
 
 export function speed(window: Window, now = new Date(), fit: Fit | null = null): Speed {
@@ -329,11 +352,11 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     window,
     done: landed.length,
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
-    phases: { intake: stat(ended.intake.map((x) => x.secs)), implement: stat(ended.implement.map((x) => x.secs)), land: stat(ended.land.map((x) => x.secs)) },
+    phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(ended[k].map((x) => x.secs))])) as Speed["phases"],
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
-      return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), intake: med(ended.intake, i), implement: med(ended.implement, i), land: med(ended.land, i) };
+      return { label: daily ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${pad(d.getHours())}:${pad(d.getMinutes())}`, at: d.toISOString(), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
     }),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),

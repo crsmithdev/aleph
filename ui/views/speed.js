@@ -19,8 +19,10 @@ const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)} h`;
 const pctText = (w) => `${Math.round((w || 0) * 100)}%`;
 const PHASES = [
   ["intake", "Intake", "An issue is created, then its first goal is queued. Counted when the goal is queued."],
+  ["queue", "Queue", "An issue's first goal is queued, then its first agent run starts. This includes any wait for a slot or for another goal. Counted when the run starts."],
   ["implement", "Implement", "A job's first agent run starts, then its last agent run finishes with work to land. Counted when it finishes."],
   ["land", "Land", "A job finishes, then it lands. This includes any wait for a review or for Chris. Counted when it lands."],
+  ["lead", "Lead time", "An issue is created, then its last land. The whole span, including what the other phases leave out. Counted when it lands."],
 ];
 
 /** One phase card: the title and count, the p50, the p90. A phase with no count has no times. */
@@ -29,7 +31,7 @@ const phaseCard = ([key, title, text], c) => {
   return `<div class="med" title="${esc(text)}"><span class="k">${esc(title)} (${c.count})</span><span class="v">${esc(f(c.p50))} p50</span><span class="p90">${esc(f(c.p90))} p90</span></div>`;
 };
 
-/** The phase cards: intake, implement, land. */
+/** The phase cards: intake, queue, implement, land, lead time. */
 export const renderPhases = (d) => `<div class="meds phases">${PHASES.map((p) => phaseCard(p, d.phases[p[0]])).join("")}</div>`;
 
 const BAR_PX = 760;
@@ -171,7 +173,7 @@ export function barOption(buckets, key, { window, color, lines = null, lineColor
     color: [color],
     grid: { left: 48, right: lines ? 78 : 8, top: 8, bottom: 20 },
     tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(dur(q.value))}`; } },
-    xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 4) - 1), hideOverlap: true } },
+    xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 3) - 1), hideOverlap: true } },
     yAxis: { type: "value", min: 0, max, interval: step, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: axisTime } },
     series: [{ type: "bar", data: buckets.map((b) => b[key]), ...(lines ? { markLine: thresholdLines(lines, lineColors, max) } : {}) }],
   };
@@ -202,7 +204,7 @@ function draw(box, d) {
   clear();
   if (!globalThis.echarts) return;
   const t = readTokens();
-  const colors = { intake: t.run, implement: t.need, land: t.done };
+  const colors = { intake: t.run, queue: t.muted, implement: t.need, land: t.done, lead: t.ink };
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
     const key = el.dataset.chart, c = d.phases[key];
     try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], lines: c.count ? c : null, lineColors: { p50: t.ink, p90: t.muted } }))); } catch (e) { console.error("speed chart failed", e); }

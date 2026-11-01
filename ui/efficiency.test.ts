@@ -107,7 +107,7 @@ test("the flex values share out each side, and the sides share out the total, al
 
 const withTop = () => {
   const cs = classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]);
-  cs[3].causes = [{ name: "Land conflict", text: "Conflict text.", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
+  cs[3].causes = [{ name: "Land conflict", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
   (cs[3] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", title: "Fix the merge", reason: "merge conflict in ui/x.ts", hours: 20, runs: 3 }];
   return { ...D, hasWeek: true, classes: cs };
 };
@@ -125,7 +125,7 @@ test("the breakdown under the bar, the hours view, the pin", () => {
 
 test("mountSpeed: a click on a segment re-renders the efficiency section", async () => {
   resetSpeed();
-  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), phases: Object.fromEntries(["intake","implement","land"].map((k) => [k, { count: 0, p50: 0, p90: 0 }])), checks: [], buckets: [], done: 1, flaky: 0, goals: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 } };
+  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), phases: Object.fromEntries(["intake", "queue", "implement", "land", "lead"].map((k) => [k, { count: 0, p50: 0, p90: 0 }])), checks: [], buckets: [], done: 1, flaky: 0, goals: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 } };
   const mk = () => ({ innerHTML: "", dataset: {} as Record<string, string>, isConnected: true, handler: null as any, addEventListener(_: string, f: any) { this.handler = f; }, querySelector: () => null, querySelectorAll: () => [] });
   const top = mk(), eff = mk();
   const root = { querySelector: (s: string) => (s === "#speed" ? top : s === "#efficiency" ? eff : null) };
