@@ -165,10 +165,31 @@ test("a body that is not JSON logs one line and not the body", async () => {
 });
 
 test("a JSON body with no usage numbers logs one line", async () => {
-  reply = () => Response.json({ five_hour: null });
+  reply = () => Response.json({ five_hour: { utilization: 5 }, seven_day: null });
   const lines = await errors(() => pollOnce());
   expect(lines).toHaveLength(1);
   expect(lines[0]).toContain("no usage numbers");
+});
+
+const noFive = (extra: object) => Response.json({ ...extra, seven_day: { utilization: 25, resets_at: "2026-11-02T00:00:00Z" } });
+for (const [name, body] of [["null", { five_hour: null }], ["missing", {}], ["non-numeric", { five_hour: { utilization: "x" } }]] as const) {
+  test(`a reply with ${name} five_hour gives a null five_hour snapshot`, async () => {
+    reply = () => noFive(body);
+    let snap: Snapshot | null = null;
+    const lines = await errors(async () => { snap = await pollOnce(); });
+    expect(lines).toEqual([]);
+    expect(snap!.seven_day).toBe(25);
+    expect(snap!.five_hour).toBeNull();
+    expect(readSnapshots().at(-1)!.five_hour).toBeNull();
+    expect(summary().now).not.toBeNull();
+  });
+}
+
+test("readSnapshots keeps a null or missing five_hour as null and a number as is", () => {
+  const f = process.env.ALEPH_USAGE_FILE!;
+  const row = (m: number, extra: object) => JSON.stringify({ at: new Date(T0 + 900 * H + m * 60_000).toISOString(), seven_day: 3, seven_day_resets_at: null, ...extra });
+  require("node:fs").appendFileSync(f, [row(1, { five_hour: null }), row(2, {}), row(3, { five_hour: 12 })].join("\n") + "\n");
+  expect(readSnapshots().slice(-3).map((s) => s.five_hour)).toEqual([null, null, 12]);
 });
 
 test("a network failure logs one line", async () => {

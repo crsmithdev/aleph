@@ -102,6 +102,15 @@ test("the status line: am/pm time, the sentence, the Hour/Day/Week/Month picker 
   expect(r.view.render(att(full))).toMatch(/aria-pressed="true">Week</);
 });
 
+test("a usage summary with a null five_hour renders the weekly figure only", () => {
+  const s = { now: Date.now(), usage: { now: { seven_day: 41.2, five_hour: null, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [], last5h: 2 } };
+  for (const h of [r.renderUsage(s), r.renderContext(s)]) {
+    const txt = h.replace(/<[^>]+>/g, "");
+    expect(txt).toContain("41%");
+    expect(txt).not.toMatch(/5-hour|5 hours|NaN/);
+  }
+});
+
 test("the flow strip: Incoming, Queued, Running of cap, Done, then the Context card; no agent lines", () => {
   const stuck = [job({ name: "aleph-30", state: "stuck", reason: "x" }), job({ name: "aleph-31", state: "failed", reason: "y" }), job({ name: "aleph-32", state: "failed", reason: "z" })];
   const s = { ...att({ ...full, stuck }), usage: { now: { seven_day: 41.2, five_hour: 7, seven_day_resets_at: "2026-10-30T09:00:00Z" }, series: [] }, issues: [issue(1)], newIssues: 1, factory: { ...full.factory, liveCap: 3, liveRuns: 1, waitingCap: 5, firefighter: [] } };

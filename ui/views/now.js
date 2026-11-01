@@ -53,7 +53,7 @@ export function renderUsage(s) {
   const cur = s.usage?.now;
   if (!cur) return `<span class="quiet">usage unknown</span>`;
   const reset = cur.seven_day_resets_at && !Number.isNaN(Date.parse(cur.seven_day_resets_at)) ? `<span class="quiet">resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}</span>` : "";
-  return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span><span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>${reset}`;
+  return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span>${Number.isFinite(cur.five_hour) && cur.five_hour !== null ? `<span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>` : ""}${reset}`;
 }
 
 /** The status line: the time, the status sentence, the page time picker, Pause or Resume. */
@@ -228,7 +228,7 @@ export function renderContext(s) {
   const gain = s.usage?.last5h;
   const stat = (k, v, after = "") => `<span class="cnt"><span class="n">${esc(v)}</span> ${esc(k)}${after}</span>`;
   const gained = gain === null || gain === undefined ? "" : ` (+${Math.round(gain)}%)`;
-  return head + stat("weekly", pct(cur.seven_day), gained) + `<span class="sep">/</span>` + stat("5 hours", pct(cur.five_hour)) + `</div></div>`;
+  return head + stat("weekly", pct(cur.seven_day), gained) + (typeof cur.five_hour === "number" && Number.isFinite(cur.five_hour) ? `<span class="sep">/</span>` + stat("5 hours", pct(cur.five_hour)) : "") + `</div></div>`;
 }
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */

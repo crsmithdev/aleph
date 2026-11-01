@@ -11,7 +11,7 @@ import { allRuns, expand } from "../jobs/lib/ledger.ts";
 import { config, traces } from "./langfuse.ts";
 import { staleAsync } from "./stale.ts";
 
-export interface Snapshot { at: string; five_hour: number; seven_day: number; seven_day_resets_at: string | null }
+export interface Snapshot { at: string; five_hour: number | null; seven_day: number; seven_day_resets_at: string | null }
 export interface Spend { at: number; model: string; cost: number }
 /** A job's or session's estimated share of the week: percent of the weekly limit, and whether the pooled rate priced it. */
 export interface Wk { pct: number; pooled: boolean }
@@ -70,9 +70,9 @@ export async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
     return failed(e instanceof SyntaxError ? "response body is not valid JSON" : `network failure or timeout (${errName(e)})`);
   }
   const five = b?.five_hour?.utilization, seven = b?.seven_day?.utilization;
-  if (typeof five !== "number" || typeof seven !== "number") return failed("response body has no usage numbers");
+  if (typeof seven !== "number") return failed("response body has no usage numbers");
   const resets = b.seven_day.resets_at;
-  return { at: now.toISOString(), five_hour: five, seven_day: seven, seven_day_resets_at: typeof resets === "string" ? resets : null };
+  return { at: now.toISOString(), five_hour: typeof five === "number" ? five : null, seven_day: seven, seven_day_resets_at: typeof resets === "string" ? resets : null };
 }
 
 /** Polls once: appends the snapshot to the file; on any error records nothing. */
@@ -105,7 +105,7 @@ export function readSnapshots(): Snapshot[] {
   for (const l of readFileSync(file, "utf8").split("\n")) {
     try {
       const s = JSON.parse(l);
-      if (typeof s?.at === "string" && Number.isFinite(Date.parse(s.at)) && typeof s.seven_day === "number") out.push({ at: s.at, five_hour: Number(s.five_hour) || 0, seven_day: s.seven_day, seven_day_resets_at: s.seven_day_resets_at ?? null });
+      if (typeof s?.at === "string" && Number.isFinite(Date.parse(s.at)) && typeof s.seven_day === "number") out.push({ at: s.at, five_hour: typeof s.five_hour === "number" && Number.isFinite(s.five_hour) ? s.five_hour : null, seven_day: s.seven_day, seven_day_resets_at: s.seven_day_resets_at ?? null });
     } catch { /* a torn line */ }
   }
   return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
