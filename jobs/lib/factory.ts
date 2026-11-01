@@ -33,6 +33,7 @@ import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, section, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
+import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
 
 export const factoryDir = () => layout().factory;
 const pauseFile = () => join(factoryDir(), "paused");
@@ -167,80 +168,26 @@ async function factsStep(): Promise<void> {
 /** The buildable issues of each factory repo. */
 export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos(), lists);
 
-/**
- * Whether `<repo>-<n>` is done: the store says done, or the stage is done, or the store's list was read and lacks it
- * (closed work that was not copied). A list not read blocks: nothing there counts as done.
- */
+/** Whether `<repo>-<n>` is done, by `refDone`. It fetches each repo once. */
 export function doneChecker(): (ref: string) => boolean {
   const reg = loadRegistry();
-  const known = new Map<string, { done: Set<string>; items: Set<string> | null }>();
+  const known = new Map<string, { doc: issues.Doc | null; stages: Map<string, string>; read: boolean }>();
   return (ref) => {
     const r = issues.parseGoalRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
-      const done = new Set<string>();
-      let items: Set<string> | null = null;
+      const k = { doc: null as issues.Doc | null, stages: new Map<string, string>(), read: false };
       try {
-        const doc = readList(repo);
-        for (const i of doc?.items ?? []) if (issues.status(i) === "done") done.add(`${r.repo}-${issues.refOf(i)}`);
-        for (const s of repoStages(repo, { fetch: true, doc })) if (s.stage === "done") done.add(s.id);
-        if (doc) items = new Set(doc.items.map((i) => `${r.repo}-${issues.refOf(i)}`));
+        k.doc = readList(repo);
+        for (const s of repoStages(repo, { fetch: true, doc: k.doc })) k.stages.set(s.id, s.stage);
+        k.read = !!k.doc;
       } catch {}
-      known.set(r.repo, { done, items });
+      known.set(r.repo, k);
     }
-    const { done, items } = known.get(r.repo)!;
-    const id = `${r.repo}-${r.id}`;
-    return done.has(id) || (items !== null && !items.has(id));
+    const { doc, stages, read } = known.get(r.repo)!;
+    return refDone(doc ? issues.find(doc, r.id) : undefined, read, stages.get(`${r.repo}-${r.id}`));
   };
-}
-
-/** Why an item is not ready to start, or null: something it is `after` is not done. */
-export function notReady(item: issues.Issue, done: (ref: string) => boolean): string | null {
-  const open = pendingWaits(afterOf(item), done);
-  if (open.length) return `blocked: after ${open.join(",")}`;
-  return null;
-}
-
-/** The goals of `after` (a list of ids) that are not done. */
-export function pendingWaits(after: string[], done: (ref: string) => boolean): string[] {
-  return after.filter((w) => !done(w));
-}
-
-export type WaitReason =
-  | { kind: "ready"; text: string }
-  | { kind: "waits_on"; ids: string[]; text: string }
-  | { kind: "ask"; reason: string; text: string }
-  | { kind: "planning"; text: string }
-  | { kind: "red"; text: string }
-  | { kind: "gate"; gate: Gate; text: string };
-
-/** What `waitReason` reads: the caller computes these once for all its goals. `planning` is `planning(repo, id)`'s answer. */
-export interface WaitContext { done: (ref: string) => boolean; jobs?: Job[]; gated?: ReturnType<typeof gates>; red?: string | null; planning?: boolean; now?: Date }
-
-/** Why a queued goal does not start now, by the order and the texts `dispatchIssues` skips it with; `ready` when nothing stops it. */
-export function waitReason(_repo: Repo, item: issues.Issue, ctx: WaitContext): WaitReason {
-  if (ctx.red) return { kind: "red", text: ctx.red };
-  const ids = pendingWaits(afterOf(item), ctx.done);
-  if (ids.length) return { kind: "waits_on", ids, text: `Waits on ${ids.join(", ")}` };
-  const ask = askOf(item);
-  if (ask) {
-    const last = item.notes.at(-1)?.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").replace(/^asks Chris: /, "");
-    const reason = ask.question || last || ask.reason || "the factory stopped starting it";
-    return { kind: "ask", reason, text: `Waits for you: ${reason}` };
-  }
-  if (ctx.planning) return { kind: "planning", text: "A planner run is splitting it" };
-  const g = ctx.gated;
-  if (g) {
-    const n = g.why.match(/^\d+/)?.[0];
-    const text = g.gate === "live" ? `Waiting for a slot (${n ?? liveRuns()} of ${LIVE_CAP()} running)`
-      : g.gate === "day" ? `Day cap reached (${runsToday().length} of ${DAY_CAP()} runs in 24 hours)`
-      : g.gate === "pause" ? "The factory is paused"
-      : g.gate === "awaiting" ? `${n ?? ""} runs wait for Chris (cap ${AWAITING_CAP()})`
-      : g.why;
-    return { kind: "gate", gate: g.gate, text };
-  }
-  return { kind: "ready", text: "Starts at the next dispatch" };
 }
 
 /** The job name for an issue: its id, `aleph-28` or `aleph-28.1`. */
@@ -261,27 +208,33 @@ export type Gate = (typeof GATES)[number];
  * it to some of them (a caller whose other gates are met elsewhere or do not
  * apply); `jobs` and `except` are hold's and the waiting count's.
  */
-export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: string } = {}): { gate: Gate; why: string } | null {
+export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: string } = {}): { gate: Gate; why: string; text: string } | null {
   const on = (g: Gate) => !opts.only || opts.only.includes(g);
-  if (on("pause") && paused()) return { gate: "pause", why: "paused" };
+  if (on("pause") && paused()) return { gate: "pause", why: "paused", text: "The factory is paused" };
   if (on("hold")) {
     const h = hold(opts.jobs, opts.except);
-    if (h) return { gate: "hold", why: h.line };
+    if (h) return { gate: "hold", why: h.line, text: h.line };
   }
   if (on("probe")) {
     const p = lastProbe();
-    if (p && !p.ok) return { gate: "probe", why: `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}` };
+    if (p && !p.ok) {
+      const why = `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`;
+      return { gate: "probe", why, text: why };
+    }
   }
   // The jobs, when given, hold every run: the live and day gates count from them and read no run again.
   const runs = opts.jobs?.flat();
   if (on("live")) {
     const live = liveRuns(runs);
-    if (live >= LIVE_CAP()) return { gate: "live", why: `${live} agent runs are live` };
+    if (live >= LIVE_CAP()) return { gate: "live", why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)` };
   }
-  if (on("day") && runsToday(Date.now(), runs).length >= DAY_CAP()) return { gate: "day", why: `cap of ${DAY_CAP()} runs in 24 hours` };
+  if (on("day")) {
+    const today = runsToday(Date.now(), runs).length;
+    if (today >= DAY_CAP()) return { gate: "day", why: `cap of ${DAY_CAP()} runs in 24 hours`, text: `Day cap reached (${today} of ${DAY_CAP()} runs in 24 hours)` };
+  }
   if (on("awaiting")) {
     const waits = waiting(opts.jobs);
-    if (waits >= AWAITING_CAP()) return { gate: "awaiting", why: `${waits} runs wait for Chris` };
+    if (waits >= AWAITING_CAP()) return { gate: "awaiting", why: `${waits} runs wait for Chris`, text: `${waits} runs wait for Chris (cap ${AWAITING_CAP()})` };
   }
   return null;
 }
@@ -314,7 +267,7 @@ const surfaceOf = (body: string): string[] => section(body, "Edit surface").spli
  * Why a goal waits for an open job: both name the same busy file in their Edit surface, so one
  * of the two lands would conflict. A job waiting for Chris does not count, as it can wait for hours.
  */
-export function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()): string | null {
+function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()): string | null {
   const counts = new Map<string, number>();
   for (const j of jobs) for (const { run } of j) {
     if (run.kind !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
@@ -332,6 +285,19 @@ export function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date
     if (shared) return `waits for ${last.name}: both change the busy file ${shared}`;
   }
   return null;
+}
+
+/** The facts of a goal that the jobs and the factory's marks give; `goalDecision` takes them with the caller's own. */
+export function goalFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
+  const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
+  return {
+    name, item,
+    open: openJob(name, null, jobs)?.at(-1)!.run.condition ?? null,
+    busy: busyWait(repo, item, jobs, now),
+    noCommits: noCommitStreak(repo.key, name, runs),
+    capHeld: capMarked(name),
+    startsInHour: agentStartsInHour(repo.key, name, runs, now),
+  };
 }
 
 /**
@@ -389,7 +355,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
   for (const repo of sandboxRepos()) {
     if (reds.get(repo.key)) continue;
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
-      if (!planSet(item) || issues.status(item) !== "open" || askOf(item) || notReady(item, done) || await planning(repo, item.id)) continue;
+      if (!planSet(item) || issues.status(item) !== "open" || askOf(item) || pendingWaits(afterOf(item), done).length || await planning(repo, item.id)) continue;
       plan(repo, item.id);
       planned.push(issueJob(repo, item.id));
     }
@@ -398,10 +364,8 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = reds.get(repo.key);
-    if (red) { skipped.push(`${name}: ${red}`); continue; }
-    if (done(`${repo.key}-${ref}`)) { skipped.push(`${name}: the item is already done`); continue; }
-    const wait = notReady(listed, done);
-    if (wait) { skipped.push(`${name}: ${wait}`); continue; }
+    const first = goalDecision({ name, item: listed, done, red });
+    if (first.kind !== "ready") { skipped.push(`${name}: ${first.why}`); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
     const release = await lock(`goal-${name}`);
@@ -409,44 +373,34 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     try {
       const jobs = allJobs();
       const open = openJob(name, null, jobs);
-      if (open) { skipped.push(`${name}: ${open.at(-1)!.run.condition}`); continue; }
-      // Read after the jobs: a note added before the last run's drop is in the rerun's spec.
-      const item = goal(repo, ref);
+      // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
+      const item = open ? listed : goal(repo, ref);
       if (!item) { skipped.push(`${name}: not a goal`); continue; }
-      // The item may have gained an after since it was read, while the baseline ran or an earlier goal started.
-      const waitNow = notReady(item, done);
-      if (waitNow) { skipped.push(`${name}: ${waitNow}`); continue; }
-      // A plan job runs detached: the goal gets no second planner and no worker while it does.
-      if (await planning(repo, item.id)) { skipped.push(`${name}: planning`); continue; }
-      // A pass that began before a pause must not start a run after it.
-      const gated = gates({ only: ["pause", "live", "day", "awaiting"], jobs });
-      if (gated) { skipped.push(`${name}: ${gated.why}`); continue; }
-      // Read again just before the start: an item done or dropped since it was read starts no run, whatever the trigger.
+      const d = goalDecision({
+        ...goalFacts(repo, item, jobs), done, red,
+        // A plan job runs detached: the goal gets no second planner and no worker while it does.
+        planning: !open && await planning(repo, item.id),
+        // A pass that began before a pause must not start a run after it.
+        gate: gates({ only: ["pause", "live", "day", "awaiting"], jobs }),
+      });
+      if (d.kind !== "ready" && d.kind !== "no-commit" && d.kind !== "run-cap") { skipped.push(`${name}: ${d.why}`); continue; }
+      // Read again just before the start or the Ask: an item done or dropped since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
       if (!latest || issues.status(latest) === "done" || issues.status(latest) === "dropped") { skipped.push(`${name}: the item is ${latest ? issues.status(latest) : "gone"}`); continue; }
-      const busy = busyWait(repo, latest, jobs);
-      if (busy) { skipped.push(`${name}: ${busy}`); continue; }
-      const marked = streakMark(name) !== null;
-      if ((marked && askOf(item)) || noCommitStreak(repo.key, name) >= NO_COMMIT_LIMIT) {
-        if (!askOf(item)) {
-          writeStreakMark(name);
-          const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
-          const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("no-commit", text) });
-          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
-        }
-        skipped.push(`${name}: ${NO_COMMIT_LIMIT} runs in a row with no commit`);
+      if (d.kind === "no-commit") {
+        writeStreakMark(name);
+        const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
+        const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("no-commit", text) });
+        if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+        skipped.push(`${name}: ${d.why}`);
         continue;
       }
-      // A cap mark with the label still on holds the goal until Chris reruns it; with the label gone he has, and the hour count is not applied.
-      const capHeld = capMarked(name);
-      if (capHeld && askOf(item)) { skipped.push(`${name}: the run cap holds it until Chris reruns it`); continue; }
-      const started60 = capHeld ? 0 : agentStartsInHour(repo.key, name);
-      if (started60 >= MAX_RUNS_PER_HOUR) {
-        const text = `the factory started this goal ${started60} times in the last hour; it stops starting it until Chris reruns it.`;
+      if (d.kind === "run-cap") {
+        const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
         const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("run-cap", text) });
         if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         else writeCapMark(name);
-        skipped.push(`${name}: ${started60} runs in the last hour`);
+        skipped.push(`${name}: ${d.why}`);
         continue;
       }
       const again = rerunNote(name);
@@ -579,9 +533,6 @@ export async function reacceptReopened(repoKey: string, o: { since?: string; bef
 }
 
 
-/** Runs of one goal in a row, newest last, that may end with no commit before dispatch stops starting it. */
-const NO_COMMIT_LIMIT = 3;
-
 const streakFile = (name: string) => join(factoryDir(), "streak", `${name}.txt`);
 /** When the streak last set an Ask on the goal's item (ms), or null. Runs before it no longer count. */
 const streakMark = (name: string): number | null => {
@@ -595,20 +546,17 @@ const writeStreakMark = (name: string) => {
 };
 
 /** How many of the goal's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
-function noCommitStreak(repoKey: string, name: string): number {
+function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   const mark = streakMark(name) ?? -Infinity;
-  const runs = allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
+  const runs = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
     .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
   let n = 0;
   for (const e of runs.reverse()) { if (causeOf(e.run) !== "no-commit") break; n++; }
   return n;
 }
 
-/** A goal starts at most this many agent runs in any 60 minutes, whatever the trigger: a fourth start is skipped. */
-export const MAX_RUNS_PER_HOUR = 3;
-
 const capFile = (name: string) => join(factoryDir(), "cap", `${name}.txt`);
-/** Whether the cap's Ask is set for the goal's current streak of skipped starts. */
+/** Whether the cap's Ask was set for the goal and no start has followed. */
 const capMarked = (name: string): boolean => existsSync(capFile(name));
 const writeCapMark = (name: string) => {
   mkdirSync(dirname(capFile(name)), { recursive: true });
@@ -616,8 +564,8 @@ const writeCapMark = (name: string) => {
 };
 
 /** How many agent runs of the goal started in the last 60 minutes. */
-function agentStartsInHour(repoKey: string, name: string, now = Date.now()): number {
-  return allRuns().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000).length;
+function agentStartsInHour(repoKey: string, name: string, runs: Entry[], now: number): number {
+  return runs.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000).length;
 }
 
 const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
@@ -1044,9 +992,9 @@ export function stalled(jobs = allJobs(), lists = reader()): string[] {
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs) && !live("plan") && !gates({ only: ["day", "awaiting"], jobs })) {
     for (const { repo, item } of openGoals(lists)) {
-      const name = issueJob(repo, issues.idOf(item));
-      if (base[repo.key]?.ok === false || done(`${repo.key}-${issues.idOf(item)}`) || askOf(item) || notReady(item, done) || openJob(name, null, jobs) || busyWait(repo, item, jobs)) continue;
-      out.push(`goal:${name}`);
+      const b = base[repo.key];
+      const facts = goalFacts(repo, item, jobs);
+      if (goalDecision({ ...facts, done, red: b?.ok === false ? redLine(b) : null }).kind === "ready") out.push(`goal:${facts.name}`);
     }
   }
   if (!live("triage") && !live("plan") && !gates({ only: ["live", "day"], jobs })) {
@@ -1054,7 +1002,7 @@ export function stalled(jobs = allJobs(), lists = reader()): string[] {
       const doc = lists.list(repo.key);
       for (const item of doc?.items ?? []) {
         if (issues.status(item) !== "open") continue;
-        const toPlan = planSet(item) && !askOf(item) && !notReady(item, done) && base[repo.key]?.ok !== false;
+        const toPlan = planSet(item) && !askOf(item) && !pendingWaits(afterOf(item), done).length && base[repo.key]?.ok !== false;
         if (toPlan || !isSorted(doc!, item)) out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
       }
     }

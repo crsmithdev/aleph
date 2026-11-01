@@ -113,14 +113,6 @@ test("while the Ask stays on the item, dispatches start nothing and write one no
   expect(chrisNotes(id)).toBe(1);
 });
 
-test("two no-commit runs in a row are still dispatched", async () => {
-  const id = goal();
-  for (let i = 0; i < 2; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (3 - i) * 60_000).toISOString() });
-  const f = fakes();
-  const out = await dispatch(f);
-  expect(out.started).toEqual([`fac-${id}`]);
-});
-
 test("an item that the store closes while an earlier goal starts gets no run", async () => {
   const first = goal();
   const second = goal();

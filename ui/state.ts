@@ -5,7 +5,8 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, spentToday, pendingWaits, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
+import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, spentToday, goalFacts } from "../jobs/lib/factory.ts";
+import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readAlways, waitOf, type Ask } from "../jobs/lib/ask.ts";
@@ -96,7 +97,7 @@ export interface State {
   /** Everything that waits for Chris: one entry per awaiting run, issue, goal and proposal, with its kind (input or approval) and reason. */
   asks: AskItem[];
   /** Queued and blocked goals (and old items): the Queued lane. */
-  queued: { repo: string; id: number | string; title: string; stage: string; why: string; kind: WaitReason["kind"];
+  queued: { repo: string; id: number | string; title: string; stage: string; why: string; kind: GoalDecision["kind"];
     waits?: { id: string; href: string; state: string | null }[] }[];
   /** Issues in Running: each with its goals nested and "n of m issues". */
   runningIssues: RunningIssue[];
@@ -261,12 +262,11 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     }
     return m;
   };
-  // doneChecker's test, from this build's lists and stages: it fetches no project repo, as the stages above do not.
+  // The dispatch's test, from this build's lists and stages: it fetches no project repo, as the stages above do not.
   const isDone = (ref: string): boolean => {
     const r = parseGoalRef(ref), repo = r ? registry[r.repo] : undefined;
     if (!r || !repo) return false;
-    const item = lists.item(r.repo, r.id);
-    return (item !== undefined && status(item) === "done") || stagesOf(repo).get(String(r.id))?.stage === "done";
+    return refDone(lists.item(r.repo, r.id), !!lists.list(r.repo), stagesOf(repo).get(String(r.id))?.stage);
   };
   const blocker = (id: string): Wait => {
     const r = parseGoalRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
@@ -474,7 +474,8 @@ export function state(now = new Date()): State {
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
     queued: queued.map(({ repo, item, stage }) => {
       const red = redOf(repo);
-      const w = waitReason(repo, item, { done: isDone, jobs, gated, red, now });
+      // The stage already says when a planner run is going, so the lane does not take the plan lock.
+      const w = goalDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, gate: gated });
       return {
         repo: repo.key, id: idOf(item), title: item.title, stage, why: w.text, kind: w.kind,
         ...(w.kind === "waits_on" ? { waits: w.ids.map(blocker) } : {}),

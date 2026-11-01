@@ -356,6 +356,7 @@ describe("waiting entries", () => {
       const goal = add(doc, "waits goal");
 
       goal.fm.after = ["fac-2"];
+      add(doc, "after a closed goal", { spec: "Do it." }).fm.after = ["fac-9999"];
       return true;
     }, true);
     // The stuck fac-3 would hold every start: set it aside, so only the reasons under test remain.
@@ -368,6 +369,13 @@ describe("waiting entries", () => {
     expect(by(s, "waits goal")).toMatchObject({ kind: "waits_on", why: "Waits on fac-2", stage: "blocked", waits: [{ id: "fac-2", href: "#/issues/fac/2", title: expect.any(String), state: "queued", dead: null }] });
     // A goal that asks for you is awaiting: it is in asks, not Queued.
     expect(by(s, "waiting goal").why).toBe("Starts at the next dispatch");
+    // A ref the read list lacks is closed work: the dispatch counts it as done, so the lane does too.
+    expect(by(s, "after a closed goal")).toMatchObject({ kind: "ready" });
+    // The dispatch stops a goal on its no-commit streak, so the lane says so and not "Starts at the next dispatch".
+    const streak = [1, 2, 3].map((n) => `20261027-00007${n}-a`);
+    streak.forEach((id, n) => run(id, { job: `fac-2-${n}`, name: "fac-2", on: "fac-2", condition: "dropped", reason: "x", noCommit: true, started: ago(3 + n) }));
+    expect(by(state(now), "waiting goal")).toMatchObject({ kind: "no-commit", why: "The last 3 runs ended with no commit; the next dispatch asks you" });
+    for (const id of streak) rmSync(join(jobsDir, id), { recursive: true });
 
     const dir = join(jobsDir, "20261027-000060-a");
     run("20261027-000060-a", { job: "live-x", name: "live-x", condition: "running" });

@@ -3,41 +3,13 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { correctionsDue, dispatchIssues, episodeStep, report, notReady, spentToday, waitReason, setPaused, health, stalled, stallStep } from "./factory.ts";
+import { correctionsDue, dispatchIssues, episodeStep, report, spentToday, setPaused, health, stalled, stallStep } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
-
-test("notReady: a migrated goal waits on its after list, dotted ids included", () => {
-  const item = { fm: { after: ["fac-1", "fac-2.1"] } } as unknown as issues.Issue;
-  expect(notReady(item, () => true)).toBeNull();
-  expect(notReady(item, (r) => r === "fac-1")).toBe("blocked: after fac-2.1");
-});
-
-const repoX = { key: "fac" } as never;
-const mkItem = (fm: Record<string, unknown>, notes: string[] = []) => ({ fm, notes }) as unknown as issues.Issue;
-
-test("waitReason: waits_on names only the open refs", () => {
-  const r = waitReason(repoX, mkItem({ after: ["fac-1", "fac-2"] }), { done: (ref) => ref === "fac-1" });
-  expect(r).toEqual({ kind: "waits_on", ids: ["fac-2"], text: "Waits on fac-2" });
-});
-
-test("waitReason: an Ask gives its question", () => {
-  const asked = mkItem({ ask: "input", reason: "no-commit", question: "q?" });
-  expect(waitReason(repoX, asked, { done: () => true })).toEqual({ kind: "ask", reason: "q?", text: "Waits for you: q?" });
-});
-
-test("waitReason: ready, gated live, and red", () => {
-  const item = mkItem({});
-  expect(waitReason(repoX, item, { done: () => true, gated: null })).toEqual({ kind: "ready", text: "Starts at the next dispatch" });
-  process.env.ALEPH_LIVE_CAP = "12";
-  const live = waitReason(repoX, item, { done: () => true, gated: { gate: "live", why: "12 agent runs are live" } });
-  expect(live).toEqual({ kind: "gate", gate: "live", text: "Waiting for a slot (12 of 12 running)" });
-  expect(waitReason(repoX, item, { done: () => true, red: "main is red" })).toEqual({ kind: "red", text: "main is red" });
-});
 
 const storeAt = (lessons: unknown[], minedAt = "") => {
   mkdirSync(join(ctx.base, "factory"), { recursive: true });
