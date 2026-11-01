@@ -3,11 +3,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { speed } from "./api/speed.ts";
+import { withEnv } from "./test-server.ts";
 // @ts-ignore plain JS shared with the page
 import { fileIssue, issueFor, renderEfficiency, selection } from "./views/efficiency.js";
 
 let base: string;
-const saved: Record<string, string | undefined> = {};
+let restore: () => void;
 const now = new Date(2026, 9, 28, 15, 0, 0);
 let n = 0;
 function run(job: string, r: Record<string, unknown>) {
@@ -21,7 +22,7 @@ const span = (h: number, s: number) => ({ started: at(h), ended: new Date(Date.p
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-eff-"));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" })) { saved[k] = process.env[k]; process.env[k] = v; }
+  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" });
   // g1 landed first try; g2 landed after two fix rounds; g3 landed first try; g4 is not landed
   run("g1", { kind: "build", condition: "passed", cost: 1, ...span(8, 600) });
   run("g1", { kind: "land", condition: "landed", ...span(9, 30) });
@@ -34,7 +35,7 @@ beforeAll(() => {
   run("g4", { kind: "build", condition: "stuck", failed: "tests", cost: 9, ...span(8, 600) });
 });
 afterAll(() => {
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  restore();
   rmSync(base, { recursive: true, force: true });
 });
 

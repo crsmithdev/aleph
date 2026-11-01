@@ -3,10 +3,11 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activity, clearCache } from "./api/activity.ts";
+import { withEnv } from "./test-server.ts";
 
 let obsHits = 0;
 let base: string, fake: ReturnType<typeof Bun.serve>;
-const saved: Record<string, string | undefined> = {};
+let restore: () => void;
 
 const real = new Date();
 const now = new Date(real.getFullYear(), real.getMonth(), real.getDate(), 23, 0, 0);
@@ -36,14 +37,14 @@ beforeAll(() => {
       return new Response("not found", { status: 404 });
     },
   });
-  for (const [k, v] of Object.entries({
+  restore = withEnv({
     LANGFUSE_BASE_URL: `http://127.0.0.1:${fake.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk",
-  })) { saved[k] = process.env[k]; process.env[k] = v; }
+  });
 });
 
 afterAll(() => {
   fake.stop(true);
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  restore();
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -72,8 +73,7 @@ describe("activity", () => {
   });
 
   test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, the old answer comes back at once and one reload runs", async () => {
-    const saveTtl = process.env.ALEPH_UI_CACHE_TTL;
-    process.env.ALEPH_UI_CACHE_TTL = "0.3";
+    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "0.3" });
     clearCache();
     try {
       obsHits = 0;
@@ -93,18 +93,17 @@ describe("activity", () => {
       await activity(7, "fac", now);
       expect(obsHits).toBe(3);
     } finally {
-      if (saveTtl === undefined) delete process.env.ALEPH_UI_CACHE_TTL; else process.env.ALEPH_UI_CACHE_TTL = saveTtl;
+      restoreTtl();
       clearCache();
     }
   });
 
   test("without Langfuse keys the ledger half still answers", async () => {
-    const k = process.env.LANGFUSE_PUBLIC_KEY;
-    process.env.LANGFUSE_PUBLIC_KEY = "";
+    const restoreKey = withEnv({ LANGFUSE_PUBLIC_KEY: "" });
     try {
       const a = await activity(7, null, now);
       expect(a.langfuse).toBe("off");
-    } finally { process.env.LANGFUSE_PUBLIC_KEY = k; }
+    } finally { restoreKey(); }
   });
 });
 

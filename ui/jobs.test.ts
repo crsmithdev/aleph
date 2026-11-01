@@ -5,13 +5,14 @@ import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
 import { add, setStatus } from "../todo/lib/todo.ts";
 import { routes } from "./api/jobs.ts";
+import { withEnv } from "./test-server.ts";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
 // @ts-ignore plain JS, shared with the page
 import * as jobView from "./views/job.js";
 
 let base: string, jobsDir: string;
-const saved: Record<string, string | undefined> = {};
+let restore: () => void;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -58,10 +59,7 @@ beforeAll(() => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: fac }, oth: { path: oth } }));
-  for (const [k, val] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, LANGFUSE_PUBLIC_KEY: "" })) {
-    saved[k] = process.env[k]; process.env[k] = val;
-  }
-  Object.assign(process.env, gitEnv);
+  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, LANGFUSE_PUBLIC_KEY: "", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => { add(doc, "old title"); return true; }, true);
   // fac-9: a worker, a fix round with a reviewer, then a land.
   run("20261027-000001-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
@@ -73,7 +71,7 @@ beforeAll(() => {
   run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", condition: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
 });
 afterAll(() => {
-  for (const [k, val] of Object.entries(saved)) if (val === undefined) delete process.env[k]; else process.env[k] = val;
+  restore();
   rmSync(base, { recursive: true, force: true });
 });
 

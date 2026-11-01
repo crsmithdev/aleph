@@ -6,12 +6,13 @@ import { partsOf, readList, writeList } from "../todo/lib/store.ts";
 import { buildReviewFixture } from "./fixtures/review/build.ts";
 import { add, addPart, refOf, type Issue } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
+import { withEnv } from "./test-server.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/status.ts";
 
 let base: string, jobsDir: string, factory: string;
-const saved: Record<string, string | undefined> = {};
+let restore: () => void;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -43,11 +44,7 @@ beforeAll(() => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, checks: [] } }));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_DAY_CAP: "12" })) {
-    saved[k] = process.env[k];
-    process.env[k] = v;
-  }
-  Object.assign(process.env, gitEnv);
+  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_DAY_CAP: "12", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting goal" ? { spec: "Do it." } : {});
     return true;
@@ -62,7 +59,7 @@ beforeAll(() => {
   writeFileSync(join(factory, "tick.log"), `${ago(30)} yesterday line\n${now.toISOString()} started none\n`);
 });
 afterAll(() => {
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  restore();
   rmSync(base, { recursive: true, force: true });
 });
 
@@ -313,8 +310,7 @@ describe("the review fixture", () => {
   test("every item's Incoming status is its `aleph status` stage, and its list is the list of that stage", () => {
     const home = mkdtempSync(join(tmpdir(), "aleph-ui-review-"));
     const env = buildReviewFixture(home);
-    const savedEnv: Record<string, string | undefined> = {};
-    for (const [k, v] of Object.entries(env)) { savedEnv[k] = process.env[k]; process.env[k] = v; }
+    const restoreEnv = withEnv(env);
     try {
       const s = state();
       const incoming = new Map(s.incoming.map((i) => [i.id, i.stage]));
@@ -347,7 +343,7 @@ describe("the review fixture", () => {
       // Every stage has an item, and the fixture holds one of each shape.
       expect(Object.keys(stages).sort()).toEqual(Object.keys(LIST_OF).sort());
     } finally {
-      for (const [k, v] of Object.entries(savedEnv)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+      restoreEnv();
       rmSync(home, { recursive: true, force: true });
     }
   // One `jobs/cli.ts status` process per fixture item (34 here, about 120 ms each), so it needs more than the 5 s default under load. Matches the 30 s the test script uses.
@@ -377,12 +373,11 @@ describe("waiting entries", () => {
     run("20261027-000060-a", { job: "live-x", name: "live-x", condition: "running" });
     const child = spawn("bash", ["-c", "sleep 30; true", "_", dir], { stdio: "ignore" });
     writeFileSync(join(dir, "pid"), String(child.pid));
-    const keep = process.env.ALEPH_LIVE_CAP;
-    process.env.ALEPH_LIVE_CAP = "1";
+    const restoreCap = withEnv({ ALEPH_LIVE_CAP: "1" });
     try {
       expect(by(state(now), "waiting goal")).toMatchObject({ kind: "gate", why: "Waiting for a slot (1 of 1 running)" });
     } finally {
-      if (keep === undefined) delete process.env.ALEPH_LIVE_CAP; else process.env.ALEPH_LIVE_CAP = keep;
+      restoreCap();
       child.kill();
       rmSync(dir, { recursive: true });
     }
@@ -426,10 +421,9 @@ describe("factory.nextTick and tickInProgress read systemctl show and is-active"
     const dir = mkdtempSync(join(tmpdir(), "aleph-ui-systemctl-"));
     writeFileSync(join(dir, "systemctl"), `#!/bin/sh\n${script}\n`);
     Bun.spawnSync(["chmod", "+x", join(dir, "systemctl")]);
-    const path = process.env.PATH;
-    process.env.PATH = `${dir}:${path}`;
+    const restorePath = withEnv({ PATH: `${dir}:${process.env.PATH}` });
     try { const s = state(); return { nextTick: s.factory.nextTick, tickInProgress: s.factory.tickInProgress }; }
-    finally { process.env.PATH = path; rmSync(dir, { recursive: true, force: true }); }
+    finally { restorePath(); rmSync(dir, { recursive: true, force: true }); }
   }
   const noNext = `if [ "$2" = show ]; then printf 'NextElapseUSecRealtime=\\nNextElapseUSecMonotonic=0\\n'; exit 0; fi`;
   test("a next elapse is the next tick", () => {

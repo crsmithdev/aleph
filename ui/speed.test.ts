@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withEnv } from "./test-server.ts";
 import { agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
 import { durShort, weekText, xLabel } from "./views/speed.js";
@@ -9,7 +10,7 @@ import { durShort, weekText, xLabel } from "./views/speed.js";
 import { dur } from "./lib.js";
 
 let base: string;
-const saved: Record<string, string | undefined> = {};
+let restore: () => void;
 const now = new Date(2026, 9, 28, 15, 0, 0);
 const at = (daysAgo: number, h: number, m = 0) => new Date(2026, 9, 28 - daysAgo, h, m).toISOString();
 let n = 0;
@@ -22,7 +23,7 @@ const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, 
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-speed-"));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ISSUES: join(base, "issues") })) { saved[k] = process.env[k]; process.env[k] = v; }
+  restore = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ISSUES: join(base, "issues") });
   // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
   run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
   run({ kind: "build", condition: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
@@ -38,7 +39,7 @@ beforeAll(() => {
   run({ kind: "plan", condition: "done", ...secs(20, 9, 90) });
 });
 afterAll(() => {
-  for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  restore();
   rmSync(base, { recursive: true, force: true });
 });
 

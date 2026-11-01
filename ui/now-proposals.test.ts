@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 import { held, state } from "./fixtures/status-state.ts";
+import { withEnv } from "./test-server.ts";
 import { asksOf, withAttn, rows, problem, prop } from "./test-now.ts";
 
 // ---- proposals ----
@@ -49,11 +50,10 @@ test("the lede says proposals need your attention", () => {
 
 test("approve and decline handlers", async () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-prop-"));
-  const keys = ["ALEPH_FACTORY_DIR", "ALEPH_ISSUES", "ALEPH_REPOS", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
-  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  let restore = () => {};
   const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd, stdout: "pipe", stderr: "pipe" }); if (p.exitCode) throw new Error(String(p.stderr)); };
   try {
-    Object.assign(process.env, { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
+    restore = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
       ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json") });
     sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
     sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
@@ -87,7 +87,7 @@ test("approve and decline handlers", async () => {
     expect(await d.json()).toEqual({ code: 0, stdout: "declined", stderr: "" });
     expect(stored()[1].state).toBe("declined");
   } finally {
-    for (const k of keys) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+    restore();
     rmSync(base, { recursive: true, force: true });
   }
 });
