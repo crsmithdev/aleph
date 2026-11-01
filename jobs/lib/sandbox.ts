@@ -31,6 +31,21 @@ function resolveBin(name: string): string | null {
   return p ? realpathSync(p) : null;
 }
 
+/** Tools the host has and CI does not. A check step hides them so it sees what CI sees. */
+export const NOT_ON_CI = ["tailscale"] as const;
+
+/** Paths of the tools in `names` that resolve on the run PATH: each path and its real path. */
+function toolPaths(names: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const n of names) {
+    const p = Bun.which(n, { PATH: runPath() });
+    if (!p) continue;
+    out.add(p);
+    out.add(realpathSync(p));
+  }
+  return [...out];
+}
+
 /** A home for a step: Claude Code settings (auto memory off, no plugins) and a git identity. */
 export function writeHome(home: string): void {
   mkdirSync(join(home, ".claude"), { recursive: true });
@@ -82,7 +97,7 @@ const WORKER_NET: Net = { domains: ["api.anthropic.com", "registry.npmjs.org"], 
 /** srt's own sockets: a short folder, because a Unix socket path holds 108 characters and a run folder's name has no limit. */
 export const sockDir = (dir: string): string => join(layout().sandbox, ".s", Bun.hash(dir).toString(16).slice(0, 12));
 
-export function profile(dir: string, o: { read: string[]; write: string[]; net?: Net }): string {
+export function profile(dir: string, o: { read: string[]; write: string[]; net?: Net; hideCiMissing?: boolean }): string {
   const vendor = join(expand("~/.aleph/tools/lib/node_modules/@anthropic-ai/sandbox-runtime"), "vendor");
   const bins = ["claude", "bun", "git"].map((b) => { try { return realpathSync(join(dir, "bin", b)); } catch { return null; } }).filter(Boolean) as string[];
   const net = o.net ?? WORKER_NET;
@@ -93,7 +108,7 @@ export function profile(dir: string, o: { read: string[]; write: string[]; net?:
   const settings = {
     network: { allowedDomains: net.domains, allowLocalBinding: net.localBinding, deniedDomains: [] },
     filesystem: {
-      denyRead: ["/home", "/root", "/mnt", "/run", "/var/run", "/srv", "/tmp"],
+      denyRead: ["/home", "/root", "/mnt", "/run", "/var/run", "/srv", "/tmp", ...(o.hideCiMissing ? toolPaths(NOT_ON_CI) : [])],
       allowRead: [...bins, vendor, join(dir, "bin"), sockDir(dir), ...read.map((p) => join(dir, p))],
       allowWrite: o.write.map((p) => join(dir, p)),
       denyWrite: [],
@@ -121,7 +136,7 @@ export const stallReason = (): string => {
  * profile: it tests the flow, not the isolation.
  */
 export async function sandboxed(dir: string, script: string, o: {
-  read: string[]; write: string[]; net?: Net; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stall?: number; stdin?: string;
+  read: string[]; write: string[]; net?: Net; hideCiMissing?: boolean; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stall?: number; stdin?: string;
   onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void;
 }): Promise<Step> {
   const inner: Record<string, string> = {

@@ -635,3 +635,11 @@ test("a generated test name that is not literal in the file is cleared like a wr
   expect(ran[1]).toBe("bun run test");
   expect(flakeNotes()).toContain("(no file) > case 3");
 });
+
+test("the acceptance check step runs with TZ=UTC", async () => {
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
+  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
+  const r = await sandboxRunner(repo, sha, "echo tz=[$TZ]");
+  expect(r.output).toContain("tz=[UTC]");
+});

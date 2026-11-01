@@ -599,7 +599,7 @@ async function checksInSandbox(folder: string, dir: string, bundle: string, ref:
     }),
   ].join("\n");
   phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
-  const r = await withSlot(() => sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: join(folder, "check.out"), stderr: join(folder, "check.out") }));
+  const r = await withSlot(() => sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, stdout: join(folder, "check.out"), stderr: join(folder, "check.out") }));
   const read = (f: string) => existsSync(join(dir, "checklog", f)) ? readFileSync(join(dir, "checklog", f), "utf8").trim() : undefined;
   const setup = read("setup.code");
   if (setup === undefined) return `checks did not start (exit ${r.code})`;

@@ -194,7 +194,7 @@ export const sandboxRunner: Runner = async (repo, sha, command) => {
     const free = await checkSlot();
     let r;
     try {
-      r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", stdout: logs, stderr: logs });
+      r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, stdout: logs, stderr: logs });
     } finally {
       free();
     }

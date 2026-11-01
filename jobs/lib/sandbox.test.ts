@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { makeRunFolder, runPath } from "./sandbox.ts";
+import { makeRunFolder, profile, runPath, sandboxed } from "./sandbox.ts";
 
 const base = mkdtempSync(join(tmpdir(), "aleph-sandbox-"));
 process.env.ALEPH_SANDBOX_DIR = join(base, "runs");
@@ -47,4 +47,44 @@ test("makeRunFolder finds claude in ~/.local/bin when PATH lacks it", () => {
 test("makeRunFolder writes an executable bin/aleph-shot", () => {
   const dir = makeRunFolder("r-shot");
   expect(statSync(join(dir, "bin/aleph-shot")).mode & 0o111).toBe(0o111);
+});
+
+test("profile hides a CI-missing tool under denyRead only with the option", () => {
+  const bin = join(base, "fakebin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "tailscale"), "#!/bin/sh\n");
+  chmodSync(join(bin, "tailscale"), 0o755);
+  const old = process.env.PATH;
+  const dir = makeRunFolder("r-hide");
+  const deny = (o: object) => JSON.parse(readFileSync(profile(dir, { read: [], write: ["tmp"], ...o }), "utf8")).filesystem.denyRead as string[];
+  try {
+    process.env.PATH = `${bin}:/nonexistent`;
+    const plain = deny({});
+    expect(plain).not.toContain(join(bin, "tailscale"));
+    const hidden = deny({ hideCiMissing: true });
+    expect(hidden).toContain(join(bin, "tailscale"));
+    expect(hidden).toContain(realpathSync(join(bin, "tailscale")));
+    expect(hidden.slice(0, plain.length)).toEqual(plain);
+    process.env.PATH = "/nonexistent";
+    expect(deny({ hideCiMissing: true })).toEqual(plain);
+  } finally { process.env.PATH = old; }
+});
+
+test("a check step gets TZ=UTC from its option and a worker step gets no TZ", async () => {
+  const dir = makeRunFolder("r-tz");
+  const old = { cmd: process.env.ALEPH_SANDBOX_CMD, tz: process.env.TZ };
+  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
+  process.env.TZ = "Asia/Tokyo";
+  try {
+    const run = async (name: string, env?: Record<string, string>) => {
+      const f = join(dir, name);
+      await sandboxed(dir, 'echo "tz=[$TZ]"', { read: [], write: ["tmp"], cwd: "work", env, stdout: f, stderr: f });
+      return readFileSync(f, "utf8");
+    };
+    expect(await run("check.out", { TZ: "UTC" })).toContain("tz=[UTC]");
+    expect(await run("worker.out")).toContain("tz=[]");
+  } finally {
+    if (old.cmd === undefined) delete process.env.ALEPH_SANDBOX_CMD; else process.env.ALEPH_SANDBOX_CMD = old.cmd;
+    if (old.tz === undefined) delete process.env.TZ; else process.env.TZ = old.tz;
+  }
 });
