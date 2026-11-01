@@ -131,6 +131,12 @@ test("a batch of three: one check call, one push, three commits, each with its o
   expect(existsSync(join(repo.path, "t3.txt"))).toBe(true);
 });
 
+test("in a batch each commit has the Issue trailer of its own run", async () => {
+  const [a, b, c] = [job("t1", [["t1.txt", "1\n"]], { on: "demo-11" }), queued(job("t2", [["t2.txt", "2\n"]], { on: "demo-12" })), queued(job("t3", [["t3.txt", "3\n"]], { on: "demo-13" }))];
+  expect(await land(a, repo, ports())).toMatchObject({ code: 0, outcome: { condition: "landed" } });
+  for (const [e, n] of [[a, 11], [b, 12], [c, 13]] as const) expect(remote("log", "-1", "--format=%b", `--grep=^Job: ${e.run.job}$`, "main")).toContain(`Issue: demo-${n}\n`);
+});
+
 test("a queued land with a batch verdict in its folder returns that verdict", async () => {
   const e = job("given", []);
   writeFileSync(join(e.folder, "batch.json"), JSON.stringify({ verdict: { condition: "landed", commit: "abc" }, code: 0, checks: [] }));

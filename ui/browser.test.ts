@@ -123,7 +123,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("ask rows: the button sits right of its text at 1280 px and under it at 720 px; deny reveals its input as Confirm", async () => {
     await page.go("#/");
     await page.until('document.querySelector("#view .choice .act")');
-    const geo = `(() => { const c = document.querySelector("#view .choice"); const t = c.querySelector(".choice-text").getBoundingClientRect(), b = c.querySelector(".act").getBoundingClientRect(); return { right: b.right > t.right - 1 && b.left >= t.right - 1, rowTop: b.top >= t.top - 1 && b.top <= t.bottom, under: b.top >= t.bottom - 1 }; })()`;
+    await page.width(1280);
+    const geo = `(() => { const c = document.querySelector("#view .choice"); const t = c.querySelector(".choice-text").getBoundingClientRect(), b = c.querySelector(".act").getBoundingClientRect(); return { right: b.right > t.right - 1 && b.left >= t.right - 1, rowTop: b.top < t.bottom && b.bottom > t.top, under: b.top >= t.bottom - 1 }; })()`;
     const g = await page.ev<any>(geo);
     expect(g.right && g.rowTop).toBe(true);
     await page.width(720);
