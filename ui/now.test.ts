@@ -775,3 +775,11 @@ test("the sidebar links and the routes exist", async () => {
     expect(m.view.sub).toBe(true);
   }
 });
+
+test("the Weekly usage tile shows the snapshot's age only while stale", () => {
+  const now = { seven_day: 25, five_hour: 1, at: "2026-11-01T07:20:00Z", seven_day_resets_at: "2026-11-07T08:00:00Z" };
+  const st = { ...state, now: "2026-11-01T08:00:00Z" };
+  expect(r.renderTiles({ ...st, usage: { now, stale: true } }, WEEK, DAY)).toContain("as of 40m ago");
+  expect(r.renderTiles({ ...st, usage: { now, stale: false } }, WEEK, DAY)).not.toContain("as of");
+  expect(r.renderUsage({ ...st, usage: { now, stale: true } })).toContain("as of 40m ago");
+});

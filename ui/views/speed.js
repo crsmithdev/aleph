@@ -85,6 +85,13 @@ export function pace(s) {
   if (gone === null || gone === undefined) return null;
   return { used: cur.seven_day, gone, word: cur.seven_day > gone ? "over" : "under" };
 }
+/** "as of 40m ago" for a stale snapshot, else "". */
+export function usageAge(s) {
+  const cur = s.usage?.now;
+  if (!cur || !s.usage.stale) return "";
+  const sec = Math.max(0, (Date.parse(s.now) - Date.parse(cur.at)) / 1000);
+  return Number.isNaN(sec) ? "" : `as of ${durShort(sec)} ago`;
+}
 /** The Weekly usage tile: the used share, the bar with the mark for the week gone, the reset time. */
 export function usageTile(s, href = "") {
   const cur = s.usage?.now;
@@ -92,7 +99,7 @@ export function usageTile(s, href = "") {
   const p = pace(s);
   const label = p ? `${Math.round(p.used)}% used, ${p.gone.toFixed(1)}% of the week gone` : `${Math.round(cur.seven_day)}% used`;
   const bar = `<div class="usebar" role="img" aria-label="${esc(label)}"><div style="width:${Math.min(100, cur.seven_day)}%"></div>${p ? `<i style="left:${p.gone}%"></i>` : ""}</div>`;
-  const notes = (p ? small(`${p.word} pace: ${p.gone.toFixed(1)}% of the week gone`) : "") + (cur.seven_day_resets_at ? small(`resets ${when(cur.seven_day_resets_at, new Date(s.now))}`) : "");
+  const notes = (p ? small(`${p.word} pace: ${p.gone.toFixed(1)}% of the week gone`) : "") + (cur.seven_day_resets_at ? small(`resets ${when(cur.seven_day_resets_at, new Date(s.now))}`) : "") + (usageAge(s) ? small(usageAge(s)) : "");
   return tile("Weekly usage", `${Math.round(cur.seven_day)}%`, bar + notes, href);
 }
 

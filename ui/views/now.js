@@ -2,7 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, localId, openDiffs, repoIdLink, repoOf, shortModel, when } from "../lib.js";
-import { causeRow, durShort, dur, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, small, speedOf, tile, trend, usable, usageTile } from "./speed.js";
+import { causeRow, durShort, dur, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, small, speedOf, tile, trend, usable, usageAge, usageTile } from "./speed.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -83,7 +83,8 @@ export function renderUsage(s) {
   const cur = s.usage?.now;
   if (!cur) return `<span class="quiet">usage unknown</span>`;
   const reset = cur.seven_day_resets_at && !Number.isNaN(Date.parse(cur.seven_day_resets_at)) ? `<span class="quiet">resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}</span>` : "";
-  return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span>${Number.isFinite(cur.five_hour) && cur.five_hour !== null ? `<span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>` : ""}${reset}`;
+  const age = usageAge(s) ? `<span class="quiet">${esc(usageAge(s))}</span>` : "";
+  return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span>${Number.isFinite(cur.five_hour) && cur.five_hour !== null ? `<span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>` : ""}${reset}${age}`;
 }
 
 /** The status line: the time, the status sentence, Pause or Resume. */

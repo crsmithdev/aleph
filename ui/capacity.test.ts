@@ -52,3 +52,13 @@ test("the chart has one area of the total agents live", () => {
   expect(o.series.length).toBe(1);
   expect(o.series[0].data).toEqual([1.5, 0]);
 });
+
+test("a stale usage shows the figure and its age; a fresh one shows no age", () => {
+  const at = "2026-11-01T07:20:00Z";
+  const stale = { ...S, usage: { stale: true, now: { ...S.usage.now, at } } };
+  expect(headline(stale)).toBe("Usage is under pace: 7% used, 14.3% of the week gone (as of 40m ago).");
+  expect(renderCapacity(stale, null)).toContain("as of 40m ago");
+  const fresh = { ...S, usage: { stale: false, now: { ...S.usage.now, at } } };
+  expect(headline(fresh)).not.toContain("as of");
+  expect(headline({ ...S, usage: { stale: false, now: null } })).toBe("Usage is unknown.");
+});

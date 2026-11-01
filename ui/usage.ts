@@ -224,8 +224,10 @@ export function currentFit(): Promise<Fit | null> {
 export const clearFit = () => fitCache.clear();
 
 export interface UsageSummary {
-  /** The latest snapshot, or null when the usage is unknown. */
+  /** The last snapshot of the reset window, or null with none or when its week has ended. */
   now: Snapshot | null;
+  /** True when the last poll failed or the snapshot is older than STALE_MS. */
+  stale: boolean;
   /** The 7-day percent since the last reset. */
   series: { at: string; seven_day: number }[];
   /** Hours of snapshots since the last reset. */
@@ -253,13 +255,15 @@ export function gainSince(w: Snapshot[], ms: number): number | null {
   return best ? Math.max(0, last.seven_day - best.seven_day) : null;
 }
 
-/** What the Status page shows; `now` is null while the last poll failed or the last row is old. */
+/** What the Status page shows; `now` is null with no snapshot or after the snapshot's week ended; `stale` marks an old or failed one. */
 export function summary(clock = Date.now()): UsageSummary {
   const w = sinceReset(readSnapshots());
   const last = w.at(-1);
-  const known = last && !lastFailed && clock - Date.parse(last.at) <= STALE_MS;
+  const resets = last ? Date.parse(last.seven_day_resets_at ?? "") : NaN;
+  const known = last && !(resets <= clock);
   return {
     now: known ? last : null,
+    stale: !!known && (lastFailed || clock - Date.parse(last.at) > STALE_MS),
     series: w.map((s) => ({ at: s.at, seven_day: s.seven_day })),
     hours: w.length > 1 ? (Date.parse(w.at(-1)!.at) - Date.parse(w[0].at)) / HOUR : 0,
     last5h: gainSince(w, 5 * HOUR),

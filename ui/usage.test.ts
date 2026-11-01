@@ -49,11 +49,31 @@ test("a poll appends the snapshot and the token is nowhere in it", async () => {
   expect(JSON.stringify(summary())).not.toContain(TOKEN);
 });
 
-test("a bad token records nothing and the usage is unknown", async () => {
+test("a bad token records nothing; the last snapshot stays, marked stale", async () => {
   await pollOnce();
   writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, JSON.stringify({ claudeAiOauth: { accessToken: "bad" } }));
   expect(await pollOnce()).toBeNull();
   expect(readFileSync(process.env.ALEPH_USAGE_FILE!, "utf8").trim().split("\n")).toHaveLength(1);
+  expect(summary().now?.seven_day).toBe(25);
+  expect(summary().stale).toBe(true);
+  const h = renderUsage({ now: new Date().toISOString(), usage: summary() });
+  expect(h).toContain("25%");
+  expect(h).toContain("as of");
+  expect(h).not.toContain("usage unknown");
+});
+
+test("an old snapshot is stale but kept; after its reset it is dropped; none is unknown", async () => {
+  await pollOnce();
+  const last = readSnapshots().at(-1)!;
+  const at = Date.parse(last.at);
+  const s = summary(at + 40 * 60_000);
+  expect(s.now).not.toBeNull();
+  expect(s.stale).toBe(true);
+  expect(summary(at + 60_000).stale).toBe(false);
+  expect(renderUsage({ now: new Date(at + 60_000).toISOString(), usage: summary(at + 60_000) })).not.toContain("as of");
+  const r = Date.parse(last.seven_day_resets_at ?? "");
+  if (!Number.isNaN(r)) expect(summary(r + 1).now).toBeNull();
+  rmSync(process.env.ALEPH_USAGE_FILE!);
   expect(summary().now).toBeNull();
   expect(renderUsage({ now: new Date().toISOString(), usage: summary() })).toContain("usage unknown");
 });
