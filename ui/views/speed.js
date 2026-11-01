@@ -31,7 +31,7 @@ const PHASES = [
 /** One phase card: the title and count, the p50, the p90, and a chart of its median per `step`, which `mountSpeed` fills. A phase with no count has no times. */
 const phaseCard = ([key, title, text], c, step) => {
   const f = (v) => (c.count ? dur(v) : dur(null));
-  return `<div class="med" title="${esc(text)}"><span class="k">${esc(title)} (${c.count})</span><span class="v">${esc(f(c.p50))} p50</span><span class="p90">${esc(f(c.p90))} p90</span><div class="speedchart spark" data-chart="${key}" role="img" aria-label="${esc(`Median ${title.toLowerCase()} time per ${step}`)}"></div></div>`;
+  return `<div class="med" title="${esc(text)}"><span class="k">${esc(title)} (${c.count})</span><span class="v">${esc(f(c.p50))} <small>p50</small></span><span class="p90">${esc(f(c.p90))} <small>p90</small></span><div class="speedchart spark" data-chart="${key}" role="img" aria-label="${esc(`Median ${title.toLowerCase()} time per ${step}`)}"></div></div>`;
 };
 
 /** The phase cards: intake, queue, implement, land, lead time. */
@@ -73,7 +73,7 @@ export function renderFlowPanels(d) {
   const unknown = a.unknown ? `<p class="quiet">Not counted: ${plural(a.unknown, "issue")} with no filing time or created date</p>` : "";
   const panel = (id, title, text, stats, note, label) => `<section class="flowpanel" title="${esc(text)}"><h3>${esc(title)}</h3><p class="stats">${stats}</p><p class="quiet note">${note}</p><div class="speedchart tall" data-panel="${id}" role="img" aria-label="${esc(label)}"></div>${id === "age" ? unknown : ""}</section>`;
   return `<div class="flowpanels">` +
-    panel("age", "Age of open work", "How long each open issue has been open, now. This does not change with the time window.", `${a.count} open · ${esc(ageText(a.p50))} p50 · ${esc(ageText(a.p90))} p90`, oldest, "Open issues by age") +
+    panel("age", "Age of open work", "How long each open aleph issue has been open, now. This does not change with the time window.", `${a.count} open · ${esc(ageText(a.p50))} p50 · ${esc(ageText(a.p90))} p90`, oldest, "Open issues by age") +
     panel("live", "Concurrency", `Agent runs live at once, the runs the live cap counts. The line is the most live in each step. The cap is the cap now: time under an earlier cap is measured against it too.`, `${c.mean.toFixed(1)} mean · ${c.peak} peak · ${pctText(c.atCap)} of the time at the cap`, `cap ${c.cap}, ${esc(WINDOW_TEXT[d.window])}`, "Agent runs live at once over time") +
     `</div>`;
 }
@@ -144,42 +144,46 @@ export function renderEffCards(d) {
     card("Lost time", hours(lost.hours), `${Math.round(lost.share * 100)}% of agent hours on runs whose work did not reach main`) + `</div>`;
 }
 
-/** A bucket's x-axis label: "4a" or "1:36p" in the hour and day windows, "Sat" in week, "10/25" in month. */
+/** A bucket's x-axis label: "4a" or "1:36p" in the hour and day windows, "10/25" in week and month. */
 export function xLabel(at, window) {
   const d = new Date(at);
-  if (window === "month") return `${d.getMonth() + 1}/${d.getDate()}`;
-  if (window === "week") return d.toLocaleDateString("en-US", { weekday: "short" });
+  if (window === "week" || window === "month") return `${d.getMonth() + 1}/${d.getDate()}`;
   const m = d.getMinutes();
   return `${d.getHours() % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""}${d.getHours() < 12 ? "a" : "p"}`;
 }
 
-/** The bar-chart option of one phase card: one time per bucket (null leaves a gap), no y axis, the first and last x labels, and `p50` as a dotted line when it lies under the top bar. */
+// How many buckets lie between date labels on a phase card, counted back from today.
+const DATE_EVERY = { week: 2, month: 7 };
+
+/** The bar-chart option of one phase card: one time per bucket (null leaves a gap), no y axis, x labels every few days in week and month and at the ends otherwise, and `p50` as a dotted line when it lies under the top bar. */
 export function barOption(buckets, key, { window, color, p50 = 0, lineColor = "#888" }) {
   const n = buckets.length;
   const peak = Math.max(...buckets.map((b) => b[key] ?? 0));
+  const every = DATE_EVERY[window];
   const data = p50 > 0 && p50 <= peak ? [{ yAxis: p50 }] : [];
   return {
     // A push redraws the chart, and an entry animation on each redraw flashes the bars.
     animation: false,
     color: [color],
-    grid: { left: 0, right: 0, top: 2, bottom: 18 },
+    // A date centred under the last bar needs room past it.
+    grid: { left: every ? 12 : 0, right: every ? 12 : 0, top: 2, bottom: 18 },
     tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(dur(q.value))}`; } },
-    xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: { interval: (i) => i === 0 || i === n - 1, alignMinLabel: "left", alignMaxLabel: "right" } },
+    xAxis: { type: "category", data: buckets.map((b) => xLabel(b.at, window)), axisTick: { show: false }, axisLabel: every ? { interval: (i) => (n - 1 - i) % every === 0, showMinLabel: (n - 1) % every === 0 } : { interval: (i) => i === 0 || i === n - 1, alignMinLabel: "left", alignMaxLabel: "right" } },
     yAxis: { type: "value", show: false, min: 0, max: peak || 1, splitLine: { show: false } },
     series: [{ type: "bar", barCategoryGap: "20%", data: buckets.map((b) => b[key]), markLine: { silent: true, symbol: "none", label: { show: false }, lineStyle: { type: "dotted", color: lineColor, width: 1 }, data } }],
   };
 }
 
-/** The bar-chart option of the open-work ages: one bar per age, with its count on top. */
-export function ageOption(bins, { color }) {
+/** The bar-chart option of the open-work ages: one bar per age, with its count inside and no bar for none. */
+export function ageOption(bins, { color, labelColor }) {
   return {
     animation: false,
     color: [color],
-    grid: { left: 8, right: 8, top: 18, bottom: 20 },
+    grid: { left: 8, right: 8, top: 4, bottom: 20 },
     tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${esc(plural(q.value, "issue"))}`; } },
     xAxis: { type: "category", data: bins.map((b) => b.label), axisTick: { show: false } },
     yAxis: { type: "value", show: false, min: 0, splitLine: { show: false } },
-    series: [{ type: "bar", data: bins.map((b) => b.count), label: { show: true, position: "top", formatter: (p) => (p.value ? String(p.value) : "") } }],
+    series: [{ type: "bar", barMinHeight: 18, data: bins.map((b) => b.count || null), label: { show: true, position: "inside", color: labelColor, fontWeight: 600, textBorderWidth: 0 } }],
   };
 }
 
@@ -225,7 +229,7 @@ function draw(box, d) {
   const t = readTokens();
   const colors = { intake: t.run, queue: t.muted, implement: t.need, land: t.done, lead: t.ink };
   const panel = (id, option) => { const el = box.querySelector(`.speedchart[data-panel="${id}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("speed chart failed", e); } };
-  panel("age", ageOption(d.openAge.bins, { color: t.run }));
+  panel("age", ageOption(d.openAge.bins, { color: t.run, labelColor: t.bg }));
   panel("live", liveOption(d.concurrency, { window: d.window, color: t.run, capColor: t.muted }));
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
     const key = el.dataset.chart, c = d.phases[key];

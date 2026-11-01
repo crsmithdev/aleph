@@ -20,7 +20,7 @@ const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, 
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-speed-"));
-  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0" })) { saved[k] = process.env[k]; process.env[k] = v; }
+  for (const [k, v] of Object.entries({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "0", ALEPH_ISSUES: join(base, "issues") })) { saved[k] = process.env[k]; process.env[k] = v; }
   // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
   run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
   run({ kind: "build", condition: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
@@ -104,9 +104,9 @@ test("the view: five phase cards; charts; efficiency with reruns and the wasted 
   expect(h).not.toContain("charts3");
   expect(h.match(/class="med"/g)?.length).toBe(5);
   const one = renderPhases({ phases: { intake: { count: 0, p50: 0, p90: 0 }, queue: { count: 0, p50: 0, p90: 0 }, lead: { count: 0, p50: 0, p90: 0 }, implement: { count: 3, p50: 1200, p90: 1800 }, land: { count: 1, p50: 43, p90: 43 } } });
-  expect(one).toContain('<span class="k">Intake (0)</span><span class="v">– p50</span><span class="p90">– p90</span><div class="speedchart spark" data-chart="intake"');
-  expect(one).toContain('<span class="k">Implement (3)</span><span class="v">20m 00s p50</span><span class="p90">30m 00s p90</span>');
-  expect(one).toContain('<span class="k">Land (1)</span><span class="v">43s p50</span><span class="p90">43s p90</span>');
+  expect(one).toContain('<span class="k">Intake (0)</span><span class="v">– <small>p50</small></span><span class="p90">– <small>p90</small></span><div class="speedchart spark" data-chart="intake"');
+  expect(one).toContain('<span class="k">Implement (3)</span><span class="v">20m 00s <small>p50</small></span><span class="p90">30m 00s <small>p90</small></span>');
+  expect(one).toContain('<span class="k">Land (1)</span><span class="v">43s <small>p50</small></span><span class="p90">43s <small>p90</small></span>');
   for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
   const e = renderEfficiency(d);
   expect(e).toContain("Reruns");
@@ -127,7 +127,11 @@ test("the view: five phase cards; charts; efficiency with reruns and the wasted 
   expect(marked.xAxis.data).toEqual(["4a", "1p"]);
   // A p50 over the top bar would widen the axis: it has no line.
   expect(barOption([{ at: at(0, 4), implement: 90 }], "implement", { window: "day", color: "#000", p50: 300 }).series[0].markLine.data).toEqual([]);
-  expect([xLabel(new Date(2026, 9, 28, 0).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 12).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week"), xLabel(new Date(2026, 9, 5).toISOString(), "month")]).toEqual(["12a", "12p", "1:36p", "Wed", "10/5"]);
+  expect([xLabel(new Date(2026, 9, 28, 0).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 12).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week"), xLabel(new Date(2026, 9, 5).toISOString(), "month")]).toEqual(["12a", "12p", "1:36p", "10/28", "10/5"]);
+  const shown = (w: string, n: number) => Array.from({ length: n }, (_, i) => i).filter((i) => barOption(Array.from({ length: n }, () => ({ at: at(0, 4) })), "implement", { window: w, color: "#000" }).xAxis.axisLabel.interval(i));
+  expect(shown("week", 7)).toEqual([0, 2, 4, 6]);
+  expect(shown("month", 30)).toEqual([1, 8, 15, 22, 29]);
+  expect(shown("day", 24)).toEqual([0, 23]);
   expect(renderPicker("hour")).toMatch(/aria-pressed="true">Hour<[^]*aria-pressed="false">Day/);
   expect(windowOf(new URLSearchParams("window=day"))).toBe("day");
   expect(windowOf(new URLSearchParams("window=x"))).toBe("week");
@@ -300,7 +304,8 @@ test("open work: age from the filing, with bulk-added issues apart and the oldes
   expect(a.bins.map((b) => b.count)).toEqual([1, 1, 0, 0, 0, 1, 0]);
   expect(openAge([], { issue }, t).oldest).toBeNull();
   expect([ageText(7200), ageText(3 * 86400)]).toEqual(["2h 00m", "3d"]);
-  expect(ageOption(a.bins, { color: "#000" }).series[0].data).toEqual([1, 1, 0, 0, 0, 1, 0]);
+  expect(ageOption(a.bins, { color: "#000", labelColor: "#fff" }).series[0].data).toEqual([1, 1, null, null, null, 1, null]);
+  expect(ageOption(a.bins, { color: "#000", labelColor: "#fff" }).series[0].label).toMatchObject({ position: "inside", color: "#fff", textBorderWidth: 0 });
 });
 
 test("concurrency: mean over the window, peak, time at the cap, and only the runs the cap counts", () => {

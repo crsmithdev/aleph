@@ -8,7 +8,7 @@
 import { existsSync } from "node:fs";
 import { flakes, LIVE_CAP } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { allRuns, isBuild, loadRegistry, onOf, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isBuild, onOf, type Run } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, storeDir, uiFetchTtl } from "../../todo/lib/store.ts";
@@ -59,7 +59,7 @@ export interface Speed {
   concurrency: Concurrency;
 }
 
-/** The open issues now, whatever the window. An issue that a bulk commit added takes its age from its `created` date. One with neither counts in `unknown` only. */
+/** The open issues of aleph now, whatever the window. An issue that a bulk commit added takes its age from its `created` date. One with neither counts in `unknown` only. */
 export interface OpenAge {
   count: number; p50: number; p90: number; unknown: number;
   oldest: { goal: string; title: string; href: string; secs: number } | null;
@@ -296,6 +296,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
   return Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(t[k].map((x) => x.secs))])) as Speed["phases"];
 }
 
+const OPEN_AGE_REPO = "aleph";
 const AGE_BINS: [string, number][] = [["<1h", HOUR], ["1-6h", 6 * HOUR], ["6-24h", DAY], ["1-3d", 3 * DAY], ["3-7d", 7 * DAY], ["7-30d", 30 * DAY], [">30d", Infinity]];
 
 /** The age of `open` issues from when each was filed, else from `created`, a date. */
@@ -408,7 +409,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const m = t.goal.lastIndexOf("-");
     t.title = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)))?.title;
   }
-  const open = Object.values(loadRegistry()).flatMap((repo) => (lists.list(repo.key)?.items ?? []).filter((i) => i.sub === undefined && status(i) === "open").map((i) => ({ repo: repo.key, id: i.id, title: i.title, created: i.fm.created })));
+  // Chris, 31 Oct: only aleph's own issues for now; the other repos' backlogs are noise here.
+  const open = (lists.list(OPEN_AGE_REPO)?.items ?? []).filter((i) => i.sub === undefined && status(i) === "open").map((i) => ({ repo: OPEN_AGE_REPO, id: i.id, title: i.title, created: i.fm.created }));
   const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number) => {
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
