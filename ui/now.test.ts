@@ -187,51 +187,69 @@ test("many awaiting jobs all render as rows, each with its details folded and it
   for (const i of [1, 2, 3, 4]) expect(h).toContain(`data-act="land" data-name="aleph-${i}"`);
 });
 
-test("the lede leads with a count and the items, colored; the page has no banner", () => {
-  const h = r.renderLede(withFactory({}));
-  expect(h).toContain("1 ask needs your approval</a> and ");
-  expect(h).toContain("1 job is stuck</a>.");
-  expect(h).not.toContain("Awaiting");
-  expect(h).toContain('class="say error"');
-  expect(h.indexOf("needs your")).toBeLessThan(h.indexOf("stuck"));
+const calmState = { ...withFactory({}), needs: [], stuck: [], needsIssues: [], proposals: [] };
+const said = (o: object, top: object = {}) => r.renderLede({ ...calmState, ...top, factory: { ...calmState.factory, ...o } }).replace(/<[^>]*>/g, "");
+const ciRed = "health: aleph CI on main has failed 2 runs in a row since 2026-11-01 10:00 UTC (abc1234): https://x";
+const mainRed = "health: aleph main is red at abc1234: tsc";
+
+test("with nothing wrong the status sentence is the fine sentence", () => {
+  expect(said({})).toBe("Everything is running smoothly.");
+  expect(r.renderLede(calmState)).toContain('class="say fine"');
+});
+
+test("each error line says its alert, in red", () => {
   const cases: [object, string][] = [
-    [{ runsToday: 12 }, "day cap is reached"],
-    [{ paused: true }, "paused"],
-    [{ hold: "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared." }, "Held: aleph-116 is stuck (merge conflict)."],
-    [{ health: ["health: aleph main is red"] }, "main is red"],
-    [{ probe: { at: "2026-10-27T14:35:00Z", ok: false, failed: ["no network"] } }, "sandbox probe"],
+    [{ health: [ciRed] }, "GitHub CI is broken"],
+    [{ health: [mainRed] }, "the build is failing on main"],
+    [{ probe: { at: "x", ok: false, failed: ["no network"] } }, "the sandbox probe failed"],
+    [{ hold: "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared." }, "jobs are unhealthy"],
+    [{ health: ["health: no factory run started in 24 hours, with 2 open goals"] }, "the factory started no run in 24 hours"],
+    [{ health: ["health: 4 runs wait for Chris; no new run starts"] }, "new runs wait for your answers"],
+    [{ health: ["health: something new broke."] }, "something new broke"],
   ];
-  for (const [o, text] of cases) expect(r.renderLede(withFactory(o))).toContain(text);
-  const page = r.view.render(withFactory({ health: ["health: aleph main is red"] }));
-  expect(page).not.toContain('class="banner"');
-  expect(page).toMatch(/<p class="lede">[^]*main is red/);
-});
-
-test("warning-only problems get the warning class; a failed probe gets error", () => {
-  const calm = { ...withFactory({}), needs: [], stuck: [] };
-  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true } })).toMatch(/say warning">The factory is paused\./);
-  expect(r.renderLede({ ...calm, factory: { ...calm.factory, paused: true, runsToday: 12 } })).toContain("The factory is paused and the day cap is reached.");
-  expect(r.renderLede(withFactory({ needs: [], probe: { at: "x", ok: false, failed: [] } }))).toContain('say error">');
-});
-
-test("with nothing wrong the lede is one of the fine variants, with no count", () => {
-  const calm = { ...withFactory({}), needs: [], stuck: [] };
-  for (let i = 0; i < 20; i++) {
-    const h = r.renderLede({ ...calm, now: new Date(Date.UTC(2026, 9, 28, 12, i * 10)).toISOString() });
-    const text = h.replace(/<[^>]*>/g, "");
-    expect(r.FINE).toContain(text);
-    expect(h).toContain('class="say fine"');
-    expect(h).not.toMatch(/\d|asks you/);
+  for (const [o, text] of cases) {
+    expect(said(o)).toBe(`Alert: ${text}.`);
+    expect(r.renderLede({ ...calmState, factory: { ...calmState.factory, ...o } })).toContain('class="say error"');
   }
 });
 
-test("the fine sentence is stable within a 10-minute window and varies across windows; every variant is positive", () => {
-  const calm = { ...withFactory({}), needs: [], stuck: [] };
-  const at = (min: number) => r.renderLede({ ...calm, now: new Date(Date.UTC(2026, 9, 28, 12, 0, 0) + min * 60_000).toISOString() });
-  expect(at(1)).toBe(at(2));
-  expect(at(10)).toBe(at(11));
-  expect(new Set(Array.from({ length: 10 }, (_, i) => at(i * 10))).size).toBeGreaterThan(1);
-  for (const v of r.FINE) expect(v).not.toMatch(/\bnot\b|\bno |nothing|never/i);
+test("stuck and failed jobs are one alert that links to their cards", () => {
+  const stuck = [job({ name: "aleph-1", condition: "stuck" }), job({ name: "aleph-2", condition: "failed" })];
+  const h = r.renderLede({ ...calmState, stuck });
+  expect(h).toBe('<span class="say error">Alert: <a href="#jobs-stuck">jobs are unhealthy</a>.</span>');
+});
+
+test("two repos with the same trouble say it once", () => {
+  expect(said({ health: [mainRed, "health: koans main is red at def5678: lint"] })).toBe("Alert: the build is failing on main.");
+});
+
+test("the sentence says at most three parts, the most serious first", () => {
+  const stuck = [job({ name: "aleph-1", condition: "stuck" })];
+  expect(said({ health: ["health: 4 runs wait for Chris; no new run starts", mainRed, ciRed] }, { stuck })).toBe("Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy.");
+});
+
+test("what asks for you follows the fine sentence, in the warning colour", () => {
+  const ask = (kind: string) => ({ kind });
+  const asks = (...k: string[]) => ({ asks: k.map(ask) });
+  const raw = (top: object, o: object = {}) => view.renderLede({ ...calmState, ...top, factory: { ...calmState.factory, ...o } });
+  expect(raw(asks("approval"))).toBe('<span class="say warning">Everything is running smoothly; <a href="#awaiting">your permission is needed</a>.</span>');
+  expect(raw(asks("input", "input"))).toContain("smoothly; <a href=\"#awaiting\">your input is needed</a>.");
+  expect(raw(asks("input", "approval"))).toContain("your permission and input are needed");
+  expect(raw({}, { runsToday: 12 })).toContain("Everything is running smoothly; the day cap is reached.");
+  expect(raw(asks("approval"), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">the build is failing on main</a>; <a href="#awaiting">your permission is needed</a>.');
+});
+
+test("a paused factory does not say it runs smoothly", () => {
+  expect(said({ paused: true })).toBe("The factory is paused.");
+  expect(r.renderLede({ ...calmState, factory: { ...calmState.factory, paused: true } })).toContain('class="say warning"');
+  expect(said({ paused: true, runsToday: 12 })).toBe("The factory is paused; the day cap is reached.");
+  expect(said({ paused: true, health: [mainRed] })).toBe("Alert: the build is failing on main; the factory is paused.");
+});
+
+test("the page has no banner and the status line holds the alert", () => {
+  const page = r.view.render(withFactory({ health: [mainRed] }));
+  expect(page).not.toContain('class="banner"');
+  expect(page).toMatch(/<p class="lede">[^]*the build is failing on main/);
 });
 
 test("the most flaked line stays in the report and off the status sentence and the error rows", () => {
@@ -413,23 +431,21 @@ test("an old prose note gets a Problem with no tag or lead, Approve recommendati
   expect(row.match(/<details class="more"/g)?.length).toBe(1);
 });
 
-test("the status line is not 'All is well.' when the Issues section has an item", () => {
+test("the status line says your input is needed when the Issues section has an item", () => {
   const calm = { ...state, needs: [], stuck: [], issues: [], needsIssues: [], factory: { ...state.factory, health: [], hold: undefined, paused: false } };
   for (const o of [{ needsIssues: [{ ...issue(7), question: "q" }] }]) {
     const h = r.renderLede({ ...calm, ...o });
-    for (const v of r.FINE) expect(h).not.toContain(v);
-    expect(h).toContain("1 ask needs your input");
+    expect(h).toContain("your input is needed");
     expect(h).not.toContain("Awaiting");
   }
 });
 
-test("a held run that waits for the firefighter is still one job needs you, never a fine line", () => {
+test("a held run that waits for the firefighter still asks for your permission", () => {
   const held = { ...state, stuck: [], needsIssues: [], factory: { ...state.factory, health: [] } };
   const asks = attend({ runs: held.needs.map(asked), issues: [] }, { "held-path": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } }, []).items;
   const h = r.renderLede({ ...held, asks });
-  expect(h).toContain("1 ask needs your approval");
+  expect(h).toContain("your permission is needed");
   expect(h).toContain('class="say warning"');
-  for (const v of r.FINE) expect(h).not.toContain(v);
 });
 
 test("Status times use the state's own now for the year check", () => {
@@ -497,10 +513,10 @@ test("rows are ordered held, then asking, then proposal, then error; the group i
   expect(h).toContain(">4<");
 });
 
-test("the lede counts proposals as one warning", () => {
+test("the lede says proposals need your permission", () => {
   const s = { ...state, needs: [], stuck: [], factory: { ...state.factory, health: [] }, proposals: [prop] };
-  expect(r.renderLede(s)).toContain("<a href=\"#awaiting\">1 ask needs your approval</a>.");
-  expect(r.renderLede({ ...s, proposals: [prop, prop] })).toContain("2 asks need your approval");
+  expect(r.renderLede(s)).toContain("<a href=\"#awaiting\">your permission is needed</a>.");
+  expect(r.renderLede({ ...s, proposals: [prop, prop] })).toContain("your permission is needed");
 });
 
 test("approve and decline handlers", async () => {

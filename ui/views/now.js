@@ -100,40 +100,40 @@ export function usageLine(series) {
   return `<svg class="usage-line" viewBox="0 0 300 40" preserveAspectRatio="none" role="img" aria-label="7-day usage since the last reset"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
-export const FINE = ["Everything is fine.", "All is well.", "Everything is running smoothly.", "The factory is humming along."];
+export const FINE = "Everything is running smoothly";
+const JOBS_UNHEALTHY = "jobs are unhealthy";
+const MAX_SAID = 3;
 
-/** The status sentence: all fine, or one sentence that lists what asks for you, each part a link. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 /** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
 const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?|most flaked in acceptance/;
 
+/** What the status sentence says for an error line, most serious first. A line with no entry is said as it is, after these. */
+const ALERTS = [
+  [/ CI on main has failed/, "GitHub CI is broken"],
+  [/main is red/, "the build is failing on main"],
+  [/sandbox probe/, "the sandbox probe failed"],
+  [/^Held: /, JOBS_UNHEALTHY],
+  [/no factory run started/, "the factory started no run in 24 hours"],
+  [/runs? wait for Chris/, "new runs wait for your answers"],
+];
+const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
+
+/** The status sentence: "Alert: " and what is wrong, or the fine sentence, then what asks for you; at most MAX_SAID parts, each a link. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 export function renderLede(s) {
   const f = s.factory;
-  const problems = []; // [tone, text, href]
+  const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
+  if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
+  const said = [...alerts].sort((a, b) => alertRank(a) - alertRank(b)).map((t) => [t, t === JOBS_UNHEALTHY && s.stuck.length ? "#jobs-stuck" : "#awaiting"]);
   const asks = s.asks ?? [];
-  const input = asks.filter((i) => i.kind === "input").length, approval = asks.filter((i) => i.kind === "approval").length;
-  const failed = s.stuck.filter((j) => j.condition === "failed").length, stuck = s.stuck.length - failed;
-  if (input) problems.push(["warning", `${input} ${input === 1 ? "ask needs" : "asks need"} your input`, "#awaiting"]);
-  if (approval) problems.push(["warning", `${approval} ${approval === 1 ? "ask needs" : "asks need"} your approval`, "#awaiting"]);
-  if (stuck) problems.push(["error", `${stuck} ${stuck === 1 ? "job is" : "jobs are"} stuck`, "#jobs-stuck"]);
-  if (failed) problems.push(["error", `${failed} ${failed === 1 ? "job has" : "jobs have"} failed`, "#jobs-stuck"]);
-  const health = [...(f.health || [])];
-  if (f.probe && !f.probe.ok && !health.some((l) => /probe/.test(l))) health.push(`health: the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
-  for (const l of health) {
-    const text = l.replace(/^health:\s*/, "");
-    if (QUIET_HEALTH.test(text)) continue;
-    problems.push(["error", text.replace(/\.$/, ""), "#awaiting"]);
-  }
-  if (f.hold) problems.push(["error", f.hold.replace(/\.$/, ""), "#awaiting"]);
-  if (f.paused) problems.push(["warning", "the factory is paused", ""]);
-  if (f.dayCap > 0 && f.runsToday >= f.dayCap) problems.push(["warning", "the day cap is reached", ""]);
-  if (!problems.length) return `<span class="say fine">${FINE[Math.floor((Date.parse(s.now) || Date.now()) / 600000) % FINE.length]}</span>`;
-  const tone = problems.some(([t]) => t === "error") ? "error" : "warning";
-  const parts = problems.map(([, t, href], k) => {
-    const text = k === 0 ? t[0].toUpperCase() + t.slice(1) : t;
-    return href ? `<a href="${href}">${esc(text)}</a>` : esc(text);
-  });
-  const sentence = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
-  return `<span class="say ${tone}">${sentence}.</span>`;
+  const wanted = [asks.some((i) => i.kind === "approval") && "permission", asks.some((i) => i.kind === "input") && "input"].filter(Boolean);
+  if (wanted.length) said.push([`your ${wanted.join(" and ")} ${wanted.length > 1 ? "are" : "is"} needed`, "#awaiting"]);
+  const alert = alerts.size > 0;
+  if (f.paused && alert) said.push(["the factory is paused", ""]);
+  if (f.dayCap > 0 && f.runsToday >= f.dayCap) said.push(["the day cap is reached", ""]);
+  const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
+  if (alert) return `<span class="say error">Alert: ${parts}.</span>`;
+  const lead = f.paused ? "The factory is paused" : FINE;
+  return `<span class="say ${parts || f.paused ? "warning" : "fine"}">${lead}${parts ? `; ${parts}` : ""}.</span>`;
 }
 
 const list = (html) => `<div class="list">${html}</div>`;
