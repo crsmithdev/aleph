@@ -44,7 +44,7 @@ afterAll(() => {
 });
 
 describe("labels", () => {
-  const it = (fm: issues.Issue["fm"]): issues.Issue => ({ id: 1, title: "t", fm, request: "", spec: "", notes: [], legacy: false });
+  const it = (fm: issues.Issue["fm"]): issues.Issue => ({ id: 1, title: "t", fm, request: "", spec: "", notes: [] });
 
   test("a list, a lone label, and none", () => {
     expect(store.labels(it({ labels: ["a", "b"] }))).toEqual(["a", "b"]);
@@ -54,7 +54,7 @@ describe("labels", () => {
 
   test("the predicates", () => {
     const doc: issues.Doc = { items: [] };
-    const spec = (fm: Record<string, unknown> = {}): issues.Issue => ({ ...it(fm), spec: "Do it." });
+    const spec = (fm: issues.Issue["fm"] = {}): issues.Issue => ({ ...it(fm), spec: "Do it." });
     expect(store.isBuildable(doc, spec())).toBe(true);
     expect(store.isBuildable(doc, spec({ ask: "input" }))).toBe(false);
     expect(store.isBuildable(doc, spec({ closed_as: "done" }))).toBe(false);
