@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { availableParallelism, loadavg } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { note, noteFlake, writeList } from "../../todo/lib/store.ts";
+import { note, noteFlake, setAsk, writeList, type Ask } from "../../todo/lib/store.ts";
 import { git } from "./git.ts";
 import { checkSlot, expand, type Repo } from "./ledger.ts";
 import { section } from "./plan.ts";
@@ -216,13 +216,14 @@ export const sandboxRunner: Runner = async (repo, sha, command) => {
 export const lastLines = (text: string, n = 40): string =>
   text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join(" ⏎ ");
 
-/** Item `id` open again, with `text` as a note. Returns why it could not, or null. */
-function reopen(repo: Repo, id: number | string, text: string): string | null {
+/** Item `id` open again, with `text` as a note and `ask` set on it, in one write. Returns why it could not, or null. */
+function reopen(repo: Repo, id: number | string, text: string, ask?: Ask): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text.slice(0, 80)}`, (doc) => {
       const item = issues.find(doc, id);
       if (!item) return null;
       issues.setStatus(item, "open");
+      if (ask) setAsk(item, ask);
       return issues.note(item, text);
     });
     return w ? null : `no issue ${id}`;
@@ -342,7 +343,7 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
       writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
       return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
     }
-    const bad = note(repo, ref, `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { ask: { kind: "input", reason: "acceptance-failed", question: `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, options: [], why: [out] } });
+    const bad = reopen(repo, ref, `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, { kind: "input", reason: "acceptance-failed", question: `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, options: [], why: [out] });
     writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
     return `${name}: acceptance failed again at ${sha} (${command}); asks Chris${bad ? ` (no issue note: ${bad})` : ""}`;
   }

@@ -179,11 +179,13 @@ test("a second failure sets an Ask, names the command, and dispatches nothing", 
   await acceptanceStep(runner(3, "boom"));
   land(id);
   closeAgain(id);
+  const commitsBefore = Number(sh(join(base, "items.git"), "git", "rev-list", "--count", "main"));
   const lines = await acceptanceStep(runner(3, "boom again"));
   expect(lines[0]).toContain("asks Chris");
+  expect(Number(sh(join(base, "items.git"), "git", "rev-list", "--count", "main")) - commitsBefore).toBe(1);
   expect(askOf(item(id))).toMatchObject({ kind: "input", reason: "acceptance-failed" });
   expect(notes(id)).toMatch(/the Oracle command `bun run bad` still fails/);
-  expect(issues.status(item(id))).toBe("done");
+  expect(issues.status(item(id))).toBe("open");
   expect(readRecord("fac", id)?.fails).toBe(2);
   const started: string[] = [];
   const out = await dispatchGoals(async (_r, name) => { started.push(name); return null; }, async () => null);
