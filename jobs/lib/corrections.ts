@@ -13,7 +13,7 @@ import { fetchObservations } from "../../hooks/lib/otlp.ts";
 import { factoryDir } from "./factory.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
-import { always, logAlways } from "./ask.ts";
+import { always, logAlways, type Ask } from "./ask.ts";
 import { causeOf } from "./outcome.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
 
@@ -30,10 +30,10 @@ const TITLE = 60;
 
 export interface Signal { id: string; source: "chris" | "gate" | "drop"; at: string; quote: string; link: string }
 export type Kind = "check" | "claude-md" | "skill";
-export interface Lesson {
+export type Lesson = {
   id: string; sentence: string; state: "open" | "proposed" | "approved" | "declined"; signals: Signal[]; count: number;
   kind?: Kind; title?: string; target?: string; issue?: string; declinedAt?: string;
-}
+} & Partial<Pick<Ask, "situation" | "effects" | "recommend">>;
 export interface Store { minedAt: string; lessons: Lesson[] }
 
 const file = () => join(factoryDir(), "corrections.json");
@@ -404,4 +404,16 @@ export function decline(id: string, now = Date.now()): string {
   l.declinedAt = new Date(now).toISOString();
   writeStore(store);
   return "";
+}
+
+/** Stores the case text of a proposal, only while it is still proposed and still says `sentence`; true when it wrote. */
+export function explainLesson(id: string, sentence: string, text: Pick<Lesson, "situation" | "effects" | "recommend">): boolean {
+  const store = readStore();
+  const l = pending(store, id, "explained");
+  if (typeof l === "string" || l.sentence !== sentence) return false;
+  l.situation = text.situation;
+  l.effects = text.effects;
+  l.recommend = text.recommend;
+  writeStore(store);
+  return true;
 }

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
-import { approve, decline, mine, proposals } from "./corrections.ts";
+import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): void {
@@ -287,6 +287,46 @@ describe("standing proposals", () => {
 test("an unknown id is a refusal, not a throw", () => {
   expect(approve("l-nope", repo)).toContain("no lesson");
   expect(decline("l-nope")).toContain("no lesson");
+});
+
+describe("explainLesson", () => {
+  const text = { situation: "S", effects: [{ action: "approve", text: "files it" }], recommend: { action: "approve", why: "clear" } };
+  const path = () => join(base, "factory", "corrections.json");
+  const seed = (state: string) => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(path(), JSON.stringify({ minedAt: "", lessons: [{ id: "l-1", sentence: "Do x.", state, signals: [], count: 1 }] }, null, 2) + "\n");
+  };
+
+  test("a proposed lesson with the same sentence takes the text", () => {
+    seed("proposed");
+    expect(explainLesson("l-1", "Do x.", text)).toBe(true);
+    expect(readStore().lessons[0]).toMatchObject(text);
+    expect(proposals()[0]).toMatchObject(text);
+  });
+
+  test("open, approved and declined lessons are left byte for byte", () => {
+    for (const st of ["open", "approved", "declined"]) {
+      seed(st);
+      const before = readFileSync(path(), "utf8");
+      expect(explainLesson("l-1", "Do x.", text)).toBe(false);
+      expect(readFileSync(path(), "utf8")).toBe(before);
+    }
+  });
+
+  test("a different sentence or an unknown id writes nothing", () => {
+    seed("proposed");
+    const before = readFileSync(path(), "utf8");
+    expect(explainLesson("l-1", "Other.", text)).toBe(false);
+    expect(explainLesson("l-9", "Do x.", text)).toBe(false);
+    expect(readFileSync(path(), "utf8")).toBe(before);
+  });
+
+  test("decline keeps the situation", () => {
+    seed("proposed");
+    explainLesson("l-1", "Do x.", text);
+    expect(decline("l-1")).toBe("");
+    expect(readStore().lessons[0]).toMatchObject({ state: "declined", ...text });
+  });
 });
 
 describe("noise", () => {
