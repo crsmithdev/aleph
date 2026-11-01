@@ -27,7 +27,7 @@ beforeAll(() => {
   run({ kind: "build", condition: "stuck", cost: 3, ...secs(0, 10, 1800) });
   run({ kind: "build", condition: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
   run({ kind: "land", condition: "landed", ...secs(0, 9, 40) });
-  run({ kind: "land", condition: "landed", ...secs(0, 9, 46) });
+  run({ kind: "land", condition: "landed", ...secs(0, 9, 46) }); // both without an issue: one key
   run({ kind: "land", condition: "failed", ...secs(0, 9, 100) });
   run({ kind: "triage", condition: "done", ...secs(0, 11, 20) });
   run({ kind: "build", condition: "running", started: at(0, 14) });
@@ -55,7 +55,7 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
   expect("ends" in d || "wasted" in d).toBe(false);
   expect(d.classes.every((c) => c.text.length > 0)).toBe(true);
   expect(d.window).toBe("day");
-  expect(d.done).toBe(2);
+  expect(d.done).toBe(1); // two land runs with no issue count as one
   expect(d.buckets.length).toBe(24);
   const b = (h: string) => d.buckets.find((x) => x.label === h)!;
   expect(b("09:00")).toMatchObject({ implement: 600, intake: null });
@@ -67,6 +67,20 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
   expect(d.flaky).toBe(0);
 });
 
+test("done and issues.landed count landed issues, not land runs", () => {
+  // 40 days back, so no other test's window sees these runs.
+  const old = (h: number, m: number, extra: object) => run({ kind: "land", condition: "landed", ...extra, started: at(40, h, m), ended: at(40, h, m + 1) });
+  old(9, 0, { repo: "zz", on: "zz-5" });
+  old(9, 30, { repo: "zz", on: "zz-5" }); // the same issue lands again
+  old(9, 45, { repo: "zz", on: "zz-6" });
+  old(9, 50, {}); // no issue
+  old(9, 55, {}); // no issue: one key with the one above
+  const d = speed("day", new Date(2026, 8, 18, 15));
+  expect(d.kinds.land.count).toBe(5);
+  expect(d.done).toBe(3); // zz-5, zz-6 and the no-issue key
+  expect(d.issues.landed).toBe(3);
+});
+
 test("hour: sixty 1-minute buckets over the last hour", () => {
   const h = speed("hour", new Date(2026, 9, 28, 9, 47, 0));
   expect(h.buckets.length).toBe(60);
@@ -74,7 +88,7 @@ test("hour: sixty 1-minute buckets over the last hour", () => {
   expect(h.buckets[59].label).toBe("09:47");
   expect(h.kinds.agent.count).toBe(1); // the 09:00 run
   const m = speed("hour", new Date(2026, 9, 28, 9, 7, 0));
-  expect(m.done).toBe(2);
+  expect(m.done).toBe(1);
 });
 
 test("week and month: one bucket per local day, wider windows add runs", () => {

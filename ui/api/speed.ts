@@ -30,7 +30,7 @@ export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
 const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
 export interface Speed {
   window: Window;
-  /** Land runs that landed in the window: the issues done. */
+  /** Issues that landed in the window: one per issue, however many land runs it had. Land runs with no issue count as one. */
   done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
   /** Intake: issue created to its first triage end. Queue: that end, or the filing with no triage, to the issue's first agent start. Implement: job's first agent start to its last finish. Land: finish to landed. Lead: issue created to its last land. Each counts in the window where it ends. */
@@ -41,14 +41,14 @@ export interface Speed {
   slowest: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[];
   models: { model: string; count: number; p50: number }[];
   flaky: number;
-  /** Landed goals (land runs that landed in the window) and what they cost to get there. */
+  /** Landed issues (one per issue that landed in the window) and what they cost to get there. */
   issues: {
     landed: number;
-    /** Share of landed goals with 0 fix rounds, 0 to 1; null with none landed. */
+    /** Share of landed issues with 0 fix rounds, 0 to 1; null with none landed. */
     firstPass: number | null;
-    /** Median fix rounds per landed goal; null with none landed. */
+    /** Median fix rounds per landed issue; null with none landed. */
     fixRounds: number | null;
-    /** Median over landed goals of the week share their agent runs took, 2 decimals; null with no fit or none landed. */
+    /** Median over landed issues of the week share their agent runs took, 2 decimals; null with no fit or none landed. */
     week: number | null;
   };
   classes: ClassStat[];
@@ -390,11 +390,18 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     if (!isAgent(r)) continue;
     if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
   }
-  const fixes = landed.map((r) => rounds.get(r.job) ?? 0);
+  // Landed issues: a land run of an issue with no number all share the one key "none". An issue's fix rounds are the most any of its landing runs' jobs needed.
+  const landedBy = new Map<string, Run[]>();
+  for (const r of landed) {
+    const k = issueOf(r) === undefined ? "none" : `${r.repo}-${issueOf(r)}`;
+    landedBy.set(k, [...(landedBy.get(k) ?? []), r]);
+  }
+  const issuesLanded = landedBy.size;
+  const fixes = [...landedBy.values()].map((rs) => Math.max(...rs.map((r) => rounds.get(r.job) ?? 0)));
   const issues: Speed["issues"] = {
-    landed: landed.length,
-    firstPass: landed.length ? round(fixes.filter((f) => f === 0).length / landed.length, 4) : null,
-    fixRounds: landed.length ? pct(fixes, 0.5) : null,
+    landed: issuesLanded,
+    firstPass: issuesLanded ? round(fixes.filter((f) => f === 0).length / issuesLanded, 4) : null,
+    fixRounds: issuesLanded ? pct(fixes, 0.5) : null,
     week: null,
   };
   if (fit) {
@@ -421,7 +428,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   };
   return {
     window,
-    done: landed.length,
+    done: issuesLanded,
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
     phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(ended[k].map((x) => x.secs))])) as Speed["phases"],
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),

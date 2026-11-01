@@ -208,7 +208,7 @@ export function renderLanes(s) {
 /** The untriaged issues: all of them when the state counts them, else the ones listed. */
 const incomingCount = (s) => Math.max(s.newIssues ?? 0, (s.issues ?? []).length);
 
-/** The flow strip: Incoming, Queued, Running, Done, then the Context card. `sp` is /api/speed for the picked window (Done counts its lands); null while it loads. */
+/** The flow strip: Incoming, Queued, Running, Done, then the Context card. `sp` is /api/speed for the picked window (Done counts its landed issues); null while it loads. */
 export function renderFlow(s, sp = null) {
   const stage = (lane, k, n, of, id = "") =>
     `<div class="stage"><a class="stage-main" href="#lane-${lane}"><span class="k">${k}</span><span class="v"${id ? ` id="${id}"` : ""}>${n}${of ? `<span class="of"> of ${of}</span>` : ""}</span></a></div>`;
