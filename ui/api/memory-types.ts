@@ -12,9 +12,9 @@ import { activity } from "./activity.ts";
 import { skillsDir } from "./skills.ts";
 import { config, traces } from "../langfuse.ts";
 import { staleAsync } from "../stale.ts";
+import { uiCacheMs } from "../../jobs/lib/settings.ts";
 
 /** Langfuse-backed loads, kept `ALEPH_UI_CACHE_TTL` seconds like `vault misses`; a failure is kept as an answer with no data (null). */
-const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 const sessionsCache = staleAsync<Sessions | null>();
 const callsCache = staleAsync<Map<string, number> | null>();
 export const clearTypesCache = () => { sessionsCache.clear(); callsCache.clear(); };
@@ -58,7 +58,7 @@ function semantic(root: string, wiki: Note[]) {
 
 /** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. */
 type Sessions = { id: string; project: string; firstPrompt: string; turns: number; last: string }[];
-const sessions = (): Promise<Sessions | null> => sessionsCache.get("sessions", ttlMs(), loadSessions);
+const sessions = (): Promise<Sessions | null> => sessionsCache.get("sessions", uiCacheMs(), loadSessions);
 async function loadSessions(): Promise<Sessions | null> {
   if (!langfuseConfig()) return null;
   try {
@@ -89,7 +89,7 @@ async function hooks() {
   const file = join(homedir(), ".claude", "settings.json");
   let cfg: any = {};
   try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch {}
-  const counts = await callsCache.get("calls", ttlMs(), async () => {
+  const counts = await callsCache.get("calls", uiCacheMs(), async () => {
     try {
       const a = await activity(7, null);
       return a.langfuse === "ok" ? new Map(a.hooks.map((h) => [h.name, h.calls] as const)) : null;

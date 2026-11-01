@@ -15,6 +15,7 @@ import { causeOf, checksStopped, LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
 import { itemOnMain } from "./status.ts";
 import { serverGraph } from "./ui-graph.ts";
+import { landBatch } from "./settings.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
 export interface CheckReport { why: string | null; checks?: Run["checks"]; log?: string }
@@ -119,7 +120,6 @@ interface Member { id: string; folder: string; run: Run; log: (step: string, out
 /** A member's squash commit, on top of the commit before it in the chain. */
 interface Pending { m: Member; commit: string }
 
-const landBatch = () => Math.max(1, Math.floor(Number(process.env.ALEPH_LAND_BATCH ?? 8)) || 1);
 
 /** The land runs queued behind this one in the repo, oldest first, that `aleph land` would still accept. */
 function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {

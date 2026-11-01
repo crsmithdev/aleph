@@ -15,6 +15,7 @@ import { layout } from "./layout.ts";
 import { allRuns, isAwaiting, isBuild, isLive, isStarting, loadRegistry, onOf, type Entry, type Repo } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
+import { AWAITING_CAP, DAY_CAP, LIVE_CAP } from "./settings.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -22,34 +23,9 @@ export const pauseFile = () => join(factoryDir(), "paused");
 
 export const probeFile = () => join(factoryDir(), "probe.json");
 
-/** `caps.json` in the factory directory: `{ "day", "live", "awaiting" }`. A missing or bad file is empty. */
-function capsFile(): Record<string, unknown> {
-  try {
-    const c = JSON.parse(readFileSync(join(factoryDir(), "caps.json"), "utf8"));
-    return c && typeof c === "object" && !Array.isArray(c) ? c : {};
-  } catch { return {}; }
-}
-
-/** The environment variable first, then caps.json, then the default. */
-function cap(envName: string, key: string, dflt: number): number {
-  const e = process.env[envName];
-  if (e !== undefined && e !== "") return Number(e);
-  const f = capsFile()[key] ?? (key === "awaiting" ? capsFile().waiting : undefined);
-  return typeof f === "number" && Number.isFinite(f) ? f : dflt;
-}
-
-/** Runs that start a worker, in any 24 hours. Checks and probes start none. */
-export const DAY_CAP = () => cap("ALEPH_DAY_CAP", "day", 12);
-
-/** The most agent runs live at once. */
-export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", 10);
-
 const DAY = 24 * 3600_000;
 
 export const paused = () => existsSync(pauseFile());
-
-/** The most open jobs awaiting Chris before no new run starts. */
-export const AWAITING_CAP = () => cap("ALEPH_AWAITING_CAP", "awaiting", 5);
 
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 

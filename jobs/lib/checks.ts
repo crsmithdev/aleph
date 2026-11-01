@@ -8,6 +8,7 @@ import { basename, join } from "node:path";
 import { factoryDir, flakes, flakyFile, type Flake } from "./factory-status.ts";
 import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledger.ts";
 import { sandboxed } from "./sandbox.ts";
+import { checkSeconds } from "./settings.ts";
 
 /** One run of checks. `folder` gets checks.log. `record` gets each check that ran. */
 export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; record?: (c: CheckResult) => void }
@@ -43,7 +44,6 @@ export async function withSlot<T>(fn: () => T | Promise<T>): Promise<T> {
   }
 }
 
-const checkLimit = () => Number(process.env.ALEPH_CHECK_TIMEOUT ?? 1200);
 const tail = (file: string, n: number) => existsSync(file) ? readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "";
 
 /** The repo's checks with no `when`, and those whose globs match a changed file. */
@@ -58,7 +58,7 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<s
     writeFileSync(out, "");
     // The wait for a slot is outside the time limit and outside the check's seconds.
     const { r, first, seconds } = await withSlot(async () => {
-      const limit = checkLimit();
+      const limit = checkSeconds();
       const t0 = Date.now();
       let r = await exec(check, out, limit);
       let first: string | undefined;
@@ -92,7 +92,7 @@ async function runHidden(t: CheckTask, check: Check, exec: CheckExec): Promise<s
   writeFileSync(out, "");
   const { r, seconds } = await withSlot(async () => {
     const t0 = Date.now();
-    return { r: await exec(check, out, checkLimit()), seconds: Math.round((Date.now() - t0) / 1000) };
+    return { r: await exec(check, out, checkSeconds()), seconds: Math.round((Date.now() - t0) / 1000) };
   });
   const text = readFileSync(out, "utf8");
   const pass = Number(text.match(/^\s*(\d+) pass\s*$/m)?.[1] ?? 0);

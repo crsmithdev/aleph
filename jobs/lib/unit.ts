@@ -20,7 +20,7 @@ import { serveShots } from "./shot.ts";
 import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, RESEARCH_PROMPT, serveFetches, writeWebServer } from "./research.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { checksInSandbox, runChecks } from "./checks.ts";
-import { dispatchDetached, dispatchOn } from "./factory.ts";
+import { dispatchDetached } from "./factory.ts";
 import { gates } from "./factory-status.ts";
 import { afterLand, bounceNote, land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { startReview } from "./review.ts";
@@ -28,6 +28,7 @@ import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
 import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
+import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewerCmd, reviewSeconds, workerCmd } from "./settings.ts";
 
 export { git };
 
@@ -53,8 +54,6 @@ async function exec(argv: string[], o: { cwd: string; env: Record<string, string
   closeSync(fd);
   return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000 };
 }
-
-const limit = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
 
 /** The `result` of the last result event; else the last assistant text; else empty. */
 export function resultText(log: string): string {
@@ -347,7 +346,6 @@ async function dispatchFree(folder: string): Promise<void> {
   await runLogged(["dispatch"], join(folder, "dispatch.log"));
 }
 
-const fixRounds = () => Number(process.env.ALEPH_FIX_ROUNDS ?? 2);
 
 /**
  * What the unit starts after a run ends. A land follows afterLand; an agent run
@@ -451,7 +449,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     phase("setup");
     for (const cmd of repo.setup) {
       appendFileSync(join(folder, "setup.log"), `## ${cmd}\n`);
-      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: join(folder, "setup.log"), limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
+      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: join(folder, "setup.log"), limit: checkSeconds() });
       if (r.timedOut) return fail("stalled", `timed out: setup ${cmd}`);
       if (r.code !== 0) return fail("other", `setup failed: ${cmd}`);
     }
@@ -465,13 +463,13 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
     GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
   };
-  const argv = [process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill",
+  const argv = [workerCmd(), "-p", "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : [])];
   const text = prompt(id, folder, run, repo);
   writeFileSync(join(folder, "prompt.md"), text);
   phase("worker");
-  const w = await exec(argv, { cwd: wt, env: workerEnv, out: join(folder, "output.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400), stdin: text });
+  const w = await exec(argv, { cwd: wt, env: workerEnv, out: join(folder, "output.log"), limit: jobSeconds(), stdin: text });
   const result = resultText(readFileSync(join(folder, "output.log"), "utf8"));
   writeFileSync(join(folder, "result.md"), result);
 
@@ -530,7 +528,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       phase("sealed checks");
       authorCost = await seal(repo, goalId);
     }
-    const argv = [process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [workerCmd(), "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       ...(run.model ? ["--model", run.model] : [])];
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
@@ -555,7 +553,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       w = await sandboxed(dir, script, {
         read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
         env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-        stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400),
+        stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: jobSeconds(),
         stall: stallSeconds(),
         onSpawn: (p) => { child = p; },
       });
@@ -620,7 +618,7 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
   const dir = makeRunFolder(id);
   try {
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-    const claude = process.env.ALEPH_WORKER_CMD ?? "claude";
+    const claude = workerCmd();
     const common = ["--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions"];
     const env = { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1", ENABLE_TOOL_SEARCH: "false" };
     const net = { domains: ["api.anthropic.com"], localBinding: false };
@@ -640,7 +638,7 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
     try {
       w = await sandboxed(dir, `exec ${argv.map(q).join(" ")}`, {
         read: [], write: ["home", "work", "tmp"], net, cwd: "work", stdin: text, env,
-        stdout: log, stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400), stall: stallSeconds(),
+        stdout: log, stderr: join(folder, "stderr.log"), limit: jobSeconds(), stall: stallSeconds(),
         onSpawn: (p) => { child = p; },
       });
     } finally { pages = await fetches.stop(); }
@@ -661,7 +659,7 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
     const judgeArgv = [claude, "-p", ...common, "--tools", "", "--strict-mcp-config", "--model", JUDGE_MODEL];
     const j = await sandboxed(dir, `exec ${judgeArgv.map(q).join(" ")}`, {
       read: [], write: ["home", "work", "tmp"], net, cwd: "work", stdin: judgePrompt(goal, o.result, pages), env,
-      stdout: judgeLog, stderr: join(folder, "stderr.log"), limit: limit("ALEPH_JOB_TIMEOUT", 2400), stall: stallSeconds(),
+      stdout: judgeLog, stderr: join(folder, "stderr.log"), limit: jobSeconds(), stall: stallSeconds(),
       onSpawn: (p) => { child = p; },
     });
     child = null;
@@ -822,13 +820,13 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
     const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
     const whole = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
-    const max = limit("ALEPH_REVIEW_DIFF_MAX", 200000);
+    const max = reviewDiffMax();
     const diff = whole.length <= max ? whole
       : `${git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out}\n\n${whole.slice(0, max)}\n\n(diff cut at ${max} of ${whole.length} characters; read the changed files in the working directory)`;
     const text = reviewPrompt(run.name, spec, diff, findings);
     writeFileSync(join(folder, "review-prompt.md"), text);
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-    const argv = [process.env.ALEPH_REVIEWER_CMD ?? process.env.ALEPH_WORKER_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const script = [
       "set -e", "exec 3>&1 1>&2", "git init -q .",
@@ -839,7 +837,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const w = await sandboxed(rdir, script, {
       read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
       env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-      stdout: log, stderr: join(folder, "review.err"), limit: limit("ALEPH_REVIEW_TIMEOUT", 600), stall: stallSeconds(),
+      stdout: log, stderr: join(folder, "review.err"), limit: reviewSeconds(), stall: stallSeconds(),
       onSpawn: (p) => { child = p; },
     });
     child = null;

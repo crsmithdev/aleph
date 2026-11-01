@@ -5,17 +5,16 @@
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "./server.ts";
+import { layout } from "../jobs/lib/layout.ts";
 
 const COOKIE = "aleph_session";
 const password = () => process.env.ALEPH_UI_PASSWORD ?? "";
 export const gateOn = () => password() !== "";
 
 function sessionsPath(): string {
-  const d = process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory";
-  return join(d === "~" || d.startsWith("~/") ? homedir() + d.slice(1) : d, "ui-sessions.json");
+  return join(layout().factory, "ui-sessions.json");
 }
 
 function readSessions(): string[] {

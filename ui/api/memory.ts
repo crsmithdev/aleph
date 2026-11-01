@@ -7,6 +7,7 @@ import { uiFetchTtl } from "../../todo/lib/store.ts";
 import { allRuns } from "../../jobs/lib/ledger.ts";
 import { clearTypesCache, memoryTypes } from "./memory-types.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { uiCacheMs } from "../../jobs/lib/settings.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const scopeOf = (n: Note) => String(n.fm.scope ?? "");
@@ -57,7 +58,7 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
 
 /** `vault misses --days 7`'s JSON with when it was fetched, or null when it fails (no Langfuse keys, offline). */
 async function misses(): Promise<{ value: unknown; cachedAt: string } | null> {
-  return missesCache.get("misses", ttlMs(), async () => {
+  return missesCache.get("misses", uiCacheMs(), async () => {
     const value = await runMisses();
     return value == null ? null : { value, cachedAt: new Date().toISOString() };
   });
@@ -69,7 +70,6 @@ export async function warm(): Promise<void> {
 }
 /** `vault misses` is slow (Langfuse), so its answer is kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns it off); an older one is served while it reloads. */
 const missesCache = staleAsync<{ value: unknown; cachedAt: string } | null>();
-const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 /** The vault's notes, reloaded at most every ALEPH_UI_FETCH_TTL seconds: a load stats every file, which is slow on /mnt/c. */
 const notes = staleAsync<Note[]>();
 export const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));

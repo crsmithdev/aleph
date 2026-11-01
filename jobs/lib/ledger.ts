@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
 import { failedCheckOf, type Cause } from "./outcome.ts";
+import { checkSlots } from "./settings.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
@@ -370,7 +371,6 @@ function readVerdictFile(file: string): Review | undefined {
 /** The reason of a land that found the job lock taken: it did nothing to the job. */
 
 /** How many check runs of the test suite may run at once across the factory: ALEPH_CHECK_SLOTS, default 2. */
-export const checkSlots = () => Math.max(1, Math.floor(Number(process.env.ALEPH_CHECK_SLOTS)) || 2);
 
 /** Each suite run's share of the cores: cores / slots, at least 1. */
 export const testParallel = () => Math.max(1, Math.floor(availableParallelism() / checkSlots()));

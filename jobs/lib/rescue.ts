@@ -22,6 +22,7 @@ import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isLive, isStarting, lo
 import { causeOf } from "./outcome.ts";
 import { startReview } from "./review.ts";
 import { itemOnMain } from "./status.ts";
+import { rescueWaitMs } from "./settings.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
 export interface Rescue {
@@ -137,7 +138,6 @@ function restartReviews(act: Rescue): void {
 }
 
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
-const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
 
 /** Take the safe default action for each stuck job and each killed review, one job at a time under its lock. */
 export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
@@ -146,7 +146,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
-    const release = await lock(`rescue-${first[0].run.repo}-${name}`, RESCUE_WAIT_MS());
+    const release = await lock(`rescue-${first[0].run.repo}-${name}`, rescueWaitMs());
     if (!release) { factoryLog(`rescue of ${name} skipped: the rescue lock stayed busy`); continue; }
     try {
       // Read again under the lock: another dispatch may have acted on it.

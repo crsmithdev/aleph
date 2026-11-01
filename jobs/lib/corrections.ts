@@ -16,13 +16,9 @@ import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
 import { always, logAlways, type Ask } from "./ask.ts";
 import { causeOf } from "./outcome.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
+import { PROPOSE_AT } from "./settings.ts";
 
 export const CORRECTION_AT = 0.7;
-/** How many signals make a lesson a proposal. */
-export const PROPOSE_AT = (): number => {
-  const n = Number(process.env.ALEPH_PROPOSE_AT);
-  return Number.isFinite(n) && n >= 1 ? n : 3;
-};
 const WINDOW = 14 * 24 * 3600_000;
 const QUOTE = 300;
 const SENTENCE = 160;

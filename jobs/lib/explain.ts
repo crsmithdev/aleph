@@ -18,9 +18,8 @@ import { endLost, openRun } from "./agent-run.ts";
 import { git } from "./git.ts";
 import { explainLesson, proposals, type Lesson } from "./corrections.ts";
 import { factoryLog } from "./layout.ts";
+import { EXPLAIN_CAP, EXPLAIN_TRIES } from "./settings.ts";
 
-export const EXPLAIN_CAP = () => Number(process.env.ALEPH_EXPLAIN_CAP ?? 3);
-export const EXPLAIN_TRIES = () => Number(process.env.ALEPH_EXPLAIN_TRIES ?? 2);
 export const EXPLAIN_MODEL = "claude-opus-5-5";
 const SECONDS = 300;
 const TAIL = 40;

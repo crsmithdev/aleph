@@ -10,6 +10,7 @@ import type { Observation } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { today } from "../../todo/lib/todo.ts";
 import { staleAsync } from "../stale.ts";
+import { uiCacheMs } from "../../jobs/lib/settings.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
@@ -43,10 +44,9 @@ const isError = (o: Observation) => (o as any).level === "ERROR";
 
 /** Langfuse reads kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns the cache off), keyed by their arguments; an older one is served while it reloads. */
 const cache = staleAsync<{ value: unknown; cachedAt: string }>();
-const ttlMs = () => { const n = Number(process.env.ALEPH_UI_CACHE_TTL ?? 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 export const clearCache = () => cache.clear();
 function cached<T>(key: string, load: () => Promise<T>): Promise<{ value: T; cachedAt: string }> {
-  return cache.get(key, ttlMs(), () => load().then((v) => ({ value: v as unknown, cachedAt: new Date().toISOString() }))) as Promise<{ value: T; cachedAt: string }>;
+  return cache.get(key, uiCacheMs(), () => load().then((v) => ({ value: v as unknown, cachedAt: new Date().toISOString() }))) as Promise<{ value: T; cachedAt: string }>;
 }
 
 /** Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched together. */

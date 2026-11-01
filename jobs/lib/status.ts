@@ -11,11 +11,12 @@ import { join } from "node:path";
 import { readFetched, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith } from "./git.ts";
-import { allRuns, expand, type Entry, type Repo, type State } from "./ledger.ts";
+import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
+import { layout } from "./layout.ts";
 
-export const acceptanceDir = () => join(expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory"), "acceptance");
+export const acceptanceDir = () => join(layout().factory, "acceptance");
 export const acceptanceFile = (key: string, id: number | string) => join(acceptanceDir(), `${key}-${id}.json`);
 
 export interface Accepted {

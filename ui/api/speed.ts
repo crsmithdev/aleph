@@ -6,7 +6,7 @@
  * The phases also read when each issue file first came into the work store's git history.
  */
 import { existsSync } from "node:fs";
-import { flakes, LIVE_CAP } from "../../jobs/lib/factory-status.ts";
+import { flakes } from "../../jobs/lib/factory-status.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
 import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
@@ -15,6 +15,7 @@ import { staleSync } from "../stale.ts";
 import { reader, storeDir, uiFetchTtl } from "../../todo/lib/store.ts";
 import { status } from "../../todo/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
+import { LIVE_CAP } from "../../jobs/lib/settings.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 /** The issue number of a run, from `on` or old `todo`; a goal run "860.1" reads as 860. Undefined when the run has none. */

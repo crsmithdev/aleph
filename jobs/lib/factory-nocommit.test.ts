@@ -5,7 +5,7 @@ import { clearAsk, readList } from "../../todo/lib/store.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
-import { AWAITING_CAP } from "./factory-status.ts";
+import { AWAITING_CAP } from "./settings.ts";
 import { allRuns } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 

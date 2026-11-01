@@ -8,7 +8,7 @@
  * touched reopens the goal for one more worker run; a second sets an Ask (input, acceptance-failed).
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { availableParallelism, loadavg } from "node:os";
+import { loadavg } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
@@ -18,6 +18,7 @@ import { git } from "./git.ts";
 import { checkSlot, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import { acceptanceDir, acceptanceFile, commitsNaming, readRecord, resultLine, type Accepted, type FailedTest } from "./status.ts";
+import { quietLoad } from "./settings.ts";
 
 /** The longest a rerun waits for a quiet machine. */
 export const MAX_WAIT_MS = 24 * 3_600_000;
@@ -102,7 +103,7 @@ export function rerunOf(command: string, tests: FailedTest[]): string {
 }
 
 /** The machine is quiet when the 1-minute load is under half the cores; `ALEPH_QUIET_LOAD` changes the limit. */
-const quiet = () => loadavg()[0] < (Number(process.env.ALEPH_QUIET_LOAD) || availableParallelism() / 2);
+const quiet = () => loadavg()[0] < quietLoad();
 
 /** The files of the commits on origin/<main> that name the goal. */
 function goalFiles(repo: Repo, name: string): Set<string> {

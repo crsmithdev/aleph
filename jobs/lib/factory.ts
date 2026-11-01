@@ -30,11 +30,12 @@ import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
-import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, DAY_CAP, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, probeFile, readStalls, redLine, runsToday, spentToday, stallFile, type Probe } from "./factory-status.ts";
+import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, probeFile, readStalls, redLine, runsToday, spentToday, stallFile, type Probe } from "./factory-status.ts";
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 export type { Probe };
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
+import { DAY_CAP, dispatchOn } from "./settings.ts";
 
 export function setPaused(on: boolean): void {
   mkdirSync(factoryDir(), { recursive: true });
@@ -96,7 +97,6 @@ export function doneChecker(): (ref: string) => boolean {
 }
 
 /** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick still does. */
-export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
 
 /** `tier` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
 type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<string | null>;

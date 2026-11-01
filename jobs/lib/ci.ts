@@ -6,7 +6,8 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expand, type Repo } from "./ledger.ts";
+import { type Repo } from "./ledger.ts";
+import { layout } from "./layout.ts";
 
 /** A repo's CI on main: green, or red since the first failed run of the current streak. */
 /** `older` marks a streak that runs past the runs read, so `since` and `runs` are a lower bound. */
@@ -16,7 +17,7 @@ export interface GhRun { conclusion: string; status: string; headSha: string; ur
 /** The runs of `repo`'s main, the latest first, or null when `gh` cannot read them. */
 export type Runs = (repo: Repo) => GhRun[] | null;
 
-const dir = () => expand(process.env.ALEPH_FACTORY_DIR ?? "~/.aleph/factory");
+const dir = () => layout().factory;
 const file = () => join(dir(), "ci.json");
 
 const ghRuns: Runs = (repo) => {

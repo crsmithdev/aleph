@@ -11,11 +11,10 @@ import { always, askNote, logAlways, normalizeAsk, plainAsk, type Ask } from "./
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 
-export const TRIAGE_CAP = () => Number(process.env.ALEPH_TRIAGE_CAP ?? 5);
 import { factoryDir, gates } from "./factory-status.ts";
 import { git } from "./git.ts";
+import { TRIAGE_CAP, TRIAGE_TRIES } from "./settings.ts";
 /** Triage runs that end with no verdict, for one item, before it gets an Ask (reason `triage-failed`); `ALEPH_TRIAGE_TRIES` changes it. */
-export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 
 
 /** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */

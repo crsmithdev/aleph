@@ -23,6 +23,7 @@ import { route, type Tier } from "./route.ts";
 import { startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
+import { jobSeconds, pidWaitMs, rescueOn } from "./settings.ts";
 
 /** The message of a transition that refused or threw, or null when it went through: the factory's ports answer this. */
 export async function refusal(f: () => Promise<unknown>): Promise<string | null> {
@@ -42,7 +43,6 @@ export function checkName(name: string | undefined): string {
 export const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
 
 /** How long a start waits for the unit to write `pid`; `ALEPH_PID_WAIT_MS` changes it. */
-const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 
 /** What a start prints: the new run, its job and its folder. */
 export interface Started { run: string; job: string; folder: string }
@@ -85,7 +85,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
 
     // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
     const factory = isBuild(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;
-    const max = factory ? [`--property=RuntimeMaxSec=${Number(process.env.ALEPH_JOB_TIMEOUT ?? 2400) + 3600}`] : [];
+    const max = factory ? [`--property=RuntimeMaxSec=${jobSeconds() + 3600}`] : [];
     try {
       child = startUnit(["unit", folder], { unit: `aleph-${id}`, cwd, props: max, output, attach: true });
     } catch (e: any) {
@@ -361,5 +361,5 @@ export async function runDispatch() {
     return { started: [], skipped: [g.why] };
   }
   // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
-  return dispatchIssues(startGoal, baselineChecks, landGoal, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
+  return dispatchIssues(startGoal, baselineChecks, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
 }
