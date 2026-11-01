@@ -7,7 +7,7 @@ import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk }
+export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter" | "explain"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk }
 export interface JobDetail extends Job {
   blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
@@ -23,7 +23,7 @@ export const lastLines = (s: string | undefined, n = 80): string | undefined => 
   const lines = s.replace(/\n+$/, "").split("\n");
   return lines.slice(-n).join("\n");
 };
-const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter" } as const;
+const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {

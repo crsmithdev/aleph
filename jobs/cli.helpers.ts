@@ -134,6 +134,8 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_DISPATCH: "off",
     // The tick triages no issue unless a test sets a cap and a fake command.
     ALEPH_TRIAGE_CAP: "0",
+    // Nor does it explain an Ask: no test reaches the live explainer.
+    ALEPH_EXPLAIN_CAP: "0",
     // No Langfuse unless a test points one at the fake server.
     LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "",
     // The vault is empty and under base, so no test reads or writes the real ~/.aleph/vault.

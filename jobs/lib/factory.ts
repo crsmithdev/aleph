@@ -24,6 +24,7 @@ import { startReview } from "./review.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { endRun } from "./agent-run.ts";
 import { factsGate } from "./facts.ts";
+import { explainStep } from "./explain.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
@@ -862,12 +863,16 @@ export async function correctionsStep(now = Date.now()): Promise<{ signals: numb
   }
 }
 
-/** The tick's triage of open issues that are not goals (triage.ts). */
+/**
+ * The tick's triage of open issues that are not goals (triage.ts), and then the explainer (explain.ts), which writes the case
+ * text of every Ask with none, those triage just raised among them. Only the tick runs them: a dispatch does not wait on them.
+ */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
   if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
   const t = await triageOpen(sandboxRepos(), doneChecker());
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.build || t.triaged.plan) dispatchDetached();
+  await explainStep(sandboxRepos());
   return t;
 }
 
