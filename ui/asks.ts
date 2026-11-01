@@ -43,7 +43,13 @@ export function clean(text: unknown): string {
 const sentence = (s: string) => (/[.?!]$/.test(s) ? s : `${s}.`);
 
 type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
-const askIn = (c: Ctx): Ask | undefined => c.run?.ask ?? c.issue?.ask;
+/** The text a row shows: the Ask of its run or issue, else the stored text of its lesson. */
+const askIn = (c: Ctx): Pick<Ask, "situation" | "effects" | "recommend"> | undefined => {
+  const ask = c.run?.ask ?? c.issue?.ask;
+  if (ask) return ask;
+  const l = c.lesson;
+  return l?.situation ? { situation: l.situation, effects: l.effects, recommend: l.recommend } : undefined;
+};
 /** The first sentence of the note behind a check, cleaned. */
 const noteOf = (c: Ctx): string => {
   const raw = String(c.run?.reason ?? c.run?.question ?? c.issue?.question ?? "");

@@ -14,7 +14,7 @@ const run = (reason: string, extra: Partial<Job> = {}): Job => ({
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
   ...(STORE ? { ask: { kind: "input", reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
 const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/tdd/SKILL.md" } as const;
-const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }] });
+const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }], ...(STORE && { situation: STORE.situation, effects: STORE.effects, recommend: STORE.recommend }) });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "input" as const, reason: "question", why: ["w"] };
 const RUN_CAP = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it.";
 
@@ -69,7 +69,6 @@ describe("asks", () => {
       expect(plain.explained).toBe(false);
       expect(plain.situation).toBe(plain.problem);
       expect(plain.actions.some((a) => a.recommended)).toBe(false);
-      if (reason.startsWith("proposal-")) return; // lessons hold no text
       STORE = { situation: "Stored situation.", effects: plain.actions.map((a) => ({ action: key(a), text: `Effect of ${key(a)}.` })), recommend: { action: key(plain.actions[0]), why: "it is safest" } };
       try {
         const [it] = CASES[reason]();
