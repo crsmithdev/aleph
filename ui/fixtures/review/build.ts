@@ -35,9 +35,9 @@ function copyPlain(from: string, to: string): void {
 
 interface FixtureItem { title: string; labels?: string[]; priority?: string; body?: string; status?: string; due?: string; notes?: string[]; parts?: { title: string; spec: string; status?: string }[];
   /** The new-shape fields, written as the item's own: `kind`, `source`, `route`, `issue`, `goals`, `after`, `areas`, `ask` and the ask's `reason` and `question`. */
-  kind?: string; source?: string; route?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string }
+  kind?: string; source?: string; route?: string; issue?: string; goals?: string[]; after?: string[]; areas?: string[]; ask?: string; reason?: string; question?: string; situation?: string; effects?: string[]; recommend?: string }
 
-const NEW_SHAPE = ["kind", "source", "route", "issue", "goals", "after", "areas", "ask", "reason", "question"] as const;
+const NEW_SHAPE = ["kind", "source", "route", "issue", "goals", "after", "areas", "ask", "reason", "question", "situation", "effects", "recommend"] as const;
 
 /** Build the home under `dest` from `src`; returns the environment that points aleph at it. */
 export function buildReviewFixture(dest: string, src = import.meta.dir): Record<string, string> {

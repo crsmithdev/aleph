@@ -37,7 +37,7 @@ test("a held run, a stuck run, an asking issue and a red main are one row each, 
   for (const [row, id, title, btns] of [[rs[0], ">27</a>", "Digest head and tail", ["land", "drop"]], [rs[3], ">30</a>", "Fix it", ["recheck", "drop"]], [rs[1], ">7</a>", "Which tier?", ["decide", "deny"]]] as const) {
     expect(row).toContain('<span class="idp">aleph</span>');
     expect(row.indexOf(id)).toBeLessThan(row.indexOf(title));
-    expect(row.indexOf(title)).toBeLessThan(row.indexOf("problem"));
+    expect(row.indexOf(title)).toBeLessThan(row.search(/class="(problem|situation)"/));
     expect(row.match(/<details class="more"/g)?.length ?? 0).toBeLessThanOrEqual(1);
     for (const b of btns) expect(row).toContain(`data-act="${b}"`);
   }
@@ -220,4 +220,31 @@ test("a question ask renders the Answer button with a text input in the same row
   const row = h.match(/<article class="job-card small issue-row question"[^]*?<\/article>/)![0];
   expect(row).toMatch(/data-act="answer"[^>]*data-name="aleph-27"|data-name="aleph-27"[^>]*data-act="answer"/);
   expect(row).toMatch(/<input [^>]*type="text"[^>]*name="answer"/);
+});
+
+test("an ask with stored text shows the situation and each effect; one without shows the fixed text and the missing-text span", () => {
+  const sm = sample("proposal");
+  const [base] = attend(sm, {}, sm.lessons).items;
+  const stored = { ...base, situation: "First sentence. Second sentence, longer than one.", explained: true, actions: base.actions.map((a, n) => ({ ...a, hint: `Effect ${n}.`, recommended: n === 0 })) };
+  const render = (i: any) => withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: [i] }).match(/<article class="job-card small issue-row proposal"[^]*?<\/article>/)![0];
+  const row = render(stored);
+  expect(row).toContain('<p class="situation">First sentence. Second sentence, longer than one.</p>');
+  expect(row).not.toContain('class="problem"');
+  expect(row).not.toContain("case text is missing");
+  stored.actions.forEach((_, n) => expect(row).toContain(`Effect ${n}.`));
+  expect(row.match(/Recommended<\/span>/g)?.length).toBe(1);
+  const plain = render({ ...base, explained: false });
+  expect(plain).toContain(base.problem.slice(0, 20));
+  expect(plain).toContain("The case text is missing; this is the fixed text for this reason.");
+  expect(plain).not.toContain("Recommended");
+});
+
+test("the deny and answer inputs render hidden", () => {
+  for (const reason of ["question", "host-check"]) {
+    const sm = sample(reason);
+    const row = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: attend(sm, {}, sm.lessons).items }).match(/<article [^]*?<\/article>/)![0];
+    const inputs = row.match(/<input [^>]*>/g) ?? [];
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const i of inputs) expect(i).toMatch(/\shidden/);
+  }
 });

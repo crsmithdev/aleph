@@ -309,11 +309,11 @@ function askDetails(i) {
 
 const KIND_TAG = { approval: "Approval", input: "Input", stuck: "Stuck", error: "Error" };
 /** The head of every Awaiting-you card: the kind's mark (input or approval), the id and title, the one sentence of the problem. */
-const needHead = (kind, id, href, title, problem, repo = "") =>
-  `<div class="row-main"><span class="kind-tag">${KIND_TAG[kind]}</span> ${!id ? "" : href ? repoIdLink(id, href, repo) : `<span class="id">${esc(id)}</span>`} ${title ? `<span class="t">${esc(title)}</span>` : ""}</div>` +
-  `<p class="problem">${esc(localId(problem, repo))}</p>`;
+const needHead = (kind, id, href, title, problem, repo = "", para = `<p class="problem">${esc(localId(problem, repo))}</p>`) =>
+  `<div class="row-main"><span class="kind-tag">${KIND_TAG[kind]}</span> ${!id ? "" : href ? repoIdLink(id, href, repo) : `<span class="id">${esc(id)}</span>`} ${title ? `<span class="t">${esc(title)}</span>` : ""}</div>` + para;
 /** One choice of a card: the button, what it does, and any input that belongs to it. */
-const choice = (button, hint, input = "") => `<div class="choice">${button}<span class="effect">${code(hint)}</span>${input}</div>`;
+const choice = (button, hint, input = "", recommended = false) =>
+  `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ' <span class="badge run">Recommended</span>' : ""}${input}</div>${button}</div>`;
 
 /** An Awaiting-you card from a server `asks` entry: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
 function askRow(i) {
@@ -321,14 +321,14 @@ function askRow(i) {
   const inputFor = (a) => {
     if (a.act === "deny") {
       const [repo, n] = i.id.split(/-(?=\d+(?:\.\d+)?$)/);
-      return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(repo)}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
+      return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(repo)}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
     }
-    return a.act === "answer" ? `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" aria-label="Answer for ${esc(i.id)}">` : "";
+    return a.act === "answer" ? `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}">` : "";
   };
-  const choices = acts.map((a) => choice(actionButton(a), a.hint, inputFor(a)));
+  const choices = acts.map((a) => choice(actionButton(a), a.hint, inputFor(a), !!a.recommended));
   if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
   return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
-    needHead(i.kind, i.id, i.href, i.title, i.problem, i.repo) +
+    needHead(i.kind, i.id, i.href, i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.explained === false ? ' <span class="muted">The case text is missing; this is the fixed text for this reason.</span>' : ""}</p>`) +
     `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i) + `</article>`;
 }
 

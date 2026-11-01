@@ -247,13 +247,18 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 .issue-row[data-kind="error"] { background: var(--stuck-bg); }
 .kind-tag { display: inline-block; padding: 1px 8px; border-radius: var(--r-tag); background: var(--kind-bg); color: var(--kind); font: 600 var(--fs-xs) var(--sans); }
 .issue-row[data-kind="error"] .kind-tag { background: var(--stuck); color: var(--surface); }
-.issue-row .choices { flex: 1 1 100%; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
-.choice { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr); gap: 2px 12px; align-items: center; }
-.choice .act { justify-self: stretch; text-align: left; overflow-wrap: anywhere; white-space: normal; }
+.issue-row .choices { flex: 1 1 100%; display: grid; grid-template-columns: minmax(0, 1fr) max-content; gap: 8px 16px; align-items: center; }
+.choice { display: contents; }
+.choice-text { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.choice .act { white-space: normal; text-align: center; }
 .act.always { border-color: var(--kind); color: var(--kind); }
-.choice .effect { font-size: var(--fs-sm); color: var(--muted); overflow-wrap: anywhere; }
-.choice input.reason { grid-column: 2; }
-@media (max-width: 720px) { .choice { grid-template-columns: minmax(0, 1fr); } .choice input.reason { grid-column: 1; } }
+.choice .effect { font-size: var(--fs-sm); color: var(--ink); overflow-wrap: anywhere; }
+.choice input.reason { flex: 1 1 100%; }
+.choice input.reason[hidden] { display: none; }
+.issue-row .situation { flex: 1 1 100%; margin: 0; overflow-wrap: anywhere; }
+.situation .muted { color: var(--muted); font-size: var(--fs-sm); }
+.issue-row .choices > .act-msg { grid-column: 1 / -1; }
+@media (max-width: 720px) { .issue-row .choices { grid-template-columns: minmax(0, 1fr); } .choice { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; } .choice .act { justify-self: start; } }
 .job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: 16px; }
 #awaiting > h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* the section heading above already says it */
@@ -1099,9 +1104,19 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
       } catch (err) { openDiffs.delete(name); panel.innerHTML = `<p class="msg">${esc(err.message)}</p>`; }
       return;
     }
+    if ((act === "deny" || act === "answer") && !b.classList.contains("ask")) {
+      const inp = b.closest(".choice")?.querySelector("input.reason");
+      if (inp?.hidden) {
+        inp.hidden = false;
+        b.classList.add("ask");
+        b.textContent = "Confirm";
+        inp.focus();
+        return;
+      }
+    }
     const answerText = act === "answer" ? b.closest(".actions").querySelector("input[name=answer]")?.value.trim() ?? "" : "";
     if (act === "answer" && !answerText) { note("Type an answer first"); return; }
-    if ((act === "land" || act === "drop" || act === "pause" || act === "deny" || act === "answer") && !b.classList.contains("ask")) {
+    if (((act === "land" && !b.closest(".choice")) || act === "drop" || act === "pause" || ((act === "deny" || act === "answer") && !b.closest(".choice")?.querySelector("input.reason"))) && !b.classList.contains("ask")) {
       b.classList.add("ask");
       b.textContent = name ? `${label} ${name}? Click again` : `${label}? Click again`;
       clearTimeout(b._t);

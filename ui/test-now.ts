@@ -15,7 +15,7 @@ export const full: any = { ...state, issues: [issue(1), issue(2)], queued: [{ re
 export const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id}"[^]*?</section>`))![0];
 export const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
 export const rows = (h: string) => h.split('<article class="job-card small issue-row ').slice(1);
-export const problem = (row: string) => row.match(/<p class="problem">([^<]*)<\/p>/)![1];
+export const problem = (row: string) => row.match(/<p class="(?:problem|situation)">([^<]*)(?:<span[^>]*>[^<]*<\/span>)?<\/p>/)![1].trim();
 export const prop = { id: "l-1234abcd", kind: "check", title: "No db mocks", target: "aleph checks", sentence: "Do not mock the db.", count: 3, signals: [
   { source: "chris", at: "2026-10-27T10:00:00Z", quote: "No, <script>alert(1)</script>", link: "https://lf/trace/t2" },
   { source: "gate", at: "2026-10-27T11:00:00Z", quote: "deny", link: "" },

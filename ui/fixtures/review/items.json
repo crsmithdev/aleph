@@ -243,7 +243,10 @@
       "source": "chris",
       "ask": "approval",
       "reason": "proposal",
-      "question": "Support a second input file"
+      "question": "Support a second input file",
+      "situation": "This proposal asks for a second input file on the digest command. It touches the argument parser and the report writer. It does not start until you approve it; denying it closes the proposal.",
+      "effects": ["start :: Makes the proposal a goal, and the factory starts it on the next free slot.", "deny :: Closes the proposal and records your reason; nothing is built."],
+      "recommend": "start :: the change is small and the parser already takes a list"
     }
   ]
 }

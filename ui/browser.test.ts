@@ -103,7 +103,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/issues");
     await page.go("#/");
     const mark = 'document.querySelector("#view > *").dataset.mark = "1"';
-    const buttons = `document.querySelector('#view button.act[data-act="drop"], #view button.act[data-act="land"]')`;
+    const buttons = `document.querySelector('#view button.act[data-act="drop"], #view :not(.choice) > button.act[data-act="land"]')`;
     await page.until(buttons);
     await page.ev(mark);
     await page.until('!document.querySelector("#view > *").dataset.mark'); // A refresh ran.
@@ -118,6 +118,34 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await Bun.sleep(1000);
     expect(await page.ev('[!!document.querySelector("#view button.act.ask"), document.querySelector("#view > *").dataset.mark]')).toEqual([true, "1"]);
     await page.reload(); // Takes the patched timer away.
+  }, 30_000);
+
+  test("ask rows: the button sits right of its text at 1280 px and under it at 720 px; deny reveals its input as Confirm", async () => {
+    await page.go("#/");
+    await page.until('document.querySelector("#view .choice .act")');
+    const geo = `(() => { const c = document.querySelector("#view .choice"); const t = c.querySelector(".choice-text").getBoundingClientRect(), b = c.querySelector(".act").getBoundingClientRect(); return { right: b.right > t.right - 1 && b.left >= t.right - 1, rowTop: b.top >= t.top - 1 && b.top <= t.bottom, under: b.top >= t.bottom - 1 }; })()`;
+    const g = await page.ev<any>(geo);
+    expect(g.right && g.rowTop).toBe(true);
+    await page.width(720);
+    expect((await page.ev<any>(geo)).under).toBe(true);
+    await page.width(1280);
+    await page.ev('document.querySelector("#view button.act[data-act=deny]").click()');
+    expect(await page.ev('[document.querySelector("#view button.act[data-act=deny]").textContent, document.querySelector("#view button.act[data-act=deny]").closest(".choice").querySelector("input.reason").hidden]')).toEqual(["Confirm", false]);
+    await page.reload();
+  }, 30_000);
+
+  test("a land button in an ask row posts on the first click", async () => {
+    await page.go("#/");
+    await page.until('document.querySelector("#view .choice button.act[data-act=land]")');
+    await page.ev(`(() => {
+      window.__posts = [];
+      const f = window.fetch;
+      window.fetch = (u, o) => { if (o?.method === "POST") { window.__posts.push(String(u)); return Promise.resolve(new Response("{}", { status: 422 })); } return f(u, o); };
+      document.querySelector("#view .choice button.act[data-act=land]").click();
+    })()`);
+    await page.until("window.__posts.length === 1");
+    expect(await page.ev<string>("window.__posts[0]")).toContain("land");
+    await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 
   test("an action the server refuses shows the server's reason on the row", async () => {
