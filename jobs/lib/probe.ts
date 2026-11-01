@@ -13,8 +13,9 @@ import { saveProbe, type Probe } from "./factory.ts";
 import { clockStart, SKEW_LIMIT_MS, STEP_LIMIT_MS, wallStepSince, windowsSkew } from "./clock.ts";
 
 function tailnet(): string {
-  const p = Bun.spawnSync(["tailscale", "ip", "-4"], { stdout: "pipe", stderr: "ignore" });
-  return p.exitCode === 0 ? p.stdout.toString().trim().split("\n")[0] : process.env.ALEPH_PROBE_TAILNET ?? "100.68.96.43";
+  // Bun.spawnSync throws when the command is not on PATH, as on CI.
+  const p = Bun.which("tailscale") ? Bun.spawnSync(["tailscale", "ip", "-4"], { stdout: "pipe", stderr: "ignore" }) : null;
+  return p?.exitCode === 0 ? p.stdout.toString().trim().split("\n")[0] : process.env.ALEPH_PROBE_TAILNET ?? "100.68.96.43";
 }
 
 /** Each must fail inside the sandbox. */
