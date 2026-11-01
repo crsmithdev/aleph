@@ -16,6 +16,7 @@ import { ASK_REASONS, actionsOn, reasonOf, type Ask } from "./ask.ts";
 import { allRuns, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { git } from "./git.ts";
+import { explainLesson, proposals, type Lesson } from "./corrections.ts";
 import { factoryLog } from "./layout.ts";
 
 export const EXPLAIN_CAP = () => Number(process.env.ALEPH_EXPLAIN_CAP ?? 3);
@@ -30,7 +31,8 @@ const ALLOWED = ["Read", "Grep", "Glob", ...["status", "log", "show", "diff", "l
 /** One Ask with no case text: on a store item, or on an awaiting run. `on` is the item's ref or the run's folder name. */
 export type Case =
   | { at: "item"; on: string; repo: Repo; item: issues.Issue; ask: Ask }
-  | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue };
+  | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue }
+  | { at: "lesson"; on: string; repo?: Repo; lesson: Lesson };
 
 export type Text = Pick<Ask, "situation" | "effects" | "recommend">;
 
@@ -58,11 +60,20 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
     const item = m && m[1] === repo!.key ? lists.item(repo!.key, m[2].includes(".") ? m[2] : Number(m[2])) ?? undefined : undefined;
     out.push({ at: "run", on: entry.id, repo, entry, ask: r.ask!, ...(item ? { item } : {}) });
   }
+  for (const lesson of proposals()) {
+    if (lesson.state !== "proposed" || !lesson.kind || lesson.situation?.trim()) continue;
+    out.push({ at: "lesson", on: lesson.id, repo: repos[0], lesson });
+  }
   return out;
 }
 
+/** What the case asks: an Ask's question, a lesson's sentence. */
+const questionOf = (c: Case): string => (c.at === "lesson" ? c.lesson.sentence : c.ask.question);
+const reasonName = (c: Case): string => (c.at === "lesson" ? `proposal-${c.lesson.kind}` : c.ask.reason);
+
 /** The actions an effect is owed for: the reason's actions, with `decide` as one `decide:<label>` per option. */
 export function actionsOf(c: Case): string[] {
+  if (c.at === "lesson") return ["approve", "decline"];
   const reason = reasonOf(c.ask.reason);
   const acts = actionsOn(reason, { run: c.at === "run", decision: c.ask.options.length > 0 });
   return acts.flatMap((a) => (a === "decide" && c.ask.options.length ? c.ask.options.map((o) => `decide:${o.label}`) : [a]));
@@ -86,7 +97,42 @@ function diffStat(repo: Repo | undefined, run: Run): string {
 
 const section = (title: string, body: string | null | undefined): string => (body && body.trim() ? `\n## ${title}\n\n${body.trim()}\n` : "");
 
+function lessonPrompt(c: Extract<Case, { at: "lesson" }>): string {
+  const l = c.lesson;
+  const acts = actionsOf(c);
+  return `You explain one proposed lesson: a stop where the factory waits for Chris on the proposal ${c.on}. Chris reads your text on the proposal's row before he presses a button. Your working directory is the repo${c.repo ? ` ${c.repo.key}` : ""}. You have read-only tools: Read, Grep, Glob, and Bash for \`git status\`, \`git log\`, \`git show\`, \`git diff\`, \`git ls-files\` and \`ls\`. Change nothing. Read the files the case names before you write about them.
+
+# The proposal
+
+Reason: proposal-${l.kind}
+Actions on the card: ${acts.join(", ")}
+Kind: ${l.kind}
+Target: ${l.target || "(none)"}
+Title: ${l.title || "(none)"}
+Sentence: ${l.sentence}
+Approve only files a goal for the factory; it writes no CLAUDE.md line, skill or check itself. Decline marks the lesson declined for good.
+Signals:
+${l.signals.map((s) => `- source: ${s.source}; at: ${s.at}; quote: ${s.quote}; link: ${s.link}`).join("\n") || "(none)"}
+
+${REPLY(acts, false)}`;
+}
+
+const REPLY = (acts: string[], decision: boolean): string => `# Your reply
+
+Reply with one JSON object and nothing else:
+
+{"situation": "<2 to 5 plain sentences naming the files, what they are for, and what the run did>", "effects": [{"action": "<an action, or decide:<option label>>", "text": "<what happens in this case: to the named things, downstream, what stays undone, what it unblocks, and whether it does the work or only records a claim>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null}
+
+Rules:
+- Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. No action${decision ? " and no option" : ""} is left without an effect.
+- State only what you read. Where you did not read something, say "I did not check X".
+- Do not repeat the button's label or what the store does (an Ask cleared, a note added); say what happens to the named things in this case.
+- For "checked" on a host check or a manual check, say that the click records a claim and runs nothing, and name what was to be done.
+- "recommend" is null when you cannot tell from what you read.
+`;
+
 export function explainPrompt(c: Case): string {
+  if (c.at === "lesson") return lessonPrompt(c);
   const reason = reasonOf(c.ask.reason);
   const r = ASK_REASONS[reason];
   const acts = actionsOf(c);
@@ -106,19 +152,7 @@ ${c.ask.options.length ? `Options:\n${c.ask.options.map((o) => `- ${o.label}: ${
 ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes", item.notes.join("\n"))}` : ""}${run ? `
 # The run ${c.on}
 ${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("Tail of checks.log", tail(run.folder, "checks.log"))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}
-# Your reply
-
-Reply with one JSON object and nothing else:
-
-{"situation": "<2 to 5 plain sentences naming the files, what they are for, and what the run did>", "effects": [{"action": "<an action, or decide:<option label>>", "text": "<what happens in this case: to the named things, downstream, what stays undone, what it unblocks, and whether it does the work or only records a claim>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null}
-
-Rules:
-- Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. No action${c.ask.options.length ? " and no option" : ""} is left without an effect.
-- State only what you read. Where you did not read something, say "I did not check X".
-- Do not repeat the button's label or what the store does (an Ask cleared, a note added); say what happens to the named things in this case.
-- For "checked" on a host check or a manual check, say that the click records a claim and runs nothing, and name what was to be done.
-- "recommend" is null when you cannot tell from what you read.
-`;
+${REPLY(acts, c.ask.options.length > 0)}`;
 }
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
@@ -159,6 +193,7 @@ function store(c: Case, t: Text): boolean {
     });
     return w?.value === true;
   }
+  if (c.at === "lesson") return explainLesson(c.lesson.id, c.lesson.sentence, t);
   const now = readRun(c.entry.folder);
   if (!now || now.condition !== "awaiting" || !sameAsk(now.ask, c.ask)) return false;
   updateRun(c.entry.folder, { ask: { ...now.ask!, ...t } });
@@ -167,7 +202,7 @@ function store(c: Case, t: Text): boolean {
 
 /** The failed explain runs for this Ask. */
 const failures = (c: Case, runs: Entry[]): number =>
-  runs.filter((e) => e.run.kind === "explain" && e.run.on === c.on && e.run.question === c.ask.question && /^failed:/.test(e.run.reason ?? "")).length;
+  runs.filter((e) => e.run.kind === "explain" && e.run.on === c.on && e.run.question === questionOf(c) && /^failed:/.test(e.run.reason ?? "")).length;
 
 const lockName = (on: string) => `explain-${on}`;
 const lockOf = (run: Run): string | null => (run.on ? lockName(run.on) : null);
@@ -183,9 +218,9 @@ async function explainOne(c: Case): Promise<string> {
     const run = openRun({
       role: "explain", who: "the explainer", model: EXPLAIN_MODEL, seconds: SECONDS,
       flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(",")],
-      cwd, name: `explain-${c.on}`, command: `explain ${c.on}: ${c.ask.reason}: ${c.ask.question}`, shown: true, on: c.on,
+      cwd, name: `explain-${c.on}`, command: `explain ${c.on}: ${reasonName(c)}: ${questionOf(c)}`, shown: true, on: c.on,
     });
-    updateRun(run.folder, { question: c.ask.question });
+    updateRun(run.folder, { question: questionOf(c) });
     try {
       const t = parseExplain(await run.ask(explainPrompt(c)), actionsOf(c));
       if (typeof t === "string") { run.end(`failed: bad JSON: ${t}`); return `${c.on}: explain failed: ${t}`; }

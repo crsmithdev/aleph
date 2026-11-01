@@ -6,6 +6,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { askOf, awaitsChris, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import { plainAsk, type Ask } from "./ask.ts";
 import { allRuns, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
+import { readStore, type Lesson } from "./corrections.ts";
 import { explainPrompt, explainStep, parseExplain, pendingCases } from "./explain.ts";
 import { liveEntries, runsToday } from "./factory-status.ts";
 import { triageStep } from "./factory.ts";
@@ -25,7 +26,11 @@ prompt=$(cat)
 printf '%s' "$prompt" > "$FAKE_DIR/prompt-$(date +%s%N).md"
 rec=deny; case $prompt in *"Land x.ts?"*) rec=land ;; esac
 echo "$PWD $*" >> "$FAKE_DIR/calls"
+if [ -n "$FAKE_HOOK" ]; then eval "$FAKE_HOOK"; fi
 if [ -n "$FAKE_EXIT" ]; then echo "boom" >&2; exit "$FAKE_EXIT"; fi
+case $prompt in *"approve, decline"*)
+echo '{"situation":"The lesson says to check x.ts.","effects":[{"action":"approve","text":"Files a goal."},{"action":"decline","text":"Drops it."}],"recommend":{"action":"decline","why":"Too vague."}}'
+exit 0 ;; esac
 echo '{"situation":"The run changed x.ts, the parser. I did not check the vault.","effects":[{"action":"checked","text":"Records a claim that the dashboard was looked at; it runs nothing."},{"action":"deny","text":"Leaves the dashboard unchecked."},{"action":"land","text":"Puts x.ts on main."},{"action":"drop","text":"Throws the branch away."}],"recommend":{"action":"'$rec'","why":"Nothing was checked."}}'
 `;
 
@@ -76,6 +81,7 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 beforeEach(() => {
+  rmSync(join(base, "factory"), { recursive: true, force: true }); delete process.env.FAKE_HOOK;
   delete process.env.FAKE_EXIT; delete process.env.ALEPH_EXPLAIN_TRIES; delete process.env.ALEPH_EXPLAIN_CAP;
   for (const f of readdirSync(base)) if (f.startsWith("prompt-") || f === "calls") rmSync(join(base, f));
 });
@@ -185,4 +191,72 @@ test("the tick's triage step runs the sweep", async () => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: base, sandbox: true } }));
   await triageStep();
   expect(askOf(itemOf(id))!.situation).toContain("x.ts");
+});
+
+// ---- lessons
+const lessonId = "l1";
+const fresh = () => { process.env.ALEPH_JOBS_DIR = join(base, `jobs-${++lists}`); };
+function seedLessons(...ls: Partial<Lesson>[]): void {
+  mkdirSync(join(base, "factory"), { recursive: true });
+  const lessons = ls.map((l, i) => ({
+    id: `l${i + 1}`, sentence: `Check x.ts first ${i + 1}`, state: "proposed", count: 1, kind: "claude-md", target: "CLAUDE.md", title: "Check x.ts",
+    signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "QUOTE-MARK you forgot x.ts", link: "https://example.com/1" }], ...l,
+  }));
+  writeFileSync(join(base, "factory", "corrections.json"), JSON.stringify({ minedAt: "", lessons }));
+}
+const lesson = (id = lessonId) => readStore().lessons.find((l) => l.id === id)!;
+
+test("a proposed lesson gets its situation, effects and recommend, and the prompt names its parts", async () => {
+  seed(plainAsk("host-check", "x"));
+  seedLessons({});
+  process.env.ALEPH_EXPLAIN_CAP = "5";
+  expect(pendingCases([repo]).map((c) => c.at)).toEqual(["item", "lesson"]);
+  await explainStep([repo]);
+  const l = lesson();
+  expect(l.situation).toContain("x.ts");
+  expect(l.effects!.map((e) => e.action)).toEqual(["approve", "decline"]);
+  expect(l.recommend).toEqual({ action: "decline", why: "Too vague." });
+  const e = explains().find((x) => x.run.on === lessonId)!;
+  expect([e.run.condition, e.run.reason, e.run.question]).toEqual(["done", "explained", "Check x.ts first 1"]);
+  const p = prompts().find((x) => x.includes("approve, decline"))!;
+  for (const m of ["Check x.ts first 1", "CLAUDE.md", "claude-md", "QUOTE-MARK", "Approve only files a goal"]) expect(p).toContain(m);
+  expect(readFileSync(join(base, "calls"), "utf8")).toContain(`${base} `);
+});
+
+test("a failing explainer leaves the lesson; after two failed sweeps no third run opens", async () => {
+  fresh();
+  seedLessons({});
+  const before = JSON.stringify(readStore());
+  process.env.FAKE_EXIT = "1";
+  for (let i = 0; i < 3; i++) await explainStep([repo]);
+  expect(JSON.stringify(readStore())).toBe(before);
+  expect(explains()).toHaveLength(2);
+});
+
+test("lessons not proposed, without a kind, or already explained open no run", async () => {
+  fresh();
+  seedLessons({ state: "open" }, { state: "approved" }, { state: "declined" }, { kind: undefined }, { situation: "already" });
+  expect(pendingCases([repo])).toEqual([]);
+  await explainStep([repo]);
+  expect(explains()).toHaveLength(0);
+});
+
+test("a lesson declined during its run gets no text", async () => {
+  fresh();
+  seedLessons({});
+  process.env.FAKE_HOOK = `sed -i 's/"proposed"/"declined"/' "${join(base, "factory", "corrections.json")}"`;
+  await explainStep([repo]);
+  expect(lesson().situation).toBeUndefined();
+  expect(explains()[0].run.reason).toBe("the ask changed during the run");
+});
+
+test("ALEPH_EXPLAIN_CAP=1 explains the item first and the lesson in the second sweep", async () => {
+  const id = seed(plainAsk("host-check", "check the prod dashboard"));
+  seedLessons({});
+  process.env.ALEPH_EXPLAIN_CAP = "1";
+  await explainStep([repo]);
+  expect(askOf(itemOf(id))!.situation).toBeTruthy();
+  expect(lesson().situation).toBeUndefined();
+  await explainStep([repo]);
+  expect(lesson().situation).toBeTruthy();
 });
