@@ -215,11 +215,11 @@ test("classify: one run of each class, with its cause", () => {
     expect(c).toHaveProperty("week");
     for (const e of [...c.causes, ...c.top]) expect(e).not.toHaveProperty("week");
   }
-  expect(out.notCounted).toEqual({ runs: 4, goals: 2, hours: round2(4 * 10 / 60) });
+  expect(out.notCounted).toEqual({ runs: 4, issues: 2, hours: round2(4 * 10 / 60) });
   expect(out.lost.hours).toBeCloseTo(Math.round(out.classes.slice(2).reduce((a, c) => a + c.hours, 0) * 100) / 100, 1);
   const d = speed("day", now);
   expect(d.classes.map((c) => c.key)).toEqual([...CLASSES]);
-  expect(d.goals.week).toBeNull();
+  expect(d.issues.week).toBeNull();
   expect(d.hasWeek).toBe(false);
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -271,9 +271,9 @@ test("runs read their issue from on: a goal run counts under its issue, an issue
   for (const r of [a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), land("p", { on: "ox-860" }), land("q", { on: "ox-860.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
   const fit = { pooled: 0.1, byModel: {} } as any;
   const w = speed("week", now, fit);
-  expect(w.goals.week).toBe(0.2); // both runs under the one key ox-860
+  expect(w.issues.week).toBe(0.2); // both runs under the one key ox-860
   run({ ...a("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) });
-  expect(speed("week", now, fit).goals.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
+  expect(speed("week", now, fit).issues.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
 });
 
 test("phases: intake runs from the filing to the first triage end, queue from there to the first agent start, lead from the filing to the last land", () => {

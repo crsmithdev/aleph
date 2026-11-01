@@ -219,7 +219,7 @@ export type WaitReason =
 /** What `waitReason` reads: the caller computes these once for all its goals. `planning` is `planning(repo, id)`'s answer. */
 export interface WaitContext { done: (ref: string) => boolean; jobs?: Job[]; gated?: ReturnType<typeof gates>; red?: string | null; planning?: boolean; now?: Date }
 
-/** Why a queued goal does not start now, by the order and the texts `dispatchGoals` skips it with; `ready` when nothing stops it. */
+/** Why a queued goal does not start now, by the order and the texts `dispatchIssues` skips it with; `ready` when nothing stops it. */
 export function waitReason(_repo: Repo, item: issues.Issue, ctx: WaitContext): WaitReason {
   if (ctx.red) return { kind: "red", text: ctx.red };
   const ids = pendingWaits(afterOf(item), ctx.done);
@@ -245,7 +245,7 @@ export function waitReason(_repo: Repo, item: issues.Issue, ctx: WaitContext): W
 }
 
 /** The job name for an issue: its id, `aleph-28` or `aleph-28.1`. */
-export const goalJob = (repo: Repo, id: number | string) => `${repo.key}-${id}`;
+export const issueJob = (repo: Repo, id: number | string) => `${repo.key}-${id}`;
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
 export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
@@ -346,7 +346,7 @@ export function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date
  * only: an issue is closed as done once its goals are all done (`closeIssues`).
  * `plan` starts an issue's planner detached; the dispatch does not wait for it.
  */
-export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -392,12 +392,12 @@ export async function dispatchGoals(start: Start, checks?: Checks, land?: Land, 
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
       if (!planSet(item) || issues.status(item) !== "open" || askOf(item) || notReady(item, done) || await planning(repo, item.id)) continue;
       plan(repo, item.id);
-      planned.push(goalJob(repo, item.id));
+      planned.push(issueJob(repo, item.id));
     }
   }
   for (const { repo, item: listed } of goals) {
     const ref = issues.idOf(listed);
-    const name = goalJob(repo, ref);
+    const name = issueJob(repo, ref);
     const red = reds.get(repo.key);
     if (red) { skipped.push(`${name}: ${red}`); continue; }
     if (done(`${repo.key}-${ref}`)) { skipped.push(`${name}: the item is already done`); continue; }
@@ -969,7 +969,7 @@ export async function episodeStep(): Promise<string[]> {
 }
 
 /** One tick of the timer: a dispatch, as the fallback. */
-export const tick = dispatchGoals;
+export const tick = dispatchIssues;
 
 export interface Flake { repo: string; check: string; run: string; at: string }
 const flakyFile = () => join(factoryDir(), "flaky.json");

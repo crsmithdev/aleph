@@ -180,7 +180,7 @@ function queuedLane(s) {
 
 /** An issue in Running: its title, "n of m parts", and its parts nested, each with its stage and its job. */
 function runningIssue(i) {
-  const goals = i.goals.map((g) =>
+  const goals = i.parts.map((g) =>
     `<li class="goal-row">${idLink(localId(g.id, repoOf(i.id)), g.href)} ${statusBadge(g.stage)} <span class="t">${esc(g.title)}</span>${g.job ? ` <a class="job" href="${esc(g.job.href)}">${esc(g.job.kind === "agent" || g.job.kind === "build" ? "build" : g.job.kind)}</a>` : ""}</li>`).join("");
   return `<article class="job-card small lane-card run-row issue-run" data-issue="${esc(i.id)}"><div class="ih">${repoIdLink(i.id, i.href)}${statusBadge(i.stage)}<span class="num">${i.of.n} of ${i.of.m} goals</span></div>` +
     `<a href="${esc(i.href)}" class="t">${esc(i.title)}</a><ul class="goals">${goals}</ul></article>`;

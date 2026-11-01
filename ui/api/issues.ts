@@ -139,8 +139,8 @@ async function create(req: Request, url: URL): Promise<Response> {
   if (project && project !== repo) return Response.json({ error: `this view is filtered to ${project}` }, { status: 400 });
   const given = (Array.isArray(b.labels) ? b.labels : String(b.labels ?? "").split(",")).map((s: unknown) => String(s).trim()).filter(Boolean);
   // The form's factory box: the text is the issue's spec, so it builds.
-  const labels = given.filter((l: string) => l !== "goal");
-  const args = ["issue", "add", repo, title, given.includes("goal") ? "--spec" : "--request", "-"];
+  const labels = given.filter((l: string) => l !== "spec");
+  const args = ["issue", "add", repo, title, given.includes("spec") ? "--spec" : "--request", "-"];
   if (labels.length) args.push("--labels", labels.join(","));
   const after = str(b.after)?.trim();
   if (after) args.push("--after", after);

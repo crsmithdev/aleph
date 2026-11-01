@@ -71,7 +71,7 @@ function branchRange(runs: Entry[]): { path: string; base: string; ref: string }
 export const routes: Routes = {
   "GET /api/jobs": async (_req, _p, url) => {
     const q = url.searchParams;
-    const project = q.get("project"), repo = q.get("repo"), state = q.get("state");
+    const project = q.get("project"), repo = q.get("repo"), state = q.get("condition");
     const dq = q.get("days");
     const days = dq === null || dq === "" ? 7 : Number(dq);
     if (!(days >= 0)) return Response.json({ error: "days must be a number" }, { status: 400 });

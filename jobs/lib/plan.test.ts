@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { labels as itemLabels, readList, writeList, partsOf } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { dispatchGoals, planNow } from "./factory.ts";
+import { dispatchIssues, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { isLarge, parsePlan, prompt, realOracle, runPlan, topFolders } from "./plan.ts";
 import type { Tier } from "./route.ts";
@@ -112,14 +112,14 @@ async function plannerLogsCall(plans: Promise<unknown>[]): Promise<void> {
 async function dispatch(tier: Tier | null) {
   const starts: [string, Tier | null | undefined][] = [];
   const plans: Promise<{ planned: string[] } | { why: string }>[] = [];
-  const out: any = await dispatchGoals(async (_repo, name, _id, _spec, t) => { starts.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier,
+  const out: any = await dispatchIssues(async (_repo, name, _id, _spec, t) => { starts.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier,
     (repo, id) => { plans.push(planNow(repo, id)); });
   const done = await Promise.all(plans);
   const refs = done.flatMap((r, i) => ("planned" in r ? [`${out.planned[i]} into ${r.planned.join(",")}`] : []));
   out.planned = refs.length ? refs : undefined;
   // The plan job's own dispatch, which starts the children or the fallback worker.
   const then: [string, Tier | null | undefined][] = [];
-  if (plans.length) await dispatchGoals(async (_repo, name, _id, _spec, t) => { then.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier, () => {});
+  if (plans.length) await dispatchIssues(async (_repo, name, _id, _spec, t) => { then.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier, () => {});
   return { starts, then, out };
 }
 
@@ -236,7 +236,7 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
   const starts: string[] = [];
   const plans: Promise<unknown>[] = [];
   try {
-    const out = await dispatchGoals(async (_r, name) => { starts.push(name); return null; }, undefined, undefined, undefined,
+    const out = await dispatchIssues(async (_r, name) => { starts.push(name); return null; }, undefined, undefined, undefined,
       async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
     expect(starts).toEqual([`fac-${small}`]);
     expect(out.planned).toEqual([`fac-${big}`]);
@@ -246,7 +246,7 @@ test("a dispatch returns before a slow planner replies; the small goal starts, a
 
     // A second pass starts no second plan and no worker for the large goal.
     const again: string[] = [];
-    const out2 = await dispatchGoals(async (_r, name) => { again.push(name); return null; }, undefined, undefined, undefined,
+    const out2 = await dispatchIssues(async (_r, name) => { again.push(name); return null; }, undefined, undefined, undefined,
       async (spec) => (spec.includes("PLAN:slow") ? "opus" : "sonnet"), (repo, id) => { plans.push(planNow(repo, id)); });
     expect(again).not.toContain(`fac-${big}`);
     expect(out2.skipped).toContain(`fac-${big}: planning`);

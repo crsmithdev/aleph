@@ -124,8 +124,8 @@ describe("/api/state on a work-model store", () => {
     // The issue in Running nests its goals with their stages; .3 runs after .2, so it is blocked.
     const issue = s.runningIssues.find((i: any) => i.id === "fac-1");
     expect(issue.of).toEqual({ n: 1, m: 3 });
-    expect(issue.goals.map((g: any) => [g.id, g.stage])).toEqual([["fac-1.1", "done"], ["fac-1.2", "building"], ["fac-1.3", "blocked"]]);
-    expect(issue.goals[1].job).toMatchObject({ name: "fac-1.2", kind: "build" });
+    expect(issue.parts.map((g: any) => [g.id, g.stage])).toEqual([["fac-1.1", "done"], ["fac-1.2", "building"], ["fac-1.3", "blocked"]]);
+    expect(issue.parts[1].job).toMatchObject({ name: "fac-1.2", kind: "build" });
     expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "blocked"]]);
   });
 

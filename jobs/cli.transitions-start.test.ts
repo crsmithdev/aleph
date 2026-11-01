@@ -55,7 +55,7 @@ describe("every transition dispatches at once", () => {
     const create = issues.routes["POST /api/issues"];
     const saved = { ...process.env };
     Object.assign(process.env, env(on()));
-    const req = new Request("http://x/api/issues", { method: "POST", headers: { "x-aleph-ui": "1" }, body: JSON.stringify({ repo: "fac", title, labels: "goal", body: `ACTION: ${open("form")}` }) });
+    const req = new Request("http://x/api/issues", { method: "POST", headers: { "x-aleph-ui": "1" }, body: JSON.stringify({ repo: "fac", title, labels: "spec", body: `ACTION: ${open("form")}` }) });
     const res = await create(req, {}, new URL(req.url));
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
     Object.assign(process.env, saved);

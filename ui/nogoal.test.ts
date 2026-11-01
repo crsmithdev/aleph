@@ -39,6 +39,6 @@ describe("the UI never says goal", () => {
     expect(triageCard({ name: "t", condition: "done", outcome: "build" }, "full")).toContain("To factory");
     const form = renderContents({ projects: [], issues: [] });
     expect(form).toContain("build it in the factory");
-    expect(form).toContain('name="goal"');
+    expect(form).toContain('name="spec"');
   });
 });

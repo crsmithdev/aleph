@@ -325,15 +325,15 @@ describe("views", () => {
 });
 
 describe("POST /api/issues", () => {
-  test("turns the goal label into --spec -, and passes title, labels and the text on stdin to `aleph issue add`", async () => {
-    const res = await post({ repo: "fac", title: "new one", body: "## Goal\n\ndo it", labels: ["goal", "x"] });
+  test("turns the spec label into --spec -, and passes title, labels and the text on stdin to `aleph issue add`", async () => {
+    const res = await post({ repo: "fac", title: "new one", body: "## Goal\n\ndo it", labels: ["spec", "x"] });
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ added: 7 });
     expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "new one", "--spec", "-", "--labels", "x"]);
     expect(readFileSync(stdinFile, "utf8")).toBe("## Goal\n\ndo it");
   });
 
-  test("without the goal label the text is the body", async () => {
+  test("without the spec label the text is the body", async () => {
     const res = await post({ repo: "fac", title: "plain one", body: "just words", labels: ["x"] });
     expect(res.status).toBe(200);
     expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "plain one", "--request", "-", "--labels", "x"]);

@@ -6,7 +6,7 @@ import { askOf, clearAsk, readList, writeList } from "../../todo/lib/store.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { AWAITING_CAP, correctionsDue, dispatchGoals, episodeStep, report, gates, notReady, spentToday, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue , factoryDir } from "./factory.ts";
+import { AWAITING_CAP, correctionsDue, dispatchIssues, episodeStep, report, gates, notReady, spentToday, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue , factoryDir } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -60,7 +60,7 @@ test("a goal turned back into an issue during the baseline is not started", asyn
   const id = goal();
   const calls: string[] = [];
   let baselined = false;
-  const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => {
+  const out = await dispatchIssues(async (_repo, name) => { calls.push(name); return null; }, async () => {
     baselined = true;
     await change(id, (item) => { item.spec = ""; });
     return null;
@@ -73,7 +73,7 @@ test("a goal turned back into an issue during the baseline is not started", asyn
 test("a goal closed during the baseline is not started", async () => {
   const id = goal();
   const calls: string[] = [];
-  const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => {
+  const out = await dispatchIssues(async (_repo, name) => { calls.push(name); return null; }, async () => {
     await change(id, (item) => issues.setStatus(item, "done"));
     return null;
   });
@@ -88,7 +88,7 @@ test("a goal given an after while an earlier goal starts is not started", async 
   const second = goal();
   const other = writeList({ key: "fac" }, "add an open item", (doc) => { const i = issues.add(doc, "not a goal"); issues.setStatus(issues.addPart(doc, i, { title: "g", spec: "b" }), "dropped"); return i.id; }, true)!.value;
   const calls: string[] = [];
-  const out = await dispatchGoals(async (_repo, name) => {
+  const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => { item.fm.after = [`fac-${other}.1`]; });
     return null;
@@ -116,7 +116,7 @@ test("a goal turned back into an issue while an earlier goal starts is not start
   const first = goal();
   const second = goal();
   const calls: string[] = [];
-  const out = await dispatchGoals(async (_repo, name) => {
+  const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => { item.spec = ""; });
     return null;
@@ -131,7 +131,7 @@ test("a goal closed while an earlier goal starts is not started", async () => {
   const first = goal();
   const second = goal();
   const calls: string[] = [];
-  const out = await dispatchGoals(async (_repo, name) => {
+  const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
     return null;
@@ -145,10 +145,10 @@ test("a goal closed while an earlier goal starts is not started", async () => {
 test("a goal added while another dispatch holds the baseline is started by the holder", async () => {
   goal();
   let added = 0;
-  let b: Awaited<ReturnType<typeof dispatchGoals>> | undefined;
-  const a = await dispatchGoals(async () => null, async () => {
+  let b: Awaited<ReturnType<typeof dispatchIssues>> | undefined;
+  const a = await dispatchIssues(async () => null, async () => {
     added = goal();
-    b = await dispatchGoals(async () => null, async () => null);
+    b = await dispatchIssues(async () => null, async () => null);
     return null;
   });
   expect(b!.started).toEqual([]);
@@ -168,12 +168,12 @@ test("a goal added while the baseline of a repo that joined the list runs is sta
   }));
   goal();
   let first = 0, second = 0;
-  let b: Awaited<ReturnType<typeof dispatchGoals>> | undefined;
-  const a = await dispatchGoals(async () => null, async (repo) => {
+  let b: Awaited<ReturnType<typeof dispatchIssues>> | undefined;
+  const a = await dispatchIssues(async () => null, async (repo) => {
     if (repo.key === "fac") first = goal([], "two");
     else {
       second = goal([], "two");
-      b = await dispatchGoals(async () => null, async () => null);
+      b = await dispatchIssues(async () => null, async () => null);
     }
     return null;
   });
@@ -186,7 +186,7 @@ test("a goal added while the baseline of a repo that joined the list runs is sta
 test("a goal that stays open and labelled is started exactly once", async () => {
   const id = goal();
   const calls: string[] = [];
-  const out = await dispatchGoals(async (_repo, name) => { calls.push(name); return null; }, async () => null);
+  const out = await dispatchIssues(async (_repo, name) => { calls.push(name); return null; }, async () => null);
   expect(calls).toEqual([`fac-${id}`]);
   expect(out.started).toEqual([`fac-${id}`]);
   expect(out.skipped).toEqual([]);
@@ -276,7 +276,7 @@ function fakes() {
   const start = async (_r: unknown, name: string, _id: number | string, spec: string) => { calls.push(`start ${name}`); specs.push(spec); return null; };
   return { calls, rescue, land, specs, start };
 }
-const dispatch = (f: ReturnType<typeof fakes>) => dispatchGoals(f.start, async () => null, f.land, f.rescue);
+const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start, async () => null, f.land, f.rescue);
 
 // A run that a host restart killed: `running`, started before this boot, its process gone.
 const BEFORE_BOOT = "2020-01-01T00:00:00.000Z";
@@ -300,9 +300,9 @@ test("a goal whose run a host restart killed keeps its rerun: the next no commit
   killedRun(`fac-${id}`);
   const f = fakes();
   f.start = async () => null;
-  await dispatchGoals(f.start, async () => null, f.land, f.rescue);
+  await dispatchIssues(f.start, async () => null, f.land, f.rescue);
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
-  await dispatchGoals(f.start, async () => null, f.land, f.rescue);
+  await dispatchIssues(f.start, async () => null, f.land, f.rescue);
   expect(f.calls).toEqual([`drop fac-${id}`, `drop fac-${id}`]);
   expect(ask(id)).toBeNull();
 });
@@ -543,7 +543,7 @@ test("an item that the store closes while an earlier goal starts gets no run", a
   const first = goal();
   const second = goal();
   const f = fakes();
-  const out = await dispatchGoals(async (_repo, name) => {
+  const out = await dispatchIssues(async (_repo, name) => {
     f.calls.push(`start ${name}`);
     if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
     return null;
@@ -693,7 +693,7 @@ const claimed = (name: string, result: string) => {
   return mk(name, "build", "stuck", { reason: "no commit" }, { "result.md": result });
 };
 const withChecks = (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<string | null>) =>
-  dispatchGoals(f.start, checks, f.land, f.rescue);
+  dispatchIssues(f.start, checks, f.land, f.rescue);
 
 test("no commit and the worker says the goal is already met, the checks pass on main: dropped and the item done", async () => {
   const id = goal();
@@ -800,7 +800,7 @@ test("a pass that began before a pause starts nothing after it", async () => {
   const first = goal();
   goal();
   const calls: string[] = [];
-  const out = await dispatchGoals(async (_repo, name) => {
+  const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
     mkdirSync(factoryDir(), { recursive: true });
     writeFileSync(join(factoryDir(), "paused"), "");
@@ -969,7 +969,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
 test("without rescue actions a stuck run still holds the factory", async () => {
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "time box" });
-  const out = await dispatchGoals(async () => null, async () => null);
+  const out = await dispatchIssues(async () => null, async () => null);
   expect(out.held).toContain("Held:");
 });
 
@@ -996,7 +996,7 @@ test("two dispatches at once rescue one stuck job once", async () => {
   mk(name, "build", "stuck", { reason: "time box" });
   const f = fakes();
   const slow = { ...f.rescue, drop: async (n: string, r: string) => { await Bun.sleep(300); return f.rescue.drop(n, r); } };
-  await Promise.all([dispatchGoals(f.start, async () => null, f.land, slow), dispatchGoals(f.start, async () => null, f.land, slow)]);
+  await Promise.all([dispatchIssues(f.start, async () => null, f.land, slow), dispatchIssues(f.start, async () => null, f.land, slow)]);
   expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);
 });
 
@@ -1153,7 +1153,7 @@ test("a dispatch with checks, three factory repos and no open goals fetches the 
   const path = process.env.PATH;
   process.env.PATH = `${join(base, "bin")}:${path}`;
   try {
-    const out = await dispatchGoals(async () => null, async () => null);
+    const out = await dispatchIssues(async () => null, async () => null);
     expect(out.started).toEqual([]);
   } finally {
     process.env.PATH = path;
@@ -1177,11 +1177,11 @@ test("a goal that names a busy file an open job also names waits; a job waiting 
   const { folder } = mk(`fac-${first}`, "build", "passed");
   const calls: string[] = [];
   const start = async (_repo: unknown, name: string) => { calls.push(name); return null; };
-  const out = await dispatchGoals(start);
+  const out = await dispatchIssues(start);
   expect(calls).toEqual([]);
   expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both change the busy file jobs/busy.ts`);
   writeRun(folder, { ...readRun(folder)!, condition: "awaiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
-  await dispatchGoals(start);
+  await dispatchIssues(start);
   expect(calls).toEqual([`fac-${second}`]);
 });
 
@@ -1193,6 +1193,6 @@ test("a goal that shares only a quiet file with an open job starts", async () =>
   const second = add();
   mk(`fac-${first}`, "build", "passed");
   const calls: string[] = [];
-  await dispatchGoals(async (_repo, name) => { calls.push(name); return null; });
+  await dispatchIssues(async (_repo, name) => { calls.push(name); return null; });
   expect(calls).toEqual([`fac-${second}`]);
 });

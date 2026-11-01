@@ -48,7 +48,7 @@ async function review(script: string) {
   }
 }
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
-import { dispatchGoals } from "./factory.ts";
+import { dispatchIssues } from "./factory.ts";
 
 test("reviewFacts keeps one fact and rejects one", async () => {
   const reply = JSON.stringify({ verdicts: [{ fact: "alpha holds", verdict: "keep", reason: "a.txt says so", scope: "demo", title: "Alpha Holds" }, { fact: "beta holds", verdict: "reject", reason: "b.txt says otherwise", scope: "global", title: "Beta" }] });
@@ -206,7 +206,7 @@ describe("factsGate through the dispatch", () => {
       { fact: "lemons float", verdict: "keep", reason: "a.ts shows it", scope: "fac", title: "Lemons Float" },
       { fact: "pears sink", verdict: "reject", reason: "b.ts says otherwise", scope: "fac", title: "Pears" },
     ] });
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
     const note = readFileSync(join(vault, "wiki", "gotchas", "Lemons Float.md"), "utf8");
     expect(note).toContain("written_by: factory");
     expect(note).toMatch(/sources: \[src\/a\.ts:1, /);
@@ -219,7 +219,7 @@ describe("factsGate through the dispatch", () => {
     expect(log()).toContain("gate-01: fact dropped, no source: no source at all");
     expect(log()).toContain("gate-01: fact rejected (b.ts says otherwise): pears sink");
     expect(existsSync(join(vault, "wiki", "gotchas", "Pears.md"))).toBe(false);
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
     expect(factsRuns()).toHaveLength(1);
   });
 
@@ -229,7 +229,7 @@ describe("factsGate through the dispatch", () => {
     answer = 0.9;
     landed("gate-02", "FACT: widgets are not registered [source: src/w.ts:2]\n");
     reviewer({ verdicts: [{ fact: "widgets are not registered", verdict: "keep", reason: "w.ts shows it", scope: "fac", title: "Widget Registry Rules" }] });
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
     answer = 0;
     expect(existsSync(join(vault, "wiki", "gotchas", "Widget Registry Rules.md"))).toBe(false);
     const run = factsRuns().map((f) => JSON.parse(readFileSync(join(jobs, f, "state.json"), "utf8"))).find((s) => s.name === "facts-gate-02");
@@ -241,7 +241,7 @@ describe("factsGate through the dispatch", () => {
   test("a landed job with no FACT lines makes no facts run", async () => {
     const before = factsRuns().length;
     landed("gate-03", "done, nothing learned\n");
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
     expect(factsRuns()).toHaveLength(before);
   });
 
@@ -249,9 +249,9 @@ describe("factsGate through the dispatch", () => {
     const before = factsRuns().length;
     landed("gate-04", "FACT: nothing to cite\nFACT: still nothing [source: not a source!]\n");
     const count = () => log().split("\n").filter((l) => l.includes("gate-04: fact dropped, no source")).length;
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
     expect(count()).toBe(2);
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
     expect(count()).toBe(2);
     expect(factsRuns()).toHaveLength(before);
     const land = JSON.parse(readFileSync(join(jobs, "20261028-000004-gate-04-land", "state.json"), "utf8"));
@@ -264,8 +264,8 @@ describe("factsGate through the dispatch", () => {
     landed("gate-05", "nothing\n");
     landed("gate-06", "FACT: ok [source: src/a.ts:1]\n");
     reviewer({ verdicts: [{ fact: "ok", verdict: "reject", reason: "no", scope: "fac", title: "Ok" }] });
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
-    await dispatchGoals((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
+    await dispatchIssues((() => { throw new Error("no start"); }) as any);
     expect(factsRuns()).toHaveLength(before + 1);
     for (const n of ["000005-gate-05", "000006-gate-06"]) {
       const land = JSON.parse(readFileSync(join(jobs, `20261028-${n}-land`, "state.json"), "utf8"));

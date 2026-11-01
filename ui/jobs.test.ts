@@ -87,8 +87,8 @@ describe("a land that found the job lock busy", () => {
       expect(d.condition).toBe("passed");
       expect(d.reason).toBeUndefined();
       expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ condition: "failed", reason: "job lock busy" });
-      expect((await (await get("/api/jobs?state=failed")).json()).map((j: any) => j.name)).not.toContain("fac-7");
-      expect((await (await get("/api/jobs?state=passed")).json()).map((j: any) => j.name)).toContain("fac-7");
+      expect((await (await get("/api/jobs?condition=failed")).json()).map((j: any) => j.name)).not.toContain("fac-7");
+      expect((await (await get("/api/jobs?condition=passed")).json()).map((j: any) => j.name)).toContain("fac-7");
     } finally {
       for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
     }
@@ -105,7 +105,7 @@ describe("GET /api/jobs", () => {
   });
   test("filters by repo, state and days", async () => {
     expect((await (await get("/api/jobs?repo=fac")).json()).map((j: any) => j.name)).toEqual(["fac-9"]);
-    expect((await (await get("/api/jobs?state=stuck")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
+    expect((await (await get("/api/jobs?condition=stuck")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
     expect((await (await get("/api/jobs?days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1", "fac-9", "fac-2"]);
     expect(await (await get("/api/jobs?days=x")).status).toBe(400);
   });
@@ -203,11 +203,11 @@ describe("render", () => {
     expect(h).not.toContain("<it>");
   });
   test("the list shows jobs with filters, and an empty state", () => {
-    const h = v.renderJobs([job], { repo: "fac", state: "landed" });
+    const h = v.renderJobs([job], { repo: "fac", condition: "landed" });
     expect(h).toContain('href="#/jobs/fac-9"');
     expect(h).toContain('<table class="tbl">');
     expect(h.match(/<th[ >]/g)).toHaveLength(8);
-    expect(h).toContain('<select name="state"');
+    expect(h).toContain('<select name="condition"');
     expect(h).toContain('<option value="landed" selected>');
     expect(h).toContain('aria-pressed="true"');
     expect(h).not.toContain("<style>");
@@ -219,9 +219,9 @@ describe("render", () => {
     expect(v.renderJobs([], {})).toContain("No job in this window.");
   });
   test("the list reads the route query from its argument", () => {
-    expect(v.view.api({}, new URLSearchParams("state=stuck&repo=fac"))).toBe("/api/jobs?repo=fac&state=stuck");
+    expect(v.view.api({}, new URLSearchParams("condition=stuck&repo=fac"))).toBe("/api/jobs?repo=fac&condition=stuck");
     expect(v.view.api({}, new URLSearchParams())).toBe("/api/jobs");
-    const h = v.view.render([job], {}, new URLSearchParams("state=stuck"));
+    const h = v.view.render([job], {}, new URLSearchParams("condition=stuck"));
     expect(h).toContain('<option value="stuck" selected>');
   });
   test("no render or api function reads location.hash", () => {

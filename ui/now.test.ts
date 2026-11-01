@@ -760,7 +760,7 @@ test("a question ask renders the Answer button with a text input in the same row
 test("efficiency cards stack at narrow widths: .meds.eff has its own media rules, since its 5-column rule outranks .meds", async () => {
   // @ts-ignore
   const { renderEffCards } = await import("./views/speed.js");
-  const h = renderEffCards({ window: "week", flaky: 0, goals: { landed: 1, firstPass: 1, fixRounds: 0, week: null }, lost: { hours: 0, share: 0 } });
+  const h = renderEffCards({ window: "week", flaky: 0, issues: { landed: 1, firstPass: 1, fixRounds: 0, week: null }, lost: { hours: 0, share: 0 } });
   expect(h).toContain('<div class="meds eff">');
   expect(h.match(/class="med/g)?.length ?? 0).toBeGreaterThan(0);
   const css = await Bun.file(new URL("./index.html", import.meta.url)).text();

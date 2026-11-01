@@ -12,7 +12,7 @@ import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.t
 import { baselineChecks, git, removeBranch } from "./unit.ts";
 import { fetchOrigin } from "./git.ts";
 import { itemOnMain } from "./status.ts";
-import { dispatchDetached, dispatchGoals, factoryLog, gates, liveEntries } from "./factory.ts";
+import { dispatchDetached, dispatchIssues, factoryLog, gates, liveEntries } from "./factory.ts";
 import { route, type Tier } from "./route.ts";
 import { startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -357,5 +357,5 @@ export async function runDispatch() {
     return { started: [], skipped: [g.why] };
   }
   // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
-  return dispatchGoals(startGoal, baselineChecks, landGoal, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
+  return dispatchIssues(startGoal, baselineChecks, landGoal, process.env.ALEPH_RESCUE === "off" ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
 }

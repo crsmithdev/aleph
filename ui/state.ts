@@ -67,7 +67,7 @@ export interface NewIssue { id: string; title: string; status: string; href: str
 
 /** An issue in Running: its goals, each with its stage and the job that works on it. */
 export interface RunningIssue { id: string; title: string; href: string; stage: string; of: { n: number; m: number };
-  goals: { id: string; title: string; href: string; stage: string; job?: { name: string; href: string; kind: string } }[] }
+  parts: { id: string; title: string; href: string; stage: string; job?: { name: string; href: string; kind: string } }[] }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
 export interface DoneItem { id: string; title: string; href: string; finished: string; jobs: Job[] }
@@ -365,13 +365,13 @@ export function state(now = new Date()): State {
       const parts = partsOf(doc!, item);
       if (st === "building" && parts.length) {
         const of = stageById.get(ref)?.of ?? { n: 0, m: parts.length };
-        const goals = parts.map((gi) => {
+        const nested_ = parts.map((gi) => {
           const gref = refOf(gi), g = `${repo.key}-${gref}`, j = liveOf.get(g);
           if (j) nested.add(j.name);
           return { id: g, title: gi.title, href: hrefOf(repo, gref), stage: stageById.get(gref)?.stage ?? status(gi),
             ...(j ? { job: { name: j.name, href: `#/jobs/${encodeURIComponent(j.name)}`, kind: j.run.kind } } : {}) };
         });
-        runningIssues.push({ id, title: item.title, href, stage: st, of, goals });
+        runningIssues.push({ id, title: item.title, href, stage: st, of, parts: nested_ });
       }
     }
   }

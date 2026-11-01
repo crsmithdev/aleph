@@ -253,7 +253,7 @@ export function renderForm(rows, o = {}) {
     `<label>Title <input name="title" required></label>` +
     `<label>Text <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
-    `<label><input type="checkbox" name="goal"> The text is a spec: build it in the factory</label>` +
+    `<label><input type="checkbox" name="spec"> The text is a spec: build it in the factory</label>` +
     `<label>After <input name="after" placeholder="repo-n, repo-n.k"></label>` +
     `<button type="submit" class="cmd primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
 }
@@ -411,7 +411,7 @@ if (typeof document !== "undefined") {
     e.preventDefault();
     const v = (n) => form.elements[n].value.trim();
     const labels = v("labels").split(",").map((s) => s.trim()).filter(Boolean);
-    if (form.elements.goal.checked && !labels.includes("goal")) labels.push("goal");
+    if (form.elements.spec.checked && !labels.includes("spec")) labels.push("spec");
     const msg = form.querySelector(".form-msg");
     try {
       const res = await fetch("/api/issues", {

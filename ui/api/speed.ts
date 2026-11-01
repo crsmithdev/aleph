@@ -42,7 +42,7 @@ export interface Speed {
   models: { model: string; count: number; p50: number }[];
   flaky: number;
   /** Landed goals (land runs that landed in the window) and what they cost to get there. */
-  goals: {
+  issues: {
     landed: number;
     /** Share of landed goals with 0 fix rounds, 0 to 1; null with none landed. */
     firstPass: number | null;
@@ -52,7 +52,7 @@ export interface Speed {
     week: number | null;
   };
   classes: ClassStat[];
-  notCounted: { runs: number; goals: number; hours: number };
+  notCounted: { runs: number; issues: number; hours: number };
   lost: { hours: number; share: number };
   hasWeek: boolean;
 }
@@ -85,7 +85,7 @@ const CAUSE_TEXT: Record<string, string> = {
 
 export interface Measure { hours: number; week: number; runs: number }
 export interface ClassStat extends Measure {
-  key: Class; name: string; text: string; goals: number;
+  key: Class; name: string; text: string; issues: number;
   causes: (Omit<Measure, "week"> & { name: string; text: string })[];
   top: (Omit<Measure, "week"> & { goal: string; title?: string; href: string; reason: string })[];
 }
@@ -111,7 +111,7 @@ const isAgent = (r: Run) => isBuild(r.kind) || r.kind === "recheck";
 const passedState = (st: string) => st === "passed" || st === "landed" || st === "done";
 
 /** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
-export function classify(runs: Run[], statusOf: (goal: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; goals: number; hours: number }; lost: { hours: number; share: number }; total: number } {
+export function classify(runs: Run[], statusOf: (goal: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; issues: number; hours: number }; lost: { hours: number; share: number }; total: number } {
   const goalOf = (r: Run) => `${r.repo}-${issueOf(r)}`;
   const t0 = (r: Run) => Date.parse(r.started);
   const agentsOf = new Map<string, Run[]>(), landsOf = new Map<string, Run[]>(), firstStart = new Map<string, number>();
@@ -185,13 +185,13 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
       const m = goal.lastIndexOf("-");
       return { goal, sum: sum(x), reason: (last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").slice(0, 140), href: `#/issues/${encodeURIComponent(goal.slice(0, m))}/${goal.slice(m + 1)}` };
     }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.goal, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
-    return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), goals: new Set(rs.map((r) => r.goal)).size, causes, top };
+    return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.goal)).size, causes, top };
   });
   const raw = CLASSES.map((c) => sum(rows.get(c)!).hours);
   const total = raw.reduce((x, y) => x + y, 0), lostH = raw.slice(2).reduce((x, y) => x + y, 0);
   return {
     classes,
-    notCounted: { runs: skipped.length, goals: new Set(skipped.map((r) => r.goal)).size, hours: round(skipped.reduce((x, y) => x + y.hours, 0), 2) },
+    notCounted: { runs: skipped.length, issues: new Set(skipped.map((r) => r.goal)).size, hours: round(skipped.reduce((x, y) => x + y.hours, 0), 2) },
     lost: { hours: round(lostH, 2), share: total ? round(lostH / total, 4) : 0 },
     total: round(total, 2),
   };
@@ -322,7 +322,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
   }
   const fixes = landed.map((r) => rounds.get(r.job) ?? 0);
-  const goals: Speed["goals"] = {
+  const issues: Speed["issues"] = {
     landed: landed.length,
     firstPass: landed.length ? round(fixes.filter((f) => f === 0).length / landed.length, 4) : null,
     fixRounds: landed.length ? pct(fixes, 0.5) : null,
@@ -332,7 +332,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const weekOf = new Map<string, number>();
     for (const r of all) if (isAgent(r) && issueOf(r) !== undefined) weekOf.set(`${r.repo}-${issueOf(r)}`, (weekOf.get(`${r.repo}-${issueOf(r)}`) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
     const per = [...new Set(landed.filter((r) => issueOf(r) !== undefined).map((r) => `${r.repo}-${issueOf(r)}`))].map((g) => weekOf.get(g) ?? 0);
-    goals.week = per.length ? round(pct(per, 0.5), 2) : null;
+    issues.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
   const lists = reader({ fetch: false });
   const statusOf = (goal: string): string | undefined => {
@@ -362,7 +362,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     }),
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
-    goals,
+    issues,
     classes: cls.classes,
     notCounted: cls.notCounted,
     lost: cls.lost,

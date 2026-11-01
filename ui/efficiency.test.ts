@@ -38,7 +38,7 @@ afterAll(() => {
 });
 
 test("goal stats: first-pass share, median fix rounds", () => {
-  const g = speed("day", now).goals;
+  const g = speed("day", now).issues;
   expect(g).toEqual({ landed: 3, firstPass: 0.6667, fixRounds: 0, week: null });
   expect(g).not.toHaveProperty("cost");
 });
@@ -56,23 +56,23 @@ test("the efficiency cards say reruns, first pass, fix rounds, week per goal and
 });
 
 test("Week per issue and Lost time show their values and notes", () => {
-  const base = { window: "week", flaky: 0, goals: { landed: 2, firstPass: 1, fixRounds: 0, week: 2.5 }, lost: { hours: 1.5, share: 0.25 } };
+  const base = { window: "week", flaky: 0, issues: { landed: 2, firstPass: 1, fixRounds: 0, week: 2.5 }, lost: { hours: 1.5, share: 0.25 } };
   const h = renderEffCards(base);
   expect(h).toContain('<span class="v">2.5%</span><span class="quiet">of the weekly limit, median per landed issue</span>');
   expect(h).toContain("1.5 h");
   expect(h).toContain("25% of agent hours on runs whose work did not reach main");
-  const n = renderEffCards({ ...base, goals: { ...base.goals, week: null } });
+  const n = renderEffCards({ ...base, issues: { ...base.issues, week: null } });
   expect(n).toContain('<span class="v">–</span><span class="quiet">needs 6 hours of usage snapshots</span>');
 });
 
 test("with no landed goal the goal cards show a dash", () => {
-  const h = renderEffCards({ window: "week", flaky: 0, wasted: 0, goals: { landed: 0, firstPass: null, fixRounds: null, week: null }, lost: { hours: 0, share: 0 } });
+  const h = renderEffCards({ window: "week", flaky: 0, wasted: 0, issues: { landed: 0, firstPass: null, fixRounds: null, week: null }, lost: { hours: 0, share: 0 } });
   expect(h.match(/<span class="v">–<\/span><span class="quiet">no issue landed<\/span>/g)?.length).toBe(3);
 });
 
-const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, goals: 2, causes: [{ name: "First run of the job", hours, runs: 5 }], top: [] });
+const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, issues: 2, causes: [{ name: "First run of the job", hours, runs: 5 }], top: [] });
 const classes = (h: number[], w: number[]) => [["landed", "Landed"], ["fixed", "Fixed"], ["nothing", "Late"], ["restarted", "Restarted"], ["dropped", "Dropped"]].map(([k, n], i) => C(k, n, h[i], w[i]));
-const D = { window: "week", notCounted: { runs: 11, goals: 4, hours: 0.4 } };
+const D = { window: "week", notCounted: { runs: 11, issues: 4, hours: 0.4 } };
 
 test("the agent-time bar: sentence, brackets, two sides of segments, not counted, no legend", () => {
   const d = { ...D, classes: classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]) };
@@ -125,7 +125,7 @@ test("the breakdown under the bar, the hours view, the pin", () => {
 
 test("mountSpeed: a click on a segment re-renders the efficiency section", async () => {
   resetSpeed();
-  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), phases: Object.fromEntries(["intake", "queue", "implement", "land", "lead"].map((k) => [k, { count: 0, p50: 0, p90: 0 }])), checks: [], buckets: [], done: 1, flaky: 0, goals: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 } };
+  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), phases: Object.fromEntries(["intake", "queue", "implement", "land", "lead"].map((k) => [k, { count: 0, p50: 0, p90: 0 }])), checks: [], buckets: [], done: 1, flaky: 0, issues: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 } };
   const mk = () => ({ innerHTML: "", dataset: {} as Record<string, string>, isConnected: true, handler: null as any, addEventListener(_: string, f: any) { this.handler = f; }, querySelector: () => null, querySelectorAll: () => [] });
   const top = mk(), eff = mk();
   const root = { querySelector: (s: string) => (s === "#speed" ? top : s === "#efficiency" ? eff : null) };
@@ -155,7 +155,7 @@ test("Efficiency at 1600px and wider: the bar spans the column, the detail sits 
 });
 
 test("the breakdown lists 5 issues at most and each cause has its text as a tooltip", () => {
-  const c = { key: "restarted", name: "Restarted", text: "t", hours: 9, week: 0, runs: 9, goals: 9, causes: [{ name: "Restart loop", text: "Four starts.", hours: 9, runs: 9 }],
+  const c = { key: "restarted", name: "Restarted", text: "t", hours: 9, week: 0, runs: 9, issues: 9, causes: [{ name: "Restart loop", text: "Four starts.", hours: 9, runs: 9 }],
     top: Array.from({ length: 8 }, (_, i) => ({ goal: `fx-${i}`, href: `#/issues/fx/${i}`, reason: "", hours: 1, runs: 1 })) };
   const h = renderBreakdown({ classes: [c], hasWeek: false } as any, "restarted");
   expect(h.match(/class="grow"/g)).toHaveLength(5);

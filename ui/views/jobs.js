@@ -7,7 +7,7 @@ import { costHtml, STATES, badge, cmd, crumb, empty, esc, filterBar, idLink, loc
 /** The list's data URL: the filters in the hash go to the API. */
 const listUrl = (_params, q = new URLSearchParams()) => {
   const out = new URLSearchParams();
-  for (const k of ["repo", "state", "days"]) if (q.get(k)) out.set(k, q.get(k));
+  for (const k of ["repo", "condition", "days"]) if (q.get(k)) out.set(k, q.get(k));
   const s = out.toString();
   return s ? `/api/jobs?${s}` : "/api/jobs";
 };
@@ -45,7 +45,7 @@ export function renderFilters(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
   return filterBar([
     { label: "Project", name: "repo", value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
-    { label: "Condition", name: "state", value: f.state || "", options: [{ value: "", label: "All" }, ...STATES] },
+    { label: "Condition", name: "condition", value: f.condition || "", options: [{ value: "", label: "All" }, ...STATES] },
     { label: "Window", name: "days", value: f.days || "", options: [{ value: "", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }] },
   ]);
 }
@@ -65,7 +65,7 @@ export function renderJobs(jobs, f = {}) {
 
 /** Wire the filter bar (a change goes to the hash, keeping the other filters) and the pager's "Show more". */
 export function mountJobs(root, _jobs, f = {}) {
-  const go = (name, value) => { location.hash = href("/jobs", { repo: f.repo, state: f.state, days: f.days, [name]: value }); };
+  const go = (name, value) => { location.hash = href("/jobs", { repo: f.repo, condition: f.condition, days: f.days, [name]: value }); };
   root.onclick = (e) => {
     const b = e.target.closest?.(".seg button");
     if (b) return go(b.parentElement.dataset.name, b.dataset.value);

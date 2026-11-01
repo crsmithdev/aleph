@@ -6,7 +6,7 @@ import { askOf, flakeTracker, readList, writeList } from "../../todo/lib/store.t
 import * as issues from "../../todo/lib/todo.ts";
 import { accept, failedTests, oracleCommands, readRecord, rerunOf, resultLine, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { checkSlot } from "./ledger.ts";
-import { acceptanceStep, dispatchGoals, reacceptReopened } from "./factory.ts";
+import { acceptanceStep, dispatchIssues, reacceptReopened } from "./factory.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
@@ -164,7 +164,7 @@ test("a failing command reopens the goal with the last 40 lines and it is dispat
   expect(notes(id)).not.toContain("line 20 ");
   expect(notes(id)).not.toContain("line 1 ");
   const specs: string[] = [];
-  const out = await dispatchGoals(async (_r, _name, _id, spec) => { specs.push(spec); return null; }, async () => null);
+  const out = await dispatchIssues(async (_r, _name, _id, spec) => { specs.push(spec); return null; }, async () => null);
   expect(out.started).toEqual([`fac-${id}`]);
   expect(specs).toHaveLength(1);
   expect(specs[0]).toContain("acceptance: fail at");
@@ -188,7 +188,7 @@ test("a second failure sets an Ask, names the command, and dispatches nothing", 
   expect(issues.status(item(id))).toBe("open");
   expect(readRecord("fac", id)?.fails).toBe(2);
   const started: string[] = [];
-  const out = await dispatchGoals(async (_r, name) => { started.push(name); return null; }, async () => null);
+  const out = await dispatchIssues(async (_r, name) => { started.push(name); return null; }, async () => null);
   expect(out.started).toEqual([]);
   expect(started).toEqual([]);
   expect(await acceptanceStep(runner(3))).toEqual([]);
