@@ -5,7 +5,7 @@
  */
 import { resultLine } from "../jobs/lib/acceptance.ts";
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, spentToday, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
+import { DAY_CAP, LIVE_CAP, liveRuns, AWAITING_CAP, baselines, firefighterLines, gates, health, hold, lastProbe, paused, redLine, runsToday, spentToday, pendingWaits, waitReason, type WaitReason } from "../jobs/lib/factory.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { readAsk, type Ask } from "../jobs/lib/ask.ts";
@@ -16,6 +16,11 @@ import { idOf, parseGoalRef, refOf, status } from "../todo/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
 import type { Wk } from "./usage.ts";
+
+/** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
+export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
+const hrefOf = (repo: Repo, ref: string) => `#/issues/${encodeURIComponent(repo.key)}/${ref}`;
+const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.dead);
 
 export interface Job {
   name: string; repo: string; item: { id: number | string; title: string } | null;
@@ -257,14 +262,35 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     }
     return m;
   };
-  return { lists, toJob, stagesOf };
+  // doneChecker's test, from this build's lists and stages: it fetches no project repo, as the stages above do not.
+  const isDone = (ref: string): boolean => {
+    const r = parseGoalRef(ref), repo = r ? registry[r.repo] : undefined;
+    if (!r || !repo) return false;
+    const item = lists.item(r.repo, r.id);
+    return (item !== undefined && status(item) === "done") || stagesOf(repo).get(String(r.id))?.stage === "done";
+  };
+  const blocker = (id: string): Wait => {
+    const r = parseGoalRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
+    return {
+      id, href: r ? hrefOf({ key: r.repo } as Repo, String(r.id)) : "", title: found?.title ?? "",
+      state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(String(r.id))?.stage ?? status(found) : null,
+      // The dispatcher counts neither as done, so the wait does not end by itself.
+      dead: !found ? null : status(found) === "dropped" ? "dropped" : isTracker(found) ? "tracker" : null,
+    };
+  };
+  /** What an open issue waits on now: nothing once it is closed. */
+  const blockers = (key: string, ref: number | string): Wait[] => {
+    const item = lists.item(key, ref);
+    return item && status(item) === "open" ? pendingWaits(afterOf(item), isDone).map(blocker) : [];
+  };
+  return { lists, toJob, stagesOf, isDone, blocker, blockers };
 }
 
 export function state(now = new Date()): State {
   const registry = loadRegistry();
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
   const jobs = allJobs(), runs = jobs.flat();
-  const { lists, toJob, stagesOf } = jobProjector(registry, jobs);
+  const { lists, toJob, stagesOf, isDone, blocker } = jobProjector(registry, jobs);
 
   let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
@@ -345,7 +371,6 @@ export function state(now = new Date()): State {
   const queued: { repo: Repo; item: any; stage: string }[] = [];
   const runningIssues: RunningIssue[] = [];
   let openIssues = 0;
-  const hrefOf = (repo: Repo, ref: string) => `#/issues/${encodeURIComponent(repo.key)}/${ref}`;
   // The job that works on each goal now, by `repo-ref`.
   const liveOf = new Map<string, Job>();
   for (const j of running) if (j.item && j.run.kind !== "plan") liveOf.set(`${j.repo}-${j.item.id}`, j);
@@ -411,13 +436,6 @@ export function state(now = new Date()): State {
   const today = runsToday(now.getTime(), runs);
   const probe = lastProbe();
   const granted = readAlways();
-  // doneChecker's test, from this build's lists and stages: it fetches no project repo, as the stages above do not.
-  const isDone = (ref: string): boolean => {
-    const r = parseGoalRef(ref), repo = r ? registry[r.repo] : undefined;
-    if (!r || !repo) return false;
-    const item = lists.item(r.repo, r.id);
-    return (item !== undefined && status(item) === "done") || stagesOf(repo).get(String(r.id))?.stage === "done";
-  };
   const gated = gates({ only: ["pause", "hold", "probe", "live", "day", "awaiting"], jobs });
   const att = attend({ runs: needs, issues: awaitingItems }, granted);
   // The run behind an ask: its live-run mark, its trailers and its notes.
@@ -461,11 +479,8 @@ export function state(now = new Date()): State {
       const w = waitReason(repo, item, { done: isDone, jobs, gated, red, now });
       return {
         repo: repo.key, id: idOf(item), title: item.title, stage, why: w.text, kind: w.kind,
-        ...(w.kind === "waits_on" ? { waits: w.ids.map((id) => {
-          const r = parseGoalRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
-          return { id, href: r ? hrefOf({ key: r.repo } as Repo, String(r.id)) : "", state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(String(r.id))?.stage ?? status(found) : null };
-        }) } : {}),
+        ...(w.kind === "waits_on" ? { waits: w.ids.map(blocker) } : {}),
       };
-    }),
+    }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a))),
   };
 }

@@ -134,6 +134,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 
+  test("a dead blocker shows on Status and on the Issue page, and Stop waiting removes it", async () => {
+    await page.go("#/");
+    const row = `[...document.querySelectorAll("#lane-queued .queued-row")].find((r) => r.textContent.includes("Warm the cache on deploy"))`;
+    await page.until(row);
+    expect(await page.ev<string>(`${row}.querySelector(".blockers").textContent`)).toContain("Speed up the import");
+    expect(await page.ev(`document.querySelector("#lane-queued .queued-row").textContent.includes("Stop waiting")`)).toBe(true);
+    await page.ev(`${row}.querySelector(".blockers a").click()`);
+    await page.until(`location.hash === "#/issues/demo/10"`);
+    await page.go("#/issues/demo/21");
+    await page.until(`document.querySelector('.facts [data-act="unblock"]')`);
+    expect(await page.ev<string>(`document.querySelector(".facts").textContent`)).toContain("Blocked by");
+    await page.ev(`document.querySelector('.facts [data-act="unblock"]').click()`);
+    await page.until(`!document.querySelector('.facts [data-act="unblock"]')`);
+    expect(await page.ev<string>(`document.querySelector(".facts").textContent`)).not.toContain("Blocked by");
+    expect(page.errors).toEqual([]);
+  }, 30_000);
+
   test("Log out shows only behind the password gate", async () => {
     expect(await page.ev('document.querySelector("#logout").hidden')).toBe(true);
   }, 30_000);

@@ -369,7 +369,7 @@ describe("waiting entries", () => {
     async function check() {
     const by = (s: ReturnType<typeof state>, title: string) => s.queued.find((w) => w.title === title)!;
     const s = state(now);
-    expect(by(s, "waits goal")).toMatchObject({ kind: "waits_on", why: "Waits on fac-2", stage: "blocked", waits: [{ id: "fac-2", href: "#/issues/fac/2", state: "queued" }] });
+    expect(by(s, "waits goal")).toMatchObject({ kind: "waits_on", why: "Waits on fac-2", stage: "blocked", waits: [{ id: "fac-2", href: "#/issues/fac/2", title: expect.any(String), state: "queued", dead: null }] });
     // A goal that asks for you is awaiting: it is in asks, not Queued.
     expect(by(s, "waiting goal").why).toBe("Starts at the next dispatch");
 

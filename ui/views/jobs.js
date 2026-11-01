@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { costHtml, STATES, badge, card, cmd, crumb, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, when, wireScope } from "../lib.js";
+import { blockersHtml, costHtml, STATES, badge, card, cmd, crumb, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, when, wireScope } from "../lib.js";
 
 
 /** The list's data URL: the filters in the hash go to the API. */
@@ -127,7 +127,7 @@ export function renderJob(j) {
   const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
   return `<div class="page">${crumb("#/jobs", [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [localId(j.name, j.repo)]])}` +
     pageHead(j.item?.title || j.name) + `<div class="status-row">${badge(j.condition)}</div>` +
-    `<dl class="facts">${fact("Project", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}` +
+    `<dl class="facts">${j.blockers?.length ? fact("Blocked by", blockersHtml(j.blockers, j.repo, j.item.id)) : ""}${fact("Project", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}` +
     `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}${j.checkedBy?.length ? fact("Checked by", esc(j.checkedBy.join(", "))) : ""}${j.look ? fact("Look", `about ${esc(j.look)} min (estimate)`) : ""}</dl>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +

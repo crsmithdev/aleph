@@ -645,6 +645,18 @@ test("a question ask renders the Answer button with a text input in the same row
   expect(row).toMatch(/<input [^>]*type="text"[^>]*name="answer"/);
 });
 
+test("a Queued card names a dead blocker and offers to remove only that wait", () => {
+  const q = r.renderLanes({ ...state, queued: [{ repo: "aleph", id: 964, title: "t", why: "x", kind: "waits_on", waits: [
+    { id: "aleph-963", href: "#/issues/aleph/963", title: "Old <work>", state: "dropped", dead: "dropped" },
+    { id: "aleph-970", href: "#/issues/aleph/970", title: "Live", state: "building", dead: null },
+  ] }] });
+  expect(q).toContain('<a href="#/issues/aleph/963">963</a> <span>Old &lt;work&gt;</span> <span class="badge stuck">dropped</span>');
+  expect(q).toContain('<span class="badge quiet">building</span>');
+  expect(q).toContain("this wait never ends");
+  expect(q).toContain('data-act="unblock" data-repo="aleph" data-id="964"');
+  expect(q).toContain(">Stop waiting on 963</button>");
+});
+
 test("Queued cards show why each goal waits", () => {
   const w = (id: number, why: string, kind: string, more: any = {}) => ({ repo: "aleph", id, title: `t${id}`, why, kind, ...more });
   const lanes = r.renderLanes({ ...state, queued: [
@@ -653,7 +665,8 @@ test("Queued cards show why each goal waits", () => {
     w(4, "Waiting for a slot (12 of 12 running)", "gate"),
   ] });
   const q = lanes.match(/<section id="lane-queued"[^]*?<\/section>/)![0];
-  expect(q).toContain('After <a href="#/issues/aleph/630">630</a> <span class="badge quiet">building</span>');
+  expect(q).toContain('Blocked by</div><div class="blocker"><a href="#/issues/aleph/630">630</a> <span class="badge quiet">building</span>');
+  expect(q).not.toContain('data-act="unblock"');
   expect(q).toContain("Starts at the next dispatch");
   expect(q).toContain("Waiting for a slot (12 of 12 running)");
   expect(q.match(/Waiting for a slot/g)?.length).toBe(1);

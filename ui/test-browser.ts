@@ -31,7 +31,7 @@ export async function startRig(): Promise<Rig> {
   const base = mkdtempSync(join(tmpdir(), "aleph-ui-browser-"));
   const build = Bun.spawnSync([process.execPath, join(import.meta.dir, "fixtures", "review", "build.ts"), join(base, "home")], { stdout: "pipe", stderr: "pipe" });
   if (build.exitCode !== 0) throw new Error(build.stderr.toString());
-  const env: Record<string, string> = { ...process.env as Record<string, string>, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", HOME: join(base, "empty") };
+  const env: Record<string, string> = { ...process.env as Record<string, string>, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", HOME: join(base, "empty") };
   for (const l of build.stdout.toString().trim().split("\n")) env[l.slice(0, l.indexOf("="))] = l.slice(l.indexOf("=") + 1);
   const server = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env, stdout: "pipe", stderr: "ignore" });
   const line = new TextDecoder().decode((await (server.stdout as ReadableStream<Uint8Array>).getReader().read()).value);

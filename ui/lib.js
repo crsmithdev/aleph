@@ -307,6 +307,15 @@ export function day(ts, now = new Date()) {
 export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace(/(-\d+)+(\[.*\])?$/, "");
 
 /** An id as a link: mono, small, muted, underlined on hover. */
+/** What an issue waits on, one row each; a wait that never ends says so and offers to remove it. */
+export function blockersHtml(waits, repo, id) {
+  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(localId(b.id, repo))}</a>` : esc(localId(b.id, repo))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` <span class="badge stuck">${esc(b.dead)}</span>` : b.state ? ` <span class="badge quiet">${esc(b.state)}</span>` : ""}</div>`).join("");
+  const dead = waits.filter((b) => b.dead);
+  if (!dead.length) return rows;
+  const label = `Stop waiting on ${dead.map((b) => localId(b.id, repo)).join(", ")}`;
+  return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> <button class="act" type="button" data-act="unblock" data-repo="${esc(repo)}" data-id="${esc(id)}" data-label="${esc(label)}">${esc(label)}</button></div>`;
+}
+
 export const idLink = (id, href) => `<a class="idl" href="${esc(safeHref(href))}">${esc(id)}</a>`;
 
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */

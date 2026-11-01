@@ -174,6 +174,10 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .lane-card .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
 .lane-card .goal-row .t { flex: 1 1 12em; min-width: 0; }
 .lane-card .goal-row .job { color: var(--muted); }
+.blockers { flex-basis: 100%; display: grid; gap: 4px; }
+.blocker { overflow-wrap: anywhere; }
+.blocker-dead { color: var(--stuck); }
+.blocker-dead .act { margin-top: 4px; }
 .lane-card .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: var(--fs-sm); color: var(--muted); }
 .needs { margin: 0 0 24px; }
 .wk { cursor: help; font-weight: 600; }
@@ -1121,7 +1125,7 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
       if (shown) load(shown, false);
       return;
     }
-    if (act === "retriage" || act === "rerun" || act === "checked" || act === "close" || (act === "drop" && b.dataset.repo)) {
+    if (act === "retriage" || act === "unblock" || act === "rerun" || act === "checked" || act === "close" || (act === "drop" && b.dataset.repo)) {
       const { repo, id } = b.dataset;
       b.disabled = true;
       try {

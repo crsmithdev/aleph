@@ -3,12 +3,13 @@ import { git } from "../../jobs/lib/git.ts";
 import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { changedLinesOf } from "../../jobs/lib/factory.ts";
-import { jobProjector, type Job } from "../state.ts";
+import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 
 export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk }
 export interface JobDetail extends Job {
+  blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
   checksLog?: string; stderr?: string; trace?: string;
   /** What checked the job; a delivery's minutes to spot-check it, an estimate. */
@@ -99,7 +100,10 @@ export const routes: Routes = {
     if (!runs) return Response.json({ error: "no such job" }, { status: 404 });
     const v = view(runs);
     const fit = await currentFit().catch(() => null);
-    const detail: JobDetail = { ...jobProjector().toJob(runs, v), runs: runInfos(runs, fit) };
+    const projector = jobProjector();
+    const detail: JobDetail = { ...projector.toJob(runs, v), runs: runInfos(runs, fit) };
+    const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
+    if (blockers.length) detail.blockers = blockers;
     annotate([detail], fit);
     const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
     const review = latestFile(runs, "review.md")?.text;

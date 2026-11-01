@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { barList, barRow, barsOption, badge, card, sectionHead, chart, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, blockersHtml, barsOption, badge, card, sectionHead, chart, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
 import { renderLifetime } from "../timeline.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
@@ -496,7 +496,7 @@ export function renderIssue(d) {
   const HIDE = ["labels", "id", "closed_as", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title"];
   const fact = (name, dd) => `<div><dt>${esc(name)}</dt><dd>${dd}</dd></div>`;
   const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? "chris";
-  const facts = fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
+  const facts = (d.blockers?.length ? fact("Blocked by", blockersHtml(d.blockers, d.repo, d.ref ?? d.id)) : "") + fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
     fact("Areas", editable(esc(areas.map(labelName).join(", ") || "-"), `<input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}">`)) +
     Object.entries(fm).filter(([k]) => !HIDE.includes(k) && !["priority", "source", "areas"].includes(k)).map(([k, v]) => fact(k[0].toUpperCase() + k.slice(1), esc(Array.isArray(v) ? v.map(labelName).join(", ") : v))).join("");
   const tracker = fm.tracker === "true";

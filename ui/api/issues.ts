@@ -19,7 +19,7 @@ import { proseDecision } from "../decision.js";
 import { afterOf, areasOf, awaitsChris, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
-import { githubBase } from "../state.ts";
+import { githubBase, jobProjector } from "../state.ts";
 import { filed } from "./speed.ts";
 
 /** An issue or goal id from a route: `7` or `7.1`; null for anything else. */
@@ -130,7 +130,9 @@ function detail(params: Record<string, string>, url: URL): Response {
     return { hash, subject: subject ?? "", date, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   });
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, commits, specs: specs(repo.key).map((s) => s.file) });
+  const blockers = jobProjector().blockers(repo.key, ref);
+
+  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {
@@ -222,6 +224,26 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
  * `rerun` is `aleph issue decide`. `aleph issue note` takes the answer as its text, not as a flag.
  */
 /** `aleph issue edit` from the Issue page: the CLI stays the one writer. A body that opens with `## Request` keeps that heading. */
+/** Stop Waiting: removes the waits that never end, and keeps the others. */
+async function unblock(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
+  const origin = req.headers.get("origin");
+  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+  const repo = loadRegistry()[params.repo];
+  const n = refOf(params.id);
+  const none = Response.json({ error: "no such issue" }, { status: 404 });
+  if (!repo || n === null) return none;
+  let doc: todos.Doc | null;
+  try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
+  const item = doc && todos.find(doc, n);
+  if (!item) return none;
+  const dead = jobProjector().blockers(repo.key, n).filter((b) => b.dead).map((b) => b.id);
+  if (!dead.length) return Response.json({ error: "this issue has no wait that never ends" }, { status: 409 });
+  const keep = afterOf(item).filter((a) => !dead.includes(a));
+  const { stdout: out, stderr: err, code } = await runCli(["issue", "edit", repo.key, String(n), "--after", keep.join(",") || "none"]);
+  if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
+  return Response.json({ removed: dead });
+}
+
 async function edit(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
   const origin = req.headers.get("origin");
   if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -279,6 +301,7 @@ export const routes: Routes = {
   "POST /api/issues/:repo/:id/retriage": answer("note", "Chris: run triage again"),
   "POST /api/issues/:repo/:id/rerun": answer("decide", "Chris: run it again"),
   "POST /api/issues/:repo/:id/checked": answer("done", "Chris: checked on the host"),
+  "POST /api/issues/:repo/:id/unblock": (req, params, url) => unblock(req, params, url),
   "POST /api/issues/:repo/:id/edit": (req, params, url) => edit(req, params, url),
   "POST /api/issues/:repo/:id/note": (req, params, url) => addNote(req, params, url),
   "POST /api/issues/:repo/:id/drop": (req, params, url) => drop(req, params, url),

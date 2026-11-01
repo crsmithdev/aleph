@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, setAsk, writeList } from "../todo/lib/store.ts";
@@ -574,4 +574,38 @@ describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
 });
 
 describe("shared table CSS", () => {
+});
+
+describe("what an issue waits on", () => {
+  let waiter: string, live: string, dead: string, tracker: string;
+  beforeAll(() => {
+    writeList({ key: "oth" }, "blockers", (doc) => {
+      const d = add(doc, "gone work"); setStatus(d, "dropped");
+      const t = add(doc, "note log"); t.fm.tracker = "true";
+      const l = add(doc, "live work");
+      const w = add(doc, "waiter"); w.fm.after = [`oth-${d.id}`, `oth-${t.id}`, `oth-${l.id}`];
+      const n = add(doc, "healthy waiter"); n.fm.after = [`oth-${l.id}`];
+      dead = `oth-${d.id}`; tracker = `oth-${t.id}`; live = `oth-${l.id}`; waiter = String(w.id);
+      return true;
+    }, true);
+  });
+  const unblock = (id: string, headers: Record<string, string> = { "x-aleph-ui": "1" }) => at(`/api/issues/oth/${id}/unblock`, { method: "POST", headers });
+
+  test("the detail names each wait, with what makes it dead", async () => {
+    const d = await (await at(`/api/issues/oth/${waiter}`)).json();
+    expect(d.blockers.map((b: any) => [b.id, b.title, b.dead])).toEqual([[dead, "gone work", "dropped"], [tracker, "note log", "tracker"], [live, "live work", null]]);
+    expect((await (await at(`/api/issues/oth/${Number(waiter) + 1}`)).json()).blockers.map((b: any) => b.dead)).toEqual([null]);
+  });
+
+  test("the unblock route removes the dead waits, keeps the live one, and refuses the rest", async () => {
+    rmSync(argvFile, { force: true });
+    expect((await unblock(waiter, {})).status).toBe(403);
+    expect((await unblock(waiter, { "x-aleph-ui": "1", origin: "http://evil.example" })).status).toBe(403);
+    expect((await unblock("999")).status).toBe(404);
+    expect((await unblock(String(Number(waiter) + 1))).status).toBe(409);
+    expect(existsSync(argvFile)).toBe(false);
+    const res = await unblock(waiter);
+    expect(res.status).toBe(200);
+    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "edit", "oth", waiter, "--after", live]);
+  });
 });

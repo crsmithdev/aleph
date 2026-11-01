@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
-import { add } from "../todo/lib/todo.ts";
+import { add, setStatus } from "../todo/lib/todo.ts";
 import { routes } from "./api/jobs.ts";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
@@ -128,6 +128,28 @@ describe("item titles", () => {
 });
 
 describe("GET /api/jobs/:name", () => {
+  test("a job whose issue waits names its blockers, and the page shows them; a closed issue waits on nothing", async () => {
+    let refs: number[] = [];
+    writeList({ key: "oth" }, "blockers", (doc) => {
+      const gone = add(doc, "gone work"); setStatus(gone, "dropped");
+      const open = add(doc, "waiter"); open.fm.after = [`oth-${gone.id}`];
+      const shut = add(doc, "closed waiter"); shut.fm.after = [`oth-${gone.id}`]; setStatus(shut, "done");
+      refs = [gone.id, open.id, shut.id];
+      return true;
+    }, true);
+    const [gone, open, shut] = refs;
+    const ids = ["20261027-000050-a", "20261027-000051-a"];
+    run(ids[0], { job: `oth-${open}`, name: `oth-${open}`, repo: "oth", condition: "stuck", on: `oth-${open}`, started: ago(1) });
+    run(ids[1], { job: `oth-${shut}`, name: `oth-${shut}`, repo: "oth", condition: "landed", on: `oth-${shut}`, started: ago(1) });
+    const j = await (await get(`/api/jobs/oth-${open}`)).json();
+    const closed = await (await get(`/api/jobs/oth-${shut}`)).json();
+    for (const id of ids) rmSync(join(jobsDir, id), { recursive: true, force: true });
+    expect(j.blockers).toEqual([expect.objectContaining({ id: `oth-${gone}`, title: "gone work", dead: "dropped" })]);
+    expect(closed.blockers).toBeUndefined();
+    const html = v.renderJob(j);
+    expect(html).toContain("<dt>Blocked by</dt>");
+    expect(html).toContain(`data-act="unblock" data-repo="oth" data-id="${open}"`);
+  });
   test("a build run reads like an agent run: review row and result", async () => {
     run("20261027-000006-a", { job: "oth-2", name: "oth-2", kind: "build", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) },
       { "result.md": "built it\n", "review.md": "Fine.\nVERDICT: pass\n" });

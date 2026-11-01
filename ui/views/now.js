@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, denyReasons, diffHtml, dur, elapsed, costHtml, esc, idLink, localId, openDiffs, repoIdLink, repoOf, shortModel, small, tile, when } from "../lib.js";
+import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, idLink, localId, openDiffs, repoIdLink, repoOf, shortModel, small, tile, when } from "../lib.js";
 import { causeRow, durShort, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, speedOf, trend, usable, usageAge, usageTile } from "./speed.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -185,7 +185,7 @@ function doneLane(s) {
 function waitMeta(w) {
   if (!w.why) return "Queued";
   if (w.kind === "waits_on" && w.waits?.length)
-    return `After ${w.waits.map((x) => `<a href="${esc(x.href)}">${esc(localId(x.id, w.repo))}</a>${x.state ? ` <span class="badge quiet">${esc(x.state)}</span>` : ""}`).join(", ")}`;
+    return `<div class="blockers"><div>Blocked by</div>${blockersHtml(w.waits, w.repo, w.id)}</div>`;
   return esc(w.why);
 }
 
