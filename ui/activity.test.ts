@@ -3,8 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activity, clearCache, routes } from "./api/activity.ts";
-// @ts-ignore activity.js is plain JS, shared with the page
-import { renderActivity, view } from "./views/activity.js";
 
 let obsHits = 0;
 let base: string, fake: ReturnType<typeof Bun.serve>;
@@ -110,57 +108,13 @@ describe("activity", () => {
   });
 });
 
-describe("routes and view", () => {
+describe("routes", () => {
   test("the routes take days and project", async () => {
     const a: any = await (await routes["GET /api/activity"](new Request("http://x/api/activity"), {}, new URL("http://x/api/activity?days=3&project=fac"))).json();
     expect(a.days).toHaveLength(3);
     expect(routes["GET /api/summary"]).toBeUndefined();
   });
 
-  test("the view is titled Tools and renders tools, hooks and denials only", async () => {
-    const a = await activity(7, null, now);
-    const html = renderActivity(a);
-    expect(view.title).toBe("Tools");
-    expect(view.group).toBe("claude");
-    for (const t of ["Tools", "Hooks", "Verify-gate denials", "Bash", "verify-gate", "nothing was run"]) expect(html).toContain(t);
-    for (const t of ["Last 30 days", "Cost per day", "Cost per model", "Factory runs per day"]) expect(html).not.toContain(t);
-  });
-
-  test("a view with no Langfuse says so, and text is escaped", () => {
-    const a = { days: ["2026-10-27"], langfuse: "off", tools: [], hooks: [], denials: { total: 0, recent: [] } };
-    expect(renderActivity(a)).toContain("Langfuse is not configured");
-    const b = { ...a, langfuse: "ok", tools: [{ name: "<b>", calls: 1, errors: 0 }] };
-    expect(renderActivity(b)).toContain("&lt;b&gt;");
-  });
 });
 
-test("view.api carries days and project", () => {
-  expect(view.api({}, new URLSearchParams("days=30&project=fac"))).toBe("/api/activity?days=30&project=fac");
-  expect(view.api({}, new URLSearchParams())).toBe("/api/activity?days=7");
-});
 
-describe("Tools page parts", () => {
-  test("uses the shared header and table, orders name, numbers; 50 rows and a pager", () => {
-    const tools = Array.from({ length: 70 }, (_, i) => ({ name: `T${i}`, calls: i, errors: i % 2 }));
-    const html = renderActivity({ langfuse: "ok", tools, hooks: [], denials: { total: 1, recent: [{ at: "2026-10-27T10:25:00", reason: "nothing ran" }] } });
-    expect(html).toContain('<header class="ph"><h1>Tools</h1>');
-    expect(html).toContain('<table class="tbl fit"');
-    expect(html).not.toContain('<table class="tbl"');
-    expect(html).toContain('class="fbar"');
-    expect(html).toContain('data-name="project"');
-    expect(html).toContain('data-name="days"');
-    expect(html).toContain('<td class="num bad">1</td>');
-    expect(html).toContain('<td class="num">0</td>');
-    expect([...html.split("</table>")[0].matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1])).toEqual(["Tool", "Calls", "Errors", "Last"]);
-    expect(html).toContain('<div class="sh"><h2>Hooks</h2></div>');
-    expect(html).toContain('<h2>Verify-gate denials</h2><span class="count">1</span>');
-    expect(html).not.toContain("<style>");
-    expect(html).not.toMatch(/td\.bad|<td class="bad"/);
-    expect(html.match(/<td class="wide">T/g)).toHaveLength(50);
-    expect(html).toContain('data-more="20">Show 20 more');
-    expect(html).toContain("50 of 70");
-    expect(html).toMatch(/<th>Reason<\/th><th>When<\/th>/);
-    expect(html).toContain('<td class="time">Oct 27 10:25</td>');
-    expect(html).not.toContain(".act table");
-  });
-});

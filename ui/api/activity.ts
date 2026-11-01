@@ -40,6 +40,8 @@ export interface Activity {
   tools: Count[];
   hooks: Count[];
   denials: { total: number; recent: { at: string; reason: string }[] };
+  /** The traces each tool ran in, for `/api/agents`. */
+  toolTraces?: Record<string, string[]>;
   /** When the Langfuse half was fetched; it is reused for ALEPH_UI_CACHE_TTL seconds. */
   cachedAt?: string;
 }
@@ -110,6 +112,7 @@ export async function activity(days: number, project: string | null, now = new D
   out.langfuse = "ok";
 
   const inRange = new Set(keys);
+  const traceSets = new Map<string, Set<string>>();
   const tools = new Map<string, Count>(), hooks = new Map<string, Count>();
   // Observations arrive newest first, so the first one seen is the last call.
   const bump = (m: Map<string, Count>, name: string, o: Observation) => {
@@ -130,17 +133,23 @@ export async function activity(days: number, project: string | null, now = new D
         if (out.denials.recent.length < 10) out.denials.recent.push({ at: o.startTime ?? "", reason: String(o.output ?? "").replace(/^deny:\s*/, "") });
       }
     } else if (o.type === "TOOL" && !name.startsWith("skill:")) {
-      bump(tools, String(o.metadata?.tool ?? name), o);
+      const tool = String(o.metadata?.tool ?? name);
+      bump(tools, tool, o);
+      if (o.traceId) traceSets.set(tool, (traceSets.get(tool) ?? new Set()).add(o.traceId));
     }
   }
   const byCalls = (a: Count, b: Count) => b.calls - a.calls || a.name.localeCompare(b.name);
   out.tools = [...tools.values()].sort(byCalls);
   out.hooks = [...hooks.values()].sort(byCalls);
+  out.toolTraces = Object.fromEntries([...traceSets].map(([k, v]) => [k, [...v]]));
   return out;
 }
 
 const projectOf = (url: URL) => url.searchParams.get("project") || null;
 
 export const routes: Routes = {
-  "GET /api/activity": async (_req, _p, url) => Response.json(await activity(daysOf(url, 7), projectOf(url))),
+  "GET /api/activity": async (_req, _p, url) => {
+    const { toolTraces: _, ...a } = await activity(daysOf(url, 7), projectOf(url));
+    return Response.json(a);
+  },
 };

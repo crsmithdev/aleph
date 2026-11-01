@@ -87,10 +87,10 @@ test("every memory type has its block", async () => {
 test("the page shows all seven types, and an empty one says what fills it", () => {
   const h = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [] });
   for (const t of ["Working", "Semantic", "Episodic", "Procedural", "Retrieval", "Prospective", "Parametric", "Facts runs", "Proposals"]) expect(h).toContain(t);
-  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`href="#h-${id}"`);
-  expect(h).toContain("No handoff yet.");
+  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-type="${id}"`);
+  expect(v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [] }, {}, new URLSearchParams("type=working"))).toContain("No handoff yet.");
   expect(h).toContain("aleph-352");
-  const many = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: { episodic: { episodes: Array.from({ length: 12 }, (_, i) => ({ title: `E${i}`, scope: "a", updated: "" })), daily: { total: 0, latest: [] }, sessions: [], last: "" } } });
+  const many = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: { episodic: { episodes: Array.from({ length: 12 }, (_, i) => ({ title: `E${i}`, scope: "a", updated: "" })), daily: { total: 0, latest: [] }, sessions: [], last: "" } } }, v.options(new URLSearchParams("type=episodic")));
   expect(many).toContain("2 more");
 });
 
@@ -311,3 +311,56 @@ test("with about 1000 notes the warm call takes under 1 s", async () => {
   }
   // Writing the 2000 fixture files and the cold call take 2 to 6 s under load, which is over the 5 s default for the whole test. The 1 s limit still applies to the warm call alone (about 90 ms). Matches the 30 s the test script uses.
 }, 30000);
+
+const row = (over: object) => ({ title: "T", kind: "gotcha", scope: "aleph", updated: "2026-10-01", read: null, problems: [], ...over });
+test("a note's status: a refusal first, then recent, earlier, never", () => {
+  const now = Date.parse("2026-11-01T12:00");
+  expect(v.noteStatus(row({ read: "2026-10-30" }), now)).toBe("use");
+  expect(v.noteStatus(row({ read: "2026-10-01" }), now)).toBe("stale");
+  expect(v.noteStatus(row({}), now)).toBe("never");
+  expect(v.noteStatus(row({ read: "2026-10-30", problems: [{ rule: "schema", detail: "x" }] }), now)).toBe("lint");
+});
+
+test("the browser filters, ranks a search first and sorts; episodes come only on request", () => {
+  const rows = [row({ title: "A", status: "never", updated: "2026-10-02" }), row({ title: "B", status: "use", scope: "x", updated: "2026-10-03" }), row({ title: "Ep", kind: "episode", status: "never" })];
+  const t = (q: string, hits: string[] = []) => v.browseRows(rows, v.options(new URLSearchParams(q)), hits).map((n: any) => n.title);
+  expect(t("")).toEqual(["B", "A"]);
+  expect(t("status=never")).toEqual(["A"]);
+  expect(t("scope=x")).toEqual(["B"]);
+  expect(t("kind=episode")).toEqual(["Ep"]);
+  expect(t("q=body", ["A", "B"])).toEqual(["A", "B"]);
+  expect(t("q=body", ["B"])).toEqual(["B"]);
+  expect(t("sort=title&dir=desc")).toEqual(["B", "A"]);
+});
+
+test("the page is the board, then broad health, then the note browser; the type comes from the query", () => {
+  const m = { exists: true, total: 2, byKind: { gotcha: 2 }, byScope: { aleph: 2 }, home: [], writes: [], facts: [], factsWeek: { days: 7, kept: 3, rejected: 1 },
+    lint: { refuse: [{ note: "B", rule: "schema", detail: "no confidence" }, { note: "B", rule: "dangling", detail: "x" }], warn: [{ note: "A", rule: "orphan", detail: "y" }] },
+    notes: [row({ title: "A" }), row({ title: "B", read: "2026-10-01", problems: [{ rule: "schema", detail: "no confidence" }] })] };
+  const h = v.renderMemory(m);
+  expect(h).toContain("Recall has never returned 1 of the 2 knowledge notes. Lint refuses 1 note.");
+  expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('aria-label="Lint"'));
+  expect(h.indexOf('aria-label="Lint"')).toBeLessThan(h.indexOf('id="mem-table"'));
+  for (const id of ["working", "semantic", "episodic", "procedural", "retrieval", "prospective", "parametric"]) expect(h).toContain(`data-type="${id}"`);
+  expect(h).toContain('data-type="semantic" aria-pressed="true"');
+  const w = v.view.render(m, {}, new URLSearchParams("type=parametric"));
+  expect(w).toContain('data-type="parametric" aria-pressed="true"');
+  expect(w).toContain("The model weights");
+  expect(v.lintRules(m.lint).map((r: any) => [r.rule, r.refused, r.warned])).toEqual([["schema", 1, 0], ["dangling", 1, 0], ["orphan", 0, 1]]);
+});
+
+test("the inspector shows the note, its problem, sources, links and path, escaped", () => {
+  const h = v.renderInspector({ title: "N", path: "wiki/N.md", frontmatter: { kind: "gotcha", scope: "a", confidence: "measured", updated: "2026-10-01", sources: ["<src>"] }, body: "**Claim.** x", links: [{ title: "L" }], backlinks: [{ title: "B" }] }, row({ status: "lint", problems: [{ rule: "schema", detail: "bad" }] }));
+  for (const s of ["Lint problem", "schema: bad", "&lt;src&gt;", "<strong>Claim.</strong>", "Linked from", "wiki/N.md"]) expect(h).toContain(s);
+  expect(v.renderInspector(null)).toContain("Select a note");
+});
+
+test("/api/memory lists the notes with their read date, and a page search logs no read", async () => {
+  const log = join(base, "vault", ".recall.json");
+  writeFileSync(log, JSON.stringify({ "Use Bun": "2026-10-30" }));
+  const m = await (await at("/api/memory")).json() as any;
+  expect(m.notes.find((n: any) => n.title === "Use Bun")).toMatchObject({ read: "2026-10-30", problems: expect.any(Array) });
+  expect(m.notes.some((n: any) => n.read === null)).toBe(true);
+  await at("/api/memory/search?q=bun");
+  expect(JSON.parse(readFileSync(log, "utf8"))).toEqual({ "Use Bun": "2026-10-30" });
+});

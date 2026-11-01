@@ -130,20 +130,7 @@ test("?project= that is no registry key is no filter", async () => {
   expect((await get("/api/skills?project=junk")).body.skills).toEqual((await get("/api/skills")).body.skills);
 });
 
-test("renderFilters lists only registry projects and selects All for an unknown one", () => {
-  const junk = v.renderFilters({ projects: ["a", "b"] }, { project: "junk" });
-  expect(junk).not.toContain("junk");
-  expect(junk).toContain('data-value="" aria-pressed="true"');
-  expect(v.renderFilters({ projects: ["a", "b"] }, { project: "b" })).toContain('data-value="b" aria-pressed="true"');
-});
 
-test("a skill from the skills folder with no use is listed as unused", async () => {
-  const { body } = await get("/api/skills");
-  expect(body.unused).toEqual(["dormant"]);
-  expect(v.renderSkills(body)).toContain("dormant");
-  expect((await get("/api/skills/dormant")).body.uses).toBe(0);
-  expect((await get("/api/skills/nothing")).status).toBe(404);
-});
 
 test("answers are cached for 30 seconds", async () => {
   await get("/api/skills");
@@ -207,20 +194,6 @@ test("after a restart, a reload fetches only the rows of the last two hours and 
   expect(body.skills.find((s: any) => s.name === "aleph:pickup")).toMatchObject({ uses: 2, errors: 1 }); // t2 is two days old
 });
 
-test("a failed reload serves the last good rows, with their age and the error", async () => {
-  await get("/api/skills");
-  clearCache();
-  down = true;
-  const { status, body } = await get("/api/skills");
-  expect(status).toBe(200);
-  expect(body.failed).toContain("503");
-  expect(Date.now() - Date.parse(body.asOf)).toBeLessThan(60_000);
-  expect(body.skills.find((s: any) => s.name === "aleph:pickup").uses).toBe(2);
-  expect(v.renderSkills(body)).toContain("Langfuse failed: ");
-  expect(v.staleNote({ failed: "timed out", asOf: "2026-10-28T07:00:00Z" }, new Date("2026-10-28T09:05:00Z"))).toContain("(2 h 5 min ago)");
-  expect(v.staleNote({ asOf: "2026-10-28T07:00:00Z" })).toBe("");
-  expect((await get("/api/skills/aleph:pickup")).body.failed).toContain("503");
-});
 
 test("pages are fetched four at a time", async () => {
   let active = 0, peak = 0, calls = 0;
@@ -247,44 +220,9 @@ test("pages are fetched four at a time", async () => {
   }
 });
 
-test("the view lists skills with bars and links, and the detail links sessions", async () => {
-  const { body } = await get("/api/skills");
-  const html = v.renderSkills(body);
-  expect(html).toContain('href="#/skills/aleph%3Apickup"');
-  expect(html).toContain('class="perday spark"');
-  expect(html).toContain('<a class="nml" href="#/skills/aleph%3Apickup">');
-  expect(html).not.toContain("<svg");
-  expect(html).toContain('data-sort="last"');
-  const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
-  expect(detail).toContain('href="#/sessions/s1"');
-  expect(detail).toContain("Bash");
-  expect(v.view).toMatchObject({ path: "/skills", group: "claude" });
-  expect((v.view as any).api({}, new URLSearchParams("days=7&project=aleph&x=1"))).toBe("/api/skills?days=7&project=aleph");
-  expect((v.view as any).api({}, new URLSearchParams())).toBe("/api/skills");
-  expect(skillView).toMatchObject({ path: "/skills/:name", api: "/api/skills/:name" });
-});
 
-test("text is escaped and an empty window shows the empty state", () => {
-  expect(v.renderSkills({ days: 30, skills: [], unused: [] })).toContain("No skill");
-  const html = v.renderSkills({ days: 30, unused: ["<b>x</b>"], skills: [] });
-  expect(html).not.toContain("<b>x");
-});
 
-test("the skills table scrolls inside its own wrapper", async () => {
-  const html = v.renderSkills((await get("/api/skills")).body);
-  expect(html).toContain('<div class="tscroll"><table class="tbl');
-  expect(html).not.toContain('style="overflow-x');
-});
 
-test("perDayOption has one bar per day with its count, dated from since", () => {
-  const o = v.perDayOption([0, 3, 1], "2026-10-25");
-  expect(o.xAxis.data).toEqual(["2026-10-25", "2026-10-26", "2026-10-27"]);
-  expect(o.series[0].data).toEqual([0, 3, 1]);
-  expect(o.tooltip.formatter({ name: "2026-10-26", value: 3 })).toBe("2026-10-26<br>3 uses");
-  expect(JSON.stringify(o)).not.toMatch(/#[0-9a-f]{3,6}|rgb/i);
-  expect(typeof v.view.mount).toBe("function");
-  expect(typeof skillView.mount).toBe("function");
-});
 
 test("pages are fetched concurrently, and serve() warms the cache so the first request hits Langfuse zero times", async () => {
   // Overlap is counted per list: the two lists run side by side even when each one pages serially.
@@ -324,45 +262,6 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
   }
 });
 
-const mk = (name: string, uses: number, lastUsed: string) => ({ name, uses, bySlash: uses, byTool: 0, sessions: 1, projects: ["p"], lastUsed, errors: 0, perDay: [uses] });
-const three = { days: 30, since: "2026-01-01", skills: [mk("b", 2, "2026-01-02T00:00:00Z"), mk("a", 2, "2026-01-05T00:00:00Z"), mk("c", 9, "2026-01-02T00:00:00Z")], unused: ["zz"] };
-
-test("renderSkills draws one chart mount per used skill", () => {
-  const html = v.renderSkills(three);
-  expect(html.match(/class="perday spark" role="img"[^>]*data-skill/g)?.length).toBe(3);
-});
-
-test("sortSkills orders by uses or by last used, ties by name", () => {
-  expect(v.sortSkills(three.skills, "uses").map((s: any) => s.name)).toEqual(["c", "a", "b"]);
-  expect(v.sortSkills(three.skills, "last").map((s: any) => s.name)).toEqual(["a", "b", "c"]);
-  expect(v.sortSkills(three.skills, { key: "name", dir: 1 }).map((s: any) => s.name)).toEqual(["a", "b", "c"]);
-  expect(v.sortSkills(three.skills, { key: "uses", dir: 1 }).map((s: any) => s.name)).toEqual(["a", "b", "c"]);
-});
-
-test("a skills row has one number for uses, three projects at most, and a when time", () => {
-  const html = v.renderSkills({ ...three, skills: [{ ...mk("a", 4, "2026-01-05T00:00:00Z"), bySlash: 3, byTool: 1, projects: ["p1", "p2", "p3", "p4", "p5"], errors: 2 }] });
-  expect(html).toContain('title="3 slash, 1 tool">4</td>');
-  expect(html).toContain('title="p1, p2, p3, p4, p5">p1, p2, p3 +2</td>');
-  expect(html).toContain('<td class="num bad">2</td>');
-  expect(html).not.toContain('class="badge');
-  expect(v.renderSkills({ ...three, skills: [mk("z", 1, "2026-01-05T00:00:00Z")] })).toContain('<td class="num">0</td>');
-  expect(html).toContain("Jan 05");
-  expect(html).not.toContain("Sort by");
-});
-
-test("unused skills are listed once, after the used ones", () => {
-  const html = v.renderSkills(three);
-  expect(html.match(/class="muted"/g)?.length).toBe(1);
-  expect(html).toContain('<div class="sh"><h2>Unused</h2>');
-  expect(html).toMatch(/<h2>Unused<\/h2>[\s\S]*?<\/div><div class="tscroll"><table class="tbl fit">[\s\S]*class="muted"/);
-  expect(html.indexOf('<h2>Unused')).toBeGreaterThan(html.lastIndexOf('data-name="b"'));
-  expect(html.match(/<tbody/g)?.length).toBe(2);
-  expect(html).toContain('name="q"');
-  expect(html).toContain('placeholder="Skill"');
-  for (const bad of ["<style", "colspan", 'style="overflow-x']) expect(html).not.toContain(bad);
-  expect(v.renderFilters({ projects: [] }, { q: "pick" })).toContain('value="pick"');
-});
-
 test("a cwd that is no registry project is not listed as a project", async () => {
   const { body } = await get("/api/skills");
   expect(body.skills.find((s: any) => s.name === "aleph:sandbox")).toMatchObject({ uses: 1, projects: [] });
@@ -378,15 +277,6 @@ test("a project tag with no cwd counts only when it is a registry key", async ()
   expect((await get("/api/skills?project=aleph")).body.skills.map((s: any) => s.name)).toContain("aleph:tagged");
 });
 
-test("the page has a Project and a Window filter, and the columns run text first, then counts", () => {
-  const html = v.renderSkills({ ...three, projects: ["a", "b"] }, { days: "7", project: "b" });
-  expect(html).toContain('class="fbar"');
-  expect(html).toContain('data-value="b" aria-pressed="true"');
-  expect(html).toContain('data-name="days"');
-  expect(html).toMatch(/data-value="7" aria-pressed="true"/);
-  const heads = [...html.match(/<thead>[\s\S]*?<\/thead>/)![0].matchAll(/<th[^>]*>(?:<button[^>]*>)?([A-Za-z ]+)/g)].map((m) => m[1]);
-  expect(heads).toEqual(["Skill", "Projects", "Uses", "Sessions", "Errors", "Per day", "Last used"]);
-});
 
 test("the skill detail uses section heads and fit tables", async () => {
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);

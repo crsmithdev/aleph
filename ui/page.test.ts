@@ -115,7 +115,7 @@ test("load records the open state of details[data-keep] before the render and re
   expect(body.slice(0, rec)).toContain("first");
 });
 
-test("the sidebar lists Status, Inventory (/inventory), then the rest, with Tools for /activity and no Jobs, Issues or Projects", async () => {
+test("the sidebar lists Status, Inventory (/inventory), then the rest, with Agents for /agents and no Jobs, Issues or Projects", async () => {
   const dir = new URL("./views/", import.meta.url);
   const names = (await import("node:fs")).readdirSync(dir).filter((n) => n.endsWith(".js") && !n.startsWith("_"));
   const all: any[] = [];
@@ -125,9 +125,9 @@ test("the sidebar lists Status, Inventory (/inventory), then the rest, with Tool
   expect(factory.slice(0, 2).map((v) => [v.title, v.path])).toEqual([["Status", "/"], ["Inventory", "/inventory"]]);
   expect(shown.some((v) => v.path === "/issues")).toBe(false);
   const claude = shown.filter((v) => v.group === "claude").sort((a, b) => a.order - b.order).map((v) => v.title);
-  expect(claude).toEqual(["Sessions", "Tools", "Skills"]);
-  expect(factory.some((v) => v.path === "/sessions")).toBe(false);
-  expect(shown.find((v) => v.path === "/activity")?.title).toBe("Tools");
+  expect(claude).toEqual(["Agents"]);
+  expect(shown.some((v) => v.path === "/sessions" || v.path === "/skills" || v.path === "/activity")).toBe(false);
+  expect(shown.find((v) => v.path === "/agents")?.title).toBe("Agents");
   expect(shown.some((v) => v.path === "/jobs" || v.path === "/projects")).toBe(false);
   expect(all.some((v) => v.path === "/jobs")).toBe(true);
   expect(all.some((v) => v.path === "/jobs/:name" || v.path === "/projects/:key")).toBe(true);
@@ -219,7 +219,7 @@ test("index.html declares an empty icon in its head", () => {
 
 test("every sidebar view has an icon, and a collapsed sidebar keeps the links and hides their labels", async () => {
   const shown = [];
-  for (const f of ["now", "contents", "sessions", "activity", "skills", "memory"]) shown.push((await import(`./views/${f}.js`)).view);
+  for (const f of ["now", "contents", "agents", "memory"]) shown.push((await import(`./views/${f}.js`)).view);
   for (const v of shown) expect(v.icon).toMatch(/^[a-z-]+$/);
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).not.toContain(".shell.collapsed #nav, .shell.collapsed #logout { display: none; }");

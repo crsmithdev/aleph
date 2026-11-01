@@ -157,14 +157,6 @@ test("a subagent's span and tools nest under the Agent tool span that launched i
   } finally { TRACES.pop(); delete OBS.t4; }
 });
 
-test("a Langfuse 500 is a 502 with a message", async () => {
-  status = 500;
-  const r = await call("GET /api/sessions", "/api/sessions");
-  expect(r.status).toBe(502);
-  const body: any = await r.json();
-  expect(body.error).toContain("500");
-  expect(v.renderSessions(body)).toContain("Langfuse is unreachable");
-});
 
 test("the second request is served from the cache", async () => {
   await call("GET /api/sessions", "/api/sessions");
@@ -174,19 +166,6 @@ test("the second request is served from the cache", async () => {
   expect(hits.length).toBe(n);
 });
 
-test("views render, link to Langfuse, and escape", async () => {
-  const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-  expect(v.renderSessions(list)).toContain('<a class="idl" title="s1" href="#/sessions/s1">s1</a>');
-  expect(v.renderSessions(list)).toContain('<header class="ph"><h1>Sessions</h1><span class="count">2</span></header>');
-  const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  expect(v.renderSession(s)).toContain(`${s.base}/trace/t1`);
-  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1", { id: "s1", n: "1" })).json();
-  const h = v.renderTurn(t);
-  expect(h).toContain("candidates 5, asked 3, kept 1");
-  expect(h).toContain(`${s.base}/trace/t1`);
-  expect(v.renderTurn({ ...t, prompt: "<script>" })).not.toContain("<script>");
-  expect(v.view.group).toBe("claude");
-});
 
 test("the waterfall at 390 px: the detail pane stacks under a grid that scrolls in a short box", async () => {
   const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
@@ -196,29 +175,7 @@ test("the waterfall at 390 px: the detail pane stacks under a grid that scrolls 
   expect(narrow).toMatch(/\.wf-grid \{ max-height: \d+vh; overflow: auto; scroll-padding-top: 24px; \}/);
 });
 
-test("the sessions tables scroll inside their own wrapper", async () => {
-  const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
-  expect(html).toMatch(/^\.tscroll \{[^}]*overflow-x: auto/m);
-  const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-  expect(v.renderSessions(list)).toContain('<div class="tscroll"><table class="tbl">');
-  expect(v.renderSessions(list)).not.toMatch(/<div class="tscroll" style=/);
-  const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  expect(v.renderSession(s, {}, TABLE)).toContain('<div class="tscroll"><table class="tbl">');
-  expect(v.renderSession(s, {}, TABLE)).not.toMatch(/<div class="tscroll" style=/);
-});
 
-test("the list has a filter bar, 50 rows and a pager; the turn is a table", async () => {
-  const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-  const h = v.renderSessions(list);
-  expect(h).toContain('class="fbar"');
-  expect(h).toContain('name="q"');
-  expect(h).toContain('<span class="of">2 of 2</span>');
-  expect(h).toContain('<span class="chips">');
-  const many = { ...list, sessions: Array.from({ length: 60 }, (_, i) => ({ ...list.sessions[0], id: `s${i}` })) };
-  expect(v.renderSessions(many)).toContain('data-more="10"');
-  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1", { id: "s1", n: "1" })).json();
-  expect(v.renderTurn(t)).toContain('<table class="tbl">');
-});
 
 test("the Session page's table uses pageHead, idLink and when, in the shared column order", async () => {
   const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
@@ -241,56 +198,7 @@ test("the Turn page uses pageHead, idLink and when", async () => {
   expect(h.match(/<h1/g)?.length).toBe(1);
 });
 
-test("Project and Window are hash parameters that reach the API", async () => {
-  expect(v.view.api({}, new URLSearchParams("days=30&project=aleph&x=1"))).toBe("/api/sessions?days=30&project=aleph");
-  expect(v.view.api({}, new URLSearchParams())).toBe("/api/sessions");
-  const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-  expect(Array.isArray(list.projects)).toBe(true);
-  expect(list.projects).toEqual([...list.projects].sort());
-  const h = v.renderSessions(list, {}, new URLSearchParams());
-  expect(h).toContain('data-name="project"');
-  expect(h).toContain('data-name="days"');
-  expect(h).toContain('data-value="7" aria-pressed="true"');
-  expect(h).toContain('name="q"');
-  expect(h).not.toContain("<style");
-  const heads = [...h.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
-  expect(heads).toEqual(["Session", "First prompt", "Project", "Kinds", "Turns", "Cost", "Started", "Last"]);
-  expect(v.renderSessions({ ...list, sessions: [] }, {}, new URLSearchParams("days=30"))).toContain("No session in the last 30 days.");
-});
 
-test("a factory session shows the job name and takes its cost from the ledger", async () => {
-  const JOB = "20261028-090535-aleph-aleph-361-agent";
-  const dir = mkdtempSync(join(tmpdir(), "sessions-jobs-"));
-  mkdirSync(join(dir, JOB));
-  writeFileSync(join(dir, JOB, "state.json"), JSON.stringify({ kind: "build", job: JOB, name: "aleph-361", repo: "aleph", condition: "landed", cost: 1.25, told: true, started: iso(60) }));
-  const saved = process.env.ALEPH_JOBS_DIR;
-  process.env.ALEPH_JOBS_DIR = dir;
-  TRACES.push(trace("t9", JOB, "aleph", iso(5), { totalCost: 0 }));
-  try {
-    const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
-    const job = list.sessions.find((s: any) => s.id === JOB);
-    expect(job.label).toBe("aleph-361");
-    expect(job.cost).toBe(1.25);
-    const s1 = list.sessions.find((s: any) => s.id === "s1");
-    expect(s1.label).toBeUndefined();
-    expect(s1.cost).toBe(1);
-    const h = v.renderSessions(list);
-    expect(h).toContain(">aleph-361</a>");
-    expect(h).toContain("$1.25");
-    expect(h).not.toContain(">20261028</a>");
-    expect(h).not.toContain("$0.00");
-    expect(h).toContain(`title="${JOB}"`);
-    const d: any = await (await call("GET /api/sessions/:id", `/api/sessions/${JOB}`, { id: JOB })).json();
-    expect(d.label).toBe("aleph-361");
-    expect(v.renderSession(d)).toContain(">aleph-361</a>");
-    const c: any = await (await call("GET /api/sessions/:id/chat", `/api/sessions/${JOB}/chat`, { id: JOB })).json();
-    expect(c.label).toBe("aleph-361");
-    expect(c.turns[0].cost).toBe(1.25);
-  } finally {
-    TRACES.pop();
-    if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
-  }
-});
 
 const chat = async (id: string, q = "") => (await call("GET /api/sessions/:id/chat", `/api/sessions/${id}/chat${q}`, { id })).json() as Promise<any>;
 

@@ -260,6 +260,7 @@ function summary(a: Analysis) {
       name, uses: mine.length,
       byTool: mine.filter((u) => u.via === "tool").length, bySlash: mine.filter((u) => u.via === "slash").length,
       sessions: new Set(mine.map((u) => u.session)).size,
+      sessionIds: [...new Set(mine.map((u) => u.session))],
       projects: [...new Set(mine.map((u) => u.project).filter(Boolean))].sort(),
       lastUsed: mine.map((u) => u.time).sort().pop()!,
       errors: [...a.errors.keys()].filter((k) => k.startsWith(name + "\0")).length,

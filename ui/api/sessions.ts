@@ -169,15 +169,20 @@ function textBlocks(obs: any[], output: string) {
     .filter((t) => t.text.trim() !== output.trim());
 }
 
+/** The traces with a session over the last `days` days. */
+export async function windowTraces(days: number, project: string | null): Promise<any[]> {
+  const hour = 3600_000; // whole hours, so the cache key holds
+  const from = new Date(Math.floor((Date.now() - (days > 0 ? days : 7) * 86400_000) / hour) * hour).toISOString();
+  return (await traces(config(), { fromTimestamp: from })).filter((t) => t.sessionId && matches(t, project));
+}
+
 export const routes: Routes = {
   "GET /api/sessions": async (_req, _p, url) => {
     const days = Number(url.searchParams.get("days") ?? 7);
     const project = url.searchParams.get("project") || null;
     try {
       const cfg = config();
-      const hour = 3600_000; // whole hours, so the cache key holds
-      const from = new Date(Math.floor((Date.now() - (days > 0 ? days : 7) * 86400_000) / hour) * hour).toISOString();
-      const all = (await traces(cfg, { fromTimestamp: from })).filter((t) => t.sessionId && matches(t, project));
+      const all = await windowTraces(days, project);
       const groups = new Map<string, any[]>();
       for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
       const ledger = jobs();

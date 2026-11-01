@@ -114,7 +114,8 @@ function readLog(): Record<string, string> {
   try { return JSON.parse(readFileSync(READ_LOG(), "utf8")); } catch { return {}; }
 }
 function noteRead(titles: string[]): void {
-  if (!titles.length) return;
+  // `--unlogged`: a person browsing is not a read by an agent, and the Memory page shows the log as use.
+  if (!titles.length || process.argv.includes("--unlogged")) return;
   try {
     const log = readLog();
     for (const t of titles) log[t] = today();

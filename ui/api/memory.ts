@@ -87,6 +87,19 @@ const WEEK = 7 * 86_400_000;
 /** A rejection is stored as `<fact>: <reason>`; the reason is what follows the last colon. */
 const splitRejection = (s: string | { fact: string; reason: string }) => { if (typeof s !== "string") return s; const i = s.lastIndexOf(": "); return i < 0 ? { fact: s, reason: "" } : { fact: s.slice(0, i), reason: s.slice(i + 2) }; };
 
+/** When `vault recall` last returned each note, by title; empty when the log is absent. */
+function readLog(root: string): Record<string, string> {
+  try { return JSON.parse(readFileSync(join(root, ".recall.json"), "utf8")); } catch { return {}; }
+}
+
+/** One row per note for the note browser: what it is, when it was written and last returned, and its refusals. */
+function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: string; detail: string }[]) {
+  const read = readLog(root);
+  const problems = new Map<string, { rule: string; detail: string }[]>();
+  for (const f of refuse) problems.set(f.note, [...(problems.get(f.note) ?? []), { rule: f.rule, detail: f.detail }]);
+  return wiki.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? "none"), scope: scopeOf(n), updated: String(n.fm.updated ?? ""), read: read[n.title] ?? null, problems: problems.get(n.title) ?? [] }));
+}
+
 /** The 20 latest facts runs of the job ledger, newest first, with what each kept (the note's title and its first source) and rejected; and the facts kept and rejected in the last 7 days. */
 function factsRuns(all: Note[], project: string | null) {
   const targets = linkTargets(all);
@@ -127,6 +140,7 @@ async function overview(url: URL): Promise<Response> {
     lint: { refuse: lint.refuse.filter(mine), warn: lint.warn.filter(mine) },
     writes: recentWrites(root, all, keep, project),
   };
+  body.notes = noteRows(wiki, root, lint.refuse);
   const m = await slow;
   if (m) { body.misses = m.value; body.cachedAt = m.cachedAt; }
   const f = factsRuns(all, project);
@@ -141,7 +155,7 @@ async function search(url: URL): Promise<Response> {
   const project = url.searchParams.get("project") || null;
   if (!q) return json({ q, results: [] });
   // `vault recall` ranks, so the page shows the order the agent sees.
-  const args = ["bun", CLI, "recall", q, ...(project ? ["--scope", project] : [])];
+  const args = ["bun", CLI, "recall", q, ...(project ? ["--scope", project] : []), "--unlogged"];
   const p = Bun.spawn(args, { env: process.env, stdout: "pipe", stderr: "ignore" });
   const text = await new Response(p.stdout).text();
   if ((await p.exited) !== 0) return json({ q, results: [], error: "vault recall failed" });
