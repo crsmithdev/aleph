@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Status: Efficiency</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#202331}
+a{color:#82AAFF}a:hover{color:#EEF1F8}
+.k{color:#8E96BA;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.id{font:12px ui-monospace,monospace;color:#8E96BA}
+.tag{font-size:11px;font-weight:600;color:#8E96BA;border:1px solid #3A3F58;border-radius:4px;padding:1px 6px}
+.shell{display:flex;flex-wrap:wrap;min-height:100%;font-family:'Work Sans',system-ui,sans-serif;color:#BFC7D5;font-size:14px;font-variant-numeric:lining-nums tabular-nums}
+.side{flex:1 1 180px;max-width:208px;box-sizing:border-box;background:#292D3E;border-right:1px solid #3A3F58;padding:20px 12px;display:flex;flex-direction:column;gap:2px}
+.side strong{font:700 20px Merriweather,Georgia,serif;color:#EEF1F8;padding:0 8px 12px}
+.side a{color:#BFC7D5;padding:12px 8px;border-radius:6px;text-decoration:none}
+.side a.sub{padding-left:20px;font-size:13px}
+.side a.on{background:#32374D;color:#EEF1F8;font-weight:600}
+.main{flex:999 1 560px;min-width:0;box-sizing:border-box;padding:24px;max-width:1232px;display:flex;flex-direction:column;gap:24px}
+.head{display:flex;flex-wrap:wrap;align-items:baseline;gap:12px}
+.head>span{font:400 26px Merriweather,Georgia,serif;color:#8E96BA}
+.head h1{margin:0;font:400 26px/1.3 Merriweather,Georgia,serif;color:#EEF1F8;flex:1 1 320px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.tile{background:#292D3E;border:1px solid #3A3F58;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:8px;color:#BFC7D5;text-decoration:none;text-align:left;font:inherit;min-width:0}
+a.tile:hover{border-color:#82AAFF;color:#BFC7D5}
+button.tile{cursor:pointer}
+.tile b{font:700 44px/1 Merriweather,Georgia,serif;color:#EEF1F8}
+.tile small{font-size:13px}
+.good{font-size:13px;font-weight:600;color:#C3E88D}
+.warn{font-size:13px;font-weight:600;color:#FFCB6B}
+.spark{display:flex;align-items:flex-end;gap:2px;height:32px}
+.spark i{flex:1;background:#8E96BA;border-radius:3px 3px 0 0}
+.card{background:#292D3E;border:1px solid #3A3F58;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card h2,.col h2{margin:0;font-size:15px;color:#EEF1F8}
+.card p{margin:0;font-size:13px}
+.cause{display:grid;grid-template-columns:minmax(130px,190px) minmax(60px,1fr) 118px;gap:12px;align-items:center;padding:7px 0;border-top:1px solid #3A3F58;font-size:13px}
+.cause i{display:block;height:10px;background:#8E96BA;border-radius:0 3px 3px 0}
+.cause.top i{background:#F78C6C}
+.cause span:last-child{text-align:right}
+.cause b{font-weight:400;color:#EEF1F8}
+.live{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.col h2{border-bottom:1px solid #3A3F58;padding-bottom:6px}
+.col h2 em{font-style:normal;font-weight:500;color:#8E96BA}
+.item{background:#292D3E;border:1px solid #3A3F58;border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.item a{color:#EEF1F8;font-weight:600;font-size:13px;text-decoration:none}
+.col p{margin:0;font-size:13px;color:#8E96BA}
+.btn{min-height:44px;padding:0 16px;background:#292D3E;border:1px solid #3A3F58;border-radius:6px;font:600 13px 'Work Sans',sans-serif;color:#EEF1F8}
+.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px;text-align:right;font-weight:400}
+th:first-child{text-align:left;color:#EEF1F8}
+thead th:first-child{color:#8E96BA}
+thead{color:#8E96BA}
+tbody tr{border-top:1px solid #3A3F58}
+@media (max-width:700px){.side{flex-basis:100%;max-width:none;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid #3A3F58;padding:12px}.side strong{width:100%}.main{padding:16px}.head span,.head h1{font-size:22px}.cause{grid-template-columns:1fr 118px}.cause i{grid-column:1/-1;grid-row:2}}
+</style>
+</helmet>
+<div class="shell">
+  <nav class="side" aria-label="Main">
+    <strong>aleph</strong>
+    <a href="EStatus.dc.html" class="">Status</a>
+    <a href="EPerformance.dc.html" class="sub">Performance</a>
+    <a href="EEfficiency.dc.html" class="sub on" aria-current="page">Efficiency</a>
+    <a href="ECapacity.dc.html" class="sub">Capacity</a>
+    <a href="#">Inventory</a><a href="#">Sessions</a><a href="#">Tools</a><a href="#">Skills</a><a href="#">Memory</a>
+  </nav>
+  <main class="main">
+    <header class="head">
+      <span>Last 7 days</span>
+      <h1>38% of agent time did not reach main. The last 24 h: 15%.</h1>
+    </header>
+
+    <section aria-label="Quality" class="tiles">
+      <div class="tile"><span class="k">Lost time</span><b>38%</b><small>63 h of 164 h agent time</small><span class="good">▼ 15% in the last 24 h</span></div>
+      <div class="tile"><span class="k">First pass</span><b>91%</b><small>lands with no fix round</small><span class="warn">▼ 88% in the last 24 h</span></div>
+      <div class="tile"><span class="k">Reruns</span><b>73</b><small>checks passed on rerun</small><small>9 in the last 24 h</small></div>
+      <div class="tile"><span class="k">Fix rounds</span><b>122</b><small>26 h on 89 issues</small></div>
+      <div class="tile"><span class="k">Usage per issue</span><b>0.02%</b><small>of the weekly limit, median</small></div>
+    </section>
+
+    <section aria-label="Agent time by outcome" class="card">
+      <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px"><h2>Agent time by outcome</h2><span style="font-size:13px">164 h counted · 72 runs, 19 h, have no outcome yet</span></div>
+      <div style="display:flex;gap:2px">
+        <div style="flex:75.6;min-width:0;min-height:56px;background:#3B4A36;color:#EEF1F8;border-radius:6px 0 0 6px;padding:8px 10px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;font-size:13px"><b>Landed</b><span style="font-size:12px">76 h · 46%</span></div>
+        <sc-for list="{{classes}}" as="c" hint-placeholder-count="3">
+          <button type="button" onClick="{{c.pick}}" aria-pressed="{{c.on}}" style="flex:{{c.hours}};min-width:0;min-height:56px;background:{{c.bg}};color:{{c.ink}};border:0;outline:{{c.ring}};outline-offset:-2px;padding:8px 10px;font:inherit;font-size:13px;text-align:left;cursor:pointer;display:flex;flex-direction:column;justify-content:center"><b>{{c.name}}</b><span style="font-size:12px">{{c.label}}</span></button>
+        </sc-for>
+      </div>
+      <div><button type="button" class="btn" onClick="{{showAll}}" aria-pressed="{{allOn}}" style="background:{{allBg}};border-color:{{allLine}};cursor:pointer">All lost time, 63 h</button></div>
+    </section>
+
+    <section class="card" aria-label="Causes">
+      <h2>{{cur.title}}, largest first</h2>
+      <p>{{cur.text}} {{cur.size}}</p>
+      <div>
+        <sc-for list="{{cur.causes}}" as="x" hint-placeholder-count="10"><div class="cause"><b>{{x.name}}</b><i style="width:{{x.w}};background:{{x.c}}"></i><span>{{x.v}}</span></div></sc-for>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Issues">
+      <h2>{{cur.title}}: the issues that cost the most</h2>
+      <div>
+        <sc-for list="{{cur.top}}" as="t" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:42px 104px 1fr;gap:10px;padding:7px 0;border-top:1px solid #3A3F58;font-size:13px"><a href="#" style="font-family:ui-monospace,monospace;font-size:12px">{{t.id}}</a><span style="color:#EEF1F8">{{t.v}}</span><span>{{t.why}}</span></div></sc-for>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px"><button type="button" class="btn" style="background:#82AAFF;border:0;color:#202331">File an issue: {{cur.first}}</button><span style="font-size:12px;color:#8E96BA">The issue carries the runs and the reasons.</span></div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  state = { pick: 'all' };
+  renderVals() {
+    const C = [
+      { key:'fixed', name:'Fixed', hours:25.6, label:'26 h · 16%', bg:'#5C7052', ink:'#EEF1F8', text:'Runs before the run that landed: the fix rounds an issue needed. This work reached main, so it is not lost time.', size:'122 runs on 89 issues.',
+        causes:[['Passed, not landed',14.44,54],['Reviewer sent back',5.01,27],['Checks failed',4.45,32],['Needed Chris',1.66,9]],
+        top:[['326','1.0 h · 4 runs','Reviewer: the server started by the harness gets the real process.env.'],['456','0.9 h · 3 runs','No reason recorded.'],['359','0.9 h · 3 runs','Tests failed.'],['743','0.8 h · 2 runs','No reason recorded.'],['322','0.8 h · 2 runs','No reason recorded.']] },
+      { key:'late', name:'Late', hours:21.8, label:'22 h · 13%', bg:'#A36A4E', ink:'#FFFFFF', text:'Runs that started after their issue had landed, or found the work already on main.', size:'192 runs on 136 issues.',
+        causes:[['Issue had landed',18.44,165],['Work on main from another issue',3.34,27]],
+        top:[['154','2.1 h · 2 runs','The run says the goal is already met.'],['308','0.9 h · 42 runs','No commit and the item is already done: dropped as a duplicate.'],['39','0.6 h · 2 runs','The run says the goal is already met.'],['346','0.4 h · 3 runs','The run says the goal is already met.'],['459','0.4 h · 2 runs','The run says the goal is already met.']] },
+      { key:'restarted', name:'Restarted', hours:41.3, label:'41 h · 25%', bg:'#C75A5A', ink:'#FFFFFF', text:'Runs that a later start replaced: another job of the issue landed, or the issue started 4 or more times inside an hour.', size:'132 runs on 55 issues.',
+        causes:[['Reviewer sent back',7.42,24],['Passed, not landed',7.21,36],['No commit',7.13,10],['Stalled or timed out',6.3,6],['Other',5.1,12],['Restart loop',4.2,24],['Checks failed',2.2,10],['Needed Chris',1.7,10]],
+        top:[['659','3.2 h · 5 runs','No reason recorded.'],['702','3.2 h · 5 runs','No reason recorded.'],['146','2.7 h · 1 run','Time box: 40 min with no commit.'],['673','2.5 h · 5 runs','The host restarted and killed this run.'],['161','2.5 h · 1 run','Its precondition is met now: aleph-159 landed.']] }
+    ];
+    const ALL = { key:'all', name:'Lost time', text:'Late and Restarted together. The first cause is 29% of the loss: 165 runs started after their issue had landed.', size:'324 runs.',
+      causes:[...C[1].causes, ...C[2].causes].sort((a, b) => b[1] - a[1]), top:C[2].top };
+    const pick = this.state.pick;
+    const c0 = pick === 'all' ? ALL : C.find((c) => c.key === pick);
+    const max = c0.causes[0][1];
+    const cur = { ...c0, title: c0.name, first: c0.causes[0][0],
+      causes: c0.causes.map(([name, h, r], i) => ({ name, v: h.toFixed(1) + ' h · ' + r + ' runs', w: (h / max) * 100 + '%', c: i ? '#8E96BA' : '#F78C6C' })),
+      top: c0.top.map(([id, v, why]) => ({ id, v, why })) };
+    const allOn = pick === 'all';
+    return { cur, allOn, allBg: allOn ? '#32374D' : '#292D3E', allLine: allOn ? '#82AAFF' : '#3A3F58', showAll: () => this.setState({ pick: 'all' }),
+      classes: C.map((c) => { const on = c.key === pick; return { ...c, on, ring: on ? '2px solid #EEF1F8' : 'none', pick: () => this.setState({ pick: c.key }) }; }) };
+  }
+}
+</script>
+</body>
+</html>
