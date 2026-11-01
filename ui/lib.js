@@ -13,11 +13,6 @@ export const clock = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
-/** "2:24 am" in local time, or "" for a bad date. */
-export const clock12 = (iso) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : `${d.getHours() % 12 || 12}:${pad(d.getMinutes())} ${d.getHours() < 12 ? "am" : "pm"}`;
-};
 /** A label as the page shows it. */
 export const labelName = (l) => l;
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
@@ -457,10 +452,6 @@ export function sortHead(label, key, sort, { num = false } = {}) {
 
 export const sectionHead = (title, { count, aside } = {}) =>
   `<div class="sh"><h2>${esc(title)}</h2>${count != null ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<span class="aside">${aside}</span>` : ""}</div>`;
-
-export const numCell = (n, { bad = n > 0 } = {}) => `<td class="num${bad ? " bad" : ""}">${esc(n)}</td>`;
-
-export const nameLink = (name, href) => `<a class="nml" href="${esc(href)}">${esc(name)}</a>`;
 
 /** The tags Claude Code and its hooks wrap around text the user did not type. */
 const SYSTEM_TAGS = ["task-notification", "system-reminder", "local-command-stdout", "local-command-stderr", "local-command-caveat", "command-name", "command-message", "command-args", "user-prompt-submit-hook", "bash-input", "bash-stdout", "bash-stderr"];

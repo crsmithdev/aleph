@@ -103,12 +103,6 @@ describe("the read", () => {
     expect(store.goal(r, 3)).toBeNull();
   });
 
-  test("itemTimes keys each item by <repo>-<n>", () => {
-    const r = repo([{ title: "one" }]);
-    const t = store.itemTimes().get(`${r.key}-1`);
-    expect(t).toBeDefined();
-    expect(t!.added).toBeLessThanOrEqual(t!.changed);
-  });
 });
 
 describe("the writes", () => {
@@ -308,12 +302,6 @@ describe("dotted goal files", () => {
     expect(store.file(r, "new", [{ title: "x", labels: [] }])).toEqual([6]);
   });
 
-  test("itemTimes has a key for the goal", () => {
-    const r = dotted();
-    store.readList(r);
-    sh(join(base, "items"), "git", "fetch", "-q", "origin");
-    expect(store.itemTimes().has(`${r.key}-5.1`)).toBe(true);
-  });
 });
 
 describe("store fetches", () => {

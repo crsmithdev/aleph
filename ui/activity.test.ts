@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { activity, clearCache, routes } from "./api/activity.ts";
+import { activity, clearCache } from "./api/activity.ts";
 
 let obsHits = 0;
 let base: string, fake: ReturnType<typeof Bun.serve>;
@@ -109,12 +109,6 @@ describe("activity", () => {
 });
 
 describe("routes", () => {
-  test("the routes take days and project", async () => {
-    const a: any = await (await routes["GET /api/activity"](new Request("http://x/api/activity"), {}, new URL("http://x/api/activity?days=3&project=fac"))).json();
-    expect(a.days).toHaveLength(3);
-    expect(routes["GET /api/summary"]).toBeUndefined();
-  });
-
 });
 
 

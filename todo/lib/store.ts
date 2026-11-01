@@ -218,33 +218,6 @@ export function writeHidden(repo: Place, id: number | string, files: Record<stri
   }
 }
 
-let timesAt: { dir: string; rev: string; times: Map<string, { added: number; changed: number }> } | null = null;
-
-/**
- * When each item was first and last committed on the store's origin/main as
- * last fetched, by `<repo>-<n>`, in ms. One `git log`, reused while origin/main stays put.
- */
-export function itemTimes(): Map<string, { added: number; changed: number }> {
-  const dir = storeDir();
-  const head = git(dir, "rev-parse", `origin/${MAIN}`);
-  if (head.ok && timesAt?.dir === dir && timesAt.rev === head.out) return timesAt.times;
-  const out = new Map<string, { added: number; changed: number }>();
-  const p = spawnGit(["git", "-C", dir, "log", head.ok ? head.out : `origin/${MAIN}`, "--format=%ct", "--name-only"], { cwd: dir, stdout: "pipe", stderr: "ignore" });
-  if (p.exitCode !== 0) return out;
-  let ct = 0;
-  for (const line of p.stdout.toString().split("\n")) {
-    if (!line) continue;
-    if (/^\d+$/.test(line)) { ct = Number(line) * 1000; continue; }
-    const m = /^([^/]+)\/backlog\/tasks\/\1-(\d+(?:\.\d+)?)\.md$/.exec(line);
-    if (!m) continue;
-    const ref = `${m[1]}-${m[2]}`;
-    const t = out.get(ref);
-    if (t) t.added = ct; else out.set(ref, { added: ct, changed: ct });
-  }
-  if (head.ok) timesAt = { dir, rev: head.out, times: out };
-  return out;
-}
-
 // The fields.
 
 /** Put `ask` on the item, as `askOf` reads it. */

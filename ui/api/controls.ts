@@ -1,5 +1,5 @@
 /**
- * `POST /api/pause`, `POST /api/resume` and `POST /api/judge` (`{ "judge": "jev" | "haiku" }`).
+ * `POST /api/pause` and `POST /api/resume`.
  * Each is the `aleph` command of that name, run as a subprocess by the launcher, under the same
  * header and Origin rule as the job actions. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
@@ -20,15 +20,7 @@ async function run(args: string[]): Promise<Response> {
 
 const simple = (verb: "pause" | "resume"): Handler => async (req) => (sameSite(req) ? run([verb]) : text("forbidden", 403));
 
-const judge: Handler = async (req) => {
-  if (!sameSite(req)) return text("forbidden", 403);
-  const body: any = await req.json().catch(() => ({}));
-  if (body?.judge !== "jev" && body?.judge !== "haiku") return text('judge must be "jev" or "haiku"', 400);
-  return run(["judge", body.judge]);
-};
-
 export const routes: Routes = {
   "POST /api/pause": simple("pause"),
   "POST /api/resume": simple("resume"),
-  "POST /api/judge": judge,
 };

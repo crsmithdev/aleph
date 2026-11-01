@@ -6,7 +6,6 @@ import { writeList } from "../todo/lib/store.ts";
 import { add } from "../todo/lib/todo.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
-import { renderCard } from "./views/projects.js";
 // @ts-ignore plain JS, shared with the page
 import { view as oneView } from "./views/project.js";
 
@@ -121,11 +120,8 @@ test("?project= narrows every route", async () => {
   expect((await at("/api/projects/fac?project=plain")).status).toBe(404);
 });
 
-test("the views render cards and the detail", async () => {
+test("the view renders the detail", async () => {
   expect(oneView.path).toBe("/projects/:key");
-  const all: any[] = await (await at("/api/projects")).json();
-  const h = all.map(renderCard).join("");
-  for (const t of ['href="#/projects/fac"', "Factory", "Red", "1 commit"]) expect(h).toContain(t);
   const d = oneView.render(await (await at("/api/projects/fac")).json());
   for (const t of ["second", "fac-2", "a goal", "B fact"]) expect(d).toContain(t);
 });

@@ -6,7 +6,6 @@ import { fit, fetchUsage, gainSince, pollOnce, readSnapshots, share, sinceReset,
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 // @ts-ignore plain JS view
-import { renderUsage } from "./views/now.js";
 
 let dir: string, server: ReturnType<typeof Bun.serve>;
 /** What the test server answers; a test swaps it to make the endpoint fail. */
@@ -56,10 +55,6 @@ test("a bad token records nothing; the last snapshot stays, marked stale", async
   expect(readFileSync(process.env.ALEPH_USAGE_FILE!, "utf8").trim().split("\n")).toHaveLength(1);
   expect(summary().now?.seven_day).toBe(25);
   expect(summary().stale).toBe(true);
-  const h = renderUsage({ now: new Date().toISOString(), usage: summary() });
-  expect(h).toContain("25%");
-  expect(h).toContain("as of");
-  expect(h).not.toContain("usage unknown");
 });
 
 test("an old snapshot is stale but kept; after its reset it is dropped; none is unknown", async () => {
@@ -70,12 +65,10 @@ test("an old snapshot is stale but kept; after its reset it is dropped; none is 
   expect(s.now).not.toBeNull();
   expect(s.stale).toBe(true);
   expect(summary(at + 60_000).stale).toBe(false);
-  expect(renderUsage({ now: new Date(at + 60_000).toISOString(), usage: summary(at + 60_000) })).not.toContain("as of");
   const r = Date.parse(last.seven_day_resets_at ?? "");
   if (!Number.isNaN(r)) expect(summary(r + 1).now).toBeNull();
   rmSync(process.env.ALEPH_USAGE_FILE!);
   expect(summary().now).toBeNull();
-  expect(renderUsage({ now: new Date().toISOString(), usage: summary() })).toContain("usage unknown");
 });
 
 test("no credentials file records nothing", async () => {

@@ -246,9 +246,3 @@ export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: st
   return null;
 }
 
-/** The buttons of a stuck row: with a blocker, Wait for it and Drop; without, Re-check and Drop. */
-export function stuckActions(j: Pick<Job, "name">, blocker: Blocker | null | undefined): Action[] {
-  const drop: Action = { act: "drop", label: "Drop", hint: "Discards the run's branch; the issue stays open.", primary: false, args: { name: j.name } };
-  if (!blocker) return [{ act: "recheck", label: "Re-check", hint: "Runs the job again.", primary: false, args: { name: j.name } }, drop];
-  return [{ act: "wait", label: `Wait for ${blocker.id}`, hint: `Makes the goal run after ${blocker.id} and drops the stuck job; the factory starts nothing until ${blocker.id} lands.`, primary: true, args: { name: j.name, on: blocker.id } }, drop];
-}

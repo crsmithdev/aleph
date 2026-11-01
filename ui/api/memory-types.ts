@@ -123,21 +123,21 @@ function retrieval(misses: any) {
   return { stats: m && "recalls" in m ? m : null, missed: Array.isArray(m?.missed) ? m.missed.slice(0, 10) : [], last: newest([m?.missed?.[0]?.at]) };
 }
 
-/** Open issues with a due date or an after, soonest due first. */
+/** Open issues with an after. */
 function prospective() {
   const registry = Object.values(loadRegistry());
   let docs: (todos.Doc | null)[] = [];
   try { docs = readLists(registry); } catch {}
-  const open: { repo: string; id: number; title: string; due: string | null; after: string[] }[] = [];
+  const open: { repo: string; id: number; title: string; after: string[] }[] = [];
   registry.forEach((r, n) => {
     for (const i of docs[n]?.items ?? []) {
       if (todos.status(i) !== "open") continue;
-      const due = i.fm.due ? String(i.fm.due) : null, after = afterOf(i);
-      if (due || after.length) open.push({ repo: r.key, id: i.id, title: i.title, due, after });
+      const after = afterOf(i);
+      if (after.length) open.push({ repo: r.key, id: i.id, title: i.title, after });
     }
   });
-  open.sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999") || a.repo.localeCompare(b.repo) || a.id - b.id);
-  return { issues: open, triggers: [] as unknown[], last: "" };
+  open.sort((a, b) => a.repo.localeCompare(b.repo) || a.id - b.id);
+  return { issues: open };
 }
 
 /** The factory's memory gates: corrections and proposals from the store. */

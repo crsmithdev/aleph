@@ -1,7 +1,6 @@
 /**
  * `GET /api/diff/:name`, `POST /api/land|recheck|drop|checked/:name` and
- * `POST /api/jobs/:name/answer` (`{ answer }`, for a job waiting on a question: the CLI's
- * `job <repo> <name> --spec -` follow-up) and `POST /api/answer/:name` (`{ answer }`, "Answer and rerun" on a
+ * `POST /api/answer/:name` (`{ answer }`, "Answer and rerun" on a
  * question run: the answer becomes the reason of `aleph drop`, so the next dispatch carries it in the spec). Each action is the `aleph` command of that
  * name, run as a subprocess by the launcher; the page offers nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own, so a web page in the browser cannot post here. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
@@ -50,17 +49,6 @@ const action = (verb: "land" | "recheck" | "drop" | "checked"): Handler => async
   return Response.json(await runCli(args));
 };
 
-const answer: Handler = async (req, { name }) => {
-  if (!sameSite(req)) return text("forbidden", 403);
-  const last = find(name);
-  if (!last) return text(`no job named ${name}`, 404);
-  const body: any = await req.json().catch(() => ({}));
-  const said = typeof body?.answer === "string" ? body.answer.trim() : "";
-  if (!said) return text("answer is required", 400);
-  if (!isAwaiting(last.run.condition) || askOf(last.run)?.reason !== "question") return text(`${name} is not waiting on a question`, 409);
-  return Response.json(await runCli(["job", last.run.repo ?? "", name, "--spec", "-"], { stdin: `Chris: ${said}` }));
-};
-
 const answerAndRerun: Handler = async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const last = find(name);
@@ -99,6 +87,5 @@ export const routes: Routes = {
   "POST /api/recheck/:name": action("recheck"),
   "POST /api/drop/:name": action("drop"),
   "POST /api/checked/:name": action("checked"),
-  "POST /api/jobs/:name/answer": answer,
   "POST /api/answer/:name": answerAndRerun,
 };

@@ -21,11 +21,6 @@ export const view = {
 };
 
 let lastState = null, outOfDateNow = false;
-export const STALE_MS = 3 * 60 * 1000;
-/** True when the last refresh failed, or the last good response is more than 3 minutes old. goodAt and now are the browser's clock (ms). */
-export function isOutOfDate({ failed, goodAt, now }) {
-  return !!failed || (goodAt != null && now - goodAt > STALE_MS);
-}
 
 const EFFICIENCY = "#/factory/efficiency", PERFORMANCE = "#/factory/jobs";
 
@@ -84,29 +79,10 @@ function statLines(stat) {
 
 /** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
 const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).filter((j) => !j.issue).length;
-/** Land runs live now, not the landed ones the Lands list also shows. */
-const liveLands = (s) => s.delivered.filter((j) => j.condition === "landing").length;
-
-/** The weekly and 5-hour usage as text with the weekly reset time; "usage unknown" when the endpoint gave nothing. */
-export function renderUsage(s) {
-  const cur = s.usage?.now;
-  if (!cur) return `<span class="quiet">usage unknown</span>`;
-  const reset = cur.seven_day_resets_at && !Number.isNaN(Date.parse(cur.seven_day_resets_at)) ? `<span class="quiet">resets ${esc(when(cur.seven_day_resets_at, new Date(s.now)))}</span>` : "";
-  const age = usageAge(s) ? `<span class="quiet">${esc(usageAge(s))}</span>` : "";
-  return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span>${Number.isFinite(cur.five_hour) && cur.five_hour !== null ? `<span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>` : ""}${reset}${age}`;
-}
 
 /** The status line: the time, the status sentence, Pause or Resume. */
 export function renderStatusLine(s, stale = false) {
   return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}${renderControls(s)}</p>`;
-}
-
-/** The 7-day % since the last reset as an SVG polyline over the 0-100 % scale. */
-export function usageLine(series) {
-  if (!series || series.length < 2) return "";
-  const t0 = Date.parse(series[0].at), span = Math.max(1, Date.parse(series.at(-1).at) - t0);
-  const pts = series.map((p) => `${(((Date.parse(p.at) - t0) / span) * 300).toFixed(1)},${(40 - (Math.min(100, p.seven_day) / 100) * 40).toFixed(1)}`).join(" ");
-  return `<svg class="usage-line" viewBox="0 0 300 40" preserveAspectRatio="none" role="img" aria-label="7-day usage since the last reset"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
 export const FINE = "Everything is running smoothly";
@@ -307,11 +283,6 @@ function decisionBody(d) {
   return `<p class="dq">${code(d.question)}</p>` +
     `<ul class="opts">${d.options.map((o) => `<li${o.label === d.recommended ? ' class="rec"' : ""}><b>${code(o.label)}</b>${o.label === d.recommended ? ' <span class="badge run">Recommended</span>' : ""} <span class="line">${code(o.line)}</span></li>`).join("")}</ul>` +
     (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${code(w)}</li>`).join("")}</ul>` : "");
-}
-
-/** An Ask without options: its paragraphs, the recommendation sentence picked out. */
-function proseBody(p) {
-  return p.paragraphs.map((t) => `<p class="dp${t === p.recommendation ? " rec" : ""}">${code(t)}</p>`).join("");
 }
 
 const isUrl = (u) => /^https?:\/\//.test(u);

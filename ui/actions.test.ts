@@ -159,37 +159,18 @@ test("a name reused by a dropped job and its rerun acts on the newer job", async
   expect(recorded().at(-1)).toBe("land dup");
 });
 
-test("pause, resume and judge run their command", async () => {
+test("pause and resume run their command", async () => {
   expect((await post("/api/pause")).status).toBe(200);
   expect(recorded().at(-1)).toBe("pause");
   await post("/api/resume");
   expect(recorded().at(-1)).toBe("resume");
-  await post("/api/judge", { "X-Aleph-UI": "1" }, { judge: "haiku" });
-  expect(recorded().at(-1)).toBe("judge haiku");
 });
 
-test("a bad judge is 400 and the controls without the header are 403, running nothing", async () => {
+test("the controls without the header are 403, running nothing", async () => {
   const before = recorded().length;
-  expect((await post("/api/judge", { "X-Aleph-UI": "1" }, { judge: "gpt" })).status).toBe(400);
-  expect((await post("/api/judge", { "X-Aleph-UI": "1" })).status).toBe(400);
   for (const p of ["/api/pause", "/api/resume"]) expect((await post(p, {})).status).toBe(403);
-  expect((await post("/api/judge", {}, { judge: "jev" })).status).toBe(403);
   expect((await post("/api/pause", { "X-Aleph-UI": "1", Origin: "https://evil.example" })).status).toBe(403);
   expect(recorded().length).toBe(before);
-});
-
-test("POST /api/jobs/:name/answer follows up a question, and refuses anything else without running the CLI", async () => {
-  const before = recorded().length;
-  const url = "/api/jobs/asks/answer";
-  expect((await post(url, {}, { answer: "blue" })).status).toBe(403);
-  expect((await post("/api/jobs/nope/answer", { "X-Aleph-UI": "1" }, { answer: "blue" })).status).toBe(404);
-  expect((await post(url, { "X-Aleph-UI": "1" }, { answer: "  " })).status).toBe(400);
-  expect((await post("/api/jobs/x/answer", { "X-Aleph-UI": "1" }, { answer: "blue" })).status).toBe(409);
-  expect(recorded().length).toBe(before);
-  const res = await post(url, { "X-Aleph-UI": "1" }, { answer: "blue" });
-  expect(res.status).toBe(200);
-  expect(recorded().at(-1)).toBe("job r asks --spec -");
-  expect(readFileSync(`${calls}.stdin`, "utf8")).toBe("Chris: blue");
 });
 
 test("POST /api/answer/:name drops the question run with the answer as its reason, and refuses anything else without running the CLI", async () => {

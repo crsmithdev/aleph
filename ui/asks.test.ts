@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { attend, asks, clean, issueReason, kindOf, stuckActions, stuckBlocker } from "./asks.ts";
+import { attend, asks, clean, issueReason, kindOf, stuckBlocker } from "./asks.ts";
 import { ASK_REASONS } from "../jobs/lib/always.ts";
 import type { Lesson } from "../jobs/lib/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
@@ -176,19 +176,15 @@ describe("asks", () => {
 describe("stuck rows", () => {
   const stuck = run("held-path", { condition: "stuck", reason: "no commit" });
   const open = new Map([["aleph-12", { title: "Land the base", href: "#/issues/aleph/12" }]]);
-  test("an item waiting on an open issue gets its id, title and Wait, not Re-check", () => {
+  test("an item waiting on an open issue gets its id and title", () => {
     const b = stuckBlocker(stuck, "aleph-12", open);
     expect(b).toEqual({ id: "aleph-12", title: "Land the base", href: "#/issues/aleph/12" });
-    const acts = stuckActions(stuck, b);
-    expect(acts.map((a) => a.label)).toEqual(["Wait for aleph-12", "Drop"]);
-    expect(acts[0].args).toEqual({ name: "aleph-27", on: "aleph-12" });
   });
   test("a last run that names an open issue is the blocker", () => {
     expect(stuckBlocker({ ...stuck, reason: "needs aleph-12 to land first" }, undefined, open)?.id).toBe("aleph-12");
   });
-  test("no open blocker keeps Re-check and Drop", () => {
+  test("no open blocker gives null", () => {
     expect(stuckBlocker(stuck, "aleph-99", open)).toBeNull();
     expect(stuckBlocker({ ...stuck, reason: "aleph-27 again" }, "aleph-27", new Map([["aleph-27", { title: "t", href: "" }]]))).toBeNull();
-    expect(stuckActions(stuck, null).map((a) => a.act)).toEqual(["recheck", "drop"]);
   });
 });

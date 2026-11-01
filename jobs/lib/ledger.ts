@@ -1,5 +1,5 @@
 /**
- * The job ledger: one folder per run in ~/.aleph/jobs, the repo registry,
+ * The job ledger: one folder per run in ~/.aleph/runs, the repo registry,
  * liveness and locks. See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";

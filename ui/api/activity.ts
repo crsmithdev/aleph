@@ -9,17 +9,10 @@ import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { today } from "../../todo/lib/todo.ts";
-import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
-
-/** `n` from the query, an integer in 1..90, else `fallback`. */
-function daysOf(url: URL, fallback: number): number {
-  const n = Number(url.searchParams.get("days"));
-  return Number.isInteger(n) && n >= 1 ? Math.min(n, 90) : fallback;
-}
 
 /** The local dates of the last `days` days, oldest first, ending today. */
 function dayKeys(days: number, now: Date): string[] {
@@ -145,11 +138,4 @@ export async function activity(days: number, project: string | null, now = new D
   return out;
 }
 
-const projectOf = (url: URL) => url.searchParams.get("project") || null;
 
-export const routes: Routes = {
-  "GET /api/activity": async (_req, _p, url) => {
-    const { toolTraces: _, ...a } = await activity(daysOf(url, 7), projectOf(url));
-    return Response.json(a);
-  },
-};

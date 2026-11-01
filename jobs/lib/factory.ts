@@ -70,7 +70,6 @@ export function factoryLog(line: string): void {
 /** The most open jobs awaiting Chris before no new run starts. */
 export const AWAITING_CAP = () => cap("ALEPH_AWAITING_CAP", "awaiting", 5);
 /** The old name, for ui/state.ts until step 5. */
-export const WAITING_CAP = AWAITING_CAP;
 
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 /** The registry's factory repos: those whose runs are sandboxed. */
@@ -967,9 +966,6 @@ export async function episodeStep(): Promise<string[]> {
     return [];
   }
 }
-
-/** One tick of the timer: a dispatch, as the fallback. */
-export const tick = dispatchIssues;
 
 export interface Flake { repo: string; check: string; run: string; at: string }
 const flakyFile = () => join(factoryDir(), "flaky.json");

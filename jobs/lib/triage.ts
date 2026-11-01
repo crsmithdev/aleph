@@ -19,8 +19,6 @@ import { always, logAlways } from "./always.ts";
 export const TRIAGE_TRIES = () => Number(process.env.ALEPH_TRIAGE_TRIES ?? 2);
 const TIME_BOX_MS = () => Number(process.env.ALEPH_TRIAGE_TIMEOUT ?? 600) * 1000;
 
-/** The longest title an issue gets. */
-export const TITLE_MAX = 60;
 
 /** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */
 export const TRIAGE_MODEL = "claude-opus-5-5";

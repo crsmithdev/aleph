@@ -2,7 +2,6 @@
  * Where the store, the ledger and the sandbox folders live. One answer for every
  * reader (docs/specs/2026-10-30-work-model.md, "Migration rules"): the new layout
  * (issues, runs, sandbox) under ~/.aleph. The environment wins, variable by variable.
- * The old roots (items, jobs) belong to jobs/lib/migrate.ts alone.
  */
 import { homedir } from "node:os";
 import { join } from "node:path";

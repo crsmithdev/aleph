@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, numCell, nameLink, shortModel, when, chartTheme, clock, clock12, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -38,11 +38,6 @@ test("formats and states", () => {
   expect(money(undefined)).toBe("$0.00");
   expect(span("2026-10-27T10:00:00Z", "2026-10-27T12:05:00Z")).toBe("2h 05m");
   expect(clock("nope")).toBe("");
-  expect(clock12("nope")).toBe("");
-  expect(clock12(new Date(2026, 9, 28, 2, 24).toISOString())).toBe("2:24 am");
-  expect(clock12(new Date(2026, 9, 28, 0, 5).toISOString())).toBe("12:05 am");
-  expect(clock12(new Date(2026, 9, 28, 12, 0).toISOString())).toBe("12:00 pm");
-  expect(clock12(new Date(2026, 9, 28, 15, 7).toISOString())).toBe("3:07 pm");
   expect(empty("Nothing here.", "Try <code>x</code>.")).toContain('<p class="hint">Try <code>x</code>.</p>');
   expect(error("<b>down</b>")).toContain("&lt;b&gt;down");
   expect(cmd("aleph land a-1", { primary: true })).toContain('data-cmd="aleph land a-1"');
@@ -269,14 +264,7 @@ test("shortModel gives one short name for a model", () => {
   expect([shortModel("claude-opus-5-5"), shortModel("sonnet"), shortModel("claude-haiku-5-5"), shortModel(undefined)]).toEqual(["opus", "sonnet", "haiku", ""]);
 });
 
-test("sectionHead, numCell and nameLink", () => {
+test("sectionHead", () => {
   expect(sectionHead("Hooks", { count: 3 })).toBe('<div class="sh"><h2>Hooks</h2><span class="count">3</span></div>');
   expect(sectionHead("A<", { aside: "<i>x</i>" })).toBe('<div class="sh"><h2>A&lt;</h2><span class="aside"><i>x</i></span></div>');
-  expect(numCell(0)).toBe('<td class="num">0</td>');
-  expect(numCell(2)).toBe('<td class="num bad">2</td>');
-  expect(numCell(0, { bad: true })).toBe('<td class="num bad">0</td>');
-  const l = nameLink("<b>", "#/x");
-  expect(l).toContain('class="nml"');
-  expect(l).toContain("&lt;b&gt;");
-  expect(l).not.toContain("<b>");
 });

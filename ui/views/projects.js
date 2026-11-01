@@ -20,13 +20,6 @@ export function renderFacts(p) {
     renderBaseline(p) + fact("Vault notes", String(p.notes)) + `</dl>`;
 }
 
-export function renderCard(p) {
-  return `<article class="del project"><div class="ih"><span class="id">${esc(p.key)}</span>` +
-    `<h3><a href="#/projects/${encodeURIComponent(p.key)}">${esc(p.key)}</a></h3>` +
-    `<span class="badge ${p.factory ? "run" : "done"}">${p.factory ? "Factory" : "Plain repo"}</span></div>` +
-    `<p class="quiet q"><code>${esc(p.path)}</code></p>${renderFacts(p)}</article>`;
-}
-
 export const NOTES = 50;
 
 export function renderDetail(p, limit = NOTES) {

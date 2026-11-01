@@ -29,7 +29,6 @@ const usageUrl = () => process.env.ALEPH_USAGE_URL ?? "https://api.anthropic.com
 
 /** Whether the last poll failed; the pages say "usage unknown" while it did. */
 let lastFailed = false;
-export const pollFailed = () => lastFailed;
 
 /** Logs why a poll failed, on one stderr line. Never the token, the credentials file or the response body. */
 function failed(reason: string): null {

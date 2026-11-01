@@ -109,10 +109,9 @@ function renderRetrieval(r) {
 
 function renderProspective(p) {
   const issues = p.issues.length
-    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${esc(i.title)} ${q(esc([i.repo, i.due && `due ${i.due}`, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
-    : none("No open issue has a due date or an after.", "<code>aleph todo add --due</code> or <code>--after</code> fills this.");
-  const trig = p.triggers.length ? fold(p.triggers, (t) => esc(JSON.stringify(t))) : none("No scheduled trigger.", "The aleph-tick sweep reads them once they exist.");
-  return `<div class="kinds">${sub("Open issues with a date or a wait", p.issues.length, issues)}${sub("Scheduled triggers", p.triggers.length, trig)}</div>`;
+    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
+    : none("No open issue has an after.", "<code>aleph issue edit</code> with <code>--after</code> fills this.");
+  return `<div class="kinds">${sub("Open issues with a wait", p.issues.length, issues)}</div>`;
 }
 
 const renderParametric = () =>
@@ -137,7 +136,7 @@ const EMPTY_TYPES = {
   episodic: { episodes: [], daily: { total: 0, latest: [] }, sessions: null, last: "" },
   procedural: { skills: [], claudeMd: null, hooks: [], last: "" },
   retrieval: { stats: null, missed: [], last: "" },
-  prospective: { issues: [], triggers: [], last: "" },
+  prospective: { issues: [] },
   gates: { corrections: [], proposals: [] },
 };
 
@@ -182,7 +181,7 @@ export function typeTiles(m, rows) {
     { id: "episodic", name: "Episodic", n: m.byKind?.episode ?? eps.length, unit: `episodes, ${t.episodic.daily.total} daily pages`, status: `${eps.filter((n) => n.read).length} returned by recall`, tone: "", write: t.episodic.last, use: newest(eps.map((n) => n.read)) },
     { id: "procedural", name: "Procedural", n: t.procedural.skills.length, unit: `skills, ${hooks} hooks`, status: t.procedural.claudeMd ? `${t.procedural.claudeMd.lines} lines of rules` : "No rules file", tone: "", write: t.procedural.last },
     { id: "retrieval", name: "Retrieval", n: stats ? stats.recalls : "–", unit: "recalls, 7 days", status: stats ? `${Math.round(stats.empty_share * 100)}% empty` : "No data", tone: stats && stats.empty_share > 0.2 ? "warn" : "", write: t.retrieval.last },
-    { id: "prospective", name: "Prospective", n: t.prospective.issues.length, unit: "dated or waiting", status: t.prospective.issues.length ? "Waiting" : "Empty", tone: "", write: t.prospective.last },
+    { id: "prospective", name: "Prospective", n: t.prospective.issues.length, unit: "waiting", status: t.prospective.issues.length ? "Waiting" : "Empty", tone: "", write: t.prospective.last },
     { id: "parametric", name: "Parametric", n: "–", unit: "not stored", status: "By design", tone: "", write: "" },
   ];
 }

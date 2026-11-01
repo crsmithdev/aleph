@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { itemOnMain, landedIndex, revertedIn } from "./status.ts";
 
-// The trailer reader: `Issue:` and `Goal:` as well as the legacy `Item:`.
+// The trailer reader: `Issue:` and `Goal:`.
 let dir: string;
 const git = (...a: string[]) => {
   const p = Bun.spawnSync(["git", "-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", ...a], { stdout: "pipe", stderr: "pipe" });
@@ -24,7 +24,7 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-test("landedIndex reads Item: and Issue:; a commit that names a goal lands the goal, not its issue", () => {
+test("landedIndex reads Issue:; a commit that names a goal lands the goal, not its issue", () => {
   const index = landedIndex(dir, "main", "k");
   expect([...index.keys()].sort()).toEqual(["1", "2", "3.1"]);
   expect(index.has("3")).toBe(false);

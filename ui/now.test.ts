@@ -23,9 +23,8 @@ const att = (s: any) => {
 const r: any = { ...view, renderJobs: (s: any) => view.renderNeeds(att(s)) + view.renderLanes(att(s)), renderLede: (s: any, o?: boolean) => view.renderLede(att(s), o), view: { ...view.view, render: (s: any, p?: any, q?: any) => view.view.render(att(s), p, q) } };
 
 // @ts-ignore
-import { landCard } from "./views/cards.js";
+import { trailerLine } from "./views/cards.js";
 // The land cards of `delivered`: the Status page no longer lists them, Done links to them, but the card still renders.
-const landList = (s: any) => `<div class="cards one">${s.delivered.map((j: any) => landCard(j, "full", s.now)).join("")}</div>`;
 
 const job = (o: object) => ({ repo: "aleph", item: null, condition: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
 const state: any = {
@@ -49,12 +48,6 @@ test("stuck, running and delivered show their jobs", () => {
   expect(withAttn(state)).toContain("aleph-30");
   expect(withAttn(state)).toContain("aleph-36");
   expect(withAttn(state)).toContain("worker");
-});
-
-test("a commitUrl becomes a link", () => {
-  expect(landList(state)).toContain('<a href="https://github.com/o/r/commit/50f301fabc"><code>50f301f</code></a>');
-  const none = landList({ ...state, delivered: [{ ...state.delivered[0], commitUrl: undefined }] });
-  expect(none).not.toContain("commit/");
 });
 
 test("an empty lane shows one quiet line; the Needs-you section is absent when nothing is wrong", () => {
@@ -155,20 +148,10 @@ test("text from the state is escaped", () => {
   }
 });
 
-test("an awaiting entry has Diff, Land and Drop buttons; a landed one with an open check has Checked", () => {
+test("an awaiting entry has Diff, Land and Drop buttons", () => {
   const h = withAttn(state);
   for (const v of ["diff", "land", "drop"]) expect(h).toContain(`data-act="${v}" data-name="aleph-27"`);
   expect(h).toContain("diff-panel");
-  const open = { ...state, delivered: [{ ...state.delivered[0], check: "open" }] };
-  expect(landList(open)).toContain('data-act="checked" data-name="aleph-28"');
-  expect(landList(state)).not.toContain("data-act=");
-  expect(landList(state)).not.toContain("data-cmd=");
-});
-
-test("a land from another day shows its date", () => {
-  const old = { ...state, delivered: [{ ...state.delivered[0], ended: "2026-10-25T16:30:00Z" }] };
-  expect(landList(old)).toMatch(/<dt>Landed<\/dt><dd>Oct 25 \d\d:\d\d<\/dd>/);
-  expect(landList(state)).toMatch(/<dt>Landed<\/dt><dd>Oct 27 \d\d:\d\d<\/dd>/);
 });
 
 const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
@@ -333,13 +316,8 @@ test("a 30-file stat shows 12 lines and +18 more files", () => {
   expect(h).toContain("+18 more files");
 });
 
-test("a land does not show checks as facts", () => {
-  const checks = [{ name: "tests", ok: true, seconds: 71 }, { name: "types", ok: false, seconds: 9 }];
-  const land = landList({ ...state, delivered: [{ ...state.delivered[0], checks }] });
-  expect(land).not.toContain("<dt>Tests</dt>");
-  expect(land).not.toContain("<dt>Types</dt>");
+test("an awaiting row does not show checks as facts", () => {
   expect(withAttn(state)).not.toContain(" s ✓");
-  expect(landList(state)).not.toContain("checks");
 });
 
 test("the Pause or Resume button sits in the page head beside the time; no Controls panel", () => {
@@ -358,30 +336,21 @@ test("the Pause or Resume button sits in the page head beside the time; no Contr
 
 test("trailers show on one line joined by ' · ', escaped, and only when there are some", () => {
   const trailers = [{ key: "Item", value: "aleph-27" }, { key: "Job", value: "<script>x</script>" }, { key: "Held-by", value: "Chris" }];
-  const del = { ...state, delivered: [job({ name: "aleph-28", condition: "landed", trailers })] };
-  const h = landList(del);
+  const h = trailerLine(job({ name: "aleph-28", condition: "landed", trailers }), state.now);
   expect(h).toContain("aleph-27 · Job &lt;script&gt;x&lt;/script&gt; · Held-by Chris");
   expect(h).not.toContain("Item aleph-27");
   expect(h).not.toContain("<script>");
   expect(h).not.toContain('<pre class="trailers"');
-  expect(landList(state)).not.toContain("trailers");
+  expect(trailerLine(state.delivered[0], state.now)).toBe("");
 });
 
 test("the Job trailer is parsed into run kind and start, linked to the job page with the raw id in the title", () => {
   const id = "20261028-042822-aleph-aleph-240-agent";
-  const del = { ...state, delivered: [job({ name: "aleph-240", condition: "landed", trailers: [{ key: "Item", value: "aleph-240" }, { key: "Job", value: id }] })] };
-  const h = landList(del);
+  const land = job({ name: "aleph-240", condition: "landed", trailers: [{ key: "Item", value: "aleph-240" }, { key: "Job", value: id }] });
+  const h = trailerLine(land, state.now);
   expect(h).toContain(`<p class="trailers-line">aleph-240 \u00b7 <a href="#/jobs/aleph-240" title="${id}">agent run, Oct 28 04:28</a></p>`);
   expect(h.replace(/title="[^"]*"/, "")).not.toContain(id);
-  expect(landList({ ...del, delivered: [{ ...del.delivered[0], trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }] })).toContain(">land, Oct 28 13:45<");
-});
-
-test("a land card has no origin/main aside; a running land comes before landed ones", () => {
-  const lands = { ...state, delivered: [job({ name: "land-1", condition: "running" }), ...state.delivered] };
-  const h = landList(lands);
-  expect(h).not.toContain("origin/main");
-  expect(h.indexOf("land-1")).toBeLessThan(h.indexOf("aleph-28"));
-  expect(h).toMatch(/class="job-card big[ "]/);
+  expect(trailerLine({ ...land, trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }, state.now)).toContain(">land, Oct 28 13:45<");
 });
 
 const two: any = { ...state, needs: [job({ name: "job-a", condition: "awaiting", needs: "held", defaults: [] }), job({ name: "job-b", condition: "awaiting", needs: "held", defaults: [] })] };
@@ -483,22 +452,9 @@ test("Status times use the state's own now for the year check", () => {
   expect(held).not.toMatch(/\d\d? ?[AP]M/i);
 });
 
-test("a planner run is shown like a triage: Planning while it runs, Done once it filed its verdict, planner as a running kind", async () => {
-  // @ts-ignore plain JS, shared with the page
-  const { triageCard } = await import("./views/cards.js");
+test("a planner run shows as planner in the running lane", async () => {
   const plan = { name: "plan-aleph-5", item: { title: "Big" }, condition: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
-  expect(triageCard(plan, "full", state.now)).toContain('<span class="badge run">Planning</span>');
-  expect(triageCard({ ...plan, condition: "done", outcome: "done" }, "full", state.now)).toContain('<span class="badge done">Done</span>');
-  expect(triageCard({ ...plan, condition: "done", reason: "malformed plan: x" }, "compact", state.now)).toContain(">No plan<");
   expect(r.renderJobs({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run">planner');
-});
-
-test("a land shows the acceptance result of its goal, escaped, and nothing without one", () => {
-  const h = landList({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: pass at abc1234" }] });
-  expect(h).toContain("<dt>Acceptance</dt><dd>pass at abc1234</dd>");
-  const bad = landList({ ...state, delivered: [{ ...state.delivered[0], acceptance: "acceptance: fail, rerun: `bun test <x>`" }] });
-  expect(bad).toContain("fail, rerun: `bun test &lt;x&gt;`");
-  expect(landList(state)).not.toContain("Acceptance");
 });
 
 // ---- proposals ----
@@ -824,7 +780,6 @@ test("the Weekly usage tile shows the snapshot's age only while stale", () => {
   const st = { ...state, now: "2026-11-01T08:00:00Z" };
   expect(r.renderTiles({ ...st, usage: { now, stale: true } }, WEEK, DAY)).toContain("as of 40m ago");
   expect(r.renderTiles({ ...st, usage: { now, stale: false } }, WEEK, DAY)).not.toContain("as of");
-  expect(r.renderUsage({ ...st, usage: { now, stale: true } })).toContain("as of 40m ago");
 });
 
 const OOD = "Alert: this status is out of date.";
@@ -843,14 +798,6 @@ test("the out-of-date part comes first and survives MAX_SAID", () => {
   const h = strip(r.renderLede(s, true));
   expect(h.startsWith(OOD.slice(0, -1) + "; ")).toBe(true);
   expect(h.split("; ").length).toBe(base.split("; ").length + 1);
-});
-
-test("isOutOfDate", () => {
-  const t = 1_000_000;
-  expect(r.isOutOfDate({ failed: true, goodAt: t, now: t })).toBe(true);
-  expect(r.isOutOfDate({ failed: false, goodAt: t, now: t + 180_001 })).toBe(true);
-  expect(r.isOutOfDate({ failed: false, goodAt: t, now: t + 180_000 })).toBe(false);
-  expect(r.isOutOfDate({ failed: false, goodAt: t + 5, now: t + 10 })).toBe(false);
 });
 
 test("without the out-of-date input the sentence is unchanged", () => {

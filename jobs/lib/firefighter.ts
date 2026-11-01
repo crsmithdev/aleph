@@ -216,8 +216,6 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
 /** Whether an item's Ask is a product choice: it offers options to pick from (triage's `chris` verdict and the rescue write them). A plain question has none. */
 export const isProductChoice = (item: issues.Issue): boolean => (store.askOf(item)?.options.length ?? 0) > 0;
 
-/** The reason code an item's Ask waits for, or null when it has none. */
-export const reasonOf = (item: issues.Issue): string | null => store.askOf(item)?.reason ?? null;
 
 /** How actions reach the factory; each returns the refusal, or null. Tests replace land and drop. */
 export interface Ports {

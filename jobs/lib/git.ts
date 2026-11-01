@@ -81,11 +81,6 @@ export function show(cwd: string, rev: string, path: string): string | null {
   return r.ok ? r.out + "\n" : null;
 }
 
-/** `tree` with `path` set to `content`, built in a temporary index: no working tree changes. */
-export function treeWith(cwd: string, tree: string, path: string, content: string): string {
-  return treeWithFiles(cwd, tree, { [path]: content });
-}
-
 /** `tree` with each path in `files` set to its content, or removed when it is null. */
 export function treeWithFiles(cwd: string, tree: string, files: Record<string, string | null>): string {
   const index = join(tmpdir(), `aleph-index-${process.pid}-${crypto.randomUUID()}`);
