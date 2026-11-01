@@ -256,15 +256,34 @@ describe("git-guard", () => {
   });
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  async function guard(filePath: string, env: Record<string, string> = {}) {
+  async function guard(filePath: string, env: Record<string, string> = {}, tool_input: Record<string, string> = { file_path: filePath }) {
     const proc = Bun.spawn(["bun", join(HOOKS, "git-guard.ts")], {
       env: { ...(process.env as Record<string, string>), ALEPH_REPOS: join(root, "none.json"), ...env },
-      stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Edit", tool_input: { file_path: filePath } })),
-      stdout: "pipe",
+      stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Edit", tool_input })),
+      stdout: "pipe", stderr: "pipe",
     });
-    await proc.exited;
+    // A crashed hook does not block the tool, so an "allow" must prove the hook ran to its end.
+    expect(await proc.exited).toBe(0);
+    expect(await new Response(proc.stderr).text()).toBe("");
     return (await new Response(proc.stdout).text()).trim();
   }
+
+  test("denies a NotebookEdit on main, a path under .worktrees that is no worktree, and a detached HEAD", async () => {
+    const decision = (out: string) => JSON.parse(out).hookSpecificOutput.permissionDecision;
+    const nb = join(root, "repo", "n.ipynb");
+    expect(decision(await guard(nb, {}, { notebook_path: nb }))).toBe("deny");
+    expect(decision(await guard(join(root, "repo", ".worktrees", "nothing", "a.ts")))).toBe("deny");
+    mkdirSync(join(root, "detached"));
+    const git = (...args: string[]) => Bun.spawnSync(["git", "-C", join(root, "detached"), "-c", "user.email=t@t", "-c", "user.name=t", ...args]);
+    git("init", "-q", "-b", "main"); git("commit", "-q", "--allow-empty", "-m", "i"); git("checkout", "-q", "--detach");
+    const out = await guard(join(root, "detached", "a.ts"));
+    expect(decision(out)).toBe("deny");
+    expect(JSON.parse(out).hookSpecificOutput.permissionDecisionReason).toContain("a detached HEAD");
+  });
+  test("allows a detached HEAD in a linked worktree", async () => {
+    Bun.spawnSync(["git", "-C", join(root, "repo"), "worktree", "add", "-q", "--detach", join(root, "linked")]);
+    expect(await guard(join(root, "linked", "a.ts"))).toBe("");
+  });
 
   test("denies an edit on main", async () => {
     const out = JSON.parse(await guard(join(root, "repo", "new-dir", "a.ts")));
@@ -474,6 +493,19 @@ describe("secret scan", () => {
     expect(scanLine("-----BEGIN OPENSSH " + "PRIVATE KEY-----")).toBe("private key block");
     expect(scanLine('const password = "correct-horse' + '-battery-staple"')).toBe("credential assignment");
     expect(scanLine('LANGFUSE_SECRET_KEY: "sk"')).toBeNull();
+    for (const [text, label] of [
+      ['ANTHROPIC_API_KEY="abcdefghijklmnop1234"', "credential assignment"],
+      ['DB_PASSWORD="abcdefghijklmnop1234"', "credential assignment"],
+      ['AWS_SECRET_ACCESS_KEY="abcdefghijklmnop1234"', "credential assignment"],
+      ['apiSecret: "abcdefghijklmnop1234"', "credential assignment"],
+      ['"token": "abcdefghijklmnop1234"', "credential assignment"],
+      ["sk-" + "a".repeat(32), "secret key token"],
+      ["github_pat_" + "a".repeat(22), "GitHub token"],
+      ["AIza" + "a".repeat(35), "Google API key"],
+      ["eyJ" + "a".repeat(10) + ".eyJ" + "a".repeat(10) + "." + "a".repeat(10), "JWT"],
+    ]) expect([text, scanLine(text)]).toEqual([text, label]);
+    expect(scanLine('token_url = "https://example.test/oauth/token"')).toBeNull();
+    expect(scanLine('tokenizer = "abcdefghijklmnop1234"')).toBeNull();
     expect(scanLine('password: "<your-password-here>"')).toBeNull();
     expect(scanLine("password = os.environ['PASSWORD']")).toBeNull();
     expect(scanLine("  debugger;")).toBe("debugger statement");
@@ -496,6 +528,11 @@ describe("secret scan", () => {
     ]);
   });
 
+  test("an added line that starts with ++ is an added line, not a file header", () => {
+    const diff = "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -0,0 +1,2 @@\n+++ AKIA" + "IOSFODNN7EXAMPLE\n+ok\n";
+    expect(scanDiff(diff)).toEqual([{ file: "a.txt", line: 1, label: "AWS access key" }]);
+  });
+
   describe("hook", () => {
     let repo: string;
     const run = (...args: string[]) => { const p = Bun.spawnSync(["git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", ...args], { stdout: "ignore", stderr: "pipe" }); if (p.exitCode !== 0) throw new Error(p.stderr.toString()); };
@@ -508,12 +545,30 @@ describe("secret scan", () => {
     async function scan(command: string, cwd = repo) {
       const proc = Bun.spawn(["bun", join(HOOKS, "secret-scan.ts")], {
         stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd, tool_input: { command } })),
-        env: { ...process.env }, stdout: "pipe",
+        env: { ...process.env }, stdout: "pipe", stderr: "pipe",
       });
-      await proc.exited;
+      expect(await proc.exited).toBe(0);
+      expect(await new Response(proc.stderr).text()).toBe("");
       const out = (await new Response(proc.stdout).text()).trim();
       return out ? JSON.parse(out).hookSpecificOutput : null;
     }
+    test("finds the repo from any spelling of cd or git -C", async () => {
+      writeFileSync(join(repo, "config.ts"), "export const key = 'AKIA" + "IOSFODNN7EXAMPLE';\n");
+      run("add", "config.ts");
+      const home = { rel: repo.split("/").pop()! };
+      for (const c of [`cd ${repo}; git commit -m x`, `cd "${repo}" && git commit -m x`, `cd '${repo}' && git commit -m x`, `(cd ${repo} && git commit -m x)`, `git -C "${repo}" commit -m x`, `git -C ${repo} commit -m x`, `cd ${tmpdir()} && cd ${home.rel} && git commit -m x`, `true && cd ${repo} && git add . && git commit -m x`]) {
+        expect([c, (await scan(c, "/"))?.permissionDecision]).toEqual([c, "deny"]);
+      }
+      run("rm", "-qf", "--cached", "config.ts");
+      rmSync(join(repo, "config.ts"));
+    });
+    test("a named directory it cannot read is denied; a cwd outside any repo has nothing to commit", async () => {
+      for (const c of ['cd "$REPO" && git commit -m x', "cd /no/such/dir && git commit -m x", "git -C $(pwd) commit -m x"]) {
+        expect((await scan(c, "/")).permissionDecisionReason).toContain("cannot find the repo");
+      }
+      expect(await scan("ALEPH_SKIP_SCAN=1 git -C $(pwd) commit -m x", "/")).toBeNull();
+      expect(await scan("git commit -m x", "/")).toBeNull();
+    });
     test("denies a commit whose staged diff holds a secret, naming file and line", async () => {
       writeFileSync(join(repo, "config.ts"), "export const region = 'us-east-1';\nexport const key = 'AKIA" + "IOSFODNN7EXAMPLE';\n");
       run("add", "config.ts");

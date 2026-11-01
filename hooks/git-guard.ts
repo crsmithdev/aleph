@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 /**
- * PreToolUse on Edit|Write: no edits on main outside a worktree.
+ * PreToolUse on Edit|Write|NotebookEdit: no edits on main, or on a detached
+ * HEAD, in a repo's main checkout. A linked worktree is free.
  * Exempt: ~/.claude, ~/.aleph and the home directory itself. The vault is
  * allowed on main except VAULT.md, which is human-owned. The work store's
  * files are never edited by hand: `aleph issue` writes them.
@@ -12,7 +13,7 @@ import { storeDir } from "../todo/lib/store.ts";
 import { vaultDir } from "../vault/lib/vault.ts";
 
 const input = JSON.parse(await Bun.stdin.text());
-const filePath: string | undefined = input.tool_input?.file_path;
+const filePath: string | undefined = input.tool_input?.file_path ?? input.tool_input?.notebook_path;
 if (!filePath) process.exit(0);
 
 /** The path with every link followed, for a file that may not exist yet. */
@@ -52,13 +53,13 @@ if (realpathSync(top) === vault) {
 }
 
 const branch = git("rev-parse", "--abbrev-ref", "HEAD");
-if (branch !== "main" && branch !== "master") process.exit(0);
-if (target.includes("/.worktrees/")) process.exit(0);
+if (branch !== "main" && branch !== "master" && branch !== "HEAD") process.exit(0);
+if (resolve(dir, git("rev-parse", "--git-dir") ?? "") !== resolve(dir, git("rev-parse", "--git-common-dir") ?? "")) process.exit(0);
 
 console.log(JSON.stringify({
   hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: "deny",
-    permissionDecisionReason: `Refusing to edit ${filePath} on ${branch} in ${top}. Work in a worktree: git -C ${top} worktree add .worktrees/<name> -b feature/<name> ${branch}`,
+    permissionDecisionReason: `Refusing to edit ${filePath} on ${branch === "HEAD" ? "a detached HEAD" : branch} in ${top}. Work in a worktree: git -C ${top} worktree add .worktrees/<name> -b feature/<name>`,
   },
 }));

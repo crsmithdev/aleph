@@ -19,7 +19,8 @@ const RULES: [string, RegExp][] = [
   ["breakpoint", /\b(?:breakpoint\(\)|pdb\.set_trace\(|import\s+pdb\b|binding\.pry\b)/],
   ["focused test", /\b(?:test|it|describe)\.only\(/],
 ];
-const ASSIGNMENT = /\b(?:api[_-]?key|secret|password|passwd|token)\b\s*[:=]\s*["'`]([^"'`\s]{16,})["'`]/i;
+// The name can have a prefix (DB_PASSWORD, apiSecret) or a key suffix (AWS_SECRET_ACCESS_KEY), and can be quoted (JSON).
+const ASSIGNMENT = /(?:api[_-]?key|secret|password|passwd|token)(?:[_-]?(?:access[_-]?)?key)?["']?\s*[:=]\s*["'`]([^"'`\s]{16,})["'`]/i;
 const PLACEHOLDER = /<|…|\.\.\.|xxx|example|placeholder|changeme|your[_-]|\$\{/i;
 
 export function scanLine(text: string): string | null {
@@ -34,9 +35,14 @@ export function scanDiff(diff: string): Finding[] {
   const out: Finding[] = [];
   let file = "";
   let line = 0;
+  let header = true; // Inside a hunk, `+++ x` is an added line whose text starts with `++ x`.
   for (const raw of diff.split("\n")) {
-    if (raw.startsWith("+++ ")) { file = raw.slice(4).replace(/^b\//, ""); continue; }
-    if (raw.startsWith("---") || raw.startsWith("diff ")) continue;
+    if (raw.startsWith("diff ")) { header = true; continue; }
+    if (header) {
+      if (raw.startsWith("+++ ")) file = raw.slice(4).replace(/^b\//, "");
+      if (!raw.startsWith("@@ ")) continue;
+      header = false;
+    }
     const hunk = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)/);
     if (hunk) { line = Number(hunk[1]); continue; }
     if (raw.startsWith("+")) {
