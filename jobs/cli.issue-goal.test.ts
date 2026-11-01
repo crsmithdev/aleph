@@ -31,6 +31,14 @@ describe("aleph issue add --spec -", () => {
     expect(shown.json.spec).toContain("## Oracle");
   });
 
+  test("--request - reads the request from stdin and leaves the title alone", async () => {
+    const r = await aleph(["issue", "add", "fac", "a plain title", "--request", "-"], { ALEPH_DISPATCH: "off" }, "The request text.\n");
+    expect(r.code, r.stderr).toBe(0);
+    expect(r.json.title).toBe("a plain title");
+    expect((await aleph(["issue", "show", "fac", String(r.json.added), "--json"])).json.request).toContain("The request text.");
+    await aleph(["issue", "drop", "fac", String(r.json.added), "test over"]);
+  });
+
   test("--after takes a plain or a dotted ref; an absent id is refused and writes nothing", async () => {
     const first = (await aleph(["issue", "add", "fac", "First", "--spec", "-"], {}, GOAL)).json.added;
     const before = commits();
