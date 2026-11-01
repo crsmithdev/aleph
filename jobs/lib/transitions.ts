@@ -216,8 +216,11 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const held = needs === "held" || needs === "review";
     if (agent.state !== "passed" && !manual && !held) refuse(`${name} is ${agent.state}${needs ? ` (${needs})` : ""}, not passed`);
     const repo = loadRegistry()[agent.repo!];
-    if (onOf(agent) !== undefined) fetchOrigin(repo.path);
-    const landedAs = itemOnMain(repo, onOf(agent));
+    const item = onOf(agent);
+    if (item !== undefined) fetchOrigin(repo.path);
+    // A land that pushed and died before it closed the item: its own `Job:` commit on main is that land, so the land unit finishes it (unit.ts). Another job's commit, or a commit by hand, that names the item still refuses.
+    const ownPush = item !== undefined && agent.job !== undefined && git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${agent.job}$`).out !== "";
+    const landedAs = ownPush ? null : itemOnMain(repo, item);
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     return await dispatch({
       kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
