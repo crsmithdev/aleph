@@ -1,4 +1,5 @@
 /** Jev picks the model tier for a factory run, from the item's spec. */
+import { factoryLog } from "./layout.ts";
 import { decide, judgeChoice } from "../../hooks/lib/jev.ts";
 
 export const TIERS = ["haiku", "sonnet", "opus"] as const;
@@ -19,9 +20,11 @@ const TIER_QUESTION = {
 export async function route(spec: string): Promise<Tier | null> {
   if (judgeChoice() === "haiku") return null;
   try {
-    const a = (await decide({ goal: spec }, { tier: TIER_QUESTION })).answers.tier;
+    const d = await decide({ goal: spec }, { tier: TIER_QUESTION });
+    const a = d.answers.tier;
     if (a.type !== "choice") return null;
     const p = a.probabilities?.[a.choice] ?? a.confidence ?? 0;
+    try { factoryLog(`route cost ${d.cost} model ${d.model} tier ${a.choice} p ${p}`); } catch { /* the cost line is a note; it never changes the tier */ }
     return (TIERS as readonly string[]).includes(a.choice) && p >= CUT ? (a.choice as Tier) : null;
   } catch {
     return null;

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { route } from "./route.ts";
@@ -16,13 +16,18 @@ beforeAll(() => {
   Object.assign(process.env, { ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
 });
 afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; delete process.env.ALEPH_JUDGE_FILE; });
-beforeEach(() => { asked = []; delete process.env.ALEPH_JUDGE; });
+beforeEach(() => { asked = []; delete process.env.ALEPH_JUDGE; rmSync(join(dir, "f"), { recursive: true, force: true }); process.env.ALEPH_FACTORY_DIR = join(dir, "f"); });
+afterAll(() => { delete process.env.ALEPH_FACTORY_DIR; });
+const logLines = () => { try { return readFileSync(join(dir, "f", "tick.log"), "utf8").trim().split("\n").filter(Boolean); } catch { return []; } };
 
-const answer = (choice: string, p: number) => ({ status: 200, body: { answers: { tier: { type: "choice", choice, probabilities: { [choice]: p } } } } });
+const answer = (choice: string, p: number) => ({ status: 200, body: { model: "jev-test", usage: { cost: 0.00002 }, answers: { tier: { type: "choice", choice, probabilities: { [choice]: p } } } } });
 
 test("sonnet at 0.9 routes to sonnet, with one choice question over the three tiers", async () => {
   reply = answer("sonnet", 0.9);
   expect(await route("Add a flag")).toBe("sonnet");
+  const l = logLines();
+  expect(l).toHaveLength(1);
+  expect(l[0]).toMatch(/ route cost 0\.00002 model jev-test tier sonnet p 0\.9$/);
   expect(asked).toHaveLength(1);
   expect(asked[0].state).toEqual({ goal: "Add a flag" });
   const qs = Object.values(asked[0].questions) as any[];
@@ -34,11 +39,14 @@ test("sonnet at 0.9 routes to sonnet, with one choice question over the three ti
 test("opus at 0.5 gives no model", async () => {
   reply = answer("opus", 0.5);
   expect(await route("x")).toBeNull();
+  expect(logLines()).toHaveLength(1);
+  expect(logLines()[0]).toContain("tier opus p 0.5");
 });
 
-test("a Jev 500 gives no model", async () => {
+test("a Jev 500 gives no model and writes no line", async () => {
   reply = { status: 500, body: { error: { message: "down" } } };
   expect(await route("x")).toBeNull();
+  expect(logLines()).toEqual([]);
 });
 
 test("ALEPH_JUDGE=haiku gives no model and Jev is not asked", async () => {
@@ -46,6 +54,14 @@ test("ALEPH_JUDGE=haiku gives no model and Jev is not asked", async () => {
   reply = answer("opus", 0.99);
   expect(await route("x")).toBeNull();
   expect(asked).toEqual([]);
+  expect(logLines()).toEqual([]);
+});
+
+test("an unwritable factory folder does not change the tier", async () => {
+  writeFileSync(join(dir, "file"), "x");
+  process.env.ALEPH_FACTORY_DIR = join(dir, "file", "sub");
+  reply = answer("sonnet", 0.9);
+  expect(await route("x")).toBe("sonnet");
 });
 
 test("the job command carries --model only when routed", () => {
