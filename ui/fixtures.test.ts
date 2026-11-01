@@ -3,6 +3,8 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symli
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { state as handWritten } from "./fixtures/status-state.ts";
+
 let base: string, proc: ReturnType<typeof Bun.spawn>, port: number;
 const get = async (p: string) => (await fetch(`http://127.0.0.1:${port}${p}`)).json() as Promise<any>;
 
@@ -80,4 +82,11 @@ test("links in the clone's fixture are not followed: nothing outside dest is wri
     expect(existsSync(join(dest, "vault", "secret.md"))).toBe(false);
     expect(existsSync(join(dest, "jobs", "planted", "state.json"))).toBe(false);
   } finally { rmSync(src, { recursive: true, force: true }); }
+});
+
+test("the hand-written Status state has only keys that /api/state really sends", async () => {
+  const real = await get("/api/state");
+  const extra = (mine: object, theirs: object) => Object.keys(mine).filter((k) => !(k in theirs));
+  expect(extra(handWritten, real).filter((k) => k !== "needs")).toEqual([]);
+  expect(extra(handWritten.factory, real.factory)).toEqual([]);
 });

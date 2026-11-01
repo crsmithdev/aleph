@@ -73,10 +73,11 @@ export function version(dir = import.meta.dir): string {
 }
 
 /** `warm: false` skips the warm-ups: a test that does not test them keeps Langfuse and the vault out of its process. */
-export async function serve(port: number, { warm = true, pageDir }: { warm?: boolean; pageDir?: string } = {}) {
+export async function serve(port: number, { warm = true, pageDir, apiDir }: { warm?: boolean; pageDir?: string; apiDir?: string } = {}) {
   const dir = pageDir ?? import.meta.dir;
   warmers.length = 0;
   const routes = await loadRoutes(join(import.meta.dir, "api"));
+  if (apiDir) routes.push(...await loadRoutes(apiDir));
   for (const [key, handler] of Object.entries(authRoutes)) {
     const [method, path] = key.split(" ");
     routes.push({ method, ...compile(path), handler });

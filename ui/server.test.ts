@@ -1,13 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "./server.ts";
 
-let base: string, server: Awaited<ReturnType<typeof serve>>;
+let base: string, server: Awaited<ReturnType<typeof serve>>, pageDir: string, apiDir: string;
 const saved: Record<string, string | undefined> = {};
-const testView = join(import.meta.dir, "views", "_test.js");
-const testApi = join(import.meta.dir, "api", "_test.ts");
 const at = (p: string, init?: RequestInit) => fetch(`http://127.0.0.1:${server.port}${p}`, init);
 
 const run = (o: object) => JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), ...o });
@@ -25,14 +23,15 @@ beforeAll(async () => {
     process.env[k] = v;
   }
   // A view added the way a view goal adds one: two new files, no edit to server.ts.
-  writeFileSync(testView, `export const view = { path: "/_test/:id", title: "Test", group: "work", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
-  writeFileSync(testApi, `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
-  server = await serve(0, { warm: false });
+  pageDir = join(base, "page"); apiDir = join(base, "api");
+  for (const f of ["index.html", "lib.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
+  mkdirSync(apiDir);
+  writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "work", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
+  writeFileSync(join(apiDir, "_test.ts"), `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
+  server = await serve(0, { warm: false, pageDir, apiDir });
 });
 afterAll(() => {
   server.stop(true);
-  rmSync(testView, { force: true });
-  rmSync(testApi, { force: true });
   for (const [k, v] of Object.entries(saved)) if (v === undefined) delete process.env[k]; else process.env[k] = v;
   rmSync(base, { recursive: true, force: true });
 });
@@ -108,7 +107,7 @@ test("other paths are 404 and writes are refused", async () => {
 test("every API answer carries the server's version; the page and its modules are revalidated on each load", async () => {
   const { version } = await import("./server.ts");
   const a = await at("/api/_test/x");
-  expect(a.headers.get("x-aleph-version")).toBe(version());
+  expect(a.headers.get("x-aleph-version")).toBe(version(pageDir));
   for (const p of ["/", "/lib.js", "/views/_test.js"]) expect((await at(p)).headers.get("cache-control")).toBe("no-cache");
 });
 
@@ -131,7 +130,7 @@ test("x-aleph-version changes when a page file changes, is added or is removed",
   const pages = mkdtempSync(join(tmpdir(), "aleph-ui-pages-"));
   mkdirSync(join(pages, "views"));
   for (const f of ["index.html", "lib.js", "decision.js", "views/a.js"]) writeFileSync(join(pages, f), "one");
-  const s = await serve(0, { warm: false, pageDir: pages });
+  const s = await serve(0, { warm: false, pageDir: pages, apiDir });
   const v = async () => (await fetch(`http://127.0.0.1:${s.port}/api/_test/x`)).headers.get("x-aleph-version");
   try {
     const first = await v();

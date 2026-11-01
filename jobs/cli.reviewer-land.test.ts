@@ -46,8 +46,6 @@ describe("a factory run", () => {
     expect(shown.review).toEqual({ call: "ask", reason: "decide the held path" });
     expect(state(run)).toMatchObject({ condition: "awaiting", ask: { kind: "approval", reason: "held-path" } });
     expect(state(run).needs).toBeUndefined();
-    const before = remoteGit("rev-parse", "main");
-    expect(remoteGit("rev-parse", "main")).toBe(before);
     const l = await aleph(["land", "fheld"]);
     expect(state(l.json.run)).toMatchObject({ condition: "landed", held: true });
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");

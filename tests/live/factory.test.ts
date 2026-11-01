@@ -13,7 +13,8 @@ const live = process.env.ALEPH_LIVE === "1";
 const describeLive = live ? describe : describe.skip;
 const CLI = join(import.meta.dir, "../../jobs/cli.ts");
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-const runs = join(homedir(), ".aleph", "runs");
+// layout().sandbox: a run works here, and aleph removes its folder at the end.
+const runs = join(homedir(), ".aleph", "sandbox");
 
 describeLive("live factory sandbox", () => {
   let base: string;
@@ -73,7 +74,7 @@ describeLive("live factory sandbox", () => {
     const names = err.match(/^ENV: (.*)$/m)![1].trim().split(" ");
     expect(names).toContain("CLAUDE_CODE_OAUTH_TOKEN");
     // Only what aleph sets, and srt's proxy variables.
-    const ours = ["HOME", "CLAUDE_CONFIG_DIR", "TMPDIR", "PATH", "LANG", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_AUTOUPDATER", "CLAUDE_CODE_OAUTH_TOKEN", "PWD", "SHLVL", "_"];
+    const ours = ["ALEPH_TEST_PARALLEL", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS", "HOME", "CLAUDE_CONFIG_DIR", "TMPDIR", "PATH", "LANG", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_AUTOUPDATER", "CLAUDE_CODE_OAUTH_TOKEN", "PWD", "SHLVL", "_"];
     const srt = /proxy|PROXY|SANDBOX_RUNTIME|CLOUDSDK_|^GIT_CONFIG_PARAMETERS$|^GIT_SSH_COMMAND$|^JAVA_TOOL_OPTIONS$/;
     expect(names.filter((n) => !ours.includes(n) && !srt.test(n))).toEqual([]);
     expect(sh(join(base, "repo"), "git", "log", "-1", "--format=%s", "factory/hello")).toBe("add hello");

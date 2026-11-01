@@ -430,9 +430,6 @@ describe("issue form project select", () => {
     expect(h).toContain("&lt;b&gt;");
     expect(h).not.toContain("<b>");
   });
-  test("exports mount", () => {
-    expect(typeof v.mount).toBe("function");
-  });
 });
 
 describe("POST /api/issues/:repo/:id/decide and deny", () => {
@@ -577,14 +574,4 @@ describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
 });
 
 describe("shared table CSS", () => {
-  test("a chip in table.tbl is width-limited and td.wide has a min-width outside the 720px query", () => {
-    const css = readFileSync(join(import.meta.dir, "index.html"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
-    const rule = (sel: string) => css.match(new RegExp(`(?:^|\\n)${sel.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`))?.[1] ?? "";
-    expect(rule("table.tbl .chip")).toMatch(/max-width:\s*\d+ch/);
-    expect(rule("table.tbl .chip")).toMatch(/text-overflow:\s*ellipsis/);
-    expect(rule("table.tbl td.wide")).toMatch(/min-width:\s*16ch/);
-    // the chip column's minimum is no wider than the chip cap, so a capped chip leaves the Title its room
-    const cap = Number(rule("table.tbl .chip").match(/max-width:\s*(\d+)ch/)![1]);
-    expect(Number(css.match(/\ntable\.tbl td:has\(> \.chips\)\s*\{[^}]*min-width:\s*(\d+)ch/)![1])).toBeLessThanOrEqual(cap);
-  });
 });

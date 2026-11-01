@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseFrontmatter, splitFrontmatter } from "../vault/lib/frontmatter.ts";
@@ -66,18 +66,30 @@ function seed(text: string | null): void {
   sh(items, "git", "push", "-q", "origin", "main");
 }
 
+let templateDir = "";
+function template(): string {
+  if (templateDir) return templateDir;
+  templateDir = mkdtempSync(join(tmpdir(), "aleph-todo-template-"));
+  for (const name of ["items", "proj"]) {
+    const bare = join(templateDir, `${name}.git`), clone = join(templateDir, name);
+    sh(templateDir, "git", "init", "-q", "--bare", "-b", "main", bare);
+    sh(templateDir, "git", "clone", "-q", bare, clone);
+    sh(clone, "git", "commit", "-q", "--allow-empty", "-m", "start");
+    sh(clone, "git", "push", "-q", "origin", "main");
+  }
+  return templateDir;
+}
+afterAll(() => rmSync(templateDir, { recursive: true, force: true }));
+
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-todo-"));
   remote = join(base, "items.git");
   items = join(base, "items");
   repoRemote = join(base, "proj.git");
   repo = join(base, "proj");
-  for (const [bare, clone] of [[remote, items], [repoRemote, repo]]) {
-    sh(base, "git", "init", "-q", "--bare", "-b", "main", bare);
-    sh(base, "git", "clone", "-q", bare, clone);
-    sh(clone, "git", "commit", "-q", "--allow-empty", "-m", "start");
-    sh(clone, "git", "push", "-q", "origin", "main");
-  }
+  // Four repos cost twenty git processes: make them once, and copy them with their remotes pointed here.
+  cpSync(template(), base, { recursive: true });
+  for (const clone of [items, repo]) writeFileSync(join(clone, ".git", "config"), readFileSync(join(clone, ".git", "config"), "utf8").replaceAll(templateDir, base));
   writeFileSync(join(base, "repos.json"), JSON.stringify({ proj: { path: repo } }));
   seed("# To do\n\n## 3. An old item\n---\nid: 3\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\nlabels: []\n---\n\nWritten long ago.\n\nDone when it is done.\n");
 });

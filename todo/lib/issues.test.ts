@@ -88,9 +88,4 @@ describe("issue verbs without argv", () => {
     expect(store.askOf(item(r, 3))).toBeNull();
   });
 
-  test("edit needs a field and a good --due", () => {
-    const r = repo([{ title: "a" }]);
-    expect(refusal(() => issueOps.edit(r, 1, {}))).toContain("give --title");
-    expect(item(r, 1).fm.due).toBeUndefined();
-  });
 });

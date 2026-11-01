@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
+import { job, state } from "./fixtures/status-state.ts";
 // @ts-ignore
 import { actMessages, openDiffs } from "./lib.js";
 
@@ -26,16 +27,6 @@ const r: any = { ...view, renderJobs: (s: any) => view.renderNeeds(att(s)) + vie
 import { trailerLine } from "./views/cards.js";
 // The land cards of `delivered`: the Status page no longer lists them, Done links to them, but the card still renders.
 
-const job = (o: object) => ({ repo: "aleph", item: null, condition: "running", started: "2026-10-27T16:00:00Z", defaults: [], followups: [], ...o });
-const state: any = {
-  now: "2026-10-27T17:00:00Z",
-  factory: { paused: false, dayCap: 12, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
-  needs: [job({ name: "aleph-27", condition: "awaiting", needs: "held", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } })],
-  stuck: [job({ name: "aleph-30", condition: "stuck", reason: "types failed" })],
-  running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
-  delivered: [job({ name: "aleph-28", condition: "landed", ended: "2026-10-27T16:30:00Z", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc" })],
-  queued: [],
-};
 
 test("needs shows name, reason and stat, and no copy commands", () => {
   const h = withAttn(state);
@@ -626,7 +617,7 @@ test("the Awaiting-you group is one list; its articles are the asks plus the err
 });
 
 test("Status has no Standing permissions section", () => {
-  const s = { ...full, standing: [{ reason: "held", action: "firefighter", at: "2026-10-27T16:00:00Z", handed: 3 }] };
+  const s = full;
   expect(r.view.render(s)).not.toContain("Standing permissions");
   expect(r.view.render(s)).not.toContain('data-act="revoke"');
 });

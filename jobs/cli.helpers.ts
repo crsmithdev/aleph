@@ -378,7 +378,7 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
     aleph: { path: repo, checks: [], autoland: false },
   }));
 
-  sh(base, "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
+  sh(base, "openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
   lf = Bun.serve({ port: 0, async fetch(req) { lfPosts.push(await req.json()); return new Response("{}", { status: lfStatus }); } });
   server = Bun.serve({
     port: 0,

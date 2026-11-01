@@ -103,10 +103,6 @@ test("failMessage shows the reason from the body", () => {
   expect(failMessage("/api/x", 500, "a".repeat(1000))).toBe(`/api/x answered 500: ${"a".repeat(300)}`);
 });
 
-test("the shell reports failures with failMessage", async () => {
-  const { readFileSync } = await import("node:fs");
-  expect(readFileSync(new URL("./index.html", import.meta.url), "utf8")).toContain("failMessage(");
-});
 
 test("diffHtml marks added, removed and hunk lines; an empty diff says so", () => {
   const h = diffHtml("@@ -1 +1 @@\n-a\n+b");

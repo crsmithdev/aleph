@@ -86,7 +86,7 @@ describe("activity", () => {
       const c = await activity(7, null, now);
       expect(c.cachedAt).toBe(a.cachedAt);
       await activity(7, null, now);
-      await Bun.sleep(50);
+      for (let i = 0; i < 200 && obsHits < 2; i++) await Bun.sleep(25);
       expect(obsHits).toBe(2);
       const d = await activity(7, null, now);
       expect(d.cachedAt).not.toBe(a.cachedAt);
