@@ -978,7 +978,7 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
     follow();
     if (!m) {
       document.title = "Not found · aleph";
-      $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#/">Now</a> or pick a view from the list.`)}</div>`;
+      $("view").innerHTML = `<div class="page nf"><h1>Nothing at ${esc(path)}</h1>${empty("No view has this address.", `Go to <a href="#/">Status</a> or pick a view from the list.`)}</div>`;
       $("offline").hidden = true;
       return;
     }
