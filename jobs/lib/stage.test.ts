@@ -71,6 +71,10 @@ const GOALS_DOTTED: Row[] = [
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedGoal("fac", n, 1); landGoal(n, `${n}.1`); return a;
   } },
+  { name: "dotted goal: awaiting its Ask while a trailer commit on main names it", stage: "awaiting", why: /input: acceptance-failed/, build: async () => {
+    const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
+    const a = seedGoal("fac", n, 1, { ask: "input", reason: "acceptance-failed" }); landGoal(n, `${n}.1`); return a;
+  } },
   { name: "dotted goal: not done when the store holds it done and its only commit is reverted", stage: "queued", build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedGoal("fac", n, 1, { status: "done" }); revertOnMain(landGoal(n, `${n}.1`)); return a;

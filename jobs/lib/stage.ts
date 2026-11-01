@@ -79,6 +79,8 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const id = item.id;
   const out = (s: Stage["stage"], why: string, of?: Stage["of"]): Stage => ({ id, stage: s, why, ...(of ? { of } : {}) });
   if (item.status === "dropped") return out("dropped", "the store says dropped");
+  // An open item that asks is awaiting, even when a trailer commit on main names it (acceptance can reopen a landed goal).
+  if (item.status === "open" && item.ask) return out("awaiting", asks(item.ask));
   const done = doneWhy(item, ctx);
   if (done) return out("done", done);
   const live = ctx.runs(id).filter((r) => r.open && r.kind !== "facts");
