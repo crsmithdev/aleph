@@ -165,7 +165,7 @@ export function add(doc: Doc, title: string, o: { priority?: string; labels?: st
   return item;
 }
 
-/** Add part `<n>.<k>` under issue `issue` (`k` the next free number), with `after` and the issue's priority. */
+/** Add part `<n>.<k>` under issue `issue` (`k` the next free number), with `after`, the issue's priority and a `source`: the issue's when it is not chris, else agent. */
 export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string; after?: string[]; now?: Date }): Issue {
   const day = today(o.now);
   const sub = nextSub(doc, issue.id);
@@ -173,7 +173,7 @@ export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string
     id: issue.id,
     sub,
     title: o.title,
-    fm: { id: `${issue.id}.${sub}`, created: day, updated: day, priority: (issue.fm.priority as string) ?? "medium", after: o.after ?? [] },
+    fm: { id: `${issue.id}.${sub}`, created: day, updated: day, priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
     request: "",
     spec: o.spec,
     notes: [],

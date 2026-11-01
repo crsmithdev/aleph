@@ -389,3 +389,17 @@ describe("readHidden", () => {
     try { expect(() => store.readHidden(r, 1)).toThrow("work store"); } finally { process.env.ALEPH_ISSUES = saved; }
   });
 });
+
+describe("a part's source", () => {
+  test("addPart stores agent, or the parent's source when it is not chris; a part with none stored reads agent", () => {
+    const doc = { items: [] } as unknown as issues.Doc;
+    const a = issues.add(doc, "from chris");
+    const b = issues.add(doc, "from worker", { source: "worker" });
+    expect(issues.addPart(doc, a, { title: "p", spec: "x" }).fm.source).toBe("agent");
+    expect(issues.addPart(doc, b, { title: "p", spec: "x" }).fm.source).toBe("worker");
+    const old = issues.addPart(doc, a, { title: "old", spec: "x" });
+    delete old.fm.source;
+    expect(store.sourceOf(old)).toBe("agent");
+    expect(store.sourceOf(a)).toBe("chris");
+  });
+});

@@ -230,10 +230,10 @@ export const awaitsChris = (item: Issue): boolean => item.fm.ask !== undefined;
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
-/** Who raised the item: its `source`, else chris. */
+/** Who raised the item: its `source`, else agent for a part (a part is made by the planner, never by chris) and chris for an issue. */
 export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" | "agent" {
   const s = text(item.fm.source);
-  return s === "worker" || s === "deps" || s === "memory" || s === "agent" ? s : "chris";
+  return s === "worker" || s === "deps" || s === "memory" || s === "agent" ? s : item.sub === undefined ? "chris" : "agent";
 }
 /** The parts of an issue, in number order. */
 export const partsOf = (doc: Doc, item: Issue): Issue[] => (item.sub === undefined ? doc.items.filter((i) => i.id === item.id && i.sub !== undefined) : []);
