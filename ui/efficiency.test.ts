@@ -125,7 +125,7 @@ test("the breakdown under the bar, the hours view, the pin", () => {
 
 test("mountSpeed: a click on a segment re-renders the efficiency section", async () => {
   resetSpeed();
-  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), phases: Object.fromEntries(["intake", "queue", "implement", "land", "lead"].map((k) => [k, { count: 0, p50: 0, p90: 0 }])), checks: [], buckets: [], done: 1, flaky: 0, issues: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 } };
+  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), phases: Object.fromEntries(["intake", "queue", "implement", "land", "lead"].map((k) => [k, { count: 0, p50: 0, p90: 0 }])), checks: [], buckets: [], done: 1, flaky: 0, issues: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 }, openAge: { count: 0, p50: 0, p90: 0, unknown: 0, oldest: null, bins: [] }, concurrency: { cap: 5, mean: 0, peak: 0, atCap: 0, points: [] } };
   const mk = () => ({ innerHTML: "", dataset: {} as Record<string, string>, isConnected: true, handler: null as any, addEventListener(_: string, f: any) { this.handler = f; }, querySelector: () => null, querySelectorAll: () => [] });
   const top = mk(), eff = mk();
   const root = { querySelector: (s: string) => (s === "#speed" ? top : s === "#efficiency" ? eff : null) };

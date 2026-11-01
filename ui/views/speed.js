@@ -15,6 +15,9 @@ export function dur(s) {
   const m = Math.floor(s / 60);
   return m < 60 ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
 }
+/** An age: as `dur` under a day, then whole days. */
+export const ageText = (s) => (s < 86400 ? dur(s) : `${Math.floor(s / 86400)}d`);
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)} h`;
 const pctText = (w) => `${Math.round((w || 0) * 100)}%`;
 const PHASES = [
@@ -69,13 +72,25 @@ const chartBox = (key, title, label) => `<figure class="chartbox"><figcaption>${
 export const renderCharts = (d) => `<div class="charts3">` +
   PHASES.map(([key, title]) => chartBox(key, `${title} by ${STEP_TEXT[d.window]} (median)`, `Median ${title.toLowerCase()} time per bucket`)).join("") + `</div>`;
 
+/** The two panels under the charts: how old the open work is, and how many agent runs were live at once. */
+export function renderFlowPanels(d) {
+  const a = d.openAge, c = d.concurrency;
+  const oldest = a.oldest ? `oldest ${esc(ageText(a.oldest.secs))}: ${repoIdLink(a.oldest.goal, a.oldest.href)} ${esc(a.oldest.title)}` : "no open issue";
+  const unknown = a.unknown ? `<p class="quiet">Not counted: ${plural(a.unknown, "issue")} with no filing time or created date</p>` : "";
+  const panel = (id, title, text, stats, note, label) => `<section class="flowpanel" title="${esc(text)}"><h3>${esc(title)}</h3><p class="stats">${stats}</p><p class="quiet note">${note}</p><div class="speedchart tall" data-panel="${id}" role="img" aria-label="${esc(label)}"></div>${id === "age" ? unknown : ""}</section>`;
+  return `<div class="flowpanels">` +
+    panel("age", "Age of open work", "How long each open issue has been open, now. This does not change with the time window.", `${a.count} open · ${esc(ageText(a.p50))} p50 · ${esc(ageText(a.p90))} p90`, oldest, "Open issues by age") +
+    panel("live", "Concurrency", `Agent runs live at once, the runs the live cap counts. The line is the most live in each step. The cap is the cap now: time under an earlier cap is measured against it too.`, `${c.mean.toFixed(1)} mean · ${c.peak} peak · ${pctText(c.atCap)} of the time at the cap`, `cap ${c.cap}, ${esc(WINDOW_TEXT[d.window])}`, "Agent runs live at once over time") +
+    `</div>`;
+}
+
 const loading = (what, d) => (!d ? `<p class="quiet loading" role="status">Loading ${what}…</p>` : `<div class="empty"><p class="hint">${esc(d.error)}</p></div>`);
 
 /** The Performance block: the phase cards and the three charts. `d` is null while loading, `{error}` on a failed load. */
 export function renderSpeedTop(d) {
   const head = `<div class="sh sub"><h2 id="h-speed">Performance</h2></div>`;
   if (!d || d.error) return head + loading("performance", d);
-  return head + renderPhases(d) + renderCharts(d);
+  return head + renderPhases(d) + renderCharts(d) + renderFlowPanels(d);
 }
 
 // Duplicated from ui/api/speed.ts: keep the texts identical.
@@ -98,7 +113,6 @@ export function shownClass(d, pinned = null) {
 }
 
 const TOP_ISSUES = 5;
-const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 /** The breakdown of one class: its causes and the goals that took the most. "" when `key` is null. */
 export function renderBreakdown(d, key) {
@@ -181,6 +195,34 @@ export function barOption(buckets, key, { window, color, lines = null, lineColor
   };
 }
 
+/** The bar-chart option of the open-work ages: one bar per age, with its count on top. */
+export function ageOption(bins, { color }) {
+  return {
+    animation: false,
+    color: [color],
+    grid: { left: 8, right: 8, top: 18, bottom: 20 },
+    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${esc(plural(q.value, "issue"))}`; } },
+    xAxis: { type: "category", data: bins.map((b) => b.label), axisTick: { show: false } },
+    yAxis: { type: "value", show: false, min: 0, splitLine: { show: false } },
+    series: [{ type: "bar", data: bins.map((b) => b.count), label: { show: true, position: "top", formatter: (p) => (p.value ? String(p.value) : "") } }],
+  };
+}
+
+/** The step-line option of the concurrency: the most live in each step, and the cap as a dotted line. */
+export function liveOption({ points, cap, peak }, { window, color, capColor }) {
+  const n = points.length;
+  const stamp = (at) => new Date(at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
+  return {
+    animation: false,
+    color: [color],
+    grid: { left: 24, right: 40, top: 12, bottom: 20 },
+    tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(stamp(points[q.dataIndex].at))}<br>${esc(String(q.value))} live`; } },
+    xAxis: { type: "category", boundaryGap: false, data: points.map((p) => xLabel(p.at, window)), axisTick: { show: false }, axisLabel: { interval: Math.max(0, Math.ceil(n / 4) - 1), hideOverlap: true } },
+    yAxis: { type: "value", min: 0, max: Math.max(cap, peak, 1), minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
+    series: [{ type: "line", step: "end", symbol: "none", lineStyle: { width: 2 }, areaStyle: { opacity: 0.15 }, data: points.map((p) => p.peak), markLine: { silent: true, symbol: "none", label: { position: "end", fontSize: 10, color: capColor, formatter: "cap" }, lineStyle: { type: "dotted", color: capColor, width: 2 }, data: [{ yAxis: cap }] } }],
+  };
+}
+
 // What the reader chose and what came back, so a refresh of the page re-renders at once.
 let win = DEFAULT_WINDOW;
 let pinned = null;
@@ -207,6 +249,9 @@ function draw(box, d) {
   if (!globalThis.echarts) return;
   const t = readTokens();
   const colors = { intake: t.run, queue: t.muted, implement: t.need, land: t.done, lead: t.ink };
+  const panel = (id, option) => { const el = box.querySelector(`.speedchart[data-panel="${id}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("speed chart failed", e); } };
+  panel("age", ageOption(d.openAge.bins, { color: t.run }));
+  panel("live", liveOption(d.concurrency, { window: d.window, color: t.run, capColor: t.muted }));
   for (const el of box.querySelectorAll(".speedchart[data-chart]")) {
     const key = el.dataset.chart, c = d.phases[key];
     try { drawn.push(chart(el, barOption(d.buckets, key, { window: d.window, color: colors[key], lines: c.count ? c : null, lineColors: { p50: t.ink, p90: t.muted } }))); } catch (e) { console.error("speed chart failed", e); }

@@ -6,9 +6,9 @@
  * The phases also read when each issue file first came into the work store's git history.
  */
 import { existsSync } from "node:fs";
-import { flakes } from "../../jobs/lib/factory.ts";
+import { flakes, LIVE_CAP } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { allRuns, isBuild, onOf, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isBuild, loadRegistry, onOf, type Run } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, storeDir, uiFetchTtl } from "../../todo/lib/store.ts";
@@ -55,6 +55,20 @@ export interface Speed {
   notCounted: { runs: number; issues: number; hours: number };
   lost: { hours: number; share: number };
   hasWeek: boolean;
+  openAge: OpenAge;
+  concurrency: Concurrency;
+}
+
+/** The open issues now, whatever the window. An issue that a bulk commit added takes its age from its `created` date. One with neither counts in `unknown` only. */
+export interface OpenAge {
+  count: number; p50: number; p90: number; unknown: number;
+  oldest: { goal: string; title: string; href: string; secs: number } | null;
+  bins: { label: string; count: number }[];
+}
+/** Agent runs live at once over the window. `cap` is the live cap now; an earlier cap is not recorded. `atCap` is the share of the window at or over it, 0 to 1. */
+export interface Concurrency {
+  cap: number; mean: number; peak: number; atCap: number;
+  points: { at: string; peak: number }[];
 }
 
 export const CLASSES = ["landed", "fixed", "nothing", "restarted", "dropped"] as const;
@@ -282,6 +296,55 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
   return Object.fromEntries(PHASE_KEYS.map((k) => [k, stat(t[k].map((x) => x.secs))])) as Speed["phases"];
 }
 
+const AGE_BINS: [string, number][] = [["<1h", HOUR], ["1-6h", 6 * HOUR], ["6-24h", DAY], ["1-3d", 3 * DAY], ["3-7d", 7 * DAY], ["7-30d", 30 * DAY], [">30d", Infinity]];
+
+/** The age of `open` issues from when each was filed, else from `created`, a date. */
+export function openAge(open: { repo: string; id: number; title: string; created?: unknown }[], { issue }: Filed, now: number): OpenAge {
+  const known: { goal: string; repo: string; id: number; title: string; secs: number }[] = [];
+  let unknown = 0;
+  for (const o of open) {
+    const goal = `${o.repo}-${o.id}`, at = issue.get(goal) ?? Date.parse(String(o.created));
+    if (!Number.isFinite(at)) { unknown++; continue; }
+    known.push({ ...o, goal, secs: Math.max(0, (now - at) / 1000) });
+  }
+  const secs = known.map((k) => k.secs), old = known.reduce<(typeof known)[number] | null>((a, b) => (!a || b.secs > a.secs ? b : a), null);
+  return {
+    count: known.length, ...(({ p50, p90 }) => ({ p50, p90 }))(stat(secs)), unknown,
+    oldest: old && { goal: old.goal, title: old.title, href: `#/issues/${encodeURIComponent(old.repo)}/${old.id}`, secs: round(old.secs) },
+    bins: AGE_BINS.map(([label, top], i) => ({ label, count: secs.filter((x) => x * 1000 >= (i ? AGE_BINS[i - 1][1] : 0) && x * 1000 < top).length })),
+  };
+}
+
+/** How many agent runs were live at once in `since`..`now`, the runs the live cap counts: a run still running ends at `now`. `step` is the width of a point in ms. */
+export function concurrency(runs: Run[], since: number, now: number, step: number, cap: number): Concurrency {
+  const edges: [number, number][] = [];
+  for (const r of runs) {
+    if (!isBuild(r.kind)) continue;
+    const a = Date.parse(r.started), b = r.ended ? Date.parse(r.ended) : r.condition === "running" ? now : NaN;
+    if (!(b >= a) || b - a > MAX_RUN || b <= since || a >= now) continue;
+    edges.push([Math.max(a, since), 1], [Math.min(b, now), -1]);
+  }
+  // An end before a start at the same moment: a run that follows another does not add one.
+  edges.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  const peaks = Array.from({ length: Math.ceil((now - since) / step) }, () => 0);
+  const slot = (t: number) => Math.min(peaks.length - 1, Math.floor((t - since) / step));
+  let live = 0, at = since, sum = 0, full = 0, peak = 0;
+  for (const [t, d] of edges) {
+    sum += live * (t - at);
+    if (live >= cap) full += t - at;
+    if (live > 0 && t > at) for (let i = slot(at); i <= slot(t - 1); i++) peaks[i] = Math.max(peaks[i], live);
+    live += d; at = t;
+    if (live > peak) peak = live;
+  }
+  const span = now - since;
+  if (live >= cap) full += now - at;
+  sum += live * (now - at);
+  return { cap, mean: span ? round(sum / span, 1) : 0, peak, atCap: span ? round(full / span, 4) : 0, points: peaks.map((p, i) => ({ at: new Date(since + i * step).toISOString(), peak: p })) };
+}
+
+// The width of a concurrency point: fine enough that a short burst shows.
+const CONC_STEP: Record<Window, number> = { hour: 60_000, day: 15 * 60_000, week: HOUR, month: 6 * HOUR };
+
 export function speed(window: Window, now = new Date(), fit: Fit | null = null): Speed {
   const n = COUNT[window];
   const daily = window === "week" || window === "month";
@@ -345,6 +408,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const m = t.goal.lastIndexOf("-");
     t.title = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)))?.title;
   }
+  const open = Object.values(loadRegistry()).flatMap((repo) => (lists.list(repo.key)?.items ?? []).filter((i) => i.sub === undefined && status(i) === "open").map((i) => ({ repo: repo.key, id: i.id, title: i.title, created: i.fm.created })));
   const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number) => {
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
@@ -367,6 +431,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     notCounted: cls.notCounted,
     lost: cls.lost,
     hasWeek: fit !== null,
+    openAge: openAge(open, filed(), now.getTime()),
+    concurrency: concurrency(all, since.getTime(), now.getTime(), CONC_STEP[window], LIVE_CAP()),
     flaky: flakes().filter((f) => Date.parse(f.at) >= since.getTime()).length,
   };
 }

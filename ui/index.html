@@ -549,6 +549,13 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .chartbox { margin: 0; min-width: 0; }
 .chartbox figcaption { font-size: var(--fs-xs); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
 .speedchart { height: 100px; width: 100%; }
+.speedchart.tall { height: 150px; }
+.flowpanels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 20px 0 16px; }
+.flowpanel { min-width: 0; }
+.flowpanel h3 { margin: 0 0 4px; color: var(--muted); font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+.flowpanel .stats { margin: 0; font-size: var(--fs-md); font-weight: 600; font-variant-numeric: lining-nums tabular-nums; }
+.flowpanel .note { margin: 2px 0 6px; font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 720px) { .flowpanels { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1020px) { .meds { grid-template-columns: repeat(3, minmax(0, 1fr)); } .meds > .med:nth-child(n) { border-left: 1px solid var(--rule); padding-left: 16px; } .meds > .med:nth-child(3n+1) { border-left: 0; padding-left: 0; } .charts3 { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 1020px) { .meds.eff { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 1020px) { .meds.phases, .charts3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
