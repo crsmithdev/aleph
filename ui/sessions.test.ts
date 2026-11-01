@@ -8,7 +8,7 @@ import { clearFit } from "./usage.ts";
 import { idLink, pageHead, when } from "./lib.js";
 import { routes } from "./api/sessions.ts";
 // @ts-ignore plain JS, shared with the page
-import * as v from "./views/sessions.js";
+import * as v from "./views/session.js";
 
 const trace = (id: string, session: string, name: string, at: string, extra: object = {}) =>
   ({ id, sessionId: session, name, timestamp: at, input: `prompt ${id}\nsecond line`, output: "x".repeat(600), totalCost: 0.5, latency: 12, metadata: { cwd: `/w/${name}`, task_type: "code_edit" }, ...extra });

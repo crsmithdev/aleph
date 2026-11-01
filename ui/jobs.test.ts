@@ -252,7 +252,7 @@ describe("render", () => {
 });
 
 test("the issue and job pages use pageHead, table.tbl, idLink and when", async () => {
-  const { renderIssue } = require("./views/contents.js");
+  const { renderIssue } = require("./views/issues.js");
   // This year's date, so when() prints "Oct 01 10:00" whatever the clock says.
   const started = `${new Date().getFullYear()}-10-01T10:00:00`;
   const issue = renderIssue({ repo: "fac", id: 9, title: "T", status: "open", frontmatter: { labels: ["ui"] }, body: "", notes: [], jobs: [{ name: "fac-9", condition: "landed", started }], commits: [{ hash: "abcdef123", subject: "s", date: started, commitUrl: "http://x/c" }] });

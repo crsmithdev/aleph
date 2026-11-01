@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
 import { axisTimes, compactScale, lifeRows, lifespan, noteEvent, renderLifetime } from "./timeline.js";
 // @ts-ignore
-import { renderIssue } from "./views/contents.js";
+import { renderIssue } from "./views/issues.js";
 
 const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", condition: "passed", started, ended, ...extra });
 const issue = (over: object = {}) => ({ status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [] }, ...over });

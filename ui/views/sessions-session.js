@@ -1,1 +1,1 @@
-export { sessionView as view } from "./sessions.js";
+export { sessionView as view } from "./session.js";

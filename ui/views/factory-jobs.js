@@ -30,7 +30,7 @@ function days(d, key) {
 const table = (labels, num, rows) => dataTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`).join(""));
 
 /** The page body for a stage. `day` is /api/speed for the last 24 h, or null. */
-export function renderPerformance(d, day, stage = "lead") {
+export function renderFactoryJobs(d, day, stage = "lead") {
   const [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0], c = d.phases[key];
   const over = (c.hist ?? [])[6] ?? 0;
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
@@ -55,13 +55,13 @@ export const view = {
   icon: "stopwatch",
   api: (_params, q = new URLSearchParams()) => `/api/speed?window=${q.get("window") || "week"}`,
   refresh: 60,
-  render: (d, _params, q) => renderPerformance(d, usable("day"), q?.get("stage") ?? "lead"),
+  render: (d, _params, q) => renderFactoryJobs(d, usable("day"), q?.get("stage") ?? "lead"),
   mount: async (root, d) => {
     const wire = () => {
       const stage = hashQuery().get("stage") ?? "lead", [key, name] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
       onTile(root.querySelector("#perf"), (k) => {
         setQuery({ stage: k });
-        root.innerHTML = renderPerformance(d, usable("day"), k);
+        root.innerHTML = renderFactoryJobs(d, usable("day"), k);
         wire();
         root.querySelector(`button[data-tile="${k}"]`)?.focus();
       });
@@ -74,7 +74,7 @@ export const view = {
     wire();
     await loadSpeed("day");
     if (!root.querySelector("#perf")) return;
-    root.innerHTML = renderPerformance(d, usable("day"), hashQuery().get("stage") ?? "lead");
+    root.innerHTML = renderFactoryJobs(d, usable("day"), hashQuery().get("stage") ?? "lead");
     wire();
   },
 };

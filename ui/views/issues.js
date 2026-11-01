@@ -38,7 +38,7 @@ export const view = {
   group: "work",
   order: 1,
   api: "/api/contents",
-  render: (d, _params, query) => renderContents(d, hashOptions(query)),
+  render: (d, _params, query) => renderIssues(d, hashOptions(query)),
   mount: (root, d) => mount(root, d),
 };
 
@@ -440,7 +440,7 @@ export function renderForm(rows, o = {}) {
     `<button type="submit" class="act primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
 }
 
-export function renderContents(d, o = {}) {
+export function renderIssues(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
   return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +

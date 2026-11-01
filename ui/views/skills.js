@@ -1,5 +1,5 @@
 // One skill: how often it ran, from Langfuse. `renderSkill` takes /api/skills/:name and does not touch the DOM.
-// The shell takes one view per module, so the route is declared in skill.js. The list of skills is in agents.js.
+// The shell takes one view per module, so the route is declared in skill.js. The list of skills is in sessions.js.
 import { card, chart, crumb, dataTable, empty, esc, idLink, pageHead, span, when } from "../lib.js";
 
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;

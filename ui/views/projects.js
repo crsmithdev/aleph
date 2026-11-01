@@ -1,5 +1,5 @@
 // The project card and detail renderers, shared by views/project.js. The list of
-// projects is part of views/contents.js.
+// projects is part of views/issues.js.
 import { badge, card, chips, crumb, dataTable, empty, esc, heads, idLink, localId, pageHead, pager, when } from "../lib.js";
 
 const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
-import * as v from "./views/contents.js";
+import * as v from "./views/issues.js";
 // @ts-ignore
 import { view as specView } from "./views/spec.js";
 

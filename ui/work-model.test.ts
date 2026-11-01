@@ -10,7 +10,7 @@ import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
 import { renderLanes, renderNeeds } from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
-import { renderIssue } from "./views/contents.js";
+import { renderIssue } from "./views/issues.js";
 
 // /api/state on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).

@@ -8,7 +8,7 @@ import * as todos from "../todo/lib/todo.ts";
 import { readAsk } from "../jobs/lib/ask.ts";
 import { serve } from "./server.ts";
 // @ts-ignore plain JS, shared with the page
-import * as v from "./views/contents.js";
+import * as v from "./views/issues.js";
 // @ts-ignore
 import { view as issueView } from "./views/issue.js";
 

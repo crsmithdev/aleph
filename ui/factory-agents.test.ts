@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { liveOption, renderCapacity, roleRows, totals } from "./views/capacity.js";
+import { liveOption, renderFactoryAgents, roleRows, totals } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import { pace, weekGone } from "./views/speed.js";
 
@@ -28,20 +28,20 @@ test("role shares sum to 100% over the timed roles, and the reviewer row says no
   const rows = roleRows(agents);
   expect(rows.filter((r: any) => r.share !== null).reduce((a: number, r: any) => a + r.share, 0)).toBeCloseTo(100);
   expect(rows.at(-1).share).toBeNull();
-  expect(renderCapacity(S, D)).toMatch(/<td>Reviewer<\/td><td class="num">3<\/td><td class="num">not timed<\/td><td class="num">–<\/td><td class="num">–<\/td><td class="wide">–<\/td>/);
+  expect(renderFactoryAgents(S, D)).toMatch(/<td>Reviewer<\/td><td class="num">3<\/td><td class="num">not timed<\/td><td class="num">–<\/td><td class="num">–<\/td><td class="wide">–<\/td>/);
 });
 
 test("the tiles come from the state and the agents", () => {
-  const h = renderCapacity(S, D);
+  const h = renderFactoryAgents(S, D);
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Weekly usage", "Runs today", "Worker slots", "Agents live"]);
   for (const t of ["$71.94 recorded cost", "day cap 999", "1 <em>of 5</em>", "mean, all roles, peak 4", "1 of 2 steps had no agent live"]) expect(h).toContain(t);
 });
 
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {
-  const h = renderCapacity({ ...S, usage: undefined }, null);
+  const h = renderFactoryAgents({ ...S, usage: undefined }, null);
   expect(h).toContain("usage unknown");
   expect(h).toContain("Loading");
-  expect(renderCapacity(S, { error: "no data" })).toContain("no data");
+  expect(renderFactoryAgents(S, { error: "no data" })).toContain("no data");
 });
 
 test("the chart has one area of the total agents live", () => {
@@ -54,12 +54,12 @@ test("the chart has one area of the total agents live", () => {
 test("a stale usage shows the figure and its age; a fresh one shows no age", () => {
   const at = "2026-11-01T07:20:00Z";
   const stale = { ...S, usage: { stale: true, now: { ...S.usage.now, at } } };
-  expect(renderCapacity(stale, null)).toContain("as of 40m ago");
+  expect(renderFactoryAgents(stale, null)).toContain("as of 40m ago");
   const fresh = { ...S, usage: { stale: false, now: { ...S.usage.now, at } } };
-  expect(renderCapacity(fresh, null)).not.toContain("as of");
+  expect(renderFactoryAgents(fresh, null)).not.toContain("as of");
 });
 
 test("the title is the sidebar name, whatever the data", () => {
-  expect(renderCapacity(S, D)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
-  expect(renderCapacity({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
+  expect(renderFactoryAgents(S, D)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
+  expect(renderFactoryAgents({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><div class="aside"><div class="fbar">');
 });

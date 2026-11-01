@@ -51,7 +51,7 @@ export function slotsOption(d, cap) {
 export const usageOption = (series) => lineOption(series.map((p) => when(p.at)), "Used, %", series.map((p) => Math.round(p.seven_day * 10) / 10), { max: 100 });
 
 /** The page body. `d` is /api/speed for the window, or null while it loads; `key` is the selected tile. */
-export function renderCapacity(s, d, key = "live") {
+export function renderFactoryAgents(s, d, key = "live") {
   const a = d?.agents ?? null, cur = DETAILS[key] ? key : "live";
   const wait = `<p role="status">${esc(d?.error ?? "Loading…")}</p>`;
   const scope = filterBar([{ name: "window", value: d?.window ?? "week", options: WINDOWS }]);
@@ -75,10 +75,10 @@ export const view = {
   icon: "robot",
   api: "/api/state",
   refresh: 60,
-  render: (s, _params, q) => renderCapacity(s, usable(q?.get("window") || "week"), q?.get("tile") ?? "live"),
+  render: (s, _params, q) => renderFactoryAgents(s, usable(q?.get("window") || "week"), q?.get("tile") ?? "live"),
   mount: async (root, s) => {
     const draw = (d) => {
-      root.innerHTML = renderCapacity(s, d, picked());
+      root.innerHTML = renderFactoryAgents(s, d, picked());
       wireScope(root);
       onTile(root.querySelector("#capacity"), (k) => { setQuery({ tile: k === "live" ? "" : k }); draw(d); root.querySelector(`button[data-tile="${k}"]`)?.focus(); });
       drawn?.dispose();

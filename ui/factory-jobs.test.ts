@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { histOption, renderPerformance } from "./views/performance.js";
+import { histOption, renderFactoryJobs } from "./views/factory-jobs.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const D: any = {
@@ -12,14 +12,14 @@ const D: any = {
 };
 
 test("five stage tiles come from the data, with the last 24 h", () => {
-  const h = renderPerformance(D, { phases: { ...D.phases, lead: P(1, 1484, 1484) } }, "lead");
+  const h = renderFactoryJobs(D, { phases: { ...D.phases, lead: P(1, 1484, 1484) } }, "lead");
   expect([...h.matchAll(/data-tile="(\w+)"/g)].map((m) => m[1])).toEqual(["lead", "intake", "queue", "implement", "land"]);
   expect(h).toContain("<b>26m</b><small>p90 4h 36m</small><small>24m 44s in the last 24 h</small>");
   expect(h).toContain('data-tile="lead" aria-pressed="true"');
 });
 
 test("picking a stage changes the histogram and the day rows", () => {
-  const lead = renderPerformance(D, null, "lead"), queue = renderPerformance(D, null, "queue");
+  const lead = renderFactoryJobs(D, null, "lead"), queue = renderFactoryJobs(D, null, "queue");
   expect(lead).toContain("Lead time times: 0, 1, 0, 0, 0, 0, 2 issues");
   expect(queue).toContain("Queue times: 1, 1, 1, 0, 0, 0, 0 issues");
   expect(lead).toContain('<span class="bv">16m 40s</span>');
@@ -36,12 +36,12 @@ test("the 1–4h and over-4h bins take the slow colour, the others do not", () =
 test("empty phases show dashes and no error", () => {
   const none = P(0, 0, 0, [0, 0, 0, 0, 0, 0, 0], 0);
   const d = { ...D, phases: { lead: none, intake: none, queue: none, implement: none, land: none }, buckets: [{ at: D.buckets[0].at, lead: null }], checks: [], models: [] };
-  const h = renderPerformance(d, null, "lead");
+  const h = renderFactoryJobs(d, null, "lead");
   expect(h).toContain("<b>–</b><small>p90 –</small><small>none in the last 24 h</small>");
   expect(h).not.toMatch(/NaN|undefined|Infinity/);
 });
 
 test("the title is the sidebar name; models with no name say not recorded", () => {
-  expect(renderPerformance(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><a href="#/jobs">All jobs</a> <div class="fbar">');
-  expect(renderPerformance(D, null, "lead")).toContain("not recorded");
+  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><a href="#/jobs">All jobs</a> <div class="fbar">');
+  expect(renderFactoryJobs(D, null, "lead")).toContain("not recorded");
 });

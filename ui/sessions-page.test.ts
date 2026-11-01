@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import * as v from "./views/agents.js";
+import * as v from "./views/sessions.js";
 
 const data = () => ({
   window: 7, project: null,
@@ -41,7 +41,7 @@ describe("the Sessions page", () => {
   });
 
   test("the page holds the old pages' content: tools, skills, unused, hooks, denials, sessions", () => {
-    const h = v.renderAgents(data(), opts());
+    const h = v.renderSessions(data(), opts());
     expect(h).toContain('<header class="ph"><h1>Sessions</h1><div class="aside"><div class="fbar">');
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
@@ -49,7 +49,7 @@ describe("the Sessions page", () => {
   });
 
   test("a selection is pressed, titles the list, and offers the way back and the skill's page", () => {
-    const h = v.renderAgents(data(), opts("pick=skill:aleph:handoff"));
+    const h = v.renderSessions(data(), opts("pick=skill:aleph:handoff"));
     expect(h).toContain("Sessions that used aleph:handoff");
     expect(h).toContain('data-tile="skill:aleph:handoff" aria-pressed="true"');
     expect(h).toContain("Show all sessions");
@@ -57,10 +57,10 @@ describe("the Sessions page", () => {
   });
 
   test("a failed part says so and the others still show", () => {
-    const off = v.renderAgents({ ...data(), activity: { langfuse: "off", tools: [] }, skills: { error: "boom" }, sessions: { error: "down" } }, opts());
+    const off = v.renderSessions({ ...data(), activity: { langfuse: "off", tools: [] }, skills: { error: "boom" }, sessions: { error: "down" } }, opts());
     expect(off).toContain("Langfuse is not configured");
     expect(off).toContain("Skills failed: boom");
     expect(off).toContain("Sessions failed: down");
-    expect(v.renderAgents({ ...data(), skills: { error: "boom" } }, opts())).toContain("dear one");
+    expect(v.renderSessions({ ...data(), skills: { error: "boom" } }, opts())).toContain("dear one");
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
 // @ts-ignore plain JS, shared with the page
-import { BODY_TEMPLATE, renderContents, renderIssue } from "./views/contents.js";
+import { BODY_TEMPLATE, renderIssues, renderIssue } from "./views/issues.js";
 // @ts-ignore plain JS, shared with the page
 import { renderDetail } from "./views/projects.js";
 // @ts-ignore plain JS, shared with the page
@@ -29,7 +29,7 @@ describe("the UI never says goal", () => {
   for (const [name, html] of pages) test(name, () => { noGoal(html); noGoal(attrs(html)); });
 
   test("the form still files a spec", () => {
-    const form = renderContents({ projects: [], issues: [] });
+    const form = renderIssues({ projects: [], issues: [] });
     expect(form).toContain("build it in the factory");
     expect(form).toContain('name="spec"');
   });

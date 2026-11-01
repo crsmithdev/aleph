@@ -758,7 +758,7 @@ test("an ask keeps its action buttons on the page", () => {
 });
 
 test("the sidebar links and the routes exist", async () => {
-  for (const [f, path, old] of [["performance", "/factory/jobs", "#/status/performance"], ["efficiency", "/factory/efficiency", "#/status/efficiency"], ["capacity", "/factory/agents", "#/status/capacity"]]) {
+  for (const [f, path, old] of [["factory-jobs", "/factory/jobs", "#/status/performance"], ["efficiency", "/factory/efficiency", "#/status/efficiency"], ["factory-agents", "/factory/agents", "#/status/capacity"]]) {
     const m = await import(`./views/${f}.js`);
     expect(m.view.path).toBe(path);
     expect(m.redirect(old)).toBe(`#${path}`);
