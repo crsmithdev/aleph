@@ -122,9 +122,11 @@ const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?|most flaked in acce
 const ALERTS = [
   [/ CI on main has failed/, "GitHub CI is broken"],
   [/main is red/, "the build is failing on main"],
-  [/sandbox probe/, "the sandbox probe failed"],
+  [/sandbox probe/, "the sandbox is broken"],
   [/^Held: /, JOBS_UNHEALTHY],
-  [/no factory run started/, "the factory started no run in 24 hours"],
+  [/did not land|land run of/, "lands are stuck"],
+  [/can start, but no run started/, "queued jobs are not starting"],
+  [/did not move to jobs/, "new issues are not becoming jobs"],
   [/runs? wait for Chris/, "new runs wait for your answers"],
 ];
 const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
@@ -136,8 +138,7 @@ export function renderLede(s, stale = false) {
   if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
   const said = [...alerts].sort((a, b) => alertRank(a) - alertRank(b)).map((t) => [t, t === JOBS_UNHEALTHY && s.stuck.length ? "#jobs-stuck" : "#awaiting"]);
   const asks = s.asks ?? [];
-  const wanted = [asks.some((i) => i.kind === "approval") && "permission", asks.some((i) => i.kind === "input") && "input"].filter(Boolean);
-  if (wanted.length) said.push([`your ${wanted.join(" and ")} ${wanted.length > 1 ? "are" : "is"} needed`, "#awaiting"]);
+  if (asks.length) said.push(["your attention is needed", "#awaiting"]);
   const alert = alerts.size > 0;
   if (f.paused && alert) said.push(["the factory is paused", ""]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) said.push(["the day cap is reached", ""]);

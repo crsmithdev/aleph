@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { afterOf, askOf, flakeTracker, goal, goals, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
+import { afterOf, askOf, flakeTracker, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
 import { normalizeAsk, type Ask } from "./ask.ts";
@@ -1039,12 +1039,72 @@ export function saveProbe(p: Probe): void {
 }
 export const probeDue = (now = Date.now()) => { const p = lastProbe(); return !p || now - Date.parse(p.at) > 20 * 3600_000; };
 
-/** The factory's health line, or null: no run in 24 hours with a goal open, or a failed probe. `jobs` and `lists` are the caller's, when it has read them already. */
+/** How long work may wait with nothing moving before it is stalled: three ticks. */
+const STALL_MS = 15 * 60_000;
+/** A land run live for longer than this is stuck: 99% of land runs end within 20 minutes. */
+const LAND_STUCK_MS = 30 * 60_000;
+const stallFile = () => join(factoryDir(), "stalls.json");
+const readStalls = (): Record<string, string> => {
+  try { return JSON.parse(readFileSync(stallFile(), "utf8")); } catch { return {}; }
+};
+
+/**
+ * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
+ * land live; a goal that can start with no agent or planner run live; an issue to triage or plan with no triage or
+ * planner run live. The gates that stop each step leave its work out, because each gate has its own line.
+ */
+export function stalled(jobs = allJobs(), lists = reader()): string[] {
+  if (gates({ only: ["pause", "hold"], jobs })) return [];
+  const runs = jobs.flat();
+  const live = (kind: string) => runs.some((e) => e.run.kind === kind && isLive(e.folder));
+  const base = baselines(), done = doneChecker();
+  const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
+  if (!liveRuns(runs) && !live("plan") && !gates({ only: ["day", "awaiting"], jobs })) {
+    for (const { repo, item } of openGoals(lists)) {
+      const name = issueJob(repo, issues.idOf(item));
+      if (base[repo.key]?.ok === false || done(`${repo.key}-${issues.idOf(item)}`) || askOf(item) || notReady(item, done) || openJob(name, null, jobs) || busyWait(repo, item, jobs)) continue;
+      out.push(`goal:${name}`);
+    }
+  }
+  if (!live("triage") && !live("plan") && !gates({ only: ["live", "day"], jobs })) {
+    for (const repo of sandboxRepos()) {
+      const doc = lists.list(repo.key);
+      for (const item of doc?.items ?? []) {
+        if (issues.status(item) !== "open") continue;
+        const toPlan = planSet(item) && !askOf(item) && !notReady(item, done) && base[repo.key]?.ok !== false;
+        if (toPlan || !isSorted(doc!, item)) out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
+      }
+    }
+  }
+  return out;
+}
+
+/** The tick's record of `stalled`: each key with the time a tick first saw it. A key that moved drops out, so its time starts again. */
+export function stallStep(now = Date.now()): void {
+  const seen = readStalls();
+  mkdirSync(factoryDir(), { recursive: true });
+  writeFileSync(stallFile(), JSON.stringify(Object.fromEntries(stalled().map((k) => [k, seen[k] ?? new Date(now).toISOString()]))));
+}
+
+/** The health lines of work that stayed stalled for STALL_MS, and of land runs live past LAND_STUCK_MS. */
+function stallLines(now: number, jobs?: Job[]): string[] {
+  if (paused()) return [];
+  const old = Object.entries(readStalls()).filter(([, at]) => now - Date.parse(at) >= STALL_MS).map(([k]) => k);
+  const n = (kind: string) => old.filter((k) => k.startsWith(`${kind}:`)).length;
+  const lines: string[] = [];
+  const slow = (jobs?.flat() ?? allRuns()).filter((e) => e.run.kind === "land" && isLive(e.folder) && now - Date.parse(e.run.started) >= LAND_STUCK_MS);
+  if (n("land")) lines.push(`health: ${n("land")} passed run${n("land") > 1 ? "s" : ""} did not land in 15 minutes`);
+  for (const e of slow) lines.push(`health: the land run of ${e.run.name} is live for over 30 minutes`);
+  if (n("goal")) lines.push(`health: ${n("goal")} goal${n("goal") > 1 ? "s" : ""} can start, but no run started in 15 minutes`);
+  if (n("ingest")) lines.push(`health: ${n("ingest")} new issue${n("ingest") > 1 ? "s" : ""} did not move to jobs in 15 minutes`);
+  return lines;
+}
+
+/** The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, and flakes. `jobs` and `lists` are the caller's, when it has read them already. */
 export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {}): string[] {
   const lines: string[] = [];
   const lists = o.lists ?? reader();
-  const goals = openGoals(lists);
-  if (goals.length && !paused() && !runsToday(now, o.jobs?.flat()).length) lines.push(`health: no factory run started in 24 hours, with ${goals.length} open goal${goals.length > 1 ? "s" : ""}`);
+  lines.push(...stallLines(now, o.jobs));
   const w = waiting(o.jobs);
   if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
   const p = lastProbe();

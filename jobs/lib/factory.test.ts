@@ -6,7 +6,7 @@ import { askOf, clearAsk, readList, writeList } from "../../todo/lib/store.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { AWAITING_CAP, correctionsDue, dispatchIssues, episodeStep, report, gates, notReady, spentToday, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue , factoryDir } from "./factory.ts";
+import { AWAITING_CAP, correctionsDue, dispatchIssues, episodeStep, report, gates, notReady, spentToday, waitReason, hold, saveProbe, setPaused, waitingToLand, type Rescue , factoryDir, health, stalled, stallStep } from "./factory.ts";
 import { readRun, writeRun, allJobs, allRuns, lock, type Run } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -1195,4 +1195,41 @@ test("a goal that shares only a quiet file with an open job starts", async () =>
   const calls: string[] = [];
   await dispatchIssues(async (_repo, name) => { calls.push(name); return null; });
   expect(calls).toEqual([`fac-${second}`]);
+});
+
+test("stalled lists what could move: a goal, a new issue and a passed run, each until a gate or a live run explains it", () => {
+  const id = goal();
+  const fresh = writeList({ key: "fac" }, "add an issue", (doc) => issues.add(doc, "new thing").id, true)!.value;
+  expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "repo"), sandbox: true, autoland: true } }));
+  const { folder } = mk(`fac-${id}`, "build", "passed");
+  expect(stalled()).toEqual([`land:fac-${id}`, `ingest:fac-${fresh}`]);
+  setPaused(true);
+  expect(stalled()).toEqual([]);
+  setPaused(false);
+  writeRun(folder, { ...readRun(folder)!, condition: "stuck" });
+  expect(stalled()).toEqual([]); // the hold has its own line
+});
+
+test("a blocked goal does not stall; a live agent run leaves a ready goal out", async () => {
+  const blocker = goal();
+  const after = goal();
+  await change(after, (item) => { item.fm.after = [`fac-${blocker}`]; });
+  expect(stalled()).toEqual([`goal:fac-${blocker}`]);
+  mk("fac-other", "build", "running", { made: Date.now() });
+  expect(stalled()).toEqual([]);
+});
+
+test("health says a stall only after 15 minutes of ticks, and stops when the work moves", async () => {
+  const id = goal();
+  const t0 = Date.parse("2026-11-01T12:00:00Z"), min = 60_000;
+  const said = (at: number) => health(at).filter((l) => l.includes("can start"));
+  stallStep(t0);
+  stallStep(t0 + 5 * min);
+  expect(said(t0 + 14 * min)).toEqual([]);
+  expect(said(t0 + 15 * min)).toEqual(["health: 1 goal can start, but no run started in 15 minutes"]);
+  await change(id, (item) => { issues.setStatus(item, "done"); });
+  stallStep(t0 + 16 * min);
+  expect(said(t0 + 16 * min)).toEqual([]);
+  expect(health(t0).some((l) => l.includes("24 hours"))).toBe(false);
 });
