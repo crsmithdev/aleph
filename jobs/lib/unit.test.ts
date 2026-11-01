@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkSlot } from "./ledger.ts";
-import { withSlot } from "./unit.ts";
+import { withSlot } from "./checks.ts";
 
 // Slots are locks under $XDG_RUNTIME_DIR: keep this process's own, with one slot, so a held slot is seen at once.
 let dir = "";

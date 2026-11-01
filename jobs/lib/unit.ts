@@ -12,14 +12,15 @@ import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader }
 import { addWorktree, fetchOrigin, followMain, git } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, tagged, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
-import { askOf, checkSlot, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, isLive, LOCK_BUSY, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { allJobs, hasFile, isOpen, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, RESEARCH_PROMPT, serveFetches, writeWebServer } from "./research.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
-import { dispatchDetached, dispatchOn, gates, recordFlake, waitingToLand } from "./factory.ts";
+import { checksInSandbox, runChecks } from "./checks.ts";
+import { dispatchDetached, dispatchOn, gates, waitingToLand } from "./factory.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
@@ -52,11 +53,6 @@ async function exec(argv: string[], o: { cwd: string; env: Record<string, string
 }
 
 const limit = (name: string, fallback: number) => Number(process.env[name] ?? fallback);
-
-function tail(file: string, n: number): string {
-  if (!existsSync(file)) return "";
-  return readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n");
-}
 
 /** The `result` of the last result event; else the last assistant text; else empty. */
 export function resultText(log: string): string {
@@ -129,47 +125,6 @@ function recorder(folder: string): (c: CheckResult) => void {
   let all: CheckResult[] = [];
   updateRun(folder, { checks: all });
   return (c) => { all = [...all, c]; updateRun(folder, { checks: all }); };
-}
-
-/** Run `fn` holding a check slot: the slot is freed when `fn` settles, also when it throws. */
-export async function withSlot<T>(fn: () => T | Promise<T>): Promise<T> {
-  const free = await checkSlot();
-  try {
-    return await fn();
-  } finally {
-    free();
-  }
-}
-
-/** Run every check with no `when`, and every check whose globs match a changed file. Returns why one failed. */
-async function runChecks(folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void, record: (c: CheckResult) => void): Promise<string | null> {
-  const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
-  for (const check of repo.checks) {
-    if (check.when && !matches(check.when)) continue;
-    phase(`check ${check.name}`);
-    const out = join(folder, "check.out");
-    writeFileSync(out, "");
-    // The wait for a slot is outside the time limit and outside the check's seconds.
-    const { r, again, seconds } = await withSlot(async () => {
-      const t0 = Date.now();
-      let r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
-      let again = false;
-      if (r.code !== 0 && !r.timedOut) {
-        // One more run on the same tree: a pass the second time is a flake, recorded and counted as passed.
-        appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}, run again\n${tail(out, 100)}\n\n`);
-        again = true;
-        r = await exec(["bash", "-c", check.run], { cwd: wt, env, out, limit: limit("ALEPH_CHECK_TIMEOUT", 1200) });
-        if (r.code === 0 && !r.timedOut) recordFlake(repo.key, check.name, basename(folder));
-      }
-      return { r, again, seconds: Math.round((Date.now() - t0) / 1000) };
-    });
-    const rerun = again && r.code === 0 && !r.timedOut;
-    record({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds, ...(rerun ? { rerun: true } : {}) });
-    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}${again ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
-    if (r.timedOut) return `timed out: check ${check.name}`;
-    if (r.code !== 0) return `${check.name} failed`;
-  }
-  return null;
 }
 
 /**
@@ -564,84 +519,20 @@ function followCheckout(repo: Repo, log: (step: string, out?: string) => void): 
   }
 }
 
+/** The checks on the tree in `wt`, with the given environment. */
+const inWorktree = (folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void) =>
+  runChecks({ folder, repo, changed, phase, record: recorder(folder) }, (check, out, limit) => exec(["bash", "-c", check.run], { cwd: wt, env, out, limit }));
+
 /** The checks on `commit`, in the job's worktree, which is back on its branch after. */
 async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, commit: string, changed: string[], phase: (p: string) => void): Promise<string | null> {
   const wt = run.worktree!;
   if (!existsSync(wt)) return `worktree gone: ${wt}`;
   if (!git(wt, "checkout", "-q", "--detach", commit).ok) return "checkout failed";
   try {
-    return await runChecks(folder, wt, repo, env, changed, phase, recorder(folder));
+    return await inWorktree(folder, wt, repo, env, changed, phase);
   } finally {
     git(wt, "checkout", "-q", "-f", run.branch!);
   }
-}
-
-/**
- * The repo's setup and checks on `ref` of `bundle`, under srt, in a fresh
- * clone in check/: nothing a worker left in work/ runs. Each check's output
- * and exit code go to checklog/, which only this step can write.
- */
-async function checksInSandbox(folder: string, dir: string, bundle: string, ref: string, repo: Repo, changed: string[], phase: (p: string) => void, record?: (c: CheckResult) => void, hiddenFiles: Record<string, string> = {}): Promise<string | null> {
-  const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
-  const hasHidden = Object.keys(hiddenFiles).length > 0;
-  // The hidden check runs last, on files copied in after the repo's own checks have passed.
-  const checks = [...repo.checks.filter((c) => !c.when || matches(c.when)), ...(hasHidden ? [{ name: "hidden", run: repo.hiddenRun }] : [])];
-  const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-  const lim = limit("ALEPH_CHECK_TIMEOUT", 1200);
-  if (hasHidden) {
-    mkdirSync(join(dir, "hidden"), { recursive: true });
-    for (const [name, text] of Object.entries(hiddenFiles)) writeFileSync(join(dir, "hidden", name), text);
-  }
-  const script = [
-    "set -e", "git init -q .",
-    `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
-    `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
-    `[ "$(cat ../checklog/setup.code)" = 0 ] || exit 0`,
-    ...checks.map((c, i) => {
-      const hid = c.name === "hidden" && hasHidden && i === checks.length - 1;
-      const L = `../checklog/${i}`;
-      const once = `timeout -k 30 ${lim} bash -c ${q(c.run)} > ${L}.log 2>&1; echo $? > ${L}.code`;
-      // A failed check, not the hidden one and not a timeout, runs once more on the same tree; the first run's exit and log are kept.
-      const again = hid ? "" : `c=$(cat ${L}.code); if [ "$c" != 0 ] && [ "$c" != 124 ]; then echo $c > ${L}.first; cp ${L}.log ${L}.first.log; ${once}; fi; `;
-      return `${hid ? "cp -r ../hidden .hidden; " : ""}t=$(date +%s%N); ${once}; ${again}echo $(( ($(date +%s%N) - t) / 1000000 )) > ${L}.ms; [ "$(cat ${L}.code)" = 0 ] || exit 0`;
-    }),
-  ].join("\n");
-  phase(checks.length ? `check ${checks.map((c) => c.name).join(", ")}` : "check");
-  const r = await withSlot(() => sandboxed(dir, script, { read: [bundle, ...(hasHidden ? ["hidden"] : [])], write: ["check", "checklog", "home", "tmp"], cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, stdout: join(folder, "check.out"), stderr: join(folder, "check.out") }));
-  const read = (f: string) => existsSync(join(dir, "checklog", f)) ? readFileSync(join(dir, "checklog", f), "utf8").trim() : undefined;
-  const setup = read("setup.code");
-  if (setup === undefined) return `checks did not start (exit ${r.code})`;
-  if (setup !== "0") {
-    appendFileSync(join(folder, "checks.log"), `## setup: exit ${setup}\n${tail(join(dir, "checklog", "setup.log"), 100)}\n\n`);
-    return "setup failed";
-  }
-  for (const [i, check] of checks.entries()) {
-    const code = read(`${i}.code`);
-    const timedOut = code === "124";
-    const seconds = Math.round(Number(read(`${i}.ms`) ?? 0) / 1000);
-    if (check.name === "hidden") {
-      // The hidden log can show the tests' source, so it goes to its own file and never into checks.log.
-      if (code === undefined) continue;
-      const log = read(`${i}.log`) ?? "";
-      const pass = Number(log.match(/^\s*(\d+) pass\s*$/m)?.[1] ?? 0);
-      const fail = Number(log.match(/^\s*(\d+) fail\s*$/m)?.[1] ?? 0);
-      record?.({ name: "hidden", ok: code === "0", seconds, ...(pass + fail ? { passed: pass, total: pass + fail } : {}) });
-      writeFileSync(join(folder, "hidden.log"), log + "\n");
-      appendFileSync(join(folder, "checks.log"), `## hidden: exit ${code}${timedOut ? " (timed out)" : ""}\n\n`);
-      if (timedOut) return "timed out: check hidden";
-      if (code !== "0") return fail ? `hidden check failed: ${fail} of ${pass + fail} tests` : "hidden check failed";
-      continue;
-    }
-    const first = read(`${i}.first`);
-    if (first !== undefined) appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${first}, run again\n${tail(join(dir, "checklog", `${i}.first.log`), 100)}\n\n`);
-    const rerun = first !== undefined && code === "0";
-    if (rerun) recordFlake(repo.key, check.name, basename(folder));
-    if (code !== undefined) record?.({ name: check.name, ok: code === "0", seconds, ...(rerun ? { rerun: true } : {}) });
-    appendFileSync(join(folder, "checks.log"), `## ${check.name}: exit ${code ?? "none"}${timedOut ? " (timed out)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(join(dir, "checklog", `${i}.log`), 100)}\n\n`);
-    if (timedOut) return `timed out: check ${check.name}`;
-    if (code !== "0") return `${check.name} failed`;
-  }
-  return null;
 }
 
 const HIDDEN_UNREADABLE = "hidden checks unreadable";
@@ -661,7 +552,7 @@ async function sandboxChecks(id: string, folder: string, repo: Repo, commit: str
     git(repo.path, "update-ref", ref, commit);
     const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
     if (!b.ok) return `bundle failed: ${b.out}`;
-    return await checksInSandbox(folder, dir, "out/land.bundle", ref, repo, changed, phase, recorder(folder), hidden);
+    return await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/land.bundle", ref, hidden);
   } finally {
     git(repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);
@@ -680,7 +571,7 @@ export async function baselineChecks(repo: Repo, commit: string, logs: string): 
     const b = git(repo.path, "bundle", "create", join(dir, "out", "base.bundle"), ref);
     if (!b.ok) return `bundle failed: ${b.out}`;
     const all = git(repo.path, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean);
-    return await checksInSandbox(logs, dir, "out/base.bundle", ref, repo, all, () => {});
+    return await checksInSandbox({ folder: logs, repo, changed: all, phase: () => {} }, dir, "out/base.bundle", ref);
   } catch (e) {
     return `baseline did not run: ${e instanceof Error ? e.message : e}`;
   } finally {
@@ -939,7 +830,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
   stampJob(wt, base, run.job);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
-  const failed = await runChecks(folder, wt, repo, checkEnv, changed, phase, recorder(folder));
+  const failed = await inWorktree(folder, wt, repo, checkEnv, changed, phase);
   if (failed) return fail(failed);
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
@@ -1036,7 +927,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit", facts);
     const hidden = hiddenOf(repo, run);
     if (!hidden) return stuck(HIDDEN_UNREADABLE, facts);
-    const failed = await checksInSandbox(folder, dir, "out/out.bundle", `refs/heads/${branch}`, repo, changed, phase, recorder(folder), hidden);
+    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
       const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
@@ -1229,7 +1120,7 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no commit");
     const hidden = hiddenOf(repo, run);
     if (!hidden) return stuck(HIDDEN_UNREADABLE);
-    const failed = await checksInSandbox(folder, dir, "out/out.bundle", ref, repo, changed, phase, recorder(folder), hidden);
+    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder) }, dir, "out/out.bundle", ref, hidden);
     if (failed) return stuck(failed);
     return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out });
   } finally {

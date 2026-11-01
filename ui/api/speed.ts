@@ -6,7 +6,8 @@
  * The phases also read when each issue file first came into the work store's git history.
  */
 import { existsSync } from "node:fs";
-import { flakes, LIVE_CAP } from "../../jobs/lib/factory.ts";
+import { flakes } from "../../jobs/lib/checks.ts";
+import { LIVE_CAP } from "../../jobs/lib/factory.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";

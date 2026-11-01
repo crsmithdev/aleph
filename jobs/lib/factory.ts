@@ -27,6 +27,7 @@ import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
+import { flakes } from "./checks.ts";
 import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, section, type Rate } from "./plan.ts";
@@ -961,17 +962,6 @@ export async function episodeStep(): Promise<string[]> {
     try { factoryLog(`episodes failed: ${e?.message ?? e}`); } catch {}
     return [];
   }
-}
-
-export interface Flake { repo: string; check: string; run: string; at: string }
-const flakyFile = () => join(factoryDir(), "flaky.json");
-export const flakes = (): Flake[] => {
-  try { return JSON.parse(readFileSync(flakyFile(), "utf8")); } catch { return []; }
-};
-/** A check that failed, then passed on a rerun of the same tree. */
-export function recordFlake(repo: string, check: string, run: string, now = Date.now()): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  writeFileSync(flakyFile(), JSON.stringify([...flakes(), { repo, check, run, at: new Date(now).toISOString() }], null, 2) + "\n");
 }
 
 export interface Baseline { repo: string; commit: string; ok: boolean; failed?: string }
