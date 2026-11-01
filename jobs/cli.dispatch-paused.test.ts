@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, other, sh, startScript, stateNow, setup, teardown, until as untilHelper, patchItem } from "./cli.helpers";
+import { aleph, base, jobsDir, other, sh, startScript, stateNow, setup, teardown, until as untilHelper } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -26,7 +26,6 @@ describe("a factory run", () => {
     const ids: string[] = [];
     const dropGoal = async (ref: string) => {
       await aleph(["issue", "drop", "fac", ref.split(".")[0], "test over"]);
-      patchItem("fac", ref, { status: "dropped" });
     };
     beforeAll(() => {
       startLog = join(base, "start.log");
