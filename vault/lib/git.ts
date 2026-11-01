@@ -1,5 +1,6 @@
 import { spawnSync } from "bun";
-import { relative } from "node:path";
+import { existsSync } from "node:fs";
+import { join, relative } from "node:path";
 
 export const TRAILER = "Co-Authored-By: Claude <noreply@anthropic.com>";
 
@@ -45,9 +46,17 @@ export function addedDate(dir: string, path: string): string | null {
 export function commitPaths(dir: string, subject: string, paths: string[]): string | null {
   const rel = [...new Set(paths.map((p) => relative(dir, p)))].filter((p) => p && !p.startsWith(".."));
   if (!rel.length) return null;
-  git(dir, "add", "-A", "--", ...rel);
-  if (git(dir, "diff", "--cached", "--quiet", "--", ...rel).ok) return null;
-  const r = git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", `${subject}\n\n${TRAILER}`, "--", ...rel);
+  // One pathspec that matches nothing makes `git add` fail whole, staging none
+  // of the rest. A superseded draft that no write had ever accepted is
+  // unlinked and was never tracked, so it matches nothing; the note that
+  // superseded it then stayed on disk, untracked, with no error. Drop what is
+  // neither on disk nor in git, and throw if add still fails.
+  const live = rel.filter((p) => existsSync(join(dir, p)) || tracked(dir, join(dir, p)));
+  if (!live.length) return null;
+  const added = git(dir, "add", "-A", "--", ...live);
+  if (!added.ok) throw new Error(`git add failed: ${added.out}`);
+  if (git(dir, "diff", "--cached", "--quiet", "--", ...live).ok) return null;
+  const r = git(dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", `${subject}\n\n${TRAILER}`, "--", ...live);
   if (!r.ok) throw new Error(`git commit failed: ${r.out}`);
   return git(dir, "rev-parse", "--short", "HEAD").out;
 }

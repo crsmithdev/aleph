@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addedDate } from "./git.ts";
+import { addedDate, commitPaths, tracked } from "./git.ts";
 
 const env = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let dir: string;
@@ -32,4 +32,12 @@ test("a similar note added later is not taken for the first", () => {
   commit("2026-05-01T12:00:00", "b");
   expect(addedDate(dir, join(dir, "A.md"))).toBe("2026-04-01");
   expect(addedDate(dir, join(dir, "B.md"))).toBe("2026-05-01");
+});
+
+test("commitPaths still commits the note when another named path is gone and was never tracked", () => {
+  writeFileSync(join(dir, "Draft.md"), head + "A decision.\n");
+  // The superseded draft was unlinked and never tracked; git add would fail on it whole.
+  const sha = commitPaths(dir, "write: Draft", [join(dir, "Draft.md"), join(dir, "Gone.md")]);
+  expect(sha).toBeTruthy();
+  expect(tracked(dir, join(dir, "Draft.md"))).toBe(true);
 });
