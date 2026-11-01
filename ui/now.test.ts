@@ -246,6 +246,29 @@ test("a paused factory does not say it runs smoothly", () => {
   expect(said({ paused: true, health: [mainRed] })).toBe("Alert: the build is failing on main; the factory is paused.");
 });
 
+const weekAt = (seven_day: number) => ({ usage: { now: { seven_day } } });
+
+test("a weekly usage of 90% or more is said after the other parts, in the warning colour", () => {
+  expect(said({}, weekAt(90))).toBe("Everything is running smoothly; weekly usage is at 90%.");
+  expect(r.renderLede({ ...calmState, ...weekAt(90) })).toContain('class="say warning"');
+  expect(said({}, weekAt(89.6))).toBe("Everything is running smoothly.");
+  expect(r.renderLede({ ...calmState, ...weekAt(89.6) })).toContain('class="say fine"');
+  expect(said({}, { usage: undefined })).toBe("Everything is running smoothly.");
+  expect(said({}, weekAt(93.4))).toContain("weekly usage is at 93%");
+  expect(said({ runsToday: 12, dayCap: 12 }, weekAt(95))).toBe("Everything is running smoothly; the day cap is reached; weekly usage is at 95%.");
+});
+
+test("an alert keeps its red sentence and holds the weekly usage part; three alerts cut it", () => {
+  expect(said({ health: [mainRed] }, weekAt(90))).toBe("Alert: the build is failing on main; weekly usage is at 90%.");
+  expect(r.renderLede({ ...calmState, ...weekAt(90), factory: { ...calmState.factory, health: [mainRed] } })).toContain('class="say error"');
+  const three = { health: [ciRed, mainRed, "health: 4 runs wait for Chris; no new run starts"] };
+  expect(said(three, weekAt(90))).toBe("Alert: GitHub CI is broken; the build is failing on main; new runs wait for your answers.");
+});
+
+test("a paused factory with weekly usage at 90% says so", () => {
+  expect(said({ paused: true }, weekAt(90))).toBe("The factory is paused; weekly usage is at 90%.");
+});
+
 test("the page has no banner and the status line holds the alert", () => {
   const page = r.view.render(withFactory({ health: [mainRed] }));
   expect(page).not.toContain('class="banner"');

@@ -112,6 +112,8 @@ export function usageLine(series) {
 export const FINE = "Everything is running smoothly";
 const JOBS_UNHEALTHY = "jobs are unhealthy";
 const MAX_SAID = 3;
+/** The weekly usage, in percent, from which the status sentence says how high it is. The raw value is compared, so 89.6 is not yet. */
+const WEEKLY_WARN = 90;
 
 /** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
 const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?|most flaked in acceptance/;
@@ -127,7 +129,7 @@ const ALERTS = [
 ];
 const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
 
-/** The status sentence: "Alert: " and what is wrong, or the fine sentence, then what asks for you; at most MAX_SAID parts, each a link. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
+/** The status sentence: "Alert: " and what is wrong, or the fine sentence, then what asks for you, the day cap and a weekly usage of WEEKLY_WARN or more; at most MAX_SAID parts, each a link but the day cap and usage parts, which are plain text. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 export function renderLede(s, stale = false) {
   const f = s.factory;
   const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
@@ -139,6 +141,8 @@ export function renderLede(s, stale = false) {
   const alert = alerts.size > 0;
   if (f.paused && alert) said.push(["the factory is paused", ""]);
   if (f.dayCap > 0 && f.runsToday >= f.dayCap) said.push(["the day cap is reached", ""]);
+  const week = s.usage?.now?.seven_day;
+  if (week >= WEEKLY_WARN) said.push([`weekly usage is at ${Math.round(week)}%`, ""]);
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
   if (stale) return `<span class="say error">Alert: this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
   if (alert) return `<span class="say error">Alert: ${parts}.</span>`;
