@@ -50,6 +50,12 @@ export function failedChecks(results: { name: string; ok: boolean }[], expected:
   return failed;
 }
 
+/** The last non-empty lines of a stderr text, at most `max` characters, cut from the front. */
+export function lastLines(text: string, max = 300): string {
+  const t = text.split("\n").map((l) => l.trim()).filter(Boolean).join(" | ");
+  return t.length > max ? "…" + t.slice(t.length - max + 1) : t;
+}
+
 /** What the clocks did during the probe: a wall clock step against the monotonic clock, or Windows time apart from WSL. */
 function clockFault(start: { wall: number; mono: number }): string | null {
   const step = wallStepSince(start);
@@ -76,6 +82,7 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
     git(repo.path, "bundle", "create", join(dir, "in.bundle"), `refs/remotes/origin/${repo.main}`);
     const main = `refs/remotes/origin/${repo.main}`;
     writeFileSync(log, "");
+    writeFileSync(`${log}.stderr`, "");
     const script = [
       ...denied().map(([name, cmd]) => `if ( ${cmd} ) >/dev/null 2>&1; then echo "FAIL ${name}: reachable"; else echo "PASS ${name}: denied"; fi`),
       `if claude -p 'say ok' --output-format json 2>/dev/null | grep -q '"is_error":false'; then echo "PASS claude -p: ok"; else echo "FAIL claude -p: no result"; fi`,
@@ -83,7 +90,7 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
       `${repo.setup.join(" && ") || "true"} >&2`,
       `if bun test >&2; then echo "PASS bun test: passed"; else echo "FAIL bun test: failed"; fi`,
     ].join("\n");
-    await sandboxed(dir, script, {
+    const step = await sandboxed(dir, script, {
       read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
       stdout: log, stderr: `${log}.stderr`, limit: 1200,
     });
@@ -91,6 +98,10 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
       .map((l) => ({ name: l.slice(5, l.lastIndexOf(": ")), ok: l.startsWith("PASS") }));
     const expected = denied().length + 2;
     const failed = failedChecks(results, expected, clockFault(started));
+    if (results.length < expected) {
+      const last = lastLines(readFileSync(`${log}.stderr`, "utf8"));
+      failed[failed.length - 1] += ` (exit ${step.code}${step.timedOut ? ", time box ended it" : ""}${last ? `; stderr: ${last}` : ""})`;
+    }
     const p = { at: new Date().toISOString(), ok: !failed.length, failed };
     saveProbe(p);
     return { ...p, results };
