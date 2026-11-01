@@ -67,6 +67,8 @@ export interface Agents {
   points: ({ at: string } & Partial<Record<AgentKey, number>>)[];
 }
 
+/** What `classify`'s `statusOf` returns for an issue that is no longer in the store: closed issues left it, so one with no landing was closed without landing. */
+export const GONE = "gone";
 export const CLASSES = ["landed", "fixed", "nothing", "restarted", "dropped"] as const;
 export type Class = (typeof CLASSES)[number];
 export const CLASS_NAME: Record<Class, string> = { landed: "Landed", fixed: "Fixed", nothing: "Late", restarted: "Restarted", dropped: "Dropped" };
@@ -97,7 +99,7 @@ export interface Measure { hours: number; week: number; runs: number }
 export interface ClassStat extends Measure {
   key: Class; name: string; text: string; issues: number;
   causes: (Omit<Measure, "week"> & { name: string; text: string })[];
-  top: (Omit<Measure, "week"> & { goal: string; title?: string; href: string; reason: string })[];
+  top: (Omit<Measure, "week"> & { goal: string; title?: string; href?: string; reason: string })[];
 }
 
 /** The nearest-rank percentile `p` (0..1) of `xs`; 0 for none. */
@@ -164,7 +166,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "fixed";
     else if (afterLand || /already (met|done|on main)|duplicate|folded into/i.test(reason)) cls = "nothing";
     else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "restarted";
-    else if (["done", "dropped"].includes(statusOf(g) ?? "")) cls = "dropped";
+    else if (["done", "dropped", GONE].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "nothing") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
@@ -414,12 +416,17 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   const statusOf = (goal: string): string | undefined => {
     const m = goal.lastIndexOf("-");
     const item = m < 0 ? undefined : lists.item(goal.slice(0, m), Number(goal.slice(m + 1)));
-    return item ? status(item) : undefined;
+    if (item) return status(item);
+    // An issue that is not in a readable list left the store.
+    return m >= 0 && lists.list(goal.slice(0, m)) ? GONE : undefined;
   };
   const cls = classify(all, statusOf, since.getTime(), now.getTime(), fit);
   for (const c of cls.classes) for (const t of c.top) {
     const m = t.goal.lastIndexOf("-");
-    t.title = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)))?.title;
+    const item = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)));
+    t.title = item?.title;
+    // The link would be a 404 for an issue that left the store.
+    if (!item && lists.list(t.goal.slice(0, m))) delete t.href;
   }
   const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number) => {

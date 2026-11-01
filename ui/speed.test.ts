@@ -349,3 +349,11 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   expect(html).toContain("1 live · 1 of 2 worker slots");
   expect(html).toContain("sonnet, haiku");
 });
+
+test("an unlanded run of an issue that left the store is Dropped", () => {
+  const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
+  const r = { job: "g", name: "g", repo: "fx", on: "fx-659", condition: "stuck", kind: "build", started: t(8), ended: t(9) } as any;
+  const since = new Date(2026, 9, 27).getTime(), at = new Date(2026, 9, 28, 15).getTime();
+  expect(classify([r], () => "gone", since, at, null).classes.find((c) => c.key === "dropped")!.runs).toBe(1);
+  expect(classify([r], () => undefined, since, at, null).notCounted.runs).toBe(1);
+});

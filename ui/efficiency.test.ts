@@ -100,7 +100,7 @@ test("the agent-time bar: sentence, brackets, two sides of segments, not counted
   expect(bar).toContain('title="Landed text.\nFirst run of the job: 60 h · 5 runs"');
   expect(h).not.toContain("undefined");
   expect(h).not.toContain('class="narrow"');
-  expect(h).toContain("Not counted: 11 runs of 4 open issues, 0.4 h");
+  expect(h).toContain("Not counted: 11 runs of 4 issues, 0.4 h");
   expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0], [0, 0, 0, 0, 0]) })).toContain("No agent run of an issue ended in this period.");
 });
 

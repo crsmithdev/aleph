@@ -61,7 +61,7 @@ export function renderBar(d, { pinned = null } = {}) {
   const side = (group, hrs) => (hrs > 0 ? `<div class="abar-side" style="flex:${hrs / total}">${group.filter((c) => c.hours > 0).map((c) => seg(c, hrs)).join("")}</div>` : "");
   const bar = `<div class="abar" role="group" aria-label="Agent time by what each run's work came to">${side(cs.slice(0, 2), good)}${side(cs.slice(2), lost)}</div>`;
   const nc = d.notCounted;
-  const not = nc && nc.runs ? `<p class="quiet notcounted">Not counted: ${nc.runs} runs of ${nc.issues} open issues, ${hours(nc.hours)}</p>` : "";
+  const not = nc && nc.runs ? `<p class="quiet notcounted">Not counted: ${nc.runs} runs of ${nc.issues} issues, ${hours(nc.hours)}</p>` : "";
   return brackets + bar + not;
 }
 
@@ -125,7 +125,7 @@ export function renderBreakdown(d, key) {
   const f = (v) => esc(hours(v));
   const alt = d.hasWeek ? `${esc(weekText(c.week))} of week · ` : "";
   const causes = (c.causes ?? []).map((x) => `<div class="crow"${x.text ? ` title="${esc(x.text)}"` : ""}><span class="cn">${esc(x.name)}</span><span class="cbar"><i style="width:${c.hours > 0 ? (x.hours / c.hours) * 100 : 0}%"></i></span><span class="cv">${f(x.hours)} · ${plural(x.runs, "run")}</span></div>`).join("");
-  const top = (c.top ?? []).slice(0, TOP_ISSUES).map((x) => `<div class="grow">${repoIdLink(x.goal, x.href)} ${esc(x.title ?? "")} <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
+  const top = (c.top ?? []).slice(0, TOP_ISSUES).map((x) => `<div class="grow">${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)} ${esc(x.title ?? "")} <b>${f(x.hours)}</b> <span class="quiet">${plural(x.runs, "run")}</span><div class="quiet reason">${esc(x.reason)}</div></div>`).join("");
   return `<section class="brk" data-class="${key}"><h3><i class="sw seg-${key}"></i>${esc(CLASS_NAME[key] ?? c.name)} <b>${f(c.hours)}</b> <span class="quiet">${alt}${plural(c.runs, "run")} · ${plural(c.issues, "issue")}</span></h3>` +
     `<p class="def">${esc(CLASS_TEXT[key] ?? c.text)}</p>` +
     `<div class="two"><div><h4>Causes</h4><div class="causes">${causes}</div></div><div><h4>Top Affected Issues</h4>${top}</div></div></section>`;
