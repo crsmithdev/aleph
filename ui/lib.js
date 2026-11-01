@@ -279,7 +279,7 @@ const TONES = { running: "run", landing: "run", open: "run", landed: "done", pas
 export const tone = (state) => TONES[state] ?? "quiet";
 
 // ---------- shared page parts: header, table cells, filter bar, pager ----------
-// The CSS for these is in index.html (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
+// The CSS for these is in app.css (.ph, table.tbl, .idl, .chips, .fbar, .seg, .pager).
 // Column order for every table: id or name, title, state badge, project, labels, numbers, time last.
 
 /** The page header: the serif title, a muted count, and an optional right-hand aside (`aside` is HTML). */

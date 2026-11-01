@@ -133,7 +133,7 @@ test("a held run that waits for the firefighter still asks for your attention", 
 });
 
 test("the status sentence wraps instead of clipping: .lede .say has no ellipsis or hidden overflow, and wraps", async () => {
-  const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  const html = await Bun.file(new URL("./app.css", import.meta.url)).text();
   const say = [...html.matchAll(/\.lede \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
   expect(say).not.toContain("text-overflow: ellipsis");
   expect(say).not.toContain("overflow: hidden");
@@ -141,7 +141,7 @@ test("the status sentence wraps instead of clipping: .lede .say has no ellipsis 
 });
 
 test("a long unbroken word in the status sentence (a URL) breaks: .lede .say sets overflow-wrap: anywhere", async () => {
-  const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  const html = await Bun.file(new URL("./app.css", import.meta.url)).text();
   const say = [...html.matchAll(/\.lede \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
   expect(say).toContain("overflow-wrap: anywhere");
 });

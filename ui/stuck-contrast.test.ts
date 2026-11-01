@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const html = readFileSync(join(import.meta.dir, "index.html"), "utf8");
+const html = readFileSync(join(import.meta.dir, "app.css"), "utf8");
 
 // Dark theme appears twice: the prefers-color-scheme block and the data-theme block.
 function darkBlocks(): { name: string; body: string }[] {
@@ -12,7 +12,7 @@ function darkBlocks(): { name: string; body: string }[] {
   ];
   return starts.map(({ name, re }) => {
     const m = re.exec(html);
-    if (!m) throw new Error(`no ${name} block in index.html`);
+    if (!m) throw new Error(`no ${name} block in app.css`);
     let depth = 1;
     let i = m.index + m[0].length;
     const begin = i;

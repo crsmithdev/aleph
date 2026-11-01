@@ -30,8 +30,8 @@ test("walks relative imports from the server and api roots", () => {
 
 test("this repo", () => {
   const g = serverGraph(join(import.meta.dir, "../.."));
-  for (const f of ["ui/api/now.ts", "ui/state.ts", "ui/views/now.js", "ui/decision.js", "todo/lib/store.ts", "hooks/lib/env.ts"]) expect(g.has(f)).toBe(true);
-  expect(g.has("ui/index.html")).toBe(false);
+  for (const f of ["ui/api/now.ts", "ui/state.ts", "ui/decision.js", "todo/lib/store.ts", "hooks/lib/env.ts"]) expect(g.has(f)).toBe(true);
+  for (const f of ["ui/index.html", "ui/app.css", "ui/views/now.js", "ui/views/speed.js", "ui/views/cards.js"]) expect(g.has(f)).toBe(false);
   expect(g.has("ui/lib.test.ts")).toBe(false);
   expect([...g].filter((f) => f.endsWith(".test.ts"))).toEqual([]);
 });

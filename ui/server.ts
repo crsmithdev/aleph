@@ -58,11 +58,11 @@ export function views(dir = join(import.meta.dir, "views")): string[] {
 
 /**
  * The value of `x-aleph-version`, computed per answer: the start time plus a fingerprint of the name, mtime and size
- * of index.html, the SHARED modules and each view. A restart, an edit, an added or a removed file changes it,
+ * of index.html, app.css, the SHARED modules and each view. A restart, an edit, an added or a removed file changes it,
  * so an open page sees that its code changed and reloads its modules.
  */
 export function version(dir = import.meta.dir): string {
-  const files = ["index.html", ...[...SHARED].map((p) => p.slice(1)), ...views(join(dir, "views")).map((f) => `views/${f}`)];
+  const files = ["index.html", "app.css", ...[...SHARED].map((p) => p.slice(1)), ...views(join(dir, "views")).map((f) => `views/${f}`)];
   const parts = files.map((f) => {
     try {
       const st = statSync(join(dir, f));
@@ -111,6 +111,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir }: { wa
         const page = join(dir, "index.html");
         return new Response(Bun.file(page), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
       }
+      if (path === "/app.css") return new Response(Bun.file(join(dir, "app.css")), { headers: { "content-type": "text/css; charset=utf-8", "cache-control": "no-cache" } });
       if (path === "/vendor/echarts.min.js") return new Response(Bun.file(join(dir, "vendor", "echarts.min.js")), { headers: JS });
       if (SHARED.has(path)) return new Response(Bun.file(join(dir, path.slice(1))), { headers: JS });
       const v = path.match(/^\/views\/([^/]+)$/);

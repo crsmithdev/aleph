@@ -168,7 +168,7 @@ test("the second request is served from the cache", async () => {
 
 
 test("the waterfall at 390 px: the detail pane stacks under a grid that scrolls in a short box", async () => {
-  const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
+  const html = await Bun.file(new URL("./app.css", import.meta.url)).text();
   const narrow = html.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n\}/g)!.find((b) => b.includes(".wf "))!;
   expect(narrow).toMatch(/\.wf \{ grid-template-columns: minmax\(0, 1fr\); \}/);
   expect(narrow).toMatch(/\.wf-detail \{ position: static; max-height: none; \}/);

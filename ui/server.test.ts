@@ -19,7 +19,7 @@ beforeAll(async () => {
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
   // A view added the way a view goal adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
-  for (const f of ["index.html", "lib.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
+  for (const f of ["index.html", "app.css", "lib.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
   mkdirSync(apiDir);
   writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "work", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
   writeFileSync(join(apiDir, "_test.ts"), `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
@@ -76,6 +76,14 @@ test("/ is the page, /lib.js and /views/now.js its modules", async () => {
   expect(await (await at("/views/now.js")).text()).toContain("export function renderTiles");
 });
 
+test("/app.css is the style sheet, and the page links it", async () => {
+  const res = await at("/app.css");
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toContain("text/css");
+  expect(await res.text()).toContain(":root");
+  expect(await (await at("/")).text()).toContain('<link rel="stylesheet" href="/app.css">');
+});
+
 test("/vendor/echarts.min.js is the vendored ECharts, served as JavaScript", async () => {
   const res = await at("/vendor/echarts.min.js");
   expect(res.status).toBe(200);
@@ -123,7 +131,7 @@ test("x-aleph-login is on every API answer behind the gate, and absent without a
 test("x-aleph-version changes when a page file changes, is added or is removed", async () => {
   const pages = mkdtempSync(join(tmpdir(), "aleph-ui-pages-"));
   mkdirSync(join(pages, "views"));
-  for (const f of ["index.html", "lib.js", "decision.js", "views/a.js"]) writeFileSync(join(pages, f), "one");
+  for (const f of ["index.html", "app.css", "lib.js", "decision.js", "views/a.js"]) writeFileSync(join(pages, f), "one");
   const { at: atPages, stop: stopPages } = await withServer({ warm: false, pageDir: pages, apiDir });
   const v = async () => (await atPages("/api/_test/x")).headers.get("x-aleph-version");
   try {
@@ -133,6 +141,8 @@ test("x-aleph-version changes when a page file changes, is added or is removed",
     writeFileSync(join(pages, "views", "a.js"), "changed content");
     const edited = await v();
     expect(edited).not.toBe(first);
+    writeFileSync(join(pages, "app.css"), "changed style sheet");
+    expect(await v()).not.toBe(edited);
     writeFileSync(join(pages, "views", "b.js"), "x");
     const added = await v();
     expect(added).not.toBe(edited);

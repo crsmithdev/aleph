@@ -1,11 +1,8 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
-test("index.html's style sheet has balanced braces", () => {
-  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
-  const m = html.match(/<style>([\s\S]*?)<\/style>/);
-  expect(m).not.toBeNull();
-  const css = m![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
+test("the style sheet has balanced braces", () => {
+  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
   let depth = 0;
   let min = 0;
   for (const ch of css) {
@@ -22,7 +19,7 @@ test("index.html loads Web Awesome and ECharts at pinned versions", () => {
   expect(html).toMatch(/cdn\.jsdelivr\.net\/npm\/@awesome\.me\/webawesome@\d+\.\d+\.\d+\/dist-cdn\/webawesome\.loader\.js/);
   expect(html).toContain('<script src="/vendor/echarts.min.js"></script>');
   expect(html).not.toMatch(/cdn\.jsdelivr\.net\/npm\/echarts/);
-  expect(html).toContain("--wa-color-brand-fill-loud: var(--run)");
+  expect(readFileSync(new URL("./app.css", import.meta.url), "utf8")).toContain("--wa-color-brand-fill-loud: var(--run)");
 });
 
 test("the sidebar: every group has a page, paths are unique, and each page has an icon", async () => {

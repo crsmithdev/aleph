@@ -19,3 +19,16 @@ export function proseDecision(note) {
   if (recommendation) paragraphs.push(recommendation);
   return { paragraphs, recommendation };
 }
+
+/** One plain sentence from a note: code spans, file paths and line numbers dropped, the first sentence, cut at 160 characters. */
+export function oneSentence(text) {
+  const t = String(text ?? "")
+    .replace(/`([^`]*)`/g, (_, c) => (/[\/]|\.\w{1,5}$/.test(c) ? "" : c))
+    .replace(/[\w.-]*\/[\w./-]+/g, "")
+    .replace(/[\w-]+\.(?:js|ts|tsx|md|json|html|css|py|sh|ya?ml)\b(?::\d+(?:-\d+)?)?/g, "")
+    .replace(/\(?\blines? \d+(?:-\d+)?\)?/gi, "")
+    .replace(/\s+/g, " ").replace(/\s+([,.;:?!])/g, "$1").replace(/\(\s*\)/g, "").trim();
+  const first = (/^.*?[.?!](?=\s|$)/.exec(t)?.[0] ?? t);
+  if (/:$/.test(first)) return ""; // only a lead-in was left once the path went
+  return first.length > 160 ? `${first.slice(0, 159).trimEnd()}\u2026` : first;
+}

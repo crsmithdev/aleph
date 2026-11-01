@@ -5,9 +5,8 @@
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/corrections.ts";
 import { actionsOn, ASK_REASONS, kindOf, reasonOf, type Ask, type Granted } from "../jobs/lib/ask.ts";
 // @ts-ignore plain JS, shared with the page
-import { oneSentence } from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
-import { proseDecision } from "./decision.js";
+import { oneSentence, proseDecision } from "./decision.js";
 import type { Job, NewIssue } from "./state.ts";
 
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string>; /** The Ask's recommend names this action. */ recommended: boolean }
