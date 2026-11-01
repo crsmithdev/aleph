@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeRun, type Run } from "./lib/ledger.ts";
@@ -230,7 +230,57 @@ echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}
 echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"did '"$action"'"}'
 `;
 
+/** Pids (not this process) whose cmdline, environ or cwd holds `dir`. */
+export function referring(dir: string): number[] {
+  const out: number[] = [];
+  for (const p of readdirSync("/proc").filter((p) => /^\d+$/.test(p))) {
+    if (Number(p) === process.pid) continue;
+    let hit = false;
+    for (const f of ["cmdline", "environ"]) {
+      try { if (readFileSync(`/proc/${p}/${f}`, "utf8").includes(dir)) hit = true; } catch {}
+    }
+    if (!hit) { try { hit = readlinkSync(`/proc/${p}/cwd`).startsWith(dir); } catch {} }
+    if (hit) out.push(Number(p));
+  }
+  // Their descendants too: a child such as dash's `sleep` need not hold `dir` itself.
+  const kids = new Map<number, number[]>();
+  for (const p of readdirSync("/proc").filter((p) => /^\d+$/.test(p))) {
+    try {
+      const st = readFileSync(`/proc/${p}/stat`, "utf8");
+      const ppid = Number(st.slice(st.lastIndexOf(")") + 2).split(" ")[1]);
+      kids.set(ppid, [...(kids.get(ppid) ?? []), Number(p)]);
+    } catch {}
+  }
+  for (let i = 0; i < out.length; i++) for (const k of kids.get(out[i]) ?? []) if (k !== process.pid && !out.includes(k)) out.push(k);
+  return out;
+}
+
+/** SIGKILLs every process that refers to `dir` and waits, up to 10 s, until none is left. */
+export function killReferring(dir: string): void {
+  const end = Date.now() + 10_000;
+  for (;;) {
+    const pids = referring(dir);
+    if (!pids.length || Date.now() > end) return;
+    for (const pid of pids) { try { process.kill(pid, "SIGKILL"); } catch {} }
+    Bun.sleepSync(50);
+  }
+}
+
+/** Removes `aleph-jobs-*` folders of killed test runs: more than 2 hours old, and no live process refers to them. */
+function sweepLeftovers(): void {
+  try {
+    for (const name of readdirSync(tmpdir()).filter((n) => n.startsWith("aleph-jobs-"))) {
+      try {
+        const dir = join(tmpdir(), name);
+        if (Date.now() - statSync(dir).mtimeMs < 2 * 3600_000 || referring(dir).length) continue;
+        rmSync(dir, { recursive: true, force: true });
+      } catch {}
+    }
+  } catch {}
+}
+
 export function setup(): void {
+  sweepLeftovers();
   base = mkdtempSync(join(tmpdir(), "aleph-jobs-"));
   for (const d of ["run", "fake", "jobs", "vault"]) mkdirSync(join(base, d));
   jobsDir = join(base, "jobs");
@@ -326,9 +376,10 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
   });
 }
 export function teardown(): void {
-  server.stop(true);
-  lf.stop(true);
-  rmSync(base, { recursive: true, force: true });
+  try { server?.stop(true); } catch {}
+  try { lf?.stop(true); } catch {}
+  try { if (base) killReferring(base); } catch {}
+  if (base) rmSync(base, { recursive: true, force: true });
 }
 export function resetLf(): void { lfPosts = []; lfStatus = 200; }
 export function setLfStatus(n: number): void { lfStatus = n; }
