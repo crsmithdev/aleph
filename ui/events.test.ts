@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { serve } from "./server.ts";
@@ -54,6 +54,16 @@ test("a run's state.json sends a change, also in a run folder made after the str
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
   expect(await changeAfter(() => writeFileSync(join(factory, "paused"), ""), 5000)).toBe(true);
   expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"), 5000)).toBe(true);
+});
+
+test("a state.json moved into place sends a change, as the ledger writes it", async () => {
+  const tmp = join(runs, "old", ".state.json.1");
+  expect(await changeAfter(() => { writeFileSync(tmp, "{}"); renameSync(tmp, join(runs, "old", "state.json")); }, 5000)).toBe(true);
+});
+
+test("a file in a worker's tree sends no change, also one named state.json", async () => {
+  mkdirSync(join(runs, "old", "work", "jobs", "a"), { recursive: true });
+  expect(await changeAfter(() => { writeFileSync(join(runs, "old", "work", "x.ts"), "x"); writeFileSync(join(runs, "old", "work", "jobs", "a", "state.json"), "{}"); writeFileSync(join(runs, "old", ".state.json.1"), "{}"); }, 1500)).toBe(false);
 });
 
 test("a log write sends no change", async () => {

@@ -170,6 +170,8 @@ export function barOption(buckets, key, { window, color, lines = null, lineColor
   const step = AXIS_STEPS.find((s) => top / s <= 3) ?? top;
   const max = Math.ceil(top / step) * step;
   return {
+    // A push redraws the chart, and an entry animation on each redraw flashes the bars.
+    animation: false,
     color: [color],
     grid: { left: 48, right: lines ? 78 : 8, top: 8, bottom: 20 },
     tooltip: { trigger: "axis", confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value == null ? "none" : esc(dur(q.value))}`; } },
