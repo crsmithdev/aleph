@@ -2,6 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { barList, barRow, blockersHtml, barsOption, badge, card, sectionHead, chart, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
+import { askRow } from "./now.js";
 import { renderLifetime } from "../timeline.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
@@ -493,7 +494,7 @@ export const isMachineNote = (n) => {
 /** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
-  const HIDE = ["labels", "id", "closed_as", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title"];
+  const HIDE = ["labels", "id", "closed_as", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title", "situation", "effects", "recommend"];
   const fact = (name, dd) => `<div><dt>${esc(name)}</dt><dd>${dd}</dd></div>`;
   const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? (d.issue ? "agent" : "chris");
   const facts = (d.blockers?.length ? fact("Blocked by", blockersHtml(d.blockers, d.repo, d.ref ?? d.id)) : "") + fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
@@ -523,7 +524,7 @@ export function renderIssue(d) {
   const life = renderLifetime(d);
   return `<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
     `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
-    `<dl class="facts">${facts}</dl>` +
+    `<dl class="facts">${facts}</dl>` + (d.ask ? askRow(d.ask) : "") +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
     (goals.length ? `<div class="sh"><h2 id="h-goals">Parts</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
     `<div class="sh"><h2>Notes</h2></div>${notes}${renderNoteForm(d, ref)}${life ? `<div class="sh"><h2>Lifetime</h2></div>${life}` : ""}<div class="sh"><h2>Runs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;

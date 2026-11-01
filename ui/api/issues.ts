@@ -16,10 +16,11 @@ import { Refusal } from "../../jobs/lib/transitions.ts";
 import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, areasOf, awaitsChris, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
+import { afterOf, areasOf, askOf, awaitsChris, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
-import { githubBase, jobProjector } from "../state.ts";
+import { attend } from "../asks.ts";
+import { githubBase, jobProjector, type NewIssue } from "../state.ts";
 import { filed } from "./speed.ts";
 
 /** An issue or goal id from a route: `7` or `7.1`; null for anything else. */
@@ -132,7 +133,20 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const blockers = jobProjector().blockers(repo.key, ref);
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, commits, specs: specs(repo.key).map((s) => s.file) });
+  // The Ask row of an issue that awaits Chris: the item `attend` builds, from the NewIssue as the state builds it.
+  const stored = askOf(item);
+  let ask: unknown;
+  if (stored && todos.status(item) === "open" && (mine?.stage ?? "awaiting") === "awaiting") {
+    const id = `${repo.key}-${ref}`;
+    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: "awaiting" };
+    const q = stored.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
+    if (q) c.question = q;
+    if (stored.options.length) c.decision = stored;
+    c.ask = stored; c.reason = stored.reason; c.askKind = stored.kind;
+    ask = attend({ runs: [], issues: [c] }, {}, []).items[0];
+  }
+
+  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {

@@ -604,3 +604,43 @@ describe("what an issue waits on", () => {
     expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "edit", "oth", waiter, "--after", live]);
   });
 });
+
+describe("the Issue page shows the ask row", () => {
+  const seed = (stored: boolean) => writeList({ key: "fac" }, "seed", (doc) => {
+    const i = add(doc, stored ? "ask with text" : "plain", { request: "x" });
+    setAsk(i, { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"],
+      ...(stored ? { situation: "Two ways to go.", effects: [{ action: "decide:A", text: "Goes with A." }, { action: "decide:B", text: "Goes with B." }], recommend: { action: "decide:B", why: "smaller" } } : {}) });
+    return i.id;
+  }, true)!.value;
+
+  test("an awaiting issue returns ask; a non-asking one returns none", async () => {
+    const n = seed(true);
+    const d = await getJson(`/api/issues/fac/${n}`);
+    expect(d.ask.situation).toBe("Two ways to go.");
+    expect(d.ask.explained).toBe(true);
+    expect(d.ask.actions.length).toBeGreaterThan(0);
+    expect((await getJson("/api/issues/fac/1")).ask).toBeUndefined();
+  });
+
+  test("a closed issue returns none", async () => {
+    const n = seed(true);
+    writeList({ key: "fac" }, "close", (doc) => { setStatus(doc.items.find((x) => x.id === n && x.sub === undefined)!, "dropped"); }, true);
+    expect((await getJson(`/api/issues/fac/${n}`)).ask).toBeUndefined();
+  });
+
+  test("renderIssue shows one row with the situation, effects and buttons, and no ask fields in the front matter", async () => {
+    const n = seed(true);
+    const d = await getJson(`/api/issues/fac/${n}`);
+    d.frontmatter = { ...d.frontmatter, situation: "S", effects: "E", recommend: "R", extra: "kept" };
+    const h = v.renderIssue(d);
+    expect(h.match(/<article[^>]*issue-row/g)?.length).toBe(1);
+    expect(h).toContain("Two ways to go.");
+    expect(h).toContain("Goes with A.");
+    expect(h).toContain("Goes with B.");
+    expect(h).toContain(`data-id="${n}"`);
+    expect(h).toContain('data-repo="fac"');
+    const facts = h.slice(h.indexOf('<dl class="facts">'), h.indexOf("</dl>"));
+    expect(facts).toContain("Extra");
+    for (const k of ["Situation", "Effects", "Recommend"]) expect(facts).not.toContain(`<dt>${k}</dt>`);
+  });
+});

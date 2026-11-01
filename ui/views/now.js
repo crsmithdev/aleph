@@ -316,7 +316,7 @@ const choice = (button, hint, input = "", recommended = false) =>
   `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ' <span class="badge run">Recommended</span>' : ""}${input}</div>${button}</div>`;
 
 /** An Awaiting-you card from a server `asks` entry: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
-function askRow(i) {
+export function askRow(i) {
   const acts = i.actions ?? [];
   const inputFor = (a) => {
     if (a.act === "deny") {
