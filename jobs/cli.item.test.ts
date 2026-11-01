@@ -1,18 +1,33 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown, addOld, patchItem } from "./cli.helpers";
+import * as issues from "../todo/lib/todo.ts";
+import * as verbs from "../todo/lib/issues.ts";
+import { aleph, base, env, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown, addOld, patchItem } from "./cli.helpers";
 
-beforeAll(setup);
-afterAll(teardown);
+// The issue verbs run in this process; the store reads its paths from the environment, as the child's `env()` sets them.
+const STORE_KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_DISPATCH"];
+const saved: Record<string, string | undefined> = {};
+beforeAll(() => {
+  setup();
+  const e = env();
+  for (const k of STORE_KEYS) { saved[k] = process.env[k]; process.env[k] = e[k]; }
+});
+afterAll(() => {
+  for (const k of STORE_KEYS) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+  teardown();
+});
+
+const add = async (key: string, title: string, fields: verbs.Fields = {}) => (await verbs.add({ key }, title, fields)).result.added;
+const show = (key: string, id: number) => { const { item } = verbs.show({ key }, id); return { status: issues.status(item), notes: item.notes }; };
+const closeItem = (key: string, id: number, how: "done" | "drop", text = "") => verbs.close({ key }, id, how, text);
 
 describe("a job tied to a to-do item", () => {
   const list = () => sh(base, "git", "--git-dir", itemsRemote, "rev-parse", "main");
-  const show = async (id: number) => (await aleph(["issue", "show", "demo", String(id), "--json"])).json;
   let landId: number, dropId: number;
   beforeAll(async () => {
-    landId = (await aleph(["issue", "add", "demo", "ship the widget"])).json.added;
-    dropId = (await aleph(["issue", "add", "demo", "paint the shed"])).json.added;
+    landId = await add("demo", "ship the widget");
+    dropId = await add("demo", "paint the shed");
   });
 
   test("an id the list does not have is refused, and nothing starts", async () => {
@@ -24,7 +39,7 @@ describe("a job tied to a to-do item", () => {
   });
 
   test("a run writes kind build and on, never todo; --todo is refused and starts nothing", async () => {
-    const id = (await aleph(["issue", "add", "demo", "shape check", "--spec", "-"], { ALEPH_DISPATCH: "off" }, "ACTION: commit shape.txt")).json.added;
+    const id = await add("demo", "shape check", { spec: "ACTION: commit shape.txt" });
     const j = await aleph(["job", "demo", "shape", "--spec", specFile("Goal: shape\nACTION: commit shape.txt\n"), "--on", `demo-${id}`]);
     const s = state(j.json.run);
     expect(s).toMatchObject({ kind: "build", on: `demo-${id}` });
@@ -37,7 +52,7 @@ describe("a job tied to a to-do item", () => {
   });
 
   test("--on takes the repo-prefixed form, and refuses another repo's prefix", async () => {
-    const id = (await aleph(["issue", "add", "demo", "prefixed"])).json.added;
+    const id = await add("demo", "prefixed");
     const j = await aleph(["job", "demo", "prefixed", "--spec", specFile("Goal: prefixed\nACTION: commit prefixed.txt\n"), "--on", `demo-${id}`]);
     expect(j.code).toBe(0);
     expect(state(j.json.run).on).toBe(`demo-${id}`);
@@ -53,7 +68,7 @@ describe("a job tied to a to-do item", () => {
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", condition: "landed", on: `demo-${landId}` });
     expect(s.reason).toBeUndefined();
-    const item = await show(landId);
+    const item = show("demo", landId);
     expect(item.status).toBe("done");
     expect(item.notes.at(-1)).toContain("job widget landed");
     expect(file(r.json.run, "land.log")).toContain(`## todo ${landId} done`);
@@ -66,7 +81,7 @@ describe("a job tied to a to-do item", () => {
   test("drop adds a note with the reason and leaves the item open", async () => {
     await aleph(["job", "demo", "shed", "--spec", specFile("Goal: shed\nACTION: commit shed.txt\n"), "--on", String(dropId)]);
     expect((await aleph(["drop", "shed", "wrong", "colour"])).code).toBe(0);
-    const item = await show(dropId);
+    const item = show("demo", dropId);
     expect(item.status).toBe("open");
     expect(item.notes.at(-1)).toContain("job shed dropped: wrong colour");
   });
@@ -93,7 +108,7 @@ describe("fate from git", () => {
   });
 
   test("work ported to main by hand reads as landed, and its to-do item closes", async () => {
-    const id = (await aleph(["issue", "add", "demo", "port by hand"])).json.added;
+    const id = await add("demo", "port by hand");
     const j = await aleph(["job", "demo", "ported", "--spec", specFile("Goal: ported\nACTION: commit ported.txt\n"), "--on", String(id)]);
     const tip = sh(repo, "git", "rev-parse", "job/ported");
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
@@ -104,7 +119,7 @@ describe("fate from git", () => {
     expect(await listed("ported")).toMatchObject({ condition: "landed" });
     expect(state(j.json.run)).toMatchObject({ condition: "landed", reason: "found on main (Job trailer)", commit: picked });
     expect(existsSync(worktree("ported"))).toBe(false);
-    expect((await aleph(["issue", "show", "demo", String(id), "--json"])).json.status).toBe("done");
+    expect(show("demo", id).status).toBe("done");
   });
 
   test("a branch whose change main already has, under another message, reads as landed", async () => {
@@ -143,11 +158,11 @@ describe("prospective memory", () => {
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   });
   // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `after` on an old-shape item now. The tick below does the dispatching.
-  const add = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
+  const addGoal = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
 
   test("a tick skips an issue that waits on an open item until it is ready", async () => {
-    const first = (await aleph(["issue", "add", "fac", "the first thing", "--spec", "-"], { ALEPH_DISPATCH: "off" }, "ACTION: commit first.txt")).json.added as number;
-    const second = (await aleph(["issue", "add", "fac", "waits on the first", "--spec", "-", "--after", `fac-${first}`], { ALEPH_DISPATCH: "off" }, "ACTION: commit second.txt")).json.added as number;
+    const first = await add("fac", "the first thing", { spec: "ACTION: commit first.txt" });
+    const second = await add("fac", "waits on the first", { spec: "ACTION: commit second.txt", after: [`fac-${first}`] });
     const t = await aleph(["tick"], { ...NOW, ALEPH_LIVE_CAP: "0" });
     expect(t.json.skipped).toContain(`fac-${second}: blocked: after fac-${first}`);
     expect(t.json.started).not.toContain(`fac-${second}`);
@@ -155,17 +170,17 @@ describe("prospective memory", () => {
     expect((await aleph(["tick"], NOW)).json.started).toContain(`fac-${second}`);
     // The second goal's run may end stuck, which holds the factory: clear it.
     await aleph(["drop", `fac-${second}`]);
-    await aleph(["issue", "drop", "fac", String(second), "test over"]);
-    for (const id of [first, second]) await aleph(["issue", "drop", "fac", String(id), "test over"]);
+    closeItem("fac", second, "drop", "test over");
+    for (const id of [first, second]) closeItem("fac", id, "drop", "test over");
   }, 60_000);
 
   test("a goal waiting on several items comes due once every one is done", async () => {
-    const a = await add("wait a"), b = await add("wait b");
-    const w = await add("waits on two", "--after", `fac-${a},fac-${b}`);
-    await aleph(["issue", "done", "fac", String(a)]);
+    const a = await addGoal("wait a"), b = await addGoal("wait b");
+    const w = await addGoal("waits on two", "--after", `fac-${a},fac-${b}`);
+    closeItem("fac", a, "done");
     expect((await aleph(["report"])).stdout).not.toContain(`fac-${w} waits on two`);
-    await aleph(["issue", "done", "fac", String(b)]);
+    closeItem("fac", b, "done");
     expect((await aleph(["report"])).stdout).toContain(`fac-${w} waits on two`);
-    await aleph(["issue", "drop", "fac", String(w), "test over"]);
+    closeItem("fac", w, "drop", "test over");
   }, 60_000);
 });
