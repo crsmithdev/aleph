@@ -22,7 +22,7 @@ const project = {
   items: [{ id: 3, title: "An issue", labels: [] }], commits: [], jobs: [], vault: [],
 };
 
-// The Issue page, the Inventory page and the Status lanes use the work model's names, so they say goal (see state.test.ts and issues.test.ts); the pages below keep the old rule.
+// The Issue page, the Issues page and the Status lanes use the work model's names, so they say goal (see state.test.ts and issues.test.ts); the pages below keep the old rule.
 describe("the UI never says goal", () => {
   const pages: [string, string][] = [
     ["issueCard full", issueCard(issue, "full")],

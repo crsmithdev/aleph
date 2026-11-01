@@ -15,16 +15,16 @@ const data = () => ({
 const opts = (q = "") => v.options(new URLSearchParams(q));
 const ids = (q: string) => v.shownSessions(data(), opts(q)).map((s: any) => s.id);
 
-describe("the Agents page", () => {
+describe("the Sessions page", () => {
   test("the view replaces the three old addresses and keeps their window and project", () => {
-    expect(v.view).toMatchObject({ path: "/agents", title: "Agents", group: "claude" });
+    expect(v.view).toMatchObject({ path: "/sessions", title: "Sessions", group: "claude" });
     expect(v.view.api({}, new URLSearchParams("days=30&project=x&pick=tool:Bash"))).toBe("/api/agents?days=30&project=x");
-    expect(v.redirect("#/sessions")).toBe("#/agents");
-    expect(v.redirect("#/activity?days=30&project=x&q=y")).toBe("#/agents?days=30&project=x");
-    expect(v.redirect("#/skills")).toBe("#/agents");
+    expect(v.redirect("#/agents")).toBe("#/sessions");
+    expect(v.redirect("#/activity?days=30&project=x&q=y")).toBe("#/sessions?days=30&project=x");
+    expect(v.redirect("#/skills")).toBe("#/sessions");
     expect(v.redirect("#/sessions/abc")).toBeNull();
     expect(v.redirect("#/skills/aleph:vault")).toBeNull();
-    expect(v.redirect("#/agents")).toBeNull();
+    expect(v.redirect("#/sessions")).toBeNull();
   });
 
   test("the failing tiles rank by rate and leave out a tool with under five calls", () => {
@@ -42,7 +42,7 @@ describe("the Agents page", () => {
 
   test("the page holds the old pages' content: tools, skills, unused, hooks, denials, sessions", () => {
     const h = v.renderAgents(data(), opts());
-    expect(h).toContain('<header class="ph"><h1>Agents</h1></header>');
+    expect(h).toContain('<header class="ph"><h1>Sessions</h1></header>');
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
     expect(h).toContain('data-pick="tool:Bash"');

@@ -1,4 +1,4 @@
-// The Inventory view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
+// The Issues view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { badge, chart, chips, crumb, empty, esc, filterBar, idLink, labelName, localId, md, money, pageHead, pager, sortHead, when } from "../lib.js";
@@ -32,20 +32,22 @@ export async function confirmCancel(btn, msg, target, done) {
 }
 
 export const view = {
-  path: "/inventory",
-  title: "Inventory",
-  icon: "boxes-stacked",
-  group: "factory",
+  path: "/issues",
+  title: "Issues",
+  icon: "list-check",
+  group: "work",
   order: 1,
   api: "/api/contents",
   render: (d, _params, query) => renderContents(d, hashOptions(query)),
   mount: (root, d) => mount(root, d),
 };
 
-/** The old Issues address: `#/issues`, `#/projects` and `#/contents` become `#/inventory` . The detail routes are left alone. */
+/** The old addresses: `#/inventory` keeps its filters; `#/projects` and `#/contents` become `#/issues`. The detail routes are left alone. */
 export function redirect(hash) {
-  const path = String(hash ?? "").replace(/^#/, "").split("?")[0].replace(/\/$/, "");
-  return path === "/issues" || path === "/projects" || path === "/contents" ? "#/inventory" : null;
+  const [path, qs] = String(hash ?? "").replace(/^#/, "").split("?");
+  const old = path.replace(/\/$/, "");
+  if (old === "/inventory") return `#/issues${qs ? `?${qs}` : ""}`;
+  return old === "/projects" || old === "/contents" ? "#/issues" : null;
 }
 
 // The tiles and cards follow board E of the Status redesign; the rest is what nothing shared covers: the whole-row link and the X button.
@@ -470,7 +472,7 @@ export function renderForm(rows, o = {}) {
 
 export function renderContents(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
-  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Inventory")}` +
+  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Issues")}` +
     `<div id="inv-numbers">${parts.numbers}</div>${renderGraphs()}` +
     `<div class="inv-q"><input type="search" name="q" value="${esc(o.q ?? "")}" placeholder="Search titles, ids, projects, labels" aria-label="Search the issues" data-ui="inv-search"></div>` +
     `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
@@ -545,7 +547,7 @@ export function renderIssue(d) {
       return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td></tr>`;
     }).join("")}</tbody></table></div>`
     : empty("No commit on main names this issue in its trailers.");
-  const ref = String(d.ref ?? d.id), inventory = "#/inventory", project = [d.repo, `#/inventory?project=${encodeURIComponent(d.repo)}`];
+  const ref = String(d.ref ?? d.id), inventory = "#/issues", project = [d.repo, `#/issues?project=${encodeURIComponent(d.repo)}`];
   const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   const part = (id, title, name, text) => (text || !goals.length ? `<div class="sh${text ? "" : " edit-only"}"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>` : "");
   const life = renderLifetime(d);

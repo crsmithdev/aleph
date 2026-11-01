@@ -53,7 +53,7 @@ export function renderSkill(d) {
     `<tr><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td>${esc(e.project)}</td><td class="time">${esc(when(e.time))}</td></tr>`).join("");
   const tools = d.tools.map((t) => `<tr><td><code>${esc(t.tool)}</code></td><td class="num">${t.count}</td></tr>`).join("");
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`).join("");
-  return `<div class="page skills"><p><a href="#/agents">Agents</a></p>` +
+  return `<div class="page skills"><p><a href="#/sessions">Sessions</a></p>` +
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
     (d.uses ? `<p style="max-width:720px;height:120px">${bars(d.name).replace('class="perday spark"', 'class="perday" style="width:100%;height:120px"')}</p>` : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
     (projects ? `${sectionHead("Projects")}${table("<th>Project</th><th class=\"num\">Uses</th>", projects)}` : "") +

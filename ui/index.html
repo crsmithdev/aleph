@@ -564,6 +564,7 @@ pre.stat b { color: var(--need); }
   display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 4px; text-decoration: none;
   color: var(--ink-2); font-size: var(--fs-sm); transition: background-color .15s ease-out;
 }
+#nav li.head { margin: 14px 0 4px; padding: 0 8px; font-size: var(--fs-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
 #nav a:hover { background: var(--sunk); color: var(--ink); }
 #nav wa-icon, #logout wa-icon { flex: none; width: 1.25em; font-size: var(--fs-sm); }
 #logout { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 5px 8px; border-radius: 6px; font-size: var(--fs-sm); color: var(--muted); text-decoration: none; }
@@ -577,6 +578,7 @@ pre.stat b { color: var(--need); }
   .shell.collapsed { grid-template-columns: 48px minmax(0, 1fr); }
   .shell.collapsed .side { padding-left: 6px; padding-right: 6px; align-items: center; overflow: hidden; }
   .shell.collapsed .mark { padding: 2px 0 0; margin: 0; font-size: 0; gap: 0; }
+  .shell.collapsed #nav li.head { margin: 8px 4px; padding: 0; height: 1px; overflow: hidden; font-size: 0; background: var(--rule); }
   .shell.collapsed #nav a, .shell.collapsed #logout { justify-content: center; padding: 7px 0; width: 36px; }
   .shell.collapsed #nav .lbl, .shell.collapsed #logout .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .shell.collapsed #collapse { align-self: center; }
@@ -598,6 +600,7 @@ pre.stat b { color: var(--need); }
   #nav { flex: 1 1 0; min-width: 0; }
   #collapse { display: none; }
   #logout { margin: 0; padding: 4px 8px; }
+  #nav li.head { display: none; }
   #nav ul { display: flex; flex-wrap: wrap; gap: 2px; }
   #nav a { white-space: nowrap; padding: 4px 8px; }
   #nav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--ink); }
@@ -704,9 +707,7 @@ div.crow { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; a
   .wf-axis .wf-r span:nth-child(2), .wf-axis .wf-r span:nth-child(4) { display: none; }
   .wf-axis, .wf-row { grid-template-columns: minmax(100px, 40%) minmax(0, 1fr); }
 }
-/* ---------- Status, Performance, Efficiency, Capacity ---------- */
-#nav li.sub a { padding-left: 20px; }
-.shell.collapsed #nav li.sub a { padding-left: 0; }
+/* ---------- Status, Jobs, Efficiency, Agents ---------- */
 .sp { display: flex; flex-direction: column; gap: 24px; }
 .sp > *, .page.sp > section { margin: 0; min-width: 0; }
 .sp .lanes { margin-top: 0; }
@@ -780,7 +781,6 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
 .toprow .v { color: var(--ink); }
 .filerow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: var(--fs-xs); color: var(--muted); }
 @media (max-width: 720px) {
-  #nav li.sub a { padding-left: 8px; }
   .cause { grid-template-columns: 1fr 118px; }
   .cause i { grid-column: 1 / -1; grid-row: 2; }
   .toprow { grid-template-columns: 90px 1fr; }
@@ -834,13 +834,13 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
   import { actMessages, denyReasons, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
-  // view = { path, title, group, order, sub?, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
+  // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
   // may export redirect(hash) -> new hash | null for an address it took over:
   // `api` is the URL its data comes from (":params" filled in from the route),
   // `refresh` the seconds between reloads, `live` that /api/events also reloads it,
   // `icon` its sidebar glyph, a Font Awesome name. The page builds the sidebar from
-  // them, one flat list in GROUPS order, and routes by hash (#/jobs/aleph-52).
-  const GROUPS = ["factory", "work", "claude", "memory"];
+  // them, in GROUPS order under the HEADERS, and routes by hash (#/jobs/aleph-52).
+  const GROUPS = ["work", "factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
   const $ = (id) => document.getElementById(id);
   let views = [], redirects = [], timer = 0, shown = null;
 
@@ -888,8 +888,8 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
       if (hit && (!active || v.path.length > active.path.length)) active = v;
     }
     const items = views.filter((v) => GROUPS.includes(v.group) && !v.path.includes(":") && v.nav !== false).sort((a, b) => GROUPS.indexOf(a.group) - GROUPS.indexOf(b.group) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
-    $("nav").innerHTML = `<ul>${items.map((v) =>
-      `<li${v.sub ? ' class="sub"' : ""}><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
+    $("nav").innerHTML = `<ul>${items.map((v, i) =>
+      `${v.group !== items[i - 1]?.group && HEADERS[v.group] ? `<li class="head">${HEADERS[v.group]}</li>` : ""}<li><a href="#${esc(v.path)}" title="${esc(v.title)}"${v === active ? ' aria-current="page"' : ""}><wa-icon name="${esc(v.icon)}" aria-hidden="true"></wa-icon><span class="lbl">${esc(v.title)}</span></a></li>`).join("")}</ul>`;
   }
 
   // Out-of-date check for a view with `outOfDate`: the browser's clock, from the last good response (or the route's start).

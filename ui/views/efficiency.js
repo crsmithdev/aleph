@@ -73,12 +73,14 @@ export function renderEfficiency(d, day, key = pick) {
     (s.causes[0] ? `<div class="filerow"><button type="button" class="btn primary" data-file>File an issue: ${esc(s.causes[0].name)}</button><span id="filed" role="status">The issue carries the runs and the reasons.</span></div>` : "") + `</section></div>`;
 }
 
+/** The old address. */
+export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/efficiency" ? "#/factory/efficiency" : null);
+
 export const view = {
-  path: "/status/efficiency",
+  path: "/factory/efficiency",
   title: "Efficiency",
   group: "factory",
-  order: 0.2,
-  sub: true,
+  order: 1,
   icon: "chart-pie",
   api: "/api/speed?window=week",
   refresh: 60,

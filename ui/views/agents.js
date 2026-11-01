@@ -4,9 +4,9 @@
 import { pageHead, chips, costHtml, empty, error, esc, filterBar, idLink, money, pager, sortHead, when } from "../lib.js";
 
 export const view = {
-  path: "/agents",
-  title: "Agents",
-  icon: "robot",
+  path: "/sessions",
+  title: "Sessions",
+  icon: "comments",
   group: "claude",
   order: 0,
   api: (_params, q = new URLSearchParams()) => {
@@ -18,13 +18,13 @@ export const view = {
   mount: (root, d) => mount(root, d),
 };
 
-/** The old addresses `#/sessions`, `#/activity` and `#/skills` keep their window and project. The detail routes are left alone. */
+/** The old addresses `#/agents`, `#/activity` and `#/skills` keep their window and project. The detail routes are left alone. */
 export function redirect(hash) {
   const [path, qs = ""] = String(hash ?? "").replace(/^#/, "").split("?");
-  if (!["/sessions", "/activity", "/skills"].includes(path.replace(/\/$/, ""))) return null;
+  if (!["/agents", "/activity", "/skills"].includes(path.replace(/\/$/, ""))) return null;
   const old = new URLSearchParams(qs), q = new URLSearchParams();
   for (const k of ["days", "project"]) if (old.get(k)) q.set(k, old.get(k));
-  return `#/agents${q.toString() ? `?${q}` : ""}`;
+  return `#/sessions${q.toString() ? `?${q}` : ""}`;
 }
 
 const STYLE = `<style>
@@ -170,7 +170,7 @@ const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }
 export function renderAgents(d, o = options()) {
   const projects = d?.sessions?.projects ?? d?.activity?.projects ?? [];
   const total = sum(d?.sessions?.sessions ?? [], (s) => s.cost ?? 0);
-  return `${STYLE}<div class="page agents">${pageHead("Agents")}` +
+  return `${STYLE}<div class="page agents">${pageHead("Sessions")}` +
     `<div data-ui="agents-filter">${filterBar([
       { label: "Project", name: "project", value: projects.includes(o.project) ? o.project : "", options: [{ value: "", label: "All" }, ...projects] },
       { label: "Window", name: "days", value: o.days, options: DAYS },
@@ -208,7 +208,7 @@ if (typeof document !== "undefined") {
     const t = e.target.closest ? e.target : null;
     if (!t?.closest(".agents")) return;
     const seg = t.closest('[data-ui="agents-filter"] .seg button');
-    if (seg) { const q = new URLSearchParams(location.hash.split("?")[1] ?? ""); q.set(seg.closest(".seg").dataset.name, seg.dataset.value); location.hash = `#/agents?${q}`; return; }
+    if (seg) { const q = new URLSearchParams(location.hash.split("?")[1] ?? ""); q.set(seg.closest(".seg").dataset.name, seg.dataset.value); location.hash = `#/sessions?${q}`; return; }
     const pick = t.closest("[data-pick]");
     if (pick) {
       const v = pick.dataset.pick;
@@ -229,7 +229,7 @@ if (typeof document !== "undefined") {
     if (!f) return;
     const q = new URLSearchParams(location.hash.split("?")[1] ?? "");
     if (f.value) q.set(f.name, f.value); else q.delete(f.name);
-    location.hash = `#/agents${q.toString() ? `?${q}` : ""}`;
+    location.hash = `#/sessions${q.toString() ? `?${q}` : ""}`;
   });
   let typing = 0;
   document.addEventListener("input", (e) => {

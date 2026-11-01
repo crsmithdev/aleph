@@ -60,6 +60,6 @@ test("a stale usage shows the figure and its age; a fresh one shows no age", () 
 });
 
 test("the title is the sidebar name, whatever the data", () => {
-  expect(renderCapacity(S, D)).toContain('<header class="ph"><h1>Capacity</h1></header>');
-  expect(renderCapacity({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Capacity</h1></header>');
+  expect(renderCapacity(S, D)).toContain('<header class="ph"><h1>Agents</h1></header>');
+  expect(renderCapacity({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1></header>');
 });

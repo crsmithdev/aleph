@@ -29,7 +29,7 @@ function roles(a) {
 export function renderCapacity(s, d) {
   const a = d?.agents ?? null;
   const wait = `<p role="status">${esc(speedError(d) ?? "Loading…")}</p>`;
-  return `<div class="page sp" id="capacity">${pageHead("Capacity")}<section aria-label="Scorecard" class="tiles">${tiles(s, a)}</section>` +
+  return `<div class="page sp" id="capacity">${pageHead("Agents")}<section aria-label="Scorecard" class="tiles">${tiles(s, a)}</section>` +
     `<section class="card" aria-label="Agents live"><h2>Agents live</h2>${a ? `<div class="livechart" role="img" aria-label="Agents live over the last 7 days"></div>` : wait}</section>` +
     `<section class="card" aria-label="Agent roles"><h2>Roles</h2>${a ? roles(a) : wait}</section></div>`;
 }
@@ -51,13 +51,15 @@ export function liveOption(d, color) {
 }
 
 let drawn = null;
+/** The old address. */
+export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/capacity" ? "#/factory/agents" : null);
+
 export const view = {
-  path: "/status/capacity",
-  title: "Capacity",
+  path: "/factory/agents",
+  title: "Agents",
   group: "factory",
-  order: 0.3,
-  sub: true,
-  icon: "battery-half",
+  order: 2,
+  icon: "robot",
   api: "/api/state",
   refresh: 60,
   render: (s) => renderCapacity(s, usable("week")),

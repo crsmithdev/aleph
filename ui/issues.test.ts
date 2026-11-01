@@ -183,17 +183,17 @@ describe("views", () => {
     expect((await getJson("/api/contents?project=fac")).projects).toEqual(["fac"]);
   });
 
-  test("the view is Inventory at #/inventory; #/issues and #/projects redirect, the detail routes do not", () => {
-    expect(v.view.path).toBe("/inventory");
-    expect(v.view.title).toBe("Inventory");
-    expect(v.view.group).toBe("factory");
-    expect(v.redirect("#/issues")).toBe("#/inventory");
-    expect(v.redirect("#/issues?status=open")).toBe("#/inventory");
-    expect(v.redirect("#/projects")).toBe("#/inventory");
-    expect(v.redirect("#/contents")).toBe("#/inventory");
+  test("the view is Issues at #/issues; #/inventory and #/projects redirect, the detail routes do not", () => {
+    expect(v.view.path).toBe("/issues");
+    expect(v.view.title).toBe("Issues");
+    expect(v.view.group).toBe("work");
+    expect(v.redirect("#/inventory")).toBe("#/issues");
+    expect(v.redirect("#/inventory?status=open")).toBe("#/issues?status=open");
+    expect(v.redirect("#/projects")).toBe("#/issues");
+    expect(v.redirect("#/contents")).toBe("#/issues");
     expect(v.redirect("#/issues/fac/1")).toBeNull();
     expect(v.redirect("#/projects/fac")).toBeNull();
-    expect(v.redirect("#/inventory")).toBeNull();
+    expect(v.redirect("#/issues")).toBeNull();
   });
 
   const section = (h: string, id: string) => h.split(`<div id="${id}">`)[1]?.split("</table>")[0] ?? "";

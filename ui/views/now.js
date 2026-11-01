@@ -8,7 +8,7 @@ import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } 
 export const view = {
   path: "/",
   title: "Status",
-  group: "factory",
+  group: "work",
   order: 0,
   icon: "gauge-high",
   api: "/api/state",
@@ -27,7 +27,7 @@ export function isOutOfDate({ failed, goodAt, now }) {
   return !!failed || (goodAt != null && now - goodAt > STALE_MS);
 }
 
-const EFFICIENCY = "#/status/efficiency", PERFORMANCE = "#/status/performance";
+const EFFICIENCY = "#/factory/efficiency", PERFORMANCE = "#/factory/jobs";
 
 /** The scorecard: lost time, lead time, first pass, lands, weekly usage. `d` is /api/speed for the week and `day` for the last 24 h; either is null while it loads. */
 export function renderTiles(s, d, day) {
@@ -40,7 +40,7 @@ export function renderTiles(s, d, day) {
   const lands = d
     ? tile("Lands", String(d.done), small(`issues landed, 7 days · ${d.kinds.land.count} land runs`) + small(`${day ? `${day.done} in the last 24 h, ` : ""}${Math.round(d.done / 7)} a day on average`), PERFORMANCE)
     : tile("Lands", "–", small("issues landed, 7 days"), PERFORMANCE);
-  return lostTile(d, day, EFFICIENCY) + leadTile + firstPassTile(d, day, EFFICIENCY) + lands + usageTile(s, "#/status/capacity");
+  return lostTile(d, day, EFFICIENCY) + leadTile + firstPassTile(d, day, EFFICIENCY) + lands + usageTile(s, "#/factory/agents");
 }
 
 /** The ranked causes of lost time, largest first. `d` is null while it loads, `{ error }` on a failed load. */

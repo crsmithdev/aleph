@@ -5,7 +5,7 @@ import { renderNote } from "./memory.js";
 export const view = {
   path: "/memory/:title",
   title: "Note",
-  group: "memory",
+  group: "claude",
   order: 1,
   api: (params) => `/api/memory/note?title=${encodeURIComponent(params.title)}`,
   render: (n) => renderNote(n),

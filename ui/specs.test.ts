@@ -71,7 +71,7 @@ describe("specs", () => {
     }
   });
 
-  test("Inventory shows no specs; the spec routes stay", async () => {
+  test("Issues shows no specs; the spec routes stay", async () => {
     const d = await getJson("/api/contents");
     expect(d).not.toHaveProperty("specs");
     expect(v.view.render(d, {}, new URLSearchParams())).not.toContain("<h2>Specs");

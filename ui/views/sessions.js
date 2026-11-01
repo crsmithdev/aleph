@@ -175,7 +175,7 @@ export function renderSession(d, _params, query = new URLSearchParams()) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const table = isTable(query), wf = isWaterfall(query);
   const aside = [sessionLink(d), langfuse(d.base, d.turns[0]?.traceId)].filter(Boolean).join(" ");
-  return `<div class="page"><p class="quiet"><a href="#/agents">← Agents</a></p>${pageHead(d.project, { count: table ? d.turns.length : d.total, aside })}` +
+  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a></p>${pageHead(d.project, { count: table ? d.turns.length : d.total, aside })}` +
     `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
     filterBar([{ label: "", name: "view", options: [{ value: "chat", label: "Chat" }, { value: "table", label: "Table" }, { value: "waterfall", label: "Waterfall" }], value: table ? "table" : wf ? "waterfall" : "chat" }]) +
     (table ? turnTable(d) : wf ? `<div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}` : chatBody(d)) + `</div>`;
@@ -252,7 +252,7 @@ export function renderTurn(d) {
   if (!d || d.error) return down(d ?? { error: "no answer" });
   const sid = encodeURIComponent(d.id);
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
-  return `<div class="page"><p class="quiet"><a href="#/agents">← Agents</a> / ${sessionLink(d)}</p>` +
+  return `<div class="page"><p class="quiet"><a href="#/sessions">← Sessions</a> / ${sessionLink(d)}</p>` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
     `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${costHtml(d.cost, d.wk)}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
     `<h2>Prompt</h2><pre>${esc(d.prompt)}</pre><h2>Output</h2><pre>${esc(d.output)}</pre><h2>Observations</h2>` +

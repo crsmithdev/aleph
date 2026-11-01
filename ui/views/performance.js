@@ -39,7 +39,7 @@ export function renderPerformance(d, day, stage = pick) {
   const cur = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
   const [key, name, text] = cur, c = d.phases[key];
   const over = (c.hist ?? [])[6] ?? 0;
-  return `<div class="page sp" id="perf">${pageHead("Performance")}` +
+  return `<div class="page sp" id="perf">${pageHead("Jobs", { aside: `<a href="#/jobs">All jobs</a>` })}` +
     `<section aria-label="Stages" class="tiles">${STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")}</section>` +
     `<div class="split"><section class="card wide2" aria-label="Time distribution"><h2>${esc(name)}: how long it took</h2><p>${esc(text)} ${over} of ${c.count} took over 4 h.</p>${histogram(c, name)}</section>` +
     `<section class="card" aria-label="Median by day"><h2>Median by day</h2>${days(d, key)}<p class="foot">Longest: ${esc(c.count ? dur(c.worst) : "–")}.</p></section></div>` +
@@ -47,12 +47,14 @@ export function renderPerformance(d, day, stage = pick) {
     `<section class="card" aria-label="Worker models"><h2>Build time by model</h2>${table(["Model", "Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)]))}</section></div></div>`;
 }
 
+/** The old address. */
+export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/performance" ? "#/factory/jobs" : null);
+
 export const view = {
-  path: "/status/performance",
-  title: "Performance",
+  path: "/factory/jobs",
+  title: "Jobs",
   group: "factory",
-  order: 0.1,
-  sub: true,
+  order: 0,
   icon: "stopwatch",
   api: "/api/speed?window=week",
   refresh: 60,

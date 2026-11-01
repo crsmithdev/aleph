@@ -760,7 +760,7 @@ test("the scorecard has five tiles with values from the data and 24 h comparison
   expect(h).toContain('<span class="warn">▼ 80% in the last 24 h</span>');
   expect(h).toContain("9 land runs");
   expect(h).toContain("3 in the last 24 h, 1 a day on average");
-  for (const t of ["#/status/efficiency", "#/status/performance", "#/status/capacity"]) expect(h).toContain(`href="${t}"`);
+  for (const t of ["#/factory/efficiency", "#/factory/jobs", "#/factory/agents"]) expect(h).toContain(`href="${t}"`);
   expect(h).toContain("under pace: 14.3% of the week gone");
 });
 
@@ -811,10 +811,11 @@ test("an ask keeps its action buttons on the page", () => {
 });
 
 test("the sidebar links and the routes exist", async () => {
-  for (const [f, path] of [["performance", "/status/performance"], ["efficiency", "/status/efficiency"], ["capacity", "/status/capacity"]]) {
+  for (const [f, path, old] of [["performance", "/factory/jobs", "#/status/performance"], ["efficiency", "/factory/efficiency", "#/status/efficiency"], ["capacity", "/factory/agents", "#/status/capacity"]]) {
     const m = await import(`./views/${f}.js`);
     expect(m.view.path).toBe(path);
-    expect(m.view.sub).toBe(true);
+    expect(m.redirect(old)).toBe(`#${path}`);
+    expect(m.redirect(`#${path}`)).toBeNull();
   }
 });
 

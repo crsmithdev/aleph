@@ -42,6 +42,6 @@ test("empty phases show dashes and no error", () => {
 });
 
 test("the title is the sidebar name; models with no name say not recorded", () => {
-  expect(renderPerformance(D, null, "lead")).toContain('<header class="ph"><h1>Performance</h1></header>');
+  expect(renderPerformance(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><a href="#/jobs">All jobs</a></div></header>');
   expect(renderPerformance(D, null, "lead")).toContain("not recorded");
 });

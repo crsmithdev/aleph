@@ -14,7 +14,7 @@ const listUrl = (_params, q = new URLSearchParams()) => {
 
 export const view = {
   path: "/jobs",
-  title: "Jobs",
+  title: "All jobs",
   nav: false,
   group: "factory",
   order: 1,
@@ -57,7 +57,7 @@ export function renderJobs(jobs, f = {}) {
     `<td class="wide" title="${esc(j.item?.title || j.name)}">${esc(j.item?.title || j.name)}</td><td>${badge(j.condition)}</td><td>${esc(j.repo)}</td>` +
     `<td class="time">${esc(when(j.started))}</td><td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td>` +
     `<td class="num">${j.cost !== undefined ? costHtml(j.cost, j.wk) : ""}</td><td>${esc(shortModel(j.model))}</td></tr>`).join("");
-  return `<div class="page">${pageHead("Jobs", { count: jobs.length })}${renderFilters(jobs, f)}` + (rows
+  return `<div class="page">${pageHead("All jobs", { count: jobs.length })}${renderFilters(jobs, f)}` + (rows
     ? `<div class="tscroll" style="overflow-x:auto;max-width:100%"><table class="tbl"><thead><tr><th>Job</th><th>Title</th><th>State</th><th>Project</th><th>Started</th><th class="num">Took</th><th class="num">Cost</th><th>Model</th></tr></thead><tbody>${rows}</tbody></table></div>` +
       (jobs.length > PAGE ? pager(PAGE, jobs.length, PAGE) : "")
     : empty("No job in this window.", "Widen the window or clear a filter.")) + `</div>`;
