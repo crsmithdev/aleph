@@ -56,10 +56,10 @@ describe("specs", () => {
     ]);
   });
 
-  test("?project= keeps one project; /api/contents carries the specs and honours it", async () => {
+  test("?project= keeps one project", async () => {
     expect((await getJson("/api/specs?project=b")).map((s: any) => s.file)).toEqual(["2026-09-01-gamma.md"]);
-    expect((await getJson("/api/contents")).specs.length).toBe(3);
-    expect((await getJson("/api/contents?project=b")).specs.map((s: any) => s.project)).toEqual(["b"]);
+    expect((await getJson("/api/specs")).length).toBe(3);
+    expect((await getJson("/api/specs?project=b")).map((s: any) => s.project)).toEqual(["b"]);
   });
 
   test("/api/specs/:project/:file gives the body; unknown or unsafe names are 404", async () => {
@@ -71,28 +71,10 @@ describe("specs", () => {
     }
   });
 
-  test("Inventory shows a Specs table after Issues: Title, Date, the project as a second line, rows link to the spec page", async () => {
+  test("Inventory shows no specs; the spec routes stay", async () => {
     const d = await getJson("/api/contents");
-    const h = v.view.render(d, {}, new URLSearchParams());
-    expect(h.indexOf("<h2>Issues")).toBeLessThan(h.indexOf("<h2>Specs"));
-    expect(h).toContain('<div class="sh"><h2>Specs</h2><span class="count">3</span></div>');
-    const t = h.split('<div id="specs-table">')[1].split("</table>")[0];
-    expect([...t.matchAll(/data-sort="(\w+)"/g)].map((m) => m[1])).toEqual(["title", "date"]);
-    expect(t).toContain('data-sort="date"');
-    expect(t).toContain('<a href="#/specs/a/2026-10-01-alpha.md">Alpha spec</a>');
-    expect(t.indexOf("2026-10-05")).toBeLessThan(t.indexOf("2026-09-01"));
-  });
-
-  test("the Project filter and the header sort apply to the Specs table", async () => {
-    const d = await getJson("/api/contents");
-    const h = v.view.render(d, {}, new URLSearchParams("project=b"));
-    expect(h).toContain('<div class="sh"><h2>Specs</h2><span class="count">1</span></div>');
-    expect(h).toContain("Gamma");
-    expect(h.split('<div id="specs-table">')[1]).not.toContain("Alpha spec");
-    expect(v.view.render({ specs: [] }, {}, new URLSearchParams())).toContain("No spec matches.");
-    const up = v.view.render(d, {}, new URLSearchParams("ssort=title&sdir=asc")).split('<div id="specs-table">')[1];
-    expect(up.indexOf("2026-10-05-beta.md")).toBeLessThan(up.indexOf("Alpha spec"));
-    expect(up.indexOf("Alpha spec")).toBeLessThan(up.indexOf("Gamma"));
+    expect(d).not.toHaveProperty("specs");
+    expect(v.view.render(d, {}, new URLSearchParams())).not.toContain("<h2>Specs");
   });
 
   test("the spec page renders the Markdown, escaping HTML", async () => {

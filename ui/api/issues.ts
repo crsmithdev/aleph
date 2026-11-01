@@ -20,6 +20,7 @@ import { afterOf, areasOf, awaitsChris, parentOf, partsOf, readList, readLists }
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { githubBase } from "../state.ts";
+import { filed } from "./speed.ts";
 
 /** An issue or goal id from a route: `7` or `7.1`; null for anything else. */
 const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
@@ -29,14 +30,14 @@ const str = (v: unknown): string | null => (v === undefined || v === null || v =
 
 export interface Row {
   id: number; ref: string; repo: string; title: string; status: string; priority: string | null; labels: string[];
-  after: string[]; updated: string | null; notes: number;
+  after: string[]; created: string | null; closed: string | null; source: string | null; updated: string | null; notes: number;
   stage?: string; why?: string;
 }
 
 function row(repo: string, i: todos.Issue): Row {
   return {
     id: i.id, ref: todos.refOf(i), repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: areasOf(i),
-    after: afterOf(i), updated: str(i.fm.updated), notes: i.notes.length,
+    after: afterOf(i), created: str(i.fm.created), closed: str(i.fm.closed_at), source: str(i.fm.source), updated: str(i.fm.updated), notes: i.notes.length,
   };
 }
 
@@ -114,6 +115,12 @@ function detail(params: Record<string, string>, url: URL): Response {
     const gi = todos.find(doc!, g), st = states.get(g);
     return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: `#/issues/${encodeURIComponent(repo.key)}/${g}`, stage: st?.stage ?? (gi ? todos.status(gi) : "missing"), why: st?.why ?? "", jobs: jobsOf(g) };
   });
+  // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
+  const onThis = (on: number | string | undefined) => (!ref.includes(".") ? isOfIssue(on, n) : String(on) === ref);
+  const timeline = {
+    filed: filed().issue.get(`${repo.key}-${ref}`) ?? null,
+    runs: all.flat().filter((e) => onThis(onOf(e.run))).map(({ run: r }) => ({ kind: r.kind, name: r.name, on: r.on, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
+  };
   const up = parentOf(doc, item);
   const parent = up ? `${repo.key}-${todos.refOf(up)}` : null;
 
@@ -123,7 +130,7 @@ function detail(params: Record<string, string>, url: URL): Response {
     return { hash, subject: subject ?? "", date, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
   });
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item), id: n, ref, request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {

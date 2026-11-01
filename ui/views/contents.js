@@ -1,7 +1,8 @@
-// The Inventory view: the state to browse, not the process: every project and every issue of every repo,
-// three tables and a form that files an issue. `data` is /api/contents: { issues, projects, specs }.
+// The Inventory view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
+// table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { badge, chips, crumb, empty, esc, filterBar, idLink, labelName, localId, md, pageHead, pager, sortHead, when } from "../lib.js";
+import { badge, chart, chips, crumb, empty, esc, filterBar, idLink, labelName, localId, md, money, pageHead, pager, sortHead, when } from "../lib.js";
+import { LIFETIME_STYLE, renderLifetime } from "../timeline.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
@@ -47,19 +48,36 @@ export function redirect(hash) {
   return path === "/issues" || path === "/projects" || path === "/contents" ? "#/inventory" : null;
 }
 
-// Only what nothing shared covers: the whole-row link and the X button.
+// The tiles and cards follow board E of the Status redesign; the rest is what nothing shared covers: the whole-row link and the X button.
 const STYLE_CONTENTS = `<style>
-.contents .cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 32px; align-items: start; }
-.contents .cols > * { min-width: 0; }
-.contents .side-col .tbl td, .contents .side-col .tbl th { padding-left: 8px; padding-right: 8px; }
-.contents .sub { display: block; font: var(--fs-xs) var(--sans); color: var(--muted); }
-@media (min-width: 1200px) {
-  .contents .cols { grid-template-columns: minmax(0, 1fr) 360px; }
-}
-/* Beside the 360px Projects pane the table is narrow: the Labels column keeps no minimum, so several chips wrap in the row and the right-hand columns stay in view. */
-@media (min-width: 1200px) and (max-width: 1439px) {
-  .contents .main-col .tbl td:has(> .chips) { min-width: 0; }
-}
+.contents { display: flex; flex-direction: column; gap: 16px; }
+.contents > .ph, .contents .fbar { margin-bottom: 0; }
+.contents .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; }
+.contents .tile { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; color: var(--ink-2); }
+.contents .tile .k { color: var(--muted); font: 600 var(--fs-xs) var(--sans); letter-spacing: .08em; text-transform: uppercase; }
+.contents .tile b { font: 700 44px/1 var(--metric); color: var(--ink); font-variant-numeric: lining-nums tabular-nums; }
+.contents .tile small { font-size: var(--fs-sm); }
+.contents .tile .up { font-size: var(--fs-sm); font-weight: 600; color: var(--need); }
+.contents .tile .down { font-size: var(--fs-sm); font-weight: 600; color: var(--done); }
+.contents .graphs { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.contents .card { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 16px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+.contents .card h2 { margin: 0; font: 600 var(--fs-lg)/1.3 var(--sans); color: var(--ink); }
+.contents .card p { margin: 0; font-size: var(--fs-sm); color: var(--muted); }
+.contents .inv-chart { height: 180px; min-width: 0; }
+.contents .inv-q { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.contents .inv-q input[type="search"] { flex: 1 1 280px; box-sizing: border-box; min-height: 36px; padding: 0 12px; font: var(--fs-md) var(--sans); color: var(--ink); background: var(--sunk); border: 1px solid var(--rule); border-radius: 6px; }
+.contents .inv-q input[type="search"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.contents .inv-q .hint { color: var(--muted); font-size: var(--fs-xs); }
+#inv-filters { display: flex; flex-direction: column; gap: 10px; }
+.contents .pfilter { display: flex; flex-wrap: wrap; gap: 6px; }
+.contents .pfilter button { min-height: 28px; padding: 0 10px; font: var(--fs-sm) var(--sans); color: var(--ink-2); background: transparent; border: 1px solid var(--rule); border-radius: 999px; cursor: pointer; }
+.contents .pfilter button:hover { border-color: var(--run); }
+.contents .pfilter button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.contents .pfilter button[aria-pressed="true"] { color: var(--ink); background: var(--run-bg); border-color: var(--run); font-weight: 600; }
+.contents .pfilter .n { margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.contents .sh { margin: 0; }
+.contents mark { color: inherit; background: var(--need-bg); border-radius: 2px; }
+.contents .tbl th button, .contents .tbl td.num, .contents .tbl td.time { white-space: nowrap; }
 .contents tr.crow { position: relative; }
 .contents td.wide a { color: inherit; text-decoration: none; }
 .contents td.wide a::after { content: ""; position: absolute; inset: 0; }
@@ -76,9 +94,6 @@ const STYLE_CONTENTS = `<style>
 .contents .cmsg.err { color: var(--stuck); }
 </style>`;
 
-/** A section heading, the same as the rest of the UI: the h2 and a muted count. */
-const section = (title, n) => `<div class="sh"><h2>${esc(title)}</h2><span class="count">${n}</span></div>`;
-
 /** The Issues table shows this many rows, and this many more for each press of the pager's button. */
 export const PAGE = 50;
 
@@ -86,14 +101,12 @@ export const PAGE = 50;
 export const DEFAULT_STATUS = "open";
 const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
-/** The filters and sorts, from the route's query: ?status=open&project=x&label=x&q=text&sort=title&dir=asc (the Issues table), &psort=open&pdir=desc (the Projects table), &ssort=date&sdir=desc (the Specs table), &limit=100 (the Issues rows shown). */
+/** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&limit=100. With a search and no sort, the best match comes first. */
 export function hashOptions(q = new URLSearchParams()) {
   return {
     limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
-    status: statusOf(q.get("status")), project: q.get("project") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
-    sort: { key: q.get("sort") || "updated", dir: q.get("dir") === "asc" ? 1 : -1 },
-    psort: { key: q.get("psort") || "updated", dir: q.get("pdir") === "asc" ? 1 : -1 },
-    ssort: { key: q.get("ssort") || "date", dir: q.get("sdir") === "asc" ? 1 : -1 },
+    status: statusOf(q.get("status")), project: q.get("project") ?? "", stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "",
+    sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
 }
 
@@ -101,121 +114,290 @@ export function hashOptions(q = new URLSearchParams()) {
 const own = (r) => r.ref ?? r.id;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
-const projectHref = (p) => `#/projects/${encodeURIComponent(p.key)}`;
 const stateBadge = (s) => badge(s);
 
+const DAY = 86_400_000;
 const ms = (s) => Date.parse(s) || 0;
+/** A store date `YYYY-MM-DD` as local midnight in ms, as the CLI writes it; 0 for none. */
+const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? Date.parse(`${String(s).slice(0, 10)}T00:00`) : 0);
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, labels: r.labels ?? [], at: r.updated, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, closed: r.closed ?? null, at: r.updated, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
 }
 
-/** The project rows from the API data: every registered project, with its open issues (0 when none). */
-export function projectRows(d) {
-  return (d?.projects ?? []).map((p) => ({ project: p.key, open: p.openItems ?? 0, at: p.activity, href: projectHref(p) }));
+// ---- Fuzzy search ----
+
+/** The edit distance of two strings; a number over `max` when their lengths alone must pass it. */
+function edits(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let back = [], prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      // Two letters swapped count as one typo.
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) cur[j] = Math.min(cur[j], back[j - 2] + 1);
+    }
+    back = prev; prev = cur;
+  }
+  return prev[b.length];
 }
 
-/** The spec rows from the API data. */
-export function specRows(d) {
-  return (d?.specs ?? []).map((s) => ({ date: s.date, title: s.title, project: s.project, at: s.date, href: `#/specs/${encodeURIComponent(s.project)}/${encodeURIComponent(s.file)}` }));
+/** The tightest place where `t`'s letters appear in order in `s`, as their positions; null when there is none or it spreads over more than three times `t`'s length. */
+function subsequence(t, s) {
+  let best = null;
+  for (let from = s.indexOf(t[0]); from >= 0; from = s.indexOf(t[0], from + 1)) {
+    const at = [from];
+    for (let i = 1, j = from; i < t.length && j >= 0; i++) { j = s.indexOf(t[i], j + 1); at.push(j); }
+    if (at.at(-1) < 0) break;
+    if (!best || at.at(-1) - at[0] < best.at(-1) - best[0]) best = at;
+  }
+  return best && best.at(-1) - best[0] < t.length * 3 ? best : null;
 }
 
-/** The issue rows that pass the filters. */
-export function filterRows(rows, o = {}) {
-  const q = (o.q ?? "").trim().toLowerCase();
-  return rows.filter((r) =>
-    (!o.status || r.status === o.status) && (!o.project || r.project === o.project) && (!o.label || r.labels.includes(o.label)) &&
-    (!q || r.title.toLowerCase().includes(q)));
+/**
+ * How well one lower-case word of a query fits `s`: `{ score, hits }`, or null. An exact run of letters scores best, more so
+ * at the start of a word; then letters in order; then a word of `s` within one typo (two from eight letters).
+ */
+export function fuzzyToken(t, s) {
+  const i = s.indexOf(t);
+  if (i >= 0) return { score: 100 + (i === 0 || /\W/.test(s[i - 1]) ? 30 : 0), hits: Array.from(t, (_, k) => i + k) };
+  if (t.length < 2) return null;
+  const sub = subsequence(t, s);
+  if (sub) return { score: 60 - (sub.at(-1) - sub[0] - t.length + 1), hits: sub };
+  if (t.length < 4) return null;
+  const max = t.length >= 8 ? 2 : 1;
+  for (const m of s.matchAll(/\w+/g)) {
+    if (edits(t, m[0], max) <= max) return { score: 30, hits: Array.from(m[0], (_, k) => m.index + k) };
+  }
+  return null;
 }
 
-/** The project rows that pass the Project filter. */
-export const filterProjects = (rows, o = {}) => rows.filter((r) => !o.project || r.project === o.project);
+/** Each word of `q` must fit the title, id, project, labels, stage or priority. Answers `{ score, hits }`, with `hits` the positions in the title; null when a word fits nowhere. */
+export function fuzzyMatch(q, r) {
+  const title = r.title.toLowerCase(), rest = [r.id, r.project, ...r.labels, r.stage, r.priority].join(" ").toLowerCase();
+  let score = 0;
+  const hits = new Set();
+  for (const t of q.toLowerCase().split(/\s+/).filter(Boolean)) {
+    const a = fuzzyToken(t, title), b = fuzzyToken(t, rest);
+    if (!a && !b) return null;
+    score += Math.max(a ? a.score + 10 : 0, b?.score ?? 0);
+    if (a) for (const h of a.hits) hits.add(h);
+  }
+  return { score, hits: [...hits] };
+}
 
-// Column order: id or name, title, state badge, project, labels, numbers, time last. [key, label, { num }]
-export const SPEC_COLUMNS = [["title", "Title"], ["date", "Date"]];
-const SPEC_SORT = { date: (r) => r.date, title: (r) => r.title, project: (r) => r.project };
-export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["labels", "Labels"], ["updated", "Updated"], ["act", ""]];
-export const PROJECT_COLUMNS = [["title", "Name"], ["open", "Open issues", { num: true }], ["updated", "Last activity"]];
-const SORT = {
-  project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => ms(r.at),
-};
-const PROJECT_SORT = { title: (r) => r.project, open: (r) => r.open, updated: (r) => ms(r.at) };
+/** The title as HTML with the hit letters marked. */
+export function markHits(title, hits = []) {
+  if (!hits.length) return esc(title);
+  const on = new Set(hits);
+  let out = "", run = "";
+  const flush = () => { if (run) out += `<mark>${esc(run)}</mark>`; run = ""; };
+  for (let i = 0; i < title.length; i++) {
+    if (on.has(i)) run += title[i];
+    else { flush(); out += esc(title[i]); }
+  }
+  flush();
+  return out;
+}
 
-/** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first. */
-export function sortRows(rows, sort = { key: "updated", dir: -1 }, by = SORT) {
-  const f = by[sort.key] ?? by.updated ?? by.date;
-  return [...rows].sort((a, b) => {
-    const x = f(a), y = f(b);
-    const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
-    return c * sort.dir || when(b.at) - when(a.at);
+/** The rows that pass every filter but the ones named in `skip`, each with its search `score` and `hits`. */
+export function filterRows(rows, o = {}, skip = []) {
+  const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
+  const q = (o.q ?? "").trim();
+  return rows.flatMap((r) => {
+    if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
+    if (o.label && !skip.includes("label") && !r.labels.includes(o.label)) return [];
+    if (!q) return [r];
+    const m = fuzzyMatch(q, r);
+    return m ? [{ ...r, score: m.score, hits: m.hits }] : [];
   });
 }
 
-/** "YYYY-MM-DD", from a date or a timestamp; "" when there is none. */
-const day = (s) => (Number.isNaN(Date.parse(s)) ? "" : String(s).slice(0, 10));
+// ---- The table ----
 
-/** A table's header row: sortable columns are sort buttons. */
-const header = (sort, columns, by) =>
-  `<thead><tr>${columns.map(([k, label, o]) => (by[k] ? sortHead(label, k, sort, o) : `<th>${esc(label)}</th>`)).join("")}</tr></thead>`;
+// Column order: id, title, state badge, project, labels, numbers, time last. [key, label, { num }]
+export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Runs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }], ["updated", "Updated"], ["act", ""]];
+const RANK = { high: 3, medium: 2, low: 1 };
+const SORT = {
+  project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => dayMs(r.at),
+  priority: (r) => RANK[r.priority] ?? 0, notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -dayMs(r.created),
+};
+/** The keys that start with the largest first. */
+const DOWN_FIRST = new Set(["updated", "priority", "notes", "runs", "cost", "age"]);
+const UPDATED = { key: "updated", dir: -1 };
+
+/** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first. */
+export function sortRows(rows, sort = UPDATED) {
+  const f = SORT[sort.key] ?? SORT.updated;
+  return [...rows].sort((a, b) => {
+    const x = f(a), y = f(b);
+    const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
+    return c * sort.dir || ms(b.at) - ms(a.at);
+  });
+}
+
+/** With a search and no chosen sort, the best match first. */
+const ordered = (rows, o) => (o.sort || !(o.q ?? "").trim() ? sortRows(rows, o.sort ?? UPDATED) : [...rows].sort((a, b) => b.score - a.score || ms(b.at) - ms(a.at)));
+
+/** A store date as the table shows it: "Oct 20" this year, "2025-12-03" another; "" for none. */
+export function dateText(s, now = new Date()) {
+  const t = dayMs(s);
+  if (!t) return "";
+  const d = new Date(t);
+  return d.getFullYear() === now.getFullYear() ? d.toLocaleDateString("en-US", { month: "short", day: "2-digit" }) : String(s).slice(0, 10);
+}
+
+/** The days since a store date, as "12 d"; a closed issue counts to its closing. "" for none. */
+export function ageText(r, now = Date.now()) {
+  const from = dayMs(r.created);
+  if (!from) return "";
+  return `${Math.max(0, Math.floor(((r.status === "open" ? now : dayMs(r.closed) || now) - from) / DAY))} d`;
+}
 
 /** The request an issue row's X sends, or null for a row that is not an open issue. */
 export function dropTarget(r) {
   return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "dropped from the Inventory page" } } : null;
 }
 
-/** One issue row, a part indented under its parent: id, title, stage, project, labels, time, and the X. */
+/** One issue row, a part indented under its parent, and the X. */
 export function renderRow(r) {
   const x = dropTarget(r)
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
   return `<tr class="crow${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
-    `<td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a></td>` +
-    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${chips(r.labels)}</td>` +
-    `<td class="time">${esc(when(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
-}
-
-/** One project row; the whole row is the link. */
-export function renderProjectRow(r) {
-  return `<tr class="crow" data-kind="project"><td class="wide"><a href="#/inventory?project=${encodeURIComponent(r.project)}" data-project="${esc(r.project)}">${esc(r.project)}</a></td>` +
-    `<td class="num">${r.open}</td><td class="time">${esc(when(r.at))}</td></tr>`;
-}
-
-/** One spec row; the whole row is the link. */
-export function renderSpecRow(r) {
-  return `<tr class="crow" data-kind="spec"><td class="wide"><a href="${esc(r.href)}">${esc(r.title)}</a><span class="sub">${esc(r.project)}</span></td>` +
-    `<td class="time">${esc(day(r.date))}</td></tr>`;
-}
-
-export function renderSpecsTable(rows, o = {}) {
-  const shown = sortRows(filterProjects(rows, o), o.ssort, SPEC_SORT);
-  if (!shown.length) return empty("No spec matches.", "A repo's docs/specs folder lists its specs here.");
-  return `<div class="tscroll"><table class="tbl">${header(o.ssort ?? { key: "date", dir: -1 }, SPEC_COLUMNS, SPEC_SORT)}<tbody>${shown.map(renderSpecRow).join("")}</tbody></table></div>`;
-}
-
-export function renderFilters(d, o = {}) {
-  const issues = issueRows(d);
-  const projects = [...new Set([...projectRows(d).map((r) => r.project), ...issues.map((r) => r.project), ...specRows(d).map((r) => r.project)])].sort();
-  const labels = [...new Set(issues.flatMap((r) => r.labels))].sort();
-  return `<div data-ui="contents-filter">${filterBar([
-    { label: "Project", name: "project", value: o.project ?? "", options: [{ value: "", label: "All" }, ...projects] },
-    { label: "Show", name: "status", value: o.status || "any", options: [{ value: "any", label: "Any" }, "open", "done", "dropped"] },
-    { label: "Label", name: "label", value: o.label ?? "", options: [{ value: "", label: "Any" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
-    { label: "Title", name: "q", search: true, value: o.q ?? "", placeholder: "text in the title" },
-  ])}</div>`;
-}
-
-export function renderProjectsTable(rows, o = {}) {
-  const shown = sortRows(filterProjects(rows, o), o.psort, PROJECT_SORT);
-  if (!shown.length) return empty("No project matches.", "Register one, or clear the Project filter.");
-  return `<div class="tscroll"><table class="tbl">${header(o.psort ?? { key: "updated", dir: -1 }, PROJECT_COLUMNS, PROJECT_SORT)}<tbody>${shown.map(renderProjectRow).join("")}</tbody></table></div>`;
+    `<td class="wide"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
+    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${esc(r.priority)}</td><td>${chips(r.labels)}</td>` +
+    `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td>` +
+    `<td class="time">${esc(dateText(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
 }
 
 export function renderTable(rows, o = {}) {
-  const all = sortRows(filterRows(rows, o), o.sort);
-  if (!all.length) return empty("Nothing matches.", "File an issue below, or loosen the filters.");
+  const all = ordered(filterRows(rows, o), o);
+  if (!all.length) return empty("Nothing matches.", "Loosen the filters, or file an issue below.");
   const shown = all.slice(0, o.limit ?? PAGE);
-  return `<div class="tscroll"><table class="tbl">${header(o.sort ?? { key: "updated", dir: -1 }, COLUMNS, SORT)}<tbody>${shown.map(renderRow).join("")}</tbody></table></div>${pager(shown.length, all.length, PAGE)}`;
+  const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
+  const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : `<th>${esc(label)}</th>`)).join("");
+  return `<div class="tscroll"><table class="tbl"><thead><tr>${head}</tr></thead><tbody>${shown.map(renderRow).join("")}</tbody></table></div>${pager(shown.length, all.length, PAGE)}`;
 }
+
+// ---- The tiles and charts ----
+
+const median = (xs) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const inDays = (s, from, to) => { const t = dayMs(s); return t >= from && t < to; };
+
+/** The numbers over `rows`: what the status and stage filters leave out still counts here, so the tiles do not empty when the table narrows. */
+export function stats(rows, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), end = today + DAY;
+  const week = today - 6 * DAY, before = week - 7 * DAY;
+  const open = rows.filter((r) => r.status === "open");
+  const ages = open.map((r) => dayMs(r.created)).filter(Boolean).map((t) => (today - t) / DAY);
+  const closedIn = (from, to) => rows.filter((r) => r.status !== "open" && inDays(r.closed, from, to));
+  const closed = closedIn(week, end);
+  const stages = {};
+  for (const r of open) stages[r.stage] = (stages[r.stage] ?? 0) + 1;
+  return {
+    total: rows.length, open: open.length, stages,
+    filed: rows.filter((r) => inDays(r.created, week, end)).length, filedBefore: rows.filter((r) => inDays(r.created, before, week)).length,
+    closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(before, week).length,
+    medianAge: median(ages), oldest: ages.length ? Math.max(...ages) : null,
+    runs: rows.filter((r) => !r.part).reduce((n, r) => n + r.runs, 0), cost: rows.filter((r) => !r.part).reduce((n, r) => n + r.cost, 0),
+  };
+}
+
+const tile = (k, value, ...lines) => `<div class="tile"><span class="k">${esc(k)}</span><b>${esc(value)}</b>${lines.filter(Boolean).join("")}</div>`;
+const small = (s) => `<small>${esc(s)}</small>`;
+/** The change from the week before, with no good or bad colour on a count that can go either way. */
+const change = (now, before) => (now === before ? small("same as the week before") : `<small>${now > before ? "▲" : "▼"} ${Math.abs(now - before)} from the week before</small>`);
+
+export function renderTiles(s) {
+  const stages = Object.entries(s.stages).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(", ");
+  return `<section class="tiles" aria-label="Issue numbers">` +
+    tile("Open", String(s.open), small(`of ${s.total} in the store`), stages && small(stages)) +
+    tile("Filed, 7 days", String(s.filed), change(s.filed, s.filedBefore)) +
+    tile("Closed, 7 days", String(s.closed), small(`${s.done} done, ${s.dropped} dropped`), change(s.closed, s.closedBefore)) +
+    tile("Median open age", s.medianAge === null ? "–" : `${Math.round(s.medianAge)} d`, s.oldest === null ? "" : small(`oldest ${Math.round(s.oldest)} d`)) +
+    tile("Runs", String(s.runs), small(`${money(s.cost)} recorded`)) + `</section>`;
+}
+
+/** The last `days` days: their labels and how many rows were filed and closed on each. */
+export function flow(rows, days = 14, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const out = { labels: [], filed: [], closed: [] };
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i), from = d.getTime(), to = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i + 1).getTime();
+    out.labels.push(d.toLocaleDateString("en-US", { month: "short", day: "numeric" }));
+    out.filed.push(rows.filter((r) => inDays(r.created, from, to)).length);
+    out.closed.push(rows.filter((r) => r.status !== "open" && inDays(r.closed, from, to)).length);
+  }
+  return out;
+}
+
+const AGES = [["Under 1 d", 1], ["1–3 d", 3], ["3–7 d", 7], ["1–2 wk", 14], ["2–4 wk", 28], ["Over 4 wk", Infinity]];
+/** The open rows counted into age bins. */
+export function ageBins(rows, now = new Date()) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const counts = AGES.map(() => 0);
+  for (const r of rows) {
+    if (r.status !== "open" || !dayMs(r.created)) continue;
+    const age = (today - dayMs(r.created)) / DAY;
+    counts[AGES.findIndex(([, hi]) => age < hi)]++;
+  }
+  return { labels: AGES.map(([k]) => k), counts };
+}
+
+const barsBase = (labels) => ({
+  animation: false,
+  grid: { left: 28, right: 4, top: 8, bottom: 20 },
+  xAxis: { type: "category", data: labels, axisTick: { show: false } },
+  yAxis: { type: "value", minInterval: 1, splitLine: { show: true } },
+  tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
+});
+export const flowOption = (f) => ({ ...barsBase(f.labels), series: [{ name: "Filed", type: "bar", data: f.filed }, { name: "Closed", type: "bar", data: f.closed }] });
+export const ageOption = (b) => ({ ...barsBase(b.labels), series: [{ name: "Open issues", type: "bar", barCategoryGap: "30%", data: b.counts }] });
+
+const renderGraphs = () => `<section class="graphs" aria-label="Issue charts">` +
+  `<div class="card"><h2>Filed and closed, 14 days</h2><p>Blue is filed; green is closed.</p><div class="inv-chart" data-chart="flow"></div></div>` +
+  `<div class="card"><h2>Open issues by age</h2><p>Days since the issue was filed.</p><div class="inv-chart" data-chart="age"></div></div></section>`;
+
+// ---- The filters ----
+
+const PRIORITY_OPTIONS = [{ value: "", label: "Any" }, "high", "medium", "low"];
+
+/** The project filter: a button per project with the count the other filters leave. */
+export function renderProjects(projects, rows, o = {}) {
+  const left = filterRows(rows, o, ["project"]);
+  const button = (value, label, n) => `<button type="button" data-project="${esc(value)}" aria-pressed="${(o.project ?? "") === value}">${esc(label)}<span class="n">${n}</span></button>`;
+  return `<div class="pfilter" role="group" aria-label="Project">${button("", "All", left.length)}${projects.map((p) => button(p, p, left.filter((r) => r.project === p).length)).join("")}</div>`;
+}
+
+export function renderFilters(rows, o = {}) {
+  const stages = [...new Set(rows.map((r) => r.stage))].sort();
+  const labels = [...new Set(rows.flatMap((r) => r.labels))].sort();
+  return filterBar([
+    { label: "Show", name: "status", value: o.status || "any", options: [{ value: "any", label: "Any" }, "open", "done", "dropped"] },
+    { label: "Stage", name: "stage", value: o.stage ?? "", options: [{ value: "", label: "Any" }, ...stages] },
+    { label: "Priority", name: "priority", value: o.priority ?? "", options: PRIORITY_OPTIONS },
+    { label: "Label", name: "label", value: o.label ?? "", options: [{ value: "", label: "Any" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
+  ]);
+}
+
+/** The parts that change with the filters. The search box stays out of them, so it keeps the focus while the reader types. */
+function renderLive(projects, rows, o) {
+  const shown = filterRows(rows, o).length;
+  // The tiles and charts follow project, label, priority and search, not status or stage.
+  return {
+    filters: renderProjects(projects, rows, o) + renderFilters(rows, o),
+    numbers: renderTiles(stats(filterRows(rows, o, ["status", "stage"]))),
+    table: `<div class="sh"><h2>Issues</h2><span class="count">${shown}</span></div>${renderTable(rows, o)}`,
+  };
+}
+
+const projectsOf = (d) => [...new Set([...(d?.projects ?? []), ...(d?.issues ?? []).map((r) => r.repo)])].sort();
 
 export const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
 
@@ -224,18 +406,42 @@ export function projectOptions(keys, project) {
   return keys.map((k) => `<option value="${esc(k)}"${k === project ? " selected" : ""}>${esc(k)}</option>`).join("");
 }
 
-/** Fills the form's Project select from the registry's keys. */
+let drawn = [], live = null;
+
+function draw(root) {
+  for (const c of drawn) c.dispose();
+  drawn = [];
+  const rows = filterRows(live.rows, live.o(), ["status", "stage"]);
+  const panel = (name, option) => { const el = root.querySelector(`.inv-chart[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
+  panel("flow", flowOption(flow(rows)));
+  panel("age", ageOption(ageBins(rows)));
+}
+
+/** Fill what follows the filters. A filter changes no route, so nothing fetches again. */
+function refill() {
+  const root = live?.root;
+  if (!root?.isConnected) return;
+  const parts = renderLive(live.projects, live.rows, live.o());
+  root.querySelector("#inv-filters").innerHTML = parts.filters;
+  root.querySelector("#inv-numbers").innerHTML = parts.numbers;
+  root.querySelector("#issues-table").innerHTML = parts.table;
+  draw(root);
+}
+
+/** Draws the charts, keeps the data for the filters, and fills the form's Project select from the registry's keys. */
 export async function mount(root, d) {
+  live = { root, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")) };
+  if (root.querySelector?.(".inv-chart")) draw(root);
   const table = root.querySelector?.("#issues-table");
   if (table) table.addEventListener("click", (ev) => {
     const btn = ev.target.closest?.("button[data-cancel]");
     const tr = btn?.closest("tr");
-    const r = tr && issueRows(d).find((x) => x.repo === tr.dataset.repo && String(x.n) === tr.dataset.n);
+    const r = tr && live.rows.find((x) => x.repo === tr.dataset.repo && String(x.n) === tr.dataset.n);
     const target = r && dropTarget(r);
     if (!target) return;
     confirmCancel(btn, tr.querySelector(".cmsg"), target, (j) => {
       r.status = j.status ?? "dropped";
-      tr.outerHTML = renderRow(r);
+      refill();
     });
   });
   const select = root.querySelector?.('select[name="repo"]');
@@ -263,13 +469,12 @@ export function renderForm(rows, o = {}) {
 }
 
 export function renderContents(d, o = {}) {
-  const issues = issueRows(d), projects = projectRows(d), specs = specRows(d);
-  const shownSpecs = filterProjects(specs, o).length;
-  const shownProjects = filterProjects(projects, o).length, shownIssues = filterRows(issues, o).length;
-  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Inventory")}${renderFilters(d, o)}` +
-    `<div class="cols"><div class="main-col">${section("Issues", shownIssues)}<div id="issues-table">${renderTable(issues, o)}</div></div>` +
-    `<div class="side-col">${section("Projects", shownProjects)}<div id="projects-table">${renderProjectsTable(projects, o)}</div>` +
-    `${section("Specs", shownSpecs)}<div id="specs-table">${renderSpecsTable(specs, o)}</div></div></div>` +
+  const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
+  return `${STYLE_CONTENTS}<div class="page contents">${pageHead("Inventory")}` +
+    `<div id="inv-numbers">${parts.numbers}</div>${renderGraphs()}` +
+    `<div class="inv-q"><input type="search" name="q" value="${esc(o.q ?? "")}" placeholder="Search titles, ids, projects, labels" aria-label="Search the issues" data-ui="inv-search"></div>` +
+    `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
+    `<div id="issues-table">${parts.table}</div>` +
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 
@@ -343,44 +548,51 @@ export function renderIssue(d) {
   const ref = String(d.ref ?? d.id), inventory = "#/inventory", project = [d.repo, `#/inventory?project=${encodeURIComponent(d.repo)}`];
   const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   const part = (id, title, name, text) => (text || !goals.length ? `<div class="sh${text ? "" : " edit-only"}"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>` : "");
-  return `<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
+  const life = renderLifetime(d);
+  return `${LIFETIME_STYLE}<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
     `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)}${chips(fm.labels)}</div>` +
     `<dl class="facts">${facts}</dl>` +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
     (goals.length ? `<div class="sh"><h2 id="h-goals">Parts</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
-    `<div class="sh"><h2>Notes</h2></div>${notes}${renderNoteForm(d, ref)}<div class="sh"><h2>Runs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
+    `<div class="sh"><h2>Notes</h2></div>${notes}${renderNoteForm(d, ref)}${life ? `<div class="sh"><h2>Lifetime</h2></div>${life}` : ""}<div class="sh"><h2>Runs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
 // listens on the document. Filters live in the route's query, the form posts.
 if (typeof document !== "undefined") {
-  const setQuery = (name, value) => {
-    const h = location.hash.replace(/^#/, "");
-    const [path, qs = ""] = h.split("?");
+  /** Change the query in place: replaceState fires no hashchange, so the shell does not fetch and render again. */
+  const setQuery = (changes) => {
+    const [path, qs = ""] = location.hash.replace(/^#/, "").split("?");
     const q = new URLSearchParams(qs);
-    if (value) q.set(name, value); else q.delete(name);
-    location.hash = path + (q.toString() ? `?${q}` : "");
+    for (const [name, value] of Object.entries(changes)) { if (value) q.set(name, value); else q.delete(name); }
+    history.replaceState(null, "", `#${path}${q.toString() ? `?${q}` : ""}`);
+    refill();
   };
+  const here = () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? ""));
   document.addEventListener("click", (e) => {
-    const b = e.target.closest && e.target.closest("#issues-table button[data-sort], #projects-table button[data-sort], #specs-table button[data-sort]");
-    if (!b) return;
-    const o = hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? ""));
-    const p = b.closest("#projects-table") ? "p" : b.closest("#specs-table") ? "s" : "", cur = p === "p" ? o.psort : p === "s" ? o.ssort : o.sort;
-    const key = b.dataset.sort, dir = cur.key === key ? -cur.dir : key === "updated" || key === "open" || key === "date" ? -1 : 1;
-    setQuery(`${p}sort`, key); setQuery(`${p}dir`, dir > 0 ? "asc" : "desc");
+    const t = e.target.closest ? e.target : null;
+    const sort = t?.closest("#issues-table button[data-sort]");
+    if (sort) {
+      const key = sort.dataset.sort, cur = here().sort;
+      const dir = cur?.key === key ? -cur.dir : DOWN_FIRST.has(key) ? -1 : 1;
+      return setQuery({ sort: key, dir: dir > 0 ? "asc" : "desc" });
+    }
+    const project = t?.closest("#inv-filters button[data-project]");
+    if (project) return setQuery({ project: project.dataset.project, limit: "" });
+    const seg = t?.closest("#inv-filters .seg button");
+    if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" });
+    const more = t?.closest("#issues-table button[data-more]");
+    if (more) setQuery({ limit: String(here().limit + Number(more.dataset.more)) });
   });
-  const FILTERS = '[data-ui="contents-filter"]';
   document.addEventListener("change", (e) => {
-    const f = e.target.closest && e.target.closest(`${FILTERS} [name]`);
-    if (f) setQuery(f.name, f.value);
+    const f = e.target.closest?.("#inv-filters select[name]");
+    if (f) setQuery({ [f.name]: f.value, limit: "" });
   });
-  document.addEventListener("click", (e) => {
-    const a = e.target.closest && e.target.closest("#projects-table a[data-project]");
-    if (a) { e.preventDefault(); return setQuery("project", a.dataset.project); }
-    const b = e.target.closest && e.target.closest(`${FILTERS} .seg button`);
-    if (b) return setQuery(b.closest(".seg").dataset.name, b.dataset.value);
-    const more = e.target.closest && e.target.closest("#issues-table button[data-more]");
-    if (more) setQuery("limit", String(hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")).limit + Number(more.dataset.more)));
+  let typing = 0;
+  document.addEventListener("input", (e) => {
+    if (!e.target.matches?.('[data-ui="inv-search"]')) return;
+    clearTimeout(typing);
+    typing = setTimeout(() => setQuery({ q: e.target.value, limit: "" }), 120);
   });
   // Edit mode: the page shows the editors in place of the values; Cancel puts the saved values back.
   document.addEventListener("click", (e) => {

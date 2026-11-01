@@ -173,12 +173,14 @@ describe("views", () => {
     expect(h).toContain('href="#/jobs/fac-1"');
   });
 
-  test("/api/contents gives the issues and the projects", async () => {
+  test("/api/contents gives the issues with their run counts and the registry's keys", async () => {
     const d = await getJson("/api/contents");
     expect(d.issues.length).toBeGreaterThan(3);
-    expect(d.projects.map((p: any) => p.key).sort()).toEqual(["fac", "oth"]);
+    expect([...d.projects].sort()).toEqual(["fac", "oth"]);
+    expect(d).not.toHaveProperty("specs");
     expect([...new Set(d.issues.map((i: any) => i.repo))].sort()).toEqual(["fac", "oth"]);
-    expect((await getJson("/api/contents?project=fac")).projects.map((p: any) => p.key)).toEqual(["fac"]);
+    expect(d.issues.every((i: any) => typeof i.runs === "number" && typeof i.cost === "number")).toBe(true);
+    expect((await getJson("/api/contents?project=fac")).projects).toEqual(["fac"]);
   });
 
   test("the view is Inventory at #/inventory; #/issues and #/projects redirect, the detail routes do not", () => {
@@ -196,16 +198,18 @@ describe("views", () => {
 
   const section = (h: string, id: string) => h.split(`<div id="${id}">`)[1]?.split("</table>")[0] ?? "";
 
-  test("two columns: Issues first, then Projects with Name, Open issues, Last activity", async () => {
+  test("the page is tiles, charts, search, filters and one table, with no Projects or Specs tables", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams("status=any"));
-    expect(h.indexOf("<h2>Projects")).toBeGreaterThan(-1);
-    expect(h.indexOf("<h2>Projects")).toBeGreaterThan(h.indexOf("<h2>Issues"));
+    expect(h).not.toContain("<h2>Projects");
+    expect(h).not.toContain("<h2>Specs");
+    expect(h).toContain('class="tiles"');
+    expect(h).toContain('data-chart="flow"');
+    expect(h).toContain('data-chart="age"');
+    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="flow"'));
+    expect(h.indexOf('data-chart="flow"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
-    expect(ths(section(h, "projects-table"))).toEqual(["title", "open", "updated"]);
-    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "labels", "updated", ""]);
-    expect(h).not.toContain('data-name="type"');
-    expect(h).toContain(`<div class="sh"><h2>Projects</h2><span class="count">${d.projects.length}</span></div>`);
+    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age", "updated", ""]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
@@ -223,34 +227,83 @@ describe("views", () => {
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
 
-  test("project rows: every registered project, open issues, last activity; no X", async () => {
+  test("the project filter is a button per project with what the other filters leave", async () => {
     const d = await getJson("/api/contents");
-    const h = section(v.view.render(d, {}, new URLSearchParams()), "projects-table");
-    expect(h).toContain('<a href="#/inventory?project=fac" data-project="fac">fac</a>');
-    expect(h).toContain('<a href="#/inventory?project=oth" data-project="oth">oth</a>');
-    expect(h).not.toContain("data-cancel");
-    const fac = d.projects.find((p: any) => p.key === "fac");
-    expect(h).toContain(`<td class="num">${fac.openItems}</td>`);
-    const rows = v.projectRows({ projects: [{ key: "empty", openItems: 0, activity: null }, { key: "b", openItems: 2, activity: "2026-10-01T00:00:00Z" }] });
-    const html = v.renderProjectsTable(rows, { psort: { key: "title", dir: 1 } });
-    expect(html).toContain('<td class="num">0</td>');
-    expect(html.indexOf(">b<")).toBeLessThan(html.indexOf(">empty<"));
-  });
-
-  test("the filters apply to Issues; the Project filter also narrows Projects; there is no Type filter", async () => {
-    const d = await getJson("/api/contents");
-    expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(section(h, "projects-table")).toContain("project=oth");
-    expect(section(h, "projects-table")).not.toContain("project=fac");
+    expect(h).toContain('data-project="oth" aria-pressed="true"');
+    expect(h).toContain('data-project="fac" aria-pressed="false"');
+    expect(h).toContain('data-project="" aria-pressed="false"');
     const rows = v.issueRows(d);
+    const counts = (o: object) => v.renderProjects(d.projects, rows, o);
+    const n = rows.filter((r: any) => r.project === "oth" && r.status === "open").length;
+    expect(counts({ status: "open" })).toContain(`data-project="oth" aria-pressed="false">oth<span class="n">${n}</span>`);
+    expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
     expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.status === "done")).toBe(true);
     expect(v.filterRows(rows, { project: "oth" }).every((r: any) => r.project === "oth")).toBe(true);
     expect(v.filterRows(rows, { project: "oth" }).length).toBeGreaterThan(0);
     expect(v.filterRows(rows, { q: "plain" }).map((r: any) => r.title)).toEqual(["plain task"]);
-    // the Projects table is not narrowed by Status, Label or Title
-    const s = v.view.render(d, {}, new URLSearchParams("status=done&q=zzzz"));
-    expect(section(s, "projects-table")).toContain("project=fac");
+  });
+
+  const fz = (title: string, extra: object = {}) => ({ id: "fac-1", project: "fac", labels: [], stage: "new", priority: "medium", title, ...extra });
+  test("search is fuzzy: letters in order, a typo, ids and labels; unrelated text does not match", () => {
+    const yes = (q: string, r: any) => expect(v.fuzzyMatch(q, r)).not.toBeNull();
+    const no = (q: string, r: any) => expect(v.fuzzyMatch(q, r)).toBeNull();
+    yes("flaky", fz("Flaky tests seen by runs"));
+    yes("flky tsts", fz("Flaky tests seen by runs"));
+    yes("flakey", fz("Flaky tests seen by runs"));
+    yes("flkay", fz("Flaky tests seen by runs"));
+    yes("fac-1", fz("x"));
+    yes("ui", fz("x", { labels: ["ui"] }));
+    no("zebra", fz("Flaky tests seen by runs"));
+    no("fks", fz("Fix the long path in the kernel and system"));
+    no("flaky zebra", fz("Flaky tests"));
+  });
+
+  test("the best match comes first with a search and no sort; a chosen sort wins; the hits are marked", () => {
+    const rows = v.issueRows({ issues: [
+      { id: 1, repo: "fac", title: "Workstatus page", status: "open", labels: [], updated: "2026-10-30" },
+      { id: 2, repo: "fac", title: "status of the land", status: "open", labels: [], updated: "2026-10-01" },
+      { id: 3, repo: "fac", title: "Set up a tiny ultra stack", status: "open", labels: [], updated: "2026-10-31" },
+    ] });
+    const titles = (o: object) => [...v.renderTable(rows, { status: "open", ...o }).matchAll(/<td class="wide"><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1].replace(/<\/?mark>/g, ""));
+    expect(titles({ q: "status" })[0]).toBe("status of the land");
+    expect(titles({ q: "status" })).not.toContain("Set up a tiny ultra stack");
+    expect(titles({ q: "status", sort: { key: "id", dir: -1 } })).toEqual(["status of the land", "Workstatus page"]);
+    expect(v.renderTable(rows, { status: "open", q: "land" })).toContain("<mark>land</mark>");
+  });
+
+  test("the numbers: open, filed and closed in 7 days, the week before, age and runs; a part's run is not counted twice", () => {
+    const now = new Date("2026-11-01T12:00");
+    const rows = v.issueRows({ issues: [
+      { id: 1, repo: "f", title: "a", status: "open", stage: "new", labels: [], created: "2026-11-01", runs: 2, cost: 1 },
+      { id: 1, ref: "1.1", repo: "f", title: "a part", status: "open", stage: "building", labels: [], created: "2026-10-20", runs: 2, cost: 1 },
+      { id: 2, repo: "f", title: "b", status: "done", labels: [], created: "2026-10-21", closed: "2026-10-30", runs: 3, cost: 0.5 },
+      { id: 3, repo: "f", title: "c", status: "dropped", labels: [], created: "2026-10-26", closed: "2026-10-25", runs: 0, cost: 0 },
+    ] });
+    expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, building: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 6, oldest: 12, runs: 5, cost: 1.5 });
+    const f = v.flow(rows, 14, now);
+    expect(f.labels).toHaveLength(14);
+    expect(f.labels.at(-1)).toBe("Nov 1");
+    expect(f.filed.at(-1)).toBe(1);
+    expect(f.closed.at(-3)).toBe(1);
+    expect(v.ageBins(rows, now).counts).toEqual([1, 0, 0, 1, 0, 0]);
+    expect(v.renderTiles(v.stats(rows, now))).toContain("1 done, 0 dropped");
+  });
+
+  test("each number column sorts; age counts to the closing", () => {
+    const rows = v.issueRows({ issues: [
+      { id: 1, repo: "f", title: "a", status: "open", priority: "low", labels: [], created: "2026-10-01", notes: 1, runs: 9, cost: 0 },
+      { id: 2, repo: "f", title: "b", status: "open", priority: "high", labels: [], created: "2026-10-20", notes: 5, runs: 1, cost: 3 },
+    ] });
+    const first = (key: string, dir = -1) => v.sortRows(rows, { key, dir })[0].title;
+    expect(first("priority")).toBe("b");
+    expect(first("notes")).toBe("b");
+    expect(first("runs")).toBe("a");
+    expect(first("cost")).toBe("b");
+    expect(first("age")).toBe("a");
+    expect(v.ageText({ status: "done", created: "2026-10-01", closed: "2026-10-11" })).toBe("10 d");
+    expect(v.dateText("2026-10-20", new Date("2026-11-01T12:00"))).toBe("Oct 20");
+    expect(v.dateText("2025-10-20", new Date("2026-11-01T12:00"))).toBe("2025-10-20");
   });
 
   test("the Status filter defaults to Open, newest first; Any shows every status", async () => {
@@ -264,17 +317,17 @@ describe("views", () => {
     expect(def).toContain('data-value="open" aria-pressed="true"');
     expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('data-value="any" aria-pressed="true"');
-    const t = (h: string) => [...h.matchAll(/<td class="time">([^<]*)</g)].map((m) => m[1]);
-    expect(t(issues)).toEqual([...t(issues)].sort().reverse());
+    const t = [...v.sortRows(v.filterRows(v.issueRows(d), { status: "open" }))].map((r: any) => Date.parse(r.at) || 0);
+    expect(t).toEqual([...t].sort((x, y) => y - x));
   });
 
   test("the filter bar is one filterBar; the row is the link, the title plain text", async () => {
     const d = await getJson("/api/contents");
     const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
     expect(h.match(/class="fbar"/g)).toHaveLength(1);
-    for (const n of ["project", "status", "label"]) expect(h).toContain(`data-name="${n}"`);
+    for (const n of ["status", "priority"]) expect(h).toContain(`data-name="${n}"`);
+    expect(h).toContain('role="group" aria-label="Project"');
     expect(h).toContain('name="q"');
-    expect(h).toContain('data-value="oth" aria-pressed="true"');
     expect(section(h, "issues-table")).not.toContain("<td>fac</td>");
     expect(h).toContain("<td>oth</td>");
     expect(h).toContain("tr.crow { position: relative; }");
@@ -288,7 +341,6 @@ describe("views", () => {
     expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
-    expect(section(v.view.render(d, {}, new URLSearchParams("psort=open&pdir=asc")), "projects-table")).toContain('aria-sort="ascending"');
   });
 
   test("the Issues table shows 50 rows and a pager that asks for 50 more", () => {
@@ -535,19 +587,5 @@ describe("shared table CSS", () => {
     // the chip column's minimum is no wider than the chip cap, so a capped chip leaves the Title its room
     const cap = Number(rule("table.tbl .chip").match(/max-width:\s*(\d+)ch/)![1]);
     expect(Number(css.match(/\ntable\.tbl td:has\(> \.chips\)\s*\{[^}]*min-width:\s*(\d+)ch/)![1])).toBeLessThanOrEqual(cap);
-  });
-});
-
-describe("Inventory page CSS", () => {
-  test("the Labels minimum is removed beside the Projects pane at 1280px", () => {
-    const src = readFileSync(join(import.meta.dir, "views/contents.js"), "utf8");
-    const style = src.match(/const STYLE_CONTENTS = `([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "");
-    const paneMin = Number(style.match(/@media \(min-width:\s*(\d+)px\)\s*\{\s*\.contents \.cols\s*\{[^}]*360px/)![1]);
-    const blocks = [...style.matchAll(/@media ([^{]+)\{\s*(\.contents \.main-col \.tbl td:has\(> \.chips\)\s*\{[^}]*\})\s*\}/g)];
-    const covers = blocks.some(([, q, rule]) => {
-      const lo = Number(q.match(/min-width:\s*(\d+)px/)?.[1] ?? 0), hi = Number(q.match(/max-width:\s*(\d+)px/)?.[1] ?? Infinity);
-      return lo <= 1280 && 1280 <= hi && /min-width:\s*0\s*[;}]/.test(rule);
-    });
-    expect(covers || paneMin > 1280).toBe(true);
   });
 });
