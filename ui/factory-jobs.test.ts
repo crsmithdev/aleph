@@ -25,7 +25,7 @@ test("picking a stage changes the histogram and the day rows", () => {
   expect(lead).toContain('<span class="bv">16m 40s</span>');
   expect(queue).toContain('<span class="bv">3m 20s</span>');
   expect(queue).toContain("Longest: 13m 20s.");
-  expect(lead).toContain("2 of 3 took over 4 h.");
+  expect(lead).toContain("2 of 3 took over 4 h in the last 7 days.");
 });
 
 test("the 1–4h and over-4h bins take the slow colour, the others do not", () => {
@@ -42,6 +42,6 @@ test("empty phases show dashes and no error", () => {
 });
 
 test("the title is the sidebar name; models with no name say not recorded", () => {
-  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><div class="aside"><a href="#/jobs">All jobs</a> <div class="fbar">');
+  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><span class="count">last 7 days</span><div class="aside"><a href="#/jobs?window=week">All jobs</a> <div class="fbar">');
   expect(renderFactoryJobs(D, null, "lead")).toContain("not recorded");
 });

@@ -377,13 +377,30 @@ export function wireScope(root) {
   if (!ph) return;
   ph.addEventListener("click", (e) => {
     const b = e.target.closest?.(".seg button");
-    if (b) goQuery({ [b.parentElement.dataset.name]: b.dataset.value });
+    if (b) { if (b.parentElement.dataset.name === "window") storeWindow(b.dataset.value); goQuery({ [b.parentElement.dataset.name]: b.dataset.value }); }
   });
   ph.addEventListener("change", (e) => { if (e.target.matches?.("select")) goQuery({ [e.target.name]: e.target.value }); });
 }
 
-/** The period a /api/speed answer covers, in words. */
-export const WINDOWS = [{ value: "week", label: "7 days" }, { value: "month", label: "30 days" }];
+/** The windows of the Factory pages, and the /api/jobs `days` of each. */
+export const WINDOWS = [{ value: "hour", label: "Hour" }, { value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }];
+export const WINDOW_DAYS = { hour: 1 / 24, day: 1, week: 7, month: 30 };
+const WINDOW_KEY = "aleph.window";
+const isWindow = (w) => Object.hasOwn(WINDOW_DAYS, w);
+/** Remember the window across the pages; storage may be missing or full. */
+export function storeWindow(w) { try { if (isWindow(w)) localStorage.setItem(WINDOW_KEY, w); } catch { /* no storage: the address still holds it */ } }
+/** The window of a page: the address first, then the last one chosen, else week. */
+export function windowOf(q) {
+  const w = q?.get?.("window");
+  if (isWindow(w)) return w;
+  try { const t = localStorage.getItem(WINDOW_KEY); if (isWindow(t)) return t; } catch { /* no storage */ }
+  return "week";
+}
+/** Keep the window in storage and in the address (replaced in place, with no reload); week is the default and stays out of the address. */
+export function keepWindow(w) {
+  storeWindow(w);
+  if (w !== "week" && hashQuery().get("window") !== w) setQuery({ window: w });
+}
 
 // ---------- the blocks of a page: tile, card, table, bar list ----------
 

@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, lineOption, onTile, pageHead, setQuery, small, tile, tiles, when, WINDOWS, wireScope } from "../lib.js";
-import { hours, loadSpeed, usable, usageTile, xLabel } from "./speed.js";
+import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, onTile, pageHead, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { hours, lastPeriod, loadSpeed, usable, usageTile, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
 export const totals = (a) => a.points.map((p) => a.roles.reduce((n, r) => n + (p[r.key] ?? 0), 0));
@@ -12,12 +12,12 @@ export function roleRows(a) {
 }
 const shareText = (v) => (v === null ? "–" : `${v < 1 ? v.toFixed(1) : Math.round(v)}%`);
 
-function scorecard(s, a, key) {
+function scorecard(s, a, key, w) {
   const f = s.factory, live = a && totals(a), on = (k) => ({ key: k, on: key === k });
-  return usageTile(s, on("usage")) +
-    tile({ k: "Runs today", v: String(f.runsToday), body: small(`$${(f.costToday ?? 0).toFixed(2)} recorded cost`) + small(f.dayCap > 0 ? `day cap ${f.dayCap}` : "no day cap"), ...on("runs") }) +
-    tile({ k: "Worker slots", vHtml: `${f.liveRuns ?? 0} <em>of ${f.liveCap}</em>`, body: small("in use now"), ...on("slots") }) +
-    tile({ k: "Agents live", v: a ? a.mean.toFixed(1) : "–", body: a ? small(`mean, all roles, peak ${a.peak}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"), ...on("live") });
+  return usageTile(s, on("usage"), small("live, not the window")) +
+    tile({ k: "Runs today", v: String(f.runsToday), body: small(`$${(f.costToday ?? 0).toFixed(2)} recorded cost`) + small(f.dayCap > 0 ? `day cap ${f.dayCap}` : "no day cap") + small("live, not the window"), ...on("runs") }) +
+    tile({ k: "Worker slots", vHtml: `${f.liveRuns ?? 0} <em>of ${f.liveCap}</em>`, body: small("live, in use now"), ...on("slots") }) +
+    tile({ k: "Agents live", v: a ? a.mean.toFixed(1) : "–", body: a ? small(`mean, all roles, peak ${a.peak}, ${lastPeriod(w)}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"), ...on("live") });
 }
 
 function roles(a) {
@@ -51,11 +51,11 @@ export function slotsOption(d, cap) {
 export const usageOption = (series) => lineOption(series.map((p) => when(p.at)), "Used, %", series.map((p) => Math.round(p.seven_day * 10) / 10), { max: 100 });
 
 /** The page body. `d` is /api/speed for the window, or null while it loads; `key` is the selected tile. */
-export function renderFactoryAgents(s, d, key = "live") {
-  const a = d?.agents ?? null, cur = DETAILS[key] ? key : "live";
+export function renderFactoryAgents(s, d, key = "live", window = "week") {
+  const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null, cur = DETAILS[key] ? key : "live";
   const wait = `<p role="status">${esc(d?.error ?? "Loading…")}</p>`;
-  const scope = filterBar([{ name: "window", value: d?.window ?? "week", options: WINDOWS }]);
-  return `<div class="page sp" id="capacity">${pageHead("Agents", { aside: scope })}${tiles("Scorecard", scorecard(s, a, cur))}` +
+  const scope = filterBar([{ name: "window", value: win, options: WINDOWS }]);
+  return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, cur, w))}` +
     card(DETAILS[cur].title, a ? `<div class="chartbox" role="img" aria-label="${esc(DETAILS[cur].title)}"></div>` : wait) +
     card("Roles", a ? roles(a) : wait) + `</div>`;
 }
@@ -63,7 +63,7 @@ export function renderFactoryAgents(s, d, key = "live") {
 /** The old address. */
 export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/capacity" ? "#/factory/agents" : null);
 
-const windowOf = () => hashQuery().get("window") || "week";
+const windowNow = () => windowOf(hashQuery());
 const picked = () => hashQuery().get("tile") ?? "live";
 let drawn = null;
 
@@ -75,10 +75,10 @@ export const view = {
   icon: "robot",
   api: "/api/state",
   refresh: 60,
-  render: (s, _params, q) => renderFactoryAgents(s, usable(q?.get("window") || "week"), q?.get("tile") ?? "live"),
+  render: (s, _params, q) => renderFactoryAgents(s, usable(windowOf(q)), q?.get("tile") ?? "live", windowOf(q)),
   mount: async (root, s) => {
     const draw = (d) => {
-      root.innerHTML = renderFactoryAgents(s, d, picked());
+      root.innerHTML = renderFactoryAgents(s, d, picked(), windowNow());
       wireScope(root);
       onTile(root.querySelector("#capacity"), (k) => { setQuery({ tile: k === "live" ? "" : k }); draw(d); root.querySelector(`button[data-tile="${k}"]`)?.focus(); });
       drawn?.dispose();
@@ -86,8 +86,9 @@ export const view = {
       const el = root.querySelector(".chartbox"), detail = DETAILS[picked()] ?? DETAILS.live;
       if (el && d?.agents && globalThis.echarts) drawn = chart(el, detail.option(s, d));
     };
-    draw(usable(windowOf()));
-    const d = await loadSpeed(windowOf());
+    keepWindow(windowNow());
+    draw(usable(windowNow()));
+    const d = await loadSpeed(windowNow());
     if (root.querySelector("#capacity")) draw(d);
   },
 };

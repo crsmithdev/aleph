@@ -1,6 +1,6 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, repoIdLink, setQuery, small, tile, tiles, WINDOWS, wireScope } from "../lib.js";
-import { firstPassTile, hours, loadSpeed, lostClasses, lostTile, mergeCauses, pctText, period, plural, trend, usable, weekText } from "./speed.js";
+import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, repoIdLink, keepWindow, setQuery, small, tile, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { firstPassTile, hours, loadSpeed, lostClasses, lastPeriod, lostTile, mergeCauses, pctText, period, plural, trendOn, usable, weekText } from "./speed.js";
 
 const TOP_ISSUES = 5;
 const REPO = "aleph";
@@ -29,14 +29,14 @@ export function selection(d, key) {
 function scorecard(d, day, key) {
   const fixed = (d.classes ?? []).find((c) => c.key === "fixed");
   return lostTile(d, day, { key: ALL, on: key === ALL }) + firstPassTile(d, day, { key: "landed", on: key === "landed" }) +
-    tile({ k: "Reruns", v: String(d.flaky), body: small("checks passed on rerun") + (day ? small(`${day.flaky} in the last 24 h`) : ""), key: FLAKES, on: key === FLAKES }) +
+    tile({ k: "Reruns", v: String(d.flaky), body: small("checks passed on rerun") + (day && trendOn(d) ? small(`${day.flaky} in the last 24 h`) : ""), key: FLAKES, on: key === FLAKES }) +
     tile({ k: "Fix rounds", v: String(fixed?.runs ?? 0), body: small(`${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`), key: "fixed", on: key === "fixed" }) +
     tile({ k: "Usage per issue", v: d.issues.week === null ? "–" : weekText(d.issues.week), body: small(d.issues.week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median"), ...(d.issues.week === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 
 function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return `<p>No agent run of an issue ended in this period.</p>`;
+  if (!(total > 0)) return `<p>No agent run of an issue ended in the ${lastPeriod(d)}.</p>`;
   const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${Math.round((c.hours / total) * 100)}%</span></button>`;
   return `<div class="obar" role="group" aria-label="Agent time by outcome">${cs.map(seg).join("")}</div>`;
 }
@@ -71,7 +71,7 @@ const usageTable = (rows) => dataTable(heads(["Issue", "Usage", "Runs"], ["Usage
 function usagePage(d, day, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
-  return `<div class="page sp" id="eff">${pageHead("Efficiency", { aside: scope })}${tiles("Quality", scorecard(d, day, key))}` +
+  return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, day, key))}` +
     card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
     card("Usage per issue, largest first", s.top.length ? usageTable(s.top) : "<p>No issue to show.</p>") + `</div>`;
 }
@@ -82,7 +82,7 @@ export function renderEfficiency(d, day, key = ALL) {
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const file = issueFor(d, key);
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
-  return `<div class="page sp" id="eff">${pageHead("Efficiency", { aside: scope })}${tiles("Quality", scorecard(d, day, key))}` +
+  return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, day, key))}` +
     card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
     card(`${s.title}, largest first`, `<p>${esc(s.text)} ${esc(s.size)}</p>${s.causes.length ? causeBars(s) : "<p>No cause to show.</p>"}`) +
     (key === FLAKES ? "" : card(`${s.title}: the issues that cost the most`, (s.top.length ? topTable(s.top) : "<p>No issue to show.</p>") +
@@ -100,10 +100,11 @@ export const view = {
   group: "factory",
   order: 1,
   icon: "chart-pie",
-  api: (_params, q = new URLSearchParams()) => `/api/speed?window=${q.get("window") || "week"}`,
+  api: (_params, q = new URLSearchParams()) => `/api/speed?window=${windowOf(q)}`,
   refresh: 60,
   render: (d, _params, q) => renderEfficiency(d, usable("day"), q?.get("tile") ?? ALL),
   mount: async (root, d) => {
+    keepWindow(d.window ?? windowOf(hashQuery()));
     const draw = () => { root.innerHTML = renderEfficiency(d, usable("day"), picked()); wire(); };
     const wire = () => {
       const page = root.querySelector("#eff");
@@ -123,6 +124,7 @@ export const view = {
       });
     };
     wire();
+    if (!trendOn(d)) return;
     await loadSpeed("day");
     if (root.querySelector("#eff")) draw();
   },

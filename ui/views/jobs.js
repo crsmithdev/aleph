@@ -1,13 +1,26 @@
 // The Jobs view (the list) and the Job view (one job's runs, result, checks,
 // logs, and a diff loaded on demand). Render functions take the /api/jobs
 // objects and return HTML strings, with no DOM, so tests can call them.
-import { blockersHtml, costHtml, STATES, badge, card, cmd, crumb, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, when, wireScope } from "../lib.js";
+import { blockersHtml, costHtml, STATES, badge, card, cmd, crumb, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope } from "../lib.js";
 
+
+/** The days of the list: the window, or an old `?days=` address that has no window; else the stored window. */
+function daysOf(q) {
+  if (!q.get("window") && q.get("days")) return q.get("days");
+  return Number(WINDOW_DAYS[windowOf(q)].toFixed(6));
+}
+/** The window a list shows, or "" for an old `?days=` that is none of the four. */
+export function windowShown(f = {}) {
+  if (!f.window && f.days) return Object.entries(WINDOW_DAYS).find(([, d]) => Math.abs(d - Number(f.days)) < 1e-4)?.[0] ?? "";
+  return windowOf({ get: (k) => f[k] });
+}
 
 /** The list's data URL: the filters in the hash go to the API. */
 const listUrl = (_params, q = new URLSearchParams()) => {
   const out = new URLSearchParams();
-  for (const k of ["repo", "condition", "days"]) if (q.get(k)) out.set(k, q.get(k));
+  for (const k of ["repo", "condition"]) if (q.get(k)) out.set(k, q.get(k));
+  const days = daysOf(q);
+  if (Number(days) !== 7) out.set("days", String(days));
   const s = out.toString();
   return s ? `/api/jobs?${s}` : "/api/jobs";
 };
@@ -41,14 +54,12 @@ const href = (path, params = {}) => {
 
 const PAGE = 50;
 
-const WINDOW = [{ value: "", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
-
 /** What scopes the page and goes to the API: the project and the window. */
 export function renderScope(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
   return filterBar([
     { label: "Project", name: "repo", data: true, value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
-    { label: "Window", name: "days", value: f.days || "", options: WINDOW },
+    { label: "Window", name: "window", value: windowShown(f), options: WINDOWS },
   ]);
 }
 
@@ -84,13 +95,17 @@ export function renderJobsTable(jobs, f = {}) {
   return dataTable(h("Job", "name") + h("Title", "title") + h("State", "condition") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started"), rows) + pager(shown.length, all.length, PAGE);
 }
 
+const WORDS = { hour: "hour", day: "24 hours", week: "7 days", month: "30 days" };
+
 export function renderJobs(jobs, f = {}) {
-  return `<div class="page sp">${pageHead("All jobs", { count: jobs.length, aside: renderScope(jobs, f) })}` +
+  return `<div class="page sp">${pageHead("All jobs", { count: `${jobs.length} in the last ${WORDS[windowShown(f)] ?? `${f.days} days`}`, aside: renderScope(jobs, f) })}` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${renderJobsTable(jobs, f)}</div>`) + `</div>`;
 }
 
 /** Wire the scope (it fetches again), the state filter, the search, the sort and the pager; the last three redraw the table. */
 export function mountJobs(root, jobs) {
+  const shown = windowShown(Object.fromEntries(hashQuery()));
+  if (shown) keepWindow(shown);
   const redraw = () => { root.querySelector("#jobs-table").innerHTML = renderJobsTable(jobs, Object.fromEntries(hashQuery())); };
   wireScope(root);
   root.onclick = (e) => {
