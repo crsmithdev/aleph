@@ -26,6 +26,7 @@ import { readdirSync } from "node:fs";
 import { alreadyMet } from "./gate.ts";
 import { always, logAlways } from "./always.ts";
 import { detached } from "./launch.ts";
+import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, section, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
 
@@ -453,7 +454,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.condition === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
       const spec = `# ${item.title}\n\n${item.spec.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
       let tier: Tier | null | undefined;
-      if (rate) {
+      if (rate && !isResearch(item)) {
         const p = await needsPlan(repo, item, spec, rate);
         if (paused()) { skipped.push(`${name}: paused`); continue; }
         if ("plan" in p) { plan(repo, item.id); planned.push(name); continue; }
