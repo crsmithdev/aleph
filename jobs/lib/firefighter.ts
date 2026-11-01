@@ -16,7 +16,7 @@ import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
 import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
-import { writeRerun } from "./factory.ts";
+import { writeRerun } from "./rescue.ts";
 import { factoryDir, factoryRepos, redBaselines } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { ciLine, redCi } from "./ci.ts";

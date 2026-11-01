@@ -3,36 +3,34 @@
  * What it reads of its state is in factory-status.ts. Its state lives in
  * ~/.aleph/factory, which no sandbox can see. See docs/specs/2026-10-26-seed-factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { afterOf, askOf, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
-import { always, logAlways, needsOf, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
+import { needsOf, plainAsk } from "./ask.ts";
 import { factoryLog } from "./layout.ts";
 import { itemOnMain, readRecord, repoStages } from "./status.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
-import { causeOf } from "./outcome.ts";
-import { allJobs, checkedBy, lookMinutes, isOpen, issue as issueOf, jobsNamed, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { clearRerun, endKilledFacts, rerunNote, rescueStuck, type Rescue } from "./rescue.ts";
+import { allJobs, checkedBy, lookMinutes, jobsNamed, lastReal, openJob } from "./job.ts";
 import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
-import { startReview } from "./review.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
-import { endLost, endRun } from "./agent-run.ts";
+import { endLost } from "./agent-run.ts";
 import { factsGate } from "./facts.ts";
 import { explainStep } from "./explain.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
-import { alreadyMet } from "./gate.ts";
 import { waitingToLand } from "./landing.ts";
 import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
-import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, DAY_CAP, factoryDir, factoryRepos as sandboxRepos, gates, holders, lastProbe, liveRuns, paused, pauseFile, probeFile, readStalls, redLine, runsToday, spentToday, stallFile, type Probe } from "./factory-status.ts";
+import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, DAY_CAP, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, probeFile, readStalls, redLine, runsToday, spentToday, stallFile, type Probe } from "./factory-status.ts";
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 export type { Probe };
@@ -104,16 +102,6 @@ export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
 type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<string | null>;
 type Checks = (repo: Repo, commit: string, logs: string) => Promise<string | null>;
 type Land = (name: string) => Promise<string | null>;
-/** What a safe default action does to a run: both return the refusal, or null. */
-export interface Rescue {
-  /** Drop the job, with the reason; the factory writes the issue note and the news itself. */
-  drop: (name: string, reason: string) => Promise<string | null>;
-  /** Start a recheck of the job. */
-  recheck: (name: string) => Promise<string | null>;
-  /** Start a review of the run's folder (startReview, when absent). */
-  review?: (folder: string) => boolean;
-}
-
 /**
  * Start every ready goal, in order, until the live cap: an open goal item with
  * no open job, while the factory is not paused and the other gates allow. It
@@ -130,7 +118,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
   }
-  if (rescue) await rescueStuck(rescue, land, checks);
+  if (rescue) await rescueStuck(rescue, land, checks && ((repo) => baseline(repo, checks)));
   const held = gates({ only: ["hold"] });
   if (held) {
     factoryLog(held.why);
@@ -229,7 +217,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       }
       const why = await start(repo, name, ref, spec, tier);
       if (why) skipped.push(`${name}: ${why}`);
-      else { started.push(name); rmSync(capFile(name), { force: true }); if (again) rmSync(rerunFile(name), { force: true }); }
+      else { started.push(name); rmSync(capFile(name), { force: true }); if (again) clearRerun(name); }
     } finally {
       release();
     }
@@ -356,272 +344,6 @@ const writeCapMark = (name: string) => {
   mkdirSync(dirname(capFile(name)), { recursive: true });
   writeFileSync(capFile(name), new Date().toISOString() + "\n");
 };
-
-const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
-/** The note the goal's next run reads, under "Note on the last run". */
-export function writeRerun(name: string, note: string): void {
-  mkdirSync(dirname(rerunFile(name)), { recursive: true });
-  writeFileSync(rerunFile(name), note + "\n");
-}
-const rerunNote = (name: string): string => (existsSync(rerunFile(name)) ? readFileSync(rerunFile(name), "utf8").trim() : "");
-
-const RERUN_OPTIONS = [
-  { label: "Rerun", line: "Drop the stuck run and start the goal again as it is" },
-  { label: "Another way", line: "Start the goal again, taking a different route than the run that failed" },
-];
-
-type Case = "killed" | "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
-/** A baseline that has not answered yet (see `baseline`): the claim is waited on, not decided. */
-const UNCHECKED = /^main (is unchecked|baseline running)/;
-
-/** Which safe case a stuck or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
-function caseOf(r: Entry["run"], onMainOrDone: () => boolean, claim: string | null): Case | null {
-  const cause = causeOf(r);
-  if (cause === "no-commit") return onMainOrDone() ? "duplicate" : claim !== null ? "claimed" : "no-commit";
-  if (cause === "time-box" && r.kind !== "land") return "time-box";
-  if (cause === "infra" || cause === "lock-busy") return "infra";
-  if (r.kind === "land" && cause === "conflict") return "land-conflict";
-  if (r.kind === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
-  return null;
-}
-
-/** When this host booted, in ms. */
-const bootedAt = (): number => Number(readFileSync("/proc/stat", "utf8").match(/^btime (\d+)$/m)![1]) * 1000;
-
-/**
- * The open jobs whose last run a host restart killed: a build, recheck or land still `running`, started before
- * this boot, with its process gone. isLive asks that the pid's process names the run's folder, so a process
- * that got the same pid after the restart does not count as the run. No mark is kept: a run stays here until it ends.
- */
-const killed = (jobs: Job[]): Job[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const booted = bootedAt();
-  return jobs.filter((j) => {
-    const last = lastReal(j);
-    const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isBuild(r.kind) || r.kind === "recheck" || r.kind === "land")
-      && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
-  });
-};
-
-/**
- * The folders of runs a host restart left with a review that cannot be alive: `awaiting` for a held-path or review
- * ask, call.md still `PENDING` and written before this boot. Sandbox repos only, as `killed`.
- */
-const killedReviews = (): string[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const booted = bootedAt();
-  const out: string[] = [];
-  for (const j of allJobs()) {
-    const last = lastReal(j);
-    const r = last.run;
-    if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.condition) || !["held-path", "review"].includes(runAskOf(r)?.reason ?? "")) continue;
-    const call = join(last.folder, "call.md");
-    try {
-      if (readFileSync(call, "utf8").trim() === "PENDING" && statSync(call).mtimeMs < booted) out.push(last.folder);
-    } catch { /* no call.md */ }
-  }
-  return out;
-};
-
-/**
- * End each facts run that a host restart killed: `running`, started before this boot. A facts run writes no pid, so its
- * process cannot be checked, and a run from before the boot has no reviewer left. It ends `done` with the reason, and
- * stays unshown so the news reports it. It is not run again: its facts are lost, and the job has a facts run, so the
- * gate never reviews them. Sandbox repos only, as `killed`.
- */
-const endKilledFacts = (): void => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const booted = bootedAt();
-  for (const e of allRuns()) {
-    const r = e.run;
-    if (r.kind !== "facts" || r.condition !== "running" || !r.repo || !keys.has(r.repo) || Date.parse(r.started) >= booted) continue;
-    endRun(e.folder, "host restart");
-    factoryLog(`${r.name}: a host restart killed its facts run; its facts are lost`);
-  }
-};
-
-/** Start again each review that a host restart killed: the stale call.md goes, and the new start writes a new PENDING. */
-function restartReviews(act: Rescue): void {
-  for (const folder of killedReviews()) {
-    try {
-      rmSync(join(folder, "call.md"), { force: true });
-      factoryLog(`${folder}: a host restart killed its review; starting it again`);
-      (act.review ?? startReview)(folder);
-    } catch (e: any) {
-      factoryLog(`review restart of ${folder} failed: ${e?.message ?? e}`);
-    }
-  }
-}
-
-/** How long a dispatch waits for a run's rescue lock before it skips the run. */
-const RESCUE_WAIT_MS = () => Number(process.env.ALEPH_RESCUE_WAIT_MS ?? 60_000);
-
-/**
- * The safe default actions for stuck and failed runs, taken by the dispatch that sees them: a duplicate
- * is dropped; a no-commit run whose worker says the goal is already met is checked on main, and closed when
- * the checks pass there; no commit, a time box and checks that fail after a land merge and a land that hits a merge conflict drop the run for one rerun
- * of the goal, with a note; an infrastructure failure is rechecked or landed again, once. Each action
- * writes its reason to the run, the issue note and the news. Anything else, or the second time one
- * case hits one goal, sets an Ask (input, rescue) on the issue; such a run holds nothing. A run that a host
- * restart killed comes first: it is dropped for a new run of the goal, or landed again, and uses up no rerun.
- */
-async function rescueStuck(act: Rescue, land?: Land, checks?: Checks): Promise<void> {
-  restartReviews(act);
-  const pending = (jobs: Job[]) => [...killed(jobs), ...holders(jobs)];
-  for (const first of pending(allJobs())) {
-    const name = first[0].run.name;
-    // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
-    const release = await lock(`rescue-${first[0].run.repo}-${name}`, RESCUE_WAIT_MS());
-    if (!release) { factoryLog(`rescue of ${name} skipped: the rescue lock stayed busy`); continue; }
-    try {
-      // Read again under the lock: another dispatch may have acted on it.
-      const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
-      if (runs) await rescueJob(runs, act, land, checks);
-    } catch (e: any) {
-      factoryLog(`rescue of ${name} failed: ${e?.message ?? e}`);
-    } finally {
-      release();
-    }
-  }
-}
-
-async function rescueJob(runs: Job, act: Rescue, land?: Land, checks?: Checks): Promise<void> {
-  const last = lastReal(runs);
-  const r = last.run;
-  const repo = loadRegistry()[r.repo!];
-  const name = r.name;
-  const fromName = name.match(/-(\d+(?:\.\d+)?)$/)?.[1];
-  const issue = issueOf(runs) ?? (fromName === undefined ? undefined : fromName.includes(".") ? fromName : Number(fromName));
-  const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
-  const record = (text: string, opts: { done?: boolean; ask?: Ask } = {}) => {
-    const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
-    if (why) factoryLog(`${name}: no issue note: ${why}`);
-  };
-  const chris = async (question: string, ask: Ask) => {
-    // An Always rule to take the recommendation: Rerun drops the run, and the goal reruns.
-    if (ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
-      const why = await act.drop(name, question);
-      if (!why) {
-        logAlways("rescue", "recommended", `${repo.key}-${issue ?? name}`);
-        record("always: Rerun");
-        await say(`always: Rerun; dropped, and the goal reruns`);
-        return;
-      }
-      factoryLog(`${name}: always Rerun failed (${why})`);
-    }
-    markAsked(last, question);
-    record(`asks Chris: ${question}`, { ask });
-    await say(`asks Chris: ${question}`);
-  };
-
-  let onMain: string | null = null;
-  const onMainOrDone = () => {
-    fetchOrigin(repo.path);
-    const mine = git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${r.job}$`).out;
-    if (mine) { onMain = mine.slice(0, 7); return true; }
-    const there = itemOnMain(repo, issue);
-    if (there) { onMain = there; return true; }
-    const item = issue === undefined ? undefined : reader().item(repo.key, issue);
-    return !!item && issues.status(item) !== "open";
-  };
-  const claim = causeOf(r) === "no-commit" ? alreadyMet(readFile(last, "result.md") ?? "") : null;
-  const key = killed([runs]).length ? "killed" : caseOf(r, onMainOrDone, claim);
-  const reason = key === "killed" ? "host restart" : r.reason ?? r.condition;
-  const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
-  if (!key) return chris(`${name} is ${r.condition} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.condition} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
-
-  const tryDo = async (why: string | null, what: string) => {
-    if (why) { rmSync(rerunFile(name), { force: true }); await chris(`${name}: ${what} failed (${why}); ${reason}. What now?`, choice(`${name}: ${what} failed: how should the factory go on?`, [`Failure: ${why}`])); return false; }
-    return true;
-  };
-  // The goal did not cause this: no rescue mark, so the goal keeps its rerun.
-  if (key === "killed") {
-    const text = `a host restart killed ${r.kind} run ${last.id}`;
-    if (r.kind === "land") {
-      // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
-      writeFileSync(join(last.folder, "exit"), "143");
-      updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
-      if (!await tryDo(land ? await land(name) : "no land", "land again")) return;
-      record(`${text}: landed again`);
-      await say(`${text}: landing again`);
-      return;
-    }
-    if (!await tryDo(await act.drop(name, `${text}. The goal did not cause this. Run the goal again from the start.`), "drop")) return;
-    record(`${text}: dropped, and the goal starts again`);
-    await say(`${text}: the goal starts again`);
-    return;
-  }
-  const rerun = (note: string) => writeRerun(name, note);
-  const quoted = (file: "checks.log" | "result.md") => `\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``;
-  const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);
-  if (key !== "duplicate" && key !== "claimed") {
-    const before = allRuns().filter((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key).length;
-    if (before) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
-  }
-  if (key !== "claimed") markRescued(last, key);
-
-  if (key === "claimed") {
-    // The worker says the goal is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
-    // the goal with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
-    const red = checks ? await baseline(repo, checks) : "main is unchecked: no checks";
-    if (red && UNCHECKED.test(red)) { factoryLog(`${name}: the claim waits: ${red}`); return; }
-    markRescued(last, key);
-    if (!red) {
-      const text = `${r.kind} run ${last.id} says the goal is already met (${claim}), and the checks pass on origin/${repo.main}: dropped, and the item is done`;
-      if (!await tryDo(await act.drop(name, text), "drop")) return;
-      record(text, { done: true });
-      await say(text);
-    } else if (earlier) {
-      return chris(`${name} says the goal is already met again (${claim}), but ${red}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
-    } else {
-      rerun(`The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`);
-      const text = `${r.kind} run ${last.id} says the goal is already met (${claim}), but ${red}; dropped, and the goal reruns once`;
-      if (!await tryDo(await act.drop(name, text), "drop")) return;
-      record(text);
-      await say(text);
-    }
-  } else if (key === "duplicate") {
-    const text = `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`;
-    if (!await tryDo(await act.drop(name, text), "drop")) return;
-    record(text, { done: !!onMain });
-    await say(text);
-  } else if (key === "infra") {
-    const text = `${r.kind} run ${last.id} failed for infrastructure (${reason}): `;
-    const branch = !!r.branch && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok;
-    if (r.kind === "land") {
-      if (!await tryDo(land ? await land(name) : "no land", "land again")) return;
-      record(`${text}landed again, once`);
-      await say(`${text}landing again`);
-    } else if (branch) {
-      if (!await tryDo(await act.recheck(name), "recheck")) return;
-      record(`${text}rechecked, once`);
-      await say(`${text}rechecking`);
-    } else {
-      rerun(`The last run failed before it made a branch: ${reason}.`);
-      if (!await tryDo(await act.drop(name, `${text}dropped for one rerun`), "drop")) return;
-      record(`${text}dropped; the goal reruns once`);
-      await say(`${text}the goal reruns`);
-    }
-  } else if (key === "land-conflict") {
-    const files = r.conflicts?.length ? r.conflicts : (reason.split(": ")[1] ?? "").split(", ").filter(Boolean);
-    fetchOrigin(repo.path);
-    const touched = files.length ? git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%h %s", "--", ...files).out : "";
-    const what = `${files.join(", ") || "unknown files"}${touched ? `, last changed on ${repo.main} by ${touched}` : ""}`;
-    rerun(`The last land failed with a merge conflict in ${what}. Another goal landed on the same lines first; this run starts from the current ${repo.main}.`);
-    const text = `${r.kind} run ${last.id}: merge conflict in ${what}; dropped, and the goal reruns once from current ${repo.main}`;
-    if (!await tryDo(await act.drop(name, text), "drop")) return;
-    record(text);
-    await say(text);
-  } else {
-    const why = key === "no-commit" ? "the last run made no commit" : key === "time-box" ? "the time box ran out" : `the checks failed after the land merged main (${reason})`;
-    rerun(`${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${key === "land-checks" ? "checks.log" : "result.md"}:\n\n${quoted(key === "land-checks" ? "checks.log" : "result.md")}`);
-    const text = `${r.kind} run ${last.id}: ${why}; dropped, and the goal reruns once`;
-    if (!await tryDo(await act.drop(name, text), "drop")) return;
-    record(text);
-    await say(text);
-  }
-}
 
 const localDay = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
