@@ -387,3 +387,34 @@ describe("waiting entries", () => {
     }
   });
 });
+
+describe("a goal that acceptance failed twice", () => {
+  test("lists under Needs you, and not under Queued or Done, though a trailer commit on main names it", () => {
+    const repo = join(base, "repo");
+    const headBefore = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });
+    const before = headBefore.exitCode === 0 ? headBefore.stdout.toString().trim() : null;
+    let goalId = 0;
+    writeList({ key: "fac" }, "goal that failed acceptance twice", (doc) => {
+      const goal = add(doc, "acceptance goal");
+      goal.fm.kind = "goal";
+      goal.fm.ask = "input";
+      goal.fm.reason = "acceptance-failed";
+      goal.notes.push("- Oracle: `bun test ui/state.test.ts` fails on the acceptance check.");
+      goalId = goal.id;
+      return true;
+    });
+    try {
+      // The trailer commit on main names the goal; origin/main points at it, as a land would leave it.
+      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nItem: fac-${goalId}`);
+      sh(repo, "git", "update-ref", "refs/remotes/origin/main", sh(repo, "git", "rev-parse", "HEAD"));
+      const s = state(now);
+      expect(s.asks.some((a) => a.id === `fac-${goalId}` && a.reason === "acceptance-failed")).toBe(true);
+      expect(s.queued.some((q) => q.id === goalId)).toBe(false);
+      expect(s.done.some((d) => d.id === `fac-${goalId}`)).toBe(false);
+    } finally {
+      Bun.spawnSync(["git", "update-ref", "-d", "refs/remotes/origin/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+      if (before) sh(repo, "git", "update-ref", "refs/heads/main", before);
+      else Bun.spawnSync(["git", "update-ref", "-d", "refs/heads/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+    }
+  });
+});
