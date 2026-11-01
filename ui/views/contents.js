@@ -56,6 +56,10 @@ const STYLE_CONTENTS = `<style>
 @media (min-width: 1200px) {
   .contents .cols { grid-template-columns: minmax(0, 1fr) 360px; }
 }
+/* Beside the 360px Projects pane the table is narrow: the Labels column keeps no minimum, so several chips wrap in the row and the right-hand columns stay in view. */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .contents .main-col .tbl td:has(> .chips) { min-width: 0; }
+}
 .contents tr.crow { position: relative; }
 .contents td.wide a { color: inherit; text-decoration: none; }
 .contents td.wide a::after { content: ""; position: absolute; inset: 0; }

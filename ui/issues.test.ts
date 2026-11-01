@@ -537,3 +537,17 @@ describe("shared table CSS", () => {
     expect(Number(css.match(/\ntable\.tbl td:has\(> \.chips\)\s*\{[^}]*min-width:\s*(\d+)ch/)![1])).toBeLessThanOrEqual(cap);
   });
 });
+
+describe("Inventory page CSS", () => {
+  test("the Labels minimum is removed beside the Projects pane at 1280px", () => {
+    const src = readFileSync(join(import.meta.dir, "views/contents.js"), "utf8");
+    const style = src.match(/const STYLE_CONTENTS = `([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "");
+    const paneMin = Number(style.match(/@media \(min-width:\s*(\d+)px\)\s*\{\s*\.contents \.cols\s*\{[^}]*360px/)![1]);
+    const blocks = [...style.matchAll(/@media ([^{]+)\{\s*(\.contents \.main-col \.tbl td:has\(> \.chips\)\s*\{[^}]*\})\s*\}/g)];
+    const covers = blocks.some(([, q, rule]) => {
+      const lo = Number(q.match(/min-width:\s*(\d+)px/)?.[1] ?? 0), hi = Number(q.match(/max-width:\s*(\d+)px/)?.[1] ?? Infinity);
+      return lo <= 1280 && 1280 <= hi && /min-width:\s*0\s*[;}]/.test(rule);
+    });
+    expect(covers || paneMin > 1280).toBe(true);
+  });
+});
