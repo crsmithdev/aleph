@@ -3,9 +3,9 @@
  * only a DOM can run. The sandbox of Chrome is off: it loads only this fixture, and CI runners refuse it.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { chromeArgv, Pipe } from "../jobs/lib/review-browser.ts";
 
 const CHROME = "/usr/bin/google-chrome";
@@ -23,16 +23,20 @@ export interface Page {
   reload(): Promise<void>;
   /** Sets the viewport width, in CSS pixels. */
   width(px: number): Promise<void>;
+  /** Saves a PNG of the viewport at its current width to `path` (folders made). */
+  shot(path: string): Promise<void>;
 }
 
 export interface Rig { url: string; open(hash?: string): Promise<Page>; stop(): void }
 
-export async function startRig(): Promise<Rig> {
+/** `prepare` runs after the fixture is built and before the server starts, with the fixture's ALEPH_* variables: a test adds its own state to the store there. */
+export async function startRig(prepare?: (env: Record<string, string>) => void | Promise<void>): Promise<Rig> {
   const base = mkdtempSync(join(tmpdir(), "aleph-ui-browser-"));
   const build = Bun.spawnSync([process.execPath, join(import.meta.dir, "fixtures", "review", "build.ts"), join(base, "home")], { stdout: "pipe", stderr: "pipe" });
   if (build.exitCode !== 0) throw new Error(build.stderr.toString());
   const env: Record<string, string> = { ...process.env as Record<string, string>, LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", HOME: join(base, "empty") };
   for (const l of build.stdout.toString().trim().split("\n")) env[l.slice(0, l.indexOf("="))] = l.slice(l.indexOf("=") + 1);
+  if (prepare) await prepare(env);
   const server = Bun.spawn([process.execPath, join(import.meta.dir, "server.ts"), "--port", "0"], { env, stdout: "pipe", stderr: "ignore" });
   const line = new TextDecoder().decode((await (server.stdout as ReadableStream<Uint8Array>).getReader().read()).value);
   const url = line.trim();
@@ -73,6 +77,11 @@ export async function startRig(): Promise<Rig> {
       errors, ev, until,
       go: async (h) => { await ev(`void (location.hash = ${JSON.stringify(h)})`); await Bun.sleep(0); await until(loaded); },
       width: async (px) => { await cdp.send("Emulation.setDeviceMetricsOverride", { width: px, height: 800, deviceScaleFactor: 1, mobile: false }, sessionId); },
+      shot: async (path) => {
+        const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, sessionId);
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, Buffer.from(data, "base64"));
+      },
       reload: async () => { await cdp.send("Page.reload", {}, sessionId); await Bun.sleep(50); await until(loaded); },
     };
   };
