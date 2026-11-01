@@ -16,6 +16,7 @@ import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, expand, isAwaiting, isBuild, needsOf, onOf, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { allJobs, checkedBy, lookMinutes, isOpen, issue as issueOf, jobsNamed, asked, lastReal, markAsked, markRescued, openJob, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { smokeLine } from "./smoke.ts";
 import { accept, final, readRecord, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { startReview } from "./review.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -1041,6 +1042,7 @@ const STALL_MS = 15 * 60_000;
 /** A land run live for longer than this is stuck: 99% of land runs end within 20 minutes. */
 const LAND_STUCK_MS = 30 * 60_000;
 const stallFile = () => join(factoryDir(), "stalls.json");
+export const smokeFile = () => join(factoryDir(), "smoke.json");
 const readStalls = (): Record<string, string> => {
   try { return JSON.parse(readFileSync(stallFile(), "utf8")); } catch { return {}; }
 };
@@ -1102,6 +1104,8 @@ export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {
   const lines: string[] = [];
   const lists = o.lists ?? reader();
   lines.push(...stallLines(now, o.jobs));
+  const smoke = smokeLine(smokeFile());
+  if (smoke) lines.push(smoke);
   const w = waiting(o.jobs);
   if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
   const p = lastProbe();

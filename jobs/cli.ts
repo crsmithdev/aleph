@@ -18,9 +18,10 @@ import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
 import { grant, readAlways, revoke } from "./lib/always.ts";
 import { ciStep } from "./lib/ci.ts";
-import { behind, correctionsStep, dispatchDetached, factoryDir, factoryLog, factoryRepos, firefighterStep, health, hold, paused, planNow, probeDue, report, setPaused, stallStep, triageDetached, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
+import { behind, smokeFile, correctionsStep, dispatchDetached, factoryDir, factoryLog, factoryRepos, firefighterStep, health, hold, paused, planNow, probeDue, report, setPaused, stallStep, triageDetached, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { checkName, checked, drop, land, recheck, refuse, Refusal, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import { probe } from "./lib/probe.ts";
+import { smokeStep } from "./lib/smoke.ts";
 import * as doctor from "./lib/doctor.ts";
 import { sweep } from "./lib/deps.ts";
 import { recordReview, runReview } from "./lib/review.ts";
@@ -341,6 +342,7 @@ async function tickCmd(): Promise<void> {
   const episodes = await episodeStep();
   try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
   try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }
+  await smokeStep(smokeFile());
   const f = await firefighterStep();
   out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f?.run ? { firefighter: f } : {}) });
 }

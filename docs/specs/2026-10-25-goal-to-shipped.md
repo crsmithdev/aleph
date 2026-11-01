@@ -1,8 +1,19 @@
 # Goal to shipped
 
-Written 2026-10-25. Version 5, 2026-11-01. The seed, the planner, the land,
-acceptance, memory and the UI are built; non-code goals are not. Each piece has
-its own spec in this folder; this file stays the map. Versions 1 to 4 are in git.
+Written 2026-10-25. Version 6, 2026-11-01. The seed, the planner, the land,
+acceptance, memory, the UI and research goals are built; other non-code goals
+are not. Each piece has its own spec in this folder; this file stays the map.
+Versions 1 to 4 are in git.
+
+Version 6 changes (Chris, 1 Nov, after the factory review):
+
+- No measure of Chris's minutes. No accurate source exists. `lookMinutes` stays
+  an estimate of the time to look at one delivery.
+- No rule on the share of goals that are not about aleph.
+- The day cap stays high: 999 in `~/.aleph/factory/caps.json`.
+- Jev rates each spec, in place of a fixed model tier per stage.
+- The sandbox stays a denylist.
+- A second factory repo opens after non-code goals.
 
 Version 5 changes (Chris, 1 Nov, after a walk through the loop against the code):
 
@@ -62,9 +73,7 @@ Chris stay behind his yes.
 
 The scarce resource is Chris's time: what he must type or say to direct the
 work, and what he must check by hand. Agent hours and tokens are not the
-constraint, within the budget. Every design choice is judged by one measure:
-**Chris-minutes per delivered goal**, split into minutes of input and minutes
-of checking.
+constraint, within the budget.
 
 This sets four rules:
 
@@ -157,10 +166,6 @@ thresholds.
 | Writing | to be set in the non-code goal plan; a starting point is the voice sample, clarity, structure, and the humanizer's AI-pattern checks | proposal |
 | Research | to be set in the non-code goal plan; a starting point is source credibility, coverage of the question, claims that trace to a fetched source | proposal |
 
-Before a worker starts, it writes a short contract: what it will make and how
-the evaluator will check it. The evaluator agrees or asks for changes. They
-communicate through files. Anthropic's contracts had up to 27 criteria.
-
 Cost reference (Anthropic, Opus 4.6): one app in 3 h 50 min for $124.70, of
 which planning cost $0.46 and three QA passes about $10.
 
@@ -197,23 +202,24 @@ which is how Ona's factory ended in chores. The rule:
   servers or checkouts. A land pushes to `origin/main`, then fast-forwards
   the repo's main checkout if it is clean, and restarts aleph-ui when the change
   touches a file in the server's import graph. The
-  seed starts runs from a 30-minute timer, with a cap of 12 runs in any 24
-  hours, and idles when no goal is open.
+  tick runs every 5 minutes and idles when no goal is open. The day cap is set
+  high on purpose, and the live cap bounds the runs at one time. Each tick also
+  asks aleph-ui for its page and Status data; two failures in a row give a
+  health line.
 - **Sandbox.** Each worker and each check runs under `srt`
-  (`@anthropic-ai/sandbox-runtime`) inside the systemd user unit. The sandbox
-  sees only its run folder and the pinned `claude` and `bun` binaries, and
-  reaches only Anthropic's API and the npm registry. Code goes in and out as
+  (`@anthropic-ai/sandbox-runtime`) inside the systemd user unit. The profile
+  is a denylist: reads of `/home` and the other private folders are denied
+  except the run folder and the pinned binaries, and `/etc` and `/usr` stay
+  readable. The network reaches only Anthropic's API and the npm registry. Code goes in and out as
   git bundles. `aleph sandbox probe` tests the isolation before the first run
   and every night. This replaces the corpus's `git clone --shared` in
-  bubblewrap (to-do 25). `srt` has not run on this machine yet; the fallback
-  is Docker with `--network none`.
+  bubblewrap (to-do 25).
 - **Work store.** Items in a private git repo at `~/.aleph/issues`, written
   only through `aleph issue`; no
   product repo's `main` moves when an item changes.
-- **Held paths.** Only the factory's own gate is held for Chris: the land
-  code, the gate hooks, identity `CLAUDE.md`, the build files, and edits to
-  existing tests. The list per repo is in `~/.aleph/repos.json`, which the
-  sandbox cannot see.
+- **Held paths.** A run that passes both reviews lands by itself. Only a diff
+  in `SECURITY_PATHS` (`jobs/lib/gate.ts`) waits for Chris. The reviewer judges
+  edits to existing tests.
 
 ## Bootstrap first
 
@@ -259,9 +265,7 @@ later factory goals.
 
 **Risk.** A harness that builds itself can absorb all the time. Yegge's Gas
 Town stopped because the model kept improving the harness ("just two more
-things"). Each self-goal therefore has an end state and a budget like any
-other goal, and after concurrency at least one goal in three is not about
-aleph.
+things"). Each self-goal therefore has an end state like any other goal.
 
 ## The pieces
 
@@ -315,13 +319,13 @@ the acceptance run and the report.
 
 ### 3. Model routing (to-dos 26 and 28)
 
-A fixed tier per stage, not a router per request. Starting point: Fable 5.1
-plans and writes the report, Opus 5.5 reviews, Sonnet 5.5 makes, and Jev
-answers typed questions (is this stop claim backed, does this pass the rubric
-item). Jev runs through OpenRouter (Chris, 27 Oct), at $0.042/M input tokens.
-It is the one paid API in the factory; every other stage bills to the
-subscription. Jev is built first, as the second goal after the seed. Cost
-accounting must price every model in use first (to-do 28).
+Jev rates each spec and picks the worker's model tier (`jobs/lib/route.ts`);
+when Jev is off, errs or is not sure, the run has no `--model`. The report has
+no model. Jev also answers typed questions (is this stop claim backed). Jev
+runs through OpenRouter (Chris, 27 Oct), at $0.042/M input tokens, and is the
+one paid API in the factory; every other stage bills to the subscription.
+OpenRouter returns the cost of each call, so `hooks/lib/pricing.ts`, which
+prices transcript turns, has no Jev row.
 
 ### 4. Work store, UI and visibility (to-do 29)
 
@@ -346,8 +350,8 @@ channel, but it is built last: the corpus has no evidence on voice intake.
 
 Each detailed plan settles these with Chris. Recommendations are not decisions.
 The seed settled three of version 3's open decisions: the work store
-(Backlog.md in `~/.aleph/issues`), the budget (subscription only, 12 runs in
-any 24 hours; Jev through OpenRouter is the one paid API) and isolation (`srt`).
+(Backlog.md in `~/.aleph/issues`), the budget (subscription only; Jev through
+OpenRouter is the one paid API) and isolation (`srt`).
 
 | Decision | Options | Recommendation |
 |---|---|---|
