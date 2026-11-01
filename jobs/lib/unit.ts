@@ -1311,6 +1311,8 @@ function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
   const fresh: string[] = [];
   for (const title of titles) {
     if (/^(none|n\/a|nothing)\.?$/i.test(title.trim())) continue;
+    // Chris paused flake follow-ups on 1 Nov 2026: a line about a flake is a tracker note, and files no issue.
+    if (/\bflak/i.test(title)) { noteFlakes(repo, run, [title]); continue; }
     if (fresh.some((t) => sameTopic(t, title))) continue;
     const same = open.find((i) => sameTopic(i.title, title));
     if (same) note(repo, issues.refOf(same), `also met in run ${run.name}: ${title}`);

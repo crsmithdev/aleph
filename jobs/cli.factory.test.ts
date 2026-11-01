@@ -131,4 +131,14 @@ describe("a worker's FOLLOWUP line (criterion 15)", () => {
     const tracker = after.find((i) => i.areas.includes("flakes"));
     expect((await aleph(["issue", "show", "fac", String(tracker.id), "--json"])).json.notes.join("\n")).toContain("job fflake2: a.test.ts > slow one");
   }, 60_000);
+
+  test("a FOLLOWUP line about a flake is a tracker note and files no issue", async () => {
+    const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
+    const line = "Fix the flaky paint test in a.test.ts";
+    expect((await aleph(["job", "fac", "fflakeup", "--spec", specFile(`Goal: fflakeup\nACTION: flake-followup\n`)])).code).toBe(0);
+    const all = await titles();
+    expect(all.map((i) => i.title)).not.toContain(line);
+    const tracker = all.find((i) => i.areas.includes("flakes"));
+    expect((await aleph(["issue", "show", "fac", String(tracker.id), "--json"])).json.notes.join("\n")).toContain(`job fflakeup: ${line}`);
+  }, 60_000);
 });
