@@ -21,7 +21,7 @@ test("the new rules sit at the top level, outside any @media block", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   const css = html.match(/<style>([\s\S]*?)<\/style>/)![1].replace(/\/\*[\s\S]*?\*\//g, "").replace(/"[^"\n]*"|'[^'\n]*'/g, "");
   let depth = 0;
-  for (const sel of [".stage-main:hover", ".ev.one", "#offline", "main {"]) {
+  for (const sel of [".tile b", ".ev.one", "#offline", "main {"]) {
     const i = css.indexOf(sel === "main {" ? "\nmain {" : "\n" + sel);
     expect(i).toBeGreaterThan(-1);
     depth = 0;
@@ -122,7 +122,8 @@ test("the sidebar lists Status, Inventory (/inventory), then the rest, with Agen
   for (const n of names) for (const m of Object.values(await import(new URL(n, dir).href))) if (m && typeof (m as any).path === "string") all.push(m);
   const shown = all.filter((v) => !v.path.includes(":") && v.nav !== false);
   const factory = shown.filter((v) => v.group === "factory").sort((a, b) => a.order - b.order);
-  expect(factory.slice(0, 2).map((v) => [v.title, v.path])).toEqual([["Status", "/"], ["Inventory", "/inventory"]]);
+  expect(factory.slice(0, 5).map((v) => [v.title, v.path])).toEqual([["Status", "/"], ["Performance", "/status/performance"], ["Efficiency", "/status/efficiency"], ["Capacity", "/status/capacity"], ["Inventory", "/inventory"]]);
+  expect(factory.slice(1, 4).every((v) => v.sub)).toBe(true);
   expect(shown.some((v) => v.path === "/issues")).toBe(false);
   const claude = shown.filter((v) => v.group === "claude").sort((a, b) => a.order - b.order).map((v) => v.title);
   expect(claude).toEqual(["Agents"]);
@@ -138,8 +139,8 @@ test("the sidebar lists Status, Inventory (/inventory), then the rest, with Agen
 test("the Status metric numbers use --metric, which has its own picker role apart from Titles", () => {
   const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
   expect(html).toContain("--metric: 'Merriweather', Georgia, serif;");
-  expect(html).toContain(".stage-main .v { font: 700 var(--fs-metric)/1 var(--metric);");
-  expect(html).toContain(".stage-main .v .of { font: 400 22px/1 var(--metric);");
+  expect(html).toContain(".tile b { font: 700 var(--fs-metric)/1 var(--metric);");
+  expect(html).toContain(".tile b em { font: 400 22px/1 var(--metric);");
   expect(html).toContain('["metric", "Big numbers", [...SERIF, ...SANS], "Merriweather", "Georgia, serif"],');
   expect(html.indexOf('["display", "Titles"')).toBeLessThan(html.indexOf('["metric", "Big numbers"'));
 });

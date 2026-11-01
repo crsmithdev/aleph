@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { renderEffCards, renderEfficiency, renderBar, renderBreakdown, mountSpeed, resetSpeed } from "./views/speed.js";
+import { fileIssue, issueFor, renderEfficiency, selection } from "./views/efficiency.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -44,129 +44,70 @@ test("goal stats: first-pass share, median fix rounds", () => {
   expect(g).not.toHaveProperty("cost");
 });
 
-test("the efficiency cards say reruns, first pass, fix rounds, week per goal and lost time", () => {
-  const d = speed("day", now);
-  const h = renderEfficiency(d);
-  for (const k of ["Reruns", "First pass", "Fix rounds", "Week per issue", "Lost time"]) expect(h).toContain(`<span class="k">${k}</span>`);
-  expect([...h.matchAll(/<span class="k">([^<]*)<\/span>/g)].map((m) => m[1])).toEqual(["Reruns", "First pass", "Fix rounds", "Week per issue", "Lost time"]);
-  const cards = renderEffCards(d);
-  for (const t of ["Cost per goal", "Wasted", "$"]) expect(cards).not.toContain(t);
-  expect(h.match(/class="med"/g)?.length).toBe(5);
-  expect(h).toContain('<span class="v">67%</span><span class="quiet">landed issues with 0 fix rounds</span>');
-  expect(h).toContain('<span class="v">0</span><span class="quiet">median per landed issue</span>');
-});
-
-test("Week per issue and Lost time show their values and notes", () => {
-  const base = { window: "week", flaky: 0, issues: { landed: 2, firstPass: 1, fixRounds: 0, week: 2.5 }, lost: { hours: 1.5, share: 0.25 } };
-  const h = renderEffCards(base);
-  expect(h).toContain('<span class="v">2.5%</span><span class="quiet">of the weekly limit, median per landed issue</span>');
-  expect(h).toContain("1.5 h");
-  expect(h).toContain("25% of agent hours on runs whose work did not reach main");
-  const n = renderEffCards({ ...base, issues: { ...base.issues, week: null } });
-  expect(n).toContain('<span class="v">–</span><span class="quiet">needs 6 hours of usage snapshots</span>');
-});
-
-test("a small nonzero Week per issue shows <0.1% rather than 0.0%", () => {
-  for (const week of [0.02, 0.01]) {
-    const h = renderEffCards({ window: "week", flaky: 0, issues: { landed: 1, firstPass: 1, fixRounds: 0, week }, lost: { hours: 0, share: 0 } });
-    expect(h).toContain('<span class="v">&lt;0.1%</span>');
-    expect(h).not.toContain('<span class="v">0.0%</span>');
-  }
-});
-
-test("with no landed goal the goal cards show a dash", () => {
-  const h = renderEffCards({ window: "week", flaky: 0, wasted: 0, issues: { landed: 0, firstPass: null, fixRounds: null, week: null }, lost: { hours: 0, share: 0 } });
-  expect(h.match(/<span class="v">–<\/span><span class="quiet">no issue landed<\/span>/g)?.length).toBe(3);
-});
-
-const C = (key: string, name: string, hours: number, week: number, text = `${name} text.`) => ({ key, name, text, hours, week, runs: 5, issues: 2, causes: [{ name: "First run of the job", hours, runs: 5 }], top: [] });
-const classes = (h: number[], w: number[]) => [["landed", "Landed"], ["fixed", "Fixed"], ["nothing", "Late"], ["restarted", "Restarted"], ["dropped", "Dropped"]].map(([k, n], i) => C(k, n, h[i], w[i]));
-const D = { window: "week", notCounted: { runs: 11, issues: 4, hours: 0.4 } };
-
-test("the agent-time bar: sentence, brackets, two sides of segments, not counted, no legend", () => {
-  const d = { ...D, classes: classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]) };
-  const h = renderBar(d);
-  const bar = h.slice(h.indexOf('class="abar"'), h.indexOf("Not counted"));
-  expect(h).not.toContain('class="lost"');
-  expect(h).toContain("Reached main 60%");
-  expect(h).toContain("Did not reach main 40%");
-  const br = h.slice(h.indexOf('class="brackets"'), h.indexOf('class="abar"'));
-  expect(br).toContain('class="bracket reached"');
-  expect(br).toContain('class="bracket missed"');
-  expect(br).toContain("Reached main");
-  expect(br).toContain("Did not reach main");
-  expect(bar.match(/class="abar-side"/g)?.length).toBe(2);
-  expect([...bar.matchAll(/data-class="(\w+)"/g)].map((m) => m[1])).toEqual(["landed", "fixed", "nothing", "restarted", "dropped"]);
-  expect(bar).toContain('title="Landed text.\nFirst run of the job: 60 h · 5 runs"');
-  expect(h).not.toContain("undefined");
-  expect(h).not.toContain('class="narrow"');
-  expect(h).toContain("Not counted: 11 runs of 4 issues, 0.4 h");
-  expect(renderBar({ ...d, classes: classes([0, 0, 0, 0, 0], [0, 0, 0, 0, 0]) })).toContain("No agent run of an issue ended in this period.");
-});
-
-test("the flex values share out each side, and the sides share out the total, also under 1 h", () => {
-  const h = renderBar({ ...D, classes: classes([0.3, 0.1, 0.05, 0.12, 0.03], [0, 0, 0, 0, 0]) });
-  const sides = [...h.matchAll(/class="abar-side" style="flex:([\d.e-]+)"/g)].map((m) => Number(m[1]));
-  expect(Math.abs(sides.reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
-  const segs = [...h.matchAll(/data-class="\w+" style="flex:([\d.e-]+)"/g)].map((m) => Number(m[1]));
-  expect(segs.length).toBe(5);
-  expect(Math.abs(segs.slice(0, 2).reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
-  expect(Math.abs(segs.slice(2).reduce((a, b) => a + b, 0) - 1)).toBeLessThan(0.001);
-});
-
-const withTop = () => {
-  const cs = classes([60, 10, 20, 25, 1], [3, 0.5, 1, 1.3, 0.1]);
-  cs[3].causes = [{ name: "Land conflict", hours: 20, runs: 3 }, { name: "Other", hours: 4, runs: 1 }];
-  (cs[3] as any).top = [{ goal: "fx-7", href: "#/issues/fx/7", title: "Fix the merge", reason: "merge conflict in ui/x.ts", hours: 20, runs: 3 }];
-  return { ...D, hasWeek: true, classes: cs };
+const cls = (key: string, name: string, h: number, causes: any[], top: any[] = []) => ({ key, name, text: `${name} text.`, hours: h, week: 0, runs: causes.reduce((a, x) => a + x.runs, 0), issues: 2, causes, top });
+const D: any = {
+  window: "week", flaky: 4, issues: { landed: 2, firstPass: 0.5, fixRounds: 1, week: 0.02 }, lost: { hours: 6, share: 0.3 }, notCounted: { runs: 11, issues: 4, hours: 0.4 },
+  classes: [
+    cls("landed", "Landed", 10, [{ name: "First run", hours: 10, runs: 5 }]),
+    cls("fixed", "Fixed", 4, [{ name: "Checks failed", hours: 4, runs: 3 }]),
+    cls("nothing", "Late", 2, [{ name: "Issue had landed", hours: 2, runs: 6 }], [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", reason: "already met", hours: 2, runs: 6 }]),
+    cls("restarted", "Restarted", 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ goal: "fx-2", reason: "", hours: 3, runs: 2 }]),
+    cls("dropped", "Dropped", 0, []),
+  ],
 };
+const DAY: any = { ...D, flaky: 1, lost: { hours: 1, share: 0.1 }, issues: { ...D.issues, firstPass: 0.75 } };
 
-test("the breakdown under the bar, the hours view, the pin", () => {
-  const d = withTop();
-  const h = renderEfficiency(d);
-  for (const t of ['class="brk" data-class="restarted"', "Causes", "Top Affected Issues", 'href="#/issues/fx/7"', "Fix the merge <b>20 h</b>", "merge conflict in ui/x.ts"]) expect(h).toContain(t);
-  expect(renderEfficiency(d, { pinned: "nothing" })).toContain('class="brk" data-class="nothing"');
-  expect(h).not.toContain("data-measure");
-  expect(h.slice(h.indexOf('class="brk"'))).toContain("1.3% of week · 5 runs"); // the week share, as the quiet part of the heading
-  expect(renderEfficiency({ ...d, hasWeek: false })).not.toContain("of week ·");
-  expect(renderBreakdown(d, null)).toBe("");
+test("the tiles and the head come from the data", () => {
+  const h = renderEfficiency(D, DAY, "all");
+  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
+  expect(h).toContain("30% of agent time did not reach main. The last 24 h: 10%.");
+  expect(h).toContain('<span class="good">▼ 10% in the last 24 h</span>');
+  expect(h).toContain('<span class="good">▲ 75% in the last 24 h</span>');
+  expect(h).toContain("&lt;0.1%");
+  expect(h).toContain("20 h counted · 11 runs, 0.4 h, have no outcome yet");
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, null, "all")).toContain("needs 6 hours of usage snapshots");
 });
 
-test("mountSpeed: a click on a segment re-renders the efficiency section", async () => {
-  resetSpeed();
-  const d = { ...withTop(), window: "week", kinds: Object.fromEntries(["agent","land","triage","plan"].map((k) => [k, { count: 0, p50: null, p90: null }])), phases: Object.fromEntries(["intake", "queue", "implement", "land", "lead"].map((k) => [k, { count: 0, p50: 0, p90: 0 }])), checks: [], buckets: [], done: 1, flaky: 0, issues: { landed: 1, firstPass: 1, fixRounds: 0, week: 1 }, lost: { hours: 1, share: 0.1 }, agents: { live: 0, workers: 0, cap: 5, mean: 0, peak: 0, roles: [], points: [] } };
-  const mk = () => ({ innerHTML: "", dataset: {} as Record<string, string>, isConnected: true, handler: null as any, addEventListener(_: string, f: any) { this.handler = f; }, querySelector: () => null, querySelectorAll: () => [] });
-  const top = mk(), eff = mk();
-  const root = { querySelector: (s: string) => (s === "#speed" ? top : s === "#efficiency" ? eff : null) };
-  await mountSpeed(root, async () => ({ ok: true, json: async () => d }));
-  eff.handler({ target: { closest: (s: string) => (s.includes("abar") ? { dataset: { class: "nothing" } } : null) } });
-  expect(eff.innerHTML).toContain('class="brk" data-class="nothing"');
-  resetSpeed();
+test("All lost time: the causes sum to lost.hours, and the button says the same hours", () => {
+  const s = selection(D, "all");
+  expect(s.causes.map((x: any) => [x.name, x.hours, x.runs])).toEqual([["Issue had landed", 3, 7], ["No commit", 3, 2]]);
+  expect(s.causes.reduce((a: number, x: any) => a + x.hours, 0)).toBe(D.lost.hours);
+  expect(renderEfficiency(D, null, "all")).toContain("All lost time, 6.0 h");
+  expect(s.text).toContain("Late and Restarted together.");
 });
 
-test("renderEfficiency wraps the bar and the detail in one .effbody after the cards; loading has none", () => {
-  const d = withTop();
-  const h = renderEfficiency(d);
-  expect(h.match(/class="effbody"/g)?.length).toBe(1);
-  const at = h.indexOf('class="effbody"');
-  expect(at).toBeGreaterThan(h.lastIndexOf('class="med"'));
-  const body = h.slice(at);
-  expect(body).toContain('class="abar"');
-  expect(body).toContain('class="brk"');
-  expect(body.indexOf('class="effbar"')).toBeGreaterThanOrEqual(0);
-  expect(body.indexOf('class="effbar"')).toBeLessThan(body.indexOf('class="brk"'));
-  expect(renderEfficiency(null)).not.toContain("effbody");
+test("selecting a class shows its causes; selecting All lost time again restores the merged list", () => {
+  const all = renderEfficiency(D, null, "all");
+  const one = renderEfficiency(D, null, "fixed");
+  expect(one).toContain("<h2>Fixed, largest first</h2>");
+  expect(one).toContain('data-class="fixed" style="flex:4" aria-pressed="true"');
+  expect(one).not.toContain("No commit");
+  expect(renderEfficiency(D, null, "all")).toBe(all);
+  expect(all).toContain('data-class="all" aria-pressed="true"');
 });
 
-test("Efficiency at 1600px and wider: the bar spans the column, the detail sits below it", async () => {
-  const css = await Bun.file(new URL("./index.html", import.meta.url)).text();
-  expect(css).not.toContain(".effbody { display: grid");
+test("Landed is no button, and a class with no hours has no segment", () => {
+  const h = renderEfficiency(D, null, "all");
+  expect(h).not.toContain('data-class="landed"');
+  expect(h).not.toContain('data-class="dropped"');
 });
 
-test("the breakdown lists 5 issues at most and each cause has its text as a tooltip", () => {
-  const c = { key: "restarted", name: "Restarted", text: "t", hours: 9, week: 0, runs: 9, issues: 9, causes: [{ name: "Restart loop", text: "Four starts.", hours: 9, runs: 9 }],
-    top: Array.from({ length: 8 }, (_, i) => ({ goal: `fx-${i}`, href: `#/issues/fx/${i}`, reason: "", hours: 1, runs: 1 })) };
-  const h = renderBreakdown({ classes: [c], hasWeek: false } as any, "restarted");
-  expect(h.match(/class="grow"/g)).toHaveLength(5);
-  expect(h).toContain('<div class="crow" title="Four starts.">');
+test("an issue with no link shows its id as text, and a run with no reason says so", () => {
+  const h = renderEfficiency(D, null, "restarted");
+  expect(h).toContain("fx-2");
+  expect(h).toContain("No reason recorded.");
+  expect(h).not.toContain("undefined");
+});
+
+test("File an issue posts the first cause as the title, with the runs and reasons as the body", async () => {
+  let sent: any;
+  await fileIssue(D, "nothing", async (u: string, o: any) => { sent = { u, o }; return { ok: true, json: async () => ({ id: 5 }) }; });
+  expect(sent.u).toBe("/api/issues");
+  expect(sent.o.headers["X-Aleph-UI"]).toBe("1");
+  const b = JSON.parse(sent.o.body);
+  expect(b.title).toBe("Lost time: Issue had landed");
+  expect(b.repo).toBe("aleph");
+  expect(b.body).toContain("fx-1: 2.0 h, 6 runs. already met");
+  expect(issueFor({ ...D, classes: [] }, "all")).toBeNull();
+  await expect(fileIssue(D, "nothing", async () => ({ ok: false, status: 422, json: async () => ({ error: "no" }) }) as any)).rejects.toThrow("no");
 });

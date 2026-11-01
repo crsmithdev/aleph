@@ -2,7 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { denyReasons, diffHtml, elapsed, costHtml, esc, idLink, localId, openDiffs, repoIdLink, repoOf, shortModel, when } from "../lib.js";
-import { efficiency, mountSpeed, renderPicker, setWindow, speedData, speedTop } from "./speed.js";
+import { causeRow, durShort, dur, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, small, speedOf, tile, trend, usable, usageTile } from "./speed.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -14,17 +14,48 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, query) => {
-    setWindow(query);
-    return `<div class="page">${renderStatusLine(s)}${renderNeeds(s)}${renderFlow(s, speedData())}` +
-      `<div class="status-grid"><div class="speedrow"><section id="speed" aria-label="Performance">${speedTop()}</section><section id="efficiency" aria-label="Efficiency">${efficiency()}</section></div>${renderLanes(s)}</div></div>`;
-  },
-  mount: (root) => mountSpeed(root),
+  render: (s) => `<div class="page sp">${renderStatusLine(s)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable("week"), usable("day"))}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf("week"))}</section></div>`,
+  mount: (root, s) => mountStatus(root, s),
 };
+
+const EFFICIENCY = "#/status/efficiency", PERFORMANCE = "#/status/performance";
+
+/** The scorecard: lost time, lead time, first pass, lands, weekly usage. `d` is /api/speed for the week and `day` for the last 24 h; either is null while it loads. */
+export function renderTiles(s, d, day) {
+  const lead = d?.phases?.lead, dlead = day?.phases?.lead;
+  const peak = lead ? Math.max(1, ...d.buckets.map((b) => b.lead ?? 0)) : 1;
+  const spark = lead ? `<div class="spark" aria-hidden="true">${d.buckets.map((b) => `<i style="height:${((b.lead ?? 0) / peak) * 100}%"></i>`).join("")}</div>` : "";
+  const leadTile = lead?.count
+    ? tile("Lead time p50", durShort(lead.p50), small(`p90 ${dur(lead.p90)}`) + spark + trend(lead.p50, dlead?.count ? dlead.p50 : null, dur), PERFORMANCE)
+    : tile("Lead time p50", "–", small(d ? "no issue landed" : "from filing to the last land"), PERFORMANCE);
+  const lands = d
+    ? tile("Lands", String(d.done), small(`issues landed, 7 days · ${d.kinds.land.count} land runs`) + small(`${day ? `${day.done} in the last 24 h, ` : ""}${Math.round(d.done / 7)} a day on average`), PERFORMANCE)
+    : tile("Lands", "–", small("issues landed, 7 days"), PERFORMANCE);
+  return lostTile(d, day, EFFICIENCY) + leadTile + firstPassTile(d, day, EFFICIENCY) + lands + usageTile(s, "#/status/capacity");
+}
+
+/** The ranked causes of lost time, largest first. `d` is null while it loads, `{ error }` on a failed load. */
+export function renderCauses(d) {
+  const title = `<h2>Causes of lost time, largest first</h2>`;
+  if (!d) return `${title}<p role="status">Loading\u2026</p>`;
+  if (d.error) return `${title}<p>${esc(d.error)}</p>`;
+  const cs = mergeCauses(d);
+  if (!cs.length) return `${title}<p>No agent time was lost in the last 7 days.</p>`;
+  const sum = cs.reduce((a, x) => a + x.hours, 0), first = cs[0];
+  return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p><div>${cs.map((x, i) => causeRow(`<a href="${EFFICIENCY}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join("")}</div>`;
+}
+
+/** Fetch the week and the last 24 h, then fill the scorecard and the causes. */
+export async function mountStatus(root, s, fetcher = fetch) {
+  await Promise.all([loadSpeed("week", fetcher), loadSpeed("day", fetcher)]);
+  const tiles = root.querySelector("#scorecard"), causes = root.querySelector("#causes");
+  if (tiles) tiles.innerHTML = renderTiles(s, usable("week"), usable("day"));
+  if (causes) causes.innerHTML = renderCauses(speedOf("week"));
+}
 
 /** The count of a section: `N / cap` where a cap applies. */
 const section = (id, title, n, body, cap) =>
-  `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2><span class="count">${n}${cap > 0 ? ` / ${cap}` : ""}</span></div>${body}`;
+  `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${n === null ? "" : `<span class="count">${n}${cap > 0 ? ` of ${cap}` : ""}</span>`}</div>${body}`;
 
 /** An empty section on this page: one quiet line. */
 const empty = (line) => `<div class="empty"><p class="hint">${esc(line)}</p></div>`;
@@ -42,7 +73,6 @@ function statLines(stat) {
   return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
 }
 
-/** How many cards the running group holds: the running jobs. */
 /** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
 const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).filter((j) => !j.issue).length;
 /** Land runs live now, not the landed ones the Lands list also shows. */
@@ -56,9 +86,9 @@ export function renderUsage(s) {
   return `<span class="cnt">Week ${esc(Math.round(cur.seven_day))}%</span>${Number.isFinite(cur.five_hour) && cur.five_hour !== null ? `<span class="cnt">5-hour ${esc(Math.round(cur.five_hour))}%</span>` : ""}${reset}`;
 }
 
-/** The status line: the time, the status sentence, the page time picker, Pause or Resume. */
+/** The status line: the time, the status sentence, Pause or Resume. */
 export function renderStatusLine(s) {
-  return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}${renderPicker()}${renderControls(s)}</p>`;
+  return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s)}${renderControls(s)}</p>`;
 }
 
 /** The 7-day % since the last reset as an SVG polyline over the 0-100 % scale. */
@@ -144,25 +174,18 @@ function laneCard(cls, id, badge, time, title, href, meta) {
 }
 
 /** A lane: header with the count, its cards or one quiet line. */
-const lane = (id, title, n, rows, none) =>
-  `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), 0)}</section>`;
+const lane = (id, title, n, rows, none, cap = 0) =>
+  `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
 
-/** Done: the last 10 done issues, newest first; the issue heads its card, its triage, work and land jobs and commits are links. */
+const LATEST_DONE = 2;
+/** Latest done: the last done issues, newest first; the issue heads its card, its triage, work and land jobs and commits are links. */
 function doneLane(s) {
   const d = new Date(s.now);
-  const rows = (s.done ?? []).map((i) => {
+  const rows = (s.done ?? []).slice(0, LATEST_DONE).map((i) => {
     const jobs = [...i.jobs].sort((a, b) => Date.parse(a.started) - Date.parse(b.started));
     return laneCard("done-row", repoIdLink(i.id, i.href), statusBadge("done"), i.finished ? when(i.finished, d) : "", i.title, i.href, jobs.map(doneJob).join(""));
   }).join("");
-  return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.");
-}
-
-/** Incoming: the new issues, newest first, each with its stage. */
-function incomingLane(s) {
-  const d = new Date(s.now);
-  const rows = (s.issues ?? []).map((i) =>
-    laneCard("incoming-row", repoIdLink(i.id, i.href), statusBadge(i.stage ?? i.status), i.created ? when(i.created, d) : "", i.title, i.href, "")).join("");
-  return lane("incoming", "Incoming", incomingCount(s), rows, "No untriaged issues.");
+  return lane("done", "Latest done", null, rows, "Nothing is done yet.");
 }
 
 /** Why a queued goal waits: links to the goals it runs after, or the reason text. */
@@ -197,38 +220,12 @@ function runningLane(s) {
     return laneCard("run-row", itemId(j), `<span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span>`, when(run.started, d), j.item?.title || j.name, jobHref(j),
       `<span class="num"><span class="elapsed" data-since="${esc(run.started)}">${esc(elapsed(run.started, s.now))}</span> elapsed</span>${over ? ` <span class="over">past the time box</span>` : ""}`);
   }).join("");
-  return lane("running", "Running", runningCount(s), rows, "Nothing is running.");
+  return lane("running", "Running", s.factory.liveRuns ?? runningCount(s), rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }
 
-/** The four lanes: Running, Queued, Done, Incoming. */
+/** The three lanes: Running, Queued, Latest done. */
 export function renderLanes(s) {
-  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s)}${incomingLane(s)}</div>`;
-}
-
-/** The untriaged issues: all of them when the state counts them, else the ones listed. */
-const incomingCount = (s) => Math.max(s.newIssues ?? 0, (s.issues ?? []).length);
-
-/** The flow strip: Incoming, Queued, Running, Done, then the Context card. `sp` is /api/speed for the picked window (Done counts its landed issues); null while it loads. */
-export function renderFlow(s, sp = null) {
-  const stage = (lane, k, n, of, id = "") =>
-    `<div class="stage"><a class="stage-main" href="#lane-${lane}"><span class="k">${k}</span><span class="v"${id ? ` id="${id}"` : ""}>${n}${of ? `<span class="of"> of ${of}</span>` : ""}</span></a></div>`;
-  return `<div class="flow" id="flow">` +
-    stage("incoming", "Incoming", incomingCount(s), 0) +
-    stage("queued", "Queued", (s.queued ?? []).length, 0) +
-    stage("running", "Running", s.factory.liveRuns ?? 0, s.factory.liveCap > 0 ? s.factory.liveCap : 0) +
-    stage("done", "Done", sp && !sp.error ? sp.done : "\u2013", 0, "done-n") + renderContext(s) + `</div>`;
-}
-
-/** The Context card: "37% weekly (+2%) / 12% 5 hours". The +N% is the weekly % used in the last 5 hours; it is absent with no snapshot near 5 hours ago. */
-export function renderContext(s) {
-  const cur = s.usage?.now;
-  const head = `<div class="stage context" id="context"><span class="k">Context</span><div class="ctx">`;
-  if (!cur) return `${head}<span class="quiet">usage unknown</span></div></div>`;
-  const pct = (n) => (Number.isFinite(n) ? `${Math.round(n)}%` : "\u2013");
-  const gain = s.usage?.last5h;
-  const stat = (k, v, after = "") => `<span class="cnt"><span class="n">${esc(v)}</span> ${esc(k)}${after}</span>`;
-  const gained = gain === null || gain === undefined ? "" : ` (+${Math.round(gain)}%)`;
-  return head + stat("weekly", pct(cur.seven_day), gained) + (typeof cur.five_hour === "number" && Number.isFinite(cur.five_hour) ? `<span class="sep">/</span>` + stat("5 hours", pct(cur.five_hour)) : "") + `</div></div>`;
+  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s)}</div>`;
 }
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */

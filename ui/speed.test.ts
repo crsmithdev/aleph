@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
-import { agentsOption, barOption, dur, renderAgents, renderEfficiency, renderPhases, renderPicker, renderSpeedTop, windowOf, xLabel } from "./views/speed.js";
+import { dur, durShort, weekText, xLabel } from "./views/speed.js";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};
@@ -109,48 +109,6 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
   expect((await (await get("?window=month")).json()).window).toBe("month");
   expect((await (await get("")).json()).window).toBe("week");
   expect((await get("?window=year")).status).toBe(400);
-});
-
-test("the view: five phase cards; charts; efficiency with reruns and the wasted share", () => {
-  const d = speed("day", now);
-  const h = renderSpeedTop(d);
-  for (const k of ["intake", "queue", "implement", "land", "lead"]) expect(h).toContain(`data-chart="${k}"`);
-  expect(h).not.toContain("charts3");
-  expect(h.match(/class="med"/g)?.length).toBe(5);
-  const one = renderPhases({ phases: { intake: { count: 0, p50: 0, p90: 0 }, queue: { count: 0, p50: 0, p90: 0 }, lead: { count: 0, p50: 0, p90: 0 }, implement: { count: 3, p50: 1200, p90: 1800 }, land: { count: 1, p50: 43, p90: 43 } } });
-  expect(one).toContain('<span class="k">Intake (0)</span><span class="v">– <small>p50</small></span><span class="p90">– <small>p90</small></span><div class="speedchart spark" data-chart="intake"');
-  expect(one).toContain('<span class="k">Implement (3)</span><span class="v">20m 00s <small>p50</small></span><span class="p90">30m 00s <small>p90</small></span>');
-  expect(one).toContain('<span class="k">Land (1)</span><span class="v">43s <small>p50</small></span><span class="p90">43s <small>p90</small></span>');
-  for (const t of ["Tests check", "Flaky", "24–27 s", "Today", "7 days"]) expect(h).not.toContain(t);
-  const e = renderEfficiency(d);
-  expect(e).toContain("Reruns");
-  for (const [w, step] of [["hour", "minute"], ["day", "hour"], ["week", "day"], ["month", "day"]] as const) expect(renderPhases({ ...d, window: w })).toContain(`Median implement time per ${step}`);
-  expect(renderSpeedTop(null)).toContain("Loading performance");
-  expect(renderSpeedTop(null)).toContain(">Performance</h2>");
-  const o = barOption(d.buckets, "implement", { window: "day", color: "#000" });
-  expect(o.series[0].type).toBe("bar");
-  expect(o.series[0].data.length).toBe(24);
-  expect(o.series[0].markLine.data).toEqual([]);
-  expect(o.xAxis.axisLabel.interval(0)).toBe(true);
-  expect(o.xAxis.axisLabel.interval(1)).toBe(false);
-  expect(o.xAxis.axisLabel.interval(23)).toBe(true);
-  const marked = barOption([{ at: at(0, 4), implement: 3100 }, { at: at(0, 13), implement: null }], "implement", { window: "day", color: "#000", p50: 60, lineColor: "#111" });
-  expect(marked.series[0].markLine.data).toEqual([{ yAxis: 60 }]);
-  expect(marked.series[0].markLine.lineStyle).toEqual({ type: "dotted", color: "#111", width: 1 });
-  expect(marked.yAxis).toMatchObject({ show: false, min: 0, max: 3100 });
-  expect(marked.xAxis.data).toEqual(["4a", "1p"]);
-  // A p50 over the top bar would widen the axis: it has no line.
-  expect(barOption([{ at: at(0, 4), implement: 90 }], "implement", { window: "day", color: "#000", p50: 300 }).series[0].markLine.data).toEqual([]);
-  expect([xLabel(new Date(2026, 9, 28, 0).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 12).toISOString(), "day"), xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week"), xLabel(new Date(2026, 9, 5).toISOString(), "month")]).toEqual(["12a", "12p", "1:36p", "10/28", "10/5"]);
-  const shown = (w: string, n: number) => Array.from({ length: n }, (_, i) => i).filter((i) => barOption(Array.from({ length: n }, () => ({ at: at(0, 4) })), "implement", { window: w, color: "#000" }).xAxis.axisLabel.interval(i));
-  expect(shown("week", 7)).toEqual([0, 2, 4, 6]);
-  expect(shown("month", 30)).toEqual([1, 8, 15, 22, 29]);
-  expect(shown("day", 24)).toEqual([0, 23]);
-  expect(renderPicker("hour")).toMatch(/aria-pressed="true">Hour<[^]*aria-pressed="false">Day/);
-  expect(windowOf(new URLSearchParams("window=day"))).toBe("day");
-  expect(windowOf(new URLSearchParams("window=x"))).toBe("week");
-  expect(dur(43)).toBe("43s");
-  expect(dur(245)).toBe("4m 05s");
 });
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
@@ -342,12 +300,6 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   expect(a.mean).toBe(0.8); // 6 agent hours over 8
   expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 0, 0, 1]);
   expect(a.points[2].triage).toBe(0.5);
-  const o = agentsOption(a, { window: "day", colors: { worker: "#111", triage: "#222" }, muted: "#333" });
-  expect(o.series.map((s: any) => s.name)).toEqual(["Worker", "Triage"]);
-  expect(o.series[0].stack).toBe("live");
-  const html = renderAgents({ window: "week", agents: a });
-  expect(html).toContain("1 live · 1 of 2 worker slots");
-  expect(html).toContain("sonnet, haiku");
 });
 
 test("an unlanded run of an issue that left the store is Dropped", () => {
@@ -370,4 +322,11 @@ test("phases: hist has 7 bins, an edge falls in the upper bin, counts sum to cou
   expect(p.implement.worst).toBe(10800);
   expect(p.intake.hist).toEqual([0, 0, 0, 0, 0, 0, 0]);
   expect(p.intake.worst).toBe(0);
+});
+
+test("the shared formats", () => {
+  expect([dur(43), dur(245), dur(null)]).toEqual(["43s", "4m 05s", "–"]);
+  expect([durShort(59), durShort(1570), durShort(16560)]).toEqual(["59s", "26m", "4h 36m"]);
+  expect([weekText(0.02), weekText(2.5)]).toEqual(["<0.1%", "2.5%"]);
+  expect([xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week")]).toEqual(["1:36p", "10/28"]);
 });
