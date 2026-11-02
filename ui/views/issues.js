@@ -178,7 +178,7 @@ export function filterRows(rows, o = {}, skip = []) {
 
 // Column order: id, title, state badge, project, labels, numbers, time last. [key, label, { num }]
 export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Runs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }], ["updated", "Updated"], ["act", ""]];
-const RANK = { high: 3, medium: 2, low: 1 };
+const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 const SORT = {
   project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => dayMs(r.at),
   priority: (r) => RANK[r.priority] ?? 0, notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -dayMs(r.created),
@@ -332,7 +332,7 @@ function renderDetail(rows, o) {
 
 // ---- The filters ----
 
-const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "high", "medium", "low"];
+const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medium", "low"];
 
 /** The project filter scopes the tiles too: a select in the page head, each option with the count the other filters leave. */
 export function renderProjects(projects, rows, o = {}) {
@@ -463,7 +463,7 @@ export const description = (body) => String(body ?? "").replace(/^\s*## Request[
 /** Each `docs/specs/<file>.md` that this project has becomes a link to its Spec page. */
 export const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
 
-const PRIORITIES = ["high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory", "agent"];
+const PRIORITIES = ["critical", "high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory", "agent"];
 const choose = (name, all, cur) => `<select name="${name}" ${FORM} aria-label="${name}">${(all.includes(cur) || !cur ? all : [cur, ...all]).map((o) => `<option${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
 
 /** One value and its editor in one place: edit mode shows the editor. The controls join the form in the head by `form=`. */

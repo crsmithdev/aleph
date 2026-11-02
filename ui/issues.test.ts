@@ -301,6 +301,18 @@ describe("views", () => {
     expect(v.dateText("2025-10-20", new Date("2026-11-01T12:00"))).toBe("2025-10-20");
   });
 
+  test("critical ranks above high in the priority sort, and the priority filter offers and keeps critical", async () => {
+    const rows = v.issueRows({ issues: [
+      { id: 1, repo: "f", title: "low one", status: "open", priority: "low", labels: [], created: "2026-10-01" },
+      { id: 2, repo: "f", title: "crit one", status: "open", priority: "critical", labels: [], created: "2026-10-02" },
+      { id: 3, repo: "f", title: "high one", status: "open", priority: "high", labels: [], created: "2026-10-03" },
+    ] });
+    expect(v.sortRows(rows, { key: "priority", dir: -1 }).map((r: any) => r.title)).toEqual(["crit one", "high one", "low one"]);
+    expect(v.filterRows(rows, { priority: "critical" }).map((r: any) => r.title)).toEqual(["crit one"]);
+    const d = await getJson("/api/contents");
+    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('data-value="critical" aria-pressed="false">critical</button>');
+  });
+
   test("the Status filter defaults to Open, newest first; Any shows every status", async () => {
     const d = await getJson("/api/contents");
     expect(v.hashOptions(new URLSearchParams()).status).toBe("open");
