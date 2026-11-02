@@ -212,3 +212,17 @@ test("health says a stall only after 15 minutes of ticks, and stops when the wor
   expect(said(t0 + 16 * min)).toEqual([]);
   expect(health(t0).some((l) => l.includes("24 hours"))).toBe(false);
 });
+
+test("report puts a delivered research report in the delivered lane, and a done triage run under other", () => {
+  const research = join(ctx.base, "jobs", "20261102-000001-research-r1-research");
+  mkdirSync(research, { recursive: true });
+  writeRun(research, { kind: "build", job: "r1", name: "research-r1", repo: "fac", condition: "done", reason: "report: /x/y.md; ok", told: true, shown: false, started: "2026-11-02T00:00:00Z" });
+  const triage = join(ctx.base, "jobs", "20261102-000002-triage-t1-triage");
+  mkdirSync(triage, { recursive: true });
+  writeRun(triage, { kind: "triage", job: "t1", name: "triage-t1", repo: "fac", condition: "done", reason: "built 1", told: true, shown: false, started: "2026-11-02T00:00:01Z" } as Run);
+  const out = report();
+  expect(out).toContain("delivered:\nfac/research-r1 done: report: /x/y.md; ok\n  report: /x/y.md");
+  expect(out.indexOf("delivered:")).toBeLessThan(out.indexOf("fac/research-r1"));
+  expect(out.indexOf("fac/research-r1")).toBeLessThan(out.indexOf("other:"));
+  expect(out.indexOf("other:")).toBeLessThan(out.indexOf("fac/triage-t1 done"));
+});

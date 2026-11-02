@@ -14,7 +14,7 @@ import { factoryLog } from "./layout.ts";
 import { itemOnMain, readRecord, repoStages } from "./status.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { clearRerun, endKilledFacts, rerunNote, rescueStuck, type Rescue } from "./rescue.ts";
 import { readBaseline } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, jobsNamed, lastReal, openJob } from "./job.ts";
@@ -519,9 +519,15 @@ function noteSource(title: string): string | undefined {
   return undefined;
 }
 
+/** A research run that delivered: a build run (unit.ts dispatches research as a build) that ended `done` with the reason `report: <path>; <verdict>` (unit.ts researchAgent). No other done run writes that reason. */
+const deliveredReport = (r: Run): boolean => r.kind === "build" && r.condition === "done" && !!r.reason?.startsWith("report: ");
+
+/** The report path a delivered research run's reason names. */
+const reportPathOf = (r: Run): string => r.reason!.slice("report: ".length).split("; ")[0];
+
 /** The heading a run's report entry goes under. */
 const laneOf = (e: Entry): string =>
-  e.run.condition === "landed" ? "delivered" : isAwaiting(e.run.condition) ? "needs you" : e.run.condition === "stuck" || e.run.condition === "failed" ? "stuck" : "other";
+  e.run.condition === "landed" || deliveredReport(e.run) ? "delivered" : isAwaiting(e.run.condition) ? "needs you" : e.run.condition === "stuck" || e.run.condition === "failed" ? "stuck" : "other";
 
 /** One run as the report gives it. */
 function entry(e: Entry): string {
@@ -529,6 +535,7 @@ function entry(e: Entry): string {
   const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
   const head = `${r.repo}/${r.name} ${r.condition}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
+  if (deliveredReport(r)) lines.push(`  report: ${reportPathOf(r)}`);
   if (r.condition === "landed" && r.commit) {
     lines.push(`  commit ${r.commit.slice(0, 7)}`);
     const j = allJobs().find((x) => x[0].run.job === r.job);
