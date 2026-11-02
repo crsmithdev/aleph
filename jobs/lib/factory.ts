@@ -16,6 +16,7 @@ import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { clearRerun, endKilledFacts, rerunNote, rescueStuck, type Rescue } from "./rescue.ts";
+import { readBaseline } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, jobsNamed, lastReal, openJob } from "./job.ts";
 import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -138,6 +139,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
   const started: string[] = [];
   const skipped: string[] = [];
   const planned: string[] = [];
+  const lineOf = (b: Baseline) => (b.state === "green" ? null : b.line);
   const reds = new Map<string, string | null>();
   const done = doneChecker();
   // Baselines run for the repos in the list, then the list is read again, until every repo in it has one. The start loop
@@ -148,7 +150,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     for (;;) {
       const missing = goals.filter(({ repo }) => !reds.has(repo.key));
       if (!missing.length) break;
-      for (const { repo } of missing) if (!reds.has(repo.key)) reds.set(repo.key, await baseline(repo, checks));
+      for (const { repo } of missing) if (!reds.has(repo.key)) reds.set(repo.key, lineOf(await baseline(repo, checks)));
       goals = openGoals();
     }
   }
@@ -416,34 +418,34 @@ export async function episodeStep(): Promise<string[]> {
   }
 }
 
-/** The check that failed, from the gate's reason: `tests failed` is `tests`. */
-const failedCheck = (why: string) => why.replace(/^timed out: check /, "").replace(/ failed$/, "");
-/** A baseline that could not run its checks, as against a check that failed: never recorded. */
-const infraError = (why: string) => /^(checks did not start|bundle failed|baseline did not run|worktree gone)/.test(why);
+/** Main's baseline as a closed state: `line` is the sentence for logs and skip lines. */
+export type Baseline = { state: "green" } | { state: "red" | "unchecked" | "running"; line: string };
 
 /**
  * Whether the repo's checks pass on its current origin/<main>: run once per
- * commit, kept in baseline.json. Returns the red line, or null when green.
+ * commit, kept in baseline.json. Returns the closed state with its line.
  * One baseline runs per repo at a time, under a lock; a dispatch that finds it
  * taken starts nothing. Only a failed check is recorded: an error that kept
  * the checks from running is reported but tried again by the next dispatch.
  */
-async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<string | null>): Promise<string | null> {
-  if (!fetchOrigin(repo.path).ok) return "main is unchecked: fetch failed";
+async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<string | null>): Promise<Baseline> {
+  const unchecked = (line: string): Baseline => ({ state: "unchecked", line });
+  if (!fetchOrigin(repo.path).ok) return unchecked("main is unchecked: fetch failed");
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
-  if (!commit) return `main is unchecked: no origin/${repo.main}`;
+  if (!commit) return unchecked(`main is unchecked: no origin/${repo.main}`);
   const known = () => { const b = baselines()[repo.key]; return b && b.commit === commit ? b : undefined; };
   let b = known();
   if (!b) {
     const release = await lock(`baseline-${repo.key}`, 0);
-    if (!release) return "main baseline running";
+    if (!release) return { state: "running", line: "main baseline running" };
     try {
       // Another dispatch may have recorded this commit between the read and the lock.
       b = known();
       if (!b) {
         const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key));
-        if (why && infraError(why)) return `main is unchecked: ${why}`;
-        b = { repo: repo.key, commit, ok: !why, ...(why ? { failed: failedCheck(why) } : {}) };
+        const read = why ? readBaseline(why) : null;
+        if (why && read?.infra) return unchecked(`main is unchecked: ${why}`);
+        b = { repo: repo.key, commit, ok: !why, ...(read && !read.infra ? { failed: read.failed } : {}) };
         mkdirSync(factoryDir(), { recursive: true });
         writeFileSync(baselineFile(), JSON.stringify({ ...baselines(), [repo.key]: b }, null, 2) + "\n");
       }
@@ -451,7 +453,7 @@ async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: s
       release();
     }
   }
-  return b.ok ? null : redLine(b);
+  return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
 }
 
 export const probeDue = (now = Date.now()) => { const p = lastProbe(); return !p || now - Date.parse(p.at) > 20 * 3600_000; };

@@ -46,3 +46,10 @@ export const failedCheckOf = (run: Run): string | undefined => statedOf(run)?.ch
 
 /** The fields of a run that the check runners stopped. The runners return a sentence: this is the one place that reads it. */
 export const checksStopped = (why: string): Stated & { reason: string } => ({ cause: "other", ...fromSentence(why), reason: why });
+
+/** What a baseline runner's sentence says: the checks could not run (`infra`, never recorded), or the name of the check that failed. */
+export type BaselineReading = { infra: true } | { infra?: false; failed: string };
+export function readBaseline(why: string): BaselineReading {
+  if (/^(checks did not start|bundle failed|baseline did not run|worktree gone)/.test(why)) return { infra: true };
+  return { failed: why.replace(/^timed out: check /, "").replace(/ failed$/, "") };
+}

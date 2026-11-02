@@ -20,6 +20,7 @@ import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, markRescued, re
 import { factoryLog } from "./layout.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
+import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
 import { itemOnMain } from "./status.ts";
 import { rescueWaitMs } from "./settings.ts";
@@ -36,8 +37,8 @@ export interface Rescue {
 
 /** Land the job again: returns the refusal, or null. */
 type Land = (name: string) => Promise<string | null>;
-/** The red line of the repo's main, or null when green (factory.ts `baseline`). */
-type CheckMain = (repo: Repo) => Promise<string | null>;
+/** The state of the repo's main (factory.ts `baseline`). */
+type CheckMain = (repo: Repo) => Promise<Baseline>;
 
 const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
 /** The note the goal's next run reads, under "Note on the last run". */
@@ -54,8 +55,6 @@ const RERUN_OPTIONS = [
 ];
 
 type Case = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
-/** A baseline that has not answered yet (see `baseline`): the claim is waited on, not decided. */
-const UNCHECKED = /^main (is unchecked|baseline running)/;
 
 /** Which safe case a stuck or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
 function caseOf(r: Entry["run"], onMainOrDone: boolean, claim: string | null): Case | null {
@@ -293,8 +292,9 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (key === "claimed") {
     // The worker says the goal is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
     // the goal with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
-    const red = checkMain ? await checkMain(repo) : "main is unchecked: no checks";
-    if (red && UNCHECKED.test(red)) { factoryLog(`${name}: the claim waits: ${red}`); return; }
+    const main: Baseline = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
+    if (main.state === "unchecked" || main.state === "running") { factoryLog(`${name}: the claim waits: ${main.line}`); return; }
+    const red = main.state === "red" ? main.line : null;
     markRescued(last, key);
     if (red && earlier) return chris(`${name} says the goal is already met again (${claim}), but ${red}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
     return take(claimStep(stuck, claim, red));
