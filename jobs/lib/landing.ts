@@ -5,18 +5,19 @@
  * The repo's checks and the start of more land runs reach this module through
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { closeAndFile } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git, jobCommit } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
-import { stopFields, type ChecksStop } from "./checks.ts";
+import { coversAll, stopFields, type ChecksStop } from "./checks.ts";
 import { causeOf, LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
 import { itemOnMain } from "./status.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
+import { baselineFile, baselines, factoryDir } from "./factory-status.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
 export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
@@ -169,6 +170,8 @@ interface Attempt {
   finish: (m: Member, o: Outcome) => void;
   log: (step: string, out?: string) => void;
   ports: LandPorts;
+  /** Commits whose tree passed every check of the repo. */
+  covered: Set<string>;
 }
 
 /** A land that did not land: its verdict, with what it conflicted in. */
@@ -223,19 +226,45 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
 async function check(ctx: Attempt, items: Pending[], base: string): Promise<ChecksStop | null> {
   const { repo, leader, base0, tips, checksOf, log, ports } = ctx;
   const first = items[0].m.run;
+  const changed = git(repo.path, "diff", "--name-only", base, items.at(-1)!.commit).out.split("\n").filter(Boolean);
+  const cover = (tip: string) => { if (coversAll(repo, changed)) ctx.covered.add(tip); };
   if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
     log(`checks skipped: main unchanged since ${base0}`);
     // The run's own checks passed on this base; a failed call that covered it earlier does not decide its verdict.
     checksOf.set(items[0].m, first.checks);
+    cover(items[0].commit);
     return null;
   }
   const tip = items.at(-1)!.commit;
-  const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
   log(`checks on ${items.length} run${items.length > 1 ? "s" : ""}`, items.map((i) => i.m.run.name).join("\n"));
   const report = await ports.check(tip, items.map((i) => i.m.run), changed);
   for (const i of items) checksOf.set(i.m, report.checks);
   if (report.why && items.length === 1 && items[0].m !== leader && report.log !== undefined) items[0].m.log("checks.log", report.log);
+  if (!report.why) cover(tip);
   return report.why;
+}
+
+/**
+ * Write `commit` to baseline.json as green, the way the factory's baseline does, so the next dispatch does not run
+ * the checks on it again. Never replaces the entry of a commit that is not an ancestor of `commit`.
+ */
+async function recordGreen(repo: Repo, commit: string, log: (step: string, out?: string) => void): Promise<void> {
+  try {
+    const release = await lock(`baseline-${repo.key}`, 60_000);
+    if (!release) { log("baseline not recorded: lock busy"); return; }
+    try {
+      const old = baselines()[repo.key];
+      if (old && old.commit !== commit && git(repo.path, "cat-file", "-e", `${old.commit}^{commit}`).ok
+        && !git(repo.path, "merge-base", "--is-ancestor", old.commit, commit).ok) { log("baseline not recorded: newer entry"); return; }
+      mkdirSync(factoryDir(), { recursive: true });
+      writeFileSync(baselineFile(), JSON.stringify({ ...baselines(), [repo.key]: { repo: repo.key, commit, ok: true } }, null, 2) + "\n");
+      log(`baseline green: ${commit}`);
+    } finally {
+      release();
+    }
+  } catch (e) {
+    log(`baseline not recorded: ${e instanceof Error ? e.message : e}`);
+  }
 }
 
 /** The commits of `items` that pass, in order, and the commit they end on. `known` is why the whole chain is already known to fail. */
@@ -338,7 +367,8 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         open.push(m);
       }
 
-      const ctx: Attempt = { repo, leader, base0, tips, checksOf, finish, log, ports };
+      const covered = new Set<string>();
+      const ctx: Attempt = { repo, leader, base0, tips, checksOf, finish, log, ports, covered };
       const chain = build(ctx, open, base0);
       const result = await settle(ctx, chain, base0, null);
       const ok = result.ok;
@@ -354,6 +384,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
             finish(m, { outcome: { condition: "landed", commit, checkItem }, code: 0 });
           }
           followCheckout(repo, log);
+          if (covered.has(result.tip)) await recordGreen(repo, result.tip, log);
           return conclude(leader, done, checksOf);
         }
         { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail("infra", `fetch failed: ${f.out}`); }

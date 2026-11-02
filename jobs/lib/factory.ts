@@ -145,6 +145,8 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
   // Baselines run for the repos in the list, then the list is read again, until every repo in it has one. The start loop
   // works from that last list, so a goal written during any baseline is in it: a dispatch that skipped with
   // `main baseline running` has its goal started by the one that held the baseline.
+  // A parent whose parts all landed closes without a green main, so the closing comes before the baselines.
+  for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
   let goals = openGoals();
   if (checks) {
     for (;;) {
@@ -154,7 +156,6 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       goals = openGoals();
     }
   }
-  for (const repo of sandboxRepos()) if (!reds.get(repo.key)) for (const l of await closeIssues(repo, done)) skipped.push(l);
   const planners: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
     if (reds.get(repo.key)) continue;

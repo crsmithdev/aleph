@@ -11,7 +11,7 @@ import { readRun, writeRun, type Entry, type Repo, type Run } from "./ledger.ts"
 
 setDefaultTimeout(120_000);
 
-const KEYS = ["ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ISSUES", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ISSUES", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
 let dir: string, repo: Repo, saved: Record<string, string | undefined>;
 let sleepers: ReturnType<typeof Bun.spawn>[];
 let made: number;
@@ -386,4 +386,52 @@ test("the run after a conflicted land has a merge prompt: the paths and the last
   expect(MERGE_SECONDS).toBe(600);
   expect(isMergeBounce({ ...e.run, ...r.outcome } as Run)).toBe(true);
   expect(isMergeBounce({ ...e.run, cause: "own-list", conflicts: ["docs/todo.md"] } as Run)).toBe(false);
+});
+
+const baselineJson = () => {
+  const f = join(dir, "factory", "baseline.json");
+  return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : {};
+};
+
+test("a land whose checks run and pass records the pushed commit as green in baseline.json", async () => {
+  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
+  repo.checks = [{ name: "all", run: "true" }];
+  const e = job("g1", [["g1.txt", "1\n"]]);
+  expect(await land(e, repo, ports())).toMatchObject({ code: 0, outcome: { condition: "landed" } });
+  expect(baselineJson()).toEqual({ demo: { repo: "demo", commit: remote("rev-parse", "main"), ok: true } });
+});
+
+test("a land with checks skipped: main unchanged since records the pushed commit as green", async () => {
+  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
+  const fresh = job("g2", [["g2.txt", "2\n"]]);
+  const e = { ...fresh, run: { ...fresh.run, checkedBase: remote("rev-parse", "main"), checkedTip: sh(repo.path, "git", "rev-parse", "job/g2") } };
+  writeRun(e.folder, e.run);
+  const p = ports();
+  expect((await land(e, repo, p)).outcome.condition).toBe("landed");
+  expect(p.calls).toEqual([]);
+  expect(landLog(e)).toContain("checks skipped: main unchanged since");
+  expect(baselineJson().demo).toEqual({ repo: "demo", commit: remote("rev-parse", "main"), ok: true });
+});
+
+test("a land whose diff matches no globs of a check records no baseline", async () => {
+  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
+  repo.checks = [{ name: "all", run: "true" }, { name: "android", run: "true", when: ["android/**"] }];
+  const e = job("g3", [["g3.txt", "3\n"]]);
+  expect((await land(e, repo, ports())).outcome.condition).toBe("landed");
+  expect(baselineJson()).toEqual({});
+});
+
+test("a failed land records no baseline, and a newer entry is kept", async () => {
+  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
+  const bad = job("g4", [["bad.txt", "x\n"]]);
+  expect((await land(bad, repo, ports({ bad: () => "all failed" }))).outcome.condition).toBe("failed");
+  expect(baselineJson()).toEqual({});
+  moveMain();
+  const newer = remote("rev-parse", "main");
+  mkdirSync(join(dir, "factory"), { recursive: true });
+  writeFileSync(join(dir, "factory", "baseline.json"), JSON.stringify({ demo: { repo: "demo", commit: newer, ok: false } }));
+  const e = job("g5", [["g5.txt", "5\n"]]);
+  // The branch is cut from main, so main moves past the entry once this land pushes: the entry is an ancestor and is replaced.
+  expect((await land(e, repo, ports())).outcome.condition).toBe("landed");
+  expect(baselineJson().demo).toEqual({ repo: "demo", commit: remote("rev-parse", "main"), ok: true });
 });

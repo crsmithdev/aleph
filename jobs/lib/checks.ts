@@ -57,6 +57,9 @@ const tail = (file: string, n: number) => existsSync(file) ? readFileSync(file, 
 /** The repo's checks with no `when`, and those whose globs match a changed file. */
 const chosen = (t: CheckTask): Check[] => t.repo.checks.filter((c) => !c.when || t.changed.some((f) => c.when!.some((g) => new Bun.Glob(g).match(f))));
 
+/** Whether the checks chosen for a diff are all of the repo's checks: none dropped for a `when` no changed file matches. */
+export const coversAll = (repo: Repo, changed: string[]): boolean => chosen({ repo, changed } as CheckTask).length === repo.checks.length;
+
 /** The one loop. A check that fails, not by timeout, runs once more on the same tree; a pass then is a flake. The first failure ends the loop. Returns why. */
 async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<ChecksStop | null> {
   const log = (text: string) => appendFileSync(join(t.folder, "checks.log"), text);

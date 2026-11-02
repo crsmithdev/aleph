@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
-import { ctx, sh, goal, change, mk, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { lock } from "./ledger.ts";
+import { readList } from "../../todo/lib/store.ts";
+import { ctx, sh, goal, change, mk, fakes, dispatch, withChecks, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -169,4 +171,50 @@ test("planner items of two repos are planned high first", async () => {
   const order: string[] = [];
   await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, (repo, id) => { order.push(`${repo.key}-${id}`); });
   expect(order).toEqual([`zzz-${hi}`, `aaa-${lo}`]);
+});
+
+const redBaseline = () => {
+  const commit = Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: join(ctx.base, "repo") }).stdout.toString().trim();
+  mkdirSync(join(ctx.base, "factory"), { recursive: true });
+  writeFileSync(join(ctx.base, "factory", "baseline.json"), JSON.stringify({ fac: { repo: "fac", commit, ok: false, failed: "x" } }));
+  return commit;
+};
+const doneParent = (): number => writeList({ key: "fac" }, "add", (doc) => {
+  const i = issues.add(doc, "parent");
+  issues.setStatus(issues.addPart(doc, i, { title: "g", spec: "Do it." }), "done");
+  return i.id;
+}, true)!.value;
+const parentStatus = (id: number) => issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!);
+
+test("a land's green baseline on the pushed commit: the next dispatch runs no baseline checks and starts the goal", async () => {
+  const commit = Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: join(ctx.base, "repo") }).stdout.toString().trim();
+  mkdirSync(join(ctx.base, "factory"), { recursive: true });
+  writeFileSync(join(ctx.base, "factory", "baseline.json"), JSON.stringify({ fac: { repo: "fac", commit, ok: true } }));
+  const id = goal();
+  const f = fakes();
+  let ran = 0;
+  const out = await withChecks(f, async () => { ran++; return null; });
+  expect(ran).toBe(0);
+  expect(out.started).toEqual([`fac-${id}`]);
+});
+
+test("a parent whose parts are all done closes in a dispatch where main's baseline is red", async () => {
+  redBaseline();
+  const id = doneParent();
+  const f = fakes();
+  await withChecks(f, async () => { throw new Error("no baseline run"); });
+  expect(parentStatus(id)).toBe("done");
+});
+
+test("a parent whose parts are all done closes in a dispatch where another dispatch holds the baseline", async () => {
+  const id = doneParent();
+  const f = fakes();
+  const release = await lock("baseline-fac", 0);
+  try {
+    const out = await withChecks(f, async () => null);
+    expect(out.started).toEqual([]);
+  } finally {
+    release!();
+  }
+  expect(parentStatus(id)).toBe("done");
 });
