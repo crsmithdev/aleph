@@ -12,7 +12,7 @@ import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader }
 import { addWorktree, fetchOrigin, git, jobCommit } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
-import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
@@ -373,14 +373,48 @@ function checkLog(folder: string, name: string): string {
   return section.split("\n").slice(1).join("\n").trimEnd().split("\n").slice(-80).join("\n");
 }
 
+/** The failing tests of a run's hidden.log, each with the lines of its failure that precede its `(fail)` line. */
+function hiddenFailures(folder: string): { name: string; failure: string }[] {
+  const file = join(folder, "hidden.log");
+  const lines = (existsSync(file) ? readFileSync(file, "utf8") : "").split("\n");
+  const seen = new Map<string, string>();
+  let block: string[] = [];
+  for (const line of lines) {
+    const m = line.match(/^\(fail\) (.*?)(?: \[[\d.]+m?s\])?$/);
+    if (m) {
+      if (!seen.has(m[1])) seen.set(m[1], block.slice(-10).join("\n").slice(-600));
+      block = [];
+    } else if (/^\(pass\)/.test(line)) block = [];
+    else if (line.trim()) block.push(line.trimEnd());
+  }
+  return [...seen].map(([name, failure]) => ({ name, failure }));
+}
+
+/**
+ * A sealed test that fails unchanged twice: the run before this one also failed the hidden check with the same
+ * failing names. A third blind fix round would guess again, so the Ask names the tests and quotes their failures,
+ * and Chris tells a wrong test from a wrong branch. Null when the failures differ or there is no run before.
+ */
+function repeatedHidden(folder: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
+  const prev = earlier.at(-1);
+  if (!prev || prev.run.failed !== "hidden") return null;
+  const now = hiddenFailures(folder);
+  const before = hiddenFailures(join(runsDir(), prev.id)).map((f) => f.name).sort();
+  const names = now.map((f) => f.name).sort();
+  if (!names.length || names.join("\n") !== before.join("\n")) return null;
+  const quoted = now.slice(0, 5).map((f) => `- ${f.name}${f.failure ? `\n${f.failure.split("\n").map((l) => `    ${l}`).join("\n")}` : ""}`).join("\n");
+  return {
+    names,
+    question: `The sealed test${names.length > 1 ? "s" : ""} failed the same way on two runs in a row, so no blind fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
+  };
+}
+
 /**
  * The fix-round note for a failed hidden check: the reason and the names of
  * the failing tests, read from hidden.log. Never the log, never the source.
  */
 function hiddenNote(folder: string, run: Run): string {
-  const file = join(folder, "hidden.log");
-  const log = existsSync(file) ? readFileSync(file, "utf8") : "";
-  const names = [...new Set([...log.matchAll(/^\(fail\) (.*?)(?: \[[\d.]+m?s\])?$/gm)].map((m) => m[1]))];
+  const names = hiddenFailures(folder).map((f) => f.name);
   return `${run.reason}\n${names.length ? `\nThe failing tests:\n${names.map((n) => `- ${n}`).join("\n")}\n` : ""}\nThe tests are hidden: their source and log are not available. Fix the cause, run the tests, and commit.`;
 }
 
@@ -591,7 +625,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no-commit", "no commit", facts);
 
     // Each earlier run of the job that a failed check sent back is a fix round.
-    const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
+    const earlierRuns = (jobById(run.job) ?? []).filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed);
+    const earlier = earlierRuns.map((e) => e.run);
     const done = earlier.length;
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
@@ -605,6 +640,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       const sent = !failed.timedOut && (failed.cause === "check" ? failed.checkName === check : check === "hidden" && failed.cause === "hidden-check");
       if (!check || !sent) return stoppedByChecks(failed, facts);
       const rounds = fixRounds();
+      const same = check === "hidden" && done < rounds ? repeatedHidden(folder, earlierRuns) : null;
+      if (same) return { outcome: { ...awaiting("question", same.question), question: same.question, cause: "hidden-check", reason: failed.reason, ...facts }, code: 0 };
       if (done < rounds) return stoppedByChecks(failed, { ...facts, failed: check, round: done });
       return stoppedByChecks(failed, { ...facts, ...(rounds > 0 ? { reason: `${failed.reason} after ${done} fix rounds` } : {}) });
     }

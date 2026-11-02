@@ -35,6 +35,19 @@ describe("a factory run's checks", () => {
       await aleph(["drop", "hidbad"]);
     }, 30_000);
 
+    test("the same hidden test failing on two runs in a row asks instead of starting a third", async () => {
+      const id = await hiddenItem();
+      await fjob("hidtwice", "commit hidtwice.txt", {}, ["--on", String(id)]);
+      const rs = runs("hidtwice");
+      expect(rs.map((x) => [x.kind, x.condition])).toEqual([["build", "stuck"], ["build", "awaiting"]]);
+      expect(rs[0]).toMatchObject({ failed: "hidden", next: "worker" });
+      const ask = rs[1].ask;
+      expect(ask.question).toContain("hid file exists");
+      expect(ask.question).toContain("failed the same way on two runs in a row");
+      expect(rs[1].failed).toBeUndefined();
+      await aleph(["drop", "hidtwice"]);
+    }, 60_000);
+
     test("the fix round's note has the line and the failing test names, and the job lands once it passes", async () => {
       const id = await hiddenItem();
       await fjob("hidfix", "hidden-fix", {}, ["--on", String(id)]);
