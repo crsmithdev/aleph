@@ -169,7 +169,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const row = `[...document.querySelectorAll("#lane-queued .queued-row")].find((r) => r.textContent.includes("Warm the cache on deploy"))`;
     await page.until(row);
     expect(await page.ev<string>(`${row}.querySelector(".blockers").textContent`)).toContain("Speed up the import");
-    expect(await page.ev(`document.querySelector("#lane-queued .queued-row").textContent.includes("Stop waiting")`)).toBe(true);
+    expect(await page.ev(`${row}.textContent.includes("Stop waiting")`)).toBe(true);
     await page.ev(`${row}.querySelector(".blockers a").click()`);
     await page.until(`location.hash === "#/issues/demo/10"`);
     await page.go("#/issues/demo/21");
