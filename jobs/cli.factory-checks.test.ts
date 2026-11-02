@@ -74,13 +74,22 @@ describe("a factory run's checks", () => {
         chmodSync(f, 0o755);
         return f;
       };
+      // A fake spec check: it records its input in specs-<name>.in, one block per call, and prints the reply.
+      const fakeSpec = (name: string, reply: string, code = 0) => {
+        const f = join(base, `spec-${name}.sh`);
+        writeFileSync(f, `#!/bin/sh\ncat >> ${base}/spec-${name}.in\necho '=====CALL' >> ${base}/spec-${name}.in\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: reply, total_cost_usd: 0.5 })}\nEOF\nexit ${code}\n`);
+        chmodSync(f, 0o755);
+        return f;
+      };
+      const calls = (name: string) => existsSync(join(base, `spec-${name}.in`)) ? readFileSync(join(base, `spec-${name}.in`), "utf8").split("=====CALL").length - 1 : 0;
+      const PASS = () => fakeSpec("default", "VERDICT: pass");
       const goalWith = (title: string) => seedItem("fac", title, { kind: "goal", issue: "fac-1", after: [] }, "## Goal\nEnd state one.\n\n## Oracle\nORACLE-TEXT\n");
       const notes = async (id: number) => (await aleph(["issue", "show", "fac", String(id)])).stdout;
       const SCENES = "1. SECRET-SCENARIO one is seen.\n2. Another is seen.\n";
 
       test("the scenarios reach the reviewer and not the worker, and no check runs them", async () => {
         const id = goalWith("sealed goal");
-        const r = await fjob("seal1", "commit sealed-a.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("a", SCENES) }, ["--on", String(id)]);
+        const r = await fjob("seal1", "commit sealed-a.txt", { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("a", SCENES) }, ["--on", String(id)]);
         expect(state(r.json.run).condition).toBe("passed");
         expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
         expect(state(r.json.run).cost).toBeGreaterThanOrEqual(0.25);
@@ -97,19 +106,71 @@ describe("a factory run's checks", () => {
 
       test("a scenario the reviewer sets aside goes on the issue's note", async () => {
         const id = goalWith("set aside goal");
-        await aleph(["job", "fac", "seal2", "--spec", specFile("Goal: seal2\nACTION: commit seal2.txt\nREVIEW:setaside\n"), "--on", String(id)], { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("b", SCENES) });
+        await aleph(["job", "fac", "seal2", "--spec", specFile("Goal: seal2\nACTION: commit seal2.txt\nREVIEW:setaside\n"), "--on", String(id)], { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("b", SCENES) });
         expect(await notes(id)).toContain("sealed checks: the reviewer set aside: scenario 2 asks for more than the goal");
       }, 60_000);
 
       test("a reply with no scenario leaves its note, the review has no section, and a goal gets one attempt", async () => {
         const id = goalWith("no scenario goal");
-        const env = { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("d", "I cannot write these.") };
+        const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("d", "I cannot write these.") };
         await fjob("seal3", "commit seal3.txt", env, ["--on", String(id)]);
         expect(await notes(id)).toContain("sealed checks: none: the author's reply has no numbered scenario");
         expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).not.toContain("## Sealed scenarios");
         rmSync(join(base, "author-d.in"));
         await fjob("seal4", "commit seal4.txt", env, ["--on", String(id)]);
         expect(existsSync(join(base, "author-d.in"))).toBe(false);
+      }, 60_000);
+
+      test("a hold drops the run with no worker, asks, and a rerun after a spec edit checks again", async () => {
+        const id = goalWith("held goal");
+        const env = { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("h", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("h", "looked.\nVERDICT: hold the Oracle names needHead, which is outside the Edit surface") };
+        rmSync(join(fakeLog, "prompt"), { force: true });
+        const r = await fjob("spec1", "commit spec1.txt", env, ["--on", String(id)]);
+        expect(state(r.json.run)).toMatchObject({ condition: "dropped", reason: expect.stringContaining("spec check held: the Oracle names needHead") });
+        expect(state(r.json.run).cost).toBeGreaterThanOrEqual(0.5);
+        expect(existsSync(join(fakeLog, "prompt"))).toBe(false);
+        expect(existsSync(join(base, "author-h.in"))).toBe(false);
+        const shown = JSON.parse((await aleph(["issue", "show", "fac", String(id), "--json"])).stdout);
+        const ask = shown.ask ?? shown.item?.ask;
+        expect(ask).toMatchObject({ kind: "input", reason: "spec-check" });
+        expect(ask.question).toContain("needHead");
+        expect(calls("h")).toBe(1);
+
+        // Edit the spec and answer: the next run checks again, with the new text.
+        const edited = "## Goal\nEdited end state NEWSPEC.\n\n## Oracle\nORACLE-TEXT\n";
+        expect((await aleph(["issue", "edit", "fac", String(id), "--spec", edited])).code).toBe(0);
+        expect((await aleph(["issue", "decide", "fac", String(id), "rerun"])).code).toBe(0);
+        const r2 = await fjob("spec2", "commit spec2.txt", { ...env, ALEPH_SPECCHECK_CMD: fakeSpec("h", "VERDICT: pass") }, ["--on", String(id)]);
+        expect(state(r2.json.run).condition).toBe("passed");
+        expect(readFileSync(join(base, "spec-h.in"), "utf8")).toContain("NEWSPEC");
+        expect(calls("h")).toBe(2);
+        expect(state(r2.json.run).cost).toBeGreaterThanOrEqual(0.75);
+      }, 90_000);
+
+      test("a rerun with no spec edit does not call the stub, and its worker starts", async () => {
+        const id = goalWith("unchanged goal");
+        const env = { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("u", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("u", "VERDICT: hold vague") };
+        const r = await fjob("spec3", "commit spec3.txt", env, ["--on", String(id)]);
+        expect(state(r.json.run).condition).toBe("dropped");
+        expect(calls("u")).toBe(1);
+        expect((await aleph(["issue", "decide", "fac", String(id), "rerun"])).code).toBe(0);
+        const r2 = await fjob("spec4", "commit spec4.txt", env, ["--on", String(id)]);
+        expect(state(r2.json.run).condition).toBe("passed");
+        expect(calls("u")).toBe(1);
+      }, 90_000);
+
+      test("a pass reply runs as today, and the cost holds both stubs", async () => {
+        const id = goalWith("pass goal");
+        const r = await fjob("spec5", "commit spec5.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("p", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("p", "VERDICT: pass") }, ["--on", String(id)]);
+        expect(state(r.json.run).condition).toBe("passed");
+        expect(state(r.json.run).cost).toBeGreaterThanOrEqual(0.75);
+      }, 60_000);
+
+      test("a stub that exits 1 runs as today, with an error note", async () => {
+        const id = goalWith("error goal");
+        const r = await fjob("spec6", "commit spec6.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("e", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("e", "oops", 1) }, ["--on", String(id)]);
+        expect(state(r.json.run).condition).toBe("passed");
+        expect(await notes(id)).toMatch(/spec check: [0-9a-f]{12} error:/);
       }, 60_000);
     });
 

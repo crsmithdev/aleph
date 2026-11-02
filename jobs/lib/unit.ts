@@ -8,7 +8,8 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSyn
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
+import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader, setAsk, writeList } from "../../todo/lib/store.ts";
+import { checkSpec } from "./spec-check.ts";
 import { addWorktree, fetchOrigin, git, jobCommit, NO_SUBMODULES } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
@@ -580,9 +581,30 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     // The store and ledger facts ride along, so `aleph status` inside answers as it does outside.
     const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, writeFacts(repo), ...(prev ? [`refs/heads/${branch}`] : []));
     if (!b.ok) return stuck("infra", `bundle failed: ${b.out}`);
+    const goalId = onOf(run);
+    let specCost: number | undefined;
+    if (repo.author && !prev && goalId !== undefined) {
+      phase("spec check");
+      const c = await checkSpec(repo, goalId);
+      specCost = c.cost;
+      if (c.verdict === "hold") {
+        const problems = c.problems ?? "";
+        const ask = plainAsk("spec-check", problems);
+        // One store write, as `reopen` in acceptance.ts does it. A goal with an Ask is not started again.
+        try {
+          writeList(repo, `todo: item ${goalId}: spec check held`, (doc) => {
+            const item = issues.find(doc, goalId);
+            if (!item) return null;
+            setAsk(item, ask);
+            return issues.note(item, `asks Chris: ${problems}`);
+          });
+        } catch (e: any) { return stuck("infra", `spec check held, but the Ask was not written: ${e?.message ?? e}`, specCost === undefined ? {} : { cost: specCost }); }
+        const cost = specCost ?? 0;
+        return { outcome: { condition: "dropped", reason: `spec check held: ${problems}`, cost }, code: 0 };
+      }
+    }
     const text = prompt(id, folder, run, repo);
     writeFileSync(join(folder, "prompt.md"), text);
-    const goalId = onOf(run);
     let authorCost: number | undefined;
     if (repo.author && !prev && goalId !== undefined) {
       phase("scenarios");
@@ -621,8 +643,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     child = null;
     const o = agentOutcome(readFileSync(join(folder, "output.log"), "utf8"));
     writeFileSync(join(folder, "result.md"), o.result);
-    const spent = (o.cost ?? 0) + (authorCost ?? 0);
-    const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
+    const spent = (o.cost ?? 0) + (authorCost ?? 0) + (specCost ?? 0);
+    const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined || specCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
     if (w.stalled) return stuck("stalled", stallReason(), facts);
