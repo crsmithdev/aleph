@@ -320,17 +320,18 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
     e("build", 1, 3, { model: "sonnet", review: { call: "land" } }), e("build", 2, 4, { model: "sonnet" }), e("agent", 3, 3.5, { model: "haiku" }),
     e("build", 7, null), e("build", 6, null), e("build", 0, 9.5), // a live run, a lost one, and a broken clock
     e("triage", 2, 2.5, { model: "claude-opus-5-5" }), e("explain", 4, 5, { model: "claude-opus-5-5" }), e("land", 1, 8), e("recheck", 1, 2),
+    e("research", 5, 6, { model: "sonnet" }),
   ];
   const a = agentStats(runs, 0, 8 * H, H, 2, (x) => x.folder === "f7");
   const r = Object.fromEntries(a.roles.map((x) => [x.key, x]));
   expect([a.live, a.workers, a.cap, a.peak]).toEqual([1, 1, 2, 3]); // 2-2.5: two workers and triage
-  expect(r.worker).toMatchObject({ live: 1, runs: 6, hours: 5.5, p50: 7200, models: ["sonnet", "haiku"] });
+  expect(r.worker).toMatchObject({ live: 1, runs: 7, hours: 6.5, p50: 3600, models: ["sonnet", "haiku"] });
   expect(r.triage).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
   expect(r.explainer).toMatchObject({ live: 0, runs: 1, hours: 1, models: ["opus"] });
   expect(r.reviewer).toMatchObject({ live: null, runs: 1, hours: null, p50: null });
   expect(a.roles.map((x) => x.key)).toEqual(["worker", "triage", "planner", "facts", "firefighter", "explainer", "reviewer"]);
-  expect(a.mean).toBe(0.9); // 7 agent hours over 8
-  expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 0, 0, 1]);
+  expect(a.mean).toBe(1); // 8 agent hours over 8
+  expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 1, 0, 1]);
   expect(a.points[2].triage).toBe(0.5);
 });
 

@@ -12,7 +12,7 @@ import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader }
 import { addWorktree, fetchOrigin, git, jobCommit, NO_SUBMODULES } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
-import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type Check, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, askOf, isAwaiting, isBuild, isWorker, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type Check, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
@@ -309,7 +309,7 @@ export async function unit(folder: string): Promise<void> {
   });
   writeFileSync(join(folder, "pid"), String(process.pid));
   const id = basename(folder);
-  const run = readRun(folder)!;
+  let run = readRun(folder)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
@@ -335,7 +335,8 @@ export async function unit(folder: string): Promise<void> {
       ({ outcome, code } = await land(entry, repo!, landPorts(entry, repo!, checkEnv)));
     } else if (run.kind === "recheck") {
       ({ outcome, code } = await recheck(id, folder, run, repo!));
-    } else if (repo!.sandbox && onOf(run) !== undefined && isResearch(reader().item(repo!.key, onOf(run)!))) {
+    } else if (repo!.sandbox && (run.kind === "research" || (onOf(run) !== undefined && isResearch(reader().item(repo!.key, onOf(run)!))))) {
+      if (run.kind !== "research") run = updateRun(folder, { kind: "research" });
       ({ outcome, code } = await researchAgent(id, folder, run, repo!));
     } else if (repo!.sandbox) {
       ({ outcome, code } = await factoryAgent(id, folder, run, repo!));
@@ -353,7 +354,7 @@ export async function unit(folder: string): Promise<void> {
   writeFileSync(join(folder, "exit"), String(code));
   process.exitCode = code;
   if (isBuild(run.kind) || run.kind === "recheck") startReview(folder);
-  if ((isBuild(run.kind) || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
+  if ((isWorker(run.kind) || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);

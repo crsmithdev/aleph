@@ -165,7 +165,7 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
 const STATUS_TONE = { awaiting: "need", stuck: "stuck", building: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
 const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
-const RUN_KIND = { agent: "build", build: "build", land: "land", triage: "triage", plan: "plan", facts: "facts" };
+const RUN_KIND = { agent: "build", build: "build", research: "research", land: "land", triage: "triage", plan: "plan", facts: "facts" };
 
 /** One job of a Done package, as a link to its page; a land adds its commit. */
 function doneJob(j) {
@@ -212,7 +212,7 @@ function queuedLane(s) {
 /** An issue in Running: its title, "n of m parts", and its parts nested, each with its stage and its job. */
 function runningIssue(i) {
   const goals = i.parts.map((g) =>
-    `<li class="goal-row">${idLink(localId(g.id, repoOf(i.id)), g.href)} ${statusBadge(g.stage)} <span class="t">${esc(g.title)}</span>${g.job ? ` <a class="job" href="${esc(g.job.href)}">${esc(g.job.kind === "agent" || g.job.kind === "build" ? "build" : g.job.kind)}</a>` : ""}</li>`).join("");
+    `<li class="goal-row">${idLink(localId(g.id, repoOf(i.id)), g.href)} ${statusBadge(g.stage)} <span class="t">${esc(g.title)}</span>${g.job ? ` <a class="job" href="${esc(g.job.href)}">${esc(g.job.kind === "agent" || g.job.kind === "build" || g.job.kind === "research" ? "build" : g.job.kind)}</a>` : ""}</li>`).join("");
   return `<article class="job-card small lane-card run-row issue-run" data-issue="${esc(i.id)}"><div class="ih">${repoIdLink(i.id, i.href)}${statusBadge(i.stage)}<span class="num">${i.of.n} of ${i.of.m} issues</span></div>` +
     `<a href="${esc(i.href)}" class="t">${esc(i.title)}</a><ul class="goals">${goals}</ul></article>`;
 }
@@ -222,7 +222,7 @@ function runningLane(s) {
   const issues = (s.runningIssues ?? []).map(runningIssue).join("");
   const rows = issues + (s.running ?? []).filter((j) => !j.issue).map((j) => {
     const run = j.run ?? { kind: "build", started: j.started };
-    const worker = run.kind === "agent" || run.kind === "build";
+    const worker = run.kind === "agent" || run.kind === "build" || run.kind === "research";
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
     return laneCard("run-row", itemId(j), `<span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span>`, when(run.started, d), j.item?.title || j.name, jobHref(j),

@@ -20,7 +20,7 @@ import { alreadyMet } from "./gate.ts";
 import { fetchOrigin, git, jobCommit } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { factoryLog } from "./layout.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isWorker, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
@@ -83,7 +83,7 @@ const killed = (jobs: Job[]): Job[] => {
   return jobs.filter((j) => {
     const last = lastReal(j);
     const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isBuild(r.kind) || r.kind === "recheck" || r.kind === "land")
+    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isWorker(r.kind) || r.kind === "recheck" || r.kind === "land")
       && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
   });
 };

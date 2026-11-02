@@ -520,7 +520,7 @@ function noteSource(title: string): string | undefined {
 }
 
 /** A research run that delivered: a build run (unit.ts dispatches research as a build) that ended `done` with the reason `report: <path>; <verdict>` (unit.ts researchAgent). No other done run writes that reason. */
-const deliveredReport = (r: Run): boolean => r.kind === "build" && r.condition === "done" && !!r.reason?.startsWith("report: ");
+const deliveredReport = (r: Run): boolean => (r.kind === "build" || r.kind === "research") && r.condition === "done" && !!r.reason?.startsWith("report: ");
 
 /** The report path a delivered research run's reason names. */
 const reportPathOf = (r: Run): string => r.reason!.slice("report: ".length).split("; ")[0];

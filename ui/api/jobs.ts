@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
-import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
+import { isWorker, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { changedLinesOf } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
@@ -65,7 +65,7 @@ export const lastLines = (s: string | undefined, n = 80): string | undefined => 
   const lines = s.replace(/\n+$/, "").split("\n");
   return lines.slice(-n).join("\n");
 };
-const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
+const KIND = { agent: "worker", build: "worker", recheck: "worker", research: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   for (const e of runs) {
@@ -81,7 +81,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     if (logs.length) info.logs = logs;
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
-    if ((isBuild(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
+    if ((isWorker(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
       out.push({ id: `${e.id}-review`, kind: "review", condition: r.condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
     }
   }
@@ -137,7 +137,7 @@ export const routes: Routes = {
     const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
     if (blockers.length) detail.blockers = blockers;
     annotate([detail], fit);
-    const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
+    const result = latestFile(runs, "result.md", (e) => isWorker(e.run.kind))?.text;
     const review = latestFile(runs, "review.md")?.text;
     const checksLog = latestFile(runs, "checks.log")?.text;
     const stderr = latestFile(runs, "stderr.log")?.text;
