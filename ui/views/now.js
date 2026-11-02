@@ -1,8 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, idLink, localId, openDiffs, repoIdLink, repoOf, shortModel, small, tile, when } from "../lib.js";
-import { causeRow, durShort, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, speedOf, trend, usable, usageAge, usageTile } from "./speed.js";
+import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, openDiffs, repoIdLink, repoOf, shortModel, small, tile, when } from "../lib.js";
+import { causeRow, durShort, firstPassTile, loadSpeed, lostTile, mergeCauses, pctText, period, speedOf, trend, trendOn, usable, usageAge, usageTile } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -15,47 +15,61 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s) => { lastState = s; return `<div class="page sp">${renderStatusLine(s, outOfDateNow)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable("week"), usable("day"))}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf("week"))}</section></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${pageHead("Status", { aside: filterBar([{ name: "window", value: w, options: WINDOWS }]) })}${renderStatusLine(s, outOfDateNow)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), usable("day"), w)}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section></div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".lede .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
-  mount: (root, s) => mountStatus(root, s),
+  mount: (root, s, q) => mountStatus(root, s, fetch, q),
 };
 
 let lastState = null, outOfDateNow = false;
 
 const EFFICIENCY = "#/factory/efficiency", PERFORMANCE = "#/factory/jobs";
+/** A link to another page that keeps the window; week is the default and stays out of the address. */
+const keep = (href, win) => (win === "week" ? href : `${href}?window=${win}`);
 
-/** The scorecard: lost time, lead time, first pass, lands, weekly usage. `d` is /api/speed for the week and `day` for the last 24 h; either is null while it loads. */
-export function renderTiles(s, d, day) {
+/** The scorecard: lost time, lead time, first pass, lands, weekly usage. `d` is /api/speed for the window `win` and `day` for the last 24 h; either is null while it loads. Weekly usage stays on its weekly limit. */
+export function renderTiles(s, d, day, win = d?.window ?? "week") {
+  const efficiency = keep(EFFICIENCY, win), performance = keep(PERFORMANCE, win), span = period({ window: win });
   const lead = d?.phases?.lead, dlead = day?.phases?.lead;
   const peak = lead ? Math.max(1, ...d.buckets.map((b) => b.lead ?? 0)) : 1;
   const spark = lead ? `<div class="spark" aria-hidden="true">${d.buckets.map((b) => `<i style="height:${((b.lead ?? 0) / peak) * 100}%"></i>`).join("")}</div>` : "";
   const leadTile = lead?.count
-    ? tile({ k: "Lead time p50", v: durShort(lead.p50), body: small(`p90 ${dur(lead.p90)}`) + spark + trend(lead.p50, dlead?.count ? dlead.p50 : null, dur), href: PERFORMANCE })
-    : tile({ k: "Lead time p50", v: "–", body: small(d ? "no issue landed" : "from filing to the last land"), href: PERFORMANCE });
+    ? tile({ k: "Lead time p50", v: durShort(lead.p50), body: small(`p90 ${dur(lead.p90)}`) + spark + (trendOn({ window: win }) ? trend(lead.p50, dlead?.count ? dlead.p50 : null, dur) : ""), href: performance })
+    : tile({ k: "Lead time p50", v: "–", body: small(d ? "no issue landed" : "from filing to the last land"), href: performance });
   const lands = d
-    ? tile({ k: "Lands", v: String(d.done), body: small(`issues landed, 7 days · ${d.kinds.land.count} land runs`) + small(`${day ? `${day.done} in the last 24 h, ` : ""}${Math.round(d.done / 7)} a day on average`), href: PERFORMANCE })
-    : tile({ k: "Lands", v: "–", body: small("issues landed, 7 days"), href: PERFORMANCE });
-  return lostTile(d, day, { href: EFFICIENCY }) + leadTile + firstPassTile(d, day, { href: EFFICIENCY }) + lands + usageTile(s, { href: "#/factory/agents" });
+    ? tile({ k: "Lands", v: String(d.done), body: small(`issues landed, ${span} · ${d.kinds.land.count} land runs`) + landNote(d, day, win), href: performance })
+    : tile({ k: "Lands", v: "–", body: small(`issues landed, ${span}`), href: performance });
+  return lostTile(d, day, { href: efficiency }) + leadTile + firstPassTile(d, day, { href: efficiency }) + lands + usageTile(s, { href: "#/factory/agents" });
+}
+
+/** The Lands note: the last 24 h where they differ from the window, and the daily average where the window spans days. */
+function landNote(d, day, win) {
+  const parts = [];
+  if (day && trendOn({ window: win })) parts.push(`${day.done} in the last 24 h`);
+  if (WINDOW_DAYS[win] >= 7) parts.push(`${Math.round(d.done / WINDOW_DAYS[win])} a day on average`);
+  return parts.length ? small(parts.join(", ")) : "";
 }
 
 /** The ranked causes of lost time, largest first. `d` is null while it loads, `{ error }` on a failed load. */
-export function renderCauses(d) {
+export function renderCauses(d, win = d?.window ?? "week") {
   const title = `<h2>Causes of lost time, largest first</h2>`;
   if (!d) return `${title}<p role="status">Loading\u2026</p>`;
   if (d.error) return `${title}<p>${esc(d.error)}</p>`;
   const cs = mergeCauses(d);
-  if (!cs.length) return `${title}<p>No agent time was lost in the last 7 days.</p>`;
+  if (!cs.length) return `${title}<p>No agent time was lost in the last ${period({ window: win })}.</p>`;
   const sum = cs.reduce((a, x) => a + x.hours, 0), first = cs[0];
-  return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p>${barList(cs.map((x, i) => causeRow(`<a href="${EFFICIENCY}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join(""))}`;
+  return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p>${barList(cs.map((x, i) => causeRow(`<a href="${keep(EFFICIENCY, win)}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join(""))}`;
 }
 
-/** Fetch the week and the last 24 h, then fill the scorecard and the causes. */
-export async function mountStatus(root, s, fetcher = fetch) {
-  await Promise.all([loadSpeed("week", fetcher), loadSpeed("day", fetcher)]);
+/** Fetch the window and the last 24 h, then fill the scorecard and the causes. */
+export async function mountStatus(root, s, fetcher = fetch, q) {
+  const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
+  keepWindow(w);
+  wireScope(root);
+  await Promise.all([loadSpeed(w, fetcher), loadSpeed("day", fetcher)]);
   const tiles = root.querySelector("#scorecard"), causes = root.querySelector("#causes");
-  if (tiles) tiles.innerHTML = renderTiles(s, usable("week"), usable("day"));
-  if (causes) causes.innerHTML = renderCauses(speedOf("week"));
+  if (tiles) tiles.innerHTML = renderTiles(s, usable(w), usable("day"), w);
+  if (causes) causes.innerHTML = renderCauses(speedOf(w), w);
 }
 
 /** The count of a section: `N / cap` where a cap applies. */

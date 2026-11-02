@@ -11,6 +11,9 @@ import * as agents from "./views/factory-agents.js";
 import * as fjobs from "./views/factory-jobs.js";
 // @ts-ignore plain JS shared with the page
 import * as jobs from "./views/jobs.js";
+// @ts-ignore plain JS shared with the page
+import * as now from "./views/now.js";
+import { full } from "./test-now.ts";
 
 const WINDOWS = ["hour", "day", "week", "month"] as const;
 const WORDS = { hour: "last hour", day: "last 24 hours", week: "last 7 days", month: "last 30 days" };
@@ -30,6 +33,7 @@ const PAGES: Record<string, { path: string; view: any; render: (w: string) => st
   jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null) },
   efficiency: { path: "#/factory/efficiency", view: eff.view, render: (w) => eff.renderEfficiency(speed(w), null) },
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
+  status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
   all: { path: "#/jobs", view: jobs.view, render: (w) => jobs.renderJobs([], { window: w }) },
 };
 // Agents loads /api/state, then the speed of the window the mount asks for.
@@ -75,7 +79,7 @@ test("picking an option on each page asks for that window and the page says its 
     if (name === "all") expect(url).toBe(DAYS[w] ? `/api/jobs?days=${DAYS[w]}` : "/api/jobs");
     else expect(url).toBe(`/api/speed?window=${w}`);
     const shown = p.render(w);
-    expect(shown, `${name} ${w}`).toContain(name === "all" ? WORDS[w].replace("last ", "") : WORDS[w]);
+    expect(shown, `${name} ${w}`).toContain(name === "all" ? WORDS[w].replace("last ", "") : name === "status" ? `issues landed, ${WORDS[w].replace("last ", "")}` : WORDS[w]);
     expect(html).toBeTruthy();
   }
 });

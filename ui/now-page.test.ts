@@ -92,7 +92,7 @@ const DAY = { ...WEEK, window: "day", done: 3, phases: { lead: { count: 2, p50: 
 
 const USAGE = { now: { seven_day: 7, five_hour: 2, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
 
-test("the page order is the status line, Awaiting you, the scorecard, the lanes, the causes; no picker, no flow strip", () => {
+test("the page order is the status line, Awaiting you, the scorecard, the lanes, the causes; the window picker, no flow strip", () => {
   const page = view.view.render(full);
   const order = ['class="lede"', 'class="asof"', 'class="say', 'data-act="pause"', 'id="needs"', 'id="scorecard"', 'id="lane-running"', 'id="lane-queued"', 'id="lane-done"', 'id="causes"'];
   const at = order.map((t) => page.indexOf(t));
@@ -173,4 +173,52 @@ test("the Weekly usage tile shows the snapshot's age only while stale", () => {
   const st = { ...state, now: "2026-11-01T08:00:00Z" };
   expect(view.renderTiles({ ...st, usage: { now, stale: true } }, WEEK, DAY)).toContain("as of 40m ago");
   expect(view.renderTiles({ ...st, usage: { now, stale: false } }, WEEK, DAY)).not.toContain("as of");
+});
+
+const pressedIn = (h: string) => [...(h.match(/data-name="window">(.*?)<\/div>/)?.[1] ?? "").matchAll(/data-value="(\w+)" aria-pressed="(\w+)"/g)];
+
+test("the page head holds the Hour, Day, Week, Month picker with the chosen window pressed", () => {
+  const page = view.view.render(full, {}, new URLSearchParams("window=month"));
+  const head = page.match(/<header class="ph">.*?<\/header>/)![0];
+  expect(head).toContain("<h1>Status</h1>");
+  expect(head).toContain('class="aside"');
+  expect(pressedIn(head).map((m) => m[1])).toEqual(["hour", "day", "week", "month"]);
+  expect(pressedIn(head).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
+  for (const t of [">Hour<", ">Day<", ">Week<", ">Month<"]) expect(head).toContain(t);
+  expect(pressedIn(view.view.render(full, {}, new URLSearchParams())).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["week"]);
+});
+
+test("the speed tiles follow the window: values, captions, 24 h trend and links", () => {
+  const MONTH = { ...WEEK, window: "month", done: 30, issues: { ...WEEK.issues, firstPass: 0.6 } };
+  const HOUR = { ...WEEK, window: "hour", done: 2, issues: { ...WEEK.issues, firstPass: 0.4 } };
+  const m = view.renderTiles({ ...state, usage: USAGE }, MONTH, DAY, "month");
+  expect(m).toContain("<b>60%</b>");
+  expect(m).toContain("issues landed, 30 days");
+  expect(m).toContain("30 days");
+  expect(m).not.toContain("7 days");
+  expect(m).toContain('href="#/factory/efficiency?window=month"');
+  expect(m).toContain('href="#/factory/jobs?window=month"');
+  expect(m).toContain("in the last 24 h");
+  const h = view.renderTiles({ ...state, usage: USAGE }, HOUR, DAY, "hour");
+  expect(h).toContain("<b>40%</b>");
+  expect(h).toContain("issues landed, hour");
+  expect(h).not.toContain("in the last 24 h");
+  expect(h).toContain('href="#/factory/jobs?window=hour"');
+  expect(h).toContain("Weekly usage");
+  expect(h).toContain('href="#/factory/agents"');
+});
+
+test("mountStatus loads the window of the address", async () => {
+  const g: any = globalThis;
+  g.localStorage = { getItem: () => null, setItem: () => {} };
+  g.location = { hash: "#/?window=hour" };
+  g.history = { replaceState: () => {} };
+  // @ts-ignore plain JS shared with the page
+  const { resetSpeed } = await import("./views/speed.js");
+  resetSpeed();
+  const urls: string[] = [];
+  await view.mountStatus({ querySelector: () => null }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => WEEK }; }, new URLSearchParams("window=hour"));
+  expect(urls.sort()).toEqual(["/api/speed?window=day", "/api/speed?window=hour"]);
+  resetSpeed();
+  delete g.localStorage; delete g.location; delete g.history;
 });
