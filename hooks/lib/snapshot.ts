@@ -3,6 +3,8 @@
  * hash of the diff. Two equal fingerprints mean the turn changed nothing.
  */
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 function git(cwd: string, ...args: string[]): string | null {
   const proc = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -17,6 +19,22 @@ function worktreesOf(cwd: string): string[] {
   return paths.length ? paths : [top];
 }
 
+/** Hash of the bytes of every untracked, non-ignored file. A file that vanishes or cannot be read counts as missing. */
+function untrackedContents(tree: string): string {
+  const names = (git(tree, "ls-files", "--others", "--exclude-standard", "-z") ?? "").split("\0").filter(Boolean).sort();
+  const hash = createHash("sha256");
+  for (const name of names) {
+    let body = "";
+    try {
+      body = createHash("sha256").update(readFileSync(join(tree, name))).digest("hex");
+    } catch {
+      body = "unreadable";
+    }
+    hash.update(name).update("\0").update(body).update("\0");
+  }
+  return hash.digest("hex");
+}
+
 /** null when cwd is not inside a git repo. */
 export function snapshot(cwd: string): string | null {
   const trees = worktreesOf(cwd);
@@ -27,6 +45,7 @@ export function snapshot(cwd: string): string | null {
     hash.update(git(tree, "rev-parse", "HEAD") ?? "").update("\0");
     hash.update(git(tree, "status", "--porcelain=v2", "--untracked-files=all") ?? "").update("\0");
     hash.update(git(tree, "diff", "HEAD") ?? "").update("\0");
+    hash.update(untrackedContents(tree)).update("\0");
   }
   return hash.digest("hex");
 }

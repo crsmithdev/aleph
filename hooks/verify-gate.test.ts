@@ -30,6 +30,15 @@ describe("snapshot", () => {
     expect(snapshot(root)).not.toBe(s1);
     expect(snapshot(join(root, ".worktrees", "w"))).toBe(snapshot(root));
   });
+  test("changes when the contents of an untracked file change", () => {
+    const w = join(root, ".worktrees", "w");
+    writeFileSync(join(w, "u.txt"), "one");
+    const s0 = snapshot(w);
+    writeFileSync(join(w, "u.txt"), "two");
+    const s1 = snapshot(w);
+    expect(s1).not.toBe(s0);
+    expect(snapshot(w)).toBe(s1);
+  });
   test("is null outside a repo", () => {
     const plain = mkdtempSync(join(tmpdir(), "aleph-plain-"));
     expect(snapshot(plain)).toBeNull();
