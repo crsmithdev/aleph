@@ -13,7 +13,7 @@ export function sh(cwd: string, ...args: string[]): void {
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
 }
 
-const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH"];
+const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_VAULT", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH"];
 let dir: string;
 let saved: Record<string, string | undefined>;
 
@@ -26,7 +26,7 @@ export function setup(): void {
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   Object.assign(process.env, {
     ALEPH_ISSUES: join(dir, "items"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_JOBS_DIR: join(dir, "jobs"),
-    ALEPH_FACTORY_DIR: join(dir, "factory"), XDG_RUNTIME_DIR: join(dir, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5", SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off",
+    ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), XDG_RUNTIME_DIR: join(dir, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5", SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off",
   });
   // The factory repo, with an origin the baseline can fetch.
   sh(dir, "git", "init", "-q", "--bare", "-b", "main", join(dir, "repo.git"));
