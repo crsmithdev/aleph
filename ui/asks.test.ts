@@ -27,6 +27,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   question: () => ofRuns(run("question", { question: "Which port?" })),
   manual: () => ofRuns(run("manual")),
   "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })),
+  "spec-check": () => ofIssues(issue({ reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" })),
   "run-cap": () => ofIssues(issue({ reason: "run-cap", question: RUN_CAP })),
   "triage-failed": () => ofIssues(issue({ reason: "triage-failed", question: "triage: no verdict in 2 runs: failed: its process ended before a verdict" })),
   "part-dropped": () => ofIssues(issue({ reason: "part-dropped", decision: { ...decision, options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed" }, question: "A goal was dropped." })),
@@ -96,7 +97,7 @@ describe("asks", () => {
 
   test("the kind: approval for review, held-path, proposal and firefighter; input for the rest; an Ask's own kind wins", () => {
     for (const r of ["review", "held-path", "proposal", "firefighter", "proposal-skill"]) expect(kindOf(r), r).toBe("approval");
-    for (const r of ["question", "manual", "no-commit", "part-dropped", "triage-failed", "host-check", "rescue", "run-cap", "acceptance-failed"]) expect(kindOf(r), r).toBe("input");
+    for (const r of ["question", "manual", "no-commit", "part-dropped", "triage-failed", "host-check", "rescue", "run-cap", "acceptance-failed", "spec-check"]) expect(kindOf(r), r).toBe("input");
     expect(kindOf("question", "approval")).toBe("approval");
     expect(CASES["held-path"]()[0].kind).toBe("approval");
     expect(CASES.review()[0].kind).toBe("approval");

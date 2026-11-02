@@ -165,7 +165,7 @@ test("grant accepts proposal-<kind>:<place> only", () => {
 });
 
 test("ASK_REASONS names every reason with actions and an always", () => {
-  expect(Object.keys(ASK_REASONS).sort()).toEqual(["acceptance-failed", "firefighter", "held-path", "host-check", "manual", "no-commit", "part-dropped", "proposal", "proposal-check", "proposal-claude-md", "proposal-skill", "question", "rescue", "review", "run-cap", "triage-failed"]);
+  expect(Object.keys(ASK_REASONS).sort()).toEqual(["acceptance-failed", "firefighter", "held-path", "host-check", "manual", "no-commit", "part-dropped", "proposal", "proposal-check", "proposal-claude-md", "proposal-skill", "question", "rescue", "review", "run-cap", "spec-check", "triage-failed"]);
   for (const r of Object.values(ASK_REASONS)) {
     expect(r.actions.length).toBeGreaterThan(0);
     expect([...r.actions, "firefighter", "recommended", ""]).toContain(r.always);

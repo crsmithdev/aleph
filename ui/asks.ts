@@ -79,6 +79,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   question: (c) => c.run ? `The worker on ${c.id} asked: ${clean(c.run.question) || "it needs an answer"}` : sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
   manual: (c) => `The manual check of ${c.id} must be run by you, on the host.`,
   "part-dropped": (c) => `A goal of ${c.id} was dropped and no other goal of it is open.`,
+  "spec-check": (c) => `The spec check held ${c.id}: its notes name the clauses to change, so edit the spec and run it again.`,
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
   "run-cap": (c) => `The factory started ${c.id} 3 times in one hour, so it stopped starting it until you run it again.`,
   "triage-failed": (c) => `Triage of ${c.id} failed twice: ${failure(c.issue?.question ?? "")}, so no one has decided what to do with this issue.`,
