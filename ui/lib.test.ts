@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
 
 test("esc escapes markup", () => {
   expect(esc("<script>alert('x')</script>")).toBe("&lt;script&gt;alert(&#39;x&#39;)&lt;/script&gt;");
@@ -263,4 +263,13 @@ test("shortModel gives one short name for a model", () => {
 test("sectionHead", () => {
   expect(sectionHead("Hooks", { count: 3 })).toBe('<div class="sh"><h2>Hooks</h2><span class="count">3</span></div>');
   expect(sectionHead("A<", { aside: "<i>x</i>" })).toBe('<div class="sh"><h2>A&lt;</h2><span class="aside"><i>x</i></span></div>');
+});
+
+test("priorityBadge shows the priority, toned apart; missing reads medium", () => {
+  expect(priorityBadge("critical")).toContain("critical");
+  expect(priorityBadge("critical")).not.toBe(priorityBadge("medium").replace("medium", "critical"));
+  expect(priorityBadge("high")).toContain("need");
+  expect(priorityBadge("low")).toContain("dim");
+  expect(priorityBadge(undefined)).toBe(priorityBadge("medium"));
+  expect(priorityBadge("bogus")).toContain(">medium<");
 });

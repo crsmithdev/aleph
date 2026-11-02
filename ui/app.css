@@ -326,6 +326,7 @@ section { margin: 0 0 28px; }
 .badge.need { background: var(--need-bg); color: var(--need); }
 .badge.parked { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--muted); }
 .badge.quiet { background: var(--sunk); color: var(--muted); }
+.badge.dim { background: transparent; opacity: .6; font-weight: 400; }
 
 .facts { display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 8px 0 16px; padding: 0; color: var(--ink-2); font-size: var(--fs-sm); }
 .facts div { display: flex; gap: 6px; }

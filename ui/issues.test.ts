@@ -678,3 +678,26 @@ describe("the Issue page shows the ask row", () => {
     for (const k of ["Situation", "Effects", "Recommend"]) expect(facts).not.toContain(`<dt>${k}</dt>`);
   });
 });
+
+describe("priority badges", () => {
+  test("the table row, the issue header and the part row show the badge; the API's goals carry priority", async () => {
+    const n = writeList({ key: "fac" }, "seed", (doc) => {
+      const i = add(doc, "prio parent", { request: "x" });
+      addPart(doc, i, { title: "plain part", spec: "x" });
+      const p = addPart(doc, i, { title: "hot part", spec: "x" });
+      (p as any).fm.priority = "critical";
+      return i.id;
+    }, true)!.value;
+    const d = await getJson(`/api/issues/fac/${n}`);
+    expect(d.goals.map((g: any) => g.priority)).toEqual(["medium", "critical"]);
+    d.priority = "critical";
+    const h = v.renderIssue(d);
+    const head = h.slice(h.indexOf('<div class="status-row">'), h.indexOf("</div>", h.indexOf('<div class="status-row">')));
+    expect(head).toContain(">critical<");
+    const rows = h.slice(h.indexOf('id="goals"')).split("<tr>");
+    expect(rows.find((r: string) => r.includes("hot part"))).toContain(">critical<");
+    expect(rows.find((r: string) => r.includes("plain part"))).toContain(">medium<");
+    const row = v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "critical", labels: [], notes: 0, runs: 0, cost: 0, at: null });
+    expect(row).toContain('<td><span class="badge stuck">critical</span></td>');
+  });
+});

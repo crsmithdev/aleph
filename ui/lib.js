@@ -331,6 +331,13 @@ export const repoIdLink = (id, href, repo = repoOf(id)) => `${repo ? `<span clas
 /** A state as a badge, toned by `tone`. */
 export const badge = (state) => `<span class="badge ${tone(state)}">${esc(state)}</span>`;
 
+/** A priority as a badge: critical is the alert tone, high the warning tone, medium quiet, low dim. Missing or unknown reads medium. */
+const PRIORITY_TONES = { critical: "stuck", high: "need", medium: "quiet", low: "quiet dim" };
+export function priorityBadge(p) {
+  const k = Object.hasOwn(PRIORITY_TONES, p) ? p : "medium";
+  return `<span class="badge ${PRIORITY_TONES[k]}">${k}</span>`;
+}
+
 /** Labels as small rounded chips; "" for none. */
 export const chips = (labels) => (labels?.length ? `<span class="chips">${labels.map((l) => `<span class="chip">${esc(labelName(l))}</span>`).join("")}</span>` : "");
 

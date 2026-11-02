@@ -114,7 +114,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   // The Issue page: the `## Request`, then the goals, each with its Job.
   const goals = goalRefs.map((g) => {
     const gi = todos.find(doc!, g), st = states.get(g);
-    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: `#/issues/${encodeURIComponent(repo.key)}/${g}`, stage: st?.stage ?? (gi ? todos.status(gi) : "missing"), why: st?.why ?? "", jobs: jobsOf(g) };
+    return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: `#/issues/${encodeURIComponent(repo.key)}/${g}`, priority: String(gi?.fm.priority ?? "medium"), stage: st?.stage ?? (gi ? todos.status(gi) : "missing"), why: st?.why ?? "", jobs: jobsOf(g) };
   });
   // The lifetime chart: every run on this issue or its parts, and the time the store got the file.
   const onThis = (on: number | string | undefined) => (!ref.includes(".") ? isOfIssue(on, n) : String(on) === ref);
