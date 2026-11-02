@@ -44,6 +44,35 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
+describe("parked", () => {
+  test("a parked issue is out of goals() until unparked", () => {
+    const r = repo([{ title: "a", labels: ["goal"] }]);
+    const has = () => store.goals([r]).some((g) => g.item.id === 1);
+    expect(has()).toBe(true);
+    store.writeList(r, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
+    expect(item(r, 1).fm.closed_as).toBeUndefined();
+    expect(has()).toBe(false);
+    store.writeList(r, "unpark", (doc) => { issues.setStatus(issues.find(doc, 1)!, "open"); return true; });
+    expect(item(r, 1).fm.parked).toBeUndefined();
+    expect(has()).toBe(true);
+  });
+
+  test("a part of a parked parent is not buildable; reopen keeps the parent parked", () => {
+    const r = repo([{ title: "p" }]);
+    store.writeList(r, "part", (doc) => { issues.addPart(doc, issues.find(doc, 1)!, { title: "part", spec: "Do it." }); return true; });
+    const buildable = () => store.isBuildable(store.readList(r)!, item(r, "1.1" as any));
+    expect(buildable()).toBe(true);
+    store.writeList(r, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
+    expect(buildable()).toBe(false);
+    expect(issues.status(item(r, "1.1" as any))).toBe("open");
+    store.writeList(r, "reopen", (doc) => { issues.setStatus(issues.find(doc, "1.1")!, "done"); store.reopen(doc, issues.find(doc, "1.1")!, null); return true; });
+    expect(issues.status(item(r, 1))).toBe("parked");
+    store.writeList(r, "unpark", (doc) => { issues.setStatus(issues.find(doc, 1)!, "open"); return true; });
+    expect(buildable()).toBe(true);
+    expect(issues.status(item(r, "1.1" as any))).toBe("open");
+  });
+});
+
 describe("labels", () => {
   const it = (fm: issues.Issue["fm"]): issues.Issue => ({ id: 1, title: "t", fm, request: "", spec: "", notes: [] });
 

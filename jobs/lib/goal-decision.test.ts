@@ -49,4 +49,5 @@ test("refDone: an item absent from a read list is done; a list not read blocks",
   expect(refDone({ fm: { closed_as: "done" } } as any, true, undefined)).toBe(true);
   expect(refDone({ fm: {} } as any, true, undefined)).toBe(false);
   expect(refDone({ fm: {} } as any, true, "done")).toBe(true);
+  expect(refDone({ fm: { parked: "true" } } as any, true, undefined)).toBe(false);
 });

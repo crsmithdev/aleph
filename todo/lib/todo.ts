@@ -8,7 +8,7 @@
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../vault/lib/frontmatter.ts";
 
-export const STATUSES = ["open", "done", "dropped"] as const;
+export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
 const REQUIRED = ["id", "created", "updated"] as const;
 
@@ -67,7 +67,7 @@ export function parseGoalRef(s: string): { repo: string; id: number | string } |
 
 /** `open`, or how the issue was closed. */
 export function status(item: Issue): string {
-  return (item.fm.closed_as as string) ?? "open";
+  return (item.fm.closed_as as string) ?? (item.fm.parked === "true" ? "parked" : "open");
 }
 
 /** An item's labels. A lone label not in a list counts as a list of one. */
@@ -207,11 +207,15 @@ export function edit(item: Issue, change: { title?: string; request?: string; sp
 
 /** Close the issue as `next`, with why; `open` takes the closure off. A reopen also sets `since`: see `store.reopen`. */
 export function setStatus(item: Issue, next: Status, now = new Date(), why?: string): void {
-  if (next === "open") {
+  if (next === "parked") {
+    item.fm.parked = "true";
+  } else if (next === "open") {
+    delete item.fm.parked;
     delete item.fm.closed_as;
     delete item.fm.closed_why;
     delete item.fm.closed_at;
   } else {
+    delete item.fm.parked;
     item.fm.closed_as = next;
     item.fm.closed_at = today(now);
     if (why) item.fm.closed_why = why;

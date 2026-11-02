@@ -113,6 +113,7 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
     // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
     const implied = labels.some((l) => ["followup", "deps", "memory"].includes(l));
     const issue = issues.add(doc, title, { priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined });
+    if (fields.status === "parked") issues.setStatus(issue, "parked");
     if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
     return { issue };
   }, true)!;
@@ -129,7 +130,7 @@ export function list(repo: store.Place, o: { status?: string; label?: string } =
 export function filterRows(doc: issues.Doc, o: { status?: string; label?: string }): issues.Issue[] {
   if (o.status && !issues.STATUSES.includes(o.status as issues.Status)) refuse(`status must be one of ${issues.STATUSES.join(", ")}`);
   return doc.items
-    .filter((i) => (o.status ? issues.status(i) === o.status : true))
+    .filter((i) => (o.status ? issues.status(i) === o.status : ["open", "parked"].includes(issues.status(i))))
     .filter((i) => (o.label ? store.areasOf(i).includes(o.label) : true));
 }
 
@@ -179,7 +180,7 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
   return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
-export function edit(repo: store.Place, id: number | string, fields: Fields) {
+export function edit(repo: store.Place, id: number | string, fields: Fields, reason = "") {
   checkFields(fields);
   const title = fields.title?.trim();
   const { request, spec, priority, labels, source, status, after } = fields;
@@ -193,8 +194,10 @@ export function edit(repo: store.Place, id: number | string, fields: Fields) {
     issues.edit(i, { title, request, spec, priority, areas: labels });
     if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
-    if (status === "open") store.reopen(doc, i, mainHead(repo));
+    if (status === "open" && issues.status(i) === "parked") issues.setStatus(i, "open");
+    else if (status === "open") store.reopen(doc, i, mainHead(repo));
     else if (status !== undefined) issues.setStatus(i, status as issues.Status);
+    if (reason) issues.note(i, reason);
     if (kept !== undefined) setAfter(repo, doc, i, kept);
     return i;
   })!;

@@ -245,7 +245,7 @@ export const planSet = (item: Issue): boolean => item.fm.plan === "true";
 export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
 /** An open issue a factory run can build: it has a spec, no parts and no Ask, and is neither to plan nor the tracker. */
 export const isBuildable = (doc: Doc, item: Issue): boolean =>
-  status(item) === "open" && !awaitsChris(item) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0;
+  status(item) === "open" && (parentOf(doc, item) === undefined || status(parentOf(doc, item)!) !== "parked") && !awaitsChris(item) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0;
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
 /** The item's areas: its `areas`. */
@@ -375,6 +375,7 @@ export function sort(repo: Place, id: number | string, message: string, change: 
 export function reopen(doc: Doc, item: Issue, since: string | null): void {
   for (const i of [item, parentOf(doc, item)]) {
     if (!i || status(i) === "open") continue;
+    if (i !== item && status(i) === "parked") continue;
     issues.setStatus(i, "open");
     if (since) i.fm.since = since;
   }

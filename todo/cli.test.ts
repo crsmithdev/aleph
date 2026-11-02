@@ -188,8 +188,8 @@ test("done and drop set a field, never move or renumber the item", () => {
   aleph("issue", "add", "proj", "Abandoned");
   expect(aleph("issue", "done", "proj", "4", "landed in abc123").code).toBe(0);
   expect(aleph("issue", "drop", "proj", "5", "superseded by 4").code).toBe(0);
-  const rows = JSON.parse(aleph("issue", "list", "proj", "--json").out);
-  expect(rows.map((r: any) => [r.id, r.status])).toEqual([[3, "open"], [4, "done"], [5, "dropped"]]);
+  expect(JSON.parse(aleph("issue", "list", "proj", "--json").out).map((r: any) => [r.id, r.status])).toEqual([[3, "open"]]);
+  expect(JSON.parse(aleph("issue", "list", "proj", "--status", "dropped", "--json").out).map((r: any) => r.id)).toEqual([5]);
   expect(JSON.parse(aleph("issue", "list", "proj", "--status", "done", "--json").out).map((r: any) => r.id)).toEqual([4]);
   expect(JSON.parse(aleph("issue", "show", "proj", "4", "--json").out).notes[0]).toContain("landed in abc123");
 });
@@ -298,6 +298,25 @@ test("add takes a body of several lines from stdin", () => {
   const shown = JSON.parse(aleph("issue", "show", "proj", "4", "--json").out);
   expect(shown.request).toBe("Why it matters.\n\nDone when the gate counts.");
   expect(remoteItem(4)).toContain("---\n<!-- request -->\nWhy it matters.\n\nDone when the gate counts.");
+});
+
+test("park: the reason is a note, closed_as stays unset, list shows parked and hides done", () => {
+  aleph("issue", "add", "proj", "Needs a look");
+  aleph("issue", "add", "proj", "Shipped");
+  aleph("issue", "done", "proj", "5", "ok");
+  const p = aleph("issue", "edit", "proj", "4", "--status", "parked", "needs more investigation");
+  expect(p.code).toBe(0);
+  expect(JSON.parse(p.out).status).toBe("parked");
+  expect(doc(4)).not.toContain("closed_as");
+  expect(JSON.parse(aleph("issue", "show", "proj", "4", "--json").out).notes.at(-1)).toContain("needs more investigation");
+  const ids = (...a: string[]) => JSON.parse(aleph("issue", "list", "proj", ...a, "--json").out).map((r: any) => r.id);
+  expect(ids()).toEqual([3, 4]);
+  expect(ids("--status", "parked")).toEqual([4]);
+  expect(ids("--status", "done")).toEqual([5]);
+  expect(JSON.parse(aleph("issue", "edit", "proj", "4", "--status", "open").out).status).toBe("open");
+  const a = aleph("issue", "add", "proj", "Filed parked", "--status", "parked");
+  expect(JSON.parse(a.out).added).toBe(6);
+  expect(ids("--status", "parked")).toEqual([6]);
 });
 
 test("edit replaces the title, body, priority and labels it is given, and keeps the notes", () => {

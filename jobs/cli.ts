@@ -240,7 +240,7 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "edit": {
-      const e = verbs.edit(repo, id, fields);
+      const e = verbs.edit(repo, id, fields, text);
       warn(e.follow);
       out(e.result);
       dispatchAfterGoal(repo, e.item);
