@@ -129,3 +129,15 @@ test("the Usage per issue tile drills to the issues list", () => {
   expect(issueFor(D, "usage")).toBeNull();
   expect(renderEfficiency({ ...D, issues: { ...D.issues, usage: undefined } }, null, "usage")).toContain("No issue to show.");
 });
+
+test("the Reruns panel describes tests and checks, and keeps a long name whole", () => {
+  const long = "ui/a.test.ts > suite > a very long test name that goes on";
+  const d = { ...D, flakes: [{ name: long, count: 3 }, { name: "types", count: 1 }] };
+  const s = selection(d, "flakes");
+  expect(s.causes).toEqual([{ name: long, runs: 3 }, { name: "types", runs: 1 }]);
+  expect(s.text.startsWith("Checks that failed")).toBe(false);
+  const h = renderEfficiency(d, null, "flakes");
+  expect(h).toContain(`title="${long.replace(/>/g, "&gt;")}"`);
+  expect(h).toContain(long.replace(/>/g, "&gt;"));
+  expect(h).toContain("rerun");
+});

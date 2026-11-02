@@ -10,7 +10,7 @@ const ALL = "all", FLAKES = "flakes", USAGE = "usage";
 export function selection(d, key) {
   if (key === FLAKES) {
     const rows = d.flakes ?? [];
-    return { title: "Reruns", text: "Checks that failed, then passed on a rerun of the same tree.", size: `${plural(d.flaky, "rerun")}.`, causes: rows.map((f) => ({ name: f.name, runs: f.count })), top: [] };
+    return { title: "Reruns", text: "Tests, or whole checks, that failed and then passed on a rerun of the same tree.", size: `${plural(d.flaky, "rerun")}.`, causes: rows.map((f) => ({ name: f.name, runs: f.count })), top: [] };
   }
   if (key === USAGE) return { title: "Usage per issue", text: "Landed issues by the share of the weekly limit their agent runs took.", size: `${plural((d.issues?.usage ?? []).length, "issue")}.`, causes: [], top: d.issues?.usage ?? [] };
   const c = key !== ALL && (d.classes ?? []).find((x) => x.key === key);
@@ -29,7 +29,7 @@ export function selection(d, key) {
 function scorecard(d, day, key) {
   const fixed = (d.classes ?? []).find((c) => c.key === "fixed");
   return lostTile(d, day, { key: ALL, on: key === ALL }) + firstPassTile(d, day, { key: "landed", on: key === "landed" }) +
-    tile({ k: "Reruns", v: String(d.flaky), body: small("checks passed on rerun") + (day && trendOn(d) ? small(`${day.flaky} in the last 24 h`) : ""), key: FLAKES, on: key === FLAKES }) +
+    tile({ k: "Reruns", v: String(d.flaky), body: small("passed on rerun") + (day && trendOn(d) ? small(`${day.flaky} in the last 24 h`) : ""), key: FLAKES, on: key === FLAKES }) +
     tile({ k: "Fix rounds", v: String(fixed?.runs ?? 0), body: small(`${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`), key: "fixed", on: key === "fixed" }) +
     tile({ k: "Usage per issue", v: d.issues.week === null ? "–" : weekText(d.issues.week), body: small(d.issues.week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median"), ...(d.issues.week === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
@@ -43,7 +43,7 @@ function bar(d, key) {
 
 const causeBars = (s) => {
   const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0;
-  return barList(s.causes.map((x, i) => barRow(`<b>${esc(x.name)}</b>`, max > 0 ? (size(x) / max) * 100 : 0, x.hours === undefined ? esc(plural(x.runs, "rerun")) : `${esc(hours(x.hours))} · ${esc(plural(x.runs, "run"))}`, { top: i === 0 })).join(""));
+  return barList(s.causes.map((x, i) => barRow(`<b title="${esc(x.name)}">${esc(x.name)}</b>`, max > 0 ? (size(x) / max) * 100 : 0, x.hours === undefined ? esc(plural(x.runs, "rerun")) : `${esc(hours(x.hours))} · ${esc(plural(x.runs, "run"))}`, { top: i === 0 })).join(""));
 };
 
 const topTable = (rows) => dataTable(heads(["Issue", "Why", "Hours", "Runs"], ["Hours", "Runs"]), rows.map((x) =>
