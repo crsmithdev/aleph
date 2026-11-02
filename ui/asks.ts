@@ -20,6 +20,8 @@ export interface AskItem {
   priority?: string;
   /** An awaiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
   /** An awaiting run: the goal or issue it is on. */ on?: string;
+  /** The date shown on the card, and when the work was first picked up (ISO, "" for never); a part of a goal as "n/m" of its parent. */
+  at?: string; since?: string; part?: { n: number; m: number; parent: string; href: string };
   agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
 }
 export interface Details {

@@ -117,23 +117,22 @@ describe("/api/state on a work-model store", () => {
       expect(p.exitCode, `${id}: ${p.stderr}`).toBe(0);
       expect(JSON.parse(p.stdout.toString()).stage, id).toBe(stage);
     }
-    // The issue in Running nests its goals with their stages; .3 runs after .2, so it is blocked.
-    const issue = s.runningIssues.find((i: any) => i.id === "fac-1");
-    expect(issue.of).toEqual({ n: 1, m: 3 });
-    expect(issue.parts.map((g: any) => [g.id, g.stage])).toEqual([["fac-1.1", "done"], ["fac-1.2", "building"], ["fac-1.3", "blocked"]]);
-    expect(issue.parts[1].job).toMatchObject({ name: "fac-1.2", kind: "build" });
+    // Parts are flat: the parent waits for its parts and has no card in Running; .3 runs after .2, so it is blocked.
+    expect(s.runningIssues).toEqual([]);
+    expect(s.incoming.find((i: any) => i.id === "fac-1").stage).toBe("building");
+    expect(s.running.find((j: any) => j.name === "fac-1.2").part).toMatchObject({ n: 2, m: 3, parent: "fac-1" });
     expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "blocked"]]);
+    expect(s.queued[0].part).toMatchObject({ n: 3, m: 3, parent: "fac-1" });
   });
 
-  test("Running shows the issue with 'n of m issues' and its goals nested, not the goal's job as a second card", () => {
+  test("Running shows a part as its own card with a 3/4 link to its parent", () => {
     const s: any = state(now);
     const html = renderLanes(s);
     const running = html.match(/<section id="lane-running"[^]*?<\/section>/)![0];
-    expect(running).toContain("1 of 3 issues");
-    expect(running.match(/class="goal-row"/g)).toHaveLength(3);
+    expect(running).toContain('<a class="part" href="#/issues/fac/1" title="Part 2 of 3 of fac-1">2/3</a>');
     expect(running).toContain('href="#/jobs/fac-1.2"');
     expect(running.match(/<article /g)).toHaveLength(1);
-    expect(s.running.find((j: any) => j.name === "fac-1.2").issue).toBe("fac-1");
+    expect(running).not.toContain("goal-row");
   });
 
   test("the Always list is always.json under the new reasons", () => {

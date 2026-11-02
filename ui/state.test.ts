@@ -90,7 +90,7 @@ describe("state", () => {
     // Delivered is the latest lands, not only today's: fac-6 landed 30 hours ago.
     expect(s.delivered.map((j) => j.name)).toEqual(["fac-5", "fac-6"]);
     expect(s.delivered[0].commitUrl).toBe("https://github.com/chris/demo/commit/abcdef1234567");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: "", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
     expect(s.factory.runsToday).toBe(4);
     expect(s.factory.dayCap).toBe(12);
     expect(s.factory.paused).toBe(false);
@@ -312,7 +312,7 @@ describe("a planner run", () => {
     run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("plan-fac-2");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
     for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
   });
 });

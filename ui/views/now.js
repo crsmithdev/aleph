@@ -75,7 +75,7 @@ function statLines(stat) {
 }
 
 /** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
-const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).filter((j) => !j.issue).length;
+const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).length;
 
 /** The status line: the time, the status sentence, Pause or Resume. */
 export function renderStatusLine(s, stale = false) {
@@ -147,20 +147,38 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
 const STATUS_TONE = { awaiting: "need", stuck: "stuck", building: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
 const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
-const RUN_KIND = { agent: "build", build: "build", research: "research", land: "land", triage: "triage", plan: "plan", facts: "facts" };
 
-/** One job of a Done package, as a link to its page; a land adds its commit. */
-function doneJob(j) {
-  const kind = j.run?.kind ?? "build";
-  const sha = j.commit ? (j.commitUrl ? ` <a href="${esc(j.commitUrl)}"><code>${esc(j.commit.slice(0, 7))}</code></a>` : ` <code>${esc(j.commit.slice(0, 7))}</code>`) : "";
-  const out = kind === "triage" && j.outcome ? ` (${esc(j.outcome)})` : "";
-  return `<span class="dj"><a href="${jobHref(j)}">${esc(RUN_KIND[kind] ?? kind)}</a>${out}${sha}</span>`;
+/** "11/02 10:36": the date of a card, in the reader's time; "–" for none. */
+export function stamp(ts) {
+  const d = new Date(ts);
+  if (!ts || Number.isNaN(d.getTime())) return "–";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** An item card of a lane: id, state badge, time, title on at most 2 lines, one meta line. */
-function laneCard(cls, id, badge, time, title, href, meta) {
-  const t = href ? `<a href="${esc(href)}" class="t">${esc(title)}</a>` : `<span class="t">${esc(title)}</span>`;
-  return `<article class="job-card small lane-card ${cls}"><div class="ih">${id}${badge}${time ? `<span class="num">${esc(time)}</span>` : ""}</div>${t}${meta ? `<div class="run-meta">${meta}</div>` : ""}</article>`;
+/** "4m", "1h05m", "2d4h": the time from `since` to `to`, in the least room; "–" when the work was never picked up. */
+export function span(since, to) {
+  const ms = Date.parse(to) - Date.parse(since);
+  if (!since || !(ms >= 0)) return "–";
+  const m = Math.floor(ms / 60_000), h = Math.floor(m / 60);
+  if (h >= 24) return `${Math.floor(h / 24)}d${h % 24}h`;
+  return h ? `${h}h${String(m % 60).padStart(2, "0")}m` : `${m}m`;
+}
+
+/** The "3/4" link of a part to its parent; "" for a card that is no part. */
+const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Part ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
+
+/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, then why it waits (it gives up space first; its tooltip holds the whole text). `chips` is HTML. */
+function metaRow({ id, chips, part, at, since, now, end, why }) {
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(stamp(at))}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${why ? `<span class="why" title="${esc(why)}">${esc(why)}</span>` : ""}</div>`;
+}
+
+/** The title of a card: at most 2 lines, an ellipsis after that. */
+const titleOf = (title, href) => (href ? `<a href="${esc(href)}" class="t" title="${esc(title)}">${esc(title)}</a>` : `<span class="t" title="${esc(title)}">${esc(title)}</span>`);
+
+/** An item card of a lane: the 3-line face (the meta row, then the title on 2 lines); `below` is HTML after the face. */
+function laneCard(cls, row, title, href, below = "") {
+  return `<article class="job-card small lane-card ${cls}">${row}${titleOf(title, href)}${below}</article>`;
 }
 
 /** A lane: header with the count, its cards or one quiet line. */
@@ -168,47 +186,36 @@ const lane = (id, title, n, rows, none, cap = 0) =>
   `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
 
 const LATEST_DONE = 2;
-/** Latest done: the last done issues, newest first; the issue heads its card, its triage, work and land jobs and commits are links. */
+/** Latest done: the last done parts and issues, newest first, each its own card. */
 function doneLane(s) {
-  const d = new Date(s.now);
-  const rows = (s.done ?? []).slice(0, LATEST_DONE).map((i) => {
-    const jobs = [...i.jobs].sort((a, b) => Date.parse(a.started) - Date.parse(b.started));
-    return laneCard("done-row", repoIdLink(i.id, i.href), statusBadge("done") + priorityBadge(i.priority), i.finished ? when(i.finished, d) : "", i.title, i.href, jobs.map(doneJob).join(""));
-  }).join("");
+  const rows = (s.done ?? []).slice(0, LATEST_DONE).map((i) =>
+    laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
   return lane("done", "Latest done", null, rows, "Nothing is done yet.");
 }
 
-/** Why a queued goal waits: links to the goals it runs after, or the reason text. */
-function waitMeta(w) {
-  if (!w.why) return "Queued";
-  if (w.kind === "waits_on" && w.waits?.length)
-    return `<div class="blockers"><div>Blocked by</div>${blockersHtml(w.waits, w.repo, w.id)}</div>`;
-  return esc(w.why);
-}
-
 function queuedLane(s) {
-  const rows = (s.queued ?? []).map((w) => laneCard("queued-row", repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo), statusBadge(w.stage ?? "queued") + priorityBadge(w.priority), "", w.title, "", waitMeta(w))).join("");
+  const rows = (s.queued ?? []).map((w) => {
+    const dead = (w.waits ?? []).filter((b) => b.dead);
+    const id = repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo);
+    return laneCard("queued-row", metaRow({ id, chips: statusBadge(w.stage ?? "queued") + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, why: w.why }), w.title, "",
+      dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
+  }).join("");
   return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
 }
 
-/** An issue in Running: its title, "n of m parts", and its parts nested, each with its stage and its job. */
-function runningIssue(i) {
-  const goals = i.parts.map((g) =>
-    `<li class="goal-row">${idLink(localId(g.id, repoOf(i.id)), g.href)} ${statusBadge(g.stage)}${priorityBadge(g.priority)} <span class="t">${esc(g.title)}</span>${g.job ? ` <a class="job" href="${esc(g.job.href)}">${esc(g.job.kind === "agent" || g.job.kind === "build" || g.job.kind === "research" ? "build" : g.job.kind)}</a>` : ""}</li>`).join("");
-  return `<article class="job-card small lane-card run-row issue-run" data-issue="${esc(i.id)}"><div class="ih">${repoIdLink(i.id, i.href)}${statusBadge(i.stage)}${priorityBadge(i.priority)}<span class="num">${i.of.n} of ${i.of.m} issues</span></div>` +
-    `<a href="${esc(i.href)}" class="t">${esc(i.title)}</a><ul class="goals">${goals}</ul></article>`;
+/** A parent that waits to close: all its parts are done. */
+function runningIssue(i, now) {
+  return laneCard("run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now, why: `${i.of.n} of ${i.of.m} parts done; waits to close` }), i.title, i.href);
 }
 
 function runningLane(s) {
-  const d = new Date(s.now);
-  const issues = (s.runningIssues ?? []).map(runningIssue).join("");
-  const rows = issues + (s.running ?? []).filter((j) => !j.issue).map((j) => {
+  const issues = (s.runningIssues ?? []).map((i) => runningIssue(i, s.now)).join("");
+  const rows = issues + (s.running ?? []).map((j) => {
     const run = j.run ?? { kind: "build", started: j.started };
     const worker = run.kind === "agent" || run.kind === "build" || run.kind === "research";
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
-    return laneCard("run-row", itemId(j), `<span class="badge run">${esc(kind)}${j.phase && j.phase !== kind ? ` \u00b7 ${esc(j.phase)}` : ""}</span>`, when(run.started, d), j.item?.title || j.name, jobHref(j),
-      `<span class="num"><span class="elapsed" data-since="${esc(run.started)}">${esc(elapsed(run.started, s.now))}</span> elapsed</span>${over ? ` <span class="over">past the time box</span>` : ""}`);
+    return laneCard("run-row", metaRow({ id: itemId(j), chips: `<span class="badge run" title="${esc(j.phase || kind)}">${esc(kind)}</span>` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now, why: over ? "past the time box" : "" }), j.item?.title || j.name, jobHref(j));
   }).join("");
   return lane("running", "Running", s.factory.liveRuns ?? runningCount(s), rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }
@@ -220,7 +227,7 @@ export function renderLanes(s) {
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */
 export function renderNeeds(s) {
-  const asks = (s.asks ?? []).map(askRow).concat(errorLines(s).map(errorRow));
+  const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
   if (!asks.length && !s.stuck.length) return "";
   const group = (id, t, n, html, wrap) => (n ? `<div class="grp" id="${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${wrap(html)}</div>` : "");
   return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Awaiting you</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
@@ -255,7 +262,7 @@ const stuckRow = (s) => (j) => {
   const blocker = b && localId(b.id, j.repo);
   const why = b ? `Waits on ${blocker}: ${b.title}.` : `${j.condition === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
   const first = b ? act("wait", j.name, `Wait for ${blocker}`, true).replace('data-label=', `data-on="${esc(b.id)}" data-label=`) : act("recheck", j.name, "Re-check");
-  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why, j.repo, undefined, j.item?.priority)}${agentLine(j)}` +
+  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why, j.repo, undefined, j.item?.priority, { at: j.run?.started ?? j.started, since: j.started, now: s.now, part: j.part })}${agentLine(j)}` +
     `<div class="actions choices">${choice(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
     (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j) + `</article>`;
 };
@@ -293,14 +300,17 @@ function askDetails(i) {
 
 const KIND_TAG = { approval: "Approval", input: "Input", stuck: "Stuck", error: "Error" };
 /** The head of every Awaiting-you card: the kind's mark (input or approval), the id and title, the one sentence of the problem. */
-const needHead = (kind, id, href, title, problem, repo = "", para = `<p class="problem">${esc(localId(problem, repo))}</p>`, priority = "") =>
-  `<div class="row-main"><span class="kind-tag">${KIND_TAG[kind]}</span> ${priority ? priorityBadge(priority) + " " : ""}${!id ? "" : href ? repoIdLink(id, href, repo) : `<span class="id">${esc(id)}</span>`} ${title ? `<span class="t">${esc(title)}</span>` : ""}</div>` + para;
+const needHead = (kind, id, href, title, problem, repo = "", para = `<p class="problem">${esc(localId(problem, repo))}</p>`, priority = "", at = {}) => {
+  const idHtml = !id ? "" : href ? repoIdLink(id, href, repo) : `<span class="id">${esc(id)}</span>`;
+  const row = metaRow({ id: idHtml, chips: `<span class="kind-tag">${KIND_TAG[kind]}</span>` + (priority ? priorityBadge(priority) : ""), part: at.part, at: at.at, since: at.since, now: at.now });
+  return row + (title ? `<span class="t">${esc(title)}</span>` : "") + para;
+};
 /** One choice of a card: the button, what it does, and any input that belongs to it. */
 const choice = (button, hint, input = "", recommended = false) =>
   `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ' <span class="badge run">Recommended</span>' : ""}${input}</div>${button}</div>`;
 
 /** An Awaiting-you card from a server `asks` entry: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
-export function askRow(i) {
+export function askRow(i, now = new Date().toISOString()) {
   const acts = i.actions ?? [];
   const inputFor = (a) => {
     if (a.act === "deny") {
@@ -312,7 +322,7 @@ export function askRow(i) {
   const choices = acts.map((a) => choice(actionButton(a), a.hint, inputFor(a), !!a.recommended));
   if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
   return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
-    needHead(i.kind, i.id, i.href, i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.explained === false ? ' <span class="muted">The case text is missing; this is the fixed text for this reason.</span>' : ""}</p>`, i.priority) +
+    needHead(i.kind, i.id, i.href, i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.explained === false ? ' <span class="muted">The case text is missing; this is the fixed text for this reason.</span>' : ""}</p>`, i.priority, { at: i.at, since: i.since, now, part: i.part }) +
     `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i) + `</article>`;
 }
 

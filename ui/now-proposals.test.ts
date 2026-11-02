@@ -92,7 +92,8 @@ test("approve and decline handlers", async () => {
   }
 });
 
-test("a held job card has no badge or agent line", () => {
+test("a held job card has the kind mark in its meta row and no agent line", () => {
   const h = withAttn({ ...state, stuck: [], asks: asksOf([{ ...held, agent: true, reviewCall: { call: "back", reason: "x" } }]) });
-  expect(rows(h)[0]).not.toContain("badge");
+  expect(rows(h)[0]).toContain('<span class="kind-tag">');
+  expect(rows(h)[0]).not.toContain("Agent working");
 });

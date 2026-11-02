@@ -888,3 +888,28 @@ pre.diff span.del { background: var(--stuck-bg); color: var(--del); }
 ul.logs { list-style: none; padding: 0; }
 ul.logs .logbody { margin: 6px 0 12px; max-height: 70vh; overflow: auto; }
 ul.logs .step { margin: 6px 0; }
+
+/* ---------- Status cards: the 3-line face ---------- */
+/* Line 1 is the meta row; lines 2 and 3 are the title. The "why it waits" text gives up space first: it truncates, its tooltip holds the whole text. The date and the duration never shrink. */
+.lane-card, .issue-row { container-type: inline-size; }
+.job-card.small .ih { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.job-card.small .ih > .idp, .job-card.small .ih > .idl, .job-card.small .ih > .id { flex: none; white-space: nowrap; }
+.job-card.small .ih > .idp { margin-right: -2px; }
+.job-card.small .ih > .badge { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-card.small .ih > .kind-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-card.small .ih > .part { flex: none; font: 600 var(--fs-xs) var(--mono); white-space: nowrap; }
+.job-card.small .ih > .num { flex: none; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
+.job-card.small .ih > .why { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: 600; color: var(--need); margin: 0; cursor: help; }
+.lane-card > .t, .issue-row > .t {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin: 4px 0 0; font-weight: 600; line-height: 1.35; min-height: calc(2 * 1.35em); text-decoration: none; color: inherit; overflow-wrap: anywhere;
+}
+.lane-card .blockers { margin-top: 6px; font-size: var(--fs-sm); }
+@container (max-width: 420px) {
+  .job-card.small .ih { gap: 4px; }
+  .job-card.small .ih > .badge, .job-card.small .ih > .kind-tag { padding: 1px 5px; font-size: 10px; }
+  .job-card.small .ih > .num, .job-card.small .ih > .part, .job-card.small .ih > .why { font-size: 10px; }
+  .job-card.small .ih > .idp, .job-card.small .ih > .idl { font-size: 11px; }
+}
+.issue-row > .ih, .issue-row > .t { flex: 1 1 100%; min-width: 0; }
+.issue-row > .ih { gap: 6px; }

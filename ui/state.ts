@@ -23,6 +23,9 @@ const hrefOf = (repo: Repo, ref: string) => `#/issues/${encodeURIComponent(repo.
 const priorityOf = (item: any): string => PRIORITIES[rank(item)];
 const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.dead);
 
+/** A part of a goal as a flat card says it: "n/m" with a link to the parent. */
+export interface Part { n: number; m: number; parent: string; href: string }
+
 export interface Job {
   name: string; repo: string; item: { id: number | string; title: string; priority?: string } | null;
   condition: string; phase?: string; reason?: string; question?: string;
@@ -37,8 +40,8 @@ export interface Job {
   stat?: string;
   /** A live run exists for this job: a next run or a rerun. */
   agent?: boolean;
-  /** Running: the issue whose goals are nested in the Running lane, which shows this job under that goal. */
-  issue?: string;
+  /** Running, stuck: the part this job works on, "n/m" of its parent. */
+  part?: Part;
   /** Awaiting: what the run asks of Chris, an input or an approval, and why. */
   ask?: Ask;
   /** Awaiting: the reviewer's call on the held run. */
@@ -74,11 +77,10 @@ export interface NewIssue { id: string; title: string; priority?: string; status
   stage?: string }
 
 /** An issue in Running: its goals, each with its stage and the job that works on it. */
-export interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number };
-  parts: { id: string; title: string; href: string; stage: string; priority: string; job?: { name: string; href: string; kind: string } }[] }
+export interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
-export interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; jobs: Job[] }
+export interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
 /** An issue as the Incoming list shows it: `stage` is from stage(). */
 export interface IncomingItem { id: string; title: string; href: string; created: string; stage: string }
 
@@ -100,7 +102,7 @@ export interface State {
   /** Everything that waits for Chris: one entry per awaiting run, issue, goal and proposal, with its kind (input or approval) and reason. */
   asks: AskItem[];
   /** Queued and blocked goals (and old items): the Queued lane. */
-  queued: { repo: string; id: number | string; title: string; priority: string; stage: string; why: string; kind: GoalDecision["kind"];
+  queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; why: string; kind: GoalDecision["kind"];
     waits?: { id: string; href: string; state: string | null }[] }[];
   /** Issues in Running: each with its goals nested and "n of m issues". */
   runningIssues: RunningIssue[];
@@ -366,18 +368,28 @@ export function state(now = new Date()): State {
     const k = `${real.repo}-${n}`;
     ofItem.set(k, [...(ofItem.get(k) ?? []), runs]);
   }
+  // When the work on an item was first picked up: its earliest run, and for a parent its parts' too.
+  const pickedUp = (key: string, ...more: string[]): string => {
+    const ts = [key, ...more].flatMap((k) => ofItem.get(k) ?? []).map((r) => Date.parse(r[0].run.started)).filter((t) => t > 0);
+    return ts.length ? new Date(Math.min(...ts)).toISOString() : "";
+  };
+  // The part of each part: "n/m" and its parent, by `repo-ref`.
+  const partOf = new Map<string, Part>();
+  for (const repo of Object.values(registry)) {
+    const doc = lists.list(repo.key);
+    for (const item of doc?.items ?? []) {
+      const ps = partsOf(doc!, item);
+      ps.forEach((g, i) => partOf.set(`${repo.key}-${refOf(g)}`, { n: i + 1, m: ps.length, parent: `${repo.key}-${refOf(item)}`, href: hrefOf(repo, refOf(item)) }));
+    }
+  }
   const everyone: { at: string; n: number; card: IncomingItem }[] = [];
-  const doneItems: { at: number; repo: Repo; item: any; runs: Runs[] }[] = [];
+  const doneItems: { at: number; repo: Repo; item: any; runs: Runs[]; since: string }[] = [];
 
   const fresh: NewIssue[] = [];
   const awaitingItems: NewIssue[] = [];
-  const queued: { repo: Repo; item: any; stage: string }[] = [];
+  const queued: { repo: Repo; item: any; stage: string; since: string; at: string }[] = [];
   const runningIssues: RunningIssue[] = [];
   let openIssues = 0;
-  // The job that works on each goal now, by `repo-ref`.
-  const liveOf = new Map<string, Job>();
-  for (const j of running) if (j.item && j.run.kind !== "plan") liveOf.set(`${j.repo}-${j.item.id}`, j);
-  const nested = new Set<string>();
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     const stageById = stagesOf(repo);
@@ -390,10 +402,12 @@ export function state(now = new Date()): State {
       const card = (): NewIssue => ({ id, title: item.title, priority: priorityOf(item), status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
       const created = String(item.fm.created ?? "");
       if (top) everyone.push({ at: created, n: item.id, card: { id, title: item.title, href, created, stage: st } });
-      if (st === "done" && top) {
-        const mine = [ref, ...partsOf(doc!, item).map(refOf)].flatMap((r) => ofItem.get(`${repo.key}-${r}`) ?? []);
+      const mineParts = partsOf(doc!, item);
+      // Latest done holds the done parts and the done issues without parts; a done parent shows no card.
+      if (st === "done" && (!top || mineParts.length === 0)) {
+        const mine = ofItem.get(id) ?? [];
         const ends = mine.map((r) => Date.parse(r.at(-1)!.run.ended ?? "")).filter((t) => t > 0);
-        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item, runs: mine });
+        doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item, runs: mine, since: pickedUp(id) });
       }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       if (top) openIssues++;
@@ -408,28 +422,26 @@ export function state(now = new Date()): State {
         c.askKind = ask.kind;
         awaitingItems.push(c);
       }
-      else if (st === "queued" || st === "blocked") queued.push({ repo, item, stage: st });
+      else if (st === "queued" || st === "blocked") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated ?? item.fm.created ?? "") });
       else if (st === "new" && !isTracker(item)) fresh.push({ ...card(), status: st });
-      const parts = partsOf(doc!, item);
-      if (st === "building" && parts.length) {
-        const of = stageById.get(ref)?.of ?? { n: 0, m: parts.length };
-        const nested_ = parts.map((gi) => {
-          const gref = refOf(gi), g = `${repo.key}-${gref}`, j = liveOf.get(g);
-          if (j) nested.add(j.name);
-          return { id: g, title: gi.title, href: hrefOf(repo, gref), stage: stageById.get(gref)?.stage ?? status(gi), priority: priorityOf(gi),
-            ...(j ? { job: { name: j.name, href: `#/jobs/${encodeURIComponent(j.name)}`, kind: j.run.kind } } : {}) };
-        });
-        runningIssues.push({ id, title: item.title, href, stage: st, priority: priorityOf(item), of, parts: nested_ });
+      // A parent shows a card in Running only while it waits to close: every part is done.
+      if (st === "building" && mineParts.length) {
+        const of = stageById.get(ref)?.of ?? { n: 0, m: mineParts.length };
+        if (of.n >= of.m) runningIssues.push({ id, title: item.title, href, stage: st, priority: priorityOf(item), of, since: pickedUp(id, ...mineParts.map((g) => `${repo.key}-${refOf(g)}`)), at: String(item.fm.updated ?? "") });
       }
     }
   }
-  for (const j of running) if (nested.has(j.name)) j.issue = j.item ? `${j.repo}-${String(j.item.id).split(".")[0]}` : undefined;
+  for (const j of running) if (j.item) {
+    const k = `${j.repo}-${j.item.id}`;
+    j.part = partOf.get(k);
+  }
+  for (const j of stuck) if (j.item) j.part = partOf.get(`${j.repo}-${j.item.id}`);
 
   everyone.sort((a, b) => b.at.localeCompare(a.at) || b.n - a.n);
   doneItems.sort((a, b) => b.at - a.at);
-  const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item, runs }) => ({
+  const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item, runs, since }) => ({
     id: `${repo.key}-${refOf(item)}`, title: item.title, href: hrefOf(repo, refOf(item)), priority: priorityOf(item),
-    finished: at ? new Date(at).toISOString() : "",
+    finished: at ? new Date(at).toISOString() : "", since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}),
     jobs: runs.map((r: Runs) => toJob(r)),
   }));
   const planAt = (r: Runs) => Date.parse(r.at(-1)!.run.condition === "running" ? "9999-01-01" : r.at(-1)!.run.ended ?? r.at(-1)!.run.started);
@@ -442,7 +454,10 @@ export function state(now = new Date()): State {
   // The run behind an ask: its live-run mark, its trailers and its notes.
   for (const a of att.items) {
     const j = a.key.startsWith("run:") ? needs.find((x) => `run:${x.name}` === a.key) : undefined;
+    const key = j?.item ? `${j.repo}-${j.item.id}` : a.id;
+    a.part = partOf.get(key); a.at = awaitingItems.find((c) => c.id === key)?.updated ?? ""; a.since = pickedUp(key);
     if (!j) continue;
+    a.at = j.run.started; a.since = j.started;
     if (j.item) a.on = `${j.repo}-${j.item.id}`;
     a.agent = j.agent ?? false; a.defaults = j.defaults; a.followups = j.followups;
     if (j.trailers) a.trailers = j.trailers;
@@ -470,11 +485,11 @@ export function state(now = new Date()): State {
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
-    queued: byPriority(queued.map(({ repo, item, stage }) => {
+    queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
       const red = redOf(repo);
       // The stage already says when a planner run is going, so the lane does not take the plan lock.
       const w = goalDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, gate: gated });
-      return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, why: w.text, kind: w.kind,
+      return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
         ...(w.kind === "waits_on" ? { waits: w.ids.map(blocker) } : {}),
       };
     }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q),

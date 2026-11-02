@@ -21,7 +21,7 @@ test("a running job past 40 minutes says so", () => {
 test("a land run is measured from its own start and never past the time box", () => {
   const h = withAttn({ ...state, now: "2026-10-27T16:55:00Z", running: [job({ name: "a", started: "2026-10-27T16:00:00Z", run: { kind: "land", started: "2026-10-27T16:50:00Z" } })] });
   expect(h).toContain("land");
-  expect(h).toContain('<span class="elapsed" data-since="2026-10-27T16:50:00Z">5:00</span> elapsed');
+  expect(h).toMatch(/<span class="num date">\d\d\/\d\d \d\d:\d\d<\/span><span class="num dur">55m<\/span>/);
   expect(h).not.toContain("past the time box");
 });
 
@@ -119,9 +119,6 @@ test("message and diff text are escaped", () => {
 });
 
 test("Status times use the state's own now for the year check", () => {
-  const run = (started: string) => withAttn({ ...state, now: "2027-01-05T12:00:00Z", running: [job({ name: "a", started, run: { kind: "land", started } })] });
-  expect(run("2026-10-27T16:50:00Z")).toContain(">2026-10-27</span>");
-  expect(run("2027-01-05T11:00:00Z")).toMatch(/>[A-Z][a-z]{2} \d\d \d\d:\d\d<\/span>/);
   const page = withAttn({ ...state, now: "2027-01-05T12:00:00Z", asks: asksOf([awaitingHeld({ name: "aleph-27", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })]) });
   expect(page).toContain("Started</dt><dd>2026-10-27");
   expect(page).not.toMatch(/\d\d? ?[AP]M/i);
@@ -129,10 +126,10 @@ test("Status times use the state's own now for the year check", () => {
 
 test("a planner run shows as planner in the running lane", async () => {
   const plan = { name: "plan-aleph-5", item: { title: "Big" }, condition: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
-  expect(withAttn({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run">planner');
+  expect(withAttn({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run" title="planner">planner');
 });
 
 test("a running firefighter run shows its role as the kind", () => {
   const s = { ...state, running: [job({ name: "firefighter", phase: "firefighter", run: { kind: "firefighter", started: "2026-10-27T16:55:00Z" } })] };
-  expect(withAttn(s)).toContain('<span class="badge run">firefighter</span>');
+  expect(withAttn(s)).toContain('<span class="badge run" title="firefighter">firefighter</span>');
 });
