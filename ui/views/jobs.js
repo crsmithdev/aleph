@@ -123,6 +123,33 @@ export function mountJobs(root, jobs) {
   root.oninput = (e) => { if (e.target.matches?.('[data-ui="jobs-search"]')) { setQuery({ q: e.target.value, limit: "" }); redraw(); } };
 }
 
+const kb = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : `${(n / 1048576).toFixed(1)} MiB`;
+const TRANSCRIPT = new Set(["output.log", "review.log"]);
+/** The log files of each run, with sizes; a file loads when its button is clicked. */
+export function renderLogs(job, runs) {
+  const rows = runs.filter((r) => r.logs?.length).map((r) =>
+    `<li><span class="quiet">${esc(r.kind)} ${esc(when(r.started))}</span> ` + r.logs.map((l) => {
+      const at = `data-log="${esc(r.id)}" data-job="${esc(job)}" data-file="${esc(l.name)}"`;
+      return `<span class="logfile">${esc(l.name)} <span class="quiet">${esc(kb(l.size))}</span> ` +
+        (TRANSCRIPT.has(l.name) ? `<button class="act" type="button" ${at} data-as="transcript">Transcript</button> ` : "") +
+        `<button class="act" type="button" ${at}>Text</button></span>`;
+    }).join(" ") + `<div class="logbody" hidden></div></li>`).join("");
+  return rows ? `<div class="sh"><h2>Logs</h2></div><ul class="logs">${rows}</ul>` : "";
+}
+
+const CUT = 600;
+/** A transcript's steps: assistant text, each tool call with its input, its result collapsed when long. */
+export function renderTranscript(steps) {
+  return steps.map((s) => {
+    if (s.kind === "text") return `<div class="md">${md(s.text)}</div>`;
+    const input = typeof s.input === "string" ? s.input : JSON.stringify(s.input, null, 2);
+    const out = s.output === undefined ? "" : s.output.length > CUT || s.output.split("\n").length > 12
+      ? `<details><summary>${s.error ? "error, " : ""}result (${esc(kb(s.output.length))})</summary><pre class="trailers">${esc(s.output)}</pre></details>`
+      : `<pre class="trailers">${esc(s.output)}</pre>`;
+    return `<div class="step"><b>${esc(s.name)}</b><pre class="trailers">${esc(input ?? "")}</pre>${out}</div>`;
+  }).join("") || `<p class="quiet">Nothing to show.</p>`;
+}
+
 export function renderRuns(runs) {
   // Columns: kind (id), reason (title), state, model, then took, cost, started.
   const rows = runs.map((r) =>
@@ -146,7 +173,7 @@ export function renderJob(j) {
     `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
     `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}${j.checkedBy?.length ? fact("Checked by", esc(j.checkedBy.join(", "))) : ""}${j.look ? fact("Look", `about ${esc(j.look)} min (estimate)`) : ""}</dl>` +
     (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
-    renderRuns(j.runs ?? []) +
+    renderRuns(j.runs ?? []) + renderLogs(j.name, j.runs ?? []) +
     (j.result ? `<div class="sh"><h2>Result</h2></div><div class="md">${md(j.result)}</div>` : "") +
     (j.review ? `<div class="sh"><h2>Review</h2></div><div class="md">${md(j.review)}</div>` : "") +
     list("Defaults taken", j.defaults ?? [], true) + list("Follow-ups", j.followups ?? []) +
@@ -181,5 +208,23 @@ if (typeof document !== "undefined") {
       out.hidden = false;
       b.disabled = false;
     }
+  });
+}
+
+// Loads a log file when its button is clicked: the page itself carries only names and sizes.
+if (typeof document !== "undefined") {
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest?.("[data-log]");
+    if (!b) return;
+    const out = b.closest("li").querySelector(".logbody");
+    const q = b.dataset.as ? `?as=${b.dataset.as}` : "";
+    out.hidden = false;
+    out.textContent = "Loading…";
+    try {
+      const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.job)}/runs/${encodeURIComponent(b.dataset.log)}/logs/${encodeURIComponent(b.dataset.file)}${q}`);
+      if (!res.ok) out.textContent = `The log failed to load (${res.status}).`;
+      else if (b.dataset.as) out.innerHTML = renderTranscript(await res.json());
+      else out.innerHTML = `<pre class="trailers">${esc(await res.text())}</pre>`;
+    } catch (err) { out.textContent = `The log failed to load: ${err.message}`; }
   });
 }

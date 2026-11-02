@@ -820,3 +820,6 @@ a.itl-dot:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; 
   .obar { flex-wrap: wrap; }
   .obar > * { min-width: 96px; border-radius: 0; }
 }
+ul.logs { list-style: none; padding: 0; }
+ul.logs .logbody { margin: 6px 0 12px; max-height: 70vh; overflow: auto; }
+ul.logs .step { margin: 6px 0; }

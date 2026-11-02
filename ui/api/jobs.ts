@@ -1,4 +1,6 @@
 /** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { git } from "../../jobs/lib/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
@@ -8,7 +10,46 @@ import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter" | "explain"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk }
+export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter" | "explain"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+/** A log file of a run, with its size in bytes. */
+export interface LogFile { name: string; size: number }
+/** The log files the Job page serves, and no others. */
+export const LOGS = ["output.log", "review.log", "checks.log", "stderr.log", "land.log", "setup.log"] as const;
+/** The known log files a run folder has. */
+function logsOf(folder: string): LogFile[] {
+  const out: LogFile[] = [];
+  for (const name of LOGS) {
+    try { const st = statSync(join(folder, name)); if (st.isFile()) out.push({ name, size: st.size }); } catch {}
+  }
+  return out;
+}
+/** One step of a transcript: assistant text, or a tool call with its input and result. */
+export type Step = { kind: "text"; text: string } | { kind: "tool"; name: string; input: unknown; output?: string; error?: boolean };
+/** A stream-json transcript as steps, in order. */
+export function transcript(stream: string): Step[] {
+  const steps: Step[] = [];
+  const calls = new Map<string, Extract<Step, { kind: "tool" }>>();
+  for (const line of stream.split("\n")) {
+    if (!line.startsWith("{")) continue;
+    let ev: any;
+    try { ev = JSON.parse(line); } catch { continue; }
+    const content = ev?.message?.content;
+    if (ev?.type === "assistant" && Array.isArray(content)) {
+      for (const b of content) {
+        if (b?.type === "text" && b.text) steps.push({ kind: "text", text: String(b.text) });
+        if (b?.type === "tool_use") { const t: Extract<Step, { kind: "tool" }> = { kind: "tool", name: String(b.name), input: b.input }; steps.push(t); calls.set(b.id, t); }
+      }
+    } else if (ev?.type === "user" && Array.isArray(content)) {
+      for (const b of content) {
+        const t = b?.type === "tool_result" ? calls.get(b.tool_use_id) : undefined;
+        if (!t) continue;
+        t.output = Array.isArray(b.content) ? b.content.map((p: any) => p?.text ?? "").join("") : String(b.content ?? "");
+        if (b.is_error === true) t.error = true;
+      }
+    }
+  }
+  return steps;
+}
 export interface JobDetail extends Job {
   blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
@@ -36,6 +77,8 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     const wk = share(fit, r.cost, r.model);
     if (wk) info.wk = wk;
     if (r.reason) info.reason = r.reason;
+    const logs = logsOf(e.folder);
+    if (logs.length) info.logs = logs;
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
     if ((isBuild(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
@@ -122,5 +165,19 @@ export const routes: Routes = {
     const d = jobDiff(runs);
     if (!d) return Response.json({ error: NO_DIFF }, { status: 404 });
     return new Response(d.diff, { headers: { "content-type": "text/plain; charset=utf-8" } });
+  },
+
+  // A log file of one run of the job: whole as text, or with `?as=transcript` as the steps of a stream-json log. Only known names.
+  "GET /api/jobs/:name/runs/:run/logs/:file": (_req, params, url) => {
+    const runs = find(params.name, url.searchParams.get("project"));
+    const entry = runs?.find((e) => e.id === params.run);
+    if (!entry || !(LOGS as readonly string[]).includes(params.file)) return Response.json({ error: "no such log" }, { status: 404 });
+    const path = join(entry.folder, params.file);
+    if (!existsSync(path)) return Response.json({ error: "no such log" }, { status: 404 });
+    if (url.searchParams.get("as") === "transcript") {
+      if (params.file !== "output.log" && params.file !== "review.log") return Response.json({ error: "not a transcript" }, { status: 404 });
+      return Response.json(transcript(readFileSync(path, "utf8")));
+    }
+    return new Response(Bun.file(path), { headers: { "content-type": "text/plain; charset=utf-8" } });
   },
 };

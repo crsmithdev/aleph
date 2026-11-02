@@ -195,6 +195,34 @@ describe("a name reused by a dropped job and its rerun", () => {
   });
 });
 
+describe("run logs", () => {
+  const id = "20261027-000090-a";
+  const stream = [
+    JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "looking" }, { type: "tool_use", id: "t1", name: "Bash", input: { command: "ls" } }] } }),
+    JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "a\nb" }] } }),
+  ].join("\n");
+  async function logs(file: string, q = "") {
+    const url = new URL(`http://x/api/jobs/oth-90/runs/${id}/logs/${encodeURIComponent(file)}${q}`);
+    return routes["GET /api/jobs/:name/runs/:run/logs/:file"](new Request(url), { name: "oth-90", run: id, file }, url);
+  }
+  test("lists the known logs with sizes, serves them whole or as a transcript, and refuses other names", async () => {
+    run(id, { job: "oth-90", name: "oth-90", kind: "build", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) },
+      { "output.log": stream, "land.log": "landed\n", "notes.txt": "x" });
+    const j = await (await get("/api/jobs/oth-90")).json();
+    expect(j.runs[0].logs).toEqual([{ name: "output.log", size: stream.length }, { name: "land.log", size: 7 }].sort((a, b) => ["output.log", "land.log"].indexOf(a.name) - ["output.log", "land.log"].indexOf(b.name)));
+    expect(await (await logs("land.log")).text()).toBe("landed\n");
+    const steps = await (await logs("output.log", "?as=transcript")).json();
+    expect(steps).toEqual([{ kind: "text", text: "looking" }, { kind: "tool", name: "Bash", input: { command: "ls" }, output: "a\nb" }]);
+    expect(v.renderTranscript(steps)).toContain("Bash");
+    expect(v.renderJob(j)).toContain('data-file="output.log"');
+    for (const bad of ["state.json", "state.json/../../x", "notes.txt", "stderr.log"]) expect((await logs(bad)).status).toBe(404);
+    expect((await logs("land.log", "?as=transcript")).status).toBe(404);
+    const other = new URL("http://x/");
+    expect((await routes["GET /api/jobs/:name/runs/:run/logs/:file"](new Request(other), { name: "oth-90", run: "../x", file: "land.log" }, other)).status).toBe(404);
+    rmSync(join(jobsDir, id), { recursive: true, force: true });
+  });
+});
+
 describe("GET /api/jobs/:name/diff", () => {
   test("returns the branch's diff from its merge base", async () => {
     const res = await get("/api/jobs/fac-9/diff");
