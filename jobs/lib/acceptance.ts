@@ -14,6 +14,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { plainAsk } from "./ask.ts";
 import { note, noteFlake, reopen as storeReopen, setAsk, writeList, type Ask } from "../../todo/lib/store.ts";
+import { cloneAndSetup, q } from "./checks.ts";
 import { git } from "./git.ts";
 import { checkSlot, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
@@ -127,8 +128,6 @@ export interface Ran { code: number; output: string; infra?: boolean }
 /** Run one command on the commit `sha` of the repo's main. */
 export type Runner = (repo: Repo, sha: string, command: string, hidden?: Record<string, string>) => Promise<Ran>;
 
-const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-
 /** The default runner: the commit goes in as a bundle, and the repo's setup and then the command run under srt, as the checks do. */
 let calls = 0;
 export const sandboxRunner: Runner = async (repo, sha, command, hidden) => {
@@ -145,8 +144,7 @@ export const sandboxRunner: Runner = async (repo, sha, command, hidden) => {
       for (const [name, text] of Object.entries(hidden)) writeFileSync(join(run, "out", "hidden", name), text);
     }
     const script = [
-      "set -e", "git init -q .", `git fetch -q ../out/accept.bundle ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
-      `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; touch ../checklog/setup-failed; echo 1 > ../checklog/code; exit 0; }`,
+      cloneAndSetup(repo.setup, "out/accept.bundle", ref, "> ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; touch ../checklog/setup-failed; echo 1 > ../checklog/code; exit 0; }"),
       ...(hidden ? ["cp -r ../out/hidden .hidden"] : []),
       `timeout -k 30 1200 bash -c ${q(command)} > ../checklog/out.log 2>&1; echo $? > ../checklog/code`,
     ].join("\n");

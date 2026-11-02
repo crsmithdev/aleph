@@ -107,6 +107,20 @@ async function runHidden(t: CheckTask, check: Check, exec: CheckExec): Promise<s
 /** The checks that apply to the task, each run by `exec` on a tree the caller set up. */
 export const runChecks = (t: CheckTask, exec: CheckExec): Promise<string | null> => runAll(t, chosen(t), exec);
 
+export const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+
+/**
+ * The script lines that make a fresh clone of `ref` from `bundle` (a path relative to the run folder) and run
+ * the repo's setup commands; `after` is the text that follows the setup group, e.g. its redirect.
+ */
+export function cloneAndSetup(setup: string[], bundle: string, ref: string, after: string): string {
+  return [
+    "set -e", "git init -q .",
+    `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
+    `{ ${setup.map((c) => `${c} && `).join("")}true; } ${after}`,
+  ].join("\n");
+}
+
 /**
  * The repo's setup and checks on `ref` of `bundle`, in a fresh clone in
  * `dir/check`: nothing a worker left in work/ runs. Each check is its own srt
@@ -114,12 +128,7 @@ export const runChecks = (t: CheckTask, exec: CheckExec): Promise<string | null>
  * checklog/.
  */
 export async function checksInSandbox(t: CheckTask, dir: string, bundle: string, ref: string, hiddenFiles: Record<string, string> = {}): Promise<string | null> {
-  const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-  const script = [
-    "set -e", "git init -q .",
-    `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
-    `{ ${t.repo.setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
-  ].join("\n");
+  const script = cloneAndSetup(t.repo.setup, bundle, ref, "> ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code");
   const noise = join(t.folder, "check.out");
   const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, onSpawn: t.onSpawn };
   t.phase("check setup");

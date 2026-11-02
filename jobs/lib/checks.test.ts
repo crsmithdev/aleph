@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runChecks, type CheckExec } from "./checks.ts";
+import { cloneAndSetup, runChecks, type CheckExec } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
 
@@ -100,4 +100,10 @@ await runChecks({ folder: ${JSON.stringify(base)}, repo, changed: [], phase: () 
   const codes = await Promise.all(procs.map((p) => p.exited));
   expect(codes).toEqual(names.map(() => 0));
   expect(flakes().length).toBe(names.length * 25);
+});
+
+test("cloneAndSetup: the clone steps, the setup group and the caller's text", () => {
+  expect(cloneAndSetup(["a", "b c"], "out/x.bundle", "refs/h/it's", "> log 2>&1")).toBe(
+    ["set -e", "git init -q .", `git fetch -q ../out/x.bundle '+refs/h/it'\\''s:refs/heads/check'`, "git switch -q check", "set +e", "{ a && b c && true; } > log 2>&1"].join("\n"),
+  );
 });
