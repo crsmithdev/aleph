@@ -15,6 +15,7 @@ which changed code is honest about what it verified.
 | 6 | **Scope:** main agent `Stop` only. `SubagentStop` stays observability-only. | Subagents report to the main agent, whose Stop is gated. |
 | 7 | **Record:** a `guardrail` span under the turn (verdict, reason, digest size, judge latency) and a Langfuse score `verified` on the trace: 1 pass, 0 deny, 0.5 forced pass. | Verdict rates over weeks are how the rubric gets tuned. |
 | 8 | **Identity:** one plain rule in `identity/CLAUDE.md`, aligned word for word with decision 2. No block, no keys, no printf. | The ritual is what the judge replaces. |
+| 9 | **Commit hashes:** before the judge, a deterministic check denies a final message that cites a commit hash (7 to 40 hex digits, with a letter a-f and a digit) which no command, output or user text in the turn contains. A prefix counts when the turn shows the full hash. The deny names the hash and `git show --stat <hash>`, and counts toward the two-denial cap. | A correction showed a turn naming `2607fbb26` as landed with no command run; the judge is the wrong tool for a substring test. Implemented in `hooks/lib/hashes.ts`. |
 
 ## Mechanism
 
