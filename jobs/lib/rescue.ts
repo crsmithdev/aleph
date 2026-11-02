@@ -204,8 +204,8 @@ function infraStep({ last, r, repo, reason }: Stuck): Step {
 }
 
 /** The step for a land that hit a merge conflict. The note names the files and what last changed them on main. */
-function conflictStep({ last, r, repo, reason }: Stuck): Step {
-  const files = r.conflicts?.length ? r.conflicts : (reason.split(": ")[1] ?? "").split(", ").filter(Boolean);
+function conflictStep({ last, r, repo }: Stuck): Step {
+  const files = r.conflicts ?? [];
   fetchOrigin(repo.path);
   const touched = files.length ? git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%h %s", "--", ...files).out : "";
   const what = `${files.join(", ") || "unknown files"}${touched ? `, last changed on ${repo.main} by ${touched}` : ""}`;
