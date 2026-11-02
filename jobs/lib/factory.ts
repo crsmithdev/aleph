@@ -189,9 +189,9 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         gate: gates({ only: ["pause", "live", "day", "awaiting"], jobs }),
       });
       if (d.kind !== "ready" && d.kind !== "no-commit" && d.kind !== "run-cap") { skipped.push(`${name}: ${d.why}`); continue; }
-      // Read again just before the start or the Ask: an item done or dropped since it was read gets neither, whatever the trigger.
+      // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
-      if (!latest || issues.status(latest) === "done" || issues.status(latest) === "dropped") { skipped.push(`${name}: the item is ${latest ? issues.status(latest) : "gone"}`); continue; }
+      if (!latest || issues.status(latest) !== "open") { skipped.push(`${name}: the item is ${latest ? (issues.status(latest) === "parked" ? "parked" : issues.status(latest)) : "gone"}`); continue; }
       if (d.kind === "no-commit") {
         writeStreakMark(name);
         const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;

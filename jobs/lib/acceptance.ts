@@ -389,6 +389,7 @@ export function reopenedByAcceptance(item: issues.Issue, since = -Infinity, befo
  */
 export async function reaccept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner): Promise<string> {
   const name = `${repo.key}-${issues.refOf(item)}`;
+  if (issues.status(item) !== "done" && issues.status(item) !== "open") return `${name}: re-accept skipped: the item is ${issues.status(item)}`;
   const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;
   if (!sha) return `${name}: re-accept not run: no origin/${repo.main}`;
   const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;

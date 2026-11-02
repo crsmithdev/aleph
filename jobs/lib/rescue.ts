@@ -175,7 +175,7 @@ function foundDone({ r, repo, issue }: Pick<Stuck, "r" | "repo" | "issue">): { o
   const there = itemOnMain(repo, issue);
   if (there) return { onMain: there };
   const item = issue === undefined ? undefined : reader().item(repo.key, issue);
-  return item && issues.status(item) !== "open" ? { onMain: null } : null;
+  return item && (issues.status(item) === "done" || issues.status(item) === "dropped") ? { onMain: null } : null;
 }
 
 /** Whether a branch has commits ahead of main: the worker's finished work, since commits reach the branch only after the worker ended. */

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { areasOf, clearAsk, isSorted, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "../../todo/lib/store.ts";
-import { countsLine, parseRoute, prompt, triageOpen, TRIAGE_MODEL } from "./triage.ts";
+import { countsLine, parseRoute, prompt, triageIssue, triageOpen, TRIAGE_MODEL } from "./triage.ts";
 import { saveProbe } from "./factory-status.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 
@@ -676,4 +676,19 @@ esac
     await triage(1);
     expect(item(1).fm).toMatchObject({ ask: "input", reason: "triage-failed" });
   }, 30_000);
+});
+
+test("the triage loop and triageIssue skip a parked issue with no spec, which keeps its status and fields", async () => {
+  reset([{ title: "parked one", body: "VERDICT:close" }, { title: "open one", body: "VERDICT:close" }]);
+  writeList(repo, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
+  const before = JSON.stringify(item(1));
+  const t = await run();
+  expect(t.triaged).toEqual({ close: 1 });
+  expect(calls()).toBe(1);
+  expect(issues.status(item(1))).toBe("parked");
+  expect(JSON.stringify(item(1))).toBe(before);
+  const one = await triageIssue(repo, 1, () => false);
+  expect(one.triaged).toEqual({});
+  expect(calls()).toBe(1);
+  expect(JSON.stringify(item(1))).toBe(before);
 });

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { askOf, flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { accept, failedTests, oracleCommands, rerunOf, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
+import { accept, reaccept, failedTests, oracleCommands, rerunOf, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { checkSlot } from "./ledger.ts";
 import { readRecord, resultLine } from "./status.ts";
 import { acceptanceStep, dispatchIssues, reacceptReopened } from "./factory.ts";
@@ -686,4 +686,16 @@ test("ALEPH_ACCEPTANCE_FAIL_CAP changes the limit", async () => {
     expect(issues.status(item(ids[0]))).toBe("open");
     expect(issues.status(item(ids[1]))).toBe("done");
   } finally { delete process.env.ALEPH_ACCEPTANCE_FAIL_CAP; }
+});
+
+test("a parked issue is not reopened by acceptance", async () => {
+  const id = reopened("`bun test x`");
+  writeList({ key: "fac" }, "park", (doc) => { issues.setStatus(issues.find(doc, id)!, "parked"); return true; });
+  expect(await reacceptReopened("fac", { run: runner(0) })).toEqual([]);
+  expect(ran).toEqual([]);
+  expect(issues.status(item(id))).toBe("parked");
+  const repo = { key: "fac", path: repoDir(), main: "main" } as any;
+  expect(await reaccept(repo, item(id), runner(0))).toContain("skipped");
+  expect(ran).toEqual([]);
+  expect(issues.status(item(id))).toBe("parked");
 });
