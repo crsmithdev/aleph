@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import { axisTimes, compactScale, gaps, lifespan, noteEvent, renderTimeline, spans } from "./timeline.js";
+import { axisTimes, compactScale, gaps, lifespan, noteEvent, renderTimeline, spans, waitEvent } from "./timeline.js";
 // @ts-ignore
 import { issueSegments, renderIssue } from "./views/issues.js";
 
@@ -125,5 +125,33 @@ describe("the timeline panel", () => {
     expect(lifespan(50 * 3_600_000)).toBe("2 d 2 h");
     expect(noteEvent("- 2026-11-01 08:06: done it")).toEqual({ at: Date.parse("2026-11-01T08:06"), text: "done it" });
     expect(noteEvent("no stamp")).toBeNull();
+  });
+});
+
+describe("waitEvent", () => {
+  const t0 = Date.parse("2026-11-01T08:00:00Z"), min = 60_000;
+  const w = { start: t0, end: t0 + 9 * min, chris: false };
+  const iso = (m: number) => new Date(t0 + m * min).toISOString();
+  test("names each reason with its minutes, in order", () => {
+    const e = waitEvent(w, [
+      { at: iso(-5), name: "a", kind: "held", text: "it waits for aleph-1045.2: both change jobs/lib/factory.ts" },
+      { at: iso(7), name: "a", kind: "held", text: "main checks are red" },
+    ]);
+    expect(e.html).toBe("Waited 9 min: 7 min because it waits for aleph-1045.2: both change jobs/lib/factory.ts; 2 min because main checks are red.");
+  });
+  test("ends a hold at a started record", () => {
+    const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "held", text: "x" }, { at: iso(3), name: "a", kind: "started", text: "" }]);
+    expect(e.html).toBe("Waited 9 min: 3 min because x.");
+  });
+  test("reads Waited N min. with no records", () => {
+    expect(waitEvent(w).html).toBe("Waited 9 min.");
+    expect(waitEvent(w, []).html).toBe("Waited 9 min.");
+    const mapped: any[] = ([w] as any[]).map(waitEvent as any);
+    expect(mapped[0].html).toBe("Waited 9 min.");
+  });
+  test("keeps for your answer", () => {
+    const e: any = waitEvent({ ...w, chris: true });
+    expect(e.html).toBe("Waited 9 min for your answer.");
+    expect(e.tag).toBe("Awaiting you");
   });
 });

@@ -82,8 +82,37 @@ export function gaps(runs, from, to) {
   return out;
 }
 
-/** A wait's event: its length, and whose it is. */
-export const waitEvent = (w) => ({ at: w.start, tag: w.chris ? "Awaiting you" : "Waiting", tone: "need", html: esc(`Waited ${lifespan(w.end - w.start)}${w.chris ? " for your answer" : ""}.`) });
+/**
+ * The minutes each hold reason covers inside a wait, in the order the reasons first happened. `holds` are
+ * `{ at, name, kind, text }` oldest first; the hold in force at a moment is the last record at or before it,
+ * and a `started` record ends it.
+ */
+function holdTimes(w, holds) {
+  const recs = holds.map((h) => ({ ...h, t: Date.parse(h.at) })).filter((h) => Number.isFinite(h.t));
+  const out = new Map();
+  let cur = null, from = w.start;
+  const close = (to) => {
+    if (cur && to > from) out.set(cur, (out.get(cur) ?? 0) + (to - from));
+    else if (cur && !out.has(cur)) out.set(cur, 0);
+  };
+  const apply = (h) => (h.kind === "started" || !h.text ? null : String(h.text));
+  for (const h of recs) {
+    if (h.t <= w.start) { cur = apply(h); continue; }
+    if (h.t >= w.end) break;
+    close(h.t);
+    from = h.t;
+    cur = apply(h);
+  }
+  close(w.end);
+  return [...out].filter(([, ms]) => ms > 0);
+}
+
+/** A wait's event: its length, whose it is and, from `holds`, why. */
+export function waitEvent(w, holds = []) {
+  const reasons = Array.isArray(holds) ? holdTimes(w, holds) : []; // `waits.map(waitEvent)` passes an index
+  const why = reasons.length ? `: ${reasons.map(([text, ms]) => `${lifespan(ms)} because ${text}`).join("; ")}` : "";
+  return { at: w.start, tag: w.chris ? "Awaiting you" : "Waiting", tone: "need", html: esc(`Waited ${lifespan(w.end - w.start)}${w.chris ? " for your answer" : ""}${why}.`) };
+}
 
 /** A bar's label: the kind, a number when the lane has more than one of that kind, the model and, with `cost`, the cost. */
 export function barLabel(r, nth, { cost = false } = {}) {
