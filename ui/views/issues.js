@@ -502,7 +502,7 @@ function filedAt(d, runs) {
 
 const RUN_TAG = { stuck: ["Stuck", "stuck"], failed: ["Failed", "stuck"], dropped: ["Dropped", "quiet"], awaiting: ["Awaiting you", "need"] };
 /** The events of a lane: each wait, and each run that stopped or asks, with its reason. */
-const laneEvents = (runs, waits, bars) => [...waits.map(waitEvent), ...runs.flatMap((x, i) => {
+const laneEvents = (runs, waits, bars, holds = []) => [...waits.map((w) => waitEvent(w, holds)), ...runs.flatMap((x, i) => {
   // A run that awaits you shows only with its question; the wait after it already shows.
   if (!RUN_TAG[x.r.condition] || (x.r.condition === "awaiting" && !x.r.reason)) return [];
   const [text, tone] = RUN_TAG[x.r.condition], name = bars[i].label;
@@ -516,10 +516,10 @@ const sum = (runs) => runs.reduce((n, x) => n + (x.r.cost ?? 0), 0);
 const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "build" : x.r.kind)))].join(", ");
 
 /** One timeline row: the runs as bars, the waits from `from` to `to`, and their events with `events`. */
-function laneRow({ head, runs, from = NaN, to = NaN, marks = [], result, events = [] }) {
+function laneRow({ head, runs, from = NaN, to = NaN, marks = [], result, events = [], holds = [] }) {
   const waits = gaps(runs, from, to), bars = barsOf(runs);
   const times = [from, to, ...runs.flatMap((x) => [x.start, x.end]), ...marks.map((m) => m.at)].filter(Number.isFinite);
-  return { head, bars, waits, marks, result, time: timeText(times.length ? Math.max(...times) - Math.min(...times) : 0), cost: costText(sum(runs)), events: [...laneEvents(runs, waits, bars), ...events] };
+  return { head, bars, waits, marks, result, time: timeText(times.length ? Math.max(...times) - Math.min(...times) : 0), cost: costText(sum(runs)), events: [...laneEvents(runs, waits, bars, holds), ...events] };
 }
 
 /**
@@ -538,8 +538,10 @@ export function issueSegments(d, now = Date.now()) {
   const job = (d.jobs ?? []).find((j) => j.name === id);
   const headOf = (text) => `${job ? idLink(id, `#/jobs/${encodeURIComponent(job.name)}`) : `<span class="idp">${esc(id)}</span>`}<span class="quiet t">${esc(text)}</span>`;
   const state = d.derived?.stage ?? d.status;
+  // The hold records of a job name: why its waits waited.
+  const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
   if (!goals.length) {
-    return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no run yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes })] }];
+    return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no run yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes, holds: holdsOf(id) })] }];
   }
   const ofPart = (g) => all.filter((x) => x.r.on === g.id), partRuns = goals.flatMap(ofPart);
   const first = partRuns.length ? Math.min(...partRuns.map((x) => x.start)) : Infinity;
@@ -547,15 +549,15 @@ export function issueSegments(d, now = Date.now()) {
   const split = Number.isFinite(ends(before)) ? ends(before) : filed, lastPart = ends(partRuns);
   const done = goals.filter((g) => g.stage === "done").length;
   const segments = [
-    { title: "Before the split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${goals.length}`), events: notes.filter((n) => n.at < first) })] },
+    { title: "Before the split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${goals.length}`), events: notes.filter((n) => n.at < first), holds: holdsOf(id) })] },
     { title: "Parts", aside: `${done} of ${goals.length} done`, rows: goals.map((g) => {
       const runs = ofPart(g);
       const job = g.jobs?.at(-1), p = g.priority && g.priority !== "medium" ? ` ${priorityBadge(g.priority)}` : "";
-      return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? `#/jobs/${encodeURIComponent(job.name)}` : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage) });
+      return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? `#/jobs/${encodeURIComponent(job.name)}` : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage), holds: holdsOf(job?.name) });
     }) },
   ];
   const later = notes.filter((n) => n.at >= first);
-  if (after.length || later.length || !open) segments.push({ title: "After the parts", rows: [laneRow({ head: headOf(open ? kinds(after) : d.status), runs: after, from: lastPart, to: open ? NaN : closed, marks: marks.filter((m) => m.tone === "done"), result: badge(state), events: later })] });
+  if (after.length || later.length || !open) segments.push({ title: "After the parts", rows: [laneRow({ head: headOf(open ? kinds(after) : d.status), runs: after, from: lastPart, to: open ? NaN : closed, marks: marks.filter((m) => m.tone === "done"), result: badge(state), events: later, holds: holdsOf(id) })] });
   return segments;
 }
 

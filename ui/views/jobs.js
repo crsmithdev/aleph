@@ -187,7 +187,7 @@ export function jobSegments(j, now = Date.now()) {
       head: `<span class="quiet">${esc([builds ? plural(builds, "build") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "run"))}</span>`,
       bars: barsOf(work, { cost: true }), waits, marks: [], result: badge(j.condition),
       time: timeText(Math.max(...work.map((x) => x.end)) - work[0].start), cost: costText(work.reduce((n, x) => n + (x.r.cost ?? 0), 0)),
-      events: [...waits.map(waitEvent), ...events,
+      events: [...waits.map((w) => waitEvent(w, j.holds ?? [])), ...events,
         ...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: inline(d) })),
         ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: inline(f) }))],
     }],

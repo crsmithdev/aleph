@@ -309,6 +309,13 @@ describe("render", () => {
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
   });
+  test("a wait between runs names the hold reason with its minutes; an answer without holds keeps the plain text", () => {
+    const at = (m: number) => new Date(now - 5 * 3600_000 + m * 60_000).toISOString();
+    const j = { ...job, runs: [{ id: "1", kind: "worker", condition: "passed", started: at(0), ended: at(10) }, { id: "2", kind: "land", condition: "landed", started: at(40), ended: at(41) }] };
+    const h = v.renderJob({ ...j, holds: [{ at: at(15), name: "fac-9", kind: "held", text: "main checks are red" }] });
+    expect(h).toContain("Waited 30 min: 25 min because main checks are red.");
+    expect(v.renderJob(j)).toContain("Waited 30 min.");
+  });
   test("the list shows jobs with filters, and an empty state", () => {
     const h = v.renderJobs([job], { repo: "fac", condition: "landed" });
     expect(h).toContain('href="#/jobs/fac-9"');
