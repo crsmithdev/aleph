@@ -5,7 +5,8 @@
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  * The phases also read when each issue file first came into the work store's git history.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { flakes } from "../../jobs/lib/factory-status.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
@@ -315,6 +316,25 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   return { intake, queue, implement, land, lead };
 }
 
+/**
+ * The run with `ended` pulled back to its last worker activity: the newest file in its folder (state.json and `exit` aside),
+ * and no later than the `exit` file. `ended` is stamped when something notices the run stopped, which can be hours after a
+ * killed worker. A run with no such file keeps its `ended`; the end never goes before `started`.
+ */
+export function activeEnd(e: Entry): Run {
+  const r = e.run as Run, a = Date.parse(r.started), b = Date.parse(r.ended ?? "");
+  if (!(b >= a)) return r;
+  let end = b;
+  try {
+    let last = -Infinity;
+    for (const f of readdirSync(e.folder)) if (f !== "state.json" && f !== "exit") last = Math.max(last, statSync(join(e.folder, f)).mtimeMs);
+    if (last > -Infinity) end = Math.min(end, last);
+    if (existsSync(join(e.folder, "exit"))) end = Math.min(end, statSync(join(e.folder, "exit")).mtimeMs);
+  } catch { return r; }
+  end = Math.max(a, end);
+  return end === b ? r : { ...r, ended: new Date(end).toISOString() };
+}
+
 /** Each phase's count, p50 and p90 over `phaseTimes`. */
 export function phases(runs: Run[], filings: Filed, since: number, now: number): Speed["phases"] {
   const t = phaseTimes(runs, filings, since, now);
@@ -455,7 +475,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     // An issue that is not in a readable list left the store.
     return m >= 0 && lists.list(goal.slice(0, m)) ? GONE : undefined;
   };
-  const cls = classify(all, statusOf, since.getTime(), now.getTime(), fit);
+  const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
   for (const c of cls.classes) for (const t of c.top) {
     const m = t.goal.lastIndexOf("-");
     const item = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)));

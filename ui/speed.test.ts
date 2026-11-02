@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv } from "./test-server.ts";
-import { agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
+import { activeEnd, agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
 // @ts-ignore plain JS shared with the page
 import { durShort, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
@@ -337,4 +337,23 @@ test("the shared formats", () => {
   expect([durShort(59), durShort(1570), durShort(16560)]).toEqual(["59s", "26m", "4h 36m"]);
   expect([weekText(0.02), weekText(2.5)]).toEqual(["<0.1%", "2.5%"]);
   expect([xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week")]).toEqual(["1:36p", "Oct 28"]);
+});
+
+test("activeEnd pulls ended back to the last worker activity", () => {
+  const { utimesSync } = require("node:fs");
+  const dir = mkdtempSync(join(tmpdir(), "aleph-active-"));
+  const t0 = Date.parse("2026-10-28T10:00:00Z"), min = 60_000;
+  const mk = (name: string, files: Record<string, number>) => {
+    const folder = join(dir, name);
+    mkdirSync(folder);
+    for (const [f, m] of Object.entries(files)) { writeFileSync(join(folder, f), "x"); utimesSync(folder + "/" + f, (t0 + m * min) / 1000, (t0 + m * min) / 1000); }
+    return { id: name, folder, run: { kind: "build", job: name, name, told: true, started: new Date(t0).toISOString(), ended: new Date(t0 + 180 * min).toISOString() } as any };
+  };
+  // killed: last output at 24 min, noticed at 180 min
+  expect(Date.parse(activeEnd(mk("a", { "state.json": 180, log: 24, exit: 180 })).ended!)).toBe(t0 + 24 * min);
+  // exit before later review files
+  expect(Date.parse(activeEnd(mk("b", { log: 20, exit: 30, "call.md": 100 })).ended!)).toBe(t0 + 30 * min);
+  // no activity files: keeps ended
+  expect(Date.parse(activeEnd(mk("c", { "state.json": 180 })).ended!)).toBe(t0 + 180 * min);
+  rmSync(dir, { recursive: true, force: true });
 });
