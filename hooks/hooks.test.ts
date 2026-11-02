@@ -722,3 +722,65 @@ describe("a guard that cannot run denies", () => {
     });
   }
 });
+
+describe("hooks.json runs each guard through sh, so a guard that cannot parse denies", () => {
+  const hooksJson = JSON.parse(readFileSync(join(HOOKS, "hooks.json"), "utf8"));
+  function entry(name: string): { command: string; args: string[] } {
+    const all = Object.values(hooksJson.hooks).flat().flatMap((g: any) => g.hooks);
+    const found = all.filter((h: any) => (h.args ?? []).some((a: string) => a.endsWith(`/hooks/${name}.ts`)));
+    expect(found.length).toBe(1);
+    return found[0];
+  }
+  /** Run the entry as hooks.json gives it, with the guard path pointed at `script`. */
+  async function runEntry(name: string, script: string, stdin: string) {
+    const { command, args } = entry(name);
+    expect(command).toBe("sh");
+    const argv = args.map((a) => a.replace("${CLAUDE_PLUGIN_ROOT}/hooks/" + name + ".ts", script));
+    const proc = Bun.spawn([command, ...argv], { stdin: new TextEncoder().encode(stdin), stdout: "pipe", stderr: "pipe" });
+    const code = await proc.exited;
+    return { code, stdout: await new Response(proc.stdout).text(), stderr: await new Response(proc.stderr).text() };
+  }
+  for (const name of ["git-guard", "secret-scan"]) {
+    test(`${name}: a syntax error in the guard -> exit 2, named on stderr`, async () => {
+      const dir = mkdtempSync(join(tmpdir(), "aleph-syntax-"));
+      try {
+        writeFileSync(join(dir, `${name}.ts`), readFileSync(join(HOOKS, `${name}.ts`), "utf8") + "\nconst = = ;\n");
+        const r = await runEntry(name, join(dir, `${name}.ts`), "{}");
+        expect(r.code).toBe(2);
+        expect(r.stderr).toContain(`${name}.ts`);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    });
+    test(`${name}: a missing guard file -> exit 2, named on stderr`, async () => {
+      const dir = mkdtempSync(join(tmpdir(), "aleph-missing-"));
+      try {
+        const r = await runEntry(name, join(dir, `${name}.ts`), "{}");
+        expect(r.code).toBe(2);
+        expect(r.stderr).toContain(`${name}.ts`);
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    });
+  }
+  test("git-guard: allow exits 0 with empty stderr, deny exits 0 with the deny JSON", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "aleph-wrap-"));
+    try {
+      const real = join(HOOKS, "git-guard.ts");
+      const allowed = await runEntry("git-guard", real, JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Edit", tool_input: {} }));
+      expect([allowed.code, allowed.stderr]).toEqual([0, ""]);
+      const repo = join(dir, "repo");
+      mkdirSync(repo);
+      const g = Bun.spawnSync(["git", "init", "-q", "-b", "main"], { cwd: repo });
+      expect(g.exitCode).toBe(0);
+      Bun.spawnSync(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "i"], { cwd: repo });
+      const denied = await runEntry("git-guard", real, JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Edit", tool_input: { file_path: join(repo, "a.ts") } }));
+      expect([denied.code, denied.stderr]).toEqual([0, ""]);
+      expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+  test("secret-scan: allow exits 0 with empty stderr, deny exits 0 with the deny JSON", async () => {
+    const real = join(HOOKS, "secret-scan.ts");
+    const allowed = await runEntry("secret-scan", real, JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "ls" } }));
+    expect([allowed.code, allowed.stderr]).toEqual([0, ""]);
+    const denied = await runEntry("secret-scan", real, JSON.stringify({ hook_event_name: "PreToolUse", tool_name: "Bash", tool_input: { command: "cd /nonexistent-aleph-dir && git commit -m x" } }));
+    expect([denied.code, denied.stderr]).toEqual([0, ""]);
+    expect(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision).toBe("deny");
+  });
+});
