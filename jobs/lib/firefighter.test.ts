@@ -84,10 +84,10 @@ const held = (b: string, review = "Looks right.\nVERDICT: land\n") =>
   run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "", options: [], why: [] }, branch: b, reason: "held path x" }, { "review.md": "Fine.\nVERDICT: pass\n", "call.md": review });
 
 let landed: string[] = [];
-let dropped: { name: string; reason: string }[] = [];
+let dropped: { name: string; reason: string; fate?: string }[] = [];
 const ports = (): Ports => ({
   land: async (name) => { landed.push(name); return null; },
-  drop: async (name, reason) => { dropped.push({ name, reason }); return null; },
+  drop: async (name, reason, fate) => { dropped.push({ name, reason, fate }); return null; },
   tell: (line) => fetch(`http://127.0.0.1:${server.port}/tell`, { method: "POST", body: JSON.stringify({ text: line }) }).then((r) => r.ok),
 });
 
@@ -484,4 +484,28 @@ test("prompt names the flake action and no longer files every follow-up with add
   expect(p).toContain('{"do": "flake"');
   expect(p).toContain("never an `add`");
   expect(p).not.toContain("File every follow-up you find as an issue");
+});
+
+test("parseReply keeps a known fate on a drop and leaves an unknown one off", () => {
+  const p = (fate: string) => parseReply(JSON.stringify({ actions: [{ do: "drop", job: "x-1", reason: "r", fate }] }));
+  expect(p("duplicate")).toEqual([{ do: "drop", job: "x-1", reason: "r", fate: "duplicate" }]);
+  expect(p("bogus")).toEqual([{ do: "drop", job: "x-1", reason: "r" }]);
+});
+
+test("an applied drop passes its fate to the drop port", async () => {
+  fresh([{ title: "met", goal: true }]);
+  const name = `${key}-1`;
+  run({ name, condition: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
+  reply([{ do: "drop", job: name, reason: "another goal did it", fate: "duplicate" }]);
+  await firefighterStep(ports());
+  expect(dropped.at(-1)?.fate).toBe("duplicate");
+});
+
+test("a close action drops the open job with already-met", async () => {
+  fresh([{ title: "met", goal: true }]);
+  const name = `${key}-1`;
+  run({ name, condition: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
+  reply([{ do: "close", repo: key, n: 1, note: "met on main" }]);
+  await firefighterStep(ports());
+  expect(dropped.map((d) => d.fate)).toEqual(["already-met"]);
 });

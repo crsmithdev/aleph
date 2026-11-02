@@ -20,6 +20,7 @@ import { writeRerun } from "./rescue.ts";
 import { factoryDir, factoryRepos, redBaselines } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { ciLine, redCi } from "./ci.ts";
+import type { Fate } from "./outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
 import { always, handed, logAlways, plainAsk, readAlways } from "./ask.ts";
 
@@ -94,7 +95,7 @@ function saveSnapshot(events: Event[]): void {
 
 export type Action =
   | { do: "land"; job: string }
-  | { do: "drop"; job: string; reason: string; after?: string[] }
+  | { do: "drop"; job: string; reason: string; after?: string[]; fate?: Fate }
   | { do: "close"; repo: string; n: number; note: string }
   | { do: "note"; repo: string; n: number; text: string }
   | { do: "add"; repo: string; title: string; body: string }
@@ -118,9 +119,10 @@ function parseAction(raw: any): Action | string {
   const f = (k: string) => text(raw[k]);
   const n = num(raw.n);
   const after = refs(raw.after);
+  const fate = (["duplicate", "already-met", "by-hand"] as const).find((x) => x === raw.fate);
   switch (raw.do) {
     case "land": return f("job") ? { do: "land", job: f("job")! } : "land without a job";
-    case "drop": return f("job") && f("reason") ? { do: "drop", job: f("job")!, reason: f("reason")!, ...(after ? { after } : {}) } : "drop without a job and a reason";
+    case "drop": return f("job") && f("reason") ? { do: "drop", job: f("job")!, reason: f("reason")!, ...(after ? { after } : {}), ...(fate ? { fate } : {}) } : "drop without a job and a reason";
     case "close": return f("repo") && n && f("note") ? { do: "close", repo: f("repo")!, n, note: f("note")! } : "close without a repo, n and note";
     case "note": return f("repo") && n && f("text") ? { do: "note", repo: f("repo")!, n, text: f("text")! } : "note without a repo, n and text";
     case "add": return f("repo") && f("title") ? { do: "add", repo: f("repo")!, title: f("title")!, body: f("body") ?? "" } : "add without a repo and a title";
@@ -186,6 +188,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: answer with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
 - File a follow-up as an issue with add, except a flaky, slow or timing-out test that is not the run's own goal: that is a \`flake\` action, never an \`add\`. The code adds it as a note on the repo's flake tracker; Chris picks from that issue which flakes get a goal.
+- On a drop, set \`fate\` to already-met when the goal is met on main, and to duplicate when another goal did the work.
 - When a run cannot pass until another open goal lands, drop it with \`after\` set to that goal, or use edit-goal with \`after\`. A note or a drop reason alone does not stop a rerun.
 - When you answer an Ask on an item whose \`after\` is done or wrong, set \`after\` to the open goals that really block it.
 - At most ${MAX_ACTIONS} actions. No action is a fine answer when nothing needs doing.${handedRule}
@@ -196,7 +199,7 @@ ${events.map((e) => `## ${e.kind}: ${e.line}\n\n${context(e, jobs)}`).join("\n\n
 
 Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action one of
 - {"do": "land", "job": "<job name>"}
-- {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"]}
+- {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"], "fate": "optional: already-met when the goal is met on main, duplicate when another goal did the work"}
 - {"do": "close", "repo": "<repo>", "n": <issue number>, "note": "<why the goal is already met>"}
 - {"do": "note", "repo": "<repo>", "n": <issue number>, "text": "<note>"}
 - {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
@@ -222,12 +225,12 @@ export const isProductChoice = (item: issues.Issue): boolean => (store.askOf(ite
 /** How actions reach the factory; each returns the refusal, or null. Tests replace land and drop. */
 export interface Ports {
   land: (name: string) => Promise<string | null>;
-  drop: (name: string, reason: string) => Promise<string | null>;
+  drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
   tell: (line: string) => Promise<boolean>;
 }
 export const defaultPorts: Ports = {
   land: (name) => refusal(async () => { await (await landJob(name, { lander: "firefighter" }, { output: "ignore" })).child?.exited; }),
-  drop: (name, reason) => refusal(() => dropJob(name, { reason, quiet: true })),
+  drop: (name, reason, fate) => refusal(() => dropJob(name, { reason, quiet: true, fate })),
   tell,
 };
 
@@ -247,7 +250,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     if (!runs || !last || !repo) return { refused: `${describe(a)}: no open factory job named ${a.job}` };
     const issue = issueOf(runs);
     if (a.do === "drop") {
-      const why = await ports.drop(a.job, a.reason);
+      const why = await ports.drop(a.job, a.reason, a.fate);
       if (why) return { refused: `${describe(a)}: ${why}` };
       writeRerun(a.job, `The last run was dropped by the firefighter: ${a.reason}`);
       // A run that cannot pass until another goal lands waits on it: the dispatch reads the goal's after and starts nothing until it is done.
@@ -290,7 +293,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (a.do === "close") {
     const open = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n);
     if (open) {
-      const why = await ports.drop(open[0].run.name, `closed by the firefighter: ${a.note}`);
+      const why = await ports.drop(open[0].run.name, `closed by the firefighter: ${a.note}`, "already-met");
       if (why) return { refused: `${describe(a)}: ${why}` };
     }
     const why = store.note(repo, a.n, `firefighter: closed: ${a.note}`, { done: true });
