@@ -350,7 +350,7 @@ export async function startGoal(repo: Repo, name: string, id: number | string, s
 /** The factory's ports onto the transitions, each in-process; each returns the refusal, or null. */
 const landGoal = (name: string) => refusal(async () => { await (await land(name, {}, { output: "ignore" })).child?.exited; });
 /** A safe default drop: quiet, as the factory writes the issue note and the news. */
-const dropGoal = (name: string, reason: string) => refusal(() => drop(name, { reason, quiet: true }));
+const dropGoal = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
 const recheckGoal = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
 
 /** `aleph dispatch`: one dispatch of the ready goals. A failed probe starts no run. */

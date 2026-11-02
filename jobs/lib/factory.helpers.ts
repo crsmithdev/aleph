@@ -76,11 +76,11 @@ export const ask = (id: number) => askOf(readList({ key: "fac" })!.items.find((i
 export function fakes() {
   const calls: string[] = [];
   const rescue: Rescue = {
-    drop: async (name, reason) => {
+    drop: async (name, reason, fate) => {
       calls.push(`drop ${name}`);
       const j = allJobs().find((x) => x.at(-1)!.run.name === name && x.at(-1)!.run.condition !== "dropped")!;
       const last = j.at(-1)!;
-      writeRun(last.folder, { ...last.run, condition: "dropped", reason });
+      writeRun(last.folder, { ...last.run, condition: "dropped", reason, ...(fate ? { fate } : {}) });
       return null;
     },
     recheck: async (name) => {

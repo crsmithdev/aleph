@@ -19,7 +19,7 @@ import { fetchOrigin, git } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
-import { causeOf } from "./outcome.ts";
+import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
 import { itemOnMain } from "./status.ts";
@@ -28,7 +28,7 @@ import { rescueWaitMs } from "./settings.ts";
 /** What a safe default action does to a run: both return the refusal, or null. */
 export interface Rescue {
   /** Drop the job, with the reason; the factory writes the issue note and the news itself. */
-  drop: (name: string, reason: string) => Promise<string | null>;
+  drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
   /** Start a recheck of the job. */
   recheck: (name: string) => Promise<string | null>;
   /** Start a review of the run's folder (startReview, when absent). */
@@ -160,7 +160,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
 }
 
 /** One action on a run. `dropReason` is the drop's text, when it is not `noted`; `told` is the news, when it is not `noted`. */
-type Step = { action: "drop" | "land again" | "recheck"; rerun?: string; dropReason?: string; noted: string; told?: string; done?: boolean };
+type Step = { action: "drop" | "land again" | "recheck"; rerun?: string; dropReason?: string; noted: string; told?: string; done?: boolean; fate?: Fate };
 
 /** The run a rescue acts on, and what its goal is. */
 type Stuck = { last: Entry; r: Entry["run"]; repo: Repo; name: string; issue: number | string | undefined; reason: string };
@@ -187,7 +187,7 @@ function killedStep({ last, r }: Stuck): Step {
 /** The step for a worker's claim that the goal is met, by `red`, the red line of main. */
 function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null): Step {
   const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
-  if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true };
+  if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "already-met" };
   return {
     action: "drop",
     rerun: `The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`,
@@ -263,7 +263,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   };
   const take = async (step: Step) => {
     if (step.rerun) writeRerun(name, step.rerun);
-    const why = step.action === "drop" ? await act.drop(name, step.dropReason ?? step.noted)
+    const why = step.action === "drop" ? await act.drop(name, step.dropReason ?? step.noted, step.fate)
       : step.action === "recheck" ? await act.recheck(name)
       : land ? await land(name) : "no land";
     if (why) {
@@ -302,7 +302,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (key === "duplicate") {
     markRescued(last, key);
     const onMain = found?.onMain;
-    return take({ action: "drop", noted: `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain });
+    return take({ action: "drop", noted: `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "already-met" });
   }
   if (earlier) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   markRescued(last, key);

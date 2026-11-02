@@ -24,6 +24,7 @@ test("no commit and the worker says the goal is already met, the checks pass on 
   expect(notes(id)).toContain("says the goal is already met (timeline.ts uses itemTimes), and the checks pass on origin/main");
   expect(ask(id)).toBeNull();
   expect(allRuns()[0].run.reason).toContain("the item is done");
+  expect(allRuns()[0].run.fate).toBe("already-met");
 });
 
 test("no commit and the worker says the goal is already met, but main is red: dropped with the claim; the goal reruns once main is green", async () => {
@@ -34,6 +35,7 @@ test("no commit and the worker says the goal is already met, but main is red: dr
   await withChecks(f, async () => "tests failed");
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(notes(id)).toContain("but main is red at");
+  expect(allRuns()[0].run.fate).toBeUndefined();
   expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
   expect(ask(id)).toBeNull();
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "fix main");
@@ -328,4 +330,13 @@ test("a rescue whose lock wait runs out skips the job and does not throw", async
     await dispatch(f);
     expect(f.calls).toEqual([]);
   } finally { delete process.env.ALEPH_RESCUE_WAIT_MS; release(); }
+});
+
+test("a first no-commit run on an open item is dropped for a rerun and states no fate", async () => {
+  const id = goal();
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls[0]).toBe(`drop fac-${id}`);
+  expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
 });
