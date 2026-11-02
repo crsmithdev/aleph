@@ -580,6 +580,28 @@ describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
   });
 });
 
+describe("a parked issue", () => {
+  test("lists as status parked; the filter offers it and narrows to it; the badge differs; it is neither open nor closed", async () => {
+    let n = 0;
+    writeList({ key: "oth" }, "park", (doc) => { const p = add(doc, "shelved thing"); setStatus(p, "parked"); n = p.id; return true; }, true);
+    const rows = await getJson("/api/issues?status=parked");
+    expect(rows.map((r: any) => [r.repo, r.id, r.status])).toEqual([["oth", n, "parked"]]);
+    expect((await getJson(`/api/issues/oth/${n}`)).status).toBe("parked");
+    const all = v.issueRows({ issues: [
+      ...rows,
+      { id: 8, repo: "f", title: "o", status: "open", stage: "new", labels: [], created: "2026-11-01" },
+      { id: 9, repo: "f", title: "d", status: "done", labels: [], created: "2026-10-30", closed: "2026-11-01" },
+    ] });
+    expect(v.renderFilters(all, { status: "" })).toContain("parked");
+    const only = v.renderTable(all, { status: "parked" });
+    expect(only).toContain("shelved thing");
+    expect(only).not.toContain(">o<");
+    expect(only).toContain('<span class="badge parked">parked</span>');
+    expect(v.renderTable(all, { status: "open" })).not.toContain("shelved thing");
+    expect(v.stats(all, new Date("2026-11-02T12:00"))).toMatchObject({ total: 3, open: 1, closed: 1 });
+  });
+});
+
 describe("shared table CSS", () => {
 });
 

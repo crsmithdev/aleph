@@ -49,7 +49,7 @@ function derived(repo: Repo, doc: todos.Doc, rows: Row[]): void {
   const byId = new Map(states.map((s) => [s.id, s]));
   for (const r of rows) {
     const s = byId.get(`${repo.key}-${r.ref}`);
-    if (s) { r.stage = s.stage; r.why = s.why; }
+    if (s && r.status !== "parked") { r.stage = s.stage; r.why = s.why; }
   }
 }
 
@@ -104,7 +104,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const goalRefs = partsOf(doc, item).map(todos.refOf);
   let states = new Map<string, { stage: string; why: string }>();
   try { for (const s of repoStages(repo, { fetch: false, doc, items: [ref, ...goalRefs] })) states.set(s.id.slice(repo.key.length + 1), s); } catch {}
-  const mine = states.get(ref);
+  const mine = todos.status(item) === "parked" ? undefined : states.get(ref);
   const state = mine ? { item: `${repo.key}-${ref}`, stage: mine.stage, why: mine.why } : null;
 
   const all = allJobs().filter((runs) => runs[0].run.repo === repo.key);

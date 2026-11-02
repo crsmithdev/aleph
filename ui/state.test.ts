@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { partsOf, readList, writeList } from "../todo/lib/store.ts";
 import { buildReviewFixture } from "./fixtures/review/build.ts";
-import { add, addPart, refOf, type Issue } from "../todo/lib/todo.ts";
+import { add, addPart, refOf, setStatus, type Issue } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
@@ -427,6 +427,20 @@ describe("a goal that acceptance failed twice", () => {
       Bun.spawnSync(["git", "update-ref", "-d", "refs/remotes/origin/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
       if (before) sh(repo, "git", "update-ref", "refs/heads/main", before);
       else Bun.spawnSync(["git", "update-ref", "-d", "refs/heads/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+    }
+  });
+});
+
+describe("a parked goal", () => {
+  test("is not in Queued, though it has a spec; the same goal open is", () => {
+    let id = 0;
+    writeList({ key: "fac" }, "parked goal", (doc) => { const g = add(doc, "parked with spec", { spec: "Do it." }); setStatus(g, "parked"); id = g.id; return true; });
+    try {
+      expect(state(now).queued.some((q) => q.id === id)).toBe(false);
+      writeList({ key: "fac" }, "unpark", (doc) => { setStatus(doc.items.find((i) => i.id === id && i.sub === undefined)!, "open"); return true; });
+      expect(state(now).queued.some((q) => q.id === id)).toBe(true);
+    } finally {
+      writeList({ key: "fac" }, "drop", (doc) => { setStatus(doc.items.find((i) => i.id === id && i.sub === undefined)!, "dropped"); return true; });
     }
   });
 });

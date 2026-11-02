@@ -55,6 +55,8 @@ export function redirect(hash) {
 export const PAGE = 50;
 
 /** The Status filter's default is Open; "any" (the All option) shows every status. */
+/** The statuses that close an issue; a parked one is neither open nor closed. */
+const CLOSED = ["done", "dropped"];
 export const DEFAULT_STATUS = "open";
 const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
@@ -163,7 +165,7 @@ export function markHits(title, hits = []) {
 export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
   const q = (o.q ?? "").trim(), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - 7 * DAY;
-  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? inDays(r.created, from, end) : o.tile === "closed" ? r.status !== "open" && inDays(r.closed, from, end) : true);
+  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? inDays(r.created, from, end) : o.tile === "closed" ? CLOSED.includes(r.status) && inDays(r.closed, from, end) : true);
   return rows.flatMap((r) => {
     if (!inTile(r)) return [];
     if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
@@ -254,7 +256,7 @@ export function stats(rows, now = new Date()) {
   const week = today - 6 * DAY, before = week - 7 * DAY;
   const open = rows.filter((r) => r.status === "open");
   const ages = open.map((r) => dayMs(r.created)).filter(Boolean).map((t) => (today - t) / DAY);
-  const closedIn = (from, to) => rows.filter((r) => r.status !== "open" && inDays(r.closed, from, to));
+  const closedIn = (from, to) => rows.filter((r) => CLOSED.includes(r.status) && inDays(r.closed, from, to));
   const closed = closedIn(week, end);
   const stages = {};
   for (const r of open) stages[r.stage] = (stages[r.stage] ?? 0) + 1;
@@ -289,7 +291,7 @@ export function flow(rows, days = 14, now = new Date()) {
     const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i), from = d.getTime(), to = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i + 1).getTime();
     out.labels.push(day(d, now));
     out.filed.push(rows.filter((r) => inDays(r.created, from, to)).length);
-    out.closed.push(rows.filter((r) => r.status !== "open" && inDays(r.closed, from, to)).length);
+    out.closed.push(rows.filter((r) => CLOSED.includes(r.status) && inDays(r.closed, from, to)).length);
   }
   return out;
 }
@@ -344,7 +346,7 @@ export function renderFilters(rows, o = {}) {
   const stages = [...new Set(rows.map((r) => r.stage))].sort();
   const labels = [...new Set(rows.flatMap((r) => r.labels))].sort();
   return filterBar([
-    { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "All" }, "open", "done", "dropped"] },
+    { label: "Status", name: "status", value: o.status || "any", options: [{ value: "any", label: "All" }, "open", "parked", "done", "dropped"] },
     { label: "Stage", name: "stage", data: true, value: o.stage ?? "", options: [{ value: "", label: "All" }, ...stages] },
     { label: "Priority", name: "priority", value: o.priority ?? "", options: PRIORITY_OPTIONS },
     { label: "Label", name: "label", data: true, value: o.label ?? "", options: [{ value: "", label: "All" }, ...labels.map((l) => ({ value: l, label: labelName(l) }))] },
@@ -494,7 +496,7 @@ export const isMachineNote = (n) => {
 /** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
-  const HIDE = ["labels", "id", "closed_as", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title", "situation", "effects", "recommend"];
+  const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title", "situation", "effects", "recommend"];
   const fact = (name, dd) => `<div><dt>${esc(name)}</dt><dd>${dd}</dd></div>`;
   const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? (d.issue ? "agent" : "chris");
   const facts = (d.blockers?.length ? fact("Blocked by", blockersHtml(d.blockers, d.repo, d.ref ?? d.id)) : "") + fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
