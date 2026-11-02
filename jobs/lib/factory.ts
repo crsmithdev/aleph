@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { afterOf, askOf, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
+import { byPriority, afterOf, askOf, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
 import { needsOf, plainAsk } from "./ask.ts";
@@ -155,13 +155,15 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     }
   }
   for (const repo of sandboxRepos()) if (!reds.get(repo.key)) for (const l of await closeIssues(repo, done)) skipped.push(l);
+  const planners: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
     if (reds.get(repo.key)) continue;
-    for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
-      if (!planSet(item) || issues.status(item) !== "open" || askOf(item) || pendingWaits(afterOf(item), done).length || await planning(repo, item.id)) continue;
-      plan(repo, item.id);
-      planned.push(issueJob(repo, item.id));
-    }
+    for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) if (planSet(item)) planners.push({ repo, item });
+  }
+  for (const { repo, item } of byPriority(planners)) {
+    if (issues.status(item) !== "open" || askOf(item) || pendingWaits(afterOf(item), done).length || await planning(repo, item.id)) continue;
+    plan(repo, item.id);
+    planned.push(issueJob(repo, item.id));
   }
   for (const { repo, item: listed } of goals) {
     const ref = issues.idOf(listed);

@@ -144,3 +144,29 @@ test("a goal that stays open and labelled is started exactly once", async () => 
   expect(out.started).toEqual([`fac-${id}`]);
   expect(out.skipped).toEqual([]);
 });
+
+const prio = (key: string, p: string) =>
+  writeList({ key }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { priority: p, spec: "Do the thing." }); return item.id; }, true)!.value;
+
+test("with a live cap of 1, the critical goal starts and the others wait", async () => {
+  process.env.ALEPH_LIVE_CAP = "1";
+  prio("fac", "low");
+  const hi = prio("fac", "critical");
+  prio("fac", "medium");
+  // A start makes a live run, as the real one does, so the cap counts it.
+  const out = await dispatchIssues(async (_r, name) => { mk(name, "build", "running", { made: Date.now() }); return null; }, async () => null);
+  expect(out.started).toEqual([`fac-${hi}`]);
+});
+
+test("planner items of two repos are planned high first", async () => {
+  writeFileSync(join(ctx.base, "repos.json"), JSON.stringify({
+    aaa: { path: join(ctx.base, "repo"), sandbox: true, autoland: false },
+    zzz: { path: join(ctx.base, "repo"), sandbox: true, autoland: false },
+  }));
+  const add = (key: string, p: string) => writeList({ key }, "add", (doc) => { const i = issues.add(doc, "plan me", { priority: p }); i.fm.plan = "true"; return i.id; }, true)!.value;
+  const lo = add("aaa", "low");
+  const hi = add("zzz", "high");
+  const order: string[] = [];
+  await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, (repo, id) => { order.push(`${repo.key}-${id}`); });
+  expect(order).toEqual([`zzz-${hi}`, `aaa-${lo}`]);
+});

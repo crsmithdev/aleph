@@ -294,12 +294,23 @@ export function reader(o: { fetch?: boolean } = {}): Reader {
   return { list, item: (key, id) => { const doc = list(key); return doc ? issues.find(doc, id) : undefined; } };
 }
 
-/** The buildable issues of each repo, in repo then number order. A repo whose list cannot be read has none. */
+/** Rank of an item's priority: 3 for critical down to 0 for low. No priority, or an unknown one, ranks as medium. */
+export function rank(item: Issue): number {
+  const i = (issues.PRIORITIES as readonly string[]).indexOf(String(item.fm.priority ?? ""));
+  return i < 0 ? (issues.PRIORITIES as readonly string[]).indexOf("medium") : i;
+}
+
+/** Sort entries by priority, highest first; stable, so equal priorities keep their order. */
+export function byPriority<T extends { item: Issue }>(entries: T[]): T[] {
+  return entries.map((e, n) => ({ e, n })).sort((a, b) => rank(b.e.item) - rank(a.e.item) || a.n - b.n).map((x) => x.e);
+}
+
+/** The buildable issues of all repos, critical first, then repo then number order within a priority. A repo whose list cannot be read has none. */
 export function goals<R extends Place>(repos: R[], lists: Reader = reader()): { repo: R; item: Issue }[] {
-  return repos.flatMap((repo) => {
+  return byPriority(repos.flatMap((repo) => {
     const doc = lists.list(repo.key);
     return (doc?.items ?? []).filter((i) => isBuildable(doc!, i)).map((item) => ({ repo, item }));
-  });
+  }));
 }
 
 /**
