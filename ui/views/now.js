@@ -61,12 +61,12 @@ export function renderCauses(d, win = d?.window ?? "week") {
   return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p>${barList(cs.map((x, i) => causeRow(`<a href="${keep(EFFICIENCY, win)}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join(""))}`;
 }
 
-/** Fetch the window and the last 24 h, then fill the scorecard and the causes. */
+/** Fetch the window with its baseline (the last 24 h and the month) in one request, then fill the scorecard and the causes. */
 export async function mountStatus(root, s, fetcher = fetch, q) {
   const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
   keepWindow(w);
   wireScope(root);
-  await Promise.all([loadSpeed(w, fetcher), loadSpeed("day", fetcher), w === "month" ? null : loadSpeed("month", fetcher)]);
+  await loadSpeed(w, fetcher, true);
   const tiles = root.querySelector("#scorecard"), causes = root.querySelector("#causes");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), usable("day"), w, usable("month"));
   if (causes) causes.innerHTML = renderCauses(speedOf(w), w);

@@ -34,11 +34,14 @@ export const resetSpeed = () => got.clear();
 /** A usable answer for a window, or null. */
 export const usable = (window) => { const d = speedOf(window); return d && !d.error ? d : null; };
 /** Fetch a window into the cache. A failed reload keeps the last good answer. */
-export async function loadSpeed(window, fetcher = fetch) {
+export async function loadSpeed(window, fetcher = fetch, baseline = false) {
   try {
-    const res = await fetcher(`/api/speed?window=${window}`, { cache: "no-store" });
+    const res = await fetcher(`/api/speed?window=${window}${baseline ? "&baseline=1" : ""}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`Could not load speed (${res.status}).`);
-    got.set(window, await res.json());
+    const { baseline: b, ...d } = await res.json();
+    got.set(window, d);
+    // The baseline windows come in the same answer: one request fills all three.
+    for (const [k, v] of Object.entries(b ?? {})) if (k !== window) got.set(k, v);
   } catch (e) { if (!usable(window)) got.set(window, { error: e.message }); }
   return got.get(window);
 }

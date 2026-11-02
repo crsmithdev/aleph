@@ -136,8 +136,8 @@ test("mountStatus fetches the week and the day and fills the scorecard and the c
   resetSpeed();
   const tiles = { innerHTML: "" }, causes = { innerHTML: "" };
   const urls: string[] = [];
-  await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#causes" ? causes : null) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => (u.includes("day") ? DAY : WEEK) }; });
-  expect(urls.sort()).toEqual(["/api/speed?window=day", "/api/speed?window=month", "/api/speed?window=week"]);
+  await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#causes" ? causes : null) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: { day: DAY, month: WEEK } }) }; });
+  expect(urls).toEqual(["/api/speed?window=week&baseline=1"]);
   expect(tiles.innerHTML).toContain("<b>38%</b>");
   expect(causes.innerHTML).toContain("Issue had landed");
   resetSpeed();
@@ -220,7 +220,7 @@ test("mountStatus loads the window of the address", async () => {
   resetSpeed();
   const urls: string[] = [];
   await view.mountStatus({ querySelector: () => null }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => WEEK }; }, new URLSearchParams("window=hour"));
-  expect(urls.sort()).toEqual(["/api/speed?window=day", "/api/speed?window=hour", "/api/speed?window=month"]);
+  expect(urls).toEqual(["/api/speed?window=hour&baseline=1"]);
   resetSpeed();
   delete g.localStorage; delete g.location; delete g.history;
 });

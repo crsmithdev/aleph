@@ -112,6 +112,10 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
   expect((await (await get("?window=month")).json()).window).toBe("month");
   expect((await (await get("")).json()).window).toBe("week");
   expect((await get("?window=year")).status).toBe(400);
+  expect((await (await get("?window=week")).json()).baseline).toBeUndefined();
+  const b = await (await get("?window=week&baseline=1")).json();
+  expect(b.window).toBe("week");
+  expect([b.baseline.day.window, b.baseline.month.window]).toEqual(["day", "month"]);
 });
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
@@ -410,4 +414,16 @@ test("classify: the parts of one issue are goals of their own, and a top list li
   expect(by("restarted").runs).toBe(0);
   const d = classify([{ ...b("x", "7.2", 0, 100), condition: "stuck", noCommit: true }], () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   expect(d.classes.find((c) => c.key === "dropped")!.top[0]).toMatchObject({ goal: "fx-7.2", href: "#/issues/fx/7.2" });
+});
+
+test("serve() warms /api/speed: week, day and month are computed before the first request", async () => {
+  const { withServer } = await import("./test-server.ts");
+  const { clearCache } = await import("./api/speed.ts");
+  clearCache();
+  const { server: s, at, stop } = await withServer();
+  try {
+    await s.warmed["speed.ts"];
+    const r = await at("/api/speed?window=week&baseline=1");
+    expect(r.status).toBe(200);
+  } finally { stop(); }
 });

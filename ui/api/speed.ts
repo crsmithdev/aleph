@@ -528,11 +528,27 @@ export const clearCache = () => cache.clear();
 /** `speed`, kept `ALEPH_UI_FETCH_TTL` seconds like the other fetches. */
 export const cachedSpeed = (window: Window, fit: Fit | null = null): Speed => cache.get(window, uiFetchTtl() * 1000, () => speed(window, new Date(), fit));
 
+/**
+ * Fills the cache for the windows the Status page reads (week, day, month) once the server is up, so the
+ * first page load after a land finds them computed. `speed` is synchronous (250-750 ms each), so each window
+ * runs in its own turn of the event loop and a request that arrives meanwhile waits for one, not all three.
+ */
+export async function warm(): Promise<void> {
+  const fit = await currentFit().catch(() => null);
+  for (const w of ["week", "day", "month"] as const) {
+    await new Promise<void>((r) => setTimeout(r, 0));
+    cachedSpeed(w, fit);
+  }
+}
+
 export const routes: Routes = {
   "GET /api/speed": async (_req, _params, url) => {
     const w = url.searchParams.get("window") ?? "week";
     if (!(WINDOWS as readonly string[]).includes(w)) return Response.json({ error: "window must be hour, day, week or month" }, { status: 400 });
-    return Response.json(cachedSpeed(w as Window, await currentFit().catch(() => null)));
+    const fit = await currentFit().catch(() => null), d = cachedSpeed(w as Window, fit);
+    // `baseline=1`: the trend baseline (the last 24 h and the month) in the same answer, so the Status page makes one request.
+    if (url.searchParams.get("baseline") !== "1") return Response.json(d);
+    return Response.json({ ...d, baseline: { day: w === "day" ? d : cachedSpeed("day", fit), month: w === "month" ? d : cachedSpeed("month", fit) } });
   },
 };
 
