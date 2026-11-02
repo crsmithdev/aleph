@@ -64,17 +64,6 @@ export function mergeCauses(d) {
 export const causeRow = (name, x, max, top) =>
   barRow(name, max > 0 ? (x.hours / max) * 100 : 0, `${esc(hours(x.hours))} · ${esc(plural(x.runs, "run"))}`, { top });
 
-/** A percent tile's value against the 30-day average in whole percentage points; the colour says whether that is good. */
-export function pctTrend(value, avg, lowerIsGood = true) {
-  const pts = Math.round((value - avg) * 100);
-  if (!pts) return small("no change vs 30-day average");
-  const down = pts < 0;
-  return `<span class="${down === lowerIsGood ? "good" : "warn"}">${down ? "▼" : "▲"} ${Math.abs(pts)}% vs 30-day average</span>`;
-}
-
-/** Whether a percent tile compares with the 30-day average: not on the month window, which is that span. */
-export const avgOn = (d) => !!d?.window && d.window !== "month";
-
 /** The last 24 h against the window: the arrow gives the direction, the colour whether that is good. */
 export function trend(week, day, format, lowerIsGood = true) {
   if (day === null || day === undefined) return small("none in the last 24 h");
@@ -113,18 +102,6 @@ export function usageTile(s, link = {}, extra = "") {
   return tile({ k: "Weekly usage", v: `${Math.round(cur.seven_day)}%`, body: bar + notes + extra, ...link });
 }
 
-/** The Lost time tile, on Status and on Efficiency. `avg` is /api/speed for the month, or null. */
-export function lostTile(d, avg, link = {}) {
-  if (!d) return tile({ k: "Lost time", v: "–", body: small("agent time that did not reach main"), ...link });
-  const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0);
-  return tile({ k: "Lost time", v: pctText(d.lost.share), body: small(`${hours(d.lost.hours)} of ${hours(total)} agent time, ${period(d)}`) + (avgOn(d) && total > 0 && d.lost.share != null && avg?.lost?.share != null ? pctTrend(d.lost.share, avg.lost.share) : ""), ...link });
-}
-/** The First pass tile, on Status and on Efficiency. */
-export function firstPassTile(d, avg, link = {}) {
-  const v = d?.issues?.firstPass ?? null;
-  return tile({ k: "First pass", v: v === null ? "–" : pctText(v), body: small(d && v === null ? "no issue landed" : "lands with no fix round") + (v === null || !avgOn(d) || avg?.issues?.firstPass == null ? "" : pctTrend(v, avg.issues.firstPass, false)), ...link });
-}
-
 /** A time on a Status card: "45s", "20m", "1h35m". */
 export function cardDur(s) {
   if (s === null || s === undefined || Number.isNaN(s)) return "–";
@@ -134,8 +111,8 @@ export function cardDur(s) {
   if (m < 60) return `${m}m`;
   return `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, "0") + "m" : ""}`;
 }
-const cardPct = (v) => (v === null || v === undefined ? "–" : `${Math.round(v * 100)}%`);
-const cardHours = (h) => (h === null || h === undefined ? "–" : `${h.toFixed(1)}h`);
+export const cardPct = (v) => (v === null || v === undefined ? "–" : `${Math.round(v * 100)}%`);
+export const cardHours = (h) => (h === null || h === undefined ? "–" : `${h.toFixed(1)}h`);
 
 /**
  * The trend of a card: an arrow and a percent, green when good and amber when bad, with the previous value and the baseline in the tooltip.
@@ -156,10 +133,19 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis 
  * A Status card: row 1 the label and the trend, row 2 the value and the second value, row 3 an optional qualifier ("p50 / p90").
  * `v` and `v2` are text; `q` is `[first, second]`; `trend` is HTML; `extra` is HTML after the value.
  */
-export function statCard({ k, v, v2, q, trend: tr = "", extra = "", href }) {
+export function statCard({ k, v, v2, q, note, trend: tr = "", extra = "", href, key, on = false }) {
   const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
-  const qual = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>` : "";
-  return `<a class="tile sc" href="${esc(href)}"><span class="r1"><span class="k">${esc(k)}</span>${tr}</span><b>${esc(v)}${second}</b>${extra}${qual}</a>`;
+  const qual = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>` : note ? `<span class="q m">${esc(note)}</span>` : "";
+  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${tr}</span><b>${esc(v)}${second}</b>${extra}${qual}`;
+  if (key) return `<button type="button" class="tile sc" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
+  return href ? `<a class="tile sc" href="${esc(href)}">${inner}</a>` : `<div class="tile sc">${inner}</div>`;
+}
+
+/** The trend of one figure of `d` against the baseline of its own /api/speed answer; empty with no baseline. */
+export function windowTrend(d, figure, value, o) {
+  const base = d?.baseline?.base;
+  if (!base) return "";
+  return cardTrend(value, base[figure], d.baseline.prev?.[figure], { basis: d.baseline.basis ?? "", ...o });
 }
 
 /** The five cards of the Status scorecard. `d` is /api/speed for the window with `baseline`, or null while it loads. */
@@ -175,7 +161,7 @@ export function statusCards(s, d, { efficiency, performance }) {
 }
 
 /** The figures of an answer, as the server's baseline gives them. */
-function figuresOf(d) {
+export function figuresOf(d) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), lead = d.phases?.lead, queue = d.phases?.queue;
   return {
     lost: total > 0 ? d.lost.share : null, hours: total > 0 ? d.lost.hours : null,

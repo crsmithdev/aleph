@@ -31,7 +31,7 @@ const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday
 
 const PAGES: Record<string, { path: string; view: any; render: (w: string) => string }> = {
   jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null) },
-  efficiency: { path: "#/factory/efficiency", view: eff.view, render: (w) => eff.renderEfficiency(speed(w), null) },
+  efficiency: { path: "#/factory/efficiency", view: eff.view, render: (w) => eff.renderEfficiency(speed(w)) },
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
   all: { path: "#/jobs", view: jobs.view, render: (w) => jobs.renderJobs([], { window: w }) },
@@ -77,7 +77,7 @@ test("picking an option on each page asks for that window and the page says its 
     expect(query().get("window"), name).toBe(w);
     const url = request(p, query());
     if (name === "all") expect(url).toBe(DAYS[w] ? `/api/jobs?days=${DAYS[w]}` : "/api/jobs");
-    else expect(url).toBe(`/api/speed?window=${w}`);
+    else expect(url).toBe(`/api/speed?window=${w}${name === "efficiency" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
     expect(shown, `${name} ${w}`).toContain(name === "all" ? WORDS[w].replace("last ", "") : name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
     expect(html).toBeTruthy();
@@ -91,15 +91,16 @@ test("Jobs titles its day rows by the bucket of the window", () => {
 test("the trend against the last 24 hours shows only for week and month", () => {
   for (const w of WINDOWS) {
     const on = w === "week" || w === "month";
-    for (const h of [fjobs.renderFactoryJobs(speed(w), speed("day")), eff.renderEfficiency(speed(w), speed("day"), "all", speed("month"))])
+    for (const h of [fjobs.renderFactoryJobs(speed(w), speed("day"))])
       expect(/in the last 24 h\b/.test(h), w).toBe(on);
-    expect(/vs 30-day average/.test(eff.renderEfficiency(speed(w), speed("day"), "all", speed("month"))), w).toBe(w !== "month");
+    expect(/vs 30-day average/.test(eff.renderEfficiency(speed(w))), w).toBe(false);
+    expect(/in the last 24 h\b/.test(eff.renderEfficiency(speed(w))), w).toBe(false);
   }
 });
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   storeWindow("month");
-  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.all ? "/api/jobs?days=30" : "/api/speed?window=month");
+  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.all ? "/api/jobs?days=30" : p === PAGES.efficiency ? "/api/speed?window=month&baseline=1" : "/api/speed?window=month");
   expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/speed?window=hour");
   expect(windowOf(new URLSearchParams("window=nope"))).toBe("month");
 });

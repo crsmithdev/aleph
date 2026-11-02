@@ -1,6 +1,6 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, repoIdLink, keepWindow, setQuery, small, tile, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
-import { firstPassTile, hours, loadSpeed, lostClasses, lastPeriod, lostTile, mergeCauses, pctText, period, plural, trendOn, usable, weekText } from "./speed.js";
+import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, pctText, period, plural, statCard, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
 const REPO = "aleph";
@@ -26,12 +26,15 @@ export function selection(d, key) {
   };
 }
 
-function scorecard(d, day, key, month) {
-  const fixed = (d.classes ?? []).find((c) => c.key === "fixed");
-  return lostTile(d, month, { key: ALL, on: key === ALL }) + firstPassTile(d, month, { key: "landed", on: key === "landed" }) +
-    tile({ k: "Reruns", v: String(d.flaky), body: small("passed on rerun") + (day && trendOn(d) ? small(`${day.flaky} in the last 24 h`) : ""), key: FLAKES, on: key === FLAKES }) +
-    tile({ k: "Fix rounds", v: String(fixed?.runs ?? 0), body: small(`${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`), key: "fixed", on: key === "fixed" }) +
-    tile({ k: "Usage per issue", v: d.issues.week === null ? "–" : weekText(d.issues.week), body: small(d.issues.week === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median"), ...(d.issues.week === null ? {} : { key: USAGE, on: key === USAGE }) });
+function scorecard(d, key) {
+  const fixed = (d.classes ?? []).find((c) => c.key === "fixed"), f = figuresOf(d);
+  const pct = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
+  const usage = d.issues.week;
+  return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours) }), trend: windowTrend(d, "lost", f.lost, { ...pct, lowerIsGood: true }), key: ALL, on: key === ALL }) +
+    statCard({ k: "First pass", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...pct, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
+    statCard({ k: "Reruns", v: String(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
+    statCard({ k: "Fix rounds", v: String(fixed?.runs ?? 0), note: `${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`, key: "fixed", on: key === "fixed" }) +
+    statCard({ k: "Usage per issue", v: usage === null ? "–" : weekText(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 
 function bar(d, key) {
@@ -68,21 +71,21 @@ export async function fileIssue(d, key, fetcher = fetch) {
 const usageTable = (rows) => dataTable(heads(["Issue", "Usage", "Runs"], ["Usage", "Runs"]), rows.map((x) =>
   `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(weekText(x.week))}</td><td class="num">${x.runs}</td></tr>`).join(""));
 
-function usagePage(d, day, key, month) {
+function usagePage(d, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
-  return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, day, key, month))}` +
+  return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
     card("Usage per issue, largest first", s.top.length ? usageTable(s.top) : "<p>No issue to show.</p>") + `</div>`;
 }
 
-/** The page body for a selection. `day` is /api/speed for the last 24 h and `month` for 30 days, or null. */
-export function renderEfficiency(d, day, key = ALL, month = null) {
-  if (key === USAGE) return usagePage(d, day, key, month);
+/** The page body for a selection. `d` is /api/speed for the window, with its `baseline` when there is one. */
+export function renderEfficiency(d, key = ALL) {
+  if (key === USAGE) return usagePage(d, key);
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const file = issueFor(d, key);
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
-  return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, day, key, month))}` +
+  return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
     card(`${s.title}, largest first`, `<p>${esc(s.text)} ${esc(s.size)}</p>${s.causes.length ? causeBars(s) : "<p>No cause to show.</p>"}`) +
     (key === FLAKES ? "" : card(`${s.title}: the issues that cost the most`, (s.top.length ? topTable(s.top) : "<p>No issue to show.</p>") +
@@ -100,12 +103,12 @@ export const view = {
   group: "factory",
   order: 1,
   icon: "chart-pie",
-  api: (_params, q = new URLSearchParams()) => `/api/speed?window=${windowOf(q)}`,
+  api: (_params, q = new URLSearchParams()) => `/api/speed?window=${windowOf(q)}&baseline=1`,
   refresh: 60,
-  render: (d, _params, q) => renderEfficiency(d, usable("day"), q?.get("tile") ?? ALL, usable("month")),
+  render: (d, _params, q) => renderEfficiency(d, q?.get("tile") ?? ALL),
   mount: async (root, d) => {
     keepWindow(d.window ?? windowOf(hashQuery()));
-    const draw = () => { root.innerHTML = renderEfficiency(d, usable("day"), picked(), usable("month")); wire(); };
+    const draw = () => { root.innerHTML = renderEfficiency(d, picked()); wire(); };
     const wire = () => {
       const page = root.querySelector("#eff");
       wireScope(root);
@@ -124,8 +127,5 @@ export const view = {
       });
     };
     wire();
-    const w = d.window ?? "week";
-    await Promise.all([trendOn(d) ? loadSpeed("day") : null, w === "month" ? null : loadSpeed("month")]);
-    if (root.querySelector("#eff")) draw();
   },
 };

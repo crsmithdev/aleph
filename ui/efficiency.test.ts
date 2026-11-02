@@ -5,9 +5,10 @@ import { join } from "node:path";
 import { speed } from "./api/speed.ts";
 import { withEnv } from "./test-server.ts";
 // @ts-ignore plain JS shared with the page
+import { onTile } from "./lib.js";
+// @ts-ignore plain JS shared with the page
 import { fileIssue, issueFor, renderEfficiency, selection } from "./views/efficiency.js";
 // @ts-ignore plain JS shared with the page
-import { pctTrend } from "./views/speed.js";
 
 let base: string;
 let restore: () => void;
@@ -58,45 +59,48 @@ const D: any = {
     cls("dropped", "Dropped", 0, []),
   ],
 };
-const DAY: any = { ...D, flaky: 1, lost: { hours: 1, share: 0.1 }, issues: { ...D.issues, firstPass: 0.75 } };
+
+const BASE: any = { prev: { lost: 0.2, firstPass: 0.6, flaky: 2 }, base: { lost: 0.25, firstPass: 0.75, flaky: 4 }, basis: "the previous 7 days" };
+const WITH: any = { ...D, baseline: BASE };
 
 test("the tiles and the head come from the data", () => {
-  const h = renderEfficiency(D, DAY, "all", DAY);
+  const h = renderEfficiency(WITH, "all");
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
+  expect(h).toContain('<b>30%<em> / 6.0h</em></b>');
   expect(h).toContain('<header class="ph"><h1>Efficiency</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
-  expect(h).toContain('<span class="warn">▲ 20% vs 30-day average</span>');
-  expect(h).toContain('<span class="warn">▼ 25% vs 30-day average</span>');
+  expect(h).not.toContain("vs 30-day average");
+  expect(h).not.toContain("in the last 24 h");
   expect(h).toContain("&lt;0.1%");
   expect(h).toContain("20 h counted · 11 runs, 0.4 h, have no outcome yet");
-  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, null, "all")).toContain("needs 6 hours of usage snapshots");
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, "all")).toContain("needs 6 hours of usage snapshots");
 });
 
 test("All lost time: the causes sum to lost.hours", () => {
   const s = selection(D, "all");
   expect(s.causes.map((x: any) => [x.name, x.hours, x.runs])).toEqual([["Issue had landed", 3, 7], ["No commit", 3, 2]]);
   expect(s.causes.reduce((a: number, x: any) => a + x.hours, 0)).toBe(D.lost.hours);
-  expect(renderEfficiency(D, null, "all")).toContain("<h2>Lost time, largest first</h2>");
+  expect(renderEfficiency(D, "all")).toContain("<h2>Lost time, largest first</h2>");
   expect(s.text).toContain("Late and Restarted together.");
 });
 
 test("selecting a class shows its causes; selecting Lost time again restores the merged list", () => {
-  const all = renderEfficiency(D, null, "all");
-  const one = renderEfficiency(D, null, "fixed");
+  const all = renderEfficiency(D, "all");
+  const one = renderEfficiency(D, "fixed");
   expect(one).toContain("<h2>Fixed, largest first</h2>");
   expect(one).toContain('data-tile="fixed" style="flex:4" aria-pressed="true"');
   expect(one).not.toContain("No commit");
-  expect(renderEfficiency(D, null, "all")).toBe(all);
+  expect(renderEfficiency(D, "all")).toBe(all);
   expect(all).toContain('data-tile="all" aria-pressed="true"');
 });
 
 test("the First pass tile and the Landed segment select the landed class, and a class with no hours has no segment", () => {
-  const h = renderEfficiency(D, null, "all");
+  const h = renderEfficiency(D, "all");
   expect(h.match(/data-tile="landed"/g)).toHaveLength(2);
   expect(h).not.toContain('class="seg-dropped"');
 });
 
 test("an issue with no link shows its id as text, and a run with no reason says so", () => {
-  const h = renderEfficiency(D, null, "restarted");
+  const h = renderEfficiency(D, "restarted");
   expect(h).toContain("fx-2");
   expect(h).toContain("No reason recorded.");
   expect(h).not.toContain("undefined");
@@ -116,10 +120,10 @@ test("File an issue posts the first cause as the title, with the runs and reason
 });
 
 test("the Usage per issue tile drills to the issues list", () => {
-  expect(renderEfficiency(D, DAY, "all")).toMatch(/data-tile="usage"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*data-tile="usage"/);
-  expect(renderEfficiency(D, null, "usage")).toContain('data-tile="usage" aria-pressed="true"');
-  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, null, "all")).not.toContain('data-tile="usage"');
-  const h = renderEfficiency(D, null, "usage");
+  expect(renderEfficiency(D, "all")).toMatch(/data-tile="usage"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*data-tile="usage"/);
+  expect(renderEfficiency(D, "usage")).toContain('data-tile="usage" aria-pressed="true"');
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, "all")).not.toContain('data-tile="usage"');
+  const h = renderEfficiency(D, "usage");
   expect(h).toContain("<h2>Usage per issue, largest first</h2>");
   expect(h).toContain("#/issues/fx/1");
   expect(h).toContain("fx-2");
@@ -129,7 +133,7 @@ test("the Usage per issue tile drills to the issues list", () => {
   expect(h).not.toContain("File an issue");
   expect(h).not.toContain("undefined");
   expect(issueFor(D, "usage")).toBeNull();
-  expect(renderEfficiency({ ...D, issues: { ...D.issues, usage: undefined } }, null, "usage")).toContain("No issue to show.");
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, usage: undefined } }, "usage")).toContain("No issue to show.");
 });
 
 test("the Reruns panel describes tests and checks, and keeps a long name whole", () => {
@@ -138,19 +142,41 @@ test("the Reruns panel describes tests and checks, and keeps a long name whole",
   const s = selection(d, "flakes");
   expect(s.causes).toEqual([{ name: long, runs: 3 }, { name: "types", runs: 1 }]);
   expect(s.text.startsWith("Checks that failed")).toBe(false);
-  const h = renderEfficiency(d, null, "flakes");
+  const h = renderEfficiency(d, "flakes");
   expect(h).toContain(`title="${long.replace(/>/g, "&gt;")}"`);
   expect(h).toContain(long.replace(/>/g, "&gt;"));
   expect(h).toContain("rerun");
 });
 
-test("percent tiles show the change from the 30-day average in points", () => {
-  expect(pctTrend(0.8302, 0.9004, false)).toBe('<span class="warn">▼ 7% vs 30-day average</span>');
-  expect(pctTrend(0.4, 0.3)).toBe('<span class="warn">▲ 10% vs 30-day average</span>');
-  expect(pctTrend(0.4007, 0.37)).toBe('<span class="warn">▲ 3% vs 30-day average</span>');
-  expect(pctTrend(0.8421, 0.8973, false)).toBe('<span class="warn">▼ 6% vs 30-day average</span>');
-  expect(pctTrend(0.3701, 0.37)).toBe("<small>no change vs 30-day average</small>");
-  expect(pctTrend(0.8972, 0.8973, false)).toBe("<small>no change vs 30-day average</small>");
-  expect(renderEfficiency({ ...D, window: "month" }, DAY, "all", DAY)).not.toContain("30-day average");
-  expect(renderEfficiency(D, DAY, "all", null)).not.toContain("30-day average");
+test("the cards trend against the baseline of the window, and show none without one", () => {
+  const h = renderEfficiency(WITH, "all");
+  expect(h).toMatch(/<span class="tr warn" title="[^"]*">▲ 5%<\/span>/);
+  expect(h).toMatch(/<span class="tr warn" title="Previous 60%; baseline 75%, the previous 7 days \(change in percentage points\)">▼ 25%<\/span>/);
+  expect(h).toContain("▬ 0%");
+  const better = renderEfficiency({ ...WITH, lost: { hours: 1, share: 0.1 }, issues: { ...D.issues, firstPass: 0.9 } }, "all");
+  expect(better).toMatch(/tr good[^>]*>▼ 15%/);
+  expect(better).toMatch(/tr good[^>]*>▲ 15%/);
+  const none = renderEfficiency(D, "all");
+  expect(none).not.toContain('class="tr');
+  expect(none).not.toContain("▲");
+  expect(none).not.toContain("▼");
+  const noRerun = renderEfficiency({ ...WITH, baseline: { ...BASE, base: { ...BASE.base, flaky: undefined } } }, "all");
+  expect([...noRerun.matchAll(/class="tr/g)].length).toBe(2);
+  for (const w of ["hour", "day", "week", "month"]) expect(renderEfficiency({ ...WITH, window: w }, "all")).not.toContain("30-day average");
+});
+
+test("a click on a card selects its class", () => {
+  const h = renderEfficiency(D, "all");
+  expect(h).toMatch(/<button type="button" class="tile sc" data-tile="all" aria-pressed="true"><span class="r1"><span class="k">Lost time/);
+  expect(h).toMatch(/data-tile="landed" aria-pressed="false"><span class="r1"><span class="k">First pass/);
+  let handler: any;
+  const picked: string[] = [];
+  onTile({ addEventListener: (_: string, f: any) => { handler = f; } }, (k: string) => picked.push(k));
+  const press = (label: string) => {
+    const m = h.match(new RegExp(`data-tile="([a-z]+)"[^>]*><span class="r1"><span class="k">${label}`));
+    handler({ target: { closest: () => ({ dataset: { tile: m![1] } }) } });
+  };
+  press("First pass");
+  press("Lost time");
+  expect(picked).toEqual(["landed", "all"]);
 });
