@@ -227,7 +227,7 @@ export function renderLanes(s) {
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */
 export function renderNeeds(s) {
-  const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
+  const asks = (s.asks ?? []).map((i) => askRow(i, s.now, true)).concat(errorLines(s).map(errorRow));
   if (!asks.length && !s.stuck.length) return "";
   const group = (id, t, n, html, wrap) => (n ? `<div class="grp" id="${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${wrap(html)}</div>` : "");
   return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Awaiting you</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
@@ -256,15 +256,18 @@ const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` 
 /** The one Details behind a stuck row: the whole reason, then the job's details. */
 const fold = (s, j) => details(s, j, j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
 
+/** The fold under a card's 3 lines: closed by default, kept open across a re-render by its data-keep key. */
+const choiceFold = (key, body) => `<details class="cfold" data-keep="fold:${esc(key)}"><summary>Choices</summary><div class="body">${body}</div></details>`;
+
 const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
   const why = b ? `Waits on ${blocker}: ${b.title}.` : `${j.condition === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
   const first = b ? act("wait", j.name, `Wait for ${blocker}`, true).replace('data-label=', `data-on="${esc(b.id)}" data-label=`) : act("recheck", j.name, "Re-check");
-  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why, j.repo, undefined, j.item?.priority, { at: j.run?.started ?? j.started, since: j.started, now: s.now, part: j.part })}${agentLine(j)}` +
-    `<div class="actions choices">${choice(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
-    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j) + `</article>`;
+  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why, j.repo, undefined, j.item?.priority, { at: j.run?.started ?? j.started, since: j.started, now: s.now, part: j.part })}` +
+    choiceFold(j.name, agentLine(j) + `<div class="actions choices">${choice(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j)) + `</article>`;
 };
 /** Text with `inline code` as <code>, everything else escaped. */
 const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -310,7 +313,7 @@ const choice = (button, hint, input = "", recommended = false) =>
   `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ' <span class="badge run">Recommended</span>' : ""}${input}</div>${button}</div>`;
 
 /** An Awaiting-you card from a server `asks` entry: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
-export function askRow(i, now = new Date().toISOString()) {
+export function askRow(i, now = new Date().toISOString(), folded = false) {
   const acts = i.actions ?? [];
   const inputFor = (a) => {
     if (a.act === "deny") {
@@ -323,7 +326,7 @@ export function askRow(i, now = new Date().toISOString()) {
   if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
   return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
     needHead(i.kind, i.id, i.href, i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.explained === false ? ' <span class="muted">The case text is missing; this is the fixed text for this reason.</span>' : ""}</p>`, i.priority, { at: i.at, since: i.since, now, part: i.part }) +
-    `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i) + `</article>`;
+    (folded ? choiceFold : (_k, body) => body)(i.key ?? i.id, `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i)) + `</article>`;
 }
 
 /** An error line as a card: the head alone, because the page has no action that fixes it. */

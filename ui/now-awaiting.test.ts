@@ -179,7 +179,7 @@ for (const reason of Object.keys(ASK_REASONS)) {
     const p = problem(row);
     expect(p.length).toBeGreaterThan(5);
     for (const t of ["<task-notification", "<agent-message", "ask:"]) expect(p).not.toContain(t);
-    const buttons = [...row.split("<details")[0].matchAll(/<button class="act( primary)?" [^>]*data-label="([^"]*)"/g)].map((m) => m[2]);
+    const buttons = [...row.split('<details class="more"')[0].matchAll(/<button class="act( primary)?" [^>]*data-label="([^"]*)"/g)].map((m) => m[2]);
     expect(buttons).toEqual(items[0].actions.map((a) => a.label));
     for (const b of buttons) expect(["Yes", "No", "Open"]).not.toContain(b);
     expect(row).toContain(`data-kind="${items[0].kind}"`);
@@ -255,4 +255,18 @@ test("an ask card and a stuck card for a critical item show the priority badge",
   expect(asksOf([], [{ ...issue(7), question: "Which?", priority: "critical" }]).map((a) => view.askRow(a)).join("")).toContain(badge);
   const stuck = { ...state, asks: [], stuck: [job({ name: "aleph-30", condition: "stuck", repo: "aleph", item: { id: 30, title: "t", priority: "critical" } })] };
   expect(view.renderNeeds(stuck)).toContain(badge);
+});
+
+test("an ask card and a stuck card keep their choices in a closed fold, and the head and the problem outside it", () => {
+  const h = withAttn({ ...state, asks: asksOf([held]) });
+  for (const row of rows(h)) {
+    if (!row.includes("choices")) continue;
+    const open = row.indexOf('<details class="cfold"');
+    expect(open).toBeGreaterThan(-1);
+    expect(row.slice(0, open + 30)).not.toMatch(/<details class="cfold"[^>]* open/);
+    expect(row.indexOf('class="choices"') > open || row.indexOf("choices") > open).toBe(true);
+    expect(row.indexOf('class="kind-tag"')).toBeLessThan(open);
+    expect(row.search(/class="(problem|situation)"/)).toBeLessThan(open);
+    expect(row.indexOf("<button")).toBeGreaterThan(open);
+  }
 });

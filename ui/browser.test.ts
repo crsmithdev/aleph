@@ -124,6 +124,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("ask rows: the button sits right of its text at 1280 px and under it at 720 px; deny reveals its input as Confirm", async () => {
     await page.go("#/");
     await page.until('document.querySelector("#view .choice .act")');
+    await page.ev('document.querySelectorAll("#view details.cfold").forEach((d) => { d.open = true; })');
     await page.width(1280);
     const geo = `(() => { const c = document.querySelector("#view .choice"); const t = c.querySelector(".choice-text").getBoundingClientRect(), b = c.querySelector(".act").getBoundingClientRect(); return { right: b.right > t.right - 1 && b.left >= t.right - 1, rowTop: b.top < t.bottom && b.bottom > t.top, under: b.top >= t.bottom - 1 }; })()`;
     const g = await page.ev<any>(geo);
@@ -135,6 +136,35 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('[document.querySelector("#view button.act[data-act=deny]").textContent, document.querySelector("#view button.act[data-act=deny]").closest(".choice").querySelector("input.reason").hidden]')).toEqual(["Confirm", false]);
     await page.reload();
   }, 30_000);
+
+  test("a folded ask card and a folded stuck card show no choice and stay within 3 lines plus the toggle; the fold opens in place and survives a refresh", async () => {
+    await page.go("#/");
+    await page.until('document.querySelector("#view .issue-row details.cfold")');
+    await page.width(1280);
+    const kinds = ['.issue-row:not(.stuck) details.cfold', '.issue-row.stuck details.cfold'];
+    for (const sel of kinds) {
+      if (!(await page.ev(`!!document.querySelector(${JSON.stringify("#view " + sel)})`))) continue;
+      const q = JSON.stringify("#view " + sel);
+      expect(await page.ev(`(() => { const d = document.querySelector(${q}); d.open = false; const b = d.querySelector(".act"); return !!b && b.offsetParent === null; })()`)).toBe(true);
+      // Height of the card: at most 3 line-heights of content, the meta row, the toggle and the padding.
+      const fits = await page.ev<boolean>(`(() => { const d = document.querySelector(${q}), c = d.closest(".issue-row"); const lh = parseFloat(getComputedStyle(c).lineHeight) || 20; const p = (n) => parseFloat(getComputedStyle(c)[n]) || 0; const t = d.querySelector("summary").getBoundingClientRect().height; const kids = [...c.children].filter((e) => e !== d); const body = kids.reduce((h, e) => h + e.getBoundingClientRect().height, 0); return body <= 4 * lh + 8 && c.getBoundingClientRect().height <= body + t + p("paddingTop") + p("paddingBottom") + 16; })()`);
+      expect(fits).toBe(true);
+      await page.ev(`document.querySelector(${q}).querySelector("summary").click()`);
+      expect(await page.ev(`(() => { const d = document.querySelector(${q}); const b = d.querySelector(".act"); return d.open && b.offsetParent !== null && b.getBoundingClientRect().top >= d.querySelector("summary").getBoundingClientRect().bottom - 1; })()`)).toBe(true);
+      const key = await page.ev<string>(`document.querySelector(${q}).dataset.keep`);
+      // A timed refresh (patched to 200 ms) re-renders the view; the open fold comes back open.
+      await page.ev("(() => { const real = window.setInterval; window.setInterval = (f, ms) => real(f, Math.min(ms, 200)); })()");
+      await page.go("#/issues");
+      await page.go("#/");
+      await page.until(`document.querySelector('#view details.cfold[data-keep="${key}"]')`);
+      expect(await page.ev(`document.querySelector('#view details.cfold[data-keep="${key}"]').open`)).toBe(false); // Closed by default.
+      await page.ev(`document.querySelector('#view details.cfold[data-keep="${key}"]').open = true`);
+      await page.ev('document.querySelector("#view > *").dataset.mark = "1"');
+      await page.until('!document.querySelector("#view > *").dataset.mark'); // A refresh ran.
+      expect(await page.ev(`document.querySelector('#view details.cfold[data-keep="${key}"]').open`)).toBe(true);
+      await page.reload();
+    }
+  }, 60_000);
 
   test("a land button in an ask row posts on the first click", async () => {
     await page.go("#/");

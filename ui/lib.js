@@ -215,7 +215,7 @@ const FIELDS = "input, textarea, select";
 function detailsKeys(root) {
   const seen = new Map();
   return [...root.querySelectorAll("details")].map((el) => {
-    const text = (el.querySelector("summary")?.textContent ?? "").trim();
+    const text = el.dataset?.keep ?? (el.querySelector("summary")?.textContent ?? "").trim();
     const n = seen.get(text) ?? 0;
     seen.set(text, n + 1);
     return [`${text}#${n}`, el];
