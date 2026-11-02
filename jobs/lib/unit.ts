@@ -100,8 +100,8 @@ on the branch: only commits leave the sandbox. Never switch to another branch
 and never push. If the previous run's land conflicted, merge \`origin/${main}\`
 into the branch and resolve the conflicts so that both changes survive. Nobody
 answers questions during the run: when you must choose, take the answer you
-would recommend and print a line \`DEFAULT: <question> -> <answer>\`. For work
-you find but do not do, print a line \`FOLLOWUP: <title>\`. A test that fails or times out and is not the goal's own, and passes again alone or on a rerun, is a flake: print one line \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\` for it. End the result with zero or more lines
+would recommend and print a line \`DEFAULT: <question> -> <answer>\`. \`DEFAULT:\` is for choices the Oracle does not settle. If you cannot meet a clause of the Oracle (for example, because the clause conflicts with another clause of the spec), stop: do not defer that clause, and make your last line \`QUESTION: <question that names the Oracle clause>\`. Do not use \`DEFAULT:\` or \`FOLLOWUP:\` for that clause. For work
+you find but do not do, print a line \`FOLLOWUP: <title>\`; a \`FOLLOWUP:\` must not cover anything the Oracle names. A test that fails or times out and is not the goal's own, and passes again alone or on a rerun, is a flake: print one line \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\` for it. End the result with zero or more lines
 \`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`, for durable
 facts about the repo or its tools that you learned and checked. If the goal already
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
