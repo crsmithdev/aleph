@@ -181,6 +181,7 @@ echo x >> "$FAKE_LOG/review-calls"
 case $prompt in
   *REVIEW:holdonce*) if [ -e "$FAKE_LOG/holdonce" ]; then echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}'; else touch "$FAKE_LOG/holdonce"; echo '{"type":"result","is_error":false,"result":"Looked.\\nVERDICT: hold the flag has no test"}'; fi ;;
   *REVIEW:noneonce*) if [ -e "$FAKE_LOG/noneonce" ]; then echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}'; else touch "$FAKE_LOG/noneonce"; echo '{"type":"result","is_error":true,"result":"API Error: 529"}'; fi ;;
+  *REVIEW:setaside*) echo '{"type":"result","is_error":false,"result":"SET-ASIDE: scenario 2 asks for more than the goal\\nVERDICT: pass"}' ;;
   *REVIEW:hold*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looked.\\nVERDICT: hold tests do not cover the new flag"}' ;;
   *REVIEW:none*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looks fine to me."}' ;;
   *REVIEW:error*) echo '{"type":"result","is_error":true,"result":"API Error: 529"}' ;;

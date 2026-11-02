@@ -3,7 +3,7 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with state.json, then `exit`, then the news.
  */
-import { seal } from "./author.ts";
+import { SCENARIOS, seal } from "./author.ts";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -223,11 +223,14 @@ async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<
 
 const HIDDEN_UNREADABLE = "hidden checks unreadable";
 
-/** The hidden files of the run's item, none for a run with no item, or null when the work store cannot be read: such a run must not pass without them. */
+/** The hidden test files of the run's item, none for a run with no item, or null when the work store cannot be read: such a run must not pass without them. Its scenarios go to the reviewer, not to a check. */
 function hiddenOf(repo: Repo, run: Run): Record<string, string> | null {
   const id = onOf(run);
   if (id === undefined) return {};
-  try { return readHidden(repo, id); } catch { return null; }
+  try {
+    const { [SCENARIOS]: _, ...tests } = readHidden(repo, id);
+    return tests;
+  } catch { return null; }
 }
 
 /** The checks on a land's squash commit: the commit goes in as a bundle. */
@@ -569,7 +572,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const goalId = onOf(run);
     let authorCost: number | undefined;
     if (repo.author && !prev && goalId !== undefined) {
-      phase("sealed checks");
+      phase("scenarios");
       authorCost = await seal(repo, goalId);
     }
     const argv = [workerCmd(), "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
@@ -886,10 +889,19 @@ const TESTS = `The diff changes tests. Judge each finding below against the goal
 when the goal does not call for the change, or the change weakens a check the
 goal keeps. A change the goal calls for passes.`;
 
-/** The reviewer's prompt: the instructions, the test findings if any, the goal and the diff. */
-export function reviewPrompt(name: string, spec: string, diff: string, findings: string[]): string {
+const SEALED = `The worker never saw these scenarios. Check each one by observing behaviour: write throwaway
+tests or scripts outside the repo's tracked files and run them. The diff and the branch's own tests are not
+evidence, because the worker wrote them. Be sceptical: do not talk yourself out of a defect you found.
+Hold when the branch fails a scenario that the goal requires. The hold reason goes to the worker: say what a
+user of the code sees that the goal does not allow, and do not quote or mention the scenarios. If a scenario
+asks for more than the goal or contradicts it, set it aside and add a line \`SET-ASIDE: <the scenario and why>\`
+before the VERDICT line.`;
+
+/** The reviewer's prompt: the instructions, the test findings if any, the sealed scenarios if any, the goal and the diff. */
+export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], scenarios = ""): string {
   const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";
-  return `${REVIEW.replace("%NAME%", name)}${tests}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
+  const sealed = scenarios ? `\n\n## Sealed scenarios\n\n${SEALED}\n\n${scenarios.trim()}` : "";
+  return `${REVIEW.replace("%NAME%", name)}${tests}${sealed}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
 }
 
 /**
@@ -906,7 +918,10 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const max = reviewDiffMax();
     const diff = whole.length <= max ? whole
       : `${git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out}\n\n${whole.slice(0, max)}\n\n(diff cut at ${max} of ${whole.length} characters; read the changed files in the working directory)`;
-    const text = reviewPrompt(run.name, spec, diff, findings);
+    const goal = onOf(run);
+    let scenarios = "";
+    try { scenarios = goal === undefined ? "" : readHidden(repo, goal)[SCENARIOS] ?? ""; } catch { return { reason: "reviewer: no verdict (the sealed scenarios are unreadable)", none: true }; }
+    const text = reviewPrompt(run.name, spec, diff, findings, scenarios);
     writeFileSync(join(folder, "review-prompt.md"), text);
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
@@ -914,6 +929,8 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const script = [
       "set -e", "exec 3>&1 1>&2", "git init -q .",
       `git fetch -q ../out/out.bundle ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}`, `git switch -q ${q(branch)}`,
+      // The scenarios need code that runs. A failed setup shows when the reviewer runs it, so it does not stop the review.
+      ...(scenarios ? [`{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`] : []),
       "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
     ].join("\n");
     const log = join(folder, "review.log");
@@ -933,6 +950,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     if (!o.ok) return none(o.line || `exit ${w.code}`);
     const v = reviewVerdict(o.result);
     if (!v) return none("no VERDICT line");
+    for (const aside of tagged(o.result, "SET-ASIDE")) note(repo, goal!, `sealed checks: the reviewer set aside: ${aside}`);
     return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
   } finally {
     removeRunFolder(rdir);
