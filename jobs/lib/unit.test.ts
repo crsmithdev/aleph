@@ -43,3 +43,19 @@ test("while a check holds the slot, another waits for it", async () => {
   await held;
   expect(await takeable()).toBe(true);
 });
+
+test("setup git settings stop the .gitmodules read; a real git error still shows", async () => {
+  const { mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
+  const { NO_SUBMODULES } = await import("./unit.ts");
+  const d = mkdtempSync(join(tmpdir(), "gm-"));
+  try {
+    mkdirSync(join(d, "src"));
+    const run = (script: string) => Bun.spawnSync(["bash", "-c", script], { cwd: d, stderr: "pipe" }).stderr.toString();
+    run("cd src && git init -q . && git -c user.name=a -c user.email=a@b commit -q --allow-empty -m x");
+    writeFileSync(join(d, ".gitmodules"), "");
+    chmodSync(join(d, ".gitmodules"), 0);
+    const set = NO_SUBMODULES.join(" && ");
+    expect(run(`git init -q . && ${set} && git fetch -q src HEAD:refs/heads/b`)).not.toContain(".gitmodules");
+    expect(run(`${set} && git fetch -q src nosuchref`)).toContain("couldn't find remote ref");
+  } finally { rmSync(d, { recursive: true, force: true }); }
+});

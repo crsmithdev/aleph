@@ -33,6 +33,8 @@ import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewerCmd, reviewSeconds, workerCmd } from "./settings.ts";
 
 export { git };
+/** srt write-protects .gitmodules with an unreadable placeholder; git warns when it reads it. These settings stop that read. */
+export const NO_SUBMODULES = ["git config fetch.recurseSubmodules false", "git config submodule.recurse false"];
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -584,7 +586,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const script = [
-      "set -e", "exec 3>&1 1>&2", "git init -q .",
+      "set -e", "exec 3>&1 1>&2", "git init -q .", ...NO_SUBMODULES,
       `git fetch -q ../in.bundle ${q(`+${main}:${main}`)} ${q(`+${FACTS_REF}:${FACTS_REF}`)}${prev ? ` ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}` : ""}`,
       prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`,
       ...repo.setup, "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
@@ -931,7 +933,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const script = [
-      "set -e", "exec 3>&1 1>&2", "git init -q .",
+      "set -e", "exec 3>&1 1>&2", "git init -q .", ...NO_SUBMODULES,
       `git fetch -q ../out/out.bundle ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}`, `git switch -q ${q(branch)}`,
       // The scenarios need code that runs. A failed setup shows when the reviewer runs it, so it does not stop the review.
       ...(scenarios ? [`{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`] : []),
