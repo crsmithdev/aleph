@@ -190,6 +190,12 @@ function stallLines(now: number, jobs?: Job[]): string[] {
   return lines;
 }
 
+/** The names a flake row stands for: one per test it names, or its check when it names none. */
+export function flakeNames(f: Flake): { kind: "test" | "check"; name: string }[] {
+  const tests = [...new Set(f.tests ?? [])];
+  return tests.length ? tests.map((name) => ({ kind: "test" as const, name })) : [{ kind: "check", name: f.check }];
+}
+
 /** The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, and flakes. `jobs` and `lists` are the caller's, when it has read them already. */
 export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {}): string[] {
   const lines: string[] = [];
@@ -204,8 +210,15 @@ export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {
   for (const b of Object.values(baselines())) if (!b.ok) lines.push(`health: ${b.repo} ${redLine(b)}`);
   for (const c of redCi()) lines.push(`health: ${ciLine(c)}`);
   const counts = new Map<string, number>();
-  for (const f of flakes()) if (now - Date.parse(f.at) < 7 * DAY) counts.set(`${f.repo} check ${f.check}`, (counts.get(`${f.repo} check ${f.check}`) ?? 0) + 1);
-  for (const [k, n] of counts) if (n >= 2) lines.push(`health: ${k} passed on rerun ${n} times in 7 days`);
+  for (const f of flakes()) {
+    if (!(now - Date.parse(f.at) < 7 * DAY)) continue;
+    for (const { kind, name } of flakeNames(f)) {
+      const k = `${f.repo} ${kind} ${name}`;
+      counts.set(k, (counts.get(k) ?? 0) + 1);
+    }
+  }
+  [...counts].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .forEach(([k, n]) => lines.push(`health: ${k} passed on rerun ${n} times in 7 days`));
   for (const repo of factoryRepos()) {
     const doc = lists.list(repo.key);
     const tracker = doc && flakeTracker(doc);

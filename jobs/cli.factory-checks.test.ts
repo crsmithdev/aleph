@@ -131,6 +131,49 @@ describe("a factory run's checks", () => {
       rmSync(join(base, "factory", "flaky.json"));
     }, 60_000);
 
+    describe("health lines by test name", () => {
+      const path = () => join(base, "factory", "flaky.json");
+      const rows = (specs: { repo?: string; tests?: string[] }[]) =>
+        writeFileSync(path(), JSON.stringify(specs.map((s, i) => ({ repo: s.repo ?? "fac", check: "tests", run: `r${i}`, at: new Date().toISOString(), ...(s.tests ? { tests: s.tests } : {}) }))));
+      const reruns = async () => (await aleph(["report"])).stdout.split("\n").filter((l) => l.includes("passed on rerun"));
+      const done = () => rmSync(path(), { force: true });
+
+      test("rows with tests count under the test name", async () => {
+        rows([{ tests: ["a.test.ts > one"] }, { tests: ["a.test.ts > one"] }]);
+        try { expect((await aleph(["report"])).stdout).toContain("health: fac test a.test.ts > one passed on rerun 2 times in 7 days"); } finally { done(); }
+      });
+
+      test("a row counts once for each test it names", async () => {
+        rows([{ tests: ["a.test.ts > one", "b.test.ts > two"] }, { tests: ["b.test.ts > two"] }]);
+        try {
+          const out = (await aleph(["report"])).stdout;
+          expect(out).toContain("health: fac test b.test.ts > two passed on rerun 2 times in 7 days");
+          expect(out).not.toContain("a.test.ts > one passed on rerun");
+        } finally { done(); }
+      });
+
+      test("at most 5 lines, most first", async () => {
+        const r: { tests: string[] }[] = [];
+        for (let i = 1; i <= 6; i++) for (let j = 0; j < i + 1; j++) r.push({ tests: [`t${i}`] });
+        rows(r);
+        try {
+          const l = await reruns();
+          expect(l).toHaveLength(5);
+          expect(l[0]).toContain("fac test t6 passed on rerun 7 times");
+          expect(l.join("\n")).not.toContain("fac test t1 ");
+        } finally { done(); }
+      });
+
+      test("two repos with the same test name make two lines", async () => {
+        rows([{ repo: "fac", tests: ["x"] }, { repo: "fac", tests: ["x"] }, { repo: "other", tests: ["x"] }, { repo: "other", tests: ["x"] }]);
+        try {
+          const l = await reruns();
+          expect(l.some((s) => s.includes("health: fac test x passed on rerun 2 times"))).toBe(true);
+          expect(l.some((s) => s.includes("health: other test x passed on rerun 2 times"))).toBe(true);
+        } finally { done(); }
+      });
+    });
+
     test("flake notes on a tracker make a health line; a repo with no tracker makes none", async () => {
       expect((await aleph(["report"])).stdout).not.toContain("flake notes in 7 days");
       const was = process.env.ALEPH_ISSUES;
