@@ -12,13 +12,13 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
+import { clearAsk, note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { endRun } from "./agent-run.ts";
-import { always, logAlways, normalizeAsk, type Ask } from "./ask.ts";
+import { always, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { factoryDir, factoryRepos as sandboxRepos, holders } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
 import { fetchOrigin, git, jobCommit } from "./git.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { allJobs, asked, isOpen, issue as issueOf, lastReal, markAsked, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isWorker, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
@@ -143,6 +143,7 @@ function restartReviews(act: Rescue): void {
 /** Take the safe default action for each stuck job and each killed review, one job at a time under its lock. */
 export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
   restartReviews(act);
+  await releaseEdited(act);
   const pending = (jobs: Job[]) => [...killed(jobs), ...holders(jobs)];
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
@@ -155,6 +156,46 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
       if (runs) await rescueJob(runs, act, land, checkMain);
     } catch (e: any) {
       factoryLog(`rescue of ${name} failed: ${e?.message ?? e}`);
+    } finally {
+      release();
+    }
+  }
+}
+
+/** The text of a goal that a run reads: an edit of any of these is a new spec. */
+const specOf = (item: issues.Issue): string => JSON.stringify([item.title, item.request, item.spec]);
+
+/**
+ * A run that ended with no commit and a question waits for a spec edit. When the goal's spec is no longer the one it asked
+ * about, the run is dropped and the Ask comes off the item, so the next dispatch starts a run on the edited spec.
+ */
+async function releaseEdited(act: Rescue): Promise<void> {
+  for (const runs of allJobs()) {
+    const last = lastReal(runs);
+    const r = last.run;
+    const was = readFile(last, "asked-spec");
+    if (was === undefined || !r.repo || !isOpen(runs) || !asked(last) || (r.condition !== "stuck" && r.condition !== "failed")) continue;
+    const repo = loadRegistry()[r.repo];
+    const question = (readFile(last, "asked") ?? "").trim();
+    const issue = issueOf(runs);
+    if (!repo || issue === undefined) continue;
+    const item = reader().item(repo.key, issue);
+    if (!item || issues.status(item) !== "open" || specOf(item) === was.trim()) continue;
+    const release = await lock(`rescue-${r.repo}-${r.name}`, rescueWaitMs());
+    if (!release) continue;
+    try {
+      const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
+      if (why) { factoryLog(`${r.name}: release after a spec edit failed (${why})`); continue; }
+      writeList(repo, `spec edit: release ${repo.key}-${issue}`, (doc) => {
+        const i = issues.find(doc, issue);
+        if (!i || i.fm.question !== question) return null;
+        clearAsk(i);
+        return true;
+      });
+      factoryLog(`${r.name}: the spec was edited; the run is dropped and the goal starts again`);
+      await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
+    } catch (e: any) {
+      factoryLog(`${r.name}: release after a spec edit failed: ${e?.message ?? e}`);
     } finally {
       release();
     }
@@ -281,9 +322,11 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
+  // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
+  const specQuestion = causeOf(r) === "no-commit" && (!!r.question || /^\s*QUESTION:/m.test(readFile(last, "result.md") ?? ""));
   const chris = async (question: string, ask: Ask) => {
-    // An Always rule to take the recommendation: Rerun drops the run, and the goal reruns.
-    if (ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
+    // An Always rule to take the recommendation: Rerun drops the run, and the goal reruns. Not for a run that asked a question.
+    if (!specQuestion && ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
       const why = await act.drop(name, question);
       if (!why) {
         logAlways("rescue", "recommended", `${repo.key}-${issue ?? name}`);
@@ -321,6 +364,13 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   }
 
   const noCommit = causeOf(r) === "no-commit";
+  if (specQuestion) {
+    const q = r.question || (readFile(last, "result.md") ?? "").split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1)?.slice("QUESTION:".length).trim() || reason;
+    const item = issue === undefined ? undefined : reader().item(repo.key, issue);
+    if (item) writeFileSync(join(last.folder, "asked-spec"), specOf(item) + "\n");
+    const text = `${name} ended with no commit and asked: ${q} The goal waits for a spec edit; the factory starts it again when you edit it. Or drop it.`;
+    return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.condition}`]));
+  }
   const found = noCommit ? foundDone(stuck) : null;
   const claim = noCommit ? alreadyMet(readFile(last, "result.md") ?? "") : null;
   const key = caseOf(r, !!found, claim);

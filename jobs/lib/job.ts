@@ -16,7 +16,7 @@ export { allJobs, isOpen };
 export type Job = Entry[];
 
 /** The files a run folder may hold that a reader of the job asks for. */
-export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "call.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "rescued" | "batch.json";
+export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "call.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "asked-spec" | "rescued" | "batch.json";
 
 /** A facts run belongs to the landed job but is not its state: names and states look past it. */
 const notFacts = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts") ?? j.at(-1)!;
