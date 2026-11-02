@@ -125,6 +125,21 @@ describe("item titles", () => {
   });
 });
 
+describe("GET /api/jobs/:name holds", () => {
+  test("carries the job's hold records and no other name's; [] without any", async () => {
+    const fdir = join(base, "factory-holds");
+    mkdirSync(fdir, { recursive: true });
+    const undo = withEnv({ ALEPH_FACTORY_DIR: fdir });
+    try {
+      expect((await (await get("/api/jobs/fac-9")).json()).holds).toEqual([]);
+      const mine = { at: ago(2), name: "fac-9", kind: "queue", text: "waits for fac-8" };
+      const theirs = { at: ago(1), name: "oth-1", kind: "queue", text: "waits" };
+      writeFileSync(join(fdir, "holds.jsonl"), [mine, theirs].map((r) => JSON.stringify(r)).join("\n") + "\n");
+      expect((await (await get("/api/jobs/fac-9")).json()).holds).toEqual([mine]);
+    } finally { undo(); }
+  });
+});
+
 describe("GET /api/jobs/:name", () => {
   test("a job whose issue waits names its blockers, and the page shows them; a closed issue waits on nothing", async () => {
     let refs: number[] = [];

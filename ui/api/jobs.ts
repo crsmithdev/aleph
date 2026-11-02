@@ -5,7 +5,7 @@ import { git } from "../../jobs/lib/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { isWorker, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
-import { changedLinesOf } from "../../jobs/lib/factory-status.ts";
+import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
@@ -60,6 +60,8 @@ export interface JobDetail extends Job {
   checkedBy?: string[]; look?: number;
   /** The item's spec, from the store. */
   spec?: string;
+  /** Why the job waited: its hold records, oldest first. */
+  holds: HoldRecord[];
   /** For a part: its issue, its place among the issue's parts, and the part after it. */
   parent?: { id: string; href: string; n: number; of: number; next?: { id: string; href: string } };
 }
@@ -159,7 +161,7 @@ export const routes: Routes = {
     const v = view(runs);
     const fit = await currentFit().catch(() => null);
     const projector = jobProjector();
-    const detail: JobDetail = { ...projector.toJob(runs, v), runs: runInfos(runs, fit) };
+    const detail: JobDetail = { ...projector.toJob(runs, v), runs: runInfos(runs, fit), holds: readHolds([projector.toJob(runs, v).name]) };
     const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
     if (blockers.length) detail.blockers = blockers;
     annotate([detail], fit);

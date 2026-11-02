@@ -22,6 +22,7 @@ import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, type NewIssue } from "../state.ts";
 import { filed } from "./speed.ts";
+import { readHolds } from "../../jobs/lib/factory-status.ts";
 
 /** An issue or goal id from a route: `7` or `7.1`; null for anything else. */
 const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
@@ -122,6 +123,8 @@ function detail(params: Record<string, string>, url: URL): Response {
     filed: filed().issue.get(`${repo.key}-${ref}`) ?? null,
     runs: all.flat().filter((e) => onThis(onOf(e.run))).map(({ run: r }) => ({ kind: r.kind, name: r.name, on: r.on, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
   };
+  // The hold records of every job name the answer shows.
+  const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...goals.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);
   const up = parentOf(doc, item);
   const parent = up ? `${repo.key}-${todos.refOf(up)}` : null;
 
@@ -149,7 +152,7 @@ function detail(params: Record<string, string>, url: URL): Response {
     ask = attend({ runs: [], issues: [c] }, {}, []).items[0];
   }
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {

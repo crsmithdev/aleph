@@ -137,6 +137,19 @@ describe("GET /api/issues/:repo/:n", () => {
     expect(g.jobs.map((j: any) => j.name)).toEqual(["on-2"]);
   });
 
+  test("carries the hold records of the job names it shows", async () => {
+    const mk = (name: string) => ({ at: new Date().toISOString(), name, kind: "queue", text: `${name} waits` });
+    const shown = [mk("on-4"), mk("goal-4-1")], other = mk("on-2");
+    const dir = join(base, "factory");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "holds.jsonl"), [...shown, other].map((r) => JSON.stringify(r)).join("\n") + "\n");
+    try {
+      const d = await getJson("/api/issues/fac/4");
+      expect(d.holds).toEqual(shown);
+    } finally { rmSync(join(dir, "holds.jsonl"), { force: true }); }
+    expect((await getJson("/api/issues/fac/4")).holds).toEqual([]);
+  });
+
   test("lists the job and the trailer commit, not the prose one", async () => {
     const d = await getJson("/api/issues/fac/1");
     expect(d.title).toBe("first goal");
