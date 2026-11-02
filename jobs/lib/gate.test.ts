@@ -73,6 +73,20 @@ test("the reviewer prompt names a deleted test; without findings it has no test 
   expect(p).toContain("Do not run the full test suite");
 });
 
+test("the reviewer prompt asks for a pass or fail mark on every clause, requirement and scenario, and every failure in the hold", () => {
+  const p = reviewPrompt("n", "goal", "diff", []);
+  expect(p).toContain("each Oracle clause");
+  expect(p).toContain("each requirement in the Goal section");
+  expect(p).toContain("each sealed scenario");
+  expect(p).toContain("CHECK: pass|fail <clause>: <what was observed>");
+  expect(p).toContain("Before the VERDICT");
+  expect(p).toContain("names every");
+  expect(p).toContain("not only the first one");
+  const s = reviewPrompt("n", "goal", "diff", [], "1. a scenario");
+  expect(s).toContain("do not quote or mention the scenarios");
+  expect(s).toContain("marked by its number only");
+});
+
 test("new code and a new test pass the gate", () => {
   expect(findings(() => { put("src/y.ts", "export const y = 2;\n"); put("src/y.test.ts", 'test("y", () => {});\n'); })).toEqual([]);
 });
@@ -115,6 +129,7 @@ test("the reviewer's verdict is its last VERDICT line", () => {
   expect(verdict("VERDICT: maybe")).toBeNull();
   expect(verdict("VERDICT: holdup")).toBeNull();
   expect(verdict("")).toBeNull();
+  expect(verdict("CHECK: pass x: ok\nCHECK: fail y: bad\nCHECK: fail scenario 2: bad\nVERDICT: hold a; b")).toEqual({ pass: false, reason: "a; b" });
 });
 
 test("replyOf reads the text and the cost of a result event; other stdout is the text", () => {

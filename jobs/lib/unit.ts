@@ -895,8 +895,15 @@ Judge whether the diff does what the issue asks, whether the tests cover it, and
 whether it breaks anything. Do not change files. The factory already ran the repo's checks on this branch and
 they passed. Do not run the full test suite or repeat-run loops: you have a time
 box, and a long command ends it with no verdict. Run only a few targeted commands
-of your own, each ending in well under a minute. ${FOREGROUND} End with one line:
-\`VERDICT: pass\` or \`VERDICT: hold <one-sentence reason>\`.`;
+of your own, each ending in well under a minute. ${FOREGROUND}
+
+Check the whole branch before you give a verdict; do not stop at the first defect. Before the VERDICT
+line, write one line for each Oracle clause of the spec and each requirement in the Goal section, and
+one for each sealed scenario if there are any, and mark each pass or fail:
+\`CHECK: pass|fail <clause>: <what was observed>\`. A sealed scenario is marked by its number only
+(\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Then end with one line:
+\`VERDICT: pass\` when every line passed, or \`VERDICT: hold <reason>\`. The hold reason names every
+failure in one line, separated by \`; \`, and not only the first one.`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
 when the goal does not call for the change, or the change weakens a check the
