@@ -16,6 +16,8 @@ export interface AskItem {
   actions: Action[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
+  /** The priority of the issue, goal or run's item it is about; none for a proposal. */
+  priority?: string;
   /** An awaiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
   /** An awaiting run: the goal or issue it is on. */ on?: string;
   agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
@@ -204,7 +206,7 @@ function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
   };
 }
 
-function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string): AskItem {
+function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string, priority?: string): AskItem {
   const actions = actionsFor(reason, c);
   const r = ASK_REASONS[reason];
   const problem = PROBLEM[reason](c);
@@ -212,7 +214,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   return {
     key, reason, kind: kindOf(reason, kind), id: c.id, href, title, problem, situation: stored || problem, explained: !!stored, actions,
     ...(c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
-    details: detailsFor(c), ...(repo ? { repo } : {}),
+    details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };
 }
 
@@ -230,8 +232,8 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, always: Always = 
   };
   const rank: Record<string, number> = { "held-path": 0, review: 1 };
   const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => (rank[a.ask!.reason] ?? 2) - (rank[b.ask!.reason] ?? 2));
-  for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo, j.ask!.kind));
-  for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+(?:\.\d+)?$)/)[0], i.askKind));
+  for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo, j.ask!.kind, j.item?.priority));
+  for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+(?:\.\d+)?$)/)[0], i.askKind, i.priority));
   for (const l of lessons) {
     const reason = `proposal-${l.kind ?? "skill"}`;
     if (ASK_REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));

@@ -224,3 +224,16 @@ test("mountStatus loads the window of the address", async () => {
   resetSpeed();
   delete g.localStorage; delete g.location; delete g.history;
 });
+
+test("a critical item shows the priority badge in Queued, Running (card and part) and Latest done", () => {
+  const badge = '<span class="badge stuck">critical</span>';
+  const lanes = view.renderLanes({ ...state,
+    queued: [{ repo: "aleph", id: 9, title: "q", why: "", kind: "ready", priority: "critical" }],
+    runningIssues: [{ id: "aleph-8", title: "r", href: "#/issues/aleph/8", stage: "building", priority: "critical", of: { n: 1, m: 1 },
+      parts: [{ id: "aleph-8.1", title: "p", href: "#/issues/aleph/8.1", stage: "building", priority: "critical" }] }],
+    done: [{ ...done(5), priority: "critical" }] });
+  expect(lanes.match(/<section id="lane-queued"[^]*?<\/section>/)![0]).toContain(badge);
+  const run = lanes.match(/<section id="lane-running"[^]*?<\/section>/)![0];
+  expect(run.split(badge).length - 1).toBe(2);
+  expect(lanes.match(/<section id="lane-done"[^]*?<\/section>/)![0]).toContain(badge);
+});

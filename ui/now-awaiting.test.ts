@@ -248,3 +248,10 @@ test("the deny and answer inputs render hidden", () => {
     for (const i of inputs) expect(i).toMatch(/\shidden/);
   }
 });
+
+test("an ask card and a stuck card for a critical item show the priority badge", () => {
+  const badge = '<span class="badge stuck">critical</span>';
+  expect(asksOf([], [{ ...issue(7), question: "Which?", priority: "critical" }]).map((a) => view.askRow(a)).join("")).toContain(badge);
+  const stuck = { ...state, asks: [], stuck: [job({ name: "aleph-30", condition: "stuck", repo: "aleph", item: { id: 30, title: "t", priority: "critical" } })] };
+  expect(view.renderNeeds(stuck)).toContain(badge);
+});

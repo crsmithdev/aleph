@@ -47,6 +47,7 @@ beforeAll(() => {
   restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_DAY_CAP: "12", ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting goal" ? { spec: "Do it." } : {});
+    add(doc, "urgent goal", { spec: "Do it first.", priority: "critical" });
     return true;
   }, true);
 
@@ -66,6 +67,16 @@ afterAll(() => {
 const runAsks = (s: ReturnType<typeof state>) => s.asks.filter((a) => a.key.startsWith("run:"));
 
 describe("state", () => {
+  test("Queued lists a critical goal before a medium one with a lower number; items carry priority, none reads medium", () => {
+    const s = state(now);
+    const ids = s.queued.map((q) => q.id);
+    expect(ids.indexOf(7)).toBeGreaterThanOrEqual(0);
+    expect(ids.indexOf(7)).toBeLessThan(ids.indexOf(2));
+    expect(s.queued.find((q) => q.id === 7)?.priority).toBe("critical");
+    expect(s.queued.find((q) => q.id === 2)?.priority).toBe("medium");
+    expect(s.done.every((d) => d.priority === "medium")).toBe(true);
+    expect(s.stuck[0].item?.priority).toBe("medium");
+  });
   test("sorts the runs into their lists", () => {
     const before = readFileSync(join(jobsDir, "20261027-000001-a", "state.json"), "utf8");
     const s = state(now);
@@ -79,7 +90,7 @@ describe("state", () => {
     // Delivered is the latest lands, not only today's: fac-6 landed 30 hours ago.
     expect(s.delivered.map((j) => j.name)).toEqual(["fac-5", "fac-6"]);
     expect(s.delivered[0].commitUrl).toBe("https://github.com/chris/demo/commit/abcdef1234567");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", stage: "queued", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
     expect(s.factory.runsToday).toBe(4);
     expect(s.factory.dayCap).toBe(12);
     expect(s.factory.paused).toBe(false);
@@ -301,7 +312,7 @@ describe("a planner run", () => {
     run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("plan-fac-2");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", stage: "queued", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
     for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
   });
 });
