@@ -204,6 +204,7 @@ if printf '%s' "$prompt" | grep -q '^# Merge '; then
 fi
 case $action in
   commit\\ *) f=\${action#commit }; mkdir -p "$(dirname "$f")"; echo "$RANDOM" > "$f"; git add "$f"; git commit -qm "add $f" ;;
+  commit-all\\ *) for f in \${action#commit-all }; do mkdir -p "$(dirname "$f")"; echo "$RANDOM" > "$f"; git add "$f"; done; git commit -qm "add \${action#commit-all }" ;;
   commit-big\\ *) f=\${action#commit-big }; for i in $(seq 1 60); do echo "line $i of the big file"; done > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-fixed\\ *) f=\${action#commit-fixed }; echo same > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-result-and\\ *) f=\${action#commit-result-and }; echo "$RANDOM" > result.md; echo "$RANDOM" > "$f"; git add result.md "$f"; git commit -qm "result and $f" ;;

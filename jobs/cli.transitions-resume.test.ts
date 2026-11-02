@@ -56,22 +56,23 @@ describe("every transition dispatches at once", () => {
     process.env.ALEPH_RESCUE = "off";
     try {
       await (async () => {
-    const s = track(await add("ends stuck", "commit FAIL", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
+    // gate/x makes the gate check run first, before the tests check that fails on FAIL.
+    const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
     await until(() => runs(s).some((r) => ["stuck", "failed"].includes(state(r).condition)));
     const b = track(await add("held behind it", open("hold-b"), ["--labels", "goal"]));
     await Bun.sleep(1500);
     expect(started()).toEqual([`fac-${s}`]);
     // The recheck is a live run, so the hold no longer counts; the dispatch must not wait for its end.
-    const slow = join(base, "slowbase");
-    writeFileSync(slow, "");
+    const hold = join(base, "gate-hold");
+    writeFileSync(hold, "");
     try {
-      // The slow check keeps the recheck live until its dispatch has started the goal. A loaded dispatch that boots after the recheck ended meets the hold again.
+      // The gate check holds the recheck live until its dispatch has started the goal. A loaded dispatch that boots after the recheck ended meets the hold again.
       const recheck = aleph(["recheck", `fac-${s}`], on());
       await until(() => started().includes(`fac-${b}`));
-      rmSync(slow, { force: true });
+      rmSync(hold, { force: true });
       expect((await recheck).code).toBe(1);
     } finally {
-      rmSync(slow, { force: true });
+      rmSync(hold, { force: true });
     }
       })();
     } finally {

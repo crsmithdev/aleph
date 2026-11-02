@@ -143,6 +143,8 @@
       }
     }
     if (route !== shown) return;  // the reader moved on while this loaded
+    // The reader armed a button while this loaded: the caller's check came too early, and the next refresh catches up.
+    if (!first && $("view").querySelector("button.act.ask")) return;
     // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
     const saved = first ? null : recordState($("view"));
     // Keyed <details> also keep their open state by data-keep.

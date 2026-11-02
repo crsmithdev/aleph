@@ -108,6 +108,8 @@ beforeAll(() => {
     ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_FIREFIGHTER_CMD: join(base, "fake"), FF_DIR: base,
     ALEPH_DISPATCH: "off", SIDETONE_TELL_URL: `http://127.0.0.1:${server.port}/tell`,
     XDG_RUNTIME_DIR: join(base, "run"),
+    // Not the factory's ~/.aleph/sandbox: a concurrent copy of this file names its land folder the same in the same second, and removes it.
+    ALEPH_SANDBOX_DIR: join(base, "sandbox"),
   });
 });
 afterAll(() => { server.stop(true); rmSync(base, { recursive: true, force: true }); });

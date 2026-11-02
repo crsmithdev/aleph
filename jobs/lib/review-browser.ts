@@ -14,7 +14,7 @@
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { closeSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -75,15 +75,16 @@ export function changedViews(files: string[], origin: string): string[] {
 export interface UiServer { url: string; stop: () => Promise<void> }
 
 /**
- * Start `bun ui/server.ts` in `dir` on a free port, outside the sandbox, with git on its PATH, and wait until
- * the port answers. Throws, with the server gone, when it exits or does not answer within `waitMs`.
+ * Start `bun ui/server.ts` in `dir` on port 0, outside the sandbox, with git on its PATH, and wait until
+ * it prints its URL and the URL answers. The kernel picks the port, so no other process can take it
+ * between a probe and the bind. Throws, with the server gone, when it exits or does not answer within `waitMs`.
  */
 export async function startUiServer(dir: string, log: string, env: Record<string, string | undefined>, waitMs = 30_000): Promise<UiServer> {
-  const port = await freePort();
+  const from = existsSync(log) ? statSync(log).size : 0;
   const fd = openSync(log, "a");
   let child: ReturnType<typeof spawn>;
   try {
-    child = spawn(process.execPath, ["ui/server.ts", "--port", String(port)], { cwd: dir, env, stdio: ["ignore", fd, fd] });
+    child = spawn(process.execPath, ["ui/server.ts", "--port", "0"], { cwd: dir, env, stdio: ["ignore", fd, fd] });
   } finally { closeSync(fd); }
   const gone = new Promise<void>((ok) => { child.once("exit", () => ok()); child.once("error", () => ok()); });
   const stop = async () => {
@@ -92,13 +93,16 @@ export async function startUiServer(dir: string, log: string, env: Record<string
     await Promise.race([gone, Bun.sleep(5000)]);
     if (child.exitCode === null && child.signalCode === null) { child.kill("SIGKILL"); await gone; }
   };
-  const url = `http://127.0.0.1:${port}`;
+  // The URL line this child printed: the log may hold lines of an earlier server, so read from where it ended.
+  const printed = () => readFileSync(log, "utf8").slice(from).match(/^http:\/\/127\.0\.0\.1:(\d+)\/$/m)?.[1];
   try {
     const end = Date.now() + waitMs;
     for (;;) {
       if (child.exitCode !== null || child.signalCode !== null) throw new Error(`ui server exited: ${tail(log, 5)}`);
-      if (await fetch(`${url}/`, { signal: AbortSignal.timeout(2000) }).then((r) => r.ok, () => false)) return { url, stop };
-      if (Date.now() > end) throw new Error(`ui server did not answer on port ${port}`);
+      const port = printed();
+      const url = port && `http://127.0.0.1:${port}`;
+      if (url && await fetch(`${url}/`, { signal: AbortSignal.timeout(2000) }).then((r) => r.ok, () => false)) return { url, stop };
+      if (Date.now() > end) throw new Error(port ? `ui server did not answer on port ${port}` : "ui server printed no URL");
       await Bun.sleep(100);
     }
   } catch (e) {

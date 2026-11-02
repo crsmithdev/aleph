@@ -99,7 +99,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("a timed refresh re-renders, except over an armed button", async () => {
     // Refresh every 200 ms: the shell reads the global setInterval when the route starts.
-    await page.ev("(() => { const real = window.setInterval; window.setInterval = (f, ms) => real(f, Math.min(ms, 200)); })()");
+    // Each fetch waits 300 ms, so a refresh is in flight when the button is armed: its answer must not render over it.
+    await page.ev("(() => { const real = window.setInterval; window.setInterval = (f, ms) => real(f, Math.min(ms, 200)); const rf = window.fetch; window.fetch = (...a) => new Promise((r) => setTimeout(r, 300)).then(() => rf(...a)); })()");
     await page.go("#/issues");
     await page.go("#/");
     const mark = 'document.querySelector("#view > *").dataset.mark = "1"';

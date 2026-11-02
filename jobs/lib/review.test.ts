@@ -27,10 +27,10 @@ beforeAll(() => {
   mkdirSync(join(repo, "ui/views"), { recursive: true });
   writeFileSync(join(repo, "ui/views/status.js"), "export const view = 1;\n");
   writeFileSync(join(repo, "ui/server.ts"), `import { appendFileSync, existsSync } from "node:fs";
-const port = Number(process.argv[process.argv.indexOf("--port") + 1]);
-appendFileSync(${JSON.stringify(join(base, "server-mark"))}, port + "\\n");
+const s = Bun.serve({ hostname: "127.0.0.1", port: Number(process.argv[process.argv.indexOf("--port") + 1]), fetch: () => Response.json({ pid: process.pid, ppid: process.ppid, port: s.port, merged: existsSync("ui/views/status.js"), git: Bun.spawnSync(["git", "--version"]).exitCode === 0 }) });
+appendFileSync(${JSON.stringify(join(base, "server-mark"))}, s.port + "\\n");
 appendFileSync(${JSON.stringify(join(base, "server-env"))}, JSON.stringify(Object.keys(process.env)) + "\\n");
-Bun.serve({ hostname: "127.0.0.1", port, fetch: () => Response.json({ pid: process.pid, ppid: process.ppid, port, merged: existsSync("ui/views/status.js"), git: Bun.spawnSync(["git", "--version"]).exitCode === 0 }) });
+console.log(\`http://127.0.0.1:\${s.port}/\`);
 `);
   sh(repo, "git", "add", "."); sh(repo, "git", "commit", "-qm", "view");
   sh(repo, "git", "switch", "-q", "main");
