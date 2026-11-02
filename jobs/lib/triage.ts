@@ -112,6 +112,8 @@ export function prompt(repo: Repo, item: issues.Issue): string {
 
 # Issue ${repo.key}-${item.id}: ${item.title}
 
+Source: ${String(item.fm.source ?? "").trim() || "not recorded"}
+
 ${item.request.trim() || "(no text)"}
 ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}
 # Open issues of ${repo.key}
@@ -137,6 +139,12 @@ Reply with one JSON object and nothing else, with one of these routes:
 - {"route": "ask", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "after": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
 
 Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "build" with "after" set to it.
+
+Test-only follow-ups: when the issue's source is \`worker\` (a follow-up a factory worker filed, not one Chris filed) and all it asks for is one of these, return "close" with the reason "test-only follow-up":
+- a new or stronger test of behaviour that works today;
+- a rerun of a test or check in another environment, such as a browser test where Chrome starts;
+- a screenshot, or a measurement with no change behind it.
+A worker follow-up that names a defect (wrong behaviour, a hole in a gate, a bug) still builds, even when its oracle is a test: a gate hole is a defect, so it is a "build". Issues whose source is not \`worker\` are not covered by this rule.
 
 Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "build" (with "after" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
 - {"route": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.

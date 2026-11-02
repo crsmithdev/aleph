@@ -407,6 +407,29 @@ describe("triage at once", () => {
   });
 });
 
+test("the prompt closes test-only worker follow-ups, and only those", () => {
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: { source: "worker" } } as unknown as issues.Issue);
+  // The rule: a close with this reason, for a worker issue whose ask is a test, a rerun or a screenshot.
+  expect(p).toContain('return "close" with the reason "test-only follow-up"');
+  expect(p).toContain("when the issue's source is `worker`");
+  expect(p).toContain("a new or stronger test of behaviour that works today");
+  expect(p).toContain("a rerun of a test or check in another environment");
+  expect(p).toContain("a screenshot, or a measurement with no change behind it");
+  // It does not cover a worker follow-up that names a defect, nor issues from other sources.
+  expect(p).toContain("names a defect");
+  expect(p).toContain("a gate hole is a defect");
+  expect(p).toContain("Issues whose source is not `worker` are not covered by this rule.");
+});
+
+test("the prompt names the issue's source, so the test-only rule can tell a worker follow-up", () => {
+  const worker = prompt(repo, { id: 7, title: "Add a test", request: "", spec: "", notes: [], fm: { source: "worker" } } as unknown as issues.Issue);
+  const chris = prompt(repo, { id: 8, title: "Fix it", request: "", spec: "", notes: [], fm: { source: "chris" } } as unknown as issues.Issue);
+  const bare = prompt(repo, { id: 9, title: "Old", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(worker).toContain("\nSource: worker\n");
+  expect(chris).toContain("\nSource: chris\n");
+  expect(bare).toContain("\nSource: not recorded\n");
+});
+
 test("the prompt keeps how-to-build questions away from Chris and asks him in plain words", () => {
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("Never ask Chris about how to build it");
