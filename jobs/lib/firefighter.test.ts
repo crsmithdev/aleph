@@ -7,6 +7,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { areasOf, askOf, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import type { Ask } from "./ask.ts";
 import { firefighterStep } from "./factory.ts";
+import { layout } from "./layout.ts";
 import { applyActions, defaultPorts, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
 
@@ -481,10 +482,12 @@ test("a flake action notes the repo's flake tracker, makes it when missing, file
   expect(log()).toContain(`firefighter: did flake ${key}: a.test.ts > t: timed out`);
 });
 
-test("prompt names the flake action and no longer files every follow-up with add", () => {
+test("prompt names the flake action and offers add only with a red event", () => {
   const p = prompt([]);
   expect(p).toContain('{"do": "flake"');
-  expect(p).toContain("never an `add`");
+  expect(p).not.toContain('{"do": "add"');
+  expect(p).not.toContain("with add");
+  expect(prompt([{ key: "ci:r:abc", kind: "red", repo: key, line: "r CI red" }])).toContain('{"do": "add"');
   expect(p).not.toContain("File every follow-up you find as an issue");
 });
 
@@ -510,4 +513,21 @@ test("a close action drops the open job with already-met", async () => {
   reply([{ do: "close", repo: key, n: 1, note: "met on main" }]);
   await firefighterStep(ports());
   expect(dropped.map((d) => d.fate)).toEqual(["already-met"]);
+});
+
+test("an add for a red main files a high priority issue naming the cause; without a red main it is refused", async () => {
+  fresh([{ title: "other" }]);
+  const add = { do: "add" as const, repo: key, title: "Fix ui/browser.test.ts:172 after 77803ea reordered Queued", body: "The test reads the first Queued row." };
+  const none = await applyActions([add], ports());
+  expect(none.refused.length).toBe(1);
+  expect(readList({ key })!.items.length).toBe(1);
+  mkdirSync(layout().factory, { recursive: true });
+  writeFileSync(join(layout().factory, "ci.json"), JSON.stringify({ [key]: { repo: key, ok: false, sha: "77803ea", url: "u", since: "2026-11-02T17:15:00Z", sinceSha: "77803ea4c", runs: 1 } }));
+  const f = await applyActions([add, add], ports());
+  expect(f.applied.length).toBe(2);
+  const items = readList({ key })!.items;
+  expect(items.length).toBe(2);
+  const it = items.find((i) => i.title === add.title)!;
+  expect(it.fm.priority).toBe("high");
+  expect(it.notes.join("\n")).toContain("still red");
 });

@@ -179,6 +179,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
   const handedRule = handedReasons.length
     ? `\n- Chris has handed these reasons to you: ${handedReasons.join(", ")}. Decide every event marked handed yourself: land, drop, answer, edit-goal or close, by the rules above; do not send it back to Chris.`
     : "";
+  const red = events.some((e) => e.kind === "red");
   return `You are the factory's firefighter. You read what went wrong and say what to do; the code does it. You have read-only tools (Read, Grep, Glob, and Bash for \`aleph jobs\`, \`aleph issue show|list\`, \`aleph report\`, \`git log|show|diff\`). Change nothing yourself.
 
 # The rules
@@ -187,7 +188,8 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - Drop a run a reviewer sent back, with the reviewer's reason as the drop's reason: it becomes the next run's note.
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: answer with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
-- File a follow-up as an issue with add, except a flaky, slow or timing-out test that is not the run's own goal: that is a \`flake\` action, never an \`add\`. The code adds it as a note on the repo's flake tracker; Chris picks from that issue which flakes get a goal.
+- The firefighter files no follow-up issues. A flaky, slow or timing-out test that is not the run's own goal is a \`flake\` action: the code adds it as a note on the repo's flake tracker; Chris picks from that issue which flakes get a goal.${red ? `
+- A red main is the one case for an issue: name the cause (the commit and the test or check that fails and why) in an \`add\` for that repo, with a title and a body that says what to change. The code files it as a high priority issue; the event is not looked at again, so without it the red stays unfixed. Use \`tell\` only to add words to it.` : ""}
 - On a drop, set \`fate\` to already-met when the goal is met on main, and to duplicate when another goal did the work.
 - When a run cannot pass until another open goal lands, drop it with \`after\` set to that goal, or use edit-goal with \`after\`. A note or a drop reason alone does not stop a rerun.
 - When you answer an Ask on an item whose \`after\` is done or wrong, set \`after\` to the open goals that really block it.
@@ -202,8 +204,7 @@ Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action o
 - {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"], "fate": "optional: already-met when the goal is met on main, duplicate when another goal did the work"}
 - {"do": "close", "repo": "<repo>", "n": <issue number>, "note": "<why the goal is already met>"}
 - {"do": "note", "repo": "<repo>", "n": <issue number>, "text": "<note>"}
-- {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
-- {"do": "flake", "repo": "<repo>", "text": "<test file> > <test name>: <what was seen>"}
+${red ? `- {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}\n` : ""}- {"do": "flake", "repo": "<repo>", "text": "<test file> > <test name>: <what was seen>"}
 - {"do": "answer", "repo": "<repo>", "n": <issue number>, "note": "<the decision>", "after": ["<optional <repo>-<n>.<k>: the open goals it really waits for>"]}
 - {"do": "edit-goal", "repo": "<repo>", "n": <issue number>, "body": "<the new goal body, optional>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"]}
 - {"do": "tell", "text": "<one sentence for Chris>"}
@@ -282,8 +283,17 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (a.do === "tell") return { applied: describe(a) };
   const repo = repoOf(a.repo);
   if (!repo) return { refused: `${describe(a)}: ${a.repo} is not a factory repo` };
-  // Chris turned this off until the inbox of aleph-826: the firefighter files no issue.
-  if (a.do === "add") return { refused: `${describe(a)}: the firefighter files no issues; use tell` };
+  // Chris turned off follow-up issues until the inbox of aleph-826, but a red main must reach a fix: an add is filed only for a repo whose main is red now.
+  if (a.do === "add") {
+    const red = redCi().some((c) => c.repo === repo.key) || redBaselines().some((b) => b.repo === repo.key);
+    if (!red) return { refused: `${describe(a)}: the firefighter files no issues except for a red main; use tell` };
+    const w = store.writeList(repo, "todo: red main", (doc) => {
+      const same = doc.items.find((i) => i.title === a.title && issues.status(i) === "open");
+      if (same) { issues.note(same, `firefighter: still red: ${a.body}`); return same.id; }
+      return issues.add(doc, a.title, { priority: "high", labels: ["red-main"], spec: a.body || a.title }).id;
+    }, true);
+    return w ? { applied: `${describe(a)} (${repo.key}-${w.value})` } : { refused: `${describe(a)}: no issue written` };
+  }
   if (a.do === "flake") {
     const r = store.noteFlake(repo, `firefighter: ${a.text}`);
     return typeof r === "string" ? { refused: `${describe(a)}: ${r}` } : { applied: `${describe(a)} (${repo.key}-${r.id})` };
