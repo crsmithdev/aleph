@@ -114,6 +114,16 @@ describe("drop", () => {
     expect(await refused(() => drop("x"))).toBe("no open job named x");
   });
 
+  test("a fate is written beside the cause; a drop with no fate writes no fate key", async () => {
+    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, reason: "no commit" });
+    await drop("x", { reason: "not needed", quiet: true, fate: "already-met" });
+    const r = readRun(folder)!;
+    expect([r.condition, r.fate, r.cause]).toEqual(["dropped", "already-met", "no-commit"]);
+    const other = run("20261028-000002-y-agent", "20261028-000002-y-agent", { name: "y", repo: undefined, reason: "no commit" });
+    await drop("y", { quiet: true });
+    expect("fate" in readRun(other)!).toBe(false);
+  });
+
   test("with no reason the reason is Chris's", async () => {
     run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined });
     expect((await drop("x")).reason).toBe("dropped by Chris");

@@ -7,7 +7,7 @@ import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
-import { failedCheckOf, type Cause } from "./outcome.ts";
+import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
 import { checkSlots } from "./settings.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
@@ -29,6 +29,8 @@ export interface Run {
   cause?: Cause;
   /** The cause `check`: the check's name. */
   checkName?: string;
+  /** What a drop means; `cause` says why the run stopped. Only a drop writes it. */
+  fate?: Fate;
   /** A run from before `cause`: a drop set this when the run had ended with no commit. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;

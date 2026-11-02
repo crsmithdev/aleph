@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
 import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
-import { causeOf, failedCheckOf } from "./outcome.ts";
+import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git } from "./unit.ts";
 import { agentOf, landTerms, removeBranch } from "./landing.ts";
@@ -293,7 +293,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
  * `aleph drop`: stop the job's live runs, take its branch, and mark it dropped. With `quiet`,
  * the factory's own drop: it writes the issue note and the news itself, and its dispatch goes on.
  */
-export async function drop(name: string, a: { reason?: string; quiet?: boolean } = {}): Promise<{ job: string; name: string; condition: "dropped"; reason: string }> {
+export async function drop(name: string, a: { reason?: string; quiet?: boolean; fate?: Fate } = {}): Promise<{ job: string; name: string; condition: "dropped"; reason: string }> {
   checkName(name);
   const reason = a.reason || "dropped by Chris";
   const runs = openJob(name) ?? refuse(`no open job named ${name}`);
@@ -320,7 +320,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean }
     for (const e of new Set([...live, last])) {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
       // The drop replaces the sentence, so a run that has only the sentence gets its cause now.
-      updateRun(e.folder, { cause: causeOf(e.run), checkName: failedCheckOf(e.run), condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
+      updateRun(e.folder, { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }
     const todo = issueOf(runs);
     const why = repo && todo !== undefined && !a.quiet ? store.note(repo, todo, `job ${name} dropped: ${reason}`) : null;

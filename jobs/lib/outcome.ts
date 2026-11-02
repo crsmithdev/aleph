@@ -9,6 +9,12 @@ export type Cause =
   | "no-commit" | "time-box" | "stalled" | "infra" | "lock-busy"
   | "check" | "hidden-check" | "conflict" | "moved" | "own-list" | "reviewer" | "no-answer" | "other";
 
+/**
+ * What a drop means, as a closed code on the run's state. `cause` is why the run stopped; `fate` is what the
+ * drop means. A drop with no fate is valid and writes no `fate`.
+ */
+export type Fate = "duplicate" | "already-met" | "by-hand";
+
 /** The cause on a run's state, and the check's name for the cause `check`. */
 export type Stated = { cause: Cause; checkName?: string };
 
