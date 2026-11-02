@@ -19,6 +19,7 @@ import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, RESEARCH_PROMPT, serveFetches, writeWebServer } from "./research.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
+import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./acceptance.ts";
 import { checksInSandbox, runChecks, stopFields, type ChecksStop } from "./checks.ts";
 import { dispatchDetached } from "./factory.ts";
 import { gates } from "./factory-status.ts";
@@ -734,21 +735,30 @@ const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`
  * of the job that were sent back (a worker run; a recheck has none): a reviewer
  * finding goes back to the worker like a failed check, while rounds are left.
  */
-async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Outcome>, earlier?: Run[]): Promise<{ outcome: Outcome; code: number }> {
+export async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Outcome>, earlier?: Run[], ports: { runner?: Runner; review?: typeof review } = {}): Promise<{ outcome: Outcome; code: number }> {
+  const reviewer = ports.review ?? review;
   const phase = (p: string) => updateRun(folder, { phase: p });
   const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
   const held = (rule: string) => ({ outcome: { ...awaiting("held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 });
   const security = securityChange(repo.path, base, `refs/heads/${branch}`);
   if (security) return held(`held path ${security}`);
   const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
+  const bad = await oracleFailure(folder, run, repo, branch, ports.runner ?? sandboxRunner, phase);
+  if (bad) {
+    const done = earlier?.length ?? 0;
+    const rounds = fixRounds();
+    const why = { cause: "check" as const, checkName: "oracle", reason: bad };
+    if (earlier && done < rounds) return stoppedByChecks(why, { ...facts, failed: "oracle", round: done });
+    return stoppedByChecks(why, { ...facts, ...(earlier && rounds > 0 ? { reason: `${bad} after ${done} fix rounds` } : {}) });
+  }
   phase("review");
   const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
-  let rv = await review(id, folder, run, repo, dir, base, branch, findings);
+  let rv = await reviewer(id, folder, run, repo, dir, base, branch, findings);
   if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   // A reviewer that gave no verdict runs once more; a second miss is the reviewer's, not the
   // worker's: it goes to Chris whatever fix rounds are left, since a fix round cannot cure it.
   if (rv.none) {
-    rv = await review(id, folder, run, repo, dir, base, branch, findings);
+    rv = await reviewer(id, folder, run, repo, dir, base, branch, findings);
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
   }
   if (!rv.reason) return rule ? held(rule) : { outcome: { condition: "passed", ...facts }, code: 0 };
@@ -759,6 +769,32 @@ async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, d
     if (back) return { outcome: { ...awaiting("review", sentBack(back, rv.reason), [stat]), cause: "reviewer", reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
   }
   return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
+}
+
+/**
+ * The goal's Oracle commands, run on the branch in the sandbox before the reviewer.
+ * A command the run's checks already ran is skipped; one that fails runs once more.
+ * Returns the reason of the first that fails twice, or null. A sandbox fault is not a failure.
+ */
+async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: (p: string) => void): Promise<string | null> {
+  const specFile = join(folder, "..", run.job, "spec.md");
+  if (!existsSync(specFile)) return null;
+  const ran = new Set((readRun(folder)?.checks ?? []).map((c) => c.name));
+  const done = new Set(repo.checks.filter((c) => ran.has(c.name)).map((c) => c.run.trim()));
+  const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
+  const hidden = hiddenOf(repo, run) ?? undefined;
+  for (const command of oracleCommands(readFileSync(specFile, "utf8"))) {
+    if (done.has(command)) continue;
+    phase("check oracle");
+    let r = await runner(repo, tip, command, hidden);
+    if (r.infra) continue;
+    let second = false;
+    if (r.code !== 0) { second = true; r = await runner(repo, tip, command, hidden); if (r.infra) continue; }
+    const out = `## oracle: exit ${r.code}${second ? " (second run)" : ""}\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`;
+    appendFileSync(join(folder, "checks.log"), out);
+    if (r.code !== 0) return `oracle failed: ${command}`;
+  }
+  return null;
 }
 
 /** The reason of a run that came back from the reviewer after the last fix round. */
