@@ -79,6 +79,8 @@ export async function pollOnce(): Promise<Snapshot | null> {
   const snap = await fetchUsage();
   lastFailed = snap === null;
   if (!snap) return null;
+  // Under `bun test` (NODE_ENV=test) the real ~/.aleph/usage.jsonl is never written: a test that sets a fixed clock and polls would leave a bad row there.
+  if (process.env.NODE_ENV === "test" && !process.env.ALEPH_USAGE_FILE) return snap;
   try {
     const file = usageFile();
     mkdirSync(dirname(file), { recursive: true });
@@ -256,7 +258,9 @@ export function gainSince(w: Snapshot[], ms: number): number | null {
 
 /** What the Status page shows; `now` is null with no snapshot or after the snapshot's week ended; `stale` marks an old or failed one. */
 export function summary(clock = Date.now()): UsageSummary {
-  const w = sinceReset(readSnapshots());
+  // A row dated after the clock cannot be a poll that has happened (a fixed-clock write once left one a
+  // few weeks ahead), so it is not the latest snapshot.
+  const w = sinceReset(readSnapshots().filter((s) => Date.parse(s.at) <= clock));
   const last = w.at(-1);
   const resets = last ? Date.parse(last.seven_day_resets_at ?? "") : NaN;
   const known = last && !(resets <= clock);

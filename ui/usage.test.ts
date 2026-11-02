@@ -221,3 +221,26 @@ test("a successful poll writes no line", async () => {
   const lines = await errors(async () => { expect((await fetchUsage())?.seven_day).toBe(25); });
   expect(lines).toHaveLength(0);
 });
+
+test("summary ignores a row dated after the clock, so a future-dated snapshot does not stick as the latest", () => {
+  const now = Date.parse("2026-11-01T23:30:00Z");
+  const past = { at: "2026-11-01T23:20:00Z", five_hour: null, seven_day: 25, seven_day_resets_at: "2026-11-05T00:00:00Z" };
+  const future = { at: "2026-11-20T12:00:00Z", five_hour: null, seven_day: 18, seven_day_resets_at: "2026-11-05T00:00:00Z" };
+  writeFileSync(process.env.ALEPH_USAGE_FILE!, [past, future].map((s) => JSON.stringify(s)).join("\n") + "\n");
+  const s = summary(now);
+  expect(s.now?.seven_day).toBe(25);
+  expect(s.series.map((p) => p.seven_day)).toEqual([25]);
+});
+
+test("under bun test a poll without ALEPH_USAGE_FILE writes no file, so a test cannot leave a row in the real ~/.aleph/usage.jsonl", async () => {
+  const saved = { f: process.env.ALEPH_USAGE_FILE, h: process.env.HOME };
+  delete process.env.ALEPH_USAGE_FILE;
+  process.env.HOME = dir;
+  try {
+    expect((await pollOnce())?.seven_day).toBe(25);
+    expect(existsSync(join(dir, ".aleph"))).toBe(false);
+  } finally {
+    process.env.ALEPH_USAGE_FILE = saved.f;
+    process.env.HOME = saved.h;
+  }
+});
