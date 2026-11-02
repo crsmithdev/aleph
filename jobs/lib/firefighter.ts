@@ -189,7 +189,18 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: answer with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
 - The firefighter files no follow-up issues. A flaky, slow or timing-out test that is not the run's own goal is a \`flake\` action: the code adds it as a note on the repo's flake tracker; Chris picks from that issue which flakes get a goal.${red ? `
-- A red main is the one case for an issue: name the cause (the commit and the test or check that fails and why) in an \`add\` for that repo, with a title and a body that says what to change. The code files it as a high priority issue; the event is not looked at again, so without it the red stays unfixed. Use \`tell\` only to add words to it.` : ""}
+- A red main is the one case for an issue: name the cause (the commit and the test or check that fails and why) in an \`add\` for that repo, with a title and a body that says what to change. The body is the issue's spec and must have these three sections, or the code refuses the add and files nothing:
+\`\`\`
+## Goal
+<the behaviour that holds once main is green>
+
+## Edit surface
+- <file>: <what changes there>
+
+## Oracle
+- <an observable clause, such as the test or check that passes>
+\`\`\`
+  The code files it as a high priority issue; the event is not looked at again, so without it the red stays unfixed. Use \`tell\` only to add words to it.` : ""}
 - On a drop, set \`fate\` to already-met when the goal is met on main, and to duplicate when another goal did the work.
 - When a run cannot pass until another open goal lands, drop it with \`after\` set to that goal, or use edit-goal with \`after\`. A note or a drop reason alone does not stop a rerun.
 - When you answer an Ask on an item whose \`after\` is done or wrong, set \`after\` to the open goals that really block it.
@@ -210,6 +221,8 @@ ${red ? `- {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
 - {"do": "tell", "text": "<one sentence for Chris>"}
 `;
 }
+
+const SPEC_SECTIONS = ["Goal", "Edit surface", "Oracle"];
 
 /** A held security path the branch changes, or null; "unknown" when there is no branch to read. */
 export function securityPath(repo: Repo, branch: string | undefined): string | null | "unknown" {
@@ -287,6 +300,8 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (a.do === "add") {
     const red = redCi().some((c) => c.repo === repo.key) || redBaselines().some((b) => b.repo === repo.key);
     if (!red) return { refused: `${describe(a)}: the firefighter files no issues except for a red main; use tell` };
+    const missing = SPEC_SECTIONS.filter((h) => !new RegExp(`^##\\s+${h}\\s*$`, "mi").test(a.body ?? ""));
+    if (missing.length) return { refused: `${describe(a)}: the body lacks ${missing.map((h) => `## ${h}`).join(", ")}; the spec check needs ## Goal, ## Edit surface and ## Oracle` };
     const w = store.writeList(repo, "todo: red main", (doc) => {
       const same = doc.items.find((i) => i.title === a.title && issues.status(i) === "open");
       if (same) { issues.note(same, `firefighter: still red: ${a.body}`); return same.id; }
