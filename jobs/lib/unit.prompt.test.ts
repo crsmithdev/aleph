@@ -43,3 +43,17 @@ test("the sandbox prompt names aleph-shot and its options; the other prompt does
   for (const w of ["aleph-shot", "--width", "--height", "--scheme", "--click", "--wait"]) expect(text).toContain(w);
   expect(prompt("run-3", join(dir, "run-3"), run, { sandbox: false, main: "main" } as any)).not.toContain("aleph-shot");
 });
+
+test("the sandbox prompt lists the repo's checks, or keeps the tests sentence without any", () => {
+  mkdirSync(join(dir, "run-4"), { recursive: true });
+  mkdirSync(join(dir, "job-c"), { recursive: true });
+  writeFileSync(join(dir, "job-c", "spec.md"), "# a goal\n");
+  const run = { name: "job-c", job: "job-c", branch: "factory/job-c", kind: "build", condition: "running" } as any;
+  const checks = [{ name: "tests", run: "bun run test" }, { name: "types", run: "bunx tsc --noEmit -p ." }];
+  const withChecks = prompt("run-4", join(dir, "run-4"), run, { sandbox: true, main: "main", checks } as any);
+  expect(withChecks).toContain("bun run test");
+  expect(withChecks).toContain("bunx tsc --noEmit -p .");
+  expect(withChecks).not.toContain("Run the repo's tests before you end.");
+  const none = prompt("run-4", join(dir, "run-4"), run, { sandbox: true, main: "main", checks: [] } as any);
+  expect(none).toContain("Run the repo's tests before you end.");
+});

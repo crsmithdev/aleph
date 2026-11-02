@@ -12,7 +12,7 @@ import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader }
 import { addWorktree, fetchOrigin, git, jobCommit } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
-import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type Check, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
@@ -87,7 +87,14 @@ and commit. If you need a decision from Chris, stop
 and make your last line \`QUESTION: <one question>\`. ${FOREGROUND} End with a
 short summary of what you did and what you ran.`;
 
-const FACTORY = (run: Run, main: string) => `You are a worker on job \`${run.name}\`, in a git repo on branch \`${run.branch}\`, inside
+/** What the worker runs before it ends: the repo's own checks, else today's sentence. */
+function checksSentence(checks: Check[]): string {
+  if (!checks.length) return "Run the repo's tests before you end.";
+  const list = checks.map((c) => `\n- \`${c.name}\`: \`${c.run}\`${c.when?.length ? ` (when ${c.when.join(", ")} change)` : ""}`).join("");
+  return `Run each of the repo's checks before you end, and fix what fails:${list}\n`;
+}
+
+const FACTORY = (run: Run, main: string, checks: Check[] = []) => `You are a worker on job \`${run.name}\`, in a git repo on branch \`${run.branch}\`, inside
 a sandbox. You see this repo and nothing else of the machine, and the network
 reaches only the Anthropic API and npm. Do the goal below. Commit every change
 on the branch: only commits leave the sandbox. Never switch to another branch
@@ -102,7 +109,7 @@ holds on your branch and no edit is needed, make no commit, run the repo's tests
 and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
 files, the lines and the commit on \`${main}\` that show it. A worker that
 cannot do the goal makes no commit and gives the reason in its final text; it does not commit a note.
-Run the repo's tests before you end. Chrome cannot start in the sandbox. For a screenshot of a page
+${checksSentence(checks)} Chrome cannot start in the sandbox. For a screenshot of a page
 served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
 the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
 Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a short summary of what you did and what you ran.`;
@@ -115,7 +122,7 @@ export function prompt(id: string, folder: string, run: Run, repo: Repo): string
     const n = onOf(run);
     return mergePrompt(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
-  const parts = [(repo.sandbox ? FACTORY : FIXED)(run, repo.main), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
+  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run, repo.main)), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
   const runs = jobById(run.job) ?? [];
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
