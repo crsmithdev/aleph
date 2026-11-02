@@ -417,22 +417,25 @@ export interface Filing { title: string; labels?: string[]; areas?: string[]; re
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,
  * as one commit; a repo the store has no list for gets one. Returns what became
  * of the item (`done`, `no issue <id>`, or the write's error) and the new numbers.
+ * A filing with no `priority` takes the priority of the closed item.
  */
 export function closeAndFile(repo: Place, message: string, id: number | string | undefined, text: string, filed: Filing[]): { todo?: string; ids: number[] } {
   let todo: string | undefined;
   let ids: number[] = [];
   try {
     writeList(repo, message, (doc) => {
+      let inherited: string | undefined;
       if (id !== undefined) {
         const item = issues.find(doc, id);
         if (item) {
+          inherited = item.fm.priority as string | undefined;
           issues.setStatus(item, "done");
           issues.note(item, text);
         }
         todo = item ? "done" : `no issue ${id}`;
       }
       ids = filed.map((f) => {
-        const item = issues.add(doc, f.title, { labels: f.labels, request: f.request, spec: f.spec, priority: f.priority, source: f.source });
+        const item = issues.add(doc, f.title, { labels: f.labels, request: f.request, spec: f.spec, priority: f.priority ?? inherited, source: f.source });
         if (f.areas) item.fm.areas = f.areas;
         if (f.ask) setAsk(item, f.ask);
         return item.id;

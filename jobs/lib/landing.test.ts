@@ -5,11 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { prompt as unitPrompt } from "./unit.ts";
 import { afterLand, bounceNote, isMergeBounce, land, landTerms, MERGE_MODEL, MERGE_SECONDS, type LandPorts } from "./landing.ts";
+import * as issues from "../../todo/lib/todo.ts";
+import * as store from "../../todo/lib/store.ts";
 import { readRun, writeRun, type Entry, type Repo, type Run } from "./ledger.ts";
 
 setDefaultTimeout(120_000);
 
-const KEYS = ["ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
+const KEYS = ["ALEPH_JOBS_DIR", "XDG_RUNTIME_DIR", "ALEPH_LAND_BATCH", "ALEPH_ISSUES", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"];
 let dir: string, repo: Repo, saved: Record<string, string | undefined>;
 let sleepers: ReturnType<typeof Bun.spawn>[];
 let made: number;
@@ -117,6 +119,20 @@ const given = (e: Entry) => JSON.parse(readFileSync(join(e.folder, "batch.json")
 const landLog = (e: Entry) => readFileSync(join(e.folder, "land.log"), "utf8");
 /** Fails only with both files in the tree, as a check does that two runs break together. */
 const both = (a: string, b: string) => (files: string[]) => files.includes(a) && files.includes(b) ? "bad failed" : null;
+
+test("the check issue filed after a land takes the priority of the landed issue", async () => {
+  sh(dir, "git", "init", "-q", "--bare", "-b", "main", "items.git");
+  sh(dir, "git", "clone", "-q", "items.git", "items");
+  sh(join(dir, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(join(dir, "items"), "git", "push", "-q", "origin", "main");
+  process.env.ALEPH_ISSUES = join(dir, "items");
+  store.writeList(repo, "start", (doc) => { issues.add(doc, "landed one", { priority: "critical" }); return true; }, true);
+  const a = job("t1", [["t1.txt", "1\n"]], { on: "demo-1", check: "open" });
+  expect(await land(a, repo, ports())).toMatchObject({ code: 0, outcome: { condition: "landed" } });
+  const doc = store.readList(repo)!;
+  expect(issues.status(issues.find(doc, 1)!)).toBe("done");
+  expect(issues.find(doc, 2)!.fm.priority).toBe("critical");
+});
 
 test("a batch of three: one check call, one push, three commits, each with its own Job trailer", async () => {
   const [a, b, c] = [job("t1", [["t1.txt", "1\n"]]), queued(job("t2", [["t2.txt", "2\n"]])), queued(job("t3", [["t3.txt", "3\n"]]))];

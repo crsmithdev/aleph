@@ -974,8 +974,9 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
  * A worker's `FOLLOWUP:` lines each become an issue with `source: worker` (the line as the title, the run in its request),
  * filed in one store commit. An empty line such as "none" files nothing, and a line on the topic of an open issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
  */
-function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
-  const open = (reader().list(repo.key)?.items ?? []).filter((i) => issues.status(i) === "open");
+export function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
+  const lists = reader();
+  const open = (lists.list(repo.key)?.items ?? []).filter((i) => issues.status(i) === "open");
   const fresh: string[] = [];
   for (const title of titles) {
     if (/^(none|n\/a|nothing)\.?$/i.test(title.trim())) continue;
@@ -987,7 +988,9 @@ function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
     else fresh.push(title);
   }
   if (!fresh.length) return;
-  fileIssues(repo, `followups from ${run.name}`, fresh.map((title) => ({ title, source: "worker" as const, request: `A follow-up the worker met in run ${run.name}.` })));
+  const on = onOf(run);
+  const priority = (on === undefined ? undefined : lists.item(repo.key, on)?.fm.priority as string | undefined) ?? "medium";
+  fileIssues(repo, `followups from ${run.name}`, fresh.map((title) => ({ title, priority, source: "worker" as const, request: `A follow-up the worker met in run ${run.name}.` })));
 }
 
 const PATH = /[\w.-]+(?:\/[\w.-]+)+|[\w-]+\.(?:ts|js|md|json)\b/g;

@@ -160,6 +160,16 @@ describe("the writes", () => {
     expect(item(r, 2).fm.labels).toBeUndefined();
   });
 
+  test("closeAndFile gives a filing without a priority the closed item's, and keeps one it has", () => {
+    const r = repo();
+    store.writeList(r, "seed", (doc) => { issues.add(doc, "hot", { priority: "high" }); return true; });
+    store.closeAndFile(r, "landed", 1, "x", [{ title: "A" }, { title: "B", priority: "low" }]);
+    expect(item(r, 2).fm.priority).toBe("high");
+    expect(item(r, 3).fm.priority).toBe("low");
+    store.closeAndFile(r, "again", undefined, "", [{ title: "C" }]);
+    expect(item(r, 4).fm.priority).toBe("medium");
+  });
+
   test("closeAndFile starts a list the store has none for, and names an item it lacks", () => {
     const r = { key: `st${++n}` };
     expect(store.closeAndFile(r, "landed", 4, "x", [{ title: "Check", labels: ["check"] }])).toEqual({ todo: "no issue 4", ids: [1] });

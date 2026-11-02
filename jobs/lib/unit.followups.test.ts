@@ -1,5 +1,11 @@
 import { expect, test } from "bun:test";
-import { sameTopic } from "./unit.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import * as issues from "../../todo/lib/todo.ts";
+import * as store from "../../todo/lib/store.ts";
+import type { Repo, Run } from "./ledger.ts";
+import { fileFollowups, sameTopic } from "./unit.ts";
 
 test("the same follow-up in other words is the same topic", () => {
   const pairs = [
@@ -15,4 +21,32 @@ test("different work in one busy file is not the same topic", () => {
   expect(sameTopic("jobs/lib/factory.ts `record(text, { unlabel: \"goal\" })` is a no-op on a kind goal", "jobs/lib/factory.ts retries a fetch that loses the ref lock")).toBe(false);
   expect(sameTopic("paint the fence", "mend the gate")).toBe(false);
   expect(sameTopic("...", "...")).toBe(false);
+});
+
+function listIn(): { dir: string; restore: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), "aleph-followups-"));
+  const env = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+  const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd, env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" }); if (p.exitCode !== 0) throw new Error(`${a.join(" ")}: ${p.stderr}`); };
+  sh(dir, "git", "init", "-q", "--bare", "-b", "main", "items.git");
+  sh(dir, "git", "clone", "-q", "items.git", "items");
+  sh(join(dir, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(join(dir, "items"), "git", "push", "-q", "origin", "main");
+  const saved = Object.fromEntries(Object.keys(env).concat("ALEPH_ISSUES").map((k) => [k, process.env[k]]));
+  Object.assign(process.env, env, { ALEPH_ISSUES: join(dir, "items") });
+  return { dir, restore: () => { for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } rmSync(dir, { recursive: true, force: true }); } };
+}
+
+test("a worker follow-up takes the priority of the run's issue, medium when there is none", () => {
+  const l = listIn();
+  try {
+    const repo = { key: "fup" } as Repo;
+    store.writeList(repo, "start", (doc) => { issues.add(doc, "the job", { priority: "high" }); return true; }, true);
+    fileFollowups(repo, { name: "r1", repo: "fup", on: "fup-1" } as Run, ["Fix the first loose end in a.ts"]);
+    fileFollowups(repo, { name: "r2", repo: "fup", on: "fup-9" } as Run, ["Mend the second gate in b.ts"]);
+    fileFollowups(repo, { name: "r3", repo: "fup" } as Run, ["Paint the third fence in c.ts"]);
+    const doc = store.readList(repo)!;
+    expect(doc.items.map((i) => [i.title, i.fm.priority])).toEqual([
+      ["the job", "high"], ["Fix the first loose end in a.ts", "high"], ["Mend the second gate in b.ts", "medium"], ["Paint the third fence in c.ts", "medium"],
+    ]);
+  } finally { l.restore(); }
 });
