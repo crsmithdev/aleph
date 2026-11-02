@@ -65,3 +65,22 @@ test("a failed bun test with all results gives only bun test, whatever is on std
 test("failedChecks keeps its list when all results are in", () => {
   expect(failedChecks([{ name: "bun test", ok: false }], 1, null)).toEqual(["bun test"]);
 });
+
+test("the probe script sets each NO_SUBMODULES setting after git init and before git fetch", async () => {
+  const { NO_SUBMODULES } = await import("./git.ts");
+  const out = join(base, "script.txt");
+  writeFileSync(join(base, "rec"), `#!/bin/bash\nfor a; do last="$a"; done\nprintf '%s' "$last" > "${out}"\n`, { mode: 0o755 });
+  process.env.ALEPH_SANDBOX_CMD = join(base, "rec");
+  try {
+    await probe(repo(), join(base, "probe3.log"));
+    const script = await Bun.file(out).text();
+    const init = script.indexOf("git init -q .");
+    const fetch = script.indexOf("git fetch");
+    expect(init).toBeGreaterThan(-1);
+    expect(NO_SUBMODULES).toHaveLength(2);
+    for (const s of NO_SUBMODULES) {
+      expect(script.indexOf(s)).toBeGreaterThan(init);
+      expect(script.indexOf(s)).toBeLessThan(fetch);
+    }
+  } finally { process.env.ALEPH_SANDBOX_CMD = join(base, "boom"); }
+});

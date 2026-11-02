@@ -122,3 +122,6 @@ export function followMain(path: string, main: string): string | null {
   const ff = git(path, "merge", "--ff-only", "-q", `origin/${main}`);
   return ff.ok ? null : `main checkout not updated: ${ff.out.split("\n")[0]}`;
 }
+
+// srt write-protects .gitmodules with an unreadable placeholder; git warns when it reads it. These settings stop that read. Run after `git init -q .` in every sandbox prelude.
+export const NO_SUBMODULES = ["git config fetch.recurseSubmodules false", "git config submodule.recurse false"];

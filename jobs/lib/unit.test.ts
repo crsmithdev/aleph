@@ -46,7 +46,7 @@ test("while a check holds the slot, another waits for it", async () => {
 
 test("setup git settings stop the .gitmodules read; a real git error still shows", async () => {
   const { mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
-  const { NO_SUBMODULES } = await import("./unit.ts");
+  const { NO_SUBMODULES } = await import("./git.ts");
   const d = mkdtempSync(join(tmpdir(), "gm-"));
   try {
     mkdirSync(join(d, "src"));

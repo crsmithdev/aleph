@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
-import { addWorktree, fetchOrigin, git, jobCommit } from "./git.ts";
+import { addWorktree, fetchOrigin, git, jobCommit, NO_SUBMODULES } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type Check, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
@@ -33,8 +33,7 @@ import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewerCmd, reviewSeconds, workerCmd } from "./settings.ts";
 
 export { git };
-/** srt write-protects .gitmodules with an unreadable placeholder; git warns when it reads it. These settings stop that read. */
-export const NO_SUBMODULES = ["git config fetch.recurseSubmodules false", "git config submodule.recurse false"];
+export { NO_SUBMODULES };
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 

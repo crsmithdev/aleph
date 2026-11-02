@@ -6,7 +6,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fetchOrigin, git } from "./git.ts";
+import { fetchOrigin, git, NO_SUBMODULES } from "./git.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
 import { saveProbe, type Probe } from "./factory-status.ts";
@@ -87,7 +87,7 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
     const script = [
       ...denied().map(([name, cmd]) => `if ( ${cmd} ) >/dev/null 2>&1; then echo "FAIL ${name}: reachable"; else echo "PASS ${name}: denied"; fi`),
       `if claude -p 'say ok' --output-format json 2>/dev/null | grep -q '"is_error":false'; then echo "PASS claude -p: ok"; else echo "FAIL claude -p: no result"; fi`,
-      `git init -q . && git fetch -q ../in.bundle ${q(`+${main}:${main}`)} && git switch -q -c probe ${q(`origin/${repo.main}`)} >&2`,
+      `git init -q . && ${NO_SUBMODULES.join(" && ")} && git fetch -q ../in.bundle ${q(`+${main}:${main}`)} && git switch -q -c probe ${q(`origin/${repo.main}`)} >&2`,
       `${repo.setup.join(" && ") || "true"} >&2`,
       `if bun test >&2; then echo "PASS bun test: passed"; else echo "FAIL bun test: failed"; fi`,
     ].join("\n");
