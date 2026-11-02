@@ -4,7 +4,7 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { flakeTracker, reader, type Reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -22,6 +22,36 @@ export const factoryDir = () => layout().factory;
 export const pauseFile = () => join(factoryDir(), "paused");
 
 export const probeFile = () => join(factoryDir(), "probe.json");
+
+export const holdsFile = () => join(factoryDir(), "holds.jsonl");
+
+export interface HoldRecord { at: string; name: string; kind: string; text: string }
+
+/** Every record of the holds file, oldest first; a line that does not parse is skipped. */
+function allHolds(): HoldRecord[] {
+  let raw: string;
+  try { raw = readFileSync(holdsFile(), "utf8"); } catch { return []; }
+  const out: HoldRecord[] = [];
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    try { out.push(JSON.parse(line) as HoldRecord); } catch { /* skip */ }
+  }
+  return out;
+}
+
+/** The records of the given goals, oldest first. */
+export function readHolds(names: string[]): HoldRecord[] {
+  const set = new Set(names);
+  return allHolds().filter((r) => set.has(r.name));
+}
+
+/** Appends one record of why a goal waits (or, with kind `started`, that it no longer does), unless it repeats the name's last record. */
+export function recordHold(name: string, kind: string, text: string): void {
+  const last = readHolds([name]).at(-1);
+  if (last && last.kind === kind && last.text === text) return;
+  mkdirSync(factoryDir(), { recursive: true });
+  appendFileSync(holdsFile(), JSON.stringify({ at: new Date().toISOString(), name, kind, text }) + "\n");
+}
 
 const DAY = 24 * 3600_000;
 

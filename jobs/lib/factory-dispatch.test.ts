@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
+import { readHolds } from "./factory-status.ts";
 import { lock } from "./ledger.ts";
 import { readList } from "../../todo/lib/store.ts";
 import { ctx, sh, goal, change, mk, fakes, dispatch, withChecks, setup, teardown } from "./factory.helpers.ts";
@@ -217,4 +218,48 @@ test("a parent whose parts are all done closes in a dispatch where another dispa
     release!();
   }
   expect(parentStatus(id)).toBe("done");
+});
+
+test("a goal that waits on an open after gets one hold record; a second dispatch with the same reason adds none; when it starts a started record ends the hold", async () => {
+  const blocker = goal();
+  const waiter = goal();
+  await change(waiter, (item) => { item.fm.after = [`fac-${blocker}`]; });
+  const name = `fac-${waiter}`;
+  const f = fakes();
+  const start = async (r: unknown, n: string, id: number | string, spec: string) => (n === `fac-${blocker}` ? "no slot" : f.start(r, n, id, spec));
+  await dispatchIssues(start, async () => null, f.land, f.rescue);
+  const recs = () => readHolds([name]);
+  expect(recs()).toHaveLength(1);
+  expect(recs()[0]).toMatchObject({ name, kind: "waits_on", text: expect.stringContaining(`after fac-${blocker}`) });
+  expect(Number.isNaN(Date.parse(recs()[0].at))).toBe(false);
+  await dispatchIssues(start, async () => null, f.land, f.rescue);
+  expect(recs()).toHaveLength(1);
+  expect(readHolds([`fac-${blocker}`]).map((r) => r.kind)).toEqual(["start"]);
+  await change(blocker, (item) => issues.setStatus(item, "done"));
+  mk(`fac-${blocker}`, "build", "passed", { commit: "abc" });
+  await dispatchIssues(f.start, async () => null, f.land, f.rescue);
+  expect(recs().map((r) => r.kind)).toContain("started");
+});
+
+test("a goal that a red main holds gets one hold record", async () => {
+  const id = goal();
+  await dispatchIssues(async () => null, async () => "tests failed");
+  await dispatchIssues(async () => null, async () => "tests failed");
+  const recs = readHolds([`fac-${id}`]);
+  expect(recs).toHaveLength(1);
+  expect(recs[0].kind).toBe("red");
+});
+
+test("a goal that a busy file holds gets one hold record", async () => {
+  const surface = "## Edit surface\n- jobs/busy.ts (the change)\n";
+  const add = () => writeList({ key: "fac" }, "add a goal", (doc) => issues.add(doc, "ship it", { spec: surface }).id, true)!.value;
+  for (const n of [901, 902, 903]) mk(`fac-${n}`, "land", "dropped", { conflicts: ["jobs/busy.ts"] });
+  const first = add();
+  const second = add();
+  mk(`fac-${first}`, "build", "passed");
+  await dispatchIssues(async () => null);
+  await dispatchIssues(async () => null);
+  const recs = readHolds([`fac-${second}`]);
+  expect(recs).toHaveLength(1);
+  expect(recs[0]).toMatchObject({ kind: "busy", text: `waits for fac-${first}: both change the busy file jobs/busy.ts` });
 });

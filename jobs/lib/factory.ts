@@ -31,7 +31,7 @@ import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
-import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, readStalls, redLine, runsToday, spentToday, stallFile } from "./factory-status.ts";
+import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, readStalls, recordHold, redLine, runsToday, spentToday, stallFile } from "./factory-status.ts";
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
@@ -171,7 +171,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     const name = issueJob(repo, ref);
     const red = reds.get(repo.key);
     const first = goalDecision({ name, item: listed, done, red });
-    if (first.kind !== "ready") { skipped.push(`${name}: ${first.why}`); continue; }
+    if (first.kind !== "ready") { recordHold(name, first.kind, first.why); skipped.push(`${name}: ${first.why}`); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
     const release = await lock(`goal-${name}`);
@@ -189,11 +189,12 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         // A pass that began before a pause must not start a run after it.
         gate: gates({ only: ["pause", "live", "day", "awaiting"], jobs }),
       });
-      if (d.kind !== "ready" && d.kind !== "no-commit" && d.kind !== "run-cap") { skipped.push(`${name}: ${d.why}`); continue; }
+      if (d.kind !== "ready" && d.kind !== "no-commit" && d.kind !== "run-cap") { recordHold(name, d.kind, d.why); skipped.push(`${name}: ${d.why}`); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
       if (!latest || issues.status(latest) !== "open") { skipped.push(`${name}: the item is ${latest ? (issues.status(latest) === "parked" ? "parked" : issues.status(latest)) : "gone"}`); continue; }
       if (d.kind === "no-commit") {
+        recordHold(name, d.kind, d.why);
         writeStreakMark(name);
         const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
         const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("no-commit", text) });
@@ -202,6 +203,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         continue;
       }
       if (d.kind === "run-cap") {
+        recordHold(name, d.kind, d.why);
         const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
         const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("run-cap", text) });
         if (bad) factoryLog(`${name}: no issue note: ${bad}`);
@@ -220,8 +222,8 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         tier = p.tier;
       }
       const why = await start(repo, name, ref, spec, tier);
-      if (why) skipped.push(`${name}: ${why}`);
-      else { started.push(name); rmSync(capFile(name), { force: true }); if (again) clearRerun(name); }
+      if (why) { recordHold(name, "start", why); skipped.push(`${name}: ${why}`); }
+      else { recordHold(name, "started", "started"); started.push(name); rmSync(capFile(name), { force: true }); if (again) clearRerun(name); }
     } finally {
       release();
     }
