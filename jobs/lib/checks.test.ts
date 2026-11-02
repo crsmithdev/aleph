@@ -102,8 +102,14 @@ await runChecks({ folder: ${JSON.stringify(base)}, repo, changed: [], phase: () 
   expect(flakes().length).toBe(names.length * 25);
 });
 
+test("the check prelude carries both NO_SUBMODULES lines", async () => {
+  const { NO_SUBMODULES } = await import("./unit.ts");
+  const lines = cloneAndSetup([], "b", "r", "").split("\n");
+  expect(lines.slice(1, 4)).toEqual(["git init -q .", ...NO_SUBMODULES]);
+});
+
 test("cloneAndSetup: the clone steps, the setup group and the caller's text", () => {
   expect(cloneAndSetup(["a", "b c"], "out/x.bundle", "refs/h/it's", "> log 2>&1")).toBe(
-    ["set -e", "git init -q .", `git fetch -q ../out/x.bundle '+refs/h/it'\\''s:refs/heads/check'`, "git switch -q check", "set +e", "{ a && b c && true; } > log 2>&1"].join("\n"),
+    ["set -e", "git init -q .", "git config fetch.recurseSubmodules false", "git config submodule.recurse false", `git fetch -q ../out/x.bundle '+refs/h/it'\\''s:refs/heads/check'`, "git switch -q check", "set +e", "{ a && b c && true; } > log 2>&1"].join("\n"),
   );
 });

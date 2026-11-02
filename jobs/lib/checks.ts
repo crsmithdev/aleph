@@ -10,6 +10,7 @@ import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledg
 import { sandboxed } from "./sandbox.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
+import { NO_SUBMODULES } from "./unit.ts";
 
 /** Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock ended the check. `null` is a pass. */
 export type ChecksStop = Stated & { reason: string; timedOut?: boolean };
@@ -122,7 +123,7 @@ export const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
  */
 export function cloneAndSetup(setup: string[], bundle: string, ref: string, after: string): string {
   return [
-    "set -e", "git init -q .",
+    "set -e", "git init -q .", ...NO_SUBMODULES,
     `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
     `{ ${setup.map((c) => `${c} && `).join("")}true; } ${after}`,
   ].join("\n");

@@ -15,6 +15,7 @@ import { fetchOrigin, git } from "./git.ts";
 import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { type Repo } from "./ledger.ts";
+import { NO_SUBMODULES } from "./unit.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 
 export interface Proposal { name: string; current: string; latest: string }
@@ -55,9 +56,18 @@ function save(r: Record_): void {
   writeFileSync(recordFile(), JSON.stringify(r, null, 2) + "\n");
 }
 
+/** The sandbox script: a fresh clone of `main` from the bundle, the repo's setup, then `bun outdated`. */
+export function outdatedScript(repo: Repo, main: string): string {
+  const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
+  return [
+    `git init -q . && ${NO_SUBMODULES.join(" && ")} && git fetch -q ../in.bundle ${q(`+${main}:${main}`)} && git switch -q -c deps ${q(`origin/${repo.main}`)} >&2 || exit 1`,
+    `${repo.setup.join(" && ") || "true"} >&2`,
+    process.env.ALEPH_OUTDATED_CMD ?? "bun outdated",
+  ].join("\n");
+}
+
 /** `bun outdated` for `repo`'s origin/main, in a fresh clone in the sandbox. Null when it did not run. */
 async function outdated(repo: Repo): Promise<string | null> {
-  const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
   const dir = makeRunFolder(`deps-${repo.key}-${crypto.randomUUID().slice(0, 8)}`); // its own folder: overlapping ticks must not wipe each other's
   const log = join(dir, "out", "outdated.log");
   try {
@@ -65,11 +75,7 @@ async function outdated(repo: Repo): Promise<string | null> {
     fetchOrigin(repo.path);
     if (!git(repo.path, "bundle", "create", join(dir, "in.bundle"), main).ok) return null;
     writeFileSync(log, "");
-    const script = [
-      `git init -q . && git fetch -q ../in.bundle ${q(`+${main}:${main}`)} && git switch -q -c deps ${q(`origin/${repo.main}`)} >&2 || exit 1`,
-      `${repo.setup.join(" && ") || "true"} >&2`,
-      process.env.ALEPH_OUTDATED_CMD ?? "bun outdated",
-    ].join("\n");
+    const script = outdatedScript(repo, main);
     const step = await sandboxed(dir, script, { read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdout: log, stderr: `${log}.stderr`, limit: 600 });
     // bun outdated exits 0 whether or not packages are stale; a failure is no answer.
     return step.code === 0 && !step.timedOut ? readFileSync(log, "utf8") : null;

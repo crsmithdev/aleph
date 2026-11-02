@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
-import { parseOutdated, propose, startProposals, sweep } from "./deps.ts";
+import { outdatedScript, parseOutdated, propose, startProposals, sweep } from "./deps.ts";
 import { grant } from "./ask.ts";
 import { type Repo } from "./ledger.ts";
 
@@ -139,4 +139,10 @@ describe("sweep", () => {
     expect(items[1].fm.ask).toBe("approval");
     expect(startProposals([repo])).toEqual([]);
   });
+});
+
+test("the deps prelude carries both NO_SUBMODULES lines", async () => {
+  const { NO_SUBMODULES } = await import("./unit.ts");
+  const script = outdatedScript({ key: "k", main: "main", setup: [] } as unknown as Repo, "refs/remotes/origin/main");
+  expect(script.split("\n")[0]).toContain(`git init -q . && ${NO_SUBMODULES.join(" && ")} && git fetch`);
 });
