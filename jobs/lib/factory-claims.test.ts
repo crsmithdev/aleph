@@ -155,37 +155,6 @@ test("a repeated no-commit run on an issue already sent back to triage once gets
   expect(ask(id)).not.toBeNull();
 });
 
-test("time box, first time: dropped and the goal reruns once, with the last 20 lines of result.md", async () => {
-  const id = goal();
-  mk(`fac-${id}`, "build", "stuck", { reason: "time box" }, { "result.md": lines(25) });
-  const f = fakes();
-  const out = await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(out.held).toBeUndefined();
-  expect(f.specs[0]).toContain("time box ran out");
-  expect(f.specs[0]).toContain("line 6\n");
-  expect(f.specs[0]).not.toContain("line 5\n");
-  expect(notes(id)).toContain("time box ran out");
-});
-
-test("the second time-box stuck run on one goal gets an Ask and no third run", async () => {
-  const id = goal();
-  mk(`fac-${id}`, "build", "stuck", { reason: "time box" }, { "result.md": lines(3) });
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  // The rerun runs, and ends in the time box again.
-  mk(`fac-${id}`, "build", "stuck", { reason: "time box" });
-  const out = await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(ask(id)).not.toBeNull();
-  expect(notes(id)).toContain("asks Chris: fac-");
-  expect(out.held).toBeUndefined();
-  await dispatch(f);
-  expect(f.calls).toHaveLength(2);
-  expect(notes(id).match(/asks Chris:/g)).toHaveLength(1);
-});
-
 test("an infrastructure failure of an agent run is rechecked once; of a land, landed again once", async () => {
   const id = goal();
   sh(join(ctx.base, "repo"), "git", "branch", `factory/fac-${id}`);

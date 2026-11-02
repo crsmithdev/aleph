@@ -143,7 +143,8 @@ function planRefusal(repo: Repo, doc: issues.Doc, issue: issues.Issue): string |
   if (issue.sub !== undefined || issues.status(issue) !== "open") return "not an open issue";
   if (partsOf(doc, issue).length) return issue.fm.plan === "true" ? null : "already planned";
   if (noGoal(issue)) return "no spec";
-  if (jobsNamed(`${repo.key}-${issue.id}`).length) return "the issue has had a run";
+  // A rescued time-box run sets `plan` on an issue that has had a run: it is split, not built again.
+  if (issue.fm.plan !== "true" && jobsNamed(`${repo.key}-${issue.id}`).length) return "the issue has had a run";
   return null;
 }
 

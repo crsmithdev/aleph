@@ -46,7 +46,7 @@ export const PROPOSE_AT = (): number => {
   return Number.isFinite(n) && n >= 1 ? n : 3;
 };
 
-export const jobSeconds = () => num("ALEPH_JOB_TIMEOUT", 2400);
+export const jobSeconds = () => num("ALEPH_JOB_TIMEOUT", 1800);
 export const checkSeconds = () => num("ALEPH_CHECK_TIMEOUT", 1200);
 export const reviewSeconds = () => num("ALEPH_REVIEW_TIMEOUT", 600);
 export const reviewDiffMax = () => num("ALEPH_REVIEW_DIFF_MAX", 200000);
