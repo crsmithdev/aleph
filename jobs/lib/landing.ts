@@ -155,6 +155,104 @@ function rebased(repo: Repo, onto: string, fork: string, tip: string): string | 
   return cur;
 }
 
+/** A member's verdict, and the step to run once the land is over. */
+type Outcome = Landing & { after?: () => void };
+
+/** What one attempt of a land shares: the leader, the commit main was at, each member's branch tip and checks, and the land's log and ports. */
+interface Attempt {
+  repo: Repo;
+  leader: Member;
+  base0: string;
+  tips: Map<Member, string>;
+  checksOf: Map<Member, Run["checks"]>;
+  finish: (m: Member, o: Outcome) => void;
+  log: (step: string, out?: string) => void;
+  ports: LandPorts;
+}
+
+/** A land that did not land: its verdict, with what it conflicted in. */
+function failed(cause: Cause, reason: string, extra: Partial<Verdict> = {}): Landing {
+  return { outcome: { condition: "failed", cause, reason, ...extra }, code: 1 };
+}
+
+/** Merge each run onto the one before it. A conflict, a run with no net change and a run that edits the list leave the chain. */
+function build(ctx: Attempt, list: Member[], from: string): Pending[] {
+  const { repo, tips, finish } = ctx;
+  const items: Pending[] = [];
+  let cur = from;
+  for (const m of list) {
+    let tip = tips.get(m)!;
+    let merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
+    if (!merged.ok) {
+      const replayed = rebased(repo, cur, git(repo.path, "merge-base", cur, tip).out, tip);
+      m.log(`mechanical rebase: ${replayed ? "ok" : "conflicts"}`);
+      if (replayed) {
+        tip = replayed;
+        tips.set(m, tip);
+        merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
+      }
+    }
+    if (!merged.ok) {
+      const lines = merged.out.split("\n");
+      const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
+      m.log("conflicts", conflicts.join("\n"));
+      finish(m, failed("conflict", "merge conflict", { conflicts }));
+      continue;
+    }
+    const tree = merged.out.split("\n")[0];
+    if (tree === git(repo.path, "rev-parse", `${cur}^{tree}`).out) {
+      m.log("no net change");
+      finish(m, { outcome: { condition: "done", reason: "no net change" }, code: 0, after: () => removeBranch(repo, m.run) });
+      continue;
+    }
+    // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
+    if (git(repo.path, "diff", "--name-only", cur, tree).out.split("\n").includes(TODO_PATH)) { finish(m, failed("own-list", OWN_LIST, { conflicts: [TODO_PATH] })); continue; }
+    const fork = git(repo.path, "merge-base", cur, tip).out;
+    const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip}`).out.split("\n").filter(Boolean);
+    const c = git(repo.path, "commit-tree", tree, "-p", cur, "-m", landMessage(subjects, m.run, repo));
+    m.log(`commit-tree: ${c.ok ? "ok" : "failed"}`, c.out);
+    if (!c.ok) { finish(m, failed("other", "commit-tree failed")); continue; }
+    items.push({ m, commit: c.out });
+    cur = c.out;
+  }
+  return items;
+}
+
+/** The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>. */
+async function check(ctx: Attempt, items: Pending[], base: string): Promise<string | null> {
+  const { repo, leader, base0, tips, checksOf, log, ports } = ctx;
+  const first = items[0].m.run;
+  if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
+    log(`checks skipped: main unchanged since ${base0}`);
+    // The run's own checks passed on this base; a failed call that covered it earlier does not decide its verdict.
+    checksOf.set(items[0].m, first.checks);
+    return null;
+  }
+  const tip = items.at(-1)!.commit;
+  const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
+  log(`checks on ${items.length} run${items.length > 1 ? "s" : ""}`, items.map((i) => i.m.run.name).join("\n"));
+  const report = await ports.check(tip, items.map((i) => i.m.run), changed);
+  for (const i of items) checksOf.set(i.m, report.checks);
+  if (report.why && items.length === 1 && items[0].m !== leader && report.log !== undefined) items[0].m.log("checks.log", report.log);
+  return report.why;
+}
+
+/** The commits of `items` that pass, in order, and the commit they end on. `known` is why the whole chain is already known to fail. */
+async function settle(ctx: Attempt, items: Pending[], base: string, known: string | null): Promise<{ ok: Pending[]; tip: string }> {
+  if (!items.length) return { ok: [], tip: base };
+  const why = known ?? await check(ctx, items, base);
+  if (!why) return { ok: items, tip: items.at(-1)!.commit };
+  if (items.length === 1) { ctx.finish(items[0].m, { outcome: { condition: "failed", ...checksStopped(why) }, code: 1 }); return { ok: [], tip: base }; }
+  ctx.log(`split ${items.length} runs: ${why}`);
+  const h = Math.floor(items.length / 2);
+  const a = await settle(ctx, items.slice(0, h), base, null);
+  const rest = items.slice(h);
+  // The first half passed whole, so the second half on top of it is the tree that just failed.
+  const intact = a.ok.length === h;
+  const b = await settle(ctx, intact ? rest : build(ctx, rest.map((i) => i.m), a.tip), a.tip, intact ? why : null);
+  return { ok: [...a.ok, ...b.ok], tip: b.ok.length ? b.tip : a.tip };
+}
+
 /**
  * Land a job, and the land runs queued behind it. Each run's branch merges onto
  * origin/<main> in memory, in order, as one squash commit with its own trailers.
@@ -174,8 +272,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
   const logged = (name: string, r: { ok: boolean; out: string }) => { log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
   const step = (name: string, ...args: string[]) => logged(name, git(repo.path, ...args));
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const failed = (cause: Cause, reason: string, extra: Partial<Verdict> = {}): Landing => ({ outcome: { condition: "failed", cause, reason, ...extra }, code: 1 });
-  const fail = (cause: Cause, reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(cause, reason, extra); };
+  const fail =(cause: Cause, reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(cause, reason, extra); };
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
   if (!release) return fail("lock-busy", LOCK_BUSY);
@@ -240,84 +337,9 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         open.push(m);
       }
 
-      // Merge each run onto the one before it. A conflict, a run with no net change and a run that edits the list leave the chain.
-      const build = (list: Member[], from: string): Pending[] => {
-        const items: Pending[] = [];
-        let cur = from;
-        for (const m of list) {
-          let tip = tips.get(m)!;
-          let merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
-          if (!merged.ok) {
-            const replayed = rebased(repo, cur, git(repo.path, "merge-base", cur, tip).out, tip);
-            m.log(`mechanical rebase: ${replayed ? "ok" : "conflicts"}`);
-            if (replayed) {
-              tip = replayed;
-              tips.set(m, tip);
-              merged = git(repo.path, "merge-tree", "--write-tree", "--name-only", cur, tip);
-            }
-          }
-          if (!merged.ok) {
-            const lines = merged.out.split("\n");
-            const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
-            m.log("conflicts", conflicts.join("\n"));
-            finish(m, failed("conflict", "merge conflict", { conflicts }));
-            continue;
-          }
-          const tree = merged.out.split("\n")[0];
-          if (tree === git(repo.path, "rev-parse", `${cur}^{tree}`).out) {
-            m.log("no net change");
-            finish(m, { outcome: { condition: "done", reason: "no net change" }, code: 0, after: () => removeBranch(repo, m.run) });
-            continue;
-          }
-          // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
-          if (git(repo.path, "diff", "--name-only", cur, tree).out.split("\n").includes(TODO_PATH)) { finish(m, failed("own-list", OWN_LIST, { conflicts: [TODO_PATH] })); continue; }
-          const fork = git(repo.path, "merge-base", cur, tip).out;
-          const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip}`).out.split("\n").filter(Boolean);
-          const c = git(repo.path, "commit-tree", tree, "-p", cur, "-m", landMessage(subjects, m.run, repo));
-          m.log(`commit-tree: ${c.ok ? "ok" : "failed"}`, c.out);
-          if (!c.ok) { finish(m, failed("other", "commit-tree failed")); continue; }
-          items.push({ m, commit: c.out });
-          cur = c.out;
-        }
-        return items;
-      };
-
-      // The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>.
-      const check = async (items: Pending[], base: string): Promise<string | null> => {
-        const first = items[0].m.run;
-        if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
-          log(`checks skipped: main unchanged since ${base0}`);
-          // The run's own checks passed on this base; a failed call that covered it earlier does not decide its verdict.
-          checksOf.set(items[0].m, first.checks);
-          return null;
-        }
-        const tip = items.at(-1)!.commit;
-        const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
-        log(`checks on ${items.length} run${items.length > 1 ? "s" : ""}`, items.map((i) => i.m.run.name).join("\n"));
-        const report = await ports.check(tip, items.map((i) => i.m.run), changed);
-        for (const i of items) checksOf.set(i.m, report.checks);
-        if (report.why && items.length === 1 && items[0].m !== leader && report.log !== undefined) items[0].m.log("checks.log", report.log);
-        return report.why;
-      };
-
-      // The commits of `items` that pass, in order, and the commit they end on. `known` is why the whole chain is already known to fail.
-      const settle = async (items: Pending[], base: string, known: string | null): Promise<{ ok: Pending[]; tip: string }> => {
-        if (!items.length) return { ok: [], tip: base };
-        const why = known ?? await check(items, base);
-        if (!why) return { ok: items, tip: items.at(-1)!.commit };
-        if (items.length === 1) { finish(items[0].m, { outcome: { condition: "failed", ...checksStopped(why) }, code: 1 }); return { ok: [], tip: base }; }
-        log(`split ${items.length} runs: ${why}`);
-        const h = Math.floor(items.length / 2);
-        const a = await settle(items.slice(0, h), base, null);
-        const rest = items.slice(h);
-        // The first half passed whole, so the second half on top of it is the tree that just failed.
-        const intact = a.ok.length === h;
-        const b = await settle(intact ? rest : build(rest.map((i) => i.m), a.tip), a.tip, intact ? why : null);
-        return { ok: [...a.ok, ...b.ok], tip: b.ok.length ? b.tip : a.tip };
-      };
-
-      const chain = build(open, base0);
-      const result = await settle(chain, base0, null);
+      const ctx: Attempt = { repo, leader, base0, tips, checksOf, finish, log, ports };
+      const chain = build(ctx, open, base0);
+      const result = await settle(ctx, chain, base0, null);
       const ok = result.ok;
       if (ok.length) {
         phase("land");
