@@ -47,6 +47,11 @@ export function gitWith(o: { env?: Record<string, string>; stdin?: string }, cwd
   return { ok: p.exitCode === 0, out: (p.stdout.toString() + (p.exitCode === 0 ? "" : p.stderr.toString())).trimEnd() };
 }
 
+/** The commit of job `job` on `origin/<main>` (the newest whose message has a `Job: <job>` trailer line), or an empty string. */
+export function jobCommit(cwd: string, main: string, job: string): string {
+  return git(cwd, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${job}$`).out;
+}
+
 /** `git fetch -q origin <refs>`, tried again (up to 5 times) when another process holds the ref lock. Returns the last result. */
 export function fetchOrigin(cwd: string, ...refs: string[]): { ok: boolean; out: string } {
   let r = git(cwd, "fetch", "-q", "origin", ...refs);

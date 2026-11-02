@@ -13,7 +13,7 @@ import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git } from "./unit.ts";
 import { agentOf, landTerms, removeBranch } from "./landing.ts";
-import { fetchOrigin } from "./git.ts";
+import { fetchOrigin, jobCommit } from "./git.ts";
 import { itemOnMain } from "./status.ts";
 import { refuse } from "./refusal.ts";
 import { dispatchDetached, dispatchIssues } from "./factory.ts";
@@ -223,7 +223,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const item = onOf(agent);
     if (item !== undefined) fetchOrigin(repo.path);
     // A land that pushed and died before it closed the item: its own `Job:` commit on main is that land, so the land unit finishes it (landing.ts). Another job's commit, or a commit by hand, that names the item still refuses.
-    const ownPush = item !== undefined && agent.job !== undefined && git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${agent.job}$`).out !== "";
+    const ownPush = item !== undefined && agent.job !== undefined && jobCommit(repo.path, repo.main, agent.job) !== "";
     const landedAs = ownPush ? null : itemOnMain(repo, item);
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     return await dispatch({

@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
-import { addWorktree, fetchOrigin, git } from "./git.ts";
+import { addWorktree, fetchOrigin, git, jobCommit } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
@@ -136,7 +136,7 @@ function recorder(folder: string): (c: CheckResult) => void {
  */
 export function onMain(repo: Repo, run: Run): { commit: string; how: string } | null {
   const main = `origin/${repo.main}`;
-  const trailer = git(repo.path, "log", main, "-1", "--format=%H", "-E", `--grep=^Job: ${run.job}$`).out;
+  const trailer = jobCommit(repo.path, repo.main, run.job);
   if (trailer) return { commit: trailer, how: "Job trailer" };
   if (!run.branch) return null;
   const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${run.branch}`);

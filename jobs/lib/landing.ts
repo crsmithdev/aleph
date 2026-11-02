@@ -8,7 +8,7 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { closeAndFile } from "../../todo/lib/store.ts";
-import { fetchOrigin, followMain, git } from "./git.ts";
+import { fetchOrigin, followMain, git, jobCommit } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { stopFields, type ChecksStop } from "./checks.ts";
@@ -312,7 +312,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
       const open: Member[] = [];
       for (const m of members) {
         // A land that pushed and then died finds its own commit here and does not merge again.
-        const pushed = git(repo.path, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${m.run.job}$`).out;
+        const pushed = jobCommit(repo.path, main, m.run.job);
         if (pushed) {
           m.log(`already on main as ${pushed}`);
           finish(m, { outcome: { condition: "landed", commit: pushed }, code: 0, after: () => {

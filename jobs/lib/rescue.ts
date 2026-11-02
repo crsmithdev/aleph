@@ -15,7 +15,7 @@ import { endRun } from "./agent-run.ts";
 import { always, logAlways, normalizeAsk, type Ask } from "./ask.ts";
 import { factoryDir, factoryRepos as sandboxRepos, holders } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
-import { fetchOrigin, git } from "./git.ts";
+import { fetchOrigin, git, jobCommit } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
@@ -168,7 +168,7 @@ type Stuck = { last: Entry; r: Entry["run"]; repo: Repo; name: string; issue: nu
 /** The commit of this job or this item on main, or `{ onMain: null }` when the item is closed without one; null when neither. */
 function foundDone({ r, repo, issue }: Pick<Stuck, "r" | "repo" | "issue">): { onMain: string | null } | null {
   fetchOrigin(repo.path);
-  const mine = git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${r.job}$`).out;
+  const mine = jobCommit(repo.path, repo.main, r.job);
   if (mine) return { onMain: mine.slice(0, 7) };
   const there = itemOnMain(repo, issue);
   if (there) return { onMain: there };
