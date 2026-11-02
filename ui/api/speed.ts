@@ -147,7 +147,7 @@ const passedState = (st: string) => st === "passed" || st === "landed" || st ===
 
 /** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
 export function classify(runs: Run[], statusOf: (goal: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; issues: number; hours: number }; lost: { hours: number; share: number }; total: number } {
-  const goalOf = (r: Run) => `${r.repo}-${issueOf(r)}`;
+  const goalOf = (r: Run) => `${r.repo}-${onOf(r)}`;
   const t0 = (r: Run) => Date.parse(r.started);
   const agentsOf = new Map<string, Run[]>(), landsOf = new Map<string, Run[]>(), firstStart = new Map<string, number>();
   for (const r of runs) {
@@ -470,7 +470,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   const lists = reader({ fetch: false });
   const statusOf = (goal: string): string | undefined => {
     const m = goal.lastIndexOf("-");
-    const item = m < 0 ? undefined : lists.item(goal.slice(0, m), Number(goal.slice(m + 1)));
+    const item = m < 0 ? undefined : lists.item(goal.slice(0, m), goal.slice(m + 1));
     if (item) return status(item);
     // An issue that is not in a readable list left the store.
     return m >= 0 && lists.list(goal.slice(0, m)) ? GONE : undefined;
@@ -478,7 +478,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
   for (const c of cls.classes) for (const t of c.top) {
     const m = t.goal.lastIndexOf("-");
-    const item = lists.item(t.goal.slice(0, m), Number(t.goal.slice(m + 1)));
+    const item = lists.item(t.goal.slice(0, m), t.goal.slice(m + 1));
     t.title = item?.title;
     // The link would be a 404 for an issue that left the store.
     if (!item && lists.list(t.goal.slice(0, m))) delete t.href;

@@ -272,7 +272,7 @@ test("classify: a drop's fate, not its prose, sets the nothing class and the Nee
   expect(by("dropped").causes.find((c) => c.name === "Needed Chris")!.runs).toBe(1);
 });
 
-test("runs read their issue from on: a goal run counts under its issue, an issue run under its number", () => {
+test("runs read their issue from on: a part counts under its own ref, an issue run under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "ox", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
   const runs = [
@@ -280,7 +280,7 @@ test("runs read their issue from on: a goal run counts under its issue, an issue
   ];
   const seen: string[] = [];
   classify(runs, (g) => { seen.push(g); return "open"; }, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
-  expect(new Set(seen)).toEqual(new Set(["ox-860", "ox-7"]));
+  expect(new Set(seen)).toEqual(new Set(["ox-860", "ox-860.1", "ox-7"]));
 
   const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), kind: "land", condition: "landed" });
   for (const r of [a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), land("p", { on: "ox-860" }), land("q", { on: "ox-860.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
@@ -396,4 +396,17 @@ test("flakes count each test name; a row without tests counts under its check", 
     rmSync(file, { force: true });
     clearCache();
   }
+});
+
+test("classify: the parts of one issue are goals of their own, and a top list links to the part", () => {
+  const t = (s: number) => new Date(2026, 9, 28, 8, 0, s).toISOString();
+  const b = (job: string, ref: string, s: number, e: number) => ({ kind: "build", job, name: job, repo: "fx", on: `fx-${ref}`, condition: "passed", started: t(s), ended: t(e) }) as any;
+  const l = (job: string, ref: string, s: number, e: number) => ({ kind: "land", job, name: job, repo: "fx", on: `fx-${ref}`, condition: "landed", started: t(s), ended: t(e) }) as any;
+  const runs = [b("p1", "7.1", 0, 100), b("p4", "7.4", 4, 100), l("p4", "7.4", 110, 120), l("p1", "7.1", 130, 140)];
+  const out = classify(runs, () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  const by = (k: string) => out.classes.find((c) => c.key === k)!;
+  expect(by("landed").runs).toBe(2);
+  expect(by("restarted").runs).toBe(0);
+  const d = classify([{ ...b("x", "7.2", 0, 100), condition: "stuck", noCommit: true }], () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  expect(d.classes.find((c) => c.key === "dropped")!.top[0]).toMatchObject({ goal: "fx-7.2", href: "#/issues/fx/7.2" });
 });
