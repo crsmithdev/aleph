@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -109,7 +109,7 @@ function renderRetrieval(r) {
 
 function renderProspective(p) {
   const issues = p.issues.length
-    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
+    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${priorityBadge(i.priority)} ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
     : none("No open issue has an after.", "<code>aleph issue edit</code> with <code>--after</code> fills this.");
   return `<div class="kinds">${sub("Open issues with a wait", p.issues.length, issues)}</div>`;
 }

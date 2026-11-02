@@ -128,12 +128,12 @@ function prospective() {
   const registry = Object.values(loadRegistry());
   let docs: (todos.Doc | null)[] = [];
   try { docs = readLists(registry); } catch {}
-  const open: { repo: string; id: number; title: string; after: string[] }[] = [];
+  const open: { repo: string; id: number; title: string; after: string[]; priority: string }[] = [];
   registry.forEach((r, n) => {
     for (const i of docs[n]?.items ?? []) {
       if (todos.status(i) !== "open") continue;
       const after = afterOf(i);
-      if (after.length) open.push({ repo: r.key, id: i.id, title: i.title, after });
+      if (after.length) open.push({ repo: r.key, id: i.id, title: i.title, after, priority: String(i.fm.priority ?? "medium") });
     }
   });
   open.sort((a, b) => a.repo.localeCompare(b.repo) || a.id - b.id);

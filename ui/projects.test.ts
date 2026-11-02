@@ -7,6 +7,8 @@ import { add } from "../todo/lib/todo.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 // @ts-ignore plain JS, shared with the page
+import { priorityBadge } from "./lib.js";
+// @ts-ignore plain JS, shared with the page
 import { view as oneView } from "./views/project.js";
 
 let base: string, stop: () => void, restoreEnv: () => void, at: (path: string) => Promise<Response>;
@@ -53,7 +55,7 @@ beforeAll(async () => {
   writeFileSync(join(vault, "wiki", "C fact.md"), note("concept", "plain", "2026-10-05"));
   restoreEnv = withEnv({ ...gitEnv, ALEPH_JOBS_DIR: jobs, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_VAULT: vault });
   writeList({ key: "fac" }, "seed", (doc) => {
-    add(doc, "a goal", { spec: "Do it." });
+    add(doc, "a goal", { spec: "Do it.", priority: "critical" });
     add(doc, "plain issue");
     return true;
   }, true);
@@ -114,5 +116,7 @@ test("the view renders the detail", async () => {
   expect(oneView.path).toBe("/projects/:key");
   const d = oneView.render(await (await at("/api/projects/fac")).json());
   for (const t of ["second", "fac-2", "a goal", "B fact"]) expect(d).toContain(t);
+  expect(d).toContain(priorityBadge("critical"));
+  expect(d).toContain(priorityBadge("medium"));
 });
 

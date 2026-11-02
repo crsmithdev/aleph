@@ -5,8 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { clearCache, warm } from "./api/memory.ts";
+import { memoryTypes } from "./api/memory-types.ts";
+import { writeList } from "../todo/lib/store.ts";
+import { add } from "../todo/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
-import { md } from "./lib.js";
+import { md, priorityBadge } from "./lib.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
@@ -365,4 +368,25 @@ test("/api/memory lists the notes with their read date, and a page search logs n
   expect(m.notes.some((n: any) => n.read === null)).toBe(true);
   await at("/api/memory/search?q=bun");
   expect(JSON.parse(readFileSync(log, "utf8"))).toEqual({ "Use Bun": "2026-10-30" });
+});
+
+test("prospective issues carry their priority, medium when they have none, and the page shows the badge", async () => {
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ pri: { path: base } }));
+  try {
+    writeList({ key: "pri" }, "seed", (doc) => {
+      const a = add(doc, "urgent wait", { priority: "critical" });
+      const b = add(doc, "plain wait");
+      a.fm.after = ["pri-9"];
+      b.fm.after = ["pri-9"];
+      delete b.fm.priority;
+      return true;
+    }, true);
+    const t: any = await memoryTypes(join(base, "vault"), [], null);
+    expect(t.prospective.issues.map((i: any) => i.priority)).toEqual(["critical", "medium"]);
+    const h = v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: t }, {}, new URLSearchParams("type=prospective"));
+    expect(h).toContain(priorityBadge("critical"));
+    expect(h).toContain(">critical<");
+  } finally {
+    writeFileSync(join(base, "repos.json"), "{}");
+  }
 });
