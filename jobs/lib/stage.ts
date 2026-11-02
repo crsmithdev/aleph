@@ -41,7 +41,7 @@ export interface Ctx {
   main: string;
   /** The repo is a factory repo (`sandbox: true`): triage reads it, so an issue with no spec gets sorted. */
   sandbox: boolean;
-  /** The not-reverted `Item:` trailer commits on origin/<main>, by item number: `landedIndex`. */
+  /** The not-reverted `Issue:` trailer commits on origin/<main>, by item number: `landedIndex`. */
   landed: Map<string, string[]>;
   /** Items whose trailer commits are all reverted. */
   reverted: Set<string>;

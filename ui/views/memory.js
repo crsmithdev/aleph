@@ -181,7 +181,7 @@ export function typeTiles(m, rows) {
     { id: "episodic", name: "Episodic", n: m.byKind?.episode ?? eps.length, unit: `episodes, ${t.episodic.daily.total} daily pages`, status: `${eps.filter((n) => n.read).length} returned by recall`, tone: "", write: t.episodic.last, use: newest(eps.map((n) => n.read)) },
     { id: "procedural", name: "Procedural", n: t.procedural.skills.length, unit: `skills, ${hooks} hooks`, status: t.procedural.claudeMd ? `${t.procedural.claudeMd.lines} lines of rules` : "No rules file", tone: "", write: t.procedural.last },
     { id: "retrieval", name: "Retrieval", n: stats ? stats.recalls : "–", unit: "recalls, 7 days", status: stats ? `${Math.round(stats.empty_share * 100)}% empty` : "No data", tone: stats && stats.empty_share > 0.2 ? "warn" : "", write: t.retrieval.last },
-    { id: "prospective", name: "Prospective", n: t.prospective.issues.length, unit: "waiting", status: t.prospective.issues.length ? "Waiting" : "Empty", tone: "", write: t.prospective.last },
+    { id: "prospective", name: "Prospective", n: t.prospective.issues.length, unit: "waiting", status: t.prospective.issues.length ? "Waiting" : "Empty", tone: "" },
     { id: "parametric", name: "Parametric", n: "–", unit: "not stored", status: "By design", tone: "", write: "" },
   ];
 }

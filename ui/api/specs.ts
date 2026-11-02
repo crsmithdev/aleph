@@ -1,6 +1,5 @@
 /**
- * `GET /api/specs` and `GET /api/specs/:project/:file`: each registered repo's `docs/specs/*.md`, one row per file
- * (`{ project, file, date, title }`), and one spec with its body. `?project=<key>` shows only that project.
+ * `GET /api/specs/:project/:file`: one spec of a registered repo's `docs/specs/*.md`, with its body.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,7 +27,6 @@ export function specs(only: string | null): Spec[] {
 }
 
 export const routes: Routes = {
-  "GET /api/specs": (_req, _p, url) => Response.json(specs(url.searchParams.get("project") || null)),
   "GET /api/specs/:project/:file": (_req, params) => {
     const row = NAME.test(params.file) ? specs(params.project).find((s) => s.file === params.file) : undefined;
     if (!row) return Response.json({ error: `no spec ${params.project}/${params.file}` }, { status: 404 });

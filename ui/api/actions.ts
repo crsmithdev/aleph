@@ -1,5 +1,5 @@
 /**
- * `GET /api/diff/:name`, `POST /api/land|recheck|drop|checked/:name` and
+ * `GET /api/diff/:name`, `POST /api/land|recheck|drop/:name` and
  * `POST /api/answer/:name` (`{ answer }`, "Answer and rerun" on a
  * question run: the answer becomes the reason of `aleph drop`, so the next dispatch carries it in the spec). Each action is the `aleph` command of that
  * name, run as a subprocess by the launcher; the page offers nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
@@ -31,7 +31,7 @@ const diff: Handler = (_req, { name }) => {
   return d ? text(d.diff, 200) : text(NO_DIFF, 404);
 };
 
-const action = (verb: "land" | "recheck" | "drop" | "checked"): Handler => async (req, { name }) => {
+const action = (verb: "land" | "recheck" | "drop"): Handler => async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   if (!find(name)) return text(`no job named ${name}`, 404);
   const args = [verb, name];
@@ -79,6 +79,5 @@ export const routes: Routes = {
   "POST /api/land/:name": action("land"),
   "POST /api/recheck/:name": action("recheck"),
   "POST /api/drop/:name": action("drop"),
-  "POST /api/checked/:name": action("checked"),
   "POST /api/answer/:name": answerAndRerun,
 };

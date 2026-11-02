@@ -112,8 +112,6 @@ test("a POST without the header, or from another origin, is 403 and runs nothing
   expect((await post("/api/land/x", { "X-Aleph-UI": "1", Origin: "https://evil.example" })).status).toBe(403);
   expect((await post("/api/drop/x", { Origin: `http://127.0.0.1:${server.port}` })).status).toBe(403);
   expect(recorded().length).toBe(before);
-  expect((await post("/api/checked/x", { "X-Aleph-UI": "1", Origin: `http://127.0.0.1:${server.port}` })).status).toBe(200);
-  expect(recorded().at(-1)).toBe("checked x");
 });
 
 test("POST /api/drop passes the reason", async () => {

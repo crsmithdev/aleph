@@ -65,13 +65,11 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("/api/projects counts, behind, baseline and notes", async () => {
-  const all: any[] = await (await at("/api/projects")).json();
-  expect(all.map((p) => p.key)).toEqual(["plain", "fac"]); // plain landed last
-  const fac = all.find((p) => p.key === "fac");
+test("/api/projects/<key> counts, behind, baseline and notes", async () => {
+  const fac: any = await (await at("/api/projects/fac")).json();
   expect(fac).toMatchObject({ factory: true, openItems: 2, openGoals: 1, behind: 1, notes: 2, baseline: { commit: "abcdef1234", ok: false, failed: "tests" } });
   expect(fac.lastLanded).toEqual({ name: "fac-1", at: "2026-10-27T11:00:00Z" });
-  const plain = all.find((p) => p.key === "plain");
+  const plain: any = await (await at("/api/projects/plain")).json();
   expect(plain).toMatchObject({ factory: false, openItems: 0, openGoals: 0, behind: null, baseline: null, notes: 1 });
 });
 
@@ -108,8 +106,6 @@ test("/api/projects/<key> gives a job's item from its on (a dotted on stays a st
 });
 
 test("?project= narrows every route", async () => {
-  const one: any[] = await (await at("/api/projects?project=fac")).json();
-  expect(one.map((p) => p.key)).toEqual(["fac"]);
   expect((await at("/api/projects/fac?project=fac")).status).toBe(200);
   expect((await at("/api/projects/fac?project=plain")).status).toBe(404);
 });
@@ -120,25 +116,3 @@ test("the view renders the detail", async () => {
   for (const t of ["second", "fac-2", "a goal", "B fact"]) expect(d).toContain(t);
 });
 
-test("/api/projects loads the vault and the jobs once for three repos", async () => {
-  const { loaders } = await import("./api/projects.ts");
-  const third = join(base, "third");
-  sh(base, "git", "init", "-q", "-b", "main", third);
-  const prev = process.env.ALEPH_REPOS, real = { ...loaders };
-  const reg = JSON.parse(require("node:fs").readFileSync(prev!, "utf8"));
-  const alt = join(base, "repos3.json");
-  writeFileSync(alt, JSON.stringify({ ...reg, third: { path: third } }));
-  process.env.ALEPH_REPOS = alt;
-  let vaults = 0, jobs = 0;
-  loaders.vault = () => { vaults++; return real.vault(); };
-  loaders.jobs = () => { jobs++; return real.jobs(); };
-  try {
-    const all: any[] = await (await at("/api/projects")).json();
-    expect(all).toHaveLength(3);
-    expect(vaults).toBe(1);
-    expect(jobs).toBe(1);
-  } finally {
-    Object.assign(loaders, real);
-    process.env.ALEPH_REPOS = prev;
-  }
-});

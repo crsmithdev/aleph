@@ -36,7 +36,7 @@ test("the review fixture gives the one-off server jobs, issues, projects and not
   expect(new Set(issues.map((i: any) => i.status))).toEqual(new Set(["open", "done", "dropped"]));
   expect(issues.some((i: any) => i.labels.includes("bug"))).toBe(true);
   expect((await get("/api/memory")).total).toBe(4);
-  expect(JSON.stringify(await get("/api/projects"))).toContain("tools");
+  expect(JSON.stringify(await get("/api/projects/tools"))).toContain("tools");
 });
 
 test("the review fixture's speed API fills four Efficiency classes, two or more of them lost", async () => {

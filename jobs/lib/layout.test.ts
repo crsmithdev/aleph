@@ -11,7 +11,7 @@ import { sandboxDir } from "./sandbox.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-const VARS = ["ALEPH_ITEMS", "ALEPH_ISSUES", "ALEPH_JOBS_DIR", "ALEPH_RUNS_DIR", "ALEPH_SANDBOX_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS", "ALEPH_BACKUPS_DIR"];
+const VARS = ["ALEPH_ISSUES", "ALEPH_JOBS_DIR", "ALEPH_RUNS_DIR", "ALEPH_SANDBOX_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS"];
 let home: string, a: string;
 const saved: Record<string, string | undefined> = {};
 

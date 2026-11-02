@@ -1,5 +1,5 @@
 /**
- * `GET /api/projects` and `GET /api/projects/<key>`: each registry repo with its open
+ * `GET /api/projects/<key>`: one registry repo with its open
  * items and goals, last land, distance behind origin/<main>, baseline and vault notes.
  * Read-only and offline: git is asked about refs already fetched, never fetched.
  */
@@ -88,14 +88,6 @@ function commits(repo: Repo): Detail["commits"] {
   });
 }
 
-const stamp = (s: string | null | undefined) => (s ? Date.parse(s) || 0 : 0);
-
-export async function projects(only: string | null): Promise<Card[]> {
-  const notes = await loaders.vault(), jobs = loaders.jobs();
-  return Object.values(loadRegistry()).filter((r) => !only || r.key === only).map((r) => card(r, openIssues(r.key), jobsOf(r, jobs), scoped(r, notes).length))
-    .sort((a, b) => stamp(b.activity) - stamp(a.activity) || a.key.localeCompare(b.key));
-}
-
 export async function project(key: string): Promise<Detail | null> {
   const repo = loadRegistry()[key];
   if (!repo) return null;
@@ -114,7 +106,6 @@ export async function project(key: string): Promise<Detail | null> {
 }
 
 export const routes: Routes = {
-  "GET /api/projects": async (_req, _p, url) => Response.json(await projects(url.searchParams.get("project") || null)),
   "GET /api/projects/:key": async (_req, params, url) => {
     const only = url.searchParams.get("project");
     const d = only && only !== params.key ? null : await project(params.key);

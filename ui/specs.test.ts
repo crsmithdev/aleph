@@ -42,21 +42,6 @@ afterAll(() => {
 });
 
 describe("specs", () => {
-  test("/api/specs lists one row per .md file, newest first, with date, title and project", async () => {
-    const d = await getJson("/api/specs");
-    expect(d).toEqual([
-      { project: "a", file: "2026-10-05-beta.md", date: "2026-10-05", title: "2026-10-05-beta.md" },
-      { project: "a", file: "2026-10-01-alpha.md", date: "2026-10-01", title: "Alpha spec" },
-      { project: "b", file: "2026-09-01-gamma.md", date: "2026-09-01", title: "Gamma" },
-    ]);
-  });
-
-  test("?project= keeps one project", async () => {
-    expect((await getJson("/api/specs?project=b")).map((s: any) => s.file)).toEqual(["2026-09-01-gamma.md"]);
-    expect((await getJson("/api/specs")).length).toBe(3);
-    expect((await getJson("/api/specs?project=b")).map((s: any) => s.project)).toEqual(["b"]);
-  });
-
   test("/api/specs/:project/:file gives the body; unknown or unsafe names are 404", async () => {
     const s = await getJson("/api/specs/a/2026-10-01-alpha.md");
     expect(s.title).toBe("Alpha spec");
