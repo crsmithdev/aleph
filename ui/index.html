@@ -54,7 +54,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { actMessages, denyReasons, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, recordState, restoreState } from "/lib.js";
+  import { actMessages, denyReasons, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
@@ -72,11 +72,7 @@
     const src = path.split("/").map((seg) => seg.startsWith(":") ? (names.push(seg.slice(1)), "([^/]+)") : seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("/");
     return { re: new RegExp(`^${src}/?$`), names };
   }
-  function parseHash() {
-    const h = location.hash.replace(/^#/, "") || "/";
-    const q = h.indexOf("?");
-    return { path: q < 0 ? h : h.slice(0, q), query: new URLSearchParams(q < 0 ? "" : h.slice(q + 1)) };
-  }
+  const readHash = () => parseHash(location.hash);
   // A hand-typed `%zz` is no encoding: it stands for itself, and the view says it found nothing.
   const decodeParam = (s) => { try { return decodeURIComponent(s); } catch { return s; } };
   function match(path, query) {
@@ -194,7 +190,7 @@
       const to = r(location.hash);
       if (to) { history.replaceState(null, "", to); break; }
     }
-    const { path, query } = parseHash();
+    const { path, query } = readHash();
     nav(path);
     clearInterval(timer);
     // #view outlives its views, so a view's handlers on it must not reach the next one.

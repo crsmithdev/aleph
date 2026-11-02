@@ -360,8 +360,14 @@ export const searchBox = (ui, value, placeholder) =>
 
 /** The hash's query. */
 export const hashQuery = () => new URLSearchParams(location.hash.split("?")[1] ?? "");
+/** A hash split into its path and query; a hash with no path (`#?window=day`) is the path `/`. */
+export function parseHash(hash) {
+  const h = hash.replace(/^#/, "");
+  const i = h.indexOf("?");
+  return { path: (i < 0 ? h : h.slice(0, i)) || "/", query: new URLSearchParams(i < 0 ? "" : h.slice(i + 1)) };
+}
 const withQuery = (changes) => {
-  const [path] = location.hash.replace(/^#/, "").split("?");
+  const path = parseHash(location.hash).path;
   const q = hashQuery();
   for (const [k, v] of Object.entries(changes)) { if (v) q.set(k, v); else q.delete(k); }
   return `#${path}${q.toString() ? `?${q}` : ""}`;

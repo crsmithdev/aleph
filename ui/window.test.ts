@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { loadSpeed } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
-import { storeWindow, windowOf, wireScope } from "./lib.js";
+import { goQuery, parseHash, storeWindow, windowOf, wireScope } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import * as eff from "./views/efficiency.js";
 // @ts-ignore plain JS shared with the page
@@ -122,4 +122,25 @@ test("All jobs keeps an old ?days= address open", () => {
 test("live values on Agents say they are live", () => {
   expect(PAGES.agents.render("hour")).toContain("live, in use now");
   expect(PAGES.agents.render("hour")).toContain("live, not the window");
+});
+
+test("the picker works from an address with no hash", () => {
+  g.location.hash = "";
+  goQuery({ window: "day" });
+  expect(g.location.hash).toBe("#/?window=day");
+  g.location.hash = "#?week=1";
+  goQuery({ window: "day" });
+  expect(g.location.hash).toBe("#/?week=1&window=day");
+  g.location.hash = "#/jobs?x=1";
+  goQuery({ window: "day" });
+  expect(g.location.hash).toBe("#/jobs?x=1&window=day");
+});
+
+test("the route of #?window=day is Status, on the day window", () => {
+  const { path, query } = parseHash("#?window=day");
+  expect(path).toBe("/");
+  expect(path).toBe(now.view.path);
+  expect(windowOf(query)).toBe("day");
+  expect(parseHash("")).toEqual({ path: "/", query: new URLSearchParams() });
+  expect(parseHash("#/jobs/a?x=1").path).toBe("/jobs/a");
 });
