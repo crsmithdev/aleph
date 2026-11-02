@@ -6,6 +6,8 @@ import { speed } from "./api/speed.ts";
 import { withEnv } from "./test-server.ts";
 // @ts-ignore plain JS shared with the page
 import { fileIssue, issueFor, renderEfficiency, selection } from "./views/efficiency.js";
+// @ts-ignore plain JS shared with the page
+import { pctTrend } from "./views/speed.js";
 
 let base: string;
 let restore: () => void;
@@ -62,8 +64,8 @@ test("the tiles and the head come from the data", () => {
   const h = renderEfficiency(D, DAY, "all");
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
   expect(h).toContain('<header class="ph"><h1>Efficiency</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
-  expect(h).toContain('<span class="good">▼ 10% in the last 24 h</span>');
-  expect(h).toContain('<span class="good">▲ 75% in the last 24 h</span>');
+  expect(h).toContain('<span class="good">▼ 20% in the last 24 h</span>');
+  expect(h).toContain('<span class="good">▲ 25% in the last 24 h</span>');
   expect(h).toContain("&lt;0.1%");
   expect(h).toContain("20 h counted · 11 runs, 0.4 h, have no outcome yet");
   expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, null, "all")).toContain("needs 6 hours of usage snapshots");
@@ -140,4 +142,12 @@ test("the Reruns panel describes tests and checks, and keeps a long name whole",
   expect(h).toContain(`title="${long.replace(/>/g, "&gt;")}"`);
   expect(h).toContain(long.replace(/>/g, "&gt;"));
   expect(h).toContain("rerun");
+});
+
+test("percent tiles show the change in points, not the 24 h value", () => {
+  expect(pctTrend(0.9004, 0.8302, false)).toBe('<span class="warn">▼ 7% in the last 24 h</span>');
+  expect(pctTrend(0.3, 0.4)).toBe('<span class="warn">▲ 10% in the last 24 h</span>');
+  expect(pctTrend(0.5, 0.5)).toBe("<small>no change in the last 24 h</small>");
+  expect(pctTrend(0.5, 0.502)).toBe("<small>no change in the last 24 h</small>");
+  expect(pctTrend(0.5, null)).toBe("<small>none in the last 24 h</small>");
 });

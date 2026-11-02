@@ -105,8 +105,8 @@ test("the scorecard has five tiles with values from the data and 24 h comparison
   const h = view.renderTiles({ ...state, now: "2026-11-01T08:00:00Z", usage: USAGE }, WEEK, DAY);
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "Lead time p50", "First pass", "Lands", "Weekly usage"]);
   expect([...h.matchAll(/<b>([^<]+)<\/b>/g)].map((m) => m[1])).toEqual(["38%", "26m", "91%", "7", "7%"]);
-  expect(h).toContain('<span class="good">▼ 15% in the last 24 h</span>');
-  expect(h).toContain('<span class="warn">▼ 80% in the last 24 h</span>');
+  expect(h).toContain('<span class="good">▼ 23% in the last 24 h</span>');
+  expect(h).toContain('<span class="warn">▼ 11% in the last 24 h</span>');
   expect(h).toContain("9 land runs");
   expect(h).toContain("3 in the last 24 h, 1 a day on average");
   for (const t of ["#/factory/efficiency", "#/factory/jobs", "#/factory/agents"]) expect(h).toContain(`href="${t}"`);
