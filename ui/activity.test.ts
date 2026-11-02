@@ -6,6 +6,8 @@ import { activity, clearCache } from "./api/activity.ts";
 import { withEnv } from "./test-server.ts";
 
 let obsHits = 0;
+/** While a test holds this promise unresolved, the fake Langfuse does not answer observations. */
+let hold: Promise<void> = Promise.resolve();
 let base: string, fake: ReturnType<typeof Bun.serve>;
 let restore: () => void;
 
@@ -28,10 +30,11 @@ beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-act-"));
   fake = Bun.serve({
     port: 0,
-    fetch(req) {
+    async fetch(req) {
       const url = new URL(req.url);
       if (!req.headers.get("authorization")?.startsWith("Basic ")) return new Response("no", { status: 401 });
       if (url.pathname === "/api/public/observations") obsHits++;
+      if (url.pathname === "/api/public/observations") await hold;
       if (url.pathname === "/api/public/observations") return Response.json({ data: observations, meta: { totalPages: 1 } });
       if (url.pathname === "/api/public/traces") return Response.json({ data: traces, meta: { totalPages: 1 } });
       return new Response("not found", { status: 404 });
@@ -73,7 +76,9 @@ describe("activity", () => {
   });
 
   test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, the old answer comes back at once and one reload runs", async () => {
-    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "0.3" });
+    // Load cannot use up 300 s; the expiry below is forced by shortening the TTL, not by waiting.
+    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "300" });
+    let release = () => {};
     clearCache();
     try {
       obsHits = 0;
@@ -82,17 +87,25 @@ describe("activity", () => {
       expect(obsHits).toBe(1);
       expect(b.cachedAt).toBe(a.cachedAt);
       expect(b.tools).toEqual(a.tools);
-      await Bun.sleep(400);
+      process.env.ALEPH_UI_CACHE_TTL = "0.001";
+      await Bun.sleep(20);
+      // The fake Langfuse holds the reload, so both stale requests below come while it is in flight.
+      hold = new Promise((r) => { release = r; });
       const c = await activity(7, null, now);
       expect(c.cachedAt).toBe(a.cachedAt);
       await activity(7, null, now);
-      for (let i = 0; i < 200 && obsHits < 2; i++) await Bun.sleep(25);
+      for (let i = 0; i < 800 && obsHits < 2; i++) await Bun.sleep(25);
+      process.env.ALEPH_UI_CACHE_TTL = "300";
+      release();
+      let d = c;
+      for (let i = 0; i < 800 && d.cachedAt === a.cachedAt; i++) { await Bun.sleep(25); d = await activity(7, null, now); }
       expect(obsHits).toBe(2);
-      const d = await activity(7, null, now);
       expect(d.cachedAt).not.toBe(a.cachedAt);
       await activity(7, "fac", now);
       expect(obsHits).toBe(3);
     } finally {
+      release();
+      hold = Promise.resolve();
       restoreTtl();
       clearCache();
     }

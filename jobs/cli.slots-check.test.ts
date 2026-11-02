@@ -7,8 +7,8 @@ import { base, job, jobsDir, repo, setup, state, teardown } from "./cli.helpers"
 beforeAll(() => {
   setup();
   const regs = JSON.parse(readFileSync(join(base, "repos.json"), "utf8"));
-  // Each check runs 4 s under a 6 s limit: 2 s of slack on each side, so a loaded machine does not cut a check off.
-  const check = (log: string) => ({ name: "slot", run: `echo "$(date +%s%N) start" >> ${log}; sleep 4; echo "$(date +%s%N) end" >> ${log}; echo "$ALEPH_TEST_PARALLEL" > ${log}.env` });
+  // Each check runs 5 s under a 9 s limit: 4 s of slack, so a loaded machine does not cut a check off.
+  const check = (log: string) => ({ name: "slot", run: `echo "$(date +%s%N) start" >> ${log}; sleep 5; echo "$(date +%s%N) end" >> ${log}; echo "$ALEPH_TEST_PARALLEL" > ${log}.env` });
   regs.slots = { path: repo, autoland: false, checks: [check(join(base, "slots.log"))] };
   writeFileSync(join(base, "repos.json"), JSON.stringify(regs));
 });
@@ -46,9 +46,10 @@ describe("check slots", () => {
     if (!passed || count !== 4) throw new Error(`both runs must pass and slots.log must have 4 lines (it has ${count})\n${cause()}`);
   };
   beforeAll(async () => {
-    // One slot, a 6 s limit, and a check of 4 s: the second check waits about 4 s and runs 4 s.
-    // Both margins are 2 s: run time against the limit, and the limit against two checks back to back (8 s).
-    const extra = { ALEPH_CHECK_SLOTS: "1", ALEPH_CHECK_TIMEOUT: "6" };
+    // One slot, a 9 s limit, and a check of 5 s: the second check waits about 5 s and runs 5 s.
+    // A check has 4 s of slack against the limit. Two checks back to back take at least 10 s, more than the limit;
+    // load only makes them take longer, so that side needs no slack.
+    const extra = { ALEPH_CHECK_SLOTS: "1", ALEPH_CHECK_TIMEOUT: "9" };
     runs = await Promise.all(["s1", "s2"].map((n) => job(n, `commit ${n}.txt`, extra, "slots")));
   }, 90_000);
 
@@ -63,8 +64,8 @@ describe("check slots", () => {
   test("the wait for a slot does not count against ALEPH_CHECK_TIMEOUT", () => {
     ready();
     const l = lines(slotsLog());
-    // The second check ended more than the 6 s limit after the first started, and was not timed out.
-    expect(Number(BigInt(l[3][0]) - BigInt(l[0][0])) / 1e9).toBeGreaterThan(6);
+    // The second check ended more than the 9 s limit after the first started, and was not timed out.
+    expect(Number(BigInt(l[3][0]) - BigInt(l[0][0])) / 1e9).toBeGreaterThan(9);
     for (const r of runs) expect(state(r.json.run).checks.every((c: any) => c.ok)).toBe(true);
   });
 

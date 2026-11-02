@@ -160,7 +160,7 @@ test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when
     const c: any = await (await at("/api/memory")).json();
     expect(c.cachedAt).toBe(a.cachedAt);
     const lines = () => readFileSync(log, "utf8").trim().split("\n").length;
-    const deadline = Date.now() + 5000;
+    const deadline = Date.now() + 20000;
     while (lines() < 2 && Date.now() < deadline) await Bun.sleep(20);
     expect(lines()).toBe(2);
     // The stub has run, but the cache stores its answer a moment later.
@@ -227,11 +227,11 @@ test("facts runs fill the gates section, newest first, scoped by project", async
   expect(other.facts).toEqual([]);
 });
 
-/** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. */
+/** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. While the file `gate` exists, the stub waits before it fails. */
 async function failing(name: string, ttl: string) {
-  const bin = join(base, name), log = join(base, `${name}-calls`);
+  const bin = join(base, name), log = join(base, `${name}-calls`), gate = join(base, `${name}-gate`);
   mkdirSync(bin);
-  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\nexit 1\n`);
+  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\nwhile [ -e ${gate} ]; do sleep 0.05; done\nexit 1\n`);
   chmodSync(join(bin, "bun"), 0o755);
   let requests = 0;
   const lf = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => { requests++; return new Response("boom", { status: 500 }); } });
@@ -245,7 +245,7 @@ async function failing(name: string, ttl: string) {
     for (const [k, val] of Object.entries(saveEnv)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
     clearCache();
   };
-  return { calls, requests: () => requests, done };
+  return { calls, requests: () => requests, gate, done };
 }
 
 test("failed loads are kept for the TTL: no second spawn, no second Langfuse request", async () => {
@@ -274,12 +274,14 @@ test("after the TTL a failed answer comes back at once and the reload runs in th
     const seen = f.requests();
     process.env.ALEPH_UI_CACHE_TTL = "0.001";
     await Bun.sleep(20);
-    const t = Date.now();
-    const c = await at("/api/memory");
-    expect(c.status).toBe(200);
-    expect((await c.json() as any).misses).toBeUndefined();
-    expect(Date.now() - t).toBeLessThan(1000);
-    const deadline = Date.now() + 5000;
+    // The reload's stub waits on the gate, so an answer that waited for the reload cannot arrive before the gate goes.
+    writeFileSync(f.gate, "");
+    const c = await Promise.race([at("/api/memory"), Bun.sleep(15000).then(() => null)]);
+    expect(c).not.toBeNull();
+    expect(c!.status).toBe(200);
+    expect((await c!.json() as any).misses).toBeUndefined();
+    rmSync(f.gate);
+    const deadline = Date.now() + 20000;
     while ((f.calls() < 2 || f.requests() === seen) && Date.now() < deadline) await Bun.sleep(20);
     expect(f.calls()).toBe(2);
     expect(f.requests()).toBeGreaterThan(seen);
