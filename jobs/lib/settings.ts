@@ -38,6 +38,8 @@ export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", 10);
 export const AWAITING_CAP = () => cap("ALEPH_AWAITING_CAP", "awaiting", 5);
 export const EXPLAIN_CAP = () => num("ALEPH_EXPLAIN_CAP", 3);
 export const EXPLAIN_TRIES = () => num("ALEPH_EXPLAIN_TRIES", 2);
+/** Goals failing acceptance at one commit, at which none of them reopens. */
+export const acceptanceFailCap = () => { const n = Math.floor(Number(process.env.ALEPH_ACCEPTANCE_FAIL_CAP)); return n >= 1 ? n : 5; };
 export const TRIAGE_CAP = () => num("ALEPH_TRIAGE_CAP", 5);
 export const TRIAGE_TRIES = () => num("ALEPH_TRIAGE_TRIES", 2);
 /** How many signals make a lesson a proposal. */

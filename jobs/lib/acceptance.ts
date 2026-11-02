@@ -16,10 +16,10 @@ import { plainAsk } from "./ask.ts";
 import { note, noteFlake, reopen as storeReopen, setAsk, writeList, type Ask } from "../../todo/lib/store.ts";
 import { cloneAndSetup, q } from "./checks.ts";
 import { git } from "./git.ts";
-import { checkSlot, type Repo } from "./ledger.ts";
+import { checkSlot, tell, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import { acceptanceDir, acceptanceFile, commitsNaming, readRecord, resultLine, type Accepted, type FailedTest } from "./status.ts";
-import { quietLoad } from "./settings.ts";
+import { acceptanceFailCap, quietLoad } from "./settings.ts";
 
 /** The longest a rerun waits for a quiet machine. */
 export const MAX_WAIT_MS = 24 * 3_600_000;
@@ -209,6 +209,23 @@ function markPassed(key: string, commit: string, command: string): void {
   writeFileSync(passesFile(), JSON.stringify(all));
 }
 
+/** The commit whose failures hit the cap, once the news and the log have said so. No `.json` name, so `unshown` does not read it. */
+const cappedFile = () => join(acceptanceDir(), "capped");
+const cappedAt = (): string | null => { try { return JSON.parse(readFileSync(cappedFile(), "utf8")).commit ?? null; } catch { return null; } };
+
+/** The goals with a `fail` record at the short commit `sha`, counting `name`. */
+function failsAt(repo: Repo, sha: string, name: string): number {
+  const names = new Set([name]);
+  if (existsSync(acceptanceDir())) {
+    for (const f of readdirSync(acceptanceDir())) {
+      const m = /^(.+)-(\d+)\.json$/.exec(f);
+      const r = m && readRecord(m[1], Number(m[2]));
+      if (m && m[1] === repo.key && r && r.result === "fail" && r.sha === sha) names.add(`${m[1]}-${m[2]}`);
+    }
+  }
+  return names.size;
+}
+
 /**
  * Run the Oracle of the done goal `item` on origin/<main>, and record what came of it.
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
@@ -218,6 +235,10 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
   const name = `${repo.key}-${ref}`;
   const prev = readRecord(repo.key, ref);
   const waiting = prev?.retest;
+  // Held by the cap at this commit: it runs again at a later one.
+  if (prev?.result === "fail" && !waiting && prev.fails < 2 && cappedAt() === git(repo.path, "rev-parse", `origin/${repo.main}`).out && prev.sha === git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out) {
+    return `${name}: acceptance held at ${prev.sha}: the fail cap was reached at this commit`;
+  }
   const began = Date.parse(waiting?.since ?? "");
   const overdue = Number.isFinite(began) && now.getTime() - began >= MAX_WAIT_MS;
   if (waiting && !quiet() && !overdue) return `${name}: acceptance rerun waits for a quiet machine (${waiting.command})`;
@@ -294,6 +315,18 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
       }
       if (why) { for (const t of others) flake(t, why); continue; }
     } else for (const t of others) flake(t, "failed twice, in a test the goal did not touch,");
+    // Many goals failing at one commit point to a shared fault, not to the goals: none reopens, and each keeps its fail record.
+    const cap = acceptanceFailCap();
+    const count = failsAt(repo, sha, name);
+    if (count >= cap) {
+      writeRecord(repo.key, ref, { result: "fail", sha, command, fails: prev?.fails ?? 0, ...(prev?.since ? { since: prev.since } : {}) });
+      if (cappedAt() === full) return `${name}: acceptance held at ${sha}: the fail cap was reached at this commit`;
+      mkdirSync(acceptanceDir(), { recursive: true });
+      writeFileSync(cappedFile(), JSON.stringify({ commit: full }));
+      const line = `acceptance: ${count} goals failed at ${sha} (limit ${cap}); none reopens, they run again at a later commit`;
+      await tell(line);
+      return line;
+    }
     const fails = (prev?.fails ?? 0) + 1;
     const out = `\`${command}\` exited ${r.code}${r.code === 0 ? " with failing tests" : ""}, and the quiet rerun failed too: ${tests.length ? `${tests.slice(0, 40).map((t) => `(fail) ${testLabel(t).slice(0, 200)}`).join(" ⏎ ")} ⏎ ` : ""}${lastLines(r.output)}`;
     if (fails < 2) {
