@@ -8,7 +8,14 @@ import { basename, join } from "node:path";
 import { factoryDir, flakes, flakyFile, type Flake } from "./factory-status.ts";
 import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledger.ts";
 import { sandboxed } from "./sandbox.ts";
+import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
+
+/** Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock ended the check. `null` is a pass. */
+export type ChecksStop = Stated & { reason: string; timedOut?: boolean };
+
+/** The fields of a run that a stop sets: the clock flag stays out of the run. */
+export const stopFields = ({ timedOut: _, ...fields }: ChecksStop): Stated & { reason: string } => fields;
 
 /** One run of checks. `folder` gets checks.log. `record` gets each check that ran. */
 export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; record?: (c: CheckResult) => void }
@@ -50,7 +57,7 @@ const tail = (file: string, n: number) => existsSync(file) ? readFileSync(file, 
 const chosen = (t: CheckTask): Check[] => t.repo.checks.filter((c) => !c.when || t.changed.some((f) => c.when!.some((g) => new Bun.Glob(g).match(f))));
 
 /** The one loop. A check that fails, not by timeout, runs once more on the same tree; a pass then is a flake. The first failure ends the loop. Returns why. */
-async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<string | null> {
+async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<ChecksStop | null> {
   const log = (text: string) => appendFileSync(join(t.folder, "checks.log"), text);
   for (const check of checks) {
     t.phase(`check ${check.name}`);
@@ -79,14 +86,14 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<s
     }
     t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}) });
     log(`## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
-    if (r.timedOut) return `timed out: check ${check.name}`;
-    if (r.code !== 0) return `${check.name} failed`;
+    if (r.timedOut) return { cause: "check", checkName: check.name, reason: `timed out: check ${check.name}`, timedOut: true };
+    if (r.code !== 0) return { cause: "check", checkName: check.name, reason: `${check.name} failed` };
   }
   return null;
 }
 
 /** The hidden check: last, with no rerun. Its log can show the tests' source, so it goes to its own file and never into checks.log. */
-async function runHidden(t: CheckTask, check: Check, exec: CheckExec): Promise<string | null> {
+async function runHidden(t: CheckTask, check: Check, exec: CheckExec): Promise<ChecksStop | null> {
   t.phase(`check ${check.name}`);
   const out = join(t.folder, "hidden.log");
   writeFileSync(out, "");
@@ -99,13 +106,13 @@ async function runHidden(t: CheckTask, check: Check, exec: CheckExec): Promise<s
   const fail = Number(text.match(/^\s*(\d+) fail\s*$/m)?.[1] ?? 0);
   t.record?.({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds, ...(pass + fail ? { passed: pass, total: pass + fail } : {}) });
   appendFileSync(join(t.folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}\n\n`);
-  if (r.timedOut) return `timed out: check ${check.name}`;
-  if (r.code !== 0) return fail ? `hidden check failed: ${fail} of ${pass + fail} tests` : "hidden check failed";
+  if (r.timedOut) return { cause: "check", checkName: check.name, reason: `timed out: check ${check.name}`, timedOut: true };
+  if (r.code !== 0) return { cause: "hidden-check", reason: fail ? `hidden check failed: ${fail} of ${pass + fail} tests` : "hidden check failed" };
   return null;
 }
 
 /** The checks that apply to the task, each run by `exec` on a tree the caller set up. */
-export const runChecks = (t: CheckTask, exec: CheckExec): Promise<string | null> => runAll(t, chosen(t), exec);
+export const runChecks = (t: CheckTask, exec: CheckExec): Promise<ChecksStop | null> => runAll(t, chosen(t), exec);
 
 export const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
@@ -127,18 +134,18 @@ export function cloneAndSetup(setup: string[], bundle: string, ref: string, afte
  * step, so its exit code comes from outside the sandbox and it cannot write
  * checklog/.
  */
-export async function checksInSandbox(t: CheckTask, dir: string, bundle: string, ref: string, hiddenFiles: Record<string, string> = {}): Promise<string | null> {
+export async function checksInSandbox(t: CheckTask, dir: string, bundle: string, ref: string, hiddenFiles: Record<string, string> = {}): Promise<ChecksStop | null> {
   const script = cloneAndSetup(t.repo.setup, bundle, ref, "> ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code");
   const noise = join(t.folder, "check.out");
   const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, onSpawn: t.onSpawn };
   t.phase("check setup");
   const r = await withSlot(() => sandboxed(dir, script, { ...step, read: [bundle], write: ["check", "checklog", "home", "tmp"], stdout: noise, stderr: noise }));
   const code = join(dir, "checklog", "setup.code");
-  if (!existsSync(code)) return `checks did not start (exit ${r.code})`;
+  if (!existsSync(code)) return { cause: "other", reason: `checks did not start (exit ${r.code})` };
   const setup = readFileSync(code, "utf8").trim();
   if (setup !== "0") {
     appendFileSync(join(t.folder, "checks.log"), `## setup: exit ${setup}\n${tail(join(dir, "checklog", "setup.log"), 100)}\n\n`);
-    return "setup failed";
+    return { cause: "check", checkName: "setup", reason: "setup failed" };
   }
   const exec = (read: string[]): CheckExec => (check, out, limit) => sandboxed(dir, check.run, { ...step, read, write: ["check", "home", "tmp"], limit, stdout: out, stderr: out });
   const failed = await runAll(t, chosen(t), exec([]));

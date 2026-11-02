@@ -11,14 +11,15 @@ import { closeAndFile } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
-import { causeOf, checksStopped, LOCK_BUSY, type Cause } from "./outcome.ts";
+import { stopFields, type ChecksStop } from "./checks.ts";
+import { causeOf, LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
 import { itemOnMain } from "./status.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
-export interface CheckReport { why: string | null; checks?: Run["checks"]; log?: string }
+export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
 
 export interface LandPorts {
   /** The repo's checks on `commit`, which holds the work of `runs`. `changed` is what the commit changes. */
@@ -219,7 +220,7 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
 }
 
 /** The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>. */
-async function check(ctx: Attempt, items: Pending[], base: string): Promise<string | null> {
+async function check(ctx: Attempt, items: Pending[], base: string): Promise<ChecksStop | null> {
   const { repo, leader, base0, tips, checksOf, log, ports } = ctx;
   const first = items[0].m.run;
   if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
@@ -238,12 +239,12 @@ async function check(ctx: Attempt, items: Pending[], base: string): Promise<stri
 }
 
 /** The commits of `items` that pass, in order, and the commit they end on. `known` is why the whole chain is already known to fail. */
-async function settle(ctx: Attempt, items: Pending[], base: string, known: string | null): Promise<{ ok: Pending[]; tip: string }> {
+async function settle(ctx: Attempt, items: Pending[], base: string, known: ChecksStop | null): Promise<{ ok: Pending[]; tip: string }> {
   if (!items.length) return { ok: [], tip: base };
   const why = known ?? await check(ctx, items, base);
   if (!why) return { ok: items, tip: items.at(-1)!.commit };
-  if (items.length === 1) { ctx.finish(items[0].m, { outcome: { condition: "failed", ...checksStopped(why) }, code: 1 }); return { ok: [], tip: base }; }
-  ctx.log(`split ${items.length} runs: ${why}`);
+  if (items.length === 1) { ctx.finish(items[0].m, { outcome: { condition: "failed", ...stopFields(why) }, code: 1 }); return { ok: [], tip: base }; }
+  ctx.log(`split ${items.length} runs: ${why.reason}`);
   const h = Math.floor(items.length / 2);
   const a = await settle(ctx, items.slice(0, h), base, null);
   const rest = items.slice(h);

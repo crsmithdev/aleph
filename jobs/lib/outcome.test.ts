@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { newsLine, type Run } from "./ledger.ts";
-import { causeOf, checksStopped, readBaseline, failedCheckOf } from "./outcome.ts";
+import { causeOf, readBaseline, failedCheckOf } from "./outcome.ts";
 
 const run = (o: Partial<Run>) => ({ kind: "build", job: "j", name: "n", repo: "fac", condition: "stuck", told: false, started: "", ...o }) as Run;
 
@@ -35,10 +35,13 @@ test("an old dropped run keeps its no-commit mark, and free prose states no caus
   expect(causeOf(run({ condition: "dropped", reason: "the work has no commit and a time box" }))).toBeUndefined();
 });
 
-test("the check runners' sentences become causes, and an unknown one is other", () => {
-  expect(checksStopped("tests failed")).toEqual({ cause: "check", checkName: "tests", reason: "tests failed" });
-  expect(checksStopped("checkout failed")).toEqual({ cause: "infra", reason: "checkout failed" });
-  expect(checksStopped("checks did not start (exit 1)")).toEqual({ cause: "other", reason: "checks did not start (exit 1)" });
+test("an old run with only the runners' sentence still reads as a cause", () => {
+  const old = (reason: string) => run({ condition: "failed", reason });
+  expect([causeOf(old("tests failed")), failedCheckOf(old("tests failed"))]).toEqual(["check", "tests"]);
+  expect([causeOf(old("timed out: check lint")), failedCheckOf(old("timed out: check lint"))]).toEqual(["check", "lint"]);
+  expect(causeOf(old("checkout failed"))).toBe("infra");
+  expect(causeOf(old("hidden check failed: 1 of 3 tests"))).toBe("hidden-check");
+  expect(causeOf(old("checks did not start (exit 1)"))).toBeUndefined();
 });
 
 test("the news names the stated check, and no other cause", () => {

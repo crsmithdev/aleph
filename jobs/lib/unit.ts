@@ -13,13 +13,13 @@ import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
-import { checksStopped, type Cause } from "./outcome.ts";
+import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, notes, openJob, readFile } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, RESEARCH_PROMPT, serveFetches, writeWebServer } from "./research.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
-import { checksInSandbox, runChecks } from "./checks.ts";
+import { checksInSandbox, runChecks, stopFields, type ChecksStop } from "./checks.ts";
 import { dispatchDetached } from "./factory.ts";
 import { gates } from "./factory-status.ts";
 import { afterLand, bounceNote, land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
@@ -180,7 +180,7 @@ function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, s
     pull: (room) => pullWaiting(repo, run, room),
     check: async (commit, runs, changed) => {
       const before = existsSync(logFile) ? readFileSync(logFile, "utf8").length : 0;
-      let why: string | null;
+      let why: ChecksStop | null;
       if (repo.sandbox) {
         const hidden: Record<string, string> = {};
         let readable = true;
@@ -189,7 +189,7 @@ function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, s
           if (!files) { readable = false; break; }
           for (const [name, text] of Object.entries(files)) hidden[name in hidden ? `${r.on ?? onOf(r)}-${name}` : name] = text;
         }
-        why = readable ? await sandboxChecks(id, folder, repo, commit, changed, phase, hidden) : HIDDEN_UNREADABLE;
+        why = readable ? await sandboxChecks(id, folder, repo, commit, changed, phase, hidden) : { cause: "infra", reason: HIDDEN_UNREADABLE };
       } else {
         const owner = runs.find((r) => r.worktree && existsSync(r.worktree)) ?? runs[0];
         why = await worktreeChecks(folder, owner, repo, env, commit, changed, phase);
@@ -204,10 +204,10 @@ const inWorktree = (folder: string, wt: string, repo: Repo, env: Record<string, 
   runChecks({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, (check, out, limit) => exec(["bash", "-c", check.run], { cwd: wt, env, out, limit }));
 
 /** The checks on `commit`, in the job's worktree, which is back on its branch after. */
-async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, commit: string, changed: string[], phase: (p: string) => void): Promise<string | null> {
+async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, commit: string, changed: string[], phase: (p: string) => void): Promise<ChecksStop | null> {
   const wt = run.worktree!;
-  if (!existsSync(wt)) return `worktree gone: ${wt}`;
-  if (!git(wt, "checkout", "-q", "--detach", commit).ok) return "checkout failed";
+  if (!existsSync(wt)) return { cause: "infra", reason: `worktree gone: ${wt}` };
+  if (!git(wt, "checkout", "-q", "--detach", commit).ok) return { cause: "infra", reason: "checkout failed" };
   try {
     return await inWorktree(folder, wt, repo, env, changed, phase);
   } finally {
@@ -225,13 +225,13 @@ function hiddenOf(repo: Repo, run: Run): Record<string, string> | null {
 }
 
 /** The checks on a land's squash commit: the commit goes in as a bundle. */
-async function sandboxChecks(id: string, folder: string, repo: Repo, commit: string, changed: string[], phase: (p: string) => void, hidden: Record<string, string>): Promise<string | null> {
+async function sandboxChecks(id: string, folder: string, repo: Repo, commit: string, changed: string[], phase: (p: string) => void, hidden: Record<string, string>): Promise<ChecksStop | null> {
   const dir = makeRunFolder(id);
   const ref = `refs/aleph/land/${id}`;
   try {
     git(repo.path, "update-ref", ref, commit);
     const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
-    if (!b.ok) return `bundle failed: ${b.out}`;
+    if (!b.ok) return { cause: "infra", reason: `bundle failed: ${b.out}` };
     return await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/land.bundle", ref, hidden);
   } finally {
     git(repo.path, "update-ref", "-d", ref);
@@ -251,7 +251,7 @@ export async function baselineChecks(repo: Repo, commit: string, logs: string): 
     const b = git(repo.path, "bundle", "create", join(dir, "out", "base.bundle"), ref);
     if (!b.ok) return `bundle failed: ${b.out}`;
     const all = git(repo.path, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean);
-    return await checksInSandbox({ folder: logs, repo, changed: all, phase: () => {} }, dir, "out/base.bundle", ref);
+    return (await checksInSandbox({ folder: logs, repo, changed: all, phase: () => {} }, dir, "out/base.bundle", ref))?.reason ?? null;
   } catch (e) {
     return `baseline did not run: ${e instanceof Error ? e.message : e}`;
   } finally {
@@ -276,7 +276,7 @@ type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" 
 
 /** A verdict that waits for Chris: the condition `awaiting` and the Ask. */
 /** The outcome of a factory run that the check runners stopped. */
-const stoppedByChecks = (why: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, ...checksStopped(why), ...extra }, code: 1 });
+const stoppedByChecks = (why: ChecksStop, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, ...stopFields(why), ...extra }, code: 1 });
 const awaiting = (reason: string, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
   ({ condition: "awaiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
 
@@ -493,7 +493,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   stampJob(wt, base, run.job);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
   const failed = await inWorktree(folder, wt, repo, checkEnv, changed, phase);
-  if (failed) return { outcome: { condition: "failed", ...checksStopped(failed) }, code: 1 };
+  if (failed) return { outcome: { condition: "failed", ...stopFields(failed) }, code: 1 };
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
   const manual = repo.manual.find((m) => matches(m.when));
@@ -593,10 +593,11 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
       const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
-      if (!check || (failed !== `${check} failed` && !(check === "hidden" && failed.startsWith("hidden check failed")))) return stoppedByChecks(failed, facts);
+      const sent = !failed.timedOut && (failed.cause === "check" ? failed.checkName === check : check === "hidden" && failed.cause === "hidden-check");
+      if (!check || !sent) return stoppedByChecks(failed, facts);
       const rounds = fixRounds();
       if (done < rounds) return stoppedByChecks(failed, { ...facts, failed: check, round: done });
-      return stoppedByChecks(failed, { ...facts, ...(rounds > 0 ? { reason: `${failed} after ${done} fix rounds` } : {}) });
+      return stoppedByChecks(failed, { ...facts, ...(rounds > 0 ? { reason: `${failed.reason} after ${done} fix rounds` } : {}) });
     }
     facts.checkedBase = base;
     facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;

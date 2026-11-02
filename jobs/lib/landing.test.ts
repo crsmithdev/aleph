@@ -1,3 +1,4 @@
+import type { ChecksStop } from "./checks.ts";
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -104,8 +105,9 @@ function ports(o: { bad?: (files: string[]) => string | null; races?: number; ra
     check: async (commit, runs) => {
       calls.push(runs.map((r) => r.name));
       if (races > 0 && (o.raceOn?.(runs.map((r) => r.name)) ?? true)) { races--; moveMain(); }
-      const why = o.bad?.(filesAt(commit)) ?? null;
-      return { why, checks: [{ name: "fake", ok: !why, seconds: 0 }], log: why ? `the log of ${why}\n` : "" };
+      const reason = o.bad?.(filesAt(commit)) ?? null;
+      const why: ChecksStop | null = reason ? { cause: "check", checkName: reason.replace(/ failed$/, ""), reason } : null;
+      return { why, checks: [{ name: "fake", ok: !why, seconds: 0 }], log: reason ? `the log of ${reason}\n` : "" };
     },
   };
 }

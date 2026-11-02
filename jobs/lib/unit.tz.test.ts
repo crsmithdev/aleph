@@ -70,6 +70,31 @@ test("checksInSandbox hands each step's process to onSpawn, so a drop can kill a
   }, dir, "out/in.bundle", "refs/heads/main");
   // The setup step, the check, and the check's rerun after the failure.
   expect(spawned).toHaveLength(3);
-  expect(why).not.toBeNull();
+  expect(why).toMatchObject({ cause: "check", checkName: "slow", reason: "slow failed" });
   expect(Date.now() - started).toBeLessThan(15_000);
 }, 20_000);
+
+/** A repo with one commit and a bundle of it in a fresh sandbox folder. */
+function sandboxed(setup: string[], checks: { name: string; run: string }[]) {
+  const path = join(base, "repo");
+  sh(base, "git", "init", "-q", "-b", "main", path);
+  writeFileSync(join(path, "f.txt"), "x\n");
+  sh(path, "git", "add", ".");
+  sh(path, "git", "commit", "-q", "-m", "init");
+  const dir = join(base, "sb");
+  for (const d of ["check", "checklog", "home", "tmp", "out"]) mkdirSync(join(dir, d), { recursive: true });
+  sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
+  return { dir, repo: { key: "r", path, setup, checks, hiddenRun: "echo '1 pass'; echo '2 fail'; exit 1" } as unknown as Repo };
+}
+
+test("checksInSandbox states a failed setup as the check `setup`", async () => {
+  const { dir, repo } = sandboxed(["false"], [{ name: "a", run: "true" }]);
+  const why = await checksInSandbox({ folder: base, repo, changed: [], phase: () => {} }, dir, "out/in.bundle", "refs/heads/main");
+  expect(why).toEqual({ cause: "check", checkName: "setup", reason: "setup failed" });
+});
+
+test("checksInSandbox states a failed hidden check as hidden-check", async () => {
+  const { dir, repo } = sandboxed([], [{ name: "a", run: "true" }]);
+  const why = await checksInSandbox({ folder: base, repo, changed: [], phase: () => {} }, dir, "out/in.bundle", "refs/heads/main", { "h.test.ts": "x" });
+  expect(why).toEqual({ cause: "hidden-check", reason: "hidden check failed: 2 of 3 tests" });
+});

@@ -60,25 +60,25 @@ test("a pass on the second run is a flake that names the failed tests once each"
 
 test("a failure on both runs fails the check, records no flake and stops the loop", async () => {
   const r = await run(repo("a", "b"), [{ code: 1 }, { code: 2 }]);
-  expect(r).toMatchObject({ failed: "a failed", calls: ["a", "a"], results: [{ name: "a", ok: false }] });
+  expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "a failed" }, calls: ["a", "a"], results: [{ name: "a", ok: false }] });
   expect(flakes()).toEqual([]);
 });
 
 test("a timeout has no rerun", async () => {
   const r = await run(repo("a"), [{ code: 124, timedOut: true }]);
-  expect(r).toMatchObject({ failed: "timed out: check a", calls: ["a"] });
+  expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "timed out: check a", timedOut: true }, calls: ["a"] });
   expect(r.log).toContain("exit 124 (timed out)");
 });
 
 test("a second run that times out is a timeout", async () => {
   const r = await run(repo("a"), [{ code: 1 }, { code: 124, timedOut: true }]);
-  expect(r).toMatchObject({ failed: "timed out: check a", results: [{ ok: false }] });
+  expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "timed out: check a", timedOut: true }, results: [{ ok: false }] });
   expect(flakes()).toEqual([]);
 });
 
 test("exit code 124 without the clock is an ordinary failure", async () => {
   const r = await run(repo("a"), [{ code: 124 }, { code: 124 }]);
-  expect(r).toMatchObject({ failed: "a failed", calls: ["a", "a"] });
+  expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "a failed" }, calls: ["a", "a"] });
 });
 
 test("a check with `when` runs only when a changed file matches", async () => {
