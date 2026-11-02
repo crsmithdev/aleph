@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fit, fetchUsage, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
+import { mkdirSync } from "node:fs";
+import { clearFit, currentFit, fit, fetchUsage, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 // @ts-ignore plain JS view
@@ -242,5 +243,39 @@ test("under bun test a poll without ALEPH_USAGE_FILE writes no file, so a test c
   } finally {
     process.env.ALEPH_USAGE_FILE = saved.f;
     process.env.HOME = saved.h;
+  }
+});
+
+test("a snapshot dated after the clock does not skew currentFit() or fit()", async () => {
+  const jobs = join(dir, "runs");
+  const keep = process.env.ALEPH_JOBS_DIR;
+  process.env.ALEPH_JOBS_DIR = jobs;
+  try {
+    const t0 = Date.now() - 12 * H;
+    const at = (h: number) => new Date(t0 + h * H).toISOString();
+    const reset = new Date(Date.now() + 5 * 24 * H).toISOString();
+    const good = [0, 4, 8, 12].map((h, i) => ({ at: at(h), five_hour: 0, seven_day: 10 + 4 * i, seven_day_resets_at: reset }));
+    const spendsAt = [2, 6, 10];
+    spendsAt.forEach((h, i) => {
+      mkdirSync(join(jobs, `r${i}`), { recursive: true });
+      writeFileSync(join(jobs, `r${i}`, "state.json"), JSON.stringify({ job: "j", model: "opus", cost: 6, started: at(h), ended: at(h) }));
+    });
+    const write = (rows: object[]) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    const sp = spendsAt.map((h) => ({ at: t0 + h * H, model: "opus", cost: 6 }));
+
+    write(good);
+    clearFit();
+    const base = await currentFit();
+    expect(base).not.toBeNull();
+    const baseDirect = fit(good, sp);
+    expect(baseDirect).not.toBeNull();
+
+    const future = { at: new Date(Date.now() + 30 * H).toISOString(), five_hour: 0, seven_day: 1, seven_day_resets_at: new Date(Date.now() + 12 * 24 * H).toISOString() };
+    write([...good, future]);
+    clearFit();
+    expect(await currentFit()).toEqual(base);
+    expect(fit([...good, future], sp)).toEqual(baseDirect);
+  } finally {
+    if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
   }
 });

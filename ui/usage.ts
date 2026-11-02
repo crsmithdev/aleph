@@ -148,8 +148,8 @@ function solve(A: number[][], b: number[]): number[] | null {
  * under MIN_DOLLARS in the window gets the pooled rate (all rises over all dollars). Null with under
  * MIN_HOURS of snapshots, or with no dollars.
  */
-export function fit(snaps: Snapshot[], spends: Spend[]): Fit | null {
-  const w = sinceReset(snaps);
+export function fit(snaps: Snapshot[], spends: Spend[], clock = Date.now()): Fit | null {
+  const w = sinceReset(snaps.filter((s) => Date.parse(s.at) <= clock));
   if (w.length < 2) return null;
   const t = w.map((s) => Date.parse(s.at));
   const hours = (t.at(-1)! - t[0]) / HOUR;
@@ -217,7 +217,7 @@ const fitCache = staleAsync<Fit | null>();
 /** The current fit, reloaded in the background at most every minute. */
 export function currentFit(): Promise<Fit | null> {
   return fitCache.get("fit", 60_000, async () => {
-    const w = sinceReset(readSnapshots());
+    const w = sinceReset(readSnapshots().filter((s) => Date.parse(s.at) <= Date.now()));
     if (w.length < 2) return null;
     return fit(w, await spends(Date.parse(w[0].at)));
   });
