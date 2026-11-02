@@ -157,6 +157,19 @@ describe("asks", () => {
     expect(CASES["host-check"]()[0].actions.map((a) => a.label)).toEqual(["Mark it checked", "Drop the check"]);
   });
 
+  test("spec-check: the problems of the issue's question, rerun then close with its hint, no auto-yes", () => {
+    const items = ofIssues(issue({ reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" }));
+    expect(items.length).toBe(1);
+    const [it] = items;
+    expect(it.reason).toBe("spec-check");
+    expect(it.kind).toBe("input");
+    expect(it.problem).toBe("The spec check found that the spec of aleph-387 cannot be met as written: spec check: abc123 hold: the Oracle clause is outside the Edit surface.");
+    expect(it.actions.map((a) => a.act)).toEqual(["rerun", "close"]);
+    expect(it.actions[0].label).toBe("Run it again");
+    expect(it.actions[0].hint).toBe("Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first.");
+    expect(it.always).toBeUndefined();
+  });
+
   test("a goal's ask names the issue and goal in its action args", () => {
     const [it] = ofIssues(issue({ id: "aleph-387.2", reason: "question", decision, question: "Should it be A or B?" }));
     expect(it.repo).toBe("aleph");
