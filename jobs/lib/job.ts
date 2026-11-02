@@ -118,12 +118,22 @@ export interface JobView {
   lost?: true;
 }
 
+/** The reviewer checked sealed scenarios: a run folder holds `review.md` and a `review-prompt.md` with a `## Sealed scenarios` section. */
+const scenariosChecked = (j: Job): boolean =>
+  j.some((e) => {
+    if (!existsSync(join(e.folder, "review.md"))) return false;
+    try { return readFileSync(join(e.folder, "review-prompt.md"), "utf8").includes("## Sealed scenarios"); } catch { return false; }
+  });
+
+/** The job's goal was checked in secret: a hidden check with a total ran, or the reviewer checked sealed scenarios. */
+export const sealed = (j: Job): boolean => j.some((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total)) || scenariosChecked(j);
+
 /** What checked a job, in the order it ran: its checks, then the reviewers that left a file. Deterministic checks and model judges are named apart. */
 export function checkedBy(j: Job): string[] {
   const checks = j.findLast((e) => e.run.checks?.length)?.run.checks ?? [];
   const names = checks.filter((c) => c.ok).map((c) => (c.name === "hidden" && c.total ? `hidden ${c.passed ?? 0}/${c.total}` : c.name));
   const has = (f: string) => j.some((e) => existsSync(join(e.folder, f)));
-  return [...names, ...(has("review.md") ? ["reviewer"] : []), ...(has(join("browser", "report.md")) ? ["browser review"] : [])];
+  return [...names, ...(has("review.md") ? ["reviewer", ...(scenariosChecked(j) ? ["sealed scenarios"] : [])] : []), ...(has(join("browser", "report.md")) ? ["browser review"] : [])];
 }
 
 /** Minutes a spot check of a delivery should take, an estimate: one, one per 200 changed lines, and one more when no sealed check ran. */

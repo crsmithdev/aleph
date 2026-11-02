@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, allJobs, batch, checkedBy, lookMinutes, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markAsked, markRescued, asked, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
+import { addNote, allJobs, batch, checkedBy, lookMinutes, sealed, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markAsked, markRescued, asked, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
 import { isOpen, writeRun, type Run } from "./ledger.ts";
 
 let base: string;
@@ -178,6 +178,16 @@ describe("the evidence of a delivery", () => {
     mkdirSync(join(f, "browser"));
     writeFileSync(join(f, "browser", "report.md"), "fine");
     expect(checkedBy(allJobs()[0])).toEqual(["tests", "hidden 2/2", "reviewer", "browser review"]);
+  });
+  test("a goal sealed with scenarios counts as sealed, and the reviewer is named with them", () => {
+    run("20261101-000003-c", "20261101-000003-c", {}, { "review.md": "land", "review-prompt.md": "x\n## Sealed scenarios\n- s\n" });
+    run("20261101-000004-d", "20261101-000004-d", {}, { "review.md": "land", "review-prompt.md": "x\n" });
+    const [c, d] = allJobs();
+    expect(sealed(c)).toBe(true);
+    expect(checkedBy(c)).toEqual(["reviewer", "sealed scenarios"]);
+    expect(sealed(d)).toBe(false);
+    expect(checkedBy(d)).toEqual(["reviewer"]);
+    expect(lookMinutes(0, sealed(c))).toBe(lookMinutes(0, sealed(d)) - 1);
   });
   test("a job with nothing recorded has no evidence", () => {
     run("20261101-000002-b", "20261101-000002-b");

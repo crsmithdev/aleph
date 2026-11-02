@@ -17,7 +17,7 @@ import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { clearRerun, endKilledFacts, rerunNote, rescueStuck, type Rescue } from "./rescue.ts";
 import { readBaseline } from "./outcome.ts";
-import { allJobs, checkedBy, lookMinutes, jobsNamed, lastReal, openJob } from "./job.ts";
+import { allJobs, checkedBy, lookMinutes, sealed, jobsNamed, lastReal, openJob } from "./job.ts";
 import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { endLost } from "./agent-run.ts";
@@ -542,7 +542,7 @@ function entry(e: Entry): string {
     if (j) lines.push(`  checked by: ${checkedBy(j).join(", ") || "nothing recorded"}`);
     const repo = r.repo ? loadRegistry()[r.repo] : undefined;
     const stat = repo ? git(repo.path, "show", "--shortstat", "--format=", r.commit).out : "";
-    if (stat) lines.push(`  look: about ${lookMinutes(changedLinesOf(stat), !!j?.some((x) => x.run.checks?.some((c) => c.name === "hidden" && c.total)))} min (estimate)`);
+    if (stat) lines.push(`  look: about ${lookMinutes(changedLinesOf(stat), !!j && sealed(j))} min (estimate)`);
   }
   if (needs === "held" || needs === "review") {
     if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
