@@ -5,7 +5,7 @@ import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { currentFit, share } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page
-import { systemParts } from "../lib.js";
+import { systemParts } from "../system-parts.js";
 
 const line = (s: unknown, max: number) => {
   const t = typeof s === "string" ? s : s == null ? "" : JSON.stringify(s);

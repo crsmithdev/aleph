@@ -21,7 +21,7 @@ const JS = { "content-type": "text/javascript; charset=utf-8", "cache-control": 
 const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
 /** The modules in ui/ that views import (`from "../lib.js"`), served at the root. */
-const SHARED = new Set(["/lib.js", "/decision.js", "/timeline.js"]);
+const SHARED = new Set(["/lib.js", "/system-parts.js", "/decision.js", "/timeline.js"]);
 
 /** `/api/jobs/:name` as a regex and its parameter names. */
 export function compile(path: string): { pattern: RegExp; names: string[] } {

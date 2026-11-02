@@ -230,7 +230,7 @@ test("argSummary picks the key argument, also out of cut JSON", async () => {
 
 test("systemParts splits tags the user did not type from the text they did", async () => {
   // @ts-ignore plain JS
-  const { systemParts } = await import("./lib.js");
+  const { systemParts } = await import("./system-parts.js");
   expect(systemParts("<task-notification><summary>done</summary></task-notification>\n\nfix it")).toEqual({ system: [{ tag: "task-notification", body: "<summary>done</summary>" }], text: "fix it" });
   expect(systemParts("hi\n<system-reminder>cut at 4 K")).toEqual({ system: [{ tag: "system-reminder", body: "cut at 4 K" }], text: "hi" });
   expect(systemParts("a <b>bold</b> claim").system).toEqual([]);
