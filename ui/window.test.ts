@@ -79,7 +79,7 @@ test("picking an option on each page asks for that window and the page says its 
     if (name === "all") expect(url).toBe(DAYS[w] ? `/api/jobs?days=${DAYS[w]}` : "/api/jobs");
     else expect(url).toBe(`/api/speed?window=${w}`);
     const shown = p.render(w);
-    expect(shown, `${name} ${w}`).toContain(name === "all" ? WORDS[w].replace("last ", "") : name === "status" ? `issues landed, ${WORDS[w].replace("last ", "")}` : WORDS[w]);
+    expect(shown, `${name} ${w}`).toContain(name === "all" ? WORDS[w].replace("last ", "") : name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
     expect(html).toBeTruthy();
   }
 });

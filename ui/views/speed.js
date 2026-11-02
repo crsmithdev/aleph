@@ -38,10 +38,11 @@ export async function loadSpeed(window, fetcher = fetch, baseline = false) {
   try {
     const res = await fetcher(`/api/speed?window=${window}${baseline ? "&baseline=1" : ""}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`Could not load speed (${res.status}).`);
-    const { baseline: b, ...d } = await res.json();
+    // With `baseline=1` the answer carries the window's trend baseline (`d.baseline`): one request per window.
+    const { others, ...d } = await res.json();
     got.set(window, d);
-    // The baseline windows come in the same answer: one request fills all three.
-    for (const [k, v] of Object.entries(b ?? {})) if (k !== window) got.set(k, v);
+    // The day and month answers come in the same answer (the Efficiency page reads them): one request fills all three.
+    for (const [k, v] of Object.entries(others ?? {})) if (k !== window) got.set(k, v);
   } catch (e) { if (!usable(window)) got.set(window, { error: e.message }); }
   return got.get(window);
 }
@@ -122,4 +123,74 @@ export function lostTile(d, avg, link = {}) {
 export function firstPassTile(d, avg, link = {}) {
   const v = d?.issues?.firstPass ?? null;
   return tile({ k: "First pass", v: v === null ? "–" : pctText(v), body: small(d && v === null ? "no issue landed" : "lands with no fix round") + (v === null || !avgOn(d) || avg?.issues?.firstPass == null ? "" : pctTrend(v, avg.issues.firstPass, false)), ...link });
+}
+
+/** A time on a Status card: "45s", "20m", "1h35m". */
+export function cardDur(s) {
+  if (s === null || s === undefined || Number.isNaN(s)) return "–";
+  s = Math.round(s);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, "0") + "m" : ""}`;
+}
+const cardPct = (v) => (v === null || v === undefined ? "–" : `${Math.round(v * 100)}%`);
+const cardHours = (h) => (h === null || h === undefined ? "–" : `${h.toFixed(1)}h`);
+
+/**
+ * The trend of a card: an arrow and a percent, green when good and amber when bad, with the previous value and the baseline in the tooltip.
+ * `kind` "points" compares shares (0 to 1) in percentage points; "relative" compares times and counts by relative change.
+ * Empty with no value or no baseline.
+ */
+export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis }) {
+  if (value === null || value === undefined || base === null || base === undefined) return "";
+  const change = kind === "points" ? (value - base) * 100 : base === 0 ? (value === 0 ? 0 : NaN) : ((value - base) / base) * 100;
+  if (Number.isNaN(change)) return "";
+  const n = Math.round(Math.abs(change)), down = change < 0;
+  const tip = `${prev === null || prev === undefined ? "No previous value" : `Previous ${format(prev)}`}; baseline ${format(base)}, ${basis}${kind === "points" ? " (change in percentage points)" : ""}`;
+  if (!n) return `<span class="tr" title="${esc(tip)}">▬ 0%</span>`;
+  return `<span class="tr ${down === lowerIsGood ? "good" : "warn"}" title="${esc(tip)}">${down ? "▼" : "▲"} ${n}%</span>`;
+}
+
+/**
+ * A Status card: row 1 the label and the trend, row 2 the value and the second value, row 3 an optional qualifier ("p50 / p90").
+ * `v` and `v2` are text; `q` is `[first, second]`; `trend` is HTML; `extra` is HTML after the value.
+ */
+export function statCard({ k, v, v2, q, trend: tr = "", extra = "", href }) {
+  const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
+  const qual = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>` : "";
+  return `<a class="tile sc" href="${esc(href)}"><span class="r1"><span class="k">${esc(k)}</span>${tr}</span><b>${esc(v)}${second}</b>${extra}${qual}</a>`;
+}
+
+/** The five cards of the Status scorecard. `d` is /api/speed for the window with `baseline`, or null while it loads. */
+export function statusCards(s, d, { efficiency, performance }) {
+  const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
+  const f = d && !d.error ? figuresOf(d) : null;
+  const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
+  const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours) }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
+  const lead = statCard({ k: "Completion", v: cardDur(f?.leadP50), v2: cardDur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
+  const landed = statCard({ k: "Landed", v: f?.landed == null ? "–" : String(f.landed), v2: cardPct(f?.firstPass), q: ["issues", "clean"], trend: t("landed", { kind: "relative", lowerIsGood: false, format: String }), href: efficiency });
+  const queue = statCard({ k: "Queue wait", v: cardDur(f?.queueP50), v2: cardDur(f?.queueP90), q: ["p50", "p90"], trend: t("queueP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
+  return lost + lead + landed + queue + usageCard(s);
+}
+
+/** The figures of an answer, as the server's baseline gives them. */
+function figuresOf(d) {
+  const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), lead = d.phases?.lead, queue = d.phases?.queue;
+  return {
+    lost: total > 0 ? d.lost.share : null, hours: total > 0 ? d.lost.hours : null,
+    leadP50: lead?.count ? lead.p50 : null, leadP90: lead?.count ? lead.p90 : null,
+    queueP50: queue?.count ? queue.p50 : null, queueP90: queue?.count ? queue.p90 : null,
+    landed: total > 0 || d.done > 0 ? d.done : null, firstPass: d.issues?.firstPass ?? null,
+  };
+}
+
+/** The Usage card: the 7-day value, the bar and the mark for the week gone; nothing else. */
+export function usageCard(s) {
+  const cur = s.usage?.now;
+  if (!cur) return statCard({ k: "Usage", v: "–", href: "#/factory/agents" });
+  const gone = weekGone(cur.seven_day_resets_at, s.now);
+  const tip = gone === null ? "" : `${Math.round(gone)}% of the week gone`;
+  const bar = `<div class="usebar"${tip ? ` title="${esc(tip)}" role="img" aria-label="${esc(tip)}"` : ""}><div style="width:${Math.min(100, cur.seven_day)}%"></div>${gone === null ? "" : `<i style="left:${gone}%"></i>`}</div>`;
+  return statCard({ k: "Usage", v: `${Math.round(cur.seven_day)}%`, extra: bar, href: "#/factory/agents" });
 }

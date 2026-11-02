@@ -115,7 +115,13 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
   expect((await (await get("?window=week")).json()).baseline).toBeUndefined();
   const b = await (await get("?window=week&baseline=1")).json();
   expect(b.window).toBe("week");
-  expect([b.baseline.day.window, b.baseline.month.window]).toEqual(["day", "month"]);
+  expect(Object.keys(b.baseline).sort()).toEqual(["base", "basis", "prev"]);
+  expect(Object.keys(b.baseline.prev)).toContain("queueP90");
+  // The Efficiency page reads the day and month answers: Status's one request fills them.
+  expect(Object.keys(b.others).sort()).toEqual(["day", "month"]);
+  expect(b.others.month.window).toBe("month");
+  const m = await (await get("?window=month&baseline=1")).json();
+  expect(Object.keys(m.others)).toEqual(["day"]);
 });
 
 test("phases: implement spans a job's fix rounds, land starts at the last finish, and each counts where it ends", () => {
@@ -426,4 +432,11 @@ test("serve() warms /api/speed: week, day and month are computed before the firs
     const r = await at("/api/speed?window=week&baseline=1");
     expect(r.status).toBe(200);
   } finally { stop(); }
+});
+
+test("averageFigures averages each figure over the spans that have data for it", async () => {
+  const { averageFigures } = await import("./api/speed.ts");
+  const none = { lost: null, hours: null, leadP50: null, leadP90: null, queueP50: null, queueP90: null, landed: null, firstPass: null };
+  const a = averageFigures([{ ...none, lost: 0.2, landed: 4 }, none, { ...none, lost: 0.4, landed: 0 }]);
+  expect(a).toMatchObject({ lost: 0.3, landed: 2, leadP50: null, firstPass: null });
 });

@@ -528,6 +528,53 @@ export const clearCache = () => cache.clear();
 /** `speed`, kept `ALEPH_UI_FETCH_TTL` seconds like the other fetches. */
 export const cachedSpeed = (window: Window, fit: Fit | null = null): Speed => cache.get(window, uiFetchTtl() * 1000, () => speed(window, new Date(), fit));
 
+/** What a Status card shows for one span; a field is null when the span has no data for it. */
+export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; queueP50: number | null; queueP90: number | null; landed: number | null; firstPass: number | null }
+/** The trend baseline of a window: `prev` is the span just before, `base` the average the trend compares with, `basis` says how it is taken. */
+export interface Baseline { prev: Figures; base: Figures; basis: string }
+
+export function figures(s: Speed): Figures {
+  const total = s.classes.reduce((a, c) => a + c.hours, 0), any = total > 0 || s.done > 0;
+  return {
+    lost: total > 0 ? s.lost.share : null,
+    hours: total > 0 ? s.lost.hours : null,
+    leadP50: s.phases.lead.count ? s.phases.lead.p50 : null,
+    leadP90: s.phases.lead.count ? s.phases.lead.p90 : null,
+    queueP50: s.phases.queue.count ? s.phases.queue.p50 : null,
+    queueP90: s.phases.queue.count ? s.phases.queue.p90 : null,
+    landed: any ? s.done : null,
+    firstPass: s.issues.firstPass,
+  };
+}
+
+/** Each field's mean over the spans that have data for it; null when none has. */
+export function averageFigures(xs: Figures[]): Figures {
+  const out = {} as Record<keyof Figures, number | null>;
+  for (const k of Object.keys(xs[0] ?? figures0()) as (keyof Figures)[]) {
+    const v = xs.map((x) => x[k]).filter((n): n is number => n !== null);
+    out[k] = v.length ? round(v.reduce((a, b) => a + b, 0) / v.length, 4) : null;
+  }
+  return out;
+}
+const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, queueP50: null, queueP90: null, landed: null, firstPass: null });
+
+// Hour: the average of the last 12 hours; day: of the last 7 days; week and month: the span before.
+const BASELINE: Record<Window, { step: number; n: number; avg: boolean; basis: string; prev: string }> = {
+  hour: { step: HOUR, n: 12, avg: true, basis: "average of the last 12 hours with data", prev: "the hour before" },
+  day: { step: 24 * HOUR, n: 7, avg: true, basis: "average of the last 7 days with data", prev: "the day before" },
+  week: { step: 7 * 24 * HOUR, n: 1, avg: false, basis: "the previous 7 days", prev: "the previous 7 days" },
+  month: { step: 30 * 24 * HOUR, n: 1, avg: false, basis: "the previous 30 days", prev: "the previous 30 days" },
+};
+
+export function baseline(window: Window, now = new Date(), fit: Fit | null = null): Baseline {
+  const b = BASELINE[window];
+  const spans = Array.from({ length: b.n }, (_, i) => figures(speed(window, new Date(now.getTime() - (i + 1) * b.step), fit)));
+  return { prev: spans[0], base: b.avg ? averageFigures(spans) : spans[0], basis: b.basis };
+}
+
+const baselines = staleSync<Baseline>();
+export const cachedBaseline = (window: Window, fit: Fit | null = null): Baseline => baselines.get(window, uiFetchTtl() * 1000, () => baseline(window, new Date(), fit));
+
 /**
  * Fills the cache for the windows the Status page reads (week, day, month) once the server is up, so the
  * first page load after a land finds them computed. `speed` is synchronous (250-750 ms each), so each window
@@ -538,6 +585,8 @@ export async function warm(): Promise<void> {
   for (const w of ["week", "day", "month"] as const) {
     await new Promise<void>((r) => setTimeout(r, 0));
     cachedSpeed(w, fit);
+    await new Promise<void>((r) => setTimeout(r, 0));
+    cachedBaseline(w, fit);
   }
 }
 
@@ -546,9 +595,11 @@ export const routes: Routes = {
     const w = url.searchParams.get("window") ?? "week";
     if (!(WINDOWS as readonly string[]).includes(w)) return Response.json({ error: "window must be hour, day, week or month" }, { status: 400 });
     const fit = await currentFit().catch(() => null), d = cachedSpeed(w as Window, fit);
-    // `baseline=1`: the trend baseline (the last 24 h and the month) in the same answer, so the Status page makes one request.
+    // `baseline=1`: the trend baseline of the window in the same answer, so the Status page makes one request.
     if (url.searchParams.get("baseline") !== "1") return Response.json(d);
-    return Response.json({ ...d, baseline: { day: w === "day" ? d : cachedSpeed("day", fit), month: w === "month" ? d : cachedSpeed("month", fit) } });
+    // `day` and `month` are the answers the Efficiency page reads (its last-24-h and 30-day-average trends), so opening it after Status finds them.
+    const others = Object.fromEntries((["day", "month"] as const).filter((k) => k !== w).map((k) => [k, cachedSpeed(k, fit)]));
+    return Response.json({ ...d, baseline: cachedBaseline(w as Window, fit), others });
   },
 };
 

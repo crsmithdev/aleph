@@ -88,7 +88,8 @@ const WEEK = {
   ],
 };
 
-const DAY = { ...WEEK, window: "day", done: 3, phases: { lead: { count: 2, p50: 900, p90: 1000 } }, issues: { ...WEEK.issues, firstPass: 0.8 }, lost: { hours: 1, share: 0.15 } };
+const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, queueP50: 60, queueP90: 300, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, queueP50: 60, queueP90: 300, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };
+const withBase = (d: any, queue = { count: 4, p50: 90, p90: 400 }) => ({ ...d, phases: { ...d.phases, queue }, baseline: BASE });
 
 const USAGE = { now: { seven_day: 7, five_hour: 2, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
 
@@ -101,22 +102,33 @@ test("the page order is the status line, Awaiting you, the scorecard, the lanes,
   for (const t of ["wpick", 'id="flow"', 'id="lane-incoming"', 'id="speed"', 'id="efficiency"']) expect(page).not.toContain(t);
 });
 
-test("the scorecard has five tiles with values from the data and 24 h comparisons", () => {
-  const h = view.renderTiles({ ...state, now: "2026-11-01T08:00:00Z", usage: USAGE }, WEEK, DAY, "week", DAY);
-  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "Lead time p50", "First pass", "Lands", "Weekly usage"]);
-  expect([...h.matchAll(/<b>([^<]+)<\/b>/g)].map((m) => m[1])).toEqual(["38%", "26m", "91%", "7", "7%"]);
-  expect(h).toContain('<span class="warn">▲ 23% vs 30-day average</span>');
-  expect(h).toContain('<span class="good">▲ 11% vs 30-day average</span>');
-  expect(h).toContain("9 land runs");
-  expect(h).toContain("3 in the last 24 h, 1 a day on average");
+test("the scorecard has five cards: Lost time, Completion, Landed, Queue wait, Usage", () => {
+  const h = view.renderTiles({ ...state, now: "2026-11-01T08:00:00Z", usage: USAGE }, withBase(WEEK), "week");
+  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "Completion", "Landed", "Queue wait", "Usage"]);
+  expect([...h.matchAll(/<b>(.*?)<\/b>/g)].map((m) => m[1])).toEqual(["38%<em> / 6.0h</em>", "26m<em> / 4h36m</em>", "7<em> / 91%</em>", "1m<em> / 6m</em>", "7%"]);
+  expect([...h.matchAll(/<span class="q"><span>([^<]*)<\/span><span class="m"> \/ ([^<]*)</g)].map((m) => `${m[1]} / ${m[2]}`)).toEqual(["p50 / p90", "issues / clean", "p50 / p90"]);
+  // Lost time: percentage points (38 - 25 = 13), bad when up; Completion: relative (1570 vs 1200 = +31%), bad when up; Landed: relative (7 vs 5 = +40%), good when up.
+  expect(h).toContain('class="tr warn" title="Previous 30%; baseline 25%, the previous 7 days (change in percentage points)">▲ 13%');
+  expect(h).toContain('class="tr warn" title="Previous 20m; baseline 20m, the previous 7 days">▲ 31%');
+  expect(h).toContain('class="tr good" title="Previous 5; baseline 5, the previous 7 days">▲ 40%');
+  expect(h).toContain('class="tr warn" title="Previous 1m; baseline 1m, the previous 7 days">▲ 50%');
   for (const t of ["#/factory/efficiency", "#/factory/jobs", "#/factory/agents"]) expect(h).toContain(`href="${t}"`);
-  expect(h).toContain("under pace: 14.3% of the week gone");
+  expect(h).not.toContain("pace");
+  expect(h).not.toContain("resets");
+  expect(h).toContain('title="14% of the week gone"');
+});
+
+test("a card has no trend without a baseline or with a zero baseline of a count", () => {
+  const h = view.renderTiles({ ...state, usage: USAGE }, WEEK, "week");
+  expect(h).not.toContain('class="tr');
+  const z = view.renderTiles({ ...state, usage: USAGE }, { ...withBase(WEEK), baseline: { ...BASE, base: { ...BASE.base, landed: 0 } } }, "week");
+  expect(z).not.toContain("Previous 5;");
 });
 
 test("the scorecard before the data arrives: dashes, and usage unknown with no usage", () => {
-  const h = view.renderTiles({ ...state, usage: undefined }, null, null);
-  expect(h.match(/<b>–<\/b>/g)?.length).toBe(5);
-  expect(h).toContain("usage unknown");
+  const h = view.renderTiles({ ...state, usage: undefined }, null);
+  expect(h.match(/<b>–/g)?.length).toBe(5);
+  expect(h).not.toContain('class="tr');
 });
 
 test("the causes merge across the lost classes, largest first, and leave out the classes that reached main", () => {
@@ -136,9 +148,9 @@ test("mountStatus fetches the week and the day and fills the scorecard and the c
   resetSpeed();
   const tiles = { innerHTML: "" }, causes = { innerHTML: "" };
   const urls: string[] = [];
-  await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#causes" ? causes : null) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: { day: DAY, month: WEEK } }) }; });
+  await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#causes" ? causes : null) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: BASE }) }; });
   expect(urls).toEqual(["/api/speed?window=week&baseline=1"]);
-  expect(tiles.innerHTML).toContain("<b>38%</b>");
+  expect(tiles.innerHTML).toContain("<b>38%<em> / 6.0h</em></b>");
   expect(causes.innerHTML).toContain("Issue had landed");
   resetSpeed();
 });
@@ -168,13 +180,6 @@ test("the sidebar links and the routes exist", async () => {
   }
 });
 
-test("the Weekly usage tile shows the snapshot's age only while stale", () => {
-  const now = { seven_day: 25, five_hour: 1, at: "2026-11-01T07:20:00Z", seven_day_resets_at: "2026-11-07T08:00:00Z" };
-  const st = { ...state, now: "2026-11-01T08:00:00Z" };
-  expect(view.renderTiles({ ...st, usage: { now, stale: true } }, WEEK, DAY)).toContain("as of 40m ago");
-  expect(view.renderTiles({ ...st, usage: { now, stale: false } }, WEEK, DAY)).not.toContain("as of");
-});
-
 const pressedIn = (h: string) => [...(h.match(/data-name="window">(.*?)<\/div>/)?.[1] ?? "").matchAll(/data-value="(\w+)" aria-pressed="(\w+)"/g)];
 
 test("the page head holds the Hour, Day, Week, Month picker with the chosen window pressed", () => {
@@ -188,25 +193,10 @@ test("the page head holds the Hour, Day, Week, Month picker with the chosen wind
   expect(pressedIn(view.view.render(full, {}, new URLSearchParams())).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["week"]);
 });
 
-test("the speed tiles follow the window: values, captions, 24 h trend and links", () => {
-  const MONTH = { ...WEEK, window: "month", done: 30, issues: { ...WEEK.issues, firstPass: 0.6 } };
-  const HOUR = { ...WEEK, window: "hour", done: 2, issues: { ...WEEK.issues, firstPass: 0.4 } };
-  const m = view.renderTiles({ ...state, usage: USAGE }, MONTH, DAY, "month");
-  expect(m).toContain("<b>60%</b>");
-  expect(m).toContain("issues landed, 30 days");
-  expect(m).toContain("30 days");
-  expect(m).not.toContain("7 days");
-  expect(m).toContain('href="#/factory/efficiency?window=month"');
-  expect(m).toContain('href="#/factory/jobs?window=month"');
-  expect(m).toContain("in the last 24 h");
-  expect(m).not.toContain("30-day average");
-  const h = view.renderTiles({ ...state, usage: USAGE }, HOUR, DAY, "hour", MONTH);
-  expect(h).toContain("30-day average");
-  expect(h).toContain("<b>40%</b>");
-  expect(h).toContain("issues landed, hour");
-  expect(h).not.toContain("in the last 24 h");
+test("the cards follow the window: links keep it, and a trend reads the window's baseline", () => {
+  const h = view.renderTiles({ ...state, usage: USAGE }, withBase({ ...WEEK, window: "hour" }), "hour");
+  expect(h).toContain('href="#/factory/efficiency?window=hour"');
   expect(h).toContain('href="#/factory/jobs?window=hour"');
-  expect(h).toContain("Weekly usage");
   expect(h).toContain('href="#/factory/agents"');
 });
 
