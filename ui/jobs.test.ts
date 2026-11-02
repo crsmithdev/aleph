@@ -178,15 +178,14 @@ describe("GET /api/jobs/:name", () => {
     rmSync(join(jobsDir, "20261027-000007-a"), { recursive: true, force: true });
     expect(j.runs.map((r: any) => r.kind)).toEqual(["explain"]);
   });
-  test("returns runs in order, the review and the log tails", async () => {
+  test("returns runs in order, the review, and ignores the log files", async () => {
     const j = await (await get("/api/jobs/fac-9")).json();
     expect(j.runs.map((r: any) => r.kind)).toEqual(["worker", "worker", "review", "land"]);
     expect(j.runs[0]).toMatchObject({ condition: "failed", cost: 0.5, model: "claude-sonnet-5-5" });
     expect(j.result).toBe("fixed it\nFOLLOWUP: tidy\n");
     expect(j.review).toContain("VERDICT: pass");
-    expect(j.checksLog.split("\n")).toHaveLength(80);
-    expect(j.checksLog.endsWith("line 99")).toBe(true);
-    expect(j.stderr).toBe("warn");
+    expect(j.checksLog).toBeUndefined();
+    expect(j.stderr).toBeUndefined();
     expect(j.stat).toContain("a.txt");
     expect(j.trace).toBeUndefined();
   });
@@ -298,7 +297,7 @@ describe("render", () => {
       { id: "2-review", kind: "review", condition: "passed", started: ago(3) },
       { id: "3", kind: "land", condition: "landed", started: ago(2.5), ended: ago(2) },
     ],
-    result: "fixed it", review: "Looks right.", checksLog: "## test: exit 1", stderr: "warn", stat: " a.txt | 1 +", trace: "http://lf/sessions/s",
+    result: "fixed it", review: "Looks right.", stat: " a.txt | 1 +", trace: "http://lf/sessions/s",
   };
   test("the job view shows each run of a fix round as a bar and an event, and the result, review and diff", () => {
     const h = v.renderJob(job);

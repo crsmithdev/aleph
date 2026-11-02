@@ -55,7 +55,7 @@ export function transcript(stream: string): Step[] {
 export interface JobDetail extends Job {
   blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
-  checksLog?: string; stderr?: string; trace?: string;
+  trace?: string;
   /** What checked the job; a delivery's minutes to spot-check it, an estimate. */
   checkedBy?: string[]; look?: number;
   /** The item's spec, from the store. */
@@ -84,12 +84,6 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
 }
 
 const DAY = 24 * 3600_000;
-/** The last `n` lines of `s`. */
-export const lastLines = (s: string | undefined, n = 80): string | undefined => {
-  if (s === undefined) return undefined;
-  const lines = s.replace(/\n+$/, "").split("\n");
-  return lines.slice(-n).join("\n");
-};
 const KIND = { agent: "worker", build: "worker", recheck: "worker", research: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
@@ -167,12 +161,8 @@ export const routes: Routes = {
     annotate([detail], fit);
     const result = latestFile(runs, "result.md", (e) => isWorker(e.run.kind))?.text;
     const review = latestFile(runs, "review.md")?.text;
-    const checksLog = latestFile(runs, "checks.log")?.text;
-    const stderr = latestFile(runs, "stderr.log")?.text;
     if (result !== undefined) detail.result = result;
     if (review !== undefined) detail.review = review;
-    if (checksLog !== undefined) detail.checksLog = lastLines(checksLog);
-    if (stderr !== undefined) detail.stderr = lastLines(stderr);
     const by = checkedBy(runs);
     if (by.length) detail.checkedBy = by;
     const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
