@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
-import { lock, readRun } from "./ledger.ts";
+import { lock, readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
-import { goal, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { ctx, goal, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -24,6 +24,38 @@ test("a run killed by a host restart is dropped, its goal starts at once, and no
   expect(notes(id)).toContain("a host restart killed build run");
   expect(ask(id)).toBeNull();
   expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+});
+
+test("a build a host restart killed, with a commit ahead of main, starts a recheck of its branch and no new run", async () => {
+  const id = goal();
+  const repo = join(ctx.base, "repo");
+  sh(repo, "git", "checkout", "-q", "-b", "work");
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "the worker's work");
+  sh(repo, "git", "checkout", "-q", "main");
+  const r = killedRun(`fac-${id}`, "build", {});
+  // The run's branch is `work`: its commit is ahead of main.
+  writeRun(r.folder, { ...readRun(r.folder)!, branch: "work" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([`recheck fac-${id}`]);
+  expect(f.specs).toEqual([]);
+  expect(notes(id)).toContain("its branch has the worker's commits");
+  expect(readRun(r.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
+  expect(ask(id)).toBeNull();
+  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+});
+
+test("a build a host restart killed, with its branch at main and no commit, is dropped for a new run of the goal", async () => {
+  const id = goal();
+  const repo = join(ctx.base, "repo");
+  sh(repo, "git", "branch", "idle");
+  const r = killedRun(`fac-${id}`, "build", {});
+  writeRun(r.folder, { ...readRun(r.folder)!, branch: "idle" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.specs[0]).toContain("a host restart killed build run");
+  expect(ask(id)).toBeNull();
 });
 
 test("a goal whose run a host restart killed keeps its rerun: the next no commit reruns it with no Ask", async () => {

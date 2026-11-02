@@ -6,7 +6,8 @@
  * (input, rescue) instead when the issue is a part or the planner has already split it; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
  * case hits one goal, sets an Ask (input, rescue) on the issue; such a run holds nothing. A run that a host
- * restart killed comes first: it is dropped for a new run of the goal, or landed again, and uses up no rerun.
+ * restart killed comes first: a build with commits ahead of main rechecks its branch; any other build is dropped for a new run of
+ * the goal; a land lands again. None of them uses up a rerun.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -177,11 +178,21 @@ function foundDone({ r, repo, issue }: Pick<Stuck, "r" | "repo" | "issue">): { o
   return item && issues.status(item) !== "open" ? { onMain: null } : null;
 }
 
+/** Whether a branch has commits ahead of main: the worker's finished work, since commits reach the branch only after the worker ended. */
+function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
+  if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) return false;
+  const ahead = git(repo.path, "rev-list", "--count", `${repo.main}..refs/heads/${r.branch}`);
+  return ahead.ok && Number(ahead.out) > 0;
+}
+
 /** The step for a run that a host restart killed. The goal did not cause this: no rescue mark, so the goal keeps its rerun. */
-function killedStep({ last, r }: Stuck): Step {
+function killedStep(stuck: Stuck): Step {
+  const { last, r } = stuck;
   const text = `a host restart killed ${r.kind} run ${last.id}`;
   // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
   if (r.kind === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
+  // A build with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
+  if (isBuild(r.kind) && hasWork(stuck)) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
   return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
 }
 
@@ -300,11 +311,13 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   };
 
   if (isKilled) {
-    if (r.kind === "land") {
+    const step = killedStep(stuck);
+    // The real recheck takes only a stuck or failed run, so the killed run ends failed first, as a killed land does.
+    if (r.kind === "land" || step.action === "recheck") {
       writeFileSync(join(last.folder, "exit"), "143");
       updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
     }
-    return take(killedStep(stuck));
+    return take(step);
   }
 
   const noCommit = causeOf(r) === "no-commit";
