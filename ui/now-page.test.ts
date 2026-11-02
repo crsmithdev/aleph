@@ -102,11 +102,11 @@ test("the page order is the status line, Awaiting you, the scorecard, the lanes,
 });
 
 test("the scorecard has five tiles with values from the data and 24 h comparisons", () => {
-  const h = view.renderTiles({ ...state, now: "2026-11-01T08:00:00Z", usage: USAGE }, WEEK, DAY);
+  const h = view.renderTiles({ ...state, now: "2026-11-01T08:00:00Z", usage: USAGE }, WEEK, DAY, "week", DAY);
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "Lead time p50", "First pass", "Lands", "Weekly usage"]);
   expect([...h.matchAll(/<b>([^<]+)<\/b>/g)].map((m) => m[1])).toEqual(["38%", "26m", "91%", "7", "7%"]);
-  expect(h).toContain('<span class="good">▼ 23% in the last 24 h</span>');
-  expect(h).toContain('<span class="warn">▼ 11% in the last 24 h</span>');
+  expect(h).toContain('<span class="warn">▲ 23% vs 30-day average</span>');
+  expect(h).toContain('<span class="good">▲ 11% vs 30-day average</span>');
   expect(h).toContain("9 land runs");
   expect(h).toContain("3 in the last 24 h, 1 a day on average");
   for (const t of ["#/factory/efficiency", "#/factory/jobs", "#/factory/agents"]) expect(h).toContain(`href="${t}"`);
@@ -137,7 +137,7 @@ test("mountStatus fetches the week and the day and fills the scorecard and the c
   const tiles = { innerHTML: "" }, causes = { innerHTML: "" };
   const urls: string[] = [];
   await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#causes" ? causes : null) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => (u.includes("day") ? DAY : WEEK) }; });
-  expect(urls.sort()).toEqual(["/api/speed?window=day", "/api/speed?window=week"]);
+  expect(urls.sort()).toEqual(["/api/speed?window=day", "/api/speed?window=month", "/api/speed?window=week"]);
   expect(tiles.innerHTML).toContain("<b>38%</b>");
   expect(causes.innerHTML).toContain("Issue had landed");
   resetSpeed();
@@ -199,7 +199,9 @@ test("the speed tiles follow the window: values, captions, 24 h trend and links"
   expect(m).toContain('href="#/factory/efficiency?window=month"');
   expect(m).toContain('href="#/factory/jobs?window=month"');
   expect(m).toContain("in the last 24 h");
-  const h = view.renderTiles({ ...state, usage: USAGE }, HOUR, DAY, "hour");
+  expect(m).not.toContain("30-day average");
+  const h = view.renderTiles({ ...state, usage: USAGE }, HOUR, DAY, "hour", MONTH);
+  expect(h).toContain("30-day average");
   expect(h).toContain("<b>40%</b>");
   expect(h).toContain("issues landed, hour");
   expect(h).not.toContain("in the last 24 h");
@@ -218,7 +220,7 @@ test("mountStatus loads the window of the address", async () => {
   resetSpeed();
   const urls: string[] = [];
   await view.mountStatus({ querySelector: () => null }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => WEEK }; }, new URLSearchParams("window=hour"));
-  expect(urls.sort()).toEqual(["/api/speed?window=day", "/api/speed?window=hour"]);
+  expect(urls.sort()).toEqual(["/api/speed?window=day", "/api/speed?window=hour", "/api/speed?window=month"]);
   resetSpeed();
   delete g.localStorage; delete g.location; delete g.history;
 });

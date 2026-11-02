@@ -60,14 +60,16 @@ export function mergeCauses(d) {
 export const causeRow = (name, x, max, top) =>
   barRow(name, max > 0 ? (x.hours / max) * 100 : 0, `${esc(hours(x.hours))} · ${esc(plural(x.runs, "run"))}`, { top });
 
-/** A percent tile's last 24 h as the change from the window in whole percentage points; the colour says whether that is good. */
-export function pctTrend(week, day, lowerIsGood = true) {
-  if (day === null || day === undefined) return small("none in the last 24 h");
-  const pts = week === null || week === undefined ? Math.round(day * 100) : Math.round((day - week) * 100);
-  if (!pts) return small("no change in the last 24 h");
+/** A percent tile's value against the 30-day average in whole percentage points; the colour says whether that is good. */
+export function pctTrend(value, avg, lowerIsGood = true) {
+  const pts = Math.round((value - avg) * 100);
+  if (!pts) return small("no change vs 30-day average");
   const down = pts < 0;
-  return `<span class="${down === lowerIsGood ? "good" : "warn"}">${down ? "▼" : "▲"} ${Math.abs(pts)}% in the last 24 h</span>`;
+  return `<span class="${down === lowerIsGood ? "good" : "warn"}">${down ? "▼" : "▲"} ${Math.abs(pts)}% vs 30-day average</span>`;
 }
+
+/** Whether a percent tile compares with the 30-day average: not on the month window, which is that span. */
+export const avgOn = (d) => !!d?.window && d.window !== "month";
 
 /** The last 24 h against the window: the arrow gives the direction, the colour whether that is good. */
 export function trend(week, day, format, lowerIsGood = true) {
@@ -107,14 +109,14 @@ export function usageTile(s, link = {}, extra = "") {
   return tile({ k: "Weekly usage", v: `${Math.round(cur.seven_day)}%`, body: bar + notes + extra, ...link });
 }
 
-/** The Lost time tile, on Status and on Efficiency. */
-export function lostTile(d, last, link = {}) {
+/** The Lost time tile, on Status and on Efficiency. `avg` is /api/speed for the month, or null. */
+export function lostTile(d, avg, link = {}) {
   if (!d) return tile({ k: "Lost time", v: "–", body: small("agent time that did not reach main"), ...link });
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0);
-  return tile({ k: "Lost time", v: pctText(d.lost.share), body: small(`${hours(d.lost.hours)} of ${hours(total)} agent time, ${period(d)}`) + (trendOn(d) ? pctTrend(d.lost.share, last ? last.lost.share : null) : ""), ...link });
+  return tile({ k: "Lost time", v: pctText(d.lost.share), body: small(`${hours(d.lost.hours)} of ${hours(total)} agent time, ${period(d)}`) + (avgOn(d) && total > 0 && d.lost.share != null && avg?.lost?.share != null ? pctTrend(d.lost.share, avg.lost.share) : ""), ...link });
 }
 /** The First pass tile, on Status and on Efficiency. */
-export function firstPassTile(d, last, link = {}) {
+export function firstPassTile(d, avg, link = {}) {
   const v = d?.issues?.firstPass ?? null;
-  return tile({ k: "First pass", v: v === null ? "–" : pctText(v), body: small(d && v === null ? "no issue landed" : "lands with no fix round") + (v === null || !trendOn(d) ? "" : pctTrend(v, last?.issues?.firstPass ?? null, false)), ...link });
+  return tile({ k: "First pass", v: v === null ? "–" : pctText(v), body: small(d && v === null ? "no issue landed" : "lands with no fix round") + (v === null || !avgOn(d) || avg?.issues?.firstPass == null ? "" : pctTrend(v, avg.issues.firstPass, false)), ...link });
 }

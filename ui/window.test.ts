@@ -91,8 +91,9 @@ test("Jobs titles its day rows by the bucket of the window", () => {
 test("the trend against the last 24 hours shows only for week and month", () => {
   for (const w of WINDOWS) {
     const on = w === "week" || w === "month";
-    for (const h of [fjobs.renderFactoryJobs(speed(w), speed("day")), eff.renderEfficiency(speed(w), speed("day"))])
+    for (const h of [fjobs.renderFactoryJobs(speed(w), speed("day")), eff.renderEfficiency(speed(w), speed("day"), "all", speed("month"))])
       expect(/in the last 24 h\b/.test(h), w).toBe(on);
+    expect(/vs 30-day average/.test(eff.renderEfficiency(speed(w), speed("day"), "all", speed("month"))), w).toBe(w !== "month");
   }
 });
 

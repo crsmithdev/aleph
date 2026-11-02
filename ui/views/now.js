@@ -28,7 +28,7 @@ const EFFICIENCY = "#/factory/efficiency", PERFORMANCE = "#/factory/jobs";
 const keep = (href, win) => (win === "week" ? href : `${href}?window=${win}`);
 
 /** The scorecard: lost time, lead time, first pass, lands, weekly usage. `d` is /api/speed for the window `win` and `day` for the last 24 h; either is null while it loads. Weekly usage stays on its weekly limit. */
-export function renderTiles(s, d, day, win = d?.window ?? "week") {
+export function renderTiles(s, d, day, win = d?.window ?? "week", month = null) {
   const efficiency = keep(EFFICIENCY, win), performance = keep(PERFORMANCE, win), span = period({ window: win });
   const lead = d?.phases?.lead, dlead = day?.phases?.lead;
   const peak = lead ? Math.max(1, ...d.buckets.map((b) => b.lead ?? 0)) : 1;
@@ -39,7 +39,7 @@ export function renderTiles(s, d, day, win = d?.window ?? "week") {
   const lands = d
     ? tile({ k: "Lands", v: String(d.done), body: small(`issues landed, ${span} · ${d.kinds.land.count} land runs`) + landNote(d, day, win), href: performance })
     : tile({ k: "Lands", v: "–", body: small(`issues landed, ${span}`), href: performance });
-  return lostTile(d, day, { href: efficiency }) + leadTile + firstPassTile(d, day, { href: efficiency }) + lands + usageTile(s, { href: "#/factory/agents" });
+  return lostTile(d, month, { href: efficiency }) + leadTile + firstPassTile(d, month, { href: efficiency }) + lands + usageTile(s, { href: "#/factory/agents" });
 }
 
 /** The Lands note: the last 24 h where they differ from the window, and the daily average where the window spans days. */
@@ -66,9 +66,9 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
   keepWindow(w);
   wireScope(root);
-  await Promise.all([loadSpeed(w, fetcher), loadSpeed("day", fetcher)]);
+  await Promise.all([loadSpeed(w, fetcher), loadSpeed("day", fetcher), w === "month" ? null : loadSpeed("month", fetcher)]);
   const tiles = root.querySelector("#scorecard"), causes = root.querySelector("#causes");
-  if (tiles) tiles.innerHTML = renderTiles(s, usable(w), usable("day"), w);
+  if (tiles) tiles.innerHTML = renderTiles(s, usable(w), usable("day"), w, usable("month"));
   if (causes) causes.innerHTML = renderCauses(speedOf(w), w);
 }
 

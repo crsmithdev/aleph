@@ -61,11 +61,11 @@ const D: any = {
 const DAY: any = { ...D, flaky: 1, lost: { hours: 1, share: 0.1 }, issues: { ...D.issues, firstPass: 0.75 } };
 
 test("the tiles and the head come from the data", () => {
-  const h = renderEfficiency(D, DAY, "all");
+  const h = renderEfficiency(D, DAY, "all", DAY);
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "First pass", "Reruns", "Fix rounds", "Usage per issue"]);
   expect(h).toContain('<header class="ph"><h1>Efficiency</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
-  expect(h).toContain('<span class="good">▼ 20% in the last 24 h</span>');
-  expect(h).toContain('<span class="good">▲ 25% in the last 24 h</span>');
+  expect(h).toContain('<span class="warn">▲ 20% vs 30-day average</span>');
+  expect(h).toContain('<span class="warn">▼ 25% vs 30-day average</span>');
   expect(h).toContain("&lt;0.1%");
   expect(h).toContain("20 h counted · 11 runs, 0.4 h, have no outcome yet");
   expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, null, "all")).toContain("needs 6 hours of usage snapshots");
@@ -144,10 +144,13 @@ test("the Reruns panel describes tests and checks, and keeps a long name whole",
   expect(h).toContain("rerun");
 });
 
-test("percent tiles show the change in points, not the 24 h value", () => {
-  expect(pctTrend(0.9004, 0.8302, false)).toBe('<span class="warn">▼ 7% in the last 24 h</span>');
-  expect(pctTrend(0.3, 0.4)).toBe('<span class="warn">▲ 10% in the last 24 h</span>');
-  expect(pctTrend(0.5, 0.5)).toBe("<small>no change in the last 24 h</small>");
-  expect(pctTrend(0.5, 0.502)).toBe("<small>no change in the last 24 h</small>");
-  expect(pctTrend(0.5, null)).toBe("<small>none in the last 24 h</small>");
+test("percent tiles show the change from the 30-day average in points", () => {
+  expect(pctTrend(0.8302, 0.9004, false)).toBe('<span class="warn">▼ 7% vs 30-day average</span>');
+  expect(pctTrend(0.4, 0.3)).toBe('<span class="warn">▲ 10% vs 30-day average</span>');
+  expect(pctTrend(0.4007, 0.37)).toBe('<span class="warn">▲ 3% vs 30-day average</span>');
+  expect(pctTrend(0.8421, 0.8973, false)).toBe('<span class="warn">▼ 6% vs 30-day average</span>');
+  expect(pctTrend(0.3701, 0.37)).toBe("<small>no change vs 30-day average</small>");
+  expect(pctTrend(0.8972, 0.8973, false)).toBe("<small>no change vs 30-day average</small>");
+  expect(renderEfficiency({ ...D, window: "month" }, DAY, "all", DAY)).not.toContain("30-day average");
+  expect(renderEfficiency(D, DAY, "all", null)).not.toContain("30-day average");
 });
