@@ -187,7 +187,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     let cls: Class | null = null;
     if (lands.has(r)) cls = "landed";
     else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "fixed";
-    else if (afterLand || /already (met|done|on main)|duplicate|folded into/i.test(reason)) cls = "nothing";
+    else if (afterLand || r.fate === "already-met" || r.fate === "duplicate") cls = "nothing";
     else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "restarted";
     else if (["done", "dropped", GONE].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
@@ -204,7 +204,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     else if (/ failed$/.test(reason)) row.cause = "Checks failed";
     else if (/time box|stalled|timed out|lost/i.test(reason)) row.cause = "Stalled or timed out";
     else if (/no commit/i.test(reason)) row.cause = "No commit";
-    else if (/by hand|aleph drop/i.test(reason)) row.cause = "Needed Chris";
+    else if (r.fate === "by-hand") row.cause = "Needed Chris";
     else if (passedState(r.condition) || /conflict/i.test(reason)) row.cause = "Passed, not landed";
     else row.cause = "Other";
     rows.get(cls)!.push(row);

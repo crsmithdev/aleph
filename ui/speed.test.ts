@@ -248,6 +248,30 @@ test("classify: a held run that later landed is landed, its earlier held rounds 
   expect([runs("landed"), runs("fixed"), runs("dropped")]).toEqual([1, 1, 1]);
 });
 
+test("classify: a drop's fate, not its prose, sets the nothing class and the Needed Chris cause", () => {
+  const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
+  const r = (todo: number, o: Record<string, unknown>) =>
+    ({ kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "stuck", started: t(todo), ended: t(todo, 10), ...o }) as any;
+  const runs = [
+    r(1, { fate: "already-met", reason: "agent run j1: stopped" }),
+    r(2, { fate: "duplicate" }),
+    // No fate: the prose says duplicate or already met, but the run is a plain drop.
+    r(3, { reason: "found it already met" }),
+    r(4, { reason: "duplicate of 2" }),
+    r(5, { fate: "by-hand" }),
+    // No fate: the prose says by hand or aleph drop, but it has no Needed Chris cause.
+    r(6, { reason: "dropped by hand" }),
+    r(7, { reason: "aleph drop" }),
+  ];
+  const out = classify(runs, () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
+  const by = (k: string) => out.classes.find((c) => c.key === k)!;
+  expect(by("nothing").runs).toBe(2);
+  expect(by("nothing").causes.map((c) => c.name)).toEqual(["Work on main from another issue"]);
+  expect(by("dropped").runs).toBe(5);
+  expect(by("dropped").causes.map((c) => c.name).sort()).toEqual(["Needed Chris", "Other"]);
+  expect(by("dropped").causes.find((c) => c.name === "Needed Chris")!.runs).toBe(1);
+});
+
 test("runs read their issue from on: a goal run counts under its issue, an issue run under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "ox", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
