@@ -116,6 +116,8 @@ export interface JobArgs {
   on?: number | string;
   model?: string;
   land?: boolean;
+  /** A merge run after a land conflict. */
+  merge?: boolean;
 }
 
 /** The argv of `aleph job` for these arguments. */
@@ -162,7 +164,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     return await dispatch({
       kind: "build", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
       condition: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
-      ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
+      ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), ...(a.merge ? { merge: true as const } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
       if (!first) return writeFileSync(join(folder, "spec.md"), a.spec);
       addNote(open!, a.spec);

@@ -3,8 +3,9 @@ import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterLand, bounceNote, land, landTerms, type LandPorts } from "./landing.ts";
-import { writeRun, type Entry, type Repo, type Run } from "./ledger.ts";
+import { prompt as unitPrompt } from "./unit.ts";
+import { afterLand, bounceNote, isMergeBounce, land, landTerms, MERGE_MODEL, MERGE_SECONDS, type LandPorts } from "./landing.ts";
+import { readRun, writeRun, type Entry, type Repo, type Run } from "./ledger.ts";
 
 setDefaultTimeout(120_000);
 
@@ -346,4 +347,27 @@ test("landTerms: which runs may land, and how", () => {
   expect(needs(ask("question", "input") as Partial<Run>)).toBeNull();
   expect(needs({ condition: "failed" })).toBeNull();
   expect(landTerms({ kind: "land", condition: "passed" } as Run)).toBeNull();
+});
+
+test("the run after a conflicted land has a merge prompt: the paths and the last commit on main, no spec text", async () => {
+  const e = job("mrg", [["clash.txt", "branch\n"]]);
+  moveMain("clash.txt", "main\n");
+  const spec = "SPEC-SECRET-TEXT: build the whole thing";
+  writeFileSync(join(e.folder, "..", e.run.job, "spec.md"), spec);
+  const r = await land(e, repo, ports());
+  expect(r.outcome).toMatchObject({ condition: "failed", conflicts: ["clash.txt"] });
+  writeRun(e.folder, { ...e.run, ...r.outcome } as Run);
+  const id = "20261101-000009-demo-mrg-build";
+  const folder = join(dir, "jobs", id);
+  mkdirSync(folder);
+  writeRun(folder, { name: "mrg", repo: "demo", job: e.run.job, kind: "build", condition: "running", merge: true, model: MERGE_MODEL, made: 99, started: new Date().toISOString() } as Run);
+  const text = unitPrompt(id, folder, readRun(folder)!, repo);
+  expect(text).toContain("clash.txt");
+  expect(text).toContain("other clash.txt");
+  expect(text).toContain("origin/main");
+  expect(text).not.toContain("SPEC-SECRET");
+  expect(text).not.toContain("## Spec");
+  expect(MERGE_SECONDS).toBe(600);
+  expect(isMergeBounce({ ...e.run, ...r.outcome } as Run)).toBe(true);
+  expect(isMergeBounce({ ...e.run, cause: "own-list", conflicts: ["docs/todo.md"] } as Run)).toBe(false);
 });

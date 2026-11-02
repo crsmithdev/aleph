@@ -22,7 +22,7 @@ import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallS
 import { checksInSandbox, runChecks, stopFields, type ChecksStop } from "./checks.ts";
 import { dispatchDetached } from "./factory.ts";
 import { gates } from "./factory-status.ts";
-import { afterLand, bounceNote, land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
+import { afterLand, bounceNote, isMergeBounce, land, mergePrompt, MERGE_MODEL, MERGE_SECONDS, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
@@ -106,6 +106,11 @@ Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUN
 /** The fixed text, the spec, every note in order, and the previous run's files. */
 export function prompt(id: string, folder: string, run: Run, repo: Repo): string {
   const first = join(folder, "..", run.job);
+  if (run.merge) {
+    const land = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land" && e.id !== id).at(-1)?.run;
+    const n = onOf(run);
+    return mergePrompt(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
+  }
   const parts = [(repo.sandbox ? FACTORY : FIXED)(run, repo.main), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
   const runs = jobById(run.job) ?? [];
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
@@ -357,6 +362,9 @@ function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
   return run.kind === "land" ? afterLand(run) : undefined;
 }
 
+/** The worker's time limit: a merge run has a short one. */
+const workSeconds = (run: Run): number => (run.merge ? MERGE_SECONDS : jobSeconds());
+
 /** The last 80 lines of the named check's section of the run's checks.log. */
 function checkLog(folder: string, name: string): string {
   const file = join(folder, "checks.log");
@@ -405,11 +413,12 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     : run.failed
     ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
     : bounceNote(run);
+  const merge = next === "worker" && !run.failed && isMergeBounce(run);
   const log = join(folder, "next.log");
   try {
     const s = next === "land"
       ? await startLand(run.name, {}, { output: { file: log } })
-      : await startJob({ repo: run.repo!, name: run.name, spec: note, land: true }, { output: { file: log } });
+      : await startJob({ repo: run.repo!, name: run.name, spec: note, land: true, ...(merge ? { merge: true, model: MERGE_MODEL } : {}) }, { output: { file: log } });
     appendFileSync(log, JSON.stringify(s.started, null, 2) + "\n");
     await s.child?.exited;
   } catch (e: any) {
@@ -469,7 +478,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const text = prompt(id, folder, run, repo);
   writeFileSync(join(folder, "prompt.md"), text);
   phase("worker");
-  const w = await exec(argv, { cwd: wt, env: workerEnv, out: join(folder, "output.log"), limit: jobSeconds(), stdin: text });
+  const w = await exec(argv, { cwd: wt, env: workerEnv, out: join(folder, "output.log"), limit: workSeconds(run), stdin: text });
   const result = resultText(readFileSync(join(folder, "output.log"), "utf8"));
   writeFileSync(join(folder, "result.md"), result);
 
@@ -553,7 +562,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       w = await sandboxed(dir, script, {
         read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
         env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-        stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: jobSeconds(),
+        stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: workSeconds(run),
         stall: stallSeconds(),
         onSpawn: (p) => { child = p; },
       });

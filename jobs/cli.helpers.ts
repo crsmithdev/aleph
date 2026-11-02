@@ -195,6 +195,12 @@ printf '%s' "$prompt" > "$FAKE_LOG/prompt"
 echo "$@" > "$FAKE_LOG/args"
 env > "$FAKE_LOG/env"
 action=$(printf '%s\\n' "$prompt" | grep '^ACTION:' | tail -1 | cut -d' ' -f2-)
+if printf '%s' "$prompt" | grep -q '^# Merge '; then
+  # A merge run has no ACTION: it merges main, except in clash.txt, which this worker cannot resolve.
+  if printf '%s' "$prompt" | grep -q 'clash.txt'; then git commit -q --allow-empty -m "unresolved"
+  else git fetch -q origin && git rebase -q -X theirs origin/main; fi
+  exit 0
+fi
 case $action in
   commit\\ *) f=\${action#commit }; mkdir -p "$(dirname "$f")"; echo "$RANDOM" > "$f"; git add "$f"; git commit -qm "add $f" ;;
   commit-big\\ *) f=\${action#commit-big }; for i in $(seq 1 60); do echo "line $i of the big file"; done > "$f"; git add "$f"; git commit -qm "add $f" ;;

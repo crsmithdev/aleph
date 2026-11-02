@@ -48,6 +48,8 @@ export interface Run {
   review?: Review;
   /** An agent run started with --land: it lands when it passes. */
   land?: boolean;
+  /** A run that only merges main into the branch after a land conflict: short prompt, short limit. */
+  merge?: true;
   /** A land run's conflicted paths, read before the rebase abort. */
   conflicts?: string[];
   /** A factory run stopped by a failing check that goes back to its worker: the check's name. */

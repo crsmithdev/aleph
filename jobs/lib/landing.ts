@@ -440,3 +440,29 @@ export function bounceNote(run: Run): string {
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
 }
+
+/** The model of a merge run: the cheapest tier the factory routes a worker to. */
+export const MERGE_MODEL = "haiku";
+/** The time limit of a merge run, in seconds. */
+export const MERGE_SECONDS = 600;
+
+/** Whether the next run is a merge run: a conflict bounce, not an `own-list` one. */
+export const isMergeBounce = (land: Run): boolean => causeOf(land) !== "own-list" && !!land.conflicts?.length;
+
+/**
+ * The whole prompt of a merge run: the conflicted paths, the last commit on main that touched each,
+ * and the goal's title when the store has one. No spec text, no notes.
+ */
+export function mergePrompt(land: Run, repo: Repo, title?: string): string {
+  const main = `origin/${repo.main}`;
+  const paths = (land.conflicts ?? []).map((p) => {
+    const last = git(repo.path, "log", "-1", "--format=%h %s", main, "--", p).out.trim();
+    return `- ${p}${last ? ` (last commit on ${main}: ${last})` : ""}`;
+  });
+  return [
+    `# Merge ${main} into this branch`,
+    ...(title ? [`Goal: ${title}`] : []),
+    `A land of this branch conflicted with ${main}. This run does one task and nothing else: merge ${main} into the branch, resolve the conflicts so that the change on main and this job's change both survive, and commit. Do not start other work.`,
+    `Conflicted paths:\n${paths.join("\n")}`,
+  ].join("\n\n") + "\n";
+}

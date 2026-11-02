@@ -29,6 +29,10 @@ describe("land: conflicts", () => {
     const runs = runsOf("mend");
     expect(runs.map((x) => [x.kind, x.condition])).toEqual([["build", "passed"], ["land", "failed"], ["build", "passed"], ["land", "landed"]]);
     expect(runs[2].land).toBe(true);
+    expect(state(runs[2].id)).toMatchObject({ merge: true, model: "haiku" });
+    expect(file(runs[2].id, "prompt.md")).toContain("mend.txt");
+    expect(file(runs[2].id, "prompt.md")).not.toContain("ACTION:");
+    expect(file(runs[2].id, "prompt.md")).not.toContain("## Spec");
     expect(file(runs[1].id, "next.log")).not.toContain("held:");
     expect(sh(base, "git", "--git-dir", remote, "show", "main:mend.txt")).toBe("mine");
     expect(remoteHead()).toBe(runs[3].commit);
