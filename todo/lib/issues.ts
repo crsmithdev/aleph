@@ -30,6 +30,7 @@ export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ?
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
+  if (f.priority !== undefined && !(issues.PRIORITIES as readonly string[]).includes(f.priority)) refuse(`--priority takes ${issues.PRIORITIES.join(", ")}`);
   if (f.status !== undefined && !(issues.STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${issues.STATUSES.join(", ")}`);
 }
 
@@ -190,6 +191,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields) {
     const i = pick(repo, doc, id);
     for (const r of kept ?? []) if (r === `${repo.key}-${issues.refOf(i)}`) refuse("an issue cannot wait for itself");
     issues.edit(i, { title, request, spec, priority, areas: labels });
+    if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
     if (status === "open") store.reopen(doc, i, mainHead(repo));
     else if (status !== undefined) issues.setStatus(i, status as issues.Status);

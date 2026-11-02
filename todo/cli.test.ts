@@ -208,6 +208,22 @@ test("drop refuses without a reason", () => {
   expect(r.err).toContain("say why");
 });
 
+test("add and edit refuse a priority outside low, medium, high, critical", () => {
+  const before = aleph("issue", "list", "proj", "--json").out;
+  const r = aleph("issue", "add", "proj", "Urgent thing", "--priority", "urgent");
+  expect(r.code).not.toBe(0);
+  for (const p of ["low", "medium", "high", "critical"]) expect(r.err).toContain(p);
+  expect(aleph("issue", "list", "proj", "--json").out).toBe(before);
+  for (const p of ["low", "medium", "high", "critical"]) {
+    expect(aleph("issue", "add", "proj", `Kept ${p}`, "--priority", p).code).toBe(0);
+    const rows = JSON.parse(aleph("issue", "list", "proj", "--json").out);
+    expect(rows.find((x: any) => x.title === `Kept ${p}`).priority).toBe(p);
+  }
+  const e = aleph("issue", "edit", "proj", "3", "--priority", "urgent");
+  expect(e.code).not.toBe(0);
+  expect(e.err).toContain("critical");
+});
+
 test("labels filter, and a flag value never lands in the title", () => {
   aleph("issue", "add", "proj", "Audio thing", "--labels", "audio,phone", "--priority", "high");
   aleph("issue", "add", "proj", "Other thing", "--labels", "build");

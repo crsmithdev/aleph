@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
+import * as verbs from "./issues.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -353,6 +354,26 @@ describe("the writers of the new shape", () => {
     expect(b.fm).toMatchObject({ source: "worker", areas: ["ui"] });
     expect(c.fm.source).toBe("deps");
     expect(store.isSorted(store.readList(r)!, a)).toBe(false);
+  });
+
+  test("editing a parent's priority sets it on its open parts, not its done ones, in one commit", () => {
+    const r = repo();
+    store.writeList(r, "x", (doc) => {
+      const issue = issues.add(doc, "big", { priority: "high" });
+      issues.addPart(doc, issue, { title: "p1", spec: "a" });
+      issues.addPart(doc, issue, { title: "p2", spec: "b" });
+      const p3 = issues.addPart(doc, issue, { title: "p3", spec: "c" });
+      issues.setStatus(p3, "done");
+      return true;
+    });
+    const before = commits();
+    verbs.edit(r, 1, { priority: "critical" });
+    expect(commits()).toBe(before + 1);
+    expect(item(r, 1 as any).fm.priority).toBe("critical");
+    expect(item(r, "1.1" as any).fm.priority).toBe("critical");
+    expect(item(r, "1.2" as any).fm.priority).toBe("critical");
+    expect(item(r, "1.3" as any).fm.priority).toBe("high");
+    expect(() => verbs.edit(r, 1, { priority: "urgent" })).toThrow("low, medium, high, critical");
   });
 
   test("addPart allocates <n>.<k> under the issue, with the issue's priority and its after, in one commit", () => {

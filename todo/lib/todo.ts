@@ -148,6 +148,9 @@ export const nextSub = (doc: Doc, n: number): number => Math.max(doc.items.reduc
 /** Labels that say a source or an old state, never an area. */
 const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged", "planned", "proposal", "live-check"];
 
+/** The four priorities, in rank order. */
+export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
+
 export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; now?: Date } = {}): Issue {
   const day = today(o.now);
   const given = o.labels ?? [];
