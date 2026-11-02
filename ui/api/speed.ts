@@ -7,7 +7,7 @@
  */
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { flakes } from "../../jobs/lib/factory-status.ts";
+import { flakeNames, flakes } from "../../jobs/lib/factory-status.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
 import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
@@ -519,7 +519,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     hasWeek: fit !== null,
     agents: agentStats(entries, since.getTime(), now.getTime(), AGENT_STEP[window], LIVE_CAP()),
     flaky: recent.length,
-    flakes: [...Map.groupBy(recent, (f) => f.check)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    flakes: [...Map.groupBy(recent.flatMap(flakeNames), (f) => f.name)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
 }
 

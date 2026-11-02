@@ -381,3 +381,19 @@ test("activeEnd pulls ended back to the last worker activity", () => {
   expect(Date.parse(activeEnd(mk("c", { "state.json": 180 })).ended!)).toBe(t0 + 180 * min);
   rmSync(dir, { recursive: true, force: true });
 });
+
+test("flakes count each test name; a row without tests counts under its check", async () => {
+  const file = join(base, "factory", "flaky.json");
+  mkdirSync(join(base, "factory"), { recursive: true });
+  const row = (check: string, tests?: string[]) => ({ repo: "r", check, run: "x", at: at(1, 9), ...(tests ? { tests } : {}) });
+  writeFileSync(file, JSON.stringify([row("tests", ["a.test.ts > one", "b.test.ts > two"]), row("tests", ["a.test.ts > one"]), row("tests"), row("types")]));
+  try {
+    clearCache();
+    const d = await speed("week", now);
+    expect(d.flaky).toBe(4);
+    expect(d.flakes).toEqual([{ name: "a.test.ts > one", count: 2 }, { name: "b.test.ts > two", count: 1 }, { name: "tests", count: 1 }, { name: "types", count: 1 }]);
+  } finally {
+    rmSync(file, { force: true });
+    clearCache();
+  }
+});
