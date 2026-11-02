@@ -6,7 +6,7 @@
  * (input, rescue) instead when the issue is a part or the planner has already split it; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
  * case hits one goal, sets an Ask (input, rescue) on the issue; such a run holds nothing. A run that a host
- * restart killed comes first: a build with commits ahead of main rechecks its branch; any other build is dropped for a new run of
+ * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
  * the goal; a land lands again. None of them uses up a rerun.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -191,8 +191,8 @@ function killedStep(stuck: Stuck): Step {
   const text = `a host restart killed ${r.kind} run ${last.id}`;
   // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
   if (r.kind === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
-  // A build with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
-  if (isBuild(r.kind) && hasWork(stuck)) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
+  // A build or recheck with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
+  if ((isBuild(r.kind) || r.kind === "recheck") && hasWork(stuck)) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
   return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
 }
 

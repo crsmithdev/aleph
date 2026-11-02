@@ -58,6 +58,38 @@ test("a build a host restart killed, with its branch at main and no commit, is d
   expect(ask(id)).toBeNull();
 });
 
+test("a recheck a host restart killed, with a commit ahead of main, starts a new recheck of its branch and no new goal run, and uses no rerun", async () => {
+  const id = goal();
+  const repo = join(ctx.base, "repo");
+  sh(repo, "git", "checkout", "-q", "-b", "work");
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "the worker's work");
+  sh(repo, "git", "checkout", "-q", "main");
+  const r = killedRun(`fac-${id}`, "recheck", {});
+  writeRun(r.folder, { ...readRun(r.folder)!, branch: "work" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([`recheck fac-${id}`]);
+  expect(f.specs).toEqual([]);
+  expect(notes(id)).toContain("its branch has the worker's commits");
+  expect(readRun(r.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
+  expect(ask(id)).toBeNull();
+  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+});
+
+test("a recheck a host restart killed, with its branch at main and no commit, is dropped for a new run of the goal, and uses no rerun", async () => {
+  const id = goal();
+  const repo = join(ctx.base, "repo");
+  sh(repo, "git", "branch", "idle");
+  const r = killedRun(`fac-${id}`, "recheck", {});
+  writeRun(r.folder, { ...readRun(r.folder)!, branch: "idle" });
+  const f = fakes();
+  await dispatch(f);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(f.specs[0]).toContain("a host restart killed recheck run");
+  expect(ask(id)).toBeNull();
+  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+});
+
 test("a goal whose run a host restart killed keeps its rerun: the next no commit reruns it with no Ask", async () => {
   const id = goal();
   killedRun(`fac-${id}`);
