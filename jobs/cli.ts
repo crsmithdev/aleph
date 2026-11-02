@@ -23,6 +23,7 @@ import { behind, correctionsStep, dispatchDetached, firefighterStep, planNow, pr
 import { smokeFile, factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
 import { factoryLog } from "./lib/layout.ts";
 import { checkName, checked, drop, land, recheck, repoOf, runDispatch, startJob, startPlain, type Start } from "./lib/transitions.ts";
+import type { Fate } from "./lib/outcome.ts";
 import { refuse, Refusal } from "./lib/refusal.ts";
 import { probe } from "./lib/probe.ts";
 import { smokeStep } from "./lib/smoke.ts";
@@ -44,7 +45,8 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--request", "--model", "--todo", "--on", "--priority", "--labels", "--status", "--label", "--title", "--after", "--reopened-since", "--before", "--undo"];
+const VALUED = ["--spec", "--request", "--model", "--todo", "--on", "--priority", "--labels", "--status", "--label", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate"];
+const FATES: Fate[] = ["duplicate", "already-met", "by-hand"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
@@ -451,7 +453,14 @@ try {
       await reviewBack(folder);
       break;
     }
-    case "drop": out(await drop(positional[0], { reason: positional.slice(1).join(" "), quiet: rest.includes("--quiet") })); break;
+    case "drop": {
+      const quiet = rest.includes("--quiet");
+      const given = flag("fate");
+      if (rest.includes("--fate") && !FATES.includes(given as Fate)) refuse(`--fate takes one of ${FATES.join(", ")}`);
+      const fate = (given as Fate | undefined) ?? (quiet ? undefined : "by-hand");
+      out(await drop(positional[0], { reason: positional.slice(1).join(" "), quiet, fate }));
+      break;
+    }
     case "unit": await unit(resolve(positional[0])); break;
     case "land": await started(await land(positional[0], { checked: rest.includes("--checked") }, { command })); break;
     case "checked": out(checked(positional[0])); break;

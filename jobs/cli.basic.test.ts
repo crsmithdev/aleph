@@ -98,6 +98,27 @@ describe("job", () => {
     expect((await aleph(["drop", "alpha"])).code).toBe(1);
   });
 
+  test("drop writes the fate by-hand, none with --quiet, and --fate overrides it", async () => {
+    await job("alpha", "commit p.txt");
+    await aleph(["drop", "alpha", "not", "needed"]);
+    expect(state((await aleph(["jobs", "alpha"])).json.run)).toMatchObject({ fate: "by-hand", reason: "not needed" });
+    await job("alpha", "commit q.txt");
+    await aleph(["drop", "alpha", "--quiet"]);
+    expect(state((await aleph(["jobs", "alpha"])).json.run).fate).toBeUndefined();
+    await job("alpha", "commit f.txt");
+    await aleph(["drop", "alpha", "--fate", "duplicate"]);
+    expect(state((await aleph(["jobs", "alpha"])).json.run)).toMatchObject({ fate: "duplicate", reason: "dropped by Chris" });
+  }, 30_000);
+
+  test("drop --fate with an unknown value is refused and the job stays open", async () => {
+    await job("alpha", "commit r.txt");
+    const r = await aleph(["drop", "alpha", "--fate", "bogus"]);
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("duplicate, already-met, by-hand");
+    expect((await aleph(["jobs", "alpha"])).json.condition).not.toBe("dropped");
+    await aleph(["drop", "alpha"]);
+  });
+
   test("a new job with an ended job's name starts fresh, clearing a leftover branch", async () => {
     sh(repo, "git", "branch", "job/alpha", "origin/main");
     const r = await job("alpha", "commit d.txt");
