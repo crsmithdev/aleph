@@ -68,9 +68,12 @@ export const lastLines = (s: string | undefined, n = 80): string | undefined => 
 const KIND = { agent: "worker", build: "worker", recheck: "worker", research: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
-  for (const e of runs) {
+  runs.forEach((e, i) => {
     const r = e.run;
-    const info: RunInfo = { id: e.id, kind: KIND[r.kind] ?? "worker", condition: r.condition, started: r.started };
+    // A worker the reviewer sent back stays stored "stuck"; the job carries on with a later worker run, so it reads "sent back".
+    const back = isWorker(r.kind) && r.failed === "review" && r.condition === "stuck" && runs.slice(i + 1).some((n) => isWorker(n.run.kind));
+    const condition = back ? "sent back" : r.condition;
+    const info: RunInfo = { id: e.id, kind: KIND[r.kind] ?? "worker", condition, started: r.started };
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
     if (r.model) info.model = r.model;
@@ -82,9 +85,9 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
     if ((isWorker(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
-      out.push({ id: `${e.id}-review`, kind: "review", condition: r.condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
+      out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
     }
-  }
+  });
   return out;
 }
 

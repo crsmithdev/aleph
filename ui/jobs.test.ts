@@ -352,3 +352,34 @@ test("the issue and job pages use pageHead, table.tbl, idLink and when", async (
   expect(job).not.toContain("<style>");
   expect(job).toContain('<dl class="facts">');
 });
+
+describe("a worker round the reviewer sent back", () => {
+  test("reads sent back while a later worker run follows, stuck when it is the last", async () => {
+    const ids = ["20261102-000101-a", "20261102-000102-a", "20261102-000103-a"];
+    const job = { job: "oth-sb", name: "oth-sb", repo: "oth", branch: "factory/oth-sb", failed: "review", started: ago(4), ended: ago(3.5) };
+    run(ids[0], { ...job, condition: "stuck", reason: "needs work", next: "worker", round: 0 }, { "review.md": "Redo it.\nVERDICT: fail\n" });
+    run(ids[1], { ...job, condition: "stuck", reason: "still wrong", round: 1, started: ago(3), ended: ago(2.5) }, { "review.md": "Still wrong.\nVERDICT: fail\n" });
+    run(ids[2], { job: "oth-sb", name: "oth-sb", repo: "oth", kind: "build", condition: "running", started: ago(2) });
+    try {
+      const j = await (await get("/api/jobs/oth-sb")).json();
+      const cond = Object.fromEntries(j.runs.map((r: any) => [r.id, r.condition]));
+      expect(cond).toEqual({
+        [ids[0]]: "sent back", [`${ids[0]}-review`]: "sent back",
+        [ids[1]]: "sent back", [`${ids[1]}-review`]: "sent back",
+        [ids[2]]: "running",
+      });
+    } finally {
+      for (const id of ids) rmSync(join(jobsDir, id), { recursive: true, force: true });
+    }
+  });
+  test("a stuck round that is the job's last worker run still reads stuck", async () => {
+    const id = "20261102-000104-a";
+    run(id, { job: "oth-sl", name: "oth-sl", repo: "oth", branch: "factory/oth-sl", condition: "stuck", failed: "review", reason: "held", next: "worker", started: ago(2), ended: ago(1.5) }, { "review.md": "No.\nVERDICT: fail\n" });
+    try {
+      const j = await (await get("/api/jobs/oth-sl")).json();
+      expect(j.runs.map((r: any) => [r.id, r.condition])).toEqual([[id, "stuck"], [`${id}-review`, "stuck"]]);
+    } finally {
+      rmSync(join(jobsDir, id), { recursive: true, force: true });
+    }
+  });
+});
