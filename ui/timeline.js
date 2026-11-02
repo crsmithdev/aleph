@@ -1,9 +1,10 @@
-// The Issue page's lifetime chart: one row per run and per wait, in time order, on a shared axis.
-// Plain JS with no DOM, so the page and the tests both import it.
-import { esc, when } from "./lib.js";
+// The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
+// a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
+// Plain JS with no DOM, so the pages and the tests both import it.
+import { clock, dur, esc, money, shortModel, when } from "./lib.js";
 
-const KINDS = { triage: "Triage", build: "Build", plan: "Plan", land: "Land", facts: "Facts review", recheck: "Recheck", plain: "Run", firefighter: "Firefighter", explain: "Explain" };
-const GAP = 60_000;
+/** A gap between two runs that is longer than this is a wait. */
+export const GAP = 60_000;
 
 /** "42 s", "12 min", "3 h 5 min", "4 d 2 h". */
 export function lifespan(ms) {
@@ -17,45 +18,12 @@ export function lifespan(ms) {
 }
 
 /** A store date or a note's stamp as ms in local time, as the CLI writes them; NaN for neither. */
-const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^\d{4}-\d\d-\d\d$/.test(String(s ?? "")) ? "T00:00" : ""));
+export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^\d{4}-\d\d-\d\d$/.test(String(s ?? "")) ? "T00:00" : ""));
 
 /** The time and text of a note line `- 2026-11-01 08:06: text`; null for one with no stamp. */
 export function noteEvent(line) {
   const m = /^- (\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?): (.*)$/s.exec(String(line));
   return m ? { at: localMs(m[1]), text: m[2] } : null;
-}
-
-const tone = (run) => (["failed", "stuck", "dropped"].includes(run.condition) ? "bad" : run.kind === "land" ? "land" : "agent");
-const waitAfter = (prev) => (!prev ? ["Queued", "wait"] : prev.condition === "awaiting" || prev.ask ? ["Awaiting", "chris"] : ["Idle", "wait"]);
-
-/** The bars in time order: `{ label, tone, start, end, run?, wait? }`, a wait for each gap over a minute between filing, runs and closing. */
-export function lifeRows(d, now = Date.now()) {
-  const t = d.timeline ?? {};
-  const runs = (t.runs ?? []).map((r) => {
-    const start = Date.parse(r.started), end = Date.parse(r.ended ?? "");
-    return { r, start, end: end >= start ? end : r.condition === "running" ? now : start };
-  }).filter((x) => x.start >= 0).sort((a, b) => a.start - b.start);
-  const created = localMs(d.frontmatter?.created);
-  // A date with no time is midnight, which would draw a wait that did not happen: a run on that day starts the chart.
-  const sameDay = runs.length && new Date(created).toDateString() === new Date(runs[0].start).toDateString();
-  const filed = t.filed ?? (created >= 0 && !sameDay ? created : runs[0]?.start ?? created);
-  const rows = [];
-  let cursor = filed, prev = null;
-  for (const { r, start, end } of runs) {
-    if (start - cursor > GAP) {
-      const [label, tone_] = waitAfter(prev);
-      rows.push({ label, tone: tone_, start: cursor, end: start, wait: true });
-    }
-    const part = /^[^-].*-(\d+\.\d+)$/.exec(r.on ?? "")?.[1];
-    rows.push({ label: KINDS[r.kind] ?? r.kind, part, tone: tone(r), start, end, run: r });
-    cursor = Math.max(cursor, end);
-    prev = r;
-  }
-  if (d.status === "open" && now - cursor > GAP) {
-    const [label, tone_] = prev ? waitAfter(prev) : ["Open, no run yet", "wait"];
-    rows.push({ label, tone: tone_, start: cursor, end: now, wait: true });
-  }
-  return { rows, start: filed, end: rows.length ? Math.max(...rows.map((r) => r.end)) : filed };
 }
 
 /**
@@ -84,48 +52,107 @@ export function axisTimes(times, x, max = 5) {
   return out.slice(0, max);
 }
 
-const pct = (f) => (f * 100).toFixed(3);
+const BAD = ["failed", "stuck", "dropped"];
+const AUX = ["triage", "plan", "facts", "explain", "firefighter"];
+/** A run's bar colour: bad for a run that failed, land, aux for a run that does not build, else build. */
+export const barTone = (r) => (BAD.includes(r.condition) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
 
-/** A row of points: the notes or the commits. */
-const dots = (name, list, x) => (list.length
-  ? `<div class="wf-row k-dots"><div class="wf-l"><span class="tn">${esc(name)}</span><span class="ld">${list.length}</span></div><div class="wf-r">${list.map((e) => {
-    const body = `style="left:${pct(x(e.at))}%" title="${esc(`${when(new Date(e.at))} ${e.text}`)}"`;
-    return e.href ? `<a class="itl-dot" href="${esc(e.href)}" ${body} aria-label="${esc(e.text)}"></a>` : `<span class="itl-dot" ${body}></span>`;
-  }).join("")}</div></div>`
-  : "");
-
-const LEGEND = [["agent", "Agent run"], ["land", "Land"], ["chris", "Awaiting"], ["wait", "Queued or idle"], ["bad", "Failed or dropped"]];
-
-/** The chart: a summary line, the legend, the axis, a row per bar and the note and commit rows. "" for an issue with nothing to draw. */
-export function renderLifetime(d, now = Date.now()) {
-  const { rows, start, end } = lifeRows(d, now);
-  const notes = (d.notes ?? []).map(noteEvent).filter(Boolean);
-  const commits = (d.commits ?? []).map((c) => ({ at: Date.parse(c.date), text: c.subject, href: c.commitUrl })).filter((c) => c.at >= 0);
-  if (!rows.length && !notes.length && !commits.length) return "";
-  const times = [start, end, ...rows.flatMap((r) => [r.start, r.end]), ...notes.map((e) => e.at), ...commits.map((e) => e.at)].filter(Number.isFinite);
-  const x = compactScale(times);
-  const sum = (tones) => rows.filter((r) => tones.includes(r.tone)).reduce((n, r) => n + (r.end - r.start), 0);
-  const cost = rows.reduce((n, r) => n + (r.run?.cost ?? 0), 0);
-  const runs = rows.filter((r) => r.run).length;
-  const hi = Math.max(...times), lo = Math.min(...times);
-  const fact = (k, v) => `${k} <strong>${esc(v)}</strong>`;
-  const summary = [
-    fact(d.status === "open" ? "Open for" : "Lifetime", lifespan(hi - lo)),
-    fact("Agents", lifespan(sum(["agent", "land", "bad"]))),
-    ...(sum(["chris"]) ? [fact("Awaiting", lifespan(sum(["chris"])))] : []),
-    ...(sum(["wait"]) ? [fact("Queued or idle", lifespan(sum(["wait"])))] : []),
-    fact("Runs", String(runs)),
-    ...(cost ? [fact("Cost", `$${cost.toFixed(2)}`)] : []),
-  ].join('<span class="dot">·</span>');
-  const row = (r) => {
-    const name = r.run ? `<a href="#/jobs/${encodeURIComponent(r.run.name)}">${esc(r.label)}</a>` : esc(r.label);
-    const tip = `${r.label}${r.run?.model ? ` · ${r.run.model}` : ""}${r.run?.condition ? ` · ${r.run.condition}` : ""} · ${when(new Date(r.start))} · ${lifespan(r.end - r.start)}${r.run?.reason ? ` · ${r.run.reason}` : ""}`;
-    return `<div class="wf-row t-${r.tone}"><div class="wf-l"><span class="tn">${name}</span>${r.part ? `<span class="ta">${esc(r.part)}</span>` : ""}<span class="ld">${esc(lifespan(r.end - r.start))}</span></div>` +
-      `<div class="wf-r"><span class="wf-bar" title="${esc(tip)}" style="left:${pct(x(r.start))}%;width:${pct(Math.max(0.004, x(r.end) - x(r.start)))}%"></span></div></div>`;
-  };
-  const ticks = axisTimes(times, x).map((t) => `<span style="left:${pct(x(t))}%">${esc(when(new Date(t)))}</span>`).join("");
-  return `<div class="itl"><p class="wf-sum">${summary}</p>` +
-    `<ul class="itl-key">${LEGEND.filter(([k]) => rows.some((r) => r.tone === k)).map(([k, v]) => `<li class="t-${k}"><i></i>${esc(v)}</li>`).join("")}</ul>` +
-    `<div class="wf-grid" role="img" aria-label="${esc(`Lifetime of the issue: ${runs} runs and ${rows.length - runs} waits`)}"><div class="wf-axis"><div class="wf-l">Long spans are compressed</div><div class="wf-r">${ticks}</div></div>` +
-    rows.map(row).join("") + dots("Notes", notes, x) + dots("Commits", commits, x) + `</div></div>`;
+/** A run's start and end in ms; a live run ends now, a run with no end ends where it started. */
+export function spanOf(r, now = Date.now()) {
+  const start = Date.parse(r.started), end = Date.parse(r.ended ?? "");
+  return { r, start, end: end >= start ? end : r.condition === "running" ? now : start };
 }
+
+/** Runs as spans in start order, without the ones with no start. */
+export const spans = (runs, now = Date.now()) => runs.map((r) => spanOf(r, now)).filter((s) => s.start >= 0).sort((a, b) => a.start - b.start);
+
+/**
+ * The waits of a lane: each gap over a minute between `from`, the runs and `to`. A wait after a run that
+ * awaits Chris is his; any other is the factory's. `runs` are spans in start order.
+ */
+export function gaps(runs, from, to) {
+  const out = [];
+  let cursor = from, prev = null;
+  for (const s of runs) {
+    if (Number.isFinite(cursor) && s.start - cursor > GAP) out.push({ start: cursor, end: s.start, chris: prev?.condition === "awaiting" });
+    cursor = Number.isFinite(cursor) ? Math.max(cursor, s.end) : s.end;
+    prev = s.r;
+  }
+  if (Number.isFinite(to) && Number.isFinite(cursor) && to - cursor > GAP) out.push({ start: cursor, end: to, chris: prev?.condition === "awaiting" });
+  return out;
+}
+
+/** A wait's event: its length, and whose it is. */
+export const waitEvent = (w) => ({ at: w.start, tag: w.chris ? "Awaiting you" : "Waiting", tone: "need", html: esc(`Waited ${lifespan(w.end - w.start)}${w.chris ? " for your answer" : ""}.`) });
+
+/** A bar's label: the kind, a number when the lane has more than one of that kind, the model and, with `cost`, the cost. */
+export function barLabel(r, nth, { cost = false } = {}) {
+  const kind = r.kind === "worker" ? "build" : r.kind;
+  return [nth ? `${kind} ${nth}` : kind, shortModel(r.model), cost && r.cost ? money(r.cost) : ""].filter(Boolean).join(" · ");
+}
+
+/** The bars of a lane from its spans: the label of each, and a tip with the condition, the time and the reason. */
+export function barsOf(runs, { cost = false } = {}) {
+  const count = {}, seen = {};
+  for (const { r } of runs) count[r.kind] = (count[r.kind] ?? 0) + 1;
+  return runs.map(({ r, start, end }) => {
+    seen[r.kind] = (seen[r.kind] ?? 0) + 1;
+    const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost });
+    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${lifespan(end - start)}${r.reason ? ` · ${r.reason}` : ""}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
+  });
+}
+
+/** An event's tag: a small badge in one of the badge tones. */
+export const tag = (text, tone = "quiet") => `<span class="badge ${esc(tone)}">${esc(text)}</span>`;
+
+const LEGEND = { wait: "waiting", chris: "awaiting you", aux: "triage, plan, facts", build: "build", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
+const pct = (f) => (f * 100).toFixed(3);
+/** The time on the page: "08:11" when the whole timeline is one day, else "Nov 02 08:11". */
+const timeOf = (at, oneDay) => (Number.isFinite(at) ? (oneDay ? clock(new Date(at)) : when(new Date(at))) : "");
+
+/**
+ * The Timeline panel. `segments` is `[{ title, aside?, rows }]`; a row is
+ * `{ head, bars: [{ start, end, tone, label, tip, href? }], waits: [{ start, end, chris }], marks: [{ at, tone: "made" | "done", tip }], result, time, cost, events: [{ at?, tag, tone, html }] }`.
+ * "" for no rows; a row with nothing timed has an empty lane.
+ */
+export function renderTimeline(segments) {
+  const rows = segments.flatMap((s) => s.rows);
+  const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
+  if (!rows.length) return "";
+  const x = compactScale(times), lo = Math.min(...times), hi = Math.max(...times);
+  const oneDay = new Date(lo).toDateString() === new Date(hi).toDateString();
+  const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.chris ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
+  const key = Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => `<li class="t-${k}"><i></i>${esc(v)}</li>`).join("");
+  // A tick near the end ends at its time, so it stays inside the axis.
+  const ticks = axisTimes(times, x).map((t) => `<span${x(t) > 0.9 ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t, oneDay))}</span>`).join("");
+  const at = (a, b) => `left:${pct(x(a))}%;width:${pct(Math.max(0.004, x(b) - x(a)))}%`;
+  const lane = (r) => `<div class="dp-lane">` +
+    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting you" : "Waiting"} · ${lifespan(w.end - w.start)}`)}"></span>`).join("") +
+    r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ""} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(b.label)}</${t}>`; }).join("") +
+    (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
+  const events = (evs) => {
+    const list = [...(evs ?? [])].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
+    return list.length ? `<div class="dp-evs">${list.map((e) => `<div class="dp-ev"><span class="dp-at">${esc(timeOf(e.at, oneDay))}</span><span>${tag(e.tag, e.tone)}</span><div class="dp-evt">${e.html}</div></div>`).join("")}</div>` : "";
+  };
+  const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
+  return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2><ul class="dp-key">${key}</ul></div>` +
+    `<div class="dp-scroll"><div class="dp-tl dp-axis"><span>Long spans are compressed</span><div class="dp-ticks">${ticks}</div><span>Result</span><span class="num">Time</span><span class="num">Cost</span></div>` +
+    segments.filter((s) => s.rows.length).map((s) => `<div class="dp-seg"><h3>${esc(s.title)}</h3>${s.aside ? `<span class="quiet">${esc(s.aside)}</span>` : ""}</div>${s.rows.map(row).join("")}`).join("") +
+    `</div></section>`;
+}
+
+/** The KPI strip: `[{ k, v, sub, text? }]`, where `v` and `sub` are HTML; a `text` value is words, set smaller than a figure. */
+export const renderKpis = (items) => `<section class="dp-panel dp-kpis" aria-label="Summary">${items.map((i) => `<div class="dp-kpi"><span class="dp-k">${esc(i.k)}</span><span class="dp-v${i.text ? " text" : ""}">${i.v}</span>${i.sub ? `<span class="dp-sub">${i.sub}</span>` : ""}</div>`).join("")}</section>`;
+
+/** A Detail panel, open: its title, an aside (HTML) beside it, and its body. */
+export const fold = (title, aside, body) => `<details class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
+
+/** A panel with a heading: the Spec, the Result, the Description. `body` is HTML; `aside` is HTML. */
+export const panel = (id, title, body, aside = "") => `<section class="dp-panel dp-prose" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
+
+/** "$1.11", or "–" for none. */
+export const costText = (n) => (n ? money(n) : "–");
+/** A span in ms as `dur` writes it, or "–". */
+export const timeText = (ms) => (ms > 0 ? dur(ms / 1000) : "–");
+/** "08:11 to 08:39" for a span in one day, else with the dates. */
+export const fromTo = (a, b) => (new Date(a).toDateString() === new Date(b).toDateString() ? `${clock(new Date(a))} to ${clock(new Date(b))}` : `${when(new Date(a))} to ${when(new Date(b))}`);

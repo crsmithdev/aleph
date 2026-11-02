@@ -10,7 +10,7 @@ import { runCli } from "../cli.ts";
 import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, onOf, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { landedCommits, recentRepos, repoStages } from "../../jobs/lib/status.ts";
+import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/status.ts";
 import { readAsk } from "../../jobs/lib/ask.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
 import * as issues from "../../todo/lib/issues.ts";
@@ -126,10 +126,13 @@ function detail(params: Record<string, string>, url: URL): Response {
   const parent = up ? `${repo.key}-${todos.refOf(up)}` : null;
 
   const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
-  const commits = landedCommits(repo.path, main, repo.key, n).map((h) => {
+  // The issue's own commits, then each part's, with the part it landed for.
+  const own = ref.includes(".") ? [ref] : [ref, ...goalRefs];
+  const seen = new Set<string>(), index = landedIndex(repo.path, main, repo.key);
+  const commits = own.flatMap((r) => (index.get(r) ?? []).filter((h) => !seen.has(h) && seen.add(h)).map((h) => {
     const [hash, date, subject] = git(repo.path, "show", "-s", "--format=%H%x09%cI%x09%s", h).out.split("\t");
-    return { hash, subject: subject ?? "", date, ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
-  });
+    return { hash, subject: subject ?? "", date, ...(r !== ref ? { part: `${repo.key}-${r}` } : {}), ...(base ? { commitUrl: `${base}/commit/${hash}` } : {}) };
+  }));
 
   const blockers = jobProjector().blockers(repo.key, ref);
 

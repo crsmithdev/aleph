@@ -5,7 +5,7 @@ import { isMachineNote, renderIssue } from "./views/issues.js";
 const page = (notes: string[], fm: Record<string, string> = {}) =>
   renderIssue({ repo: "r", id: 1, title: "t", labels: [], notes, goals: [], jobs: [], commits: [], runs: [], frontmatter: fm } as any) as string;
 const st = (t: string) => `- 2026-10-31 10:00: ${t}`;
-const fold = (h: string) => /<details[^>]*>[\s\S]*?<\/details>/.exec(h)?.[0] ?? "";
+const fold = (h: string) => /<details class="notes-fold"[^>]*>[\s\S]*?<\/details>/.exec(h)?.[0] ?? "";
 
 describe("issue notes fold", () => {
   test("machine notes fold, with the count", () => {
@@ -20,21 +20,21 @@ describe("issue notes fold", () => {
   test("read-me notes and mid-text prefixes stay visible", () => {
     const notes = [st("triage: for Chris: pick one"), st("triage: a live check: x"), st("acceptance rerun by hand: y"), st("Chris said triage: later")];
     const h = page(notes);
-    expect(h).not.toContain("<details");
+    expect(h).not.toContain("notes-fold");
     for (const n of notes) expect(isMachineNote(n)).toBe(false);
   });
   test("flake tracker folds nothing", () => {
     const h = page([st("triage: filed goal aleph-1.1")], { tracker: "true" });
-    expect(h).not.toContain("<details");
+    expect(h).not.toContain("notes-fold");
     expect(h).toContain("filed goal");
   });
   test("human only and empty", () => {
-    expect(page(["- hi"])).not.toContain("<details");
+    expect(page(["- hi"])).not.toContain("notes-fold");
     expect(page([])).toContain("No notes.");
   });
   test("all folded shows only the fold", () => {
     const h = page([st("triage: a")]);
-    expect(h).toContain("<details");
+    expect(h).toContain("notes-fold");
     expect(h.replace(fold(h), "")).not.toContain('class="notes"');
   });
   test("escapes inside and outside the fold", () => {

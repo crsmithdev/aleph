@@ -177,7 +177,7 @@ describe("the Issue page", () => {
     await post("edit", { title: before.title, priority: before.priority ?? "medium", source: before.frontmatter.source ?? "chris", areas: before.labels.join(","), description: before.request ?? before.body });
   }, 60_000);
 
-  test("the Issue page has a breadcrumb, the stage on the left, a Condition column, and links a spec it has", async () => {
+  test("the Issue page has a breadcrumb, the stage first among the pills, a timeline, and links a spec it has", async () => {
     const base = await getJson("/api/issues/fac/1");
     const html = renderIssue({ ...base, specs: ["2026-01-01-a.md"], request: "See docs/specs/2026-01-01-a.md and docs/specs/gone.md." });
     expect(html).toContain('<nav class="crumb"');
@@ -185,8 +185,8 @@ describe("the Issue page", () => {
     expect(html).toContain('<a href="#/specs/fac/2026-01-01-a.md">docs/specs/2026-01-01-a.md</a>');
     expect(html).not.toContain('">docs/specs/gone.md</a>');
     expect(html).toContain('<div class="status-row"><span class="badge');
-    expect(html).toContain("<th>Stage</th><th>Condition</th><th>Job</th>");
-    expect(html).toContain("<h2>Runs</h2>");
+    expect(html).toContain('<h2 id="h-timeline">Timeline</h2>');
+    expect(html).toContain("<h3>Parts</h3>");
     expect(html).not.toContain(base.derived.why);
     expect(html).not.toContain("<h2>Request</h2>");
     // Edit mode: each value and its editor sit in one place, and the controls belong to the one form.
@@ -195,17 +195,16 @@ describe("the Issue page", () => {
     expect(html).not.toContain("<summary>Edit</summary>");
   });
 
-  test("the page shows the Request, then Goals with each goal's Job, in the spec's names", async () => {
+  test("the page shows the parts in the timeline, each linked to its job and its page, then the Request", async () => {
     const html = renderIssue(await getJson("/api/issues/fac/1"));
     const at = (t: string) => html.indexOf(t);
-    expect(at('id="h-request">Description<')).toBeGreaterThan(-1);
+    expect(at('id="h-request">Description<')).toBeGreaterThan(at("<h3>Parts</h3>"));
     expect(at("Do three things.")).toBeGreaterThan(at('id="h-request"'));
-    expect(at('id="h-goals">Parts<')).toBeGreaterThan(at("Do three things."));
-    const goals = html.match(/<table class="tbl" id="goals">[^]*?<\/table>/)![0];
-    expect(goals).toContain("<th>Job</th>");
-    for (const id of ["fac-1.1", "fac-1.2", "fac-1.3"]) expect(goals).toContain(`href="#/issues/fac/${id.slice(4)}"`);
-    expect(goals).toContain('href="#/jobs/fac-1.2"');
-    expect(goals).toContain("No job yet");
+    const parts = html.slice(at("<h3>Parts</h3>"), at('id="h-request"'));
+    for (const id of ["fac-1.1", "fac-1.2", "fac-1.3"]) expect(parts).toContain(`href="#/issues/fac/${id.slice(4)}"`);
+    expect(parts).toContain('href="#/jobs/fac-1.2"');
+    // A part with no job yet links its id to its own page.
+    expect(parts).toMatch(/<a class="idl" href="#\/issues\/fac\/1.3">/);
     for (const old of [["needs", "chris"].join("-"), ["needs", "you"].join("-"), ["waiting", "on"].join("_"), "Item"]) expect(html).not.toContain(old);
   });
 });

@@ -145,7 +145,7 @@ describe("GET /api/jobs/:name", () => {
     expect(j.blockers).toEqual([expect.objectContaining({ id: `oth-${gone}`, title: "gone work", dead: "dropped" })]);
     expect(closed.blockers).toBeUndefined();
     const html = v.renderJob(j);
-    expect(html).toContain("<dt>Blocked by</dt>");
+    expect(html).toContain('<span class="quiet">Blocked by</span>');
     expect(html).toContain(`data-act="unblock" data-repo="oth" data-id="${open}"`);
   });
   test("a build run reads like an agent run: review row and result", async () => {
@@ -285,10 +285,13 @@ describe("render", () => {
     ],
     result: "fixed it", review: "Looks right.", checksLog: "## test: exit 1", stderr: "warn", stat: " a.txt | 1 +", trace: "http://lf/sessions/s",
   };
-  test("the job view shows each run of a fix round", () => {
+  test("the job view shows each run of a fix round as a bar and an event, and the result, review and diff", () => {
     const h = v.renderJob(job);
-    expect(h.match(/class="run run-/g)).toHaveLength(4);
-    for (const t of ["run-worker", "run-review", "run-land", "m1", "fixed it", "Looks right.", "## test: exit 1", "warn", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-diff="fac-9"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
+    // The review runs inside its build, so it is no bar of its own.
+    expect(h.match(/class="dp-bar /g)).toHaveLength(3);
+    for (const t of ["build 1 · m1 · $0.50", "build 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
+    for (const t of [">Failed<", ">Passed<", ">Landed<", ">Default<", ">Follow-up<", "a? -&gt; b", "tidy"]) expect(h).toContain(t);
+    expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
   });
   test("the list shows jobs with filters, and an empty state", () => {
@@ -324,14 +327,14 @@ describe("render", () => {
     expect(v.detail.path).toBe("/jobs/:name");
     expect(jobView.view).toBe(v.detail);
   });
-  test("each run field is its own element in its row", () => {
-    const h = v.renderRuns([{ id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed" }]);
-    const row = h.match(/<tr class="run run-worker">.*?<\/tr>/)?.[0] ?? "";
-    const cells = [...row.matchAll(/<td[^>]*>(.*?)<\/td>/g)].map((m) => m[1]);
-    expect(cells.slice(0, 5)).toEqual(["worker", "checks failed", '<span class="badge stuck">failed</span>', "opus", expect.stringMatching(/\d/)]);
-    expect(cells[5]).toBe("$1.03");
-    expect(h).toContain('<table class="tbl">');
-    expect(h).toContain('class="tscroll"');
+  test("a failed run's event names it, gives its reason with code set as code, and offers its logs", () => {
+    const h = v.renderJob({ ...job, runs: [{ id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
+    const ev = h.match(/<div class="dp-ev">.*?<\/div><\/div><\/div>/)?.[0] ?? "";
+    expect(ev).toContain('<span class="badge stuck">Failed</span>');
+    expect(ev).toContain("Build · opus: checks failed in <code>a.ts</code>");
+    expect(ev).toContain('data-log="1" data-job="fac-9" data-file="output.log" data-as="transcript"');
+    expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0 KiB">checks</button>');
+    expect(h).toContain("$1.03");
   });
   test("diff lines are coloured and escaped", () => {
     const h = v.renderDiff("--- a\n+++ b\n+x<y\n-z");
@@ -350,7 +353,7 @@ test("the issue and job pages use pageHead, table.tbl, idLink and when", async (
   const job = require("./views/jobs.js").renderJob({ name: "fac-9", repo: "fac", item: { title: "T" }, condition: "landed", started, runs: [] });
   for (const t of ['<header class="ph">', "Oct 01 10:00"]) expect(job).toContain(t);
   expect(job).not.toContain("<style>");
-  expect(job).toContain('<dl class="facts">');
+  expect(job).toContain('class="dp-panel dp-kpis"');
 });
 
 describe("a worker round the reviewer sent back", () => {

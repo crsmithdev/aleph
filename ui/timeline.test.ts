@@ -1,48 +1,76 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import { axisTimes, compactScale, lifeRows, lifespan, noteEvent, renderLifetime } from "./timeline.js";
+import { axisTimes, compactScale, gaps, lifespan, noteEvent, renderTimeline, spans } from "./timeline.js";
 // @ts-ignore
-import { renderIssue } from "./views/issues.js";
+import { issueSegments, renderIssue } from "./views/issues.js";
 
 const run = (kind: string, started: string, ended: string | null, extra: object = {}) => ({ kind, name: "fac-1", on: "fac-1", condition: "passed", started, ended, ...extra });
-const issue = (over: object = {}) => ({ status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [] }, ...over });
+const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [] }, ...over });
 const held = () => [
   run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"),
   run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { condition: "awaiting", cost: 0.25 }),
   run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed", cost: 0.05 }),
 ];
+const rowsOf = (d: object, now?: number) => issueSegments(issue(d), now).flatMap((s: any) => s.rows);
 
-describe("the lifetime rows", () => {
-  test("a wait fills each gap: Idle between runs, Awaiting after an awaiting run", () => {
-    const { rows } = lifeRows(issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() } }));
-    expect(rows.map((r: any) => r.label)).toEqual(["Triage", "Idle", "Build", "Awaiting", "Land"]);
-    expect(rows.map((r: any) => r.tone)).toEqual(["agent", "wait", "agent", "chris", "land"]);
+describe("the waits", () => {
+  test("a wait fills each gap over a minute: the factory's between runs, yours after a run that awaits you", () => {
+    const w = gaps(spans(held()), Date.parse("2026-11-01T10:00:00Z"), NaN);
+    expect(w.map((x: any) => [lifespan(x.end - x.start), x.chris])).toEqual([["28 min", false], ["4 h 20 min", true]]);
   });
 
-  test("a gap of a minute or less draws no wait; a filed issue that waited first shows Queued", () => {
-    const filed = Date.parse("2026-11-01T09:00:00Z");
-    const { rows } = lifeRows(issue({ timeline: { filed, runs: [run("build", "2026-11-01T10:00:00Z", "2026-11-01T10:05:00Z"), run("land", "2026-11-01T10:05:30Z", "2026-11-01T10:06:00Z")] } }));
-    expect(rows.map((r: any) => r.label)).toEqual(["Queued", "Build", "Land"]);
+  test("a gap of a minute or less is no wait; a wait runs on to `to`", () => {
+    const s = spans([run("build", "2026-11-01T10:00:00Z", "2026-11-01T10:05:00Z"), run("land", "2026-11-01T10:05:30Z", "2026-11-01T10:06:00Z")]);
+    expect(gaps(s, Date.parse("2026-11-01T09:59:30Z"), NaN)).toEqual([]);
+    expect(gaps(s, NaN, Date.parse("2026-11-01T10:16:00Z")).map((x: any) => x.end - x.start)).toEqual([600_000]);
+  });
+});
+
+describe("the issue timeline", () => {
+  test("without parts it is one Work row: a bar per run, the waits, and the notes as events", () => {
+    const [row] = rowsOf({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01 10:41: triage: asked"] });
+    expect(issueSegments(issue({ timeline: { filed: 0, runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
+    expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["triage", "aux"], ["build", "build"], ["land", "land"]]);
+    expect(row.bars[1].href).toBe("#/jobs/fac-1");
+    expect(row.waits.map((w: any) => w.chris)).toEqual([false, true]);
+    expect(row.events.map((e: any) => e.tag)).toEqual(["Waiting", "Awaiting you", "triage"]);
+    expect(row.cost).toBe("$0.30");
   });
 
-  test("an open issue waits up to now; a live run runs up to now; no run at all is one row", () => {
+  test("an open issue waits up to now; a live run runs up to now", () => {
     const now = Date.parse("2026-11-01T12:00:00Z");
-    const open = lifeRows(issue({ status: "open", timeline: { filed: now - 3_600_000, runs: [] } }), now);
-    expect(open.rows).toMatchObject([{ label: "Open, no run yet", tone: "wait", end: now }]);
-    const live = lifeRows(issue({ status: "open", timeline: { filed: now - 3_600_000, runs: [run("build", "2026-11-01T11:30:00Z", null, { condition: "running" })] } }), now);
-    expect(live.rows.at(-1)).toMatchObject({ label: "Build", end: now });
-    expect(lifeRows(issue({ status: "open", timeline: { filed: now - 7_200_000, runs: [run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { condition: "awaiting" })] } }), now).rows.at(-1)).toMatchObject({ label: "Awaiting", end: now });
+    expect(rowsOf({ status: "open", timeline: { filed: now - 3_600_000, runs: [] } }, now)[0].waits).toEqual([{ start: now - 3_600_000, end: now, chris: false }]);
+    const live = rowsOf({ status: "open", timeline: { filed: now - 3_600_000, runs: [run("build", "2026-11-01T11:30:00Z", null, { condition: "running" })] } }, now)[0];
+    expect(live.bars[0].end).toBe(now);
   });
 
-  test("with no filing time, a run on the created day starts the chart, so midnight draws no false wait", () => {
-    const { rows, start } = lifeRows(issue({ timeline: { filed: null, runs: [run("build", "2026-11-01T18:00:00", "2026-11-01T18:10:00")] } }));
-    expect(rows.map((r: any) => r.label)).toEqual(["Build"]);
-    expect(start).toBe(Date.parse("2026-11-01T18:00:00"));
+  test("with no filing time, a run on the created day starts it, so midnight draws no false wait", () => {
+    const [row] = rowsOf({ timeline: { filed: null, runs: [run("build", "2026-11-01T18:00:00", "2026-11-01T18:10:00")] } });
+    expect(row.waits).toEqual([]);
   });
 
-  test("a failed run is the bad tone and a part's run names its part", () => {
-    const { rows } = lifeRows(issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [run("build", "2026-11-01T10:00:10Z", "2026-11-01T10:01:00Z", { condition: "failed", on: "fac-1.2" })] } }));
-    expect(rows[0]).toMatchObject({ tone: "bad", part: "1.2" });
+  test("with parts: before the split, a row per part from its runs' `on`, and after the parts to the close", () => {
+    const goals = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [{ name: "fac-1.1" }] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
+    const runs = [
+      run("plan", "2026-11-01T10:05:00Z", "2026-11-01T10:06:00Z", { name: "plan-fac-1" }),
+      run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1", condition: "failed", reason: "it broke" }),
+      run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1" }),
+      run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" }),
+    ];
+    const notes = ["- 2026-11-01 10:06: planner: split into fac-1.1, fac-1.2", "- 2026-11-01 10:25: its parts are done"];
+    const segs = issueSegments(issue({ goals, notes, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } }));
+    expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the split", 1], ["Parts", 2], ["After the parts", 1]]);
+    const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
+    expect(before.bars.map((b: any) => b.label)).toEqual(["plan"]);
+    expect(before.events.map((e: any) => e.tag)).toEqual(["Waiting", "planner"]);
+    expect(one.bars.map((b: any) => [b.label, b.tone])).toEqual([["build 1", "bad"], ["build 2", "build"]]);
+    expect(one.events.find((e: any) => e.tag === "Failed").html).toBe("Build 1: it broke");
+    expect(one.head).toContain('href="#/jobs/fac-1.1"');
+    expect(two.head).toContain('href="#/issues/fac/1.2"');
+    // fac-1.2 waited from the split to its run: 10 min.
+    expect(two.waits.map((w: any) => lifespan(w.end - w.start))).toEqual(["10 min"]);
+    expect(after.marks.map((m: any) => m.tone)).toEqual(["done"]);
+    expect(after.events.map((e: any) => e.tag)).toEqual(["Waiting", "note"]);
   });
 });
 
@@ -65,30 +93,29 @@ describe("the compact scale", () => {
   });
 });
 
-describe("the chart", () => {
-  test("it shows the times, links a run to its job and shows notes and commits as points", () => {
-    const h = renderLifetime(issue({
-      timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() },
-      notes: ["- 2026-11-01 08:06: job fac-1 landed", "a note with no stamp"],
-      commits: [{ date: "2026-11-01T15:00:30Z", subject: "<fix>", commitUrl: "https://x/c/1", hash: "a" }],
-    }));
-    expect(h).toContain("Lifetime <strong>");
-    expect(h).toContain("Awaiting <strong>4 h 20 min</strong>");
-    expect(h).toContain("Runs <strong>3</strong>");
-    expect(h).toContain("Cost <strong>$0.30</strong>");
-    expect(h).toContain('<a href="#/jobs/fac-1">Build</a>');
-    expect(h).toContain('<span class="ld">10 min</span>');
+describe("the timeline panel", () => {
+  test("it shows the axis, the segments, the bars as links to their jobs and the events, escaped", () => {
+    const h = renderTimeline(issueSegments(issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01 10:41: <b>x</b>"] })));
+    expect(h).toContain('<h2 id="h-timeline">Timeline</h2>');
+    expect(h).toContain("<h3>Work</h3>");
+    expect(h).toContain('<a class="dp-bar t-build" href="#/jobs/fac-1"');
     expect(h).toContain("Long spans are compressed");
-    expect(h.match(/class="itl-dot"/g)).toHaveLength(2);
-    expect(h).toContain('href="https://x/c/1"');
-    expect(h).not.toContain("<fix>");
+    expect(h).toContain('<li class="t-chris">');
+    expect(h).not.toContain('<li class="t-bad">');
+    expect(h).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(h).not.toContain("<b>x");
+    expect(renderTimeline([])).toBe("");
   });
 
-  test("it is empty for nothing to draw; the Issue page puts it above Runs", () => {
-    expect(renderLifetime(issue({ status: "done", frontmatter: {}, timeline: { filed: null, runs: [] } }))).toBe("");
-    const page = renderIssue({ ...issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() } }), repo: "fac", ref: "1", id: 1, title: "t", labels: [], priority: "low", goals: [], jobs: [], specs: [], request: "r", derived: null });
-    expect(page.indexOf("<h2>Lifetime")).toBeGreaterThan(-1);
-    expect(page.indexOf("<h2>Lifetime")).toBeLessThan(page.indexOf("<h2>Runs"));
+  test("the Issue page puts the KPIs, then the Timeline, then the Description, then Notes and Commits", () => {
+    const page = renderIssue({ ...issue({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() } }), title: "t", labels: [], priority: "low", specs: [], request: "r", derived: null });
+    const at = (t: string) => page.indexOf(t);
+    expect(at("dp-kpis")).toBeGreaterThan(-1);
+    expect(at("dp-kpis")).toBeLessThan(at('id="h-timeline"'));
+    expect(at('id="h-timeline"')).toBeLessThan(at('id="h-request"'));
+    expect(at('id="h-request"')).toBeLessThan(at("<span>Notes</span>"));
+    expect(at("<span>Notes</span>")).toBeLessThan(at("<span>Commits</span>"));
+    expect(page).toContain("Awaiting you");
   });
 
   test("the formats", () => {

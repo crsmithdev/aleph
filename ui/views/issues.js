@@ -3,7 +3,7 @@
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { barList, barRow, blockersHtml, barsOption, badge, priorityBadge, card, sectionHead, chart, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
 import { askRow } from "./now.js";
-import { renderLifetime } from "../timeline.js";
+import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, tag, timeText, waitEvent } from "../timeline.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
@@ -453,12 +453,6 @@ export function renderIssues(d, o = {}) {
     renderForm(d?.issues ?? [], o) + `</div>`;
 }
 
-/** The Job of a goal on the Issue page: a link to each of its jobs with the state, or a quiet line. */
-function goalJobs(g, repo) {
-  if (!g.jobs.length) return `<span class="quiet">No job yet</span>`;
-  return g.jobs.map((j) => `${idLink(localId(j.name, repo), `#/jobs/${encodeURIComponent(j.name)}`)} <span class="time">${esc(when(j.started))}</span>`).join("<br>");
-}
-
 /** The body as the page shows it: the `## Request` heading goes, because the section has its own heading. */
 export const description = (body) => String(body ?? "").replace(/^\s*## Request[ \t]*\r?\n+/, "");
 
@@ -493,43 +487,139 @@ export const isMachineNote = (n) => {
   return MACHINE.test(t) && !READ.test(t);
 };
 
-/** The Issue page: the `## Request`, then the goals each with its Job, then the notes, the issue's own runs and the commits. Shared with views/issue.js. */
+/** A note as an event: a machine note's prefix is its tag, any other note is tagged "note". */
+function noteItem(e) {
+  const m = /^([a-z ]+): (.*)$/s.exec(e.text);
+  return m && isMachineNote(`- ${e.text}`) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(m[2]) } : { at: e.at, tag: "note", tone: "quiet", html: esc(e.text) };
+}
+
+/** The filing time: the store's, else the created date unless a run that day starts the issue (midnight would draw a false wait). */
+function filedAt(d, runs) {
+  const created = localMs(d.frontmatter?.created);
+  const sameDay = runs.length && new Date(created).toDateString() === new Date(runs[0].start).toDateString();
+  return d.timeline?.filed ?? (created >= 0 && !sameDay ? created : runs[0]?.start ?? NaN);
+}
+
+const RUN_TAG = { stuck: ["Stuck", "stuck"], failed: ["Failed", "stuck"], dropped: ["Dropped", "quiet"], awaiting: ["Awaiting you", "need"] };
+/** The events of a lane: each wait, and each run that stopped or asks, with its reason. */
+const laneEvents = (runs, waits, bars) => [...waits.map(waitEvent), ...runs.flatMap((x, i) => {
+  // A run that awaits you shows only with its question; the wait after it already shows.
+  if (!RUN_TAG[x.r.condition] || (x.r.condition === "awaiting" && !x.r.reason)) return [];
+  const [text, tone] = RUN_TAG[x.r.condition], name = bars[i].label;
+  return [{ at: x.end, tag: text, tone, html: `${esc(name[0].toUpperCase() + name.slice(1))}${x.r.reason ? `: ${inline(x.r.reason)}` : "."}` }];
+})];
+
+/** Text with its `code` spans set as code, escaped. */
+const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
+const ends = (runs) => (runs.length ? Math.max(...runs.map((x) => x.end)) : NaN);
+const sum = (runs) => runs.reduce((n, x) => n + (x.r.cost ?? 0), 0);
+const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "build" : x.r.kind)))].join(", ");
+
+/** One timeline row: the runs as bars, the waits from `from` to `to`, and their events with `events`. */
+function laneRow({ head, runs, from = NaN, to = NaN, marks = [], result, events = [] }) {
+  const waits = gaps(runs, from, to), bars = barsOf(runs);
+  const times = [from, to, ...runs.flatMap((x) => [x.start, x.end]), ...marks.map((m) => m.at)].filter(Number.isFinite);
+  return { head, bars, waits, marks, result, time: timeText(times.length ? Math.max(...times) - Math.min(...times) : 0), cost: costText(sum(runs)), events: [...laneEvents(runs, waits, bars), ...events] };
+}
+
+/**
+ * The Timeline's segments for an issue. With parts: Before the split (the issue's own runs before its parts start),
+ * Parts (one row per part), After the parts (to the close). Without: one Work row. Notes are events at their time.
+ */
+export function issueSegments(d, now = Date.now()) {
+  const id = `${d.repo}-${d.ref ?? d.id}`, goals = d.goals ?? [], open = !CLOSED.includes(d.status);
+  const all = spans(d.timeline?.runs ?? [], now), filed = filedAt(d, all);
+  const notes = (d.notes ?? []).map(noteEvent).filter(Boolean).map(noteItem);
+  // A closed issue closes at its last stamped note after its runs, else at its last run.
+  const last = ends(all), closing = notes.filter((n) => !(n.at < last)).at(-1)?.at;
+  const closed = open ? NaN : closing ?? last;
+  const marks = [...(Number.isFinite(filed) ? [{ at: filed, tone: "made", tip: "filed" }] : []), ...(Number.isFinite(closed) ? [{ at: closed, tone: "done", tip: d.status }] : [])];
+  // The issue's own job, when one has its name, is where its id links.
+  const job = (d.jobs ?? []).find((j) => j.name === id);
+  const headOf = (text) => `${job ? idLink(id, `#/jobs/${encodeURIComponent(job.name)}`) : `<span class="idp">${esc(id)}</span>`}<span class="quiet t">${esc(text)}</span>`;
+  const state = d.derived?.stage ?? d.status;
+  if (!goals.length) {
+    return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no run yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes })] }];
+  }
+  const ofPart = (g) => all.filter((x) => x.r.on === g.id), partRuns = goals.flatMap(ofPart);
+  const first = partRuns.length ? Math.min(...partRuns.map((x) => x.start)) : Infinity;
+  const own = all.filter((x) => !partRuns.includes(x)), before = own.filter((x) => x.start < first), after = own.filter((x) => x.start >= first);
+  const split = Number.isFinite(ends(before)) ? ends(before) : filed, lastPart = ends(partRuns);
+  const done = goals.filter((g) => g.stage === "done").length;
+  const segments = [
+    { title: "Before the split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${goals.length}`), events: notes.filter((n) => n.at < first) })] },
+    { title: "Parts", aside: `${done} of ${goals.length} done`, rows: goals.map((g) => {
+      const runs = ofPart(g);
+      const job = g.jobs?.at(-1), p = g.priority && g.priority !== "medium" ? ` ${priorityBadge(g.priority)}` : "";
+      return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? `#/jobs/${encodeURIComponent(job.name)}` : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage) });
+    }) },
+  ];
+  const later = notes.filter((n) => n.at >= first);
+  if (after.length || later.length || !open) segments.push({ title: "After the parts", rows: [laneRow({ head: headOf(open ? kinds(after) : d.status), runs: after, from: lastPart, to: open ? NaN : closed, marks: marks.filter((m) => m.tone === "done"), result: badge(state), events: later })] });
+  return segments;
+}
+
+/** The KPI strip of an issue: parts or stage, elapsed, waiting, cost and commits. */
+function issueKpis(d, segments, now = Date.now()) {
+  const goals = d.goals ?? [], open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
+  const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
+  const lo = Math.min(...times), hi = open ? now : Math.max(...times);
+  // Waiting is the time no run ran, on the whole issue, so a part waiting beside a running part does not count.
+  const all = spans(d.timeline?.runs ?? [], now), waits = times.length ? gaps(all, lo, hi) : [];
+  const waited = waits.reduce((n, w) => n + w.end - w.start, 0), chris = waits.filter((w) => w.chris).reduce((n, w) => n + w.end - w.start, 0);
+  const runs = all.length, cost = all.reduce((n, x) => n + (x.r.cost ?? 0), 0), done = goals.filter((g) => g.stage === "done").length;
+  const commits = d.commits ?? [];
+  const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
+  return renderKpis([
+    goals.length ? { k: "Parts done", v: esc(`${done} of ${goals.length}`), sub: esc(goals.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${g.stage}`).join(", ")) }
+      : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
+    { k: open ? "Open for" : "Elapsed", v: esc(times.length ? lifespan(hi - lo) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
+    { k: "Waiting", v: esc(times.length ? lifespan(waited) : "–"), sub: chris ? esc(`${lifespan(chris)} for your answer`) : "" },
+    { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 run" : `${runs} runs`) },
+    { k: "Commits", v: commits.length ? commits.slice(0, 3).map(sha).join(" ") : "–", text: commits.length > 0, sub: commits.length > 3 ? esc(`${commits.length} on main`) : commits.length ? "on main" : "" },
+  ]);
+}
+
+/** Front-matter keys the page shows elsewhere, or that are the store's own. */
+const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title", "situation", "effects", "recommend", "priority", "source", "areas"];
+
+/** The Issue page: the header and its pills, the KPI strip, the Timeline, the Description and the Spec, then Notes and Commits. Shared with views/issue.js. */
 export function renderIssue(d) {
   const fm = d.frontmatter ?? {};
-  const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title", "situation", "effects", "recommend"];
-  const fact = (name, dd) => `<div><dt>${esc(name)}</dt><dd>${dd}</dd></div>`;
   const areas = d.labels ?? [], priority = d.priority ?? "medium", source = fm.source ?? (d.issue ? "agent" : "chris");
-  const facts = (d.blockers?.length ? fact("Blocked by", blockersHtml(d.blockers, d.repo, d.ref ?? d.id)) : "") + fact("Priority", editable(esc(priority), choose("priority", PRIORITIES, priority))) + fact("Source", editable(esc(source), choose("source", SOURCES, source))) +
-    fact("Areas", editable(esc(areas.map(labelName).join(", ") || "-"), `<input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}">`)) +
-    Object.entries(fm).filter(([k]) => !HIDE.includes(k) && !["priority", "source", "areas"].includes(k)).map(([k, v]) => fact(k[0].toUpperCase() + k.slice(1), esc(Array.isArray(v) ? v.map(labelName).join(", ") : v))).join("");
   const tracker = fm.tracker === "true";
-  const noteLi = (n) => `<li>${esc(n.replace(/^- /, ""))}</li>`;
-  const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
-  const fold = folded.length ? `<details class="notes-fold"><summary>${folded.length} machine ${folded.length === 1 ? "note" : "notes"}</summary><ul class="notes">${folded.map(noteLi).join("")}</ul></details>` : "";
-  const notes = d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteLi).join("")}</ul>` : "") + fold : empty("No notes.");
-  const goals = d.goals ?? [];
-  const goalTable = goals.length
-    ? `<div class="tscroll"><table class="tbl" id="goals"><thead><tr><th>Part</th><th>Title</th><th>Stage</th><th>Condition</th><th>Job</th></tr></thead><tbody>${goals.map((g) => `<tr><td>${idLink(localId(g.id, d.repo), g.href)} ${priorityBadge(g.priority)}</td><td class="wide" title="${esc(localId(g.why, d.repo))}">${esc(g.title)}</td><td>${stateBadge(g.stage)}</td><td>${g.jobs.map((j) => stateBadge(j.condition)).join("<br>")}</td><td>${goalJobs(g, d.repo)}</td></tr>`).join("")}</tbody></table></div>`
-    : "";
-  const jobs = d.jobs.length
-    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Job</th><th>Condition</th><th>Started</th></tr></thead><tbody>${d.jobs.map((j) => `<tr><td>${idLink(localId(j.name, d.repo), `#/jobs/${encodeURIComponent(j.name)}`)}</td><td>${stateBadge(j.condition)}</td><td class="time">${esc(when(j.started))}</td></tr>`).join("")}</tbody></table></div>`
-    : empty("No job has worked on this.");
-  const commits = d.commits.length
-    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Commit</th><th>Subject</th><th>Date</th></tr></thead><tbody>${d.commits.map((c) => {
-      const sha = c.hash.slice(0, 7);
-      return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td><td class="time">${esc(when(c.date))}</td></tr>`;
-    }).join("")}</tbody></table></div>`
-    : empty("No commit on main names this issue in its trailers.");
   const ref = String(d.ref ?? d.id), inventory = "#/issues", project = [d.repo, `#/issues?project=${encodeURIComponent(d.repo)}`];
   const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
-  const part = (id, title, name, text) => (text || !goals.length ? `<div class="sh${text ? "" : " edit-only"}"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>` : "");
-  const life = renderLifetime(d);
-  return `<div class="page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) +
-    `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)} ${priorityBadge(d.priority)}${chips(fm.labels)}</div>` +
-    `<dl class="facts">${facts}</dl>` + (d.ask ? askRow(d.ask) : "") +
+  // Front matter the page shows nowhere else: a chip each.
+  const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => `<span class="chip">${esc(`${k}: ${Array.isArray(v) ? v.map(labelName).join(", ") : v}`)}</span>`).join("");
+  const pills = `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}<span class="chip">source: ${esc(source)}</span>${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(`${d.repo}-${ref}`)}</span></div>`;
+  const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
+    `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
+    `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;
+  const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Blocked by</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
+  const goals = d.goals ?? [];
+  const part = (id, title, name, text) => (text || !goals.length
+    ? `<section class="dp-panel dp-prose${text ? "" : " edit-only"}" aria-labelledby="h-${id}"><div class="dp-ph"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea></section>`
+    : "");
+  const noteRow = (n) => {
+    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(n.replace(/^- /, "")) };
+    return `<li class="dp-ev"><span class="dp-at">${esc(e ? when(new Date(e.at)) : "")}</span><span>${tag(it.tag, it.tone)}</span><div class="dp-evt">${it.html}</div></li>`;
+  };
+  const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
+  const fold_ = folded.length ? `<details class="notes-fold"><summary>${folded.length} machine ${folded.length === 1 ? "note" : "notes"}</summary><ul class="notes">${folded.map(noteRow).join("")}</ul></details>` : "";
+  const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + fold_ : empty("No notes.")) + renderNoteForm(d, ref);
+  const parts = d.commits.some((c) => c.part);
+  const commits = d.commits.length
+    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Commit</th><th>Subject</th>${parts ? "<th>Part</th>" : ""}<th>Date</th></tr></thead><tbody>${d.commits.map((c) => {
+      const sha = c.hash.slice(0, 7);
+      return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}<td class="time">${esc(when(c.date))}</td></tr>`;
+    }).join("")}</tbody></table></div>`
+    : empty("No commit on main names this issue in its trailers.");
+  const segments = issueSegments(d);
+  return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askRow(d.ask) : "") +
+    issueKpis(d, segments) + renderTimeline(segments) +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
-    (goals.length ? `<div class="sh"><h2 id="h-goals">Parts</h2><span class="count">${goals.length}</span></div>${goalTable}` : "") +
-    `<div class="sh"><h2>Notes</h2></div>${notes}${renderNoteForm(d, ref)}${life ? `<div class="sh"><h2>Lifetime</h2></div>${life}` : ""}<div class="sh"><h2>Runs</h2></div>${jobs}<div class="sh"><h2>Commits</h2></div>${commits}</div>`;
+    `<div class="dp-detail"><h2>Detail</h2>${fold("Notes", esc(d.notes.length), notes)}${fold("Commits", esc(d.commits.length), commits)}</div></div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view

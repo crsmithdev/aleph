@@ -673,14 +673,14 @@ describe("the Issue page shows the ask row", () => {
     expect(h).toContain("Goes with B.");
     expect(h).toContain(`data-id="${n}"`);
     expect(h).toContain('data-repo="fac"');
-    const facts = h.slice(h.indexOf('<dl class="facts">'), h.indexOf("</dl>"));
-    expect(facts).toContain("Extra");
-    for (const k of ["Situation", "Effects", "Recommend"]) expect(facts).not.toContain(`<dt>${k}</dt>`);
+    const pills = h.slice(h.indexOf('<div class="status-row">'), h.indexOf("</div>", h.indexOf('<div class="status-row">')));
+    expect(pills).toContain("extra: kept");
+    for (const k of ["situation", "effects", "recommend"]) expect(pills).not.toContain(`${k}:`);
   });
 });
 
 describe("priority badges", () => {
-  test("the table row, the issue header and the part row show the badge; the API's goals carry priority", async () => {
+  test("the table row, the issue header and a part's timeline row show the badge; the API's goals carry priority", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => {
       const i = add(doc, "prio parent", { request: "x" });
       addPart(doc, i, { title: "plain part", spec: "x" });
@@ -694,9 +694,10 @@ describe("priority badges", () => {
     const h = v.renderIssue(d);
     const head = h.slice(h.indexOf('<div class="status-row">'), h.indexOf("</div>", h.indexOf('<div class="status-row">')));
     expect(head).toContain(">critical<");
-    const rows = h.slice(h.indexOf('id="goals"')).split("<tr>");
+    // A part's row in the timeline shows its priority when it is not medium.
+    const rows = h.slice(h.indexOf("<h3>Parts</h3>")).split('<div class="dp-row">');
     expect(rows.find((r: string) => r.includes("hot part"))).toContain(">critical<");
-    expect(rows.find((r: string) => r.includes("plain part"))).toContain(">medium<");
+    expect(rows.find((r: string) => r.includes("plain part"))).not.toContain(">medium<");
     const row = v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "critical", labels: [], notes: 0, runs: 0, cost: 0, at: null });
     expect(row).toContain('<td><span class="badge stuck">critical</span></td>');
   });

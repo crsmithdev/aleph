@@ -9,6 +9,8 @@ import { changedLinesOf } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
+import { partsOf, readList } from "../../todo/lib/store.ts";
+import * as todos from "../../todo/lib/todo.ts";
 
 export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter" | "explain"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
@@ -56,6 +58,27 @@ export interface JobDetail extends Job {
   checksLog?: string; stderr?: string; trace?: string;
   /** What checked the job; a delivery's minutes to spot-check it, an estimate. */
   checkedBy?: string[]; look?: number;
+  /** The item's spec, from the store. */
+  spec?: string;
+  /** For a part: its issue, its place among the issue's parts, and the part after it. */
+  parent?: { id: string; href: string; n: number; of: number; next?: { id: string; href: string } };
+}
+
+const issueHref = (repo: string, ref: string) => `#/issues/${encodeURIComponent(repo)}/${ref}`;
+/** The item's spec and, for a part, its issue and its place among the parts. Nothing when the store cannot be read. */
+function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | "parent"> {
+  const place = loadRegistry()[repo];
+  let doc: todos.Doc | null = null;
+  try { doc = place ? readList(place) : null; } catch { return {}; }
+  const item = doc && todos.find(doc, id);
+  if (!doc || !item) return {};
+  const out: Pick<JobDetail, "spec" | "parent"> = {};
+  if (item.spec) out.spec = item.spec;
+  if (item.sub === undefined) return out;
+  const parts = partsOf(doc, todos.find(doc, item.id)!).map(todos.refOf);
+  const n = parts.indexOf(todos.refOf(item)), next = parts[n + 1];
+  out.parent = { id: `${repo}-${item.id}`, href: issueHref(repo, String(item.id)), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: `#/jobs/${encodeURIComponent(`${repo}-${next}`)}` } } : {}) };
+  return out;
 }
 
 const DAY = 24 * 3600_000;
@@ -159,6 +182,7 @@ export const routes: Routes = {
     else if (v.stat) detail.stat = v.stat;
     const trace = await traceUrl(runs);
     if (trace) detail.trace = trace;
+    if (detail.item) Object.assign(detail, fromStore(detail.repo, detail.item.id));
     return Response.json(detail);
   },
 

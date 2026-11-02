@@ -173,11 +173,11 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.ev(`${row}.querySelector(".blockers a").click()`);
     await page.until(`location.hash === "#/issues/demo/10"`);
     await page.go("#/issues/demo/21");
-    await page.until(`document.querySelector('.facts [data-act="unblock"]')`);
-    expect(await page.ev<string>(`document.querySelector(".facts").textContent`)).toContain("Blocked by");
-    await page.ev(`document.querySelector('.facts [data-act="unblock"]').click()`);
-    await page.until(`!document.querySelector('.facts [data-act="unblock"]')`);
-    expect(await page.ev<string>(`document.querySelector(".facts").textContent`)).not.toContain("Blocked by");
+    await page.until(`document.querySelector('.dp-blocked [data-act="unblock"]')`);
+    expect(await page.ev<string>(`document.querySelector(".dp-blocked").textContent`)).toContain("Blocked by");
+    await page.ev(`document.querySelector('.dp-blocked [data-act="unblock"]').click()`);
+    await page.until(`!document.querySelector('.dp-blocked [data-act="unblock"]')`);
+    expect(await page.ev<string>(`document.querySelector(".dp-blocked")?.textContent ?? ""`)).not.toContain("Blocked by");
     expect(page.errors).toEqual([]);
   }, 30_000);
 

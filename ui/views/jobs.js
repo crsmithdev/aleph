@@ -1,7 +1,8 @@
-// The Jobs view (the list) and the Job view (one job's runs, result, checks,
-// logs, and a diff loaded on demand). Render functions take the /api/jobs
-// objects and return HTML strings, with no DOM, so tests can call them.
-import { blockersHtml, costHtml, STATES, badge, card, cmd, crumb, dataTable, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, pageHead, pager, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope } from "../lib.js";
+// The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
+// review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
+// strings, with no DOM, so tests can call them.
+import { blockersHtml, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
+import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, tag, timeText, waitEvent } from "../timeline.js";
 
 
 /** The days of the list: the window, or an old `?days=` address that has no window; else the stored window. */
@@ -44,9 +45,9 @@ export const detail = {
   group: "factory",
   api: "/api/jobs/:name",
   render: (job) => renderJob(job),
+  mount: (root) => mountJob(root),
 };
 
-const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
 const href = (path, params = {}) => {
   const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v));
   return `#${path}${q.toString() ? `?${q}` : ""}`;
@@ -125,16 +126,11 @@ export function mountJobs(root, jobs) {
 
 const kb = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : `${(n / 1048576).toFixed(1)} MiB`;
 const TRANSCRIPT = new Set(["output.log", "review.log"]);
-/** The log files of each run, with sizes; a file loads when its button is clicked. */
-export function renderLogs(job, runs) {
-  const rows = runs.filter((r) => r.logs?.length).map((r) =>
-    `<li><span class="quiet">${esc(r.kind)} ${esc(when(r.started))}</span> ` + r.logs.map((l) => {
-      const at = `data-log="${esc(r.id)}" data-job="${esc(job)}" data-file="${esc(l.name)}"`;
-      return `<span class="logfile">${esc(l.name)} <span class="quiet">${esc(kb(l.size))}</span> ` +
-        (TRANSCRIPT.has(l.name) ? `<button class="act" type="button" ${at} data-as="transcript">Transcript</button> ` : "") +
-        `<button class="act" type="button" ${at}>Text</button></span>`;
-    }).join(" ") + `<div class="logbody" hidden></div></li>`).join("");
-  return rows ? `<div class="sh"><h2>Logs</h2></div><ul class="logs">${rows}</ul>` : "";
+/** A run's log files as buttons, with a place beneath for the one that loads. "" for a run with no logs. */
+export function logButtons(job, r) {
+  if (!r.logs?.length) return "";
+  const buttons = r.logs.map((l) => `<button class="link" type="button" data-log="${esc(r.id)}" data-job="${esc(job)}" data-file="${esc(l.name)}"${TRANSCRIPT.has(l.name) ? ' data-as="transcript"' : ""} title="${esc(`${l.name}, ${kb(l.size)}`)}">${esc(l.name.replace(/\.log$/, ""))}</button>`).join(" · ");
+  return `<div class="dp-logs" data-logs><span class="quiet">logs:</span> ${buttons}<div class="logbody" hidden></div></div>`;
 }
 
 const CUT = 600;
@@ -150,37 +146,109 @@ export function renderTranscript(steps) {
   }).join("") || `<p class="quiet">Nothing to show.</p>`;
 }
 
-export function renderRuns(runs) {
-  // Columns: kind (id), reason (title), state, model, then took, cost, started.
-  const rows = runs.map((r) =>
-    `<tr class="run run-${esc(r.kind)}"><td>${esc(r.kind)}</td><td class="wide" title="${esc(r.reason ?? "")}">${esc(r.reason ?? "")}</td><td>${badge(r.condition)}</td><td>${esc(shortModel(r.model))}</td>` +
-    `<td class="num">${r.ended ? esc(span(r.started, r.ended)) : ""}</td><td class="num">${r.cost !== undefined ? costHtml(r.cost, r.wk) : ""}</td>` +
-    `<td class="time">${esc(when(r.started))}</td></tr>`).join("");
-  return `<div class="sh"><h2>Runs</h2><span class="count">${runs.length}</span></div>` +
-    `<div class="tscroll"><table class="tbl"><thead><tr><th>Run</th><th>Reason</th><th>State</th><th>Model</th><th class="num">Took</th><th class="num">Cost</th><th>Started</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+/** Text with its `code` spans set as code, escaped. */
+export const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
+
+const RUN_TAG = { stuck: ["Stuck", "stuck"], failed: ["Failed", "stuck"], dropped: ["Dropped", "quiet"], passed: ["Passed", "done"], landed: ["Landed", "done"], done: ["Done", "done"], awaiting: ["Awaiting you", "need"], running: ["Running", "run"] };
+const shortSha = (j) => (j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`);
+const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The event of one run: its condition as the tag, then its reason, the commit of a land, and its log buttons. */
+function runEvent(job, x, nth, j) {
+  const r = x.r, [text, tone] = RUN_TAG[r.condition] ?? [r.condition, "quiet"];
+  const name = barLabel(r, nth);
+  const what = r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name[0].toUpperCase() + name.slice(1))} as ${shortSha(j)}.`
+    : r.reason ? `${esc(name[0].toUpperCase() + name.slice(1))}: ${inline(r.reason)}` : `${esc(name[0].toUpperCase() + name.slice(1))}.`;
+  return { at: x.end, tag: text, tone, html: what + logButtons(job, r) };
 }
 
-const list = (title, items, open = false) => items.length
-  ? `<details${open ? " open" : ""}><summary>${esc(title)}<span class="peek">${items.length}</span></summary><div class="body"><ul>${items.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></details>`
-  : "";
-const log = (title, body) => body ? `<div class="sh"><h2>${esc(title)}</h2></div><pre class="trailers">${esc(body)}</pre>` : "";
+/** "+23 −2" and "2 files" from a diff stat's last line; null for none. */
+export function change(stat) {
+  const m = /(\d+) files? changed(?:, (\d+) insertions?\(\+\))?(?:, (\d+) deletions?\(-\))?/.exec(String(stat ?? ""));
+  return m ? { lines: `+${m[2] ?? 0} −${m[3] ?? 0}`, files: plural(Number(m[1]), "file") } : null;
+}
 
+/** The runs that do the work: not the reviews, which run inside a build, and not the facts run after the land. */
+const workRuns = (j) => (j.runs ?? []).filter((r) => r.kind !== "review" && r.kind !== "facts");
+
+/** The Timeline's segments for a job: Work (builds, reviews in them, the land) and After the land (facts, acceptance). */
+export function jobSegments(j, now = Date.now()) {
+  const work = spans(workRuns(j), now);
+  const count = {};
+  for (const x of work) count[x.r.kind] = (count[x.r.kind] ?? 0) + 1;
+  const seen = {};
+  const events = work.map((x) => { seen[x.r.kind] = (seen[x.r.kind] ?? 0) + 1; return runEvent(j.name, x, count[x.r.kind] > 1 ? seen[x.r.kind] : 0, j); });
+  const waits = work.length ? gaps(work, work[0].start, NaN) : [];
+  const builds = count.worker ?? 0, lands = count.land ?? 0;
+  const segments = [];
+  if (work.length) segments.push({
+    title: "Work", aside: j.condition === "landed" ? "to the land" : "",
+    rows: [{
+      head: `<span class="quiet">${esc([builds ? plural(builds, "build") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "run"))}</span>`,
+      bars: barsOf(work, { cost: true }), waits, marks: [], result: badge(j.condition),
+      time: timeText(Math.max(...work.map((x) => x.end)) - work[0].start), cost: costText(work.reduce((n, x) => n + (x.r.cost ?? 0), 0)),
+      events: [...waits.map(waitEvent), ...events,
+        ...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: inline(d) })),
+        ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: inline(f) }))],
+    }],
+  });
+  const facts = spans((j.runs ?? []).filter((r) => r.kind === "facts"), now), accepted = /^acceptance: (\w+)/.exec(j.acceptance ?? "")?.[1];
+  if (facts.length || accepted) segments.push({
+    title: "After the land",
+    rows: [{
+      head: `<span class="quiet">${esc([facts.length ? "facts" : "", accepted ? "acceptance" : ""].filter(Boolean).join(", "))}</span>`,
+      bars: barsOf(facts), waits: [], marks: [],
+      result: accepted ? tag(accepted === "pass" ? "accepted" : "rejected", accepted === "pass" ? "done" : "stuck") : "",
+      time: timeText(facts.length ? Math.max(...facts.map((x) => x.end)) - facts[0].start : 0), cost: costText(facts.reduce((n, x) => n + (x.r.cost ?? 0), 0)),
+      events: [...facts.map((x) => ({ at: x.end, tag: "Facts", tone: "quiet", html: `${inline(x.r.reason ?? "")}${logButtons(j.name, x.r)}` })),
+        ...(accepted ? [{ tag: accepted === "pass" ? "Accepted" : "Rejected", tone: accepted === "pass" ? "done" : "stuck", html: inline(j.acceptance.replace(/^acceptance: /, "")) }] : [])],
+    }],
+  });
+  return segments;
+}
+
+/** The KPI strip of a job: builds, elapsed, cost, change, and what checked it. */
+function jobKpis(j, now = Date.now()) {
+  const runs = spans(workRuns(j), now), builds = runs.filter((x) => x.r.kind === "worker");
+  const bad = builds.filter((x) => ["stuck", "failed"].includes(x.r.condition)).length, last = builds.at(-1)?.r.condition;
+  const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
+  return renderKpis([
+    { k: "Builds", v: esc(builds.length), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "awaiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
+    { k: "Elapsed", v: esc(runs.length ? lifespan(end - runs[0].start) : "–"), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
+    { k: "Cost", v: j.cost !== undefined ? esc(money(j.cost)) : "–", sub: j.wk ? esc(wkText(j.wk)) : "" },
+    { k: "Change", v: esc(c?.lines ?? "–"), sub: [c ? esc(c.files) : "", j.commit ? shortSha(j) : ""].filter(Boolean).join(", ") },
+    { k: "Checked by", v: esc(j.checkedBy?.join(", ") || "–"), text: !!j.checkedBy?.length, sub: j.look ? esc(`look: about ${j.look} min`) : "" },
+  ]);
+}
+
+/** The Review panel's tag: the verdict the review ends with. */
+const verdictOf = (review) => /VERDICT:\s*(\w+)/i.exec(review ?? "")?.[1]?.toLowerCase();
+
+/** The Job page: the header and its pills, the KPI strip, the Timeline, the Spec and the Result, then the Detail panels. */
 export function renderJob(j) {
-  const checks = (j.checks ?? []).map((c) => `<li>${c.ok ? "✓" : "✗"} ${esc(c.name)} <span class="quiet">${esc(c.seconds)} s</span></li>`).join("");
-  return `<div class="page">${crumb("#/jobs", [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [localId(j.name, j.repo)]])}` +
-    pageHead(j.item?.title || j.name) + `<div class="status-row">${badge(j.condition)}</div>` +
-    `<dl class="facts">${j.blockers?.length ? fact("Blocked by", blockersHtml(j.blockers, j.repo, j.item.id)) : ""}${fact("Project", esc(j.repo))}${fact("Started", esc(when(j.started)))}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}` +
-    `${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${j.commit ? fact("Commit", j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`) : ""}` +
-    `${j.trace ? fact("Trace", `<a href="${esc(j.trace)}">Langfuse</a>`) : ""}${j.checkedBy?.length ? fact("Checked by", esc(j.checkedBy.join(", "))) : ""}${j.look ? fact("Look", `about ${esc(j.look)} min (estimate)`) : ""}</dl>` +
-    (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
-    renderRuns(j.runs ?? []) + renderLogs(j.name, j.runs ?? []) +
-    (j.result ? `<div class="sh"><h2>Result</h2></div><div class="md">${md(j.result)}</div>` : "") +
-    (j.review ? `<div class="sh"><h2>Review</h2></div><div class="md">${md(j.review)}</div>` : "") +
-    list("Defaults taken", j.defaults ?? [], true) + list("Follow-ups", j.followups ?? []) +
-    (checks ? `<div class="sh"><h2>Checks</h2></div><ul class="checks">${checks}</ul>` : "") +
-    log("Diff stat", j.stat) + log("checks.log, last 80 lines", j.checksLog) + log("Worker stderr, last 80 lines", j.stderr) +
-    `<div class="sh"><h2>Diff</h2></div><button class="act" type="button" data-diff="${esc(j.name)}">Load the diff</button><pre class="diff" id="diff" hidden></pre>` +
-    (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") + `</div>`;
+  const id = localId(j.name, j.repo), p = j.parent;
+  const back = p ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(p.id, j.repo)}`, p.href], [`job ${id}`]] : [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [id]];
+  const nav = [p ? `<a class="act" href="${esc(p.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next part: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
+  const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? `<span class="chip">part ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}</span>` : ""}<span class="idp">${esc(j.name)}</span></div>`;
+  const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Blocked by</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
+  const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
+  const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(j.name)}" data-file="checks.log">checks.log</button>` : "";
+  const checks = j.checks?.length
+    ? `<div class="dp-logs" data-logs><div class="tscroll"><table class="tbl"><thead><tr><th>Check</th><th>Result</th><th class="num">Time</th><th>Log</th></tr></thead><tbody>${j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td><td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join("")}</tbody></table></div><div class="logbody" hidden></div></div>`
+    : "";
+  const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = verdictOf(j.review), c = change(j.stat);
+  return `<div class="page dp-page">${crumb(p ? p.href : "#/jobs", back)}` +
+    `<header class="ph"><h1>${esc(j.item?.title || j.name)}</h1>${nav ? `<div class="aside">${nav}</div>` : ""}</header>${pills}${blocked}` +
+    (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
+    (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +
+    jobKpis(j) + renderTimeline(jobSegments(j)) +
+    (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +
+    (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") +
+    `<div class="dp-detail"><h2>Detail</h2>` +
+    (j.review ? fold("Review", verdict ? tag(verdict, verdict === "pass" ? "done" : "stuck") : "", `<div class="md">${md(j.review)}</div>`) : "") +
+    (checks ? fold("Checks", tag(`${passed} / ${j.checks.length}`, passed === j.checks.length ? "done" : "stuck"), checks) : "") +
+    fold("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<pre class="diff" id="diff" data-job="${esc(j.name)}">Loading the diff…</pre>`) +
+    `</div></div>`;
 }
 
 /** Colour a unified diff's lines. */
@@ -191,24 +259,15 @@ export function renderDiff(text) {
   }).join("\n");
 }
 
-// Loads the diff when the button is clicked. The button is rebuilt on each render, so listen on the document.
-if (typeof document !== "undefined") {
-  document.addEventListener("click", async (e) => {
-    const b = e.target.closest?.("[data-diff]");
-    if (!b) return;
-    const out = document.getElementById("diff");
-    b.disabled = true;
-    try {
-      const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.diff)}/diff`);
-      out.innerHTML = res.ok ? renderDiff(await res.text()) : esc(res.status === 404 ? "No diff was recorded for this job." : `The diff failed to load (${res.status}).`);
-      out.hidden = false;
-      b.remove();
-    } catch (err) {
-      out.textContent = `The diff failed to load: ${err.message}`;
-      out.hidden = false;
-      b.disabled = false;
-    }
-  });
+/** The Job page's mount: load the diff into the Diff panel, once. */
+export async function mountJob(root) {
+  const out = root.querySelector?.("pre#diff[data-job]");
+  if (!out || out.dataset.loaded) return;
+  out.dataset.loaded = "1";
+  try {
+    const res = await fetch(`/api/jobs/${encodeURIComponent(out.dataset.job)}/diff`);
+    out.innerHTML = res.ok ? renderDiff(await res.text()) : esc(res.status === 404 ? "No diff was recorded for this job." : `The diff failed to load (${res.status}).`);
+  } catch (err) { out.textContent = `The diff failed to load: ${err.message}`; }
 }
 
 // Loads a log file when its button is clicked: the page itself carries only names and sizes.
@@ -216,7 +275,7 @@ if (typeof document !== "undefined") {
   document.addEventListener("click", async (e) => {
     const b = e.target.closest?.("[data-log]");
     if (!b) return;
-    const out = b.closest("li").querySelector(".logbody");
+    const out = b.closest("[data-logs]").querySelector(".logbody");
     const q = b.dataset.as ? `?as=${b.dataset.as}` : "";
     out.hidden = false;
     out.textContent = "Loading…";
