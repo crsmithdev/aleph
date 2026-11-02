@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./unit.ts";
-import { heldRule, securityChange, testFindings, verdict, outcome, replyOf, tagged, alreadyMet } from "./gate.ts";
+import { heldRule, securityChange, testFindings, verdict, outcome, replyOf, alreadyMet } from "./gate.ts";
+import { tagged } from "./ledger.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

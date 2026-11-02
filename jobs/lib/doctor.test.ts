@@ -7,7 +7,7 @@ import { wallStepSince } from "./clock.ts";
 import { emptyObjects, fix, gitChecks, homeCheck, lostCheck, probeCheck, unitChecks } from "./doctor.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
 import { loadRegistry, writeRun } from "./ledger.ts";
-import { saveProbe } from "./factory.ts";
+import { saveProbe } from "./factory-status.ts";
 import { mkdirSync } from "node:fs";
 
 let dir: string, repo: string;

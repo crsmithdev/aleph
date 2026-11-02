@@ -6,9 +6,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { tagged } from "./gate.ts";
 import { needsOf } from "./ask.ts";
-import { allJobs, askOf, isBuild, isLost, isOpen, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
+import { tagged, allJobs, askOf, isBuild, isLost, isOpen, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 
 export { allJobs, isOpen };

@@ -3,6 +3,7 @@
  * needs Chris. See "Held paths" in docs/specs/2026-10-26-seed-factory.md.
  */
 import { git } from "./git.ts";
+import { tagged } from "./ledger.ts";
 
 export interface Outcome { ok: boolean; line: string; result: string; cost?: number }
 
@@ -34,10 +35,6 @@ export function replyOf(stdout: string): { text: string; cost?: number } {
   const o = outcome(stdout);
   return o.result || o.cost !== undefined ? { text: o.result, cost: o.cost } : { text: stdout };
 }
-
-/** The text after `<tag>:` on each line of the result that starts with it. */
-export const tagged = (result: string, tag: string): string[] =>
-  result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim()).filter(Boolean);
 
 /** The marker a worker's claim that the goal is already met starts with; the FACTORY prompt asks for it. */
 export const ALREADY_MET = "Goal: Already met";

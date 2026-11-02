@@ -4,7 +4,7 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { flakeTracker, reader, type Reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -152,6 +152,11 @@ export const redBaselines = (): Baseline[] => Object.values(baselines()).filter(
 export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
 
 export interface Probe { at: string; ok: boolean; failed: string[] }
+
+export function saveProbe(p: Probe): void {
+  mkdirSync(factoryDir(), { recursive: true });
+  writeFileSync(probeFile(), JSON.stringify(p, null, 2) + "\n");
+}
 
 export const lastProbe = (): Probe | null => {
   try { return JSON.parse(readFileSync(probeFile(), "utf8")); } catch { return null; }

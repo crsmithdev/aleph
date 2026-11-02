@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { fetchOrigin, git } from "./git.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, workerToken } from "./sandbox.ts";
-import { saveProbe, type Probe } from "./factory.ts";
+import { saveProbe, type Probe } from "./factory-status.ts";
 import { clockStart, SKEW_LIMIT_MS, STEP_LIMIT_MS, wallStepSince, windowsSkew } from "./clock.ts";
 
 function tailnet(): string {

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { openRun } from "./agent-run.ts";
-import { tagged } from "./gate.ts";
+import { tagged } from "./ledger.ts";
 import { readFile, allJobs } from "./job.ts";
 import { isBuild, updateRun, type Entry, type Repo } from "./ledger.ts";
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { join } from "node:path";
-import { saveProbe, setPaused } from "./factory.ts";
+import { setPaused } from "./factory.ts";
+import { saveProbe } from "./factory-status.ts";
 import { gates, hold } from "./factory-status.ts";
 import { waitingToLand } from "./landing.ts";
 import { ctx, setup, teardown } from "./factory.helpers.ts";

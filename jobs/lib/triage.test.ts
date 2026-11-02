@@ -6,6 +6,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { areasOf, clearAsk, isSorted, readList, setAsk, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "../../todo/lib/store.ts";
 import { countsLine, parseRoute, prompt, triageOpen, TRIAGE_MODEL } from "./triage.ts";
+import { saveProbe } from "./factory-status.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -376,10 +377,10 @@ describe("triage at once", () => {
   test("a failed probe triages nothing; the tick does after it passes", async () => {
     reset([{ title: "p", body: "VERDICT:close" }]);
     const f = await import("./factory.ts");
-    f.saveProbe({ at: new Date().toISOString(), ok: false, failed: ["x"] });
+    saveProbe({ at: new Date().toISOString(), ok: false, failed: ["x"] });
     expect((await f.triageNow(repo, 1)).triaged).toEqual({});
     expect(calls()).toBe(0);
-    f.saveProbe({ at: new Date().toISOString(), ok: true, failed: [] });
+    saveProbe({ at: new Date().toISOString(), ok: true, failed: [] });
     expect((await run()).triaged).toEqual({ close: 1 });
   });
 });

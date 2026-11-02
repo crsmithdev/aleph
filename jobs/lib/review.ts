@@ -13,6 +13,7 @@ import { BROWSER, browserStep, changedViews, startUiServer } from "./review-brow
 import { areasOf, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
 import { outcome } from "./gate.ts";
+import { needsOf } from "./ask.ts";
 import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
 import { startUnit } from "./launch.ts";
 import { linkBins, runPath, sandboxed, stallReason, stallSeconds, workerToken, writeHome } from "./sandbox.ts";
@@ -213,7 +214,7 @@ async function review(folder: string): Promise<void> {
  */
 export function startReview(folder: string): boolean {
   const run = readRun(folder);
-  if (!run || existsSync(join(folder, CALL_FILE)) || !isAwaiting(run.condition) || !["held-path", "review"].includes(askOf(run)?.reason ?? "")) return false;
+  if (!run || existsSync(join(folder, CALL_FILE)) || !isAwaiting(run.condition) || !["held", "review"].includes(needsOf(askOf(run)) ?? "")) return false;
   writeFileSync(join(folder, CALL_FILE), "PENDING\n");
   try {
     // Its own transient unit: the run's unit stops its whole cgroup when the run ends.

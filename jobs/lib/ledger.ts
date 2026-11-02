@@ -391,3 +391,7 @@ export async function checkSlot(): Promise<() => void> {
 
 /** The systemd-run properties of every factory run unit: the shell, the UI and Claude Code sessions win when the cores are busy. */
 export const LOW = ["--property=CPUWeight=20", "--nice=10"];
+
+/** The text after `<tag>:` on each line of the result that starts with it. */
+export const tagged = (result: string, tag: string): string[] =>
+  result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim()).filter(Boolean);

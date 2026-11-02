@@ -1,6 +1,6 @@
 /**
  * The whole path of an Ask's case text: a host-check Ask raised the way triage raises it, the explainer sweep with a fake
- * `claude`, the API, and the page in Chrome (Awaiting you on Status, and the Issue page). Two screenshots are written to `ui/shots/` in the repo, outside the temp dir, so they outlive the test and can be committed.
+ * `claude`, the API, and the page in Chrome (Awaiting you on Status, and the Issue page). Two screenshots are written to `ALEPH_SHOTS_DIR`, or a folder in the system temp dir, outside the temp dir, so they outlive the test and can be committed.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -12,8 +12,8 @@ import { plainAsk } from "../jobs/lib/ask.ts";
 import { explainStep } from "../jobs/lib/explain.ts";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 
-/** Not under the temp dir: afterAll deletes that, and the screenshots are for review. */
-const SHOTS = join(import.meta.dir, "shots");
+/** Not under the test's temp dir: afterAll deletes that, and the screenshots are for review. `ui/shots` is tracked, so a run writes there only when asked. */
+const SHOTS = process.env.ALEPH_SHOTS_DIR ?? join(tmpdir(), "aleph-asks-live");
 const FILES = ["vault/Notes/plan.md", "vault/Notes/people.md"];
 const FAKE = `#!/bin/bash
 prompt=$(cat)

@@ -30,10 +30,9 @@ import { detached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import type { Tier } from "./route.ts";
-import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, probeFile, readStalls, redLine, runsToday, spentToday, stallFile, type Probe } from "./factory-status.ts";
+import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, readStalls, redLine, runsToday, spentToday, stallFile } from "./factory-status.ts";
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
-export type { Probe };
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
 import { DAY_CAP, dispatchOn } from "./settings.ts";
 
@@ -455,10 +454,6 @@ async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: s
   return b.ok ? null : redLine(b);
 }
 
-export function saveProbe(p: Probe): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  writeFileSync(probeFile(), JSON.stringify(p, null, 2) + "\n");
-}
 export const probeDue = (now = Date.now()) => { const p = lastProbe(); return !p || now - Date.parse(p.at) > 20 * 3600_000; };
 
 /**
