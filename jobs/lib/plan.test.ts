@@ -145,7 +145,7 @@ test("a goal rated opus starts a planner run and no worker; the goals are filed 
   const id = addGoal("three");
   const { starts, out } = await dispatch("opus");
   expect(starts).toEqual([]);
-  expect(planCalls()).toEqual([expect.stringContaining("--model claude-fable-5-1 --tools Read Grep Glob")]);
+  expect(planCalls()).toEqual([expect.stringContaining("--model claude-opus-5-5 --tools Read Grep Glob")]);
   expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", name: `plan-fac-${id}`, on: `fac-${id}`, condition: "done", reason: "planned" })]);
   const refs = [1, 2, 3].map((k) => `fac-${id}.${k}`);
   expect(out.planned).toEqual([`fac-${id} into ${refs.join(",")}`]);

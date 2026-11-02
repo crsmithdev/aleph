@@ -17,7 +17,7 @@ import { endLost, openRun } from "./agent-run.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 
-export const PLAN_MODEL = "claude-fable-5-1";
+export const PLAN_MODEL = "claude-opus-5-5";
 /** Planner replies that fail the check, for one goal, before it runs as one worker run. */
 export const PLAN_TRIES = 2;
 const SECTIONS = ["Goal", "Edit surface", "Oracle", "Time box"] as const;
