@@ -533,7 +533,9 @@ const laneOf = (e: Entry): string =>
 function entry(e: Entry): string {
   const r = e.run;
   const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
-  const head = `${r.repo}/${r.name} ${r.condition}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
+  const lane = laneOf(e);
+  const prio = (lane === "delivered" || lane === "needs you") && r.repo && r.on ? reader().item(r.repo, issues.parseGoalRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
+  const head = `${r.repo}/${r.name} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (deliveredReport(r)) lines.push(`  report: ${reportPathOf(r)}`);
   if (r.condition === "landed" && r.commit) {

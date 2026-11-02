@@ -226,3 +226,12 @@ test("report puts a delivered research report in the delivered lane, and a done 
   expect(out.indexOf("fac/research-r1")).toBeLessThan(out.indexOf("other:"));
   expect(out.indexOf("other:")).toBeLessThan(out.indexOf("fac/triage-t1 done"));
 });
+
+test("report adds the priority to a delivered line at high or critical, not at medium", () => {
+  const ids = [["critical", "a"], ["medium", "b"]].map(([p]) => writeList({ key: "fac" }, "add", (doc) => issues.add(doc, `t ${p}`, { priority: p, spec: "x" }).id, true)!.value);
+  ids.forEach((id) => mk(`fac-${id}`, "build", "landed", { shown: false, on: `fac-${id}` }));
+  const out = report();
+  expect(out).toContain(`fac/fac-${ids[0]} landed [critical]`);
+  expect(out).toContain(`fac/fac-${ids[1]} landed`);
+  expect(out).not.toContain(`fac/fac-${ids[1]} landed [`);
+});

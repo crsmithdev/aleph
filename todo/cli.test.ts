@@ -338,11 +338,11 @@ test("list and lint with no repo cover the repos with a run or an item update in
   mkdirSync(jobs);
   const e = { ALEPH_JOBS_DIR: jobs };
   expect(alephWith(e, "issue", "add", "fresh", "A new item").code).toBe(0);
-  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  1  open    A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("fresh\n  1  open    medium   A new item\n");
   // proj's only item is from September; a run today makes proj recent, and the latest.
   mkdirSync(join(jobs, "r1"));
   writeFileSync(join(jobs, "r1", "state.json"), JSON.stringify({ kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: new Date().toISOString() }));
-  expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    An old item\nfresh\n  1  open    A new item\n");
+  expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    medium   An old item\nfresh\n  1  open    medium   A new item\n");
   expect(JSON.parse(alephWith(e, "issue", "list", "--status", "done", "--json").out)).toEqual([]);
   const lint = alephWith(e, "issue", "lint");
   expect(lint.code).toBe(0);

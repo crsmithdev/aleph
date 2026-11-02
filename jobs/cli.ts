@@ -424,7 +424,7 @@ const ready = (i: issues.Issue, key: string) => (store.afterOf(i).length ? `afte
 
 function printRows(rows: issues.Issue[], key: string, indent = ""): void {
   const w = String(Math.max(...rows.map((i) => i.id))).length;
-  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
+  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${String(i.fm.priority ?? "medium").padEnd(8)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
 /** `aleph doctor [--fix] [--json]`: pass or fail for each part of the machine; exit 1 if any fails. */
