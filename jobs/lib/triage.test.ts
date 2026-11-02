@@ -312,6 +312,28 @@ test("parseRoute wants the field its route needs", () => {
   expect(parseRoute("[]")).toBe("no JSON");
 });
 
+/** An earlier ended triage run of item 1, with the given fields. */
+function earlierTriage(fields: Record<string, unknown>): void {
+  const folder = join(base, "jobs", `${stamp()}-earlier-${Math.random().toString(36).slice(2)}-triage`);
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name: "earlier", repo: repo.key, on: `${repo.key}-1`, condition: "done", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now(), ...fields });
+}
+
+test("a triage run with the cause no-answer and a free reason counts toward the Ask", async () => {
+  reset([{ title: "a", body: "nothing" }]);
+  earlierTriage({ cause: "no-answer", reason: "something else entirely" });
+  await run();
+  expect(item(1).fm.ask).toBe("input");
+  expect(item(1).fm.reason).toBe("triage-failed");
+});
+
+test("a triage run with only the old sentence still counts toward the Ask", async () => {
+  reset([{ title: "a", body: "nothing" }]);
+  earlierTriage({ reason: "failed: triage exited 3" });
+  await run();
+  expect(item(1).fm.ask).toBe("input");
+});
+
 // A triage run whose process died before its `end()`: `running`, with no pid or exit file.
 function lostRun(name: string): string {
   const folder = join(base, "jobs", `${stamp()}-${name}-triage`);

@@ -12,6 +12,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { askPartDropped, note, partsOf, readList, writeList } from "../../todo/lib/store.ts";
 import { allRuns, lock, type Repo } from "./ledger.ts";
+import { causeOf } from "./outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
@@ -184,7 +185,7 @@ function endPlan(repo: Repo, id: number | string, why: string): string | null {
 
 /** Planner runs of an issue that ended with no children. */
 const badPlans = (repo: Repo, id: number | string) =>
-  allRuns().filter((e) => e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && /^(malformed plan|failed):/.test(e.run.reason ?? "")).length;
+  allRuns().filter((e) => e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && causeOf(e.run) === "no-answer").length;
 
 export type Plan = { plan: true } | { tier: Tier | null };
 
@@ -256,17 +257,18 @@ async function plan(repo: Repo, id: number): Promise<Planned> {
       // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
       const run = openRun({ role: "plan", who: "the planner", model: PLAN_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: existsSync(repo.path) ? repo.path : undefined, name: `plan-${on}`, command: `plan ${on}: ${item.title}`, shown: true, repo: repo.key, on });
       const end = (reason: string) => run.end(reason);
+      const noAnswer = (reason: string) => run.end(reason, { cause: "no-answer" });
       try {
         const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
         const plan = parsePlan(await run.ask(input), parts.length ? 1 : 2);
-        if (typeof plan === "string") { why = `malformed plan: ${plan}`; end(why); continue; }
+        if (typeof plan === "string") { why = `malformed plan: ${plan}`; noAnswer(why); continue; }
         const refs = fileChildren(repo, id, plan);
         if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }
         end("planned");
         return { planned: refs };
       } catch (e: any) {
         why = `failed: ${e?.message ?? e}`;
-        end(why);
+        noAnswer(why);
       }
     }
     const text = `planner: no plan passed the check in ${PLAN_TRIES} runs (last: ${why}); the goal runs as one worker run`;

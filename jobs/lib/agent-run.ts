@@ -103,7 +103,7 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
     if (!release) continue;
     try {
       // Read again under the lock: the run may have ended since the list was read.
-      if (readRun(folder)?.condition === "running") endRun(folder, `failed: its process ended before ${before}`);
+      if (readRun(folder)?.condition === "running") endRun(folder, `failed: its process ended before ${before}`, { cause: "no-answer" });
     } finally {
       release();
     }

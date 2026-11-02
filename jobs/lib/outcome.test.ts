@@ -22,6 +22,9 @@ test.each([
   ["tests failed", "check", "tests"],
   ["timed out: check types", "check", "types"],
   ["hidden check failed: 1 of 2 tests", "hidden-check", undefined],
+  ["malformed verdict: x", "no-answer", undefined],
+  ["malformed plan: x", "no-answer", undefined],
+  ["failed: x", "no-answer", undefined],
 ] as const)("an old run with the sentence %p has the cause %p", (reason, cause, check) => {
   expect(causeOf(run({ reason }))).toBe(cause);
   expect(failedCheckOf(run({ reason }))).toBe(check);

@@ -203,6 +203,29 @@ for (const bad of ["one", "nooracle"]) {
   });
 }
 
+/** An earlier ended plan run of the goal, with the given fields. */
+function earlierPlan(id: number, fields: Record<string, unknown>): void {
+  const folder = join(base, "jobs", `20261028-000000-plan-fac-${id}-earlier-plan`);
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { kind: "plan", job: "x", name: `plan-fac-${id}`, repo: "fac", on: `fac-${id}`, condition: "done", phase: "plan", told: true, started: new Date().toISOString(), ...fields });
+}
+
+test("a plan run with the cause no-answer and a free reason counts as a try", async () => {
+  const id = addGoal("one");
+  earlierPlan(id, { cause: "no-answer", reason: "something else entirely" });
+  await dispatch("opus");
+  expect(planCalls().length).toBe(1);
+  expect(item(id).notes.at(-1)).toContain("planner: no plan passed the check in 2 runs");
+});
+
+test("a plan run with only the old sentence still counts as a try", async () => {
+  const id = addGoal("one");
+  earlierPlan(id, { reason: "failed: its process ended before a reply" });
+  await dispatch("opus");
+  expect(planCalls().length).toBe(1);
+  expect(item(id).notes.at(-1)).toContain("planner: no plan passed the check in 2 runs");
+});
+
 test("a bad reply then a good one plans the goal", async () => {
   const id = addGoal("badthengood");
   const { starts } = await dispatch("opus");

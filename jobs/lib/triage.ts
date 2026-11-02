@@ -9,6 +9,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { isSorted, noteFlake, reader, setAsk, sort } from "../../todo/lib/store.ts";
 import { always, askNote, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
+import { causeOf } from "./outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";
 
 import { factoryDir, gates } from "./factory-status.ts";
@@ -198,7 +199,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   try { since = Number(readFileSync(mark, "utf8")) || 0; } catch {}
   const n = allRuns().filter((e) => e.run.kind === "triage" && e.run.repo === repo.key && onOf(e.run) === id
     && (e.run.made ?? 0) > since
-    && /^(malformed verdict|failed):/.test(e.run.reason ?? "")).length;
+    && causeOf(e.run) === "no-answer").length;
   if (n < TRIAGE_TRIES()) return null;
   const grant = always("triage-failed")?.action;
   const ref = `${repo.key}-${id}`;
@@ -234,11 +235,12 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
     const run = openRun({ role: "triage", who: "triage", model: TRIAGE_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"], cwd: repo.path, name: `triage-${name}`, command: `triage ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
     // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
     const end = (reason: string, route?: Applied) => run.end(reason, route ? { route } : {});
+    const noAnswer = (reason: string) => run.end(reason, { cause: "no-answer" });
     try {
       const v = parseRoute(await run.ask(prompt(repo, item)));
       if (typeof v === "string") {
         const reason = `malformed verdict: ${v}`;
-        end(reason);
+        noAnswer(reason);
         skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage gave a malformed verdict: ${v}`);
         return;
       }
@@ -246,7 +248,7 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
         const sha = commitOnMain(repo, v.commit);
         if (!sha) {
           const reason = `malformed verdict: done names ${v.commit}, not a commit on main`;
-          end(reason);
+          noAnswer(reason);
           skipped.push(giveUp(repo, item.id, reason) ?? `${name}: ${reason}`);
           return;
         }
@@ -262,7 +264,7 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
       }
     } catch (e: any) {
       const reason = `failed: ${e?.message ?? e}`;
-      end(reason);
+      noAnswer(reason);
       skipped.push(giveUp(repo, item.id, reason) ?? `${name}: triage failed: ${e?.message ?? e}`);
     }
   } finally {

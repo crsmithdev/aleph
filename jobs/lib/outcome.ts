@@ -7,7 +7,7 @@ import type { Run } from "./ledger.ts";
 
 export type Cause =
   | "no-commit" | "time-box" | "stalled" | "infra" | "lock-busy"
-  | "check" | "hidden-check" | "conflict" | "moved" | "own-list" | "reviewer" | "other";
+  | "check" | "hidden-check" | "conflict" | "moved" | "own-list" | "reviewer" | "no-answer" | "other";
 
 /** The cause on a run's state, and the check's name for the cause `check`. */
 export type Stated = { cause: Cause; checkName?: string };
@@ -23,6 +23,7 @@ const SENTENCES: [RegExp, Cause][] = [
   [/^main moved during the land; land again$/, "moved"],
   [/^the branch changes docs\/todo\.md;/, "own-list"],
   [/^hidden check failed/, "hidden-check"],
+  [/^(malformed (verdict|plan)|failed):/, "no-answer"],
 ];
 
 /** What an exact sentence of the unit states, or null. A drop's sentence is free prose and states nothing. */
