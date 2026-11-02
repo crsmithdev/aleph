@@ -68,7 +68,7 @@ const add = (title: string, o: { done?: boolean } = {}): number =>
     return item.id;
   }, true)!.value;
 
-const land = (id: number): string => {
+const land = (id: number | string): string => {
   const repo = join(base, "repo");
   writeFileSync(join(repo, `f${id}.txt`), "x\n");
   sh(repo, "git", "add", ".");
@@ -168,4 +168,50 @@ test("an unreachable Langfuse does not block the page", async () => {
   expect(r.failed).toEqual([]);
   expect(existsSync(join(base, "vault", "wiki", "episodes"))).toBe(true);
   expect(readFileSync(join(base, "vault", "wiki", "episodes", pages()[0]), "utf8")).toContain("Langfuse unreachable");
+});
+
+/** Adds a top-level issue and `titles.length` parts under it, all done with a landed commit and a run. */
+const addParts = (titles: string[]): number => {
+  const parent = writeList({ key: "fac" }, "add", (doc) => {
+    const top = issues.add(doc, "the big one", { spec: "## Goal\nShip it." });
+    for (const title of titles) issues.addPart(doc, top, { title, spec: "## Goal\nShip it." });
+    return top.id;
+  }, true)!.value;
+  titles.forEach((_, i) => {
+    land(`${parent}.${i + 1}`);
+    run(`20261028-1000${String(i).padStart(2, "0")}-fac-1-agent`, { on: `fac-${parent}.${i + 1}` });
+  });
+  return parent;
+};
+
+test("two done parts of one issue get a page each, named by their refs", async () => {
+  const parent = addParts(["first part", "second part"]);
+  const repo = loadRegistry().fac;
+  const r = await writeEpisodes([repo]);
+  expect(r.failed).toEqual([]);
+  expect(pages().filter((f) => f.startsWith(`fac-${parent}.1 `)).length).toBe(1);
+  expect(pages().filter((f) => f.startsWith(`fac-${parent}.2 `)).length).toBe(1);
+  expect(pages().filter((f) => f.startsWith(`fac-${parent} `)).length).toBe(0);
+  const text = readFileSync(join(base, "vault", "wiki", "episodes", pages().find((f) => f.startsWith(`fac-${parent}.2 `))!), "utf8");
+  expect(section(text, "Cost")).toContain("1234");
+  const again = await writeEpisodes([repo]);
+  expect(again.written).toEqual([]);
+  expect(again.failed).toEqual([]);
+  expect(pages().length).toBe(2);
+});
+
+test("a done part with a page under the old parent name is not written again", async () => {
+  const parent = addParts(Array.from({ length: 12 }, (_, i) => `p${i}`));
+  const dir = join(base, "vault", "wiki", "episodes");
+  mkdirSync(dir, { recursive: true });
+  for (let i = 0; i < 12; i++) writeFileSync(join(dir, `fac-${parent} p${i}.md`), "old page\n");
+  const goal = writeList({ key: "fac" }, "add", (doc) => issues.add(doc, "the goal", { spec: "## Goal\nShip it." }).id, true)!.value;
+  land(goal);
+  run("20261028-110000-fac-1-agent", { on: `fac-${goal}` });
+  const repo = loadRegistry().fac;
+  const r = await writeEpisodes([repo]);
+  expect(r.failed).toEqual([]);
+  expect(r.written).toEqual([`fac-${goal} the goal`]);
+  expect(pages().filter((f) => f.startsWith(`fac-${goal} `)).length).toBe(1);
+  expect(pages().filter((f) => f.startsWith(`fac-${parent}.`)).length).toBe(0);
 });

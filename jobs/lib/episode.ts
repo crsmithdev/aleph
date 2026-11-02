@@ -20,8 +20,15 @@ const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const today = () => new Date().toISOString().slice(0, 10);
 const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
-const runsOf = (repo: Repo, id: number): Entry[] =>
-  allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === id).sort((a, b) => epoch(a.run.started) - epoch(b.run.started));
+/** The ledger runs of an item: its own runs, a part's under `on: <repo>-<n>.<k>`. */
+const runsOf = (repo: Repo, item: issues.Issue): Entry[] =>
+  allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === issues.idOf(item)).sort((a, b) => epoch(a.run.started) - epoch(b.run.started));
+
+/** Whether a page exists for the item: under its ref, or for a part, under the old `<repo>-<parent> ` name. */
+function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {
+  if (pages.some((f) => f.startsWith(`${repo.key}-${issues.refOf(item)} `))) return true;
+  return item.sub !== undefined && pages.includes(`${titleUnder(`${repo.key}-${item.id}`, item)}${MD}`);
+}
 
 /** The repo's done goals with a ledger run and no episode page yet. */
 export function doneGoals(repo: Repo): issues.Issue[] {
@@ -33,7 +40,7 @@ export function doneGoals(repo: Repo): issues.Issue[] {
   const dir = join(vaultDir(), "wiki", "episodes");
   const pages = existsSync(dir) ? readdirSync(dir) : [];
   const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined).map((e) => onOf(e.run)));
-  return goals.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(issues.idOf(i)) && !pages.some((f) => f.startsWith(`${repo.key}-${issues.refOf(i)} `)));
+  return goals.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(issues.idOf(i)) && !written(repo, i, pages));
 }
 
 const NAME_MAX = 255; // bytes one file name may take
@@ -51,14 +58,18 @@ function cutBytes(s: string, max: number): string {
   return out;
 }
 
-/** `<repo>-<id> <title>` without the characters a vault title forbids, cut to fit a file name. */
-export function episodeTitle(repo: Repo, item: issues.Issue): string {
-  const head = `${repo.key}-${item.id}`;
+/** `<head> <title>` without the characters a vault title forbids, cut to fit a file name. */
+function titleUnder(head: string, item: issues.Issue): string {
   const full = `${head} ${item.title}`.replace(/[\/\\:*?"<>|]/g, " ").replace(/ +/g, " ").trim();
   if (Buffer.byteLength(full) + MD.length <= NAME_MAX) return full;
   const room = NAME_MAX - MD.length - Buffer.byteLength(`${head} `);
   const rest = cutBytes(full.slice(head.length + 1), room).replace(/[ .]+$/, "");
   return `${head} ${rest}`;
+}
+
+/** `<repo>-<ref> <title>`, the ref of a part being `<n>.<k>`, so the name and the skip filter agree. */
+export function episodeTitle(repo: Repo, item: issues.Issue): string {
+  return titleUnder(`${repo.key}-${issues.refOf(item)}`, item);
 }
 
 export interface Commit { sha: string; subject: string; stat: string }
@@ -107,7 +118,7 @@ async function langfuseFor(runs: Entry[]): Promise<Langfuse> {
 const minutes = (e: Entry) => Math.max(0, Math.round((epoch(e.run.ended) - epoch(e.run.started)) / 60000)) || 0;
 
 export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
-  const id = `${repo.key}-${item.id}`;
+  const id = `${repo.key}-${issues.refOf(item)}`;
   const sources = [id, ...commits.map((c) => `commit:${c.sha.slice(0, 7)}`), ...runs.map((e) => `run:${e.id}`)];
   const goal = section(item.spec, "Goal") || item.spec.trim() || item.request.trim();
   const landed = commits.length ? commits.map((c) => `${c.sha.slice(0, 7)} ${c.subject}${c.stat ? `\n${c.stat}` : ""}`).join("\n") : "nothing landed";
@@ -144,12 +155,12 @@ export async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ ti
   const dir = mkdtempSync(join(tmpdir(), "aleph-episode-"));
   try {
     const title = episodeTitle(repo, item);
-    const runs = runsOf(repo, item.id);
+    const runs = runsOf(repo, item);
     const draft = join(dir, `${title}.md`);
     writeFileSync(draft, episodePage(repo, item, runs, commitsOf(repo, item), await langfuseFor(runs)));
     const env: Record<string, string | undefined> = { ...process.env };
     delete env.CLAUDE_CODE_SESSION_ID;
-    const p = Bun.spawnSync(["bun", VAULT_CLI, "write", draft, "--why", `episode of ${repo.key}-${item.id}`], { env, stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawnSync(["bun", VAULT_CLI, "write", draft, "--why", `episode of ${repo.key}-${issues.refOf(item)}`], { env, stdout: "pipe", stderr: "pipe" });
     if (p.exitCode !== 0) return { error: p.stderr.toString().trim() || `vault write exited ${p.exitCode}` };
     return { title };
   } catch (e: any) {
@@ -164,7 +175,7 @@ export async function writeEpisodes(repos: Repo[], cap = 10): Promise<{ written:
   const todo: { repo: Repo; item: issues.Issue; at: number }[] = [];
   for (const repo of repos) {
     for (const item of doneGoals(repo)) {
-      const last = Math.max(...runsOf(repo, item.id).map((e) => epoch(e.run.ended) || epoch(e.run.started)));
+      const last = Math.max(...runsOf(repo, item).map((e) => epoch(e.run.ended) || epoch(e.run.started)));
       todo.push({ repo, item, at: last });
     }
   }
@@ -173,7 +184,7 @@ export async function writeEpisodes(repos: Repo[], cap = 10): Promise<{ written:
   for (const { repo, item } of todo.slice(0, cap)) {
     const r = await writeEpisode(repo, item);
     if ("title" in r) written.push(r.title);
-    else failed.push(`${repo.key}-${item.id}: ${r.error}`);
+    else failed.push(`${repo.key}-${issues.refOf(item)}: ${r.error}`);
   }
   return { written, failed };
 }
