@@ -203,6 +203,28 @@ describe("GET /api/jobs/:name/diff", () => {
     expect(t).toContain("+two");
     expect(t).toContain("a/a.txt");
   });
+  test("a landed job's diff and stat come from its commit once the branch is gone", async () => {
+    const fac = join(base, "fac");
+    sh(fac, "git", "switch", "-qc", "tmp-land");
+    writeFileSync(join(fac, "b.txt"), "landed\n");
+    sh(fac, "git", "add", "."); sh(fac, "git", "commit", "-qm", "landed work");
+    const commit = sh(fac, "git", "rev-parse", "HEAD");
+    sh(fac, "git", "switch", "-q", "main");
+    sh(fac, "git", "branch", "-D", "tmp-land");
+    run("20261027-000050-a", { job: "fac-L", name: "fac-L", repo: "fac", branch: "factory/fac-L", condition: "landed", commit });
+    const t = await (await get("/api/jobs/fac-L/diff")).text();
+    expect(t).toContain("+landed");
+    expect(((await (await get("/api/jobs/fac-L")).json()) as any).stat).toContain("b.txt");
+  });
+  test("a dropped job's kept diff.patch is served when the branch is gone; none recorded says so", async () => {
+    run("20261027-000051-a", { job: "fac-K", name: "fac-K", repo: "fac", branch: "factory/fac-K", condition: "dropped" }, { "diff.patch": "+kept line\n", "diff.stat": " k.txt | 1 +\n" });
+    expect(await (await get("/api/jobs/fac-K/diff")).text()).toContain("+kept line");
+    expect(((await (await get("/api/jobs/fac-K")).json()) as any).stat).toContain("k.txt");
+    run("20261027-000052-a", { job: "fac-N", name: "fac-N", repo: "fac", branch: "factory/fac-N", condition: "dropped" });
+    const res = await get("/api/jobs/fac-N/diff");
+    expect(res.status).toBe(404);
+    expect(await res.text()).toContain("No diff was recorded");
+  });
   test("404 when the branch is gone, or the job unknown", async () => {
     expect((await get("/api/jobs/fac-2/diff?days=30")).status).toBe(404);
     expect((await get("/api/jobs/oth-1/diff")).status).toBe(404);

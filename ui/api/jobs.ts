@@ -1,5 +1,6 @@
 /** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
 import { git } from "../../jobs/lib/git.ts";
+import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { changedLinesOf } from "../../jobs/lib/factory-status.ts";
@@ -60,18 +61,6 @@ async function traceUrl(runs: Entry[]): Promise<string | undefined> {
 
 const find = (name: string, project: string | null): Entry[] | undefined => latestJob(name, project);
 
-/** The branch of a job, if it still exists in the repo, with the repo path and its merge base. */
-function branchRange(runs: Entry[]): { path: string; base: string; ref: string } | null {
-  const last = runs.at(-1)!.run;
-  const repo = last.repo ? loadRegistry()[last.repo] : undefined;
-  const branch = runs.findLast((e) => e.run.branch)?.run.branch;
-  if (!repo || !branch) return null;
-  const ref = `refs/heads/${branch}`;
-  if (!git(repo.path, "rev-parse", "--verify", "-q", ref).ok) return null;
-  const mb = git(repo.path, "merge-base", `origin/${repo.main}`, ref);
-  return mb.ok && mb.out ? { path: repo.path, base: mb.out.trim(), ref } : null;
-}
-
 export const routes: Routes = {
   "GET /api/jobs": async (_req, _p, url) => {
     const q = url.searchParams;
@@ -118,10 +107,9 @@ export const routes: Routes = {
     const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
     const shortstat = landedIn ? git(landedIn.path, "show", "--shortstat", "--format=", v.commit!).out : "";
     if (shortstat) detail.look = lookMinutes(changedLinesOf(shortstat), !!v.hidden);
-    // The branch's diff stat while it exists, else the stat the run kept.
-    const range = branchRange(runs);
-    const s = range && git(range.path, "diff", "--stat", range.base, range.ref);
-    if (s && s.ok && s.out) detail.stat = s.out;
+    // The job's diff stat (branch, landed commit, or the kept file), else the stat the run kept.
+    const jd = jobDiff(runs);
+    if (jd?.stat) detail.stat = jd.stat;
     else if (v.stat) detail.stat = v.stat;
     const trace = await traceUrl(runs);
     if (trace) detail.trace = trace;
@@ -130,10 +118,9 @@ export const routes: Routes = {
 
   "GET /api/jobs/:name/diff": (_req, params, url) => {
     const runs = find(params.name, url.searchParams.get("project"));
-    const range = runs && branchRange(runs);
-    if (!range) return Response.json({ error: "no branch for this job" }, { status: 404 });
-    const d = git(range.path, "diff", range.base, range.ref);
-    if (!d.ok) return Response.json({ error: d.out }, { status: 500 });
-    return new Response(d.out + "\n", { headers: { "content-type": "text/plain; charset=utf-8" } });
+    if (!runs) return Response.json({ error: "no such job" }, { status: 404 });
+    const d = jobDiff(runs);
+    if (!d) return Response.json({ error: NO_DIFF }, { status: 404 });
+    return new Response(d.diff, { headers: { "content-type": "text/plain; charset=utf-8" } });
   },
 };

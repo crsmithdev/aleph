@@ -173,7 +173,7 @@ if (typeof document !== "undefined") {
     b.disabled = true;
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.diff)}/diff`);
-      out.innerHTML = res.ok ? renderDiff(await res.text()) : esc(res.status === 404 ? "The branch is gone, so there is no diff to show." : `The diff failed to load (${res.status}).`);
+      out.innerHTML = res.ok ? renderDiff(await res.text()) : esc(res.status === 404 ? "No diff was recorded for this job." : `The diff failed to load (${res.status}).`);
       out.hidden = false;
       b.remove();
     } catch (err) {

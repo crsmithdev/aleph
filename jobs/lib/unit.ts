@@ -23,6 +23,7 @@ import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./accepta
 import { checksInSandbox, runChecks, stopFields, type ChecksStop } from "./checks.ts";
 import { dispatchDetached } from "./factory.ts";
 import { gates } from "./factory-status.ts";
+import { keepDiff } from "./jobdiff.ts";
 import { afterLand, bounceNote, isMergeBounce, land, mergePrompt, MERGE_MODEL, MERGE_SECONDS, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
@@ -484,6 +485,9 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
         appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
         return fail("infra", `fetch failed: ${fetched.out}`);
       }
+      // An ended job of this name is cleared below: its run folder keeps the diff first.
+      const old = allRuns().findLast((e) => e.id !== id && e.run.repo === repo.key && e.run.name === run.name && e.run.branch === branch);
+      if (old) keepDiff(repo, branch, old.folder);
       const add = addWorktree(repo.path, wt, branch, `origin/${repo.main}`);
       if (!add.ok) return fail("other", `worktree add failed: ${add.out}`);
     } finally {

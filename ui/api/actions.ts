@@ -6,6 +6,7 @@
  * an Origin, the server's own, so a web page in the browser cannot post here. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { askOf, isAwaiting, loadRegistry, onOf } from "../../jobs/lib/ledger.ts";
+import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { latestJob } from "../../jobs/lib/job.ts";
 import { runCli } from "../cli.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
@@ -23,19 +24,11 @@ function sameSite(req: Request): boolean {
   return origin === null || origin === new URL(req.url).origin;
 }
 
-const git = (cwd: string, ...args: string[]) => Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "pipe" });
-
 const diff: Handler = (_req, { name }) => {
-  const last = find(name);
-  if (!last) return text(`no job named ${name}`, 404);
-  const branch = last.run.branch;
-  const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
-  if (!branch || !repo || git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).exitCode !== 0) return text(`${name} has no branch`, 404);
-  const base = [`refs/remotes/origin/${repo.main}`, `refs/heads/${repo.main}`].find((r) => git(repo.path, "rev-parse", "--verify", "-q", r).exitCode === 0);
-  const mb = base && git(repo.path, "merge-base", base, `refs/heads/${branch}`);
-  if (!mb || mb.exitCode !== 0) return text(`${name} shares no history with ${repo.main}`, 404);
-  const d = git(repo.path, "diff", "--no-color", `${mb.stdout.toString().trim()}..refs/heads/${branch}`);
-  return d.exitCode === 0 ? text(d.stdout.toString(), 200) : text(d.stderr.toString(), 500);
+  const runs = latestJob(name);
+  if (!runs) return text(`no job named ${name}`, 404);
+  const d = jobDiff(runs);
+  return d ? text(d.diff, 200) : text(NO_DIFF, 404);
 };
 
 const action = (verb: "land" | "recheck" | "drop" | "checked"): Handler => async (req, { name }) => {

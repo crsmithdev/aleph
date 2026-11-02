@@ -12,6 +12,7 @@ import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loa
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { baselineChecks, git } from "./unit.ts";
+import { keepDiff } from "./jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "./landing.ts";
 import { fetchOrigin, jobCommit } from "./git.ts";
 import { itemOnMain } from "./status.ts";
@@ -317,7 +318,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
       Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`], { stdout: "ignore", stderr: "ignore" });
       if (existsSync(join(e.folder, CALL_FILE))) rmSync(join(e.folder, "review"), { recursive: true, force: true });
     }
-    if (repo) removeBranch(repo, last.run);
+    if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {
       if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
