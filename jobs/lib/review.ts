@@ -18,6 +18,7 @@ import { needsOf } from "./ask.ts";
 import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
 import { startUnit } from "./launch.ts";
 import { linkBins, runPath, stallSeconds, workerToken, writeHome } from "./sandbox.ts";
+import { jobSpec, runFile } from "./run-files.ts";
 
 /**
  * The reviewer's profile: it reads the run folder, writes only in review/ (its
@@ -80,7 +81,7 @@ function isUi(repo: Repo, run: Run): boolean {
 /** Whether a review process is alive for `folder`: its review.pid names a process whose command line holds the folder. */
 function reviewing(folder: string): boolean {
   try {
-    const pid = Number(readFileSync(join(folder, "review.pid"), "utf8").trim());
+    const pid = Number(readFileSync(runFile(folder, "review.pid"), "utf8").trim());
     if (pid === process.pid) return true;
     return Number.isInteger(pid) && pid > 0 && readFileSync(`/proc/${pid}/cmdline`, "utf8").includes(folder);
   } catch { return false; }
@@ -88,7 +89,7 @@ function reviewing(folder: string): boolean {
 
 /** Run the review of the run in `folder`, to the end. Records the verdict, or `error`, and never throws; refuses, with a thrown error, when one is already running. */
 export async function runReview(folder: string): Promise<void> {
-  const pidFile = join(folder, "review.pid");
+  const pidFile = runFile(folder, "review.pid");
   if (reviewing(folder)) throw new Error(`review is already running for ${folder}`);
   writeFileSync(pidFile, String(process.pid));
   try {
@@ -105,7 +106,7 @@ export async function runReview(folder: string): Promise<void> {
  */
 async function uiBrowser(folder: string, work: string, branch: string): Promise<void> {
   const out = join(folder, BROWSER);
-  const merged = join(folder, "review", "merged");
+  const merged = join(runFile(folder, "review"), "merged");
   const note = (msg: string) => writeFileSync(join(out, "report.md"), `# Browser\n\nERROR: ${msg.replace(/\s+/g, " ").slice(0, 400)}\n`);
   let server: Awaited<ReturnType<typeof startUiServer>> | null = null;
   try {
@@ -119,9 +120,9 @@ async function uiBrowser(folder: string, work: string, branch: string): Promise<
     const files = git(merged, "diff", "--name-only", "origin-main...HEAD").out.split("\n").filter(Boolean);
     try {
       // Not process.env: the real ALEPH_* stores and tokens stay out. The server runs on the made-up set of ui/fixtures/review.
-      const fx = fixtureEnv(merged, join(folder, "review", "fixture"));
+      const fx = fixtureEnv(merged, join(runFile(folder, "review"), "fixture"));
       if (typeof fx === "string") return note(fx);
-      server = await startUiServer(merged, join(out, "server.log"), { PATH: runPath(), HOME: join(folder, "review", "home"), ...fx });
+      server = await startUiServer(merged, join(out, "server.log"), { PATH: runPath(), HOME: join(runFile(folder, "review"), "home"), ...fx });
     } catch (e: any) {
       return note(String(e?.message ?? e));
     }
@@ -138,7 +139,7 @@ async function uiBrowser(folder: string, work: string, branch: string): Promise<
 async function review(folder: string): Promise<void> {
   const run = readRun(folder)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
-  const scratch = join(folder, "review");
+  const scratch = runFile(folder, "review");
   const md = join(folder, CALL_FILE);
   const fail = (reason: string) => {
     try {
@@ -162,12 +163,12 @@ async function review(folder: string): Promise<void> {
       if (cp.exitCode !== 0) return void fail(`node_modules copy failed: ${cp.stderr.toString().slice(0, 200)}`);
     }
     const ui = isUi(repo, run);
-    const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
+    const spec = jobSpec(folder, run);
     const text = RECIPE({
       name: run.name, branch: run.branch, main: repo.main, checks: repo.checks.map((c) => c.run),
       tsc: existsSync(join(work, "tsconfig.json")) && existsSync(join(work, "node_modules", "typescript")), ui, folder, spec,
     });
-    writeFileSync(join(folder, "review-prompt.md"), text);
+    writeFileSync(runFile(folder, "review-prompt.md"), text);
     // The reviewer's home is in the scratch folder, so its settings and git identity are writable there.
     // The reviewer's tmp/ sits in the run folder, as a worker's does in its own.
     const home = join(scratch, "home");
@@ -183,7 +184,7 @@ async function review(folder: string): Promise<void> {
     delete env.ANTHROPIC_API_KEY;
     const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
-    const log = join(folder, "review.log");
+    const log = runFile(folder, "review.log");
     const once = async (): Promise<string | null> => {
       const { outcome: o, cause } = await agentCall("browser reviewer", folder, undefined, argv, {
         ...REVIEW_SANDBOX, cwd: "review/work", env, stdin: text, stdout: log, stderr: log,
@@ -215,7 +216,7 @@ export function startReview(folder: string): boolean {
   writeFileSync(join(folder, CALL_FILE), "PENDING\n");
   try {
     // Its own transient unit: the run's unit stops its whole cgroup when the run ends.
-    const err = join(folder, "review.err");
+    const err = runFile(folder, "review.err");
     startUnit(["review", folder], { unit: `aleph-${basename(folder)}-review`, cwd: folder, output: { file: err },
       props: [`--property=StandardOutput=append:${err}`, `--property=StandardError=append:${err}`] });
   } catch (e: any) {

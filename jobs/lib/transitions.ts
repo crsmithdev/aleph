@@ -24,6 +24,7 @@ import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "./settings.ts";
+import { runFile } from "./run-files.ts";
 
 /** The message of a transition that refused or threw, or null when it went through: the factory's ports answer this. */
 export async function refusal(f: () => Promise<unknown>): Promise<string | null> {
@@ -78,7 +79,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     }
     const folder = join(runsDir(), id);
     mkdirSync(folder);
-    writeFileSync(join(folder, "command.txt"), quote(["aleph", ...command]) + "\n");
+    writeFileSync(runFile(folder, "command.txt"), quote(["aleph", ...command]) + "\n");
     prep(folder);
     // `made` orders the land queue: folder names sort by name within a second.
     writeRun(folder, { ...run, job: run.job ?? id, made: Date.now() } as Run);
@@ -163,7 +164,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
       condition: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), ...(a.merge ? { merge: true as const } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
-      if (!first) return writeFileSync(join(folder, "spec.md"), a.spec);
+      if (!first) return writeFileSync(runFile(folder, "spec.md"), a.spec);
       addNote(open!, a.spec);
     });
   } finally {
@@ -185,7 +186,7 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
     if (home?.env) process.env.ALEPH_RUN_ENV = home.env;
     return await dispatch({ kind: "plain", name, condition: "running", phase: "command", told: false, started: new Date().toISOString() }, name, a.cwd,
       o.command ?? ["run", name, "--", ...a.argv], o.output, (folder) => {
-        writeFileSync(join(folder, "command.txt"), quote(a.argv) + "\n");
+        writeFileSync(runFile(folder, "command.txt"), quote(a.argv) + "\n");
       });
   } finally {
     release!();
@@ -306,7 +307,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     // A held run's review is its own unit: stop it too, and take its scratch clone.
     for (const e of runs) {
       Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`], { stdout: "ignore", stderr: "ignore" });
-      if (existsSync(join(e.folder, CALL_FILE))) rmSync(join(e.folder, "review"), { recursive: true, force: true });
+      if (existsSync(join(e.folder, CALL_FILE))) rmSync(runFile(e.folder, "review"), { recursive: true, force: true });
     }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
     // Chris asked for the drop, so it is not news.

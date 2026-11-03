@@ -3,10 +3,10 @@
  * unit posts it from outside after the run, from the worker's stream-json.
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../hooks/lib/otlp.ts";
 import { onOf, type Run } from "./ledger.ts";
+import { runFile } from "./run-files.ts";
 
 export interface TraceInput {
   runId: string; run: Run; repoKey: string;
@@ -122,13 +122,13 @@ export async function postTrace(folder: string, runId: string, run: Run, repoKey
     if (!cfg) return;
     const spans = spansFor({
       runId, run, repoKey,
-      prompt: read(join(folder, "prompt.md")) ?? "", stream: read(join(folder, "output.log")) ?? "",
-      reviewPrompt: read(join(folder, "review-prompt.md")), reviewStream: read(join(folder, "review.log")),
+      prompt: read(runFile(folder, "prompt.md")) ?? "", stream: read(runFile(folder, "output.log")) ?? "",
+      reviewPrompt: read(runFile(folder, "review-prompt.md")), reviewStream: read(runFile(folder, "review.log")),
       startMs: Date.parse(run.started) || Date.now(), endMs: Date.parse(run.ended ?? "") || Date.now(),
     });
     const r = await postSpans(cfg, spans);
-    if (!r.ok) appendFileSync(join(folder, "trace.log"), `${new Date().toISOString()} langfuse post failed: ${r.status ?? ""} ${r.error ?? ""}\n`.replace(/\s+\n/, "\n"));
+    if (!r.ok) appendFileSync(runFile(folder, "trace.log"), `${new Date().toISOString()} langfuse post failed: ${r.status ?? ""} ${r.error ?? ""}\n`.replace(/\s+\n/, "\n"));
   } catch (e: any) {
-    try { appendFileSync(join(folder, "trace.log"), `${new Date().toISOString()} trace failed: ${e?.message ?? e}\n`); } catch {}
+    try { appendFileSync(runFile(folder, "trace.log"), `${new Date().toISOString()} trace failed: ${e?.message ?? e}\n`); } catch {}
   }
 }

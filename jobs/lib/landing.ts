@@ -6,7 +6,6 @@
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { closeAndFile } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
@@ -21,6 +20,7 @@ import { RELANDS, TODO_PATH } from "./continuation.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
 import { writeBaseline } from "./factory-status.ts";
+import { runFile } from "./run-files.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
 export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
@@ -134,7 +134,7 @@ function queuedLands(repo: Repo, id: string, run: Run, cap: number): Member[] {
     const agent = runs && agentOf(runs);
     if (!runs || !isOpen(runs) || !agent || !landTerms(agent.run)) continue;
     seen.add(e.run.job);
-    out.push({ id: e.id, folder: e.folder, run: e.run, log: (step, o = "") => appendFileSync(join(e.folder, "land.log"), `## ${step}\n${o ? o + "\n" : ""}\n`) });
+    out.push({ id: e.id, folder: e.folder, run: e.run, log: (step, o = "") => appendFileSync(runFile(e.folder, "land.log"), `## ${step}\n${o ? o + "\n" : ""}\n`) });
   }
   return out;
 }
@@ -335,7 +335,7 @@ async function settle(ctx: Attempt, items: Pending[], base: string, known: Check
  */
 export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPorts): Promise<Landing> {
   const main = repo.main;
-  const logFile = join(folder, "land.log");
+  const logFile = runFile(folder, "land.log");
   const log = (step: string, out = "") => appendFileSync(logFile, `## ${step}\n${out ? out + "\n" : ""}\n`);
   const logged = (name: string, r: { ok: boolean; out: string }) => { log(`${name}: ${r.ok ? "ok" : "failed"}`, r.out); return r; };
   const step = (name: string, ...args: string[]) => logged(name, git(repo.path, ...args));
@@ -349,7 +349,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
     phase("queued");
     releaseRepo = await landTurn(repo, id, run.made ?? 0);
     // A land run an earlier land took into its batch has its verdict in its folder.
-    const given = join(folder, "batch.json");
+    const given = runFile(folder, "batch.json");
     if (existsSync(given)) {
       const b = JSON.parse(readFileSync(given, "utf8"));
       if (b.checks) updateRun(folder, { checks: b.checks });
@@ -456,7 +456,7 @@ function conclude(leader: Member, done: Map<Member, Landing & { after?: () => vo
     o.after?.();
     if (m === leader) continue;
     const checks = checksOf.get(m);
-    writeFileSync(join(m.folder, "batch.json"), JSON.stringify({ verdict: o.outcome, code: o.code, ...(checks ? { checks } : {}) }));
+    writeFileSync(runFile(m.folder, "batch.json"), JSON.stringify({ verdict: o.outcome, code: o.code, ...(checks ? { checks } : {}) }));
   }
   const own = checksOf.get(leader);
   if (own) updateRun(leader.folder, { checks: own });

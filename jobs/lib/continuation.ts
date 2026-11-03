@@ -20,6 +20,7 @@ import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
 import { askOf, isAgentRun, isBuild, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
+import { jobSpec, runFile } from "./run-files.ts";
 
 // ---------------------------------------------------------------------------
 // The worker brief
@@ -66,13 +67,12 @@ Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUN
 
 /** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, folder: string, run: Run, repo: Repo): string {
-  const first = join(folder, "..", run.job);
   if (run.merge) {
     const land = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land" && e.id !== id).at(-1)?.run;
     const n = onOf(run);
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
-  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run, repo.main)), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
+  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run, repo.main)), `## Spec\n\n${jobSpec(folder, run)}`];
   const runs = jobById(run.job) ?? [];
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
@@ -198,7 +198,7 @@ export function nextBrief(folder: string, run: Run): { note: string; merge: bool
 
 /** The last 80 lines of the named check's section of the run's checks.log. */
 function checkLog(folder: string, name: string): string {
-  const file = join(folder, "checks.log");
+  const file = runFile(folder, "checks.log");
   if (!existsSync(file)) return "";
   const section = readFileSync(file, "utf8").split(/^## /m).findLast((x) => x.startsWith(`${name}: exit`)) ?? "";
   return section.split("\n").slice(1).join("\n").trimEnd().split("\n").slice(-80).join("\n");
@@ -206,7 +206,7 @@ function checkLog(folder: string, name: string): string {
 
 /** The failing tests of a run's hidden.log, each with the lines of its failure that precede its `(fail)` line. */
 function hiddenFailures(folder: string): { name: string; failure: string }[] {
-  const file = join(folder, "hidden.log");
+  const file = runFile(folder, "hidden.log");
   const lines = (existsSync(file) ? readFileSync(file, "utf8") : "").split("\n");
   const seen = new Map<string, string>();
   let block: string[] = [];
@@ -301,7 +301,7 @@ export const questionOf = (result: string): string | undefined =>
 
 /** The case of the safe default action taken on the run, or "" when none was. */
 export const rescued = (e: Entry): string => tailOf(e, "rescued", 1);
-export const markRescued = (e: Entry, key: string): void => writeFileSync(join(e.folder, "rescued"), key + "\n");
+export const markRescued = (e: Entry, key: string): void => writeFileSync(runFile(e.folder, "rescued"), key + "\n");
 
 /**
  * The question of a run that ended with no commit and asked about the spec, or null when it did not ask.

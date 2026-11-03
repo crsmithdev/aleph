@@ -10,14 +10,13 @@ import { needsOf } from "./ask.ts";
 import { tagged, allJobs, askOf, isBuild, isOpen, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 import { isLost } from "./process.ts";
 import { causeOf } from "./outcome.ts";
+import { runFile, type RunFile } from "./run-files.ts";
 
 export { allJobs, isOpen };
 
 /** A job: its runs, oldest first. */
 export type Job = Entry[];
 
-/** The files a run folder may hold that a reader of the job asks for. */
-export type RunFile = "spec.md" | "command.txt" | "result.md" | "review.md" | "call.md" | "checks.log" | "land.log" | "stderr.log" | "asked" | "asked-spec" | "rescued" | "batch.json";
 
 /** A facts run belongs to the landed job but is not its state: names and states look past it. */
 const notFacts = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts") ?? j.at(-1)!;
@@ -50,10 +49,10 @@ export const stateOf = (j: Job): State => lastReal(j).run.condition;
 
 /** A file in a run's folder, or undefined when it is not there. */
 export function readFile(e: Entry, file: RunFile): string | undefined {
-  try { return readFileSync(join(e.folder, file), "utf8"); } catch { return undefined; }
+  try { return readFileSync(runFile(e.folder, file), "utf8"); } catch { return undefined; }
 }
 
-export const hasFile = (e: Entry, file: RunFile): boolean => existsSync(join(e.folder, file));
+export const hasFile = (e: Entry, file: RunFile): boolean => existsSync(runFile(e.folder, file));
 
 /** The job's latest run with `file` in its folder, of those `only` keeps, and the file's text. */
 export function latestFile(j: Job, file: RunFile, only: (e: Entry) => boolean = () => true): { entry: Entry; text: string } | undefined {
@@ -114,8 +113,8 @@ export interface JobView {
 /** The reviewer checked sealed scenarios: a run folder holds `review.md` and a `review-prompt.md` with a `## Sealed scenarios` section. */
 const scenariosChecked = (j: Job): boolean =>
   j.some((e) => {
-    if (!existsSync(join(e.folder, "review.md"))) return false;
-    try { return readFileSync(join(e.folder, "review-prompt.md"), "utf8").includes("## Sealed scenarios"); } catch { return false; }
+    if (!existsSync(runFile(e.folder, "review.md"))) return false;
+    try { return readFileSync(runFile(e.folder, "review-prompt.md"), "utf8").includes("## Sealed scenarios"); } catch { return false; }
   });
 
 /** The job's goal was checked in secret: a hidden check with a total ran, or the reviewer checked sealed scenarios. */

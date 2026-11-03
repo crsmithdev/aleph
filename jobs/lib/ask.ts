@@ -20,6 +20,7 @@ import { missingSections, specVersion } from "./goal-spec.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { awaitsChris, parentOf, partsOf, writeList, type Place } from "../../todo/lib/store.ts";
 import type { Entry } from "./ledger.ts";
+import { runFile, type RunFile } from "./run-files.ts";
 
 export interface Ask {
   kind: "input" | "approval";
@@ -298,24 +299,24 @@ export function askChris(place: Place, id: number | string, ask: Ask, said: stri
  * Returns why the issue got no Ask, or null.
  */
 export function askFromRun(e: Entry, place: Place, issue: number | string | undefined, ask: Ask, said: string, spec?: issues.Issue): string | null {
-  if (spec) writeFileSync(join(e.folder, "asked-spec"), specVersion(spec) + "\n");
+  if (spec) writeFileSync(runFile(e.folder, "asked-spec"), specVersion(spec) + "\n");
   markAsked(e, said);
   return issue === undefined ? "no issue" : askChris(place, issue, ask, said);
 }
 
 /** The factory set an Ask on the run's issue: the run no longer holds the factory. */
-export const asked = (e: Entry): boolean => existsSync(join(e.folder, "asked"));
-export const markAsked = (e: Entry, question: string): void => writeFileSync(join(e.folder, "asked"), question + "\n");
+export const asked = (e: Entry): boolean => existsSync(runFile(e.folder, "asked"));
+export const markAsked = (e: Entry, question: string): void => writeFileSync(runFile(e.folder, "asked"), question + "\n");
 
-const runFile = (e: Entry, name: string): string | undefined => {
-  try { return readFileSync(join(e.folder, name), "utf8"); } catch { return undefined; }
+const readRunFile = (e: Entry, name: RunFile): string | undefined => {
+  try { return readFileSync(runFile(e.folder, name), "utf8"); } catch { return undefined; }
 };
 
 /** A run that asked about its issue's spec and waits for a spec edit: the spec version it asked about and its question; else null. */
 export function waitsForSpecEdit(e: Entry): { version: string; question: string } | null {
-  const version = runFile(e, "asked-spec");
+  const version = readRunFile(e, "asked-spec");
   if (version === undefined || !asked(e)) return null;
-  return { version, question: (runFile(e, "asked") ?? "").trim() };
+  return { version, question: (readRunFile(e, "asked") ?? "").trim() };
 }
 
 export const PLAN_REST = "Plan the missing part";

@@ -12,6 +12,7 @@ import { outcome, replyOf, type Outcome } from "./gate.ts";
 import { sandboxed, stallReason, type Step } from "./sandbox.ts";
 import { allRuns, lock, readRun, runsDir, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
 import { roleCmd, roleSeconds } from "./settings.ts";
+import { runFile } from "./run-files.ts";
 
 export interface Call {
   role: string;
@@ -75,13 +76,13 @@ export function openRun(o: Opening): AgentRun {
     try { mkdirSync(path); folder = path; } catch (e: any) { if (e.code !== "EEXIST") throw e; }
   }
   writeRun(folder, { kind: o.role, job: o.job ?? folder.split("/").at(-1)!, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now() });
-  writeFileSync(join(folder, "command.txt"), `${o.command}\n`);
+  writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
   return {
     folder,
     async ask(input) {
-      writeFileSync(join(folder, "prompt.md"), input);
+      writeFileSync(runFile(folder, "prompt.md"), input);
       const r = await spawn(o, input);
-      writeFileSync(join(folder, "output.log"), r.output);
+      writeFileSync(runFile(folder, "output.log"), r.output);
       if (r.cost !== undefined) updateRun(folder, { cost: r.cost });
       if (r.failure) throw new Error(r.failure);
       return r.text;

@@ -34,6 +34,7 @@ import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
 import { FACTS_REF, onMain, writeFacts } from "./status.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile, workerCmd } from "./settings.ts";
+import { jobSpec, jobSpecFile, runFile } from "./run-files.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -106,7 +107,7 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
 /** The land's checks: in the sandbox for a sandbox repo, else in the worktree of a run that still has one. */
 function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, string | undefined>): LandPorts {
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const logFile = join(folder, "checks.log");
+  const logFile = runFile(folder, "checks.log");
   return {
     pull: (room) => pullWaiting(repo, run, room),
     check: async (commit, runs, changed, only) => {
@@ -161,12 +162,12 @@ type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" 
  * backs it; else the reason, which also goes into checks.log for the next worker's fix note.
  */
 export function docClaims(folder: string, result: string): string | null {
-  const log = join(folder, "output.log");
+  const log = runFile(folder, "output.log");
   if (!existsSync(log)) return null;
   const entries = readFileSync(log, "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
   const problems = docClaimProblems(entries, result);
   if (!problems.length) return null;
-  appendFileSync(join(folder, "checks.log"), `## doc-claims: exit 1\nThe final message says a doc matches the code, and the transcript does not back it:\n${problems.map((p) => `- ${p}`).join("\n")}\nRun a command after the last edit that shows both the doc text and the code values, or drop the claim.\n\n`);
+  appendFileSync(runFile(folder, "checks.log"), `## doc-claims: exit 1\nThe final message says a doc matches the code, and the transcript does not back it:\n${problems.map((p) => `- ${p}`).join("\n")}\nRun a command after the last edit that shows both the doc text and the code values, or drop the claim.\n\n`);
   return `doc claims: ${problems.join("; ")}`;
 }
 
@@ -203,7 +204,7 @@ export async function unit(folder: string): Promise<void> {
   let code = 0;
   try {
     if (run.kind === "plain") {
-      const r = await exec(["bash", "-c", readFileSync(join(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: join(folder, "output.log") });
+      const r = await exec(["bash", "-c", readFileSync(runFile(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: runFile(folder, "output.log") });
       code = r.code;
       outcome = code === 0 ? { condition: "done" } : { condition: "failed", cause: "other", reason: `exited ${code}` };
     } else if (run.kind === "land") {
@@ -235,7 +236,7 @@ export async function unit(folder: string): Promise<void> {
 
 /** A run ended, so a slot may be free: `aleph dispatch` starts the ready goals. Its output goes to dispatch.log. */
 async function dispatchFree(folder: string): Promise<void> {
-  await runLogged(["dispatch"], join(folder, "dispatch.log"));
+  await runLogged(["dispatch"], runFile(folder, "dispatch.log"));
 }
 
 /** The worker's time limit: a merge run has a short one. */
@@ -244,7 +245,7 @@ const workSeconds = (run: Run): number => (run.merge ? MERGE_SECONDS : jobSecond
 /** Start the next run as `aleph land` or `aleph job` would, in-process. What it prints and its refusal go to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   if (gates({ only: ["pause"] })) {
-    appendFileSync(join(folder, "next.log"), `paused: no ${next} started\n`);
+    appendFileSync(runFile(folder, "next.log"), `paused: no ${next} started\n`);
     updateRun(folder, { next: undefined });
     return;
   }
@@ -252,19 +253,19 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const there = dropped ? null : onMain(repo, { item: onOf(run), fetch: onOf(run) !== undefined })?.commit;
   if (dropped || there) {
-    appendFileSync(join(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
+    appendFileSync(runFile(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
     updateRun(folder, { next: undefined });
     return;
   }
   const h = next === "land" ? gates({ only: ["hold"], except: run.job }) : null;
   if (h) {
-    appendFileSync(join(folder, "next.log"), `held: ${h.why}\n`);
+    appendFileSync(runFile(folder, "next.log"), `held: ${h.why}\n`);
     updateRun(folder, { next: undefined });
     return;
   }
   const back = nextBrief(folder, run);
   const merge = next === "worker" && back.merge;
-  const log = join(folder, "next.log");
+  const log = runFile(folder, "next.log");
   try {
     const s = next === "land"
       ? await startLand(run.name, {}, { output: { file: log } })
@@ -293,7 +294,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     try {
       const fetched = fetchOrigin(repo.path);
       if (!fetched.ok) {
-        appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
+        appendFileSync(runFile(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
         return fail("infra", `fetch failed: ${fetched.out}`);
       }
       // An ended job of this name is cleared below: its run folder keeps the diff first.
@@ -310,8 +311,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (!existsSync(marker)) {
     phase("setup");
     for (const cmd of repo.setup) {
-      appendFileSync(join(folder, "setup.log"), `## ${cmd}\n`);
-      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: join(folder, "setup.log"), limit: checkSeconds() });
+      appendFileSync(runFile(folder, "setup.log"), `## ${cmd}\n`);
+      const r = await exec(["bash", "-c", cmd], { cwd: wt, env: checkEnv, out: runFile(folder, "setup.log"), limit: checkSeconds() });
       if (r.timedOut) return fail("stalled", `timed out: setup ${cmd}`);
       if (r.code !== 0) return fail("other", `setup failed: ${cmd}`);
     }
@@ -319,7 +320,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
 
   // The worker cannot push to github or reach gh; see "No push, no gh" in the spec.
-  const ghDir = join(folder, "gh");
+  const ghDir = runFile(folder, "gh");
   mkdirSync(ghDir, { recursive: true });
   const workerEnv = {
     ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
@@ -329,11 +330,11 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : [])];
   const text = brief(id, folder, run, repo);
-  writeFileSync(join(folder, "prompt.md"), text);
+  writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
-  const w = await exec(argv, { cwd: wt, env: workerEnv, out: join(folder, "output.log"), limit: workSeconds(run), stdin: text });
-  const result = resultText(readFileSync(join(folder, "output.log"), "utf8"));
-  writeFileSync(join(folder, "result.md"), result);
+  const w = await exec(argv, { cwd: wt, env: workerEnv, out: runFile(folder, "output.log"), limit: workSeconds(run), stdin: text });
+  const result = resultText(readFileSync(runFile(folder, "output.log"), "utf8"));
+  writeFileSync(runFile(folder, "result.md"), result);
 
   // The state rule: the first match wins.
   if (w.timedOut) return fail("stalled", "timed out: worker");
@@ -344,7 +345,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (dirty) return fail("other", `uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
   if (!refetched.ok) {
-    appendFileSync(join(folder, "setup.log"), `## fetch: failed\n${refetched.out}\n`);
+    appendFileSync(runFile(folder, "setup.log"), `## fetch: failed\n${refetched.out}\n`);
     return fail("infra", `fetch failed: ${refetched.out}`);
   }
   const base = git(wt, "merge-base", `origin/${repo.main}`, "HEAD").out;
@@ -384,7 +385,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (!b.ok) return stuck("infra", `bundle failed: ${b.out}`);
     const goalId = onOf(run);
     const text = brief(id, folder, run, repo);
-    writeFileSync(join(folder, "prompt.md"), text);
+    writeFileSync(runFile(folder, "prompt.md"), text);
     let authorCost: number | undefined;
     if (repo.author && !prev && goalId !== undefined) {
       phase("scenarios");
@@ -412,14 +413,14 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       w = await agentCall("worker", dir, bundle, argv, {
         read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
         env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-        stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: workSeconds(run),
+        stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"), limit: workSeconds(run),
         stall: stallSeconds(),
         onSpawn: (p) => { child = p; },
       });
     } finally { await shots.stop(); }
     child = null;
     const o = w.outcome;
-    writeFileSync(join(folder, "result.md"), o.result);
+    writeFileSync(runFile(folder, "result.md"), o.result);
     const spent = (o.cost ?? 0) + (authorCost ?? 0);
     const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
@@ -429,7 +430,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     // The worker's processes are gone with its sandbox. Only this step reads work/.
     phase("bundle");
     const out = await sandboxed(dir, `git bundle create -q ../out/out.bundle ${q(`refs/heads/${branch}`)}`, {
-      read: ["work"], write: ["out"], cwd: "work", stdout: join(folder, "stderr.log"), stderr: join(folder, "stderr.log"),
+      read: ["work"], write: ["out"], cwd: "work", stdout: runFile(folder, "stderr.log"), stderr: runFile(folder, "stderr.log"),
     });
     if (out.code !== 0) return stuck("other", `no branch ${branch} to hand back`, facts);
     // The one operation on the worker's data: a fetch of its branch from the bundle.
@@ -511,7 +512,7 @@ export async function heldAndReview(id: string, folder: string, run: Run, repo: 
  * Returns the reason of the first that fails twice, or null. A sandbox fault is not a failure.
  */
 async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: (p: string) => void): Promise<string | null> {
-  const specFile = join(folder, "..", run.job, "spec.md");
+  const specFile = jobSpecFile(folder, run);
   if (!existsSync(specFile)) return null;
   const ran = new Set((readRun(folder)?.checks ?? []).map((c) => c.name));
   const done = new Set(repo.checks.filter((c) => ran.has(c.name)).map((c) => c.run.trim()));
@@ -525,7 +526,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
     let second = false;
     if (r.code !== 0) { second = true; r = await runner(repo, tip, command, hidden); if (r.infra) continue; }
     const out = `## oracle: exit ${r.code}${second ? " (second run)" : ""}\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`;
-    appendFileSync(join(folder, "checks.log"), out);
+    appendFileSync(runFile(folder, "checks.log"), out);
     if (r.code !== 0) return `oracle failed: ${command}`;
   }
   return null;
@@ -542,7 +543,7 @@ export async function reviewBack(folder: string): Promise<void> {
   const run = readRun(folder);
   const r2 = readCall(folder);
   if (!run || !isAgentRun(run.kind) || !isAwaiting(run.condition)) return;
-  if (r2?.call === "land" && needsOf(askOf(run)) === "held" && existsSync(join(folder, "review.md")) && reviewVerdict(readFileSync(join(folder, "review.md"), "utf8"))?.pass) {
+  if (r2?.call === "land" && needsOf(askOf(run)) === "held" && existsSync(runFile(folder, "review.md")) && reviewVerdict(readFileSync(runFile(folder, "review.md"), "utf8"))?.pass) {
     updateRun(folder, { condition: "passed", ask: undefined, reason: undefined, cause: undefined });
     dispatchDetached();
     return;
@@ -648,7 +649,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
   const rdir = makeRunFolder(`${id}-review`);
   try {
     copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
-    const spec = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
+    const spec = jobSpec(folder, run);
     const whole = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
     const max = reviewDiffMax();
     const diff = whole.length <= max ? whole
@@ -657,7 +658,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     let scenarios = "";
     try { scenarios = goal === undefined ? "" : readHidden(repo, goal)[SCENARIOS] ?? ""; } catch { return { reason: "reviewer: no verdict (the sealed scenarios are unreadable)", none: true }; }
     const text = reviewPrompt(run.name, spec, diff, findings, scenarios);
-    writeFileSync(join(folder, "review-prompt.md"), text);
+    writeFileSync(runFile(folder, "review-prompt.md"), text);
     const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const bundle = {
@@ -668,16 +669,16 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
         ...(scenarios ? [`{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`] : []),
       ],
     };
-    const log = join(folder, "review.log");
+    const log = runFile(folder, "review.log");
     const w = await agentCall("scenario reviewer", rdir, bundle, argv, {
       read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
       env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-      stdout: log, stderr: join(folder, "review.err"), limit: reviewSeconds(), stall: stallSeconds(),
+      stdout: log, stderr: runFile(folder, "review.err"), limit: reviewSeconds(), stall: stallSeconds(),
       onSpawn: (p) => { child = p; },
     });
     child = null;
     const o = w.outcome;
-    writeFileSync(join(folder, "review.md"), o.result);
+    writeFileSync(runFile(folder, "review.md"), o.result);
     const cost = o.cost;
     const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
     if (w.cause) return none(w.cause.reason);

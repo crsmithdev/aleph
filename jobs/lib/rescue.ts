@@ -10,7 +10,6 @@
  * the goal; a land lands again. None of them uses up a rerun.
  */
 import { readFileSync, rmSync, statSync } from "node:fs";
-import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
@@ -29,6 +28,7 @@ import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
 import { onMain } from "./status.ts";
 import { rescueWaitMs } from "./settings.ts";
+import { runFile } from "./run-files.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
 export interface Rescue {
@@ -81,7 +81,7 @@ const killedReviews = (): string[] => {
     const last = lastReal(j);
     const r = last.run;
     if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.condition) || !["held", "review"].includes(needsOf(runAskOf(r)) ?? "")) continue;
-    const call = join(last.folder, "call.md");
+    const call = runFile(last.folder, "call.md");
     try {
       if (readFileSync(call, "utf8").trim() === "PENDING" && statSync(call).mtimeMs < booted) out.push(last.folder);
     } catch { /* no call.md */ }
@@ -110,7 +110,7 @@ export const endKilledFacts = (): void => {
 function restartReviews(act: Rescue): void {
   for (const folder of killedReviews()) {
     try {
-      rmSync(join(folder, "call.md"), { force: true });
+      rmSync(runFile(folder, "call.md"), { force: true });
       factoryLog(`${folder}: a host restart killed its review; starting it again`);
       (act.review ?? startReview)(folder);
     } catch (e: any) {
