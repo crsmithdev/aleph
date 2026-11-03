@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { setPaused } from "./factory.ts";
 import { saveProbe } from "./factory-status.ts";
 import { gates, health, hold } from "./factory-status.ts";
 import { waitingToLand } from "./landing.ts";
-import { ctx, setup, teardown } from "./factory.helpers.ts";
+import type { Run } from "./ledger.ts";
+import { startKept } from "./unit.ts";
+import { ctx, mk, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -49,4 +52,16 @@ test("after a land that failed 'job lock busy' the passed agent run is waiting t
   agent.run.land = true;
   expect(waitingToLand([[agent, entry("land", "failed", "job lock busy")]])).toEqual(["n1"]);
   expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
+});
+
+test("a next step the pause kept does not hold the factory, and the first dispatch after the resume starts it once", async () => {
+  const kept = mk("kept-1", "build", "failed", { failed: "test", next: "worker" }, { "paused-next": "worker\n" });
+  mk("history-2", "build", "failed", { failed: "test", next: "worker" });
+  expect(hold()).toBeNull();
+  const go: string[] = [];
+  const step = async (_folder: string, run: Run, next: NonNullable<Run["next"]>) => { go.push(`${run.name} ${next}`); };
+  expect(await startKept(step)).toEqual(["kept-1"]);
+  expect(go).toEqual(["kept-1 worker"]);
+  expect(existsSync(join(kept.folder, "paused-next"))).toBe(false);
+  expect(await startKept(step)).toEqual([]);
 });

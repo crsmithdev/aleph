@@ -21,8 +21,9 @@ describe("a factory run", () => {
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("paused");
     const r = await fjob("fpaused", "commit fpaused.txt", {}, { land: true });
     expect(state(r.json.run).condition).toBe("passed");
-    expect(state(r.json.run).next).toBeUndefined();
+    expect(state(r.json.run).next).toBe("land");
     expect(file(r.json.run, "next.log")).toContain("paused");
+    expect(file(r.json.run, "paused-next")).toBe("land\n");
     const l = await land("fpaused");
     expect(state(l.json.run).condition).toBe("landed");
     expect((await aleph(["resume"])).json).toEqual({ paused: false });

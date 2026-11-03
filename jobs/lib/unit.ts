@@ -4,7 +4,7 @@
  * command. Both end with state.json, then `exit`, then the news.
  */
 import { SCENARIOS, seal } from "./author.ts";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
@@ -17,7 +17,7 @@ import { afterReview, awaiting, workerVerdict, type Outcome, type VerdictPorts }
 import { tagged, isAgentRun, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
-import { allJobs, jobById, openJob } from "./job.ts";
+import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallSeconds, workerToken } from "./sandbox.ts";
@@ -236,11 +236,36 @@ async function dispatchFree(folder: string): Promise<void> {
 /** The worker's time limit: a merge run has a short one. */
 const workSeconds = (run: Run): number => (run.merge ? MERGE_SECONDS : jobSeconds());
 
+/**
+ * The file in a run folder that marks a next step the pause kept: the run keeps `next`, so it does not show as stuck,
+ * and the first dispatch after the resume starts the step (`startKept`). A `next` without this file is history.
+ */
+const PAUSED_NEXT = "paused-next";
+
+/**
+ * Start the kept step of each open job whose last real run has the `paused-next` file, and remove the file first.
+ * The removal is the claim: of two dispatches at once, only the one whose removal succeeds starts the step.
+ * Returns the names of the jobs it started a step for.
+ */
+export async function startKept(go: typeof start = start): Promise<string[]> {
+  const started: string[] = [];
+  for (const j of allJobs()) {
+    if (!isOpen(j)) continue;
+    const { folder, run } = lastReal(j);
+    const mark = runFile(folder, PAUSED_NEXT);
+    if (!run.next || !existsSync(mark)) continue;
+    try { rmSync(mark); } catch { continue; }
+    await go(folder, run, run.next);
+    started.push(run.name);
+  }
+  return started;
+}
+
 /** Start the next run as `aleph land` or `aleph job` would, in-process. What it prints and its refusal go to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
   if (gates({ only: ["pause"] })) {
-    appendFileSync(runFile(folder, "next.log"), `paused: no ${next} started\n`);
-    updateRun(folder, { next: undefined });
+    appendFileSync(runFile(folder, "next.log"), `paused: no ${next} started; the first dispatch after the resume starts it\n`);
+    writeFileSync(runFile(folder, PAUSED_NEXT), `${next}\n`);
     return;
   }
   const dropped = (jobById(run.job) ?? []).some((e) => e.run.condition === "dropped");

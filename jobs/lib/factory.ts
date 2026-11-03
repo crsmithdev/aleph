@@ -31,6 +31,7 @@ import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
 import { baselineChecks, runOnCommit, type ChecksStop, type Runner } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
+import { startKept } from "./unit.ts";
 import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
 import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
@@ -107,7 +108,8 @@ type Land = (name: string) => Promise<string | null>;
  * no open job, while the factory is not paused and the other gates allow. It
  * runs when a run ends, when a goal is added or edited, and from the tick as a
  * fallback. Each start holds a lock on its goal and re-reads the jobs under it,
- * so two dispatches at once start a goal once. `start` dispatches the run; it
+ * so two dispatches at once start a goal once. Before the rescue of stuck runs, it starts the
+ * next steps that a pause kept (`startKept`). `start` dispatches the run; it
  * is `aleph job`, in-process (transitions.ts). With `rate`, a large goal's
  * first run is a planner run on its issue instead (plan.ts). It starts goals
  * only: an issue is closed as done once its goals are all done (`closeIssues`).
@@ -121,6 +123,8 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
   }
+  const kept = await startKept();
+  if (kept.length) factoryLog(`started the steps the pause kept: ${kept.join(", ")}`);
   if (rescue) await rescueStuck(rescue, land, checks && ((repo) => baseline(repo, checks)));
   const held = gates({ only: ["hold"] });
   if (held) {
