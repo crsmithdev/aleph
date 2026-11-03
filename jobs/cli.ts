@@ -21,6 +21,7 @@ import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
 import { ciStep } from "./lib/ci.ts";
 import { behind, correctionsStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
+import { runSpecCheck } from "./lib/spec-check.ts";
 import { smokeFile, factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
 import { factoryLog } from "./lib/layout.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions.ts";
@@ -320,6 +321,13 @@ async function planCmd(): Promise<void> {
   out(await planNow(repo, ref.id));
 }
 
+/** `aleph spec-check <repo>-<ref>`: the detached spec check the dispatch starts for a goal; it ends with a dispatch. */
+async function specCheckCmd(): Promise<void> {
+  const ref = issues.parseGoalRef(rest[0] ?? "") ?? refuse("usage: aleph spec-check <repo>-<ref> (a goal)");
+  const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
+  out(await runSpecCheck(repo, ref.id));
+}
+
 /** `aleph dispatch`: start every ready goal up to the live cap. A run's end and `aleph issue` call it. */
 async function dispatchCmd(): Promise<void> {
   out(await runDispatch());
@@ -475,6 +483,7 @@ try {
     case "dispatch": await dispatchCmd(); break;
     case "triage": await triageCmd(); break;
     case "plan": await planCmd(); break;
+    case "spec-check": await specCheckCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;

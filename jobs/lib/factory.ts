@@ -30,7 +30,8 @@ import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
 import { baselineChecks } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
-import { dispatchDetached, planDetached } from "./launch.ts";
+import { dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
+import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
@@ -115,8 +116,10 @@ type Land = (name: string) => Promise<string | null>;
  * first run is a planner run on its issue instead (plan.ts). It starts goals
  * only: an issue is closed as done once its goals are all done (`closeIssues`).
  * `plan` starts an issue's planner detached; the dispatch does not wait for it.
+ * `specCheck` starts a goal's spec check detached (spec-check.ts), for a repo with `author` set: a goal
+ * starts only once its spec version has a recorded verdict of pass or error.
  */
-export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -178,13 +181,13 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
     const release = await lock(`goal-${name}`);
-    if (!release) { skipped.push(`${name}: another dispatch is starting it`); continue; }
+    if (!release) { recordHold(name, "locked", "another dispatch is starting it"); skipped.push(`${name}: another dispatch is starting it`); continue; }
     try {
       const jobs = allJobs();
       const open = openJob(name, null, jobs);
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : goal(repo, ref);
-      if (!item) { skipped.push(`${name}: not a goal`); continue; }
+      if (!item) { recordHold(name, "not-a-goal", "not a goal"); skipped.push(`${name}: not a goal`); continue; }
       const d = goalDecision({
         ...goalFacts(repo, item, jobs), done, red,
         // A plan job runs detached: the goal gets no second planner and no worker while it does.
@@ -195,7 +198,12 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       if (d.kind !== "ready" && d.kind !== "no-commit" && d.kind !== "run-cap") { recordHold(name, d.kind, d.why); skipped.push(`${name}: ${d.why}`); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
-      if (!latest || issues.status(latest) !== "open") { skipped.push(`${name}: the item is ${latest ? (issues.status(latest) === "parked" ? "parked" : issues.status(latest)) : "gone"}`); continue; }
+      if (!latest || issues.status(latest) !== "open") {
+        const why = `the item is ${latest ? (issues.status(latest) === "parked" ? "parked" : issues.status(latest)) : "gone"}`;
+        recordHold(name, "closed", why);
+        skipped.push(`${name}: ${why}`);
+        continue;
+      }
       if (d.kind === "no-commit") {
         recordHold(name, d.kind, d.why);
         writeStreakMark(name);
@@ -214,11 +222,25 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         skipped.push(`${name}: ${d.why}`);
         continue;
       }
+      // The spec check runs in a process of its own (it clones the repo and may take 900 s); the dispatch reads its verdict.
+      // A pass or an error starts the goal. A hold sets the Ask, so the goal leaves the list until Chris answers; a hold with
+      // no Ask left is one Chris answered with a rerun and no edit, and it starts, as a checked version is not checked again.
+      if (repo.author && !isResearch(latest)) {
+        const running = await specChecking(name);
+        const v = running ? null : recordedVerdict(latest);
+        if (!v) {
+          if (!running) { markLaunched(name); specCheck(repo, issues.refOf(latest)); }
+          recordHold(name, "spec-check", "spec check running");
+          skipped.push(`${name}: spec check running`);
+          continue;
+        }
+        if (v.verdict === "hold" && askOf(latest)) { recordHold(name, "spec-check", v.problems); skipped.push(`${name}: spec check held`); continue; }
+      }
       const { spec, rerun } = goalBrief(item, name, jobs);
       let tier: Tier | null | undefined;
       if (rate && !isResearch(item)) {
         const p = await needsPlan(repo, item, spec, rate);
-        if (paused()) { skipped.push(`${name}: paused`); continue; }
+        if (paused()) { recordHold(name, "paused", "paused"); skipped.push(`${name}: paused`); continue; }
         if ("plan" in p) { plan(repo, item.id); planned.push(name); continue; }
         tier = p.tier;
       }

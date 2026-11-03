@@ -121,55 +121,33 @@ describe("a factory run's checks", () => {
         expect(existsSync(join(base, "author-d.in"))).toBe(false);
       }, 60_000);
 
-      test("a hold drops the run with no worker, asks, and a rerun after a spec edit checks again", async () => {
+      // The dispatch runs the spec check (factory-dispatch.test.ts); a job started by hand gets none.
+      test("a job started by hand with --on runs no spec check", async () => {
+        const id = goalWith("hand goal");
+        const r = await fjob("spec1", "commit spec1.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("h", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("h", "VERDICT: hold vague") }, ["--on", String(id)]);
+        expect(state(r.json.run).condition).toBe("passed");
+        expect(calls("h")).toBe(0);
+        expect(await notes(id)).not.toContain("spec check:");
+      }, 60_000);
+
+      test("aleph spec-check: a hold asks and is noted, and the same version is not checked again", async () => {
         const id = goalWith("held goal");
-        const env = { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("h", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("h", "looked.\nVERDICT: hold the Oracle names needHead, which is outside the Edit surface") };
-        rmSync(join(fakeLog, "prompt"), { force: true });
-        const r = await fjob("spec1", "commit spec1.txt", env, ["--on", String(id)]);
-        expect(state(r.json.run)).toMatchObject({ condition: "dropped", reason: expect.stringContaining("spec check held: the Oracle names needHead") });
-        expect(state(r.json.run).cost).toBeGreaterThanOrEqual(0.5);
-        expect(existsSync(join(fakeLog, "prompt"))).toBe(false);
-        expect(existsSync(join(base, "author-h.in"))).toBe(false);
+        const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: fakeSpec("c", "looked.\nVERDICT: hold the Oracle names needHead, which is outside the Edit surface") };
+        const r = await aleph(["spec-check", `fac-${id}`], env);
+        expect(r.json).toMatchObject({ verdict: "hold", problems: expect.stringContaining("needHead"), cost: 0.5 });
         const shown = JSON.parse((await aleph(["issue", "show", "fac", String(id), "--json"])).stdout);
         const ask = shown.ask ?? shown.item?.ask;
         expect(ask).toMatchObject({ kind: "input", reason: "spec-check" });
         expect(ask.question).toContain("needHead");
-        expect(calls("h")).toBe(1);
-
-        // Edit the spec and answer: the next run checks again, with the new text.
-        const edited = "## Goal\nEdited end state NEWSPEC.\n\n## Oracle\nORACLE-TEXT\n";
-        expect((await aleph(["issue", "edit", "fac", String(id), "--spec", edited])).code).toBe(0);
-        expect((await aleph(["issue", "decide", "fac", String(id), "rerun"])).code).toBe(0);
-        const r2 = await fjob("spec2", "commit spec2.txt", { ...env, ALEPH_SPECCHECK_CMD: fakeSpec("h", "VERDICT: pass") }, ["--on", String(id)]);
-        expect(state(r2.json.run).condition).toBe("passed");
-        expect(readFileSync(join(base, "spec-h.in"), "utf8")).toContain("NEWSPEC");
-        expect(calls("h")).toBe(2);
-        expect(state(r2.json.run).cost).toBeGreaterThanOrEqual(0.75);
-      }, 90_000);
-
-      test("a rerun with no spec edit does not call the stub, and its worker starts", async () => {
-        const id = goalWith("unchanged goal");
-        const env = { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("u", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("u", "VERDICT: hold vague") };
-        const r = await fjob("spec3", "commit spec3.txt", env, ["--on", String(id)]);
-        expect(state(r.json.run).condition).toBe("dropped");
-        expect(calls("u")).toBe(1);
-        expect((await aleph(["issue", "decide", "fac", String(id), "rerun"])).code).toBe(0);
-        const r2 = await fjob("spec4", "commit spec4.txt", env, ["--on", String(id)]);
-        expect(state(r2.json.run).condition).toBe("passed");
-        expect(calls("u")).toBe(1);
-      }, 90_000);
-
-      test("a pass reply runs as today, and the cost holds both stubs", async () => {
-        const id = goalWith("pass goal");
-        const r = await fjob("spec5", "commit spec5.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("p", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("p", "VERDICT: pass") }, ["--on", String(id)]);
-        expect(state(r.json.run).condition).toBe("passed");
-        expect(state(r.json.run).cost).toBeGreaterThanOrEqual(0.75);
+        expect(await notes(id)).toMatch(/spec check: [0-9a-f]{12} hold: the Oracle names needHead/);
+        expect((await aleph(["spec-check", `fac-${id}`], env)).json).toMatchObject({ verdict: "skip" });
+        expect(calls("c")).toBe(1);
       }, 60_000);
 
-      test("a stub that exits 1 runs as today, with an error note", async () => {
+      test("aleph spec-check: a stub that exits 1 leaves an error note", async () => {
         const id = goalWith("error goal");
-        const r = await fjob("spec6", "commit spec6.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("e", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("e", "oops", 1) }, ["--on", String(id)]);
-        expect(state(r.json.run).condition).toBe("passed");
+        const r = await aleph(["spec-check", `fac-${id}`], { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: fakeSpec("e", "oops", 1) });
+        expect(r.json).toMatchObject({ verdict: "error" });
         expect(await notes(id)).toMatch(/spec check: [0-9a-f]{12} error:/);
       }, 60_000);
     });

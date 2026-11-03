@@ -70,11 +70,36 @@ export function runsToday(now = Date.now(), runs: Entry[] = allRuns()): Entry[] 
   return runs.filter((e) => (isWorker(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
-/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and explain runs, which the day cap does not count. An explain run has no repo (its `on` is an item ref or a run folder), so it is not filtered by one, as a firefighter run is not. */
+/** The spec checks' spend: one line per check that reported a cost. A spec check is no run, so it has no run folder to hold its cost. */
+const specCostsFile = () => join(factoryDir(), "spec-checks.jsonl");
+
+/** Records the dollars of one spec check of goal `name`, which `spentToday` counts and `runsToday` does not. */
+export function recordSpecCost(name: string, cost: number): void {
+  mkdirSync(factoryDir(), { recursive: true });
+  appendFileSync(specCostsFile(), JSON.stringify({ at: new Date().toISOString(), name, cost }) + "\n");
+}
+
+/** The dollars of the spec checks recorded in the 24 hours before `now`. */
+function specSpent(now: number): number {
+  let raw: string;
+  try { raw = readFileSync(specCostsFile(), "utf8"); } catch { return 0; }
+  let sum = 0;
+  for (const line of raw.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const r = JSON.parse(line);
+      const at = Date.parse(r.at);
+      if (typeof r.cost === "number" && at <= now && now - at < DAY) sum += r.cost;
+    } catch {}
+  }
+  return sum;
+}
+
+/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and explain runs, which the day cap does not count, and the spec checks. An explain run has no repo (its `on` is an item ref or a run folder), so it is not filtered by one, as a firefighter run is not. */
 export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "explain" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
-  return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0);
+  return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0) + specSpent(now);
 }
 
 /** Open jobs in factory repos whose last run awaits Chris (a stuck run needs no answer). */

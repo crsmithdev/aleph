@@ -111,6 +111,12 @@ export function triageDetached(repo: Repo, id: number): void {
   detached(["triage", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
 }
 
+/** Start `aleph spec-check <repo>-<ref>` detached, for a goal whose spec version has no verdict; it never fails the caller. */
+export function specCheckDetached(repo: Repo, ref: string): void {
+  if (!dispatchOn() || !repo.sandbox) return;
+  detached(["spec-check", `${repo.key}-${ref}`], join(factoryDir(), "dispatch.log"));
+}
+
 /** Start `aleph plan <repo>-<id>` detached, for a large goal; it never fails the caller. */
 export function planDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;

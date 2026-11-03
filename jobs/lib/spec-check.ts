@@ -3,8 +3,10 @@
  * spec (Goal, Edit surface, Oracle) against a clone of `origin/<main>` and says whether the spec
  * can be met. A hold names each problem with a change to the spec. The check runs once for each
  * version of the spec (goal-spec.ts): the issue's note carries the version, so an edit makes it run again.
+ * The dispatch never runs it inline: it reads the recorded verdict (`recordedVerdict`) and, when there is
+ * none, starts `aleph spec-check` detached (`runSpecCheck`), which ends by starting a dispatch.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { note, reader } from "../../todo/lib/store.ts";
@@ -13,7 +15,11 @@ import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
 import { git } from "./git.ts";
 import { isVersion, specVersion } from "./goal-spec.ts";
-import type { Repo } from "./ledger.ts";
+import { lock, type Repo } from "./ledger.ts";
+import { askChris, plainAsk } from "./ask.ts";
+import { factoryDir, issueJob, recordHold, recordSpecCost } from "./factory-status.ts";
+import { factoryLog } from "./layout.ts";
+import { dispatchDetached } from "./launch.ts";
 
 export const SPEC_CHECK_MODEL = "claude-opus-5-5";
 const NOTE = "spec check:";
@@ -59,11 +65,7 @@ export function specVerdict(reply: string): { pass: true } | { pass: false; prob
 export async function checkSpec(repo: Repo, id: number | string): Promise<{ verdict: "pass" | "hold" | "skip" | "error"; problems?: string; cost?: number }> {
   const item = reader().item(repo.key, id);
   if (!item || !item.spec.trim()) return { verdict: "skip" };
-  const checked = (n: string) => {
-    const m = n.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").match(/^spec check: (\S+)/);
-    return !!m && isVersion(item, m[1]);
-  };
-  if (item.notes.some(checked)) return { verdict: "skip" };
+  if (recordedVerdict(item)) return { verdict: "skip" };
   const version = specVersion(item);
   const say = (text: string) => { note(repo, issues.refOf(item), `${NOTE} ${version} ${text}`); };
   let clone: string | undefined;
@@ -90,4 +92,67 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
   } finally {
     if (clone) rmSync(clone, { recursive: true, force: true });
   }
+}
+
+export type Recorded = { verdict: "pass" } | { verdict: "hold"; problems: string } | { verdict: "error"; why: string };
+
+/** The verdict `checkSpec` noted for the goal's current spec version, the last one when there are several; null when this version has none. */
+export function recordedVerdict(item: issues.Issue): Recorded | null {
+  for (let i = item.notes.length - 1; i >= 0; i--) {
+    const m = item.notes[i].replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").match(/^spec check: (\S+) (pass|hold|error)\b:?\s*(.*)$/s);
+    if (!m || !isVersion(item, m[1])) continue;
+    if (m[2] === "pass") return { verdict: "pass" };
+    if (m[2] === "hold") return { verdict: "hold", problems: m[3].trim() };
+    return { verdict: "error", why: m[3].trim() };
+  }
+  return null;
+}
+
+/** The goal's spec-check lock: its holder is the one process checking that goal. */
+export const specCheckLock = (name: string, waitMs = 0) => lock(`spec-check-${name}`, waitMs);
+
+/** A check started but not yet holding its lock counts as running for this long; a launch that never ran is retried after it. */
+const LAUNCH_MS = 16 * 60_000;
+const launchFile = (name: string) => join(factoryDir(), `spec-check-${name}.started`);
+
+/** Marks that the dispatch started a check of `name`, so a dispatch before the process takes its lock starts no second one. */
+export function markLaunched(name: string): void {
+  mkdirSync(factoryDir(), { recursive: true });
+  writeFileSync(launchFile(name), new Date().toISOString() + "\n");
+}
+
+/** Whether a check of goal `name` is running: its lock is held, or the dispatch started one in the last LAUNCH_MS. */
+export async function specChecking(name: string): Promise<boolean> {
+  const release = await specCheckLock(name);
+  if (!release) return true;
+  release();
+  try { return Date.now() - statSync(launchFile(name)).mtimeMs < LAUNCH_MS; } catch { return false; }
+}
+
+/**
+ * `aleph spec-check <repo>-<ref>`, the process the dispatch starts: under the goal's lock, check the spec once
+ * for its version. A hold sets the `spec-check` Ask and records the hold; the cost goes into the day's spend.
+ * It ends with a dispatch, so a passed goal starts at once.
+ */
+export async function runSpecCheck(repo: Repo, ref: number | string): Promise<{ verdict: string; problems?: string; cost?: number }> {
+  const name = issueJob(repo, ref);
+  const release = await specCheckLock(name);
+  if (!release) return { verdict: "running" };
+  let c: Awaited<ReturnType<typeof checkSpec>>;
+  try {
+    c = await checkSpec(repo, ref);
+    if (c.cost !== undefined) recordSpecCost(name, c.cost);
+    if (c.verdict === "hold") {
+      const problems = c.problems ?? "";
+      const bad = askChris(repo, ref, plainAsk("spec-check", problems), problems);
+      if (bad) factoryLog(`${name}: spec check held, but the Ask was not written: ${bad}`);
+      recordHold(name, "spec-check", problems);
+    }
+    factoryLog(`${name}: spec check ${c.verdict}${c.problems ? `: ${c.problems}` : ""}`);
+  } finally {
+    rmSync(launchFile(name), { force: true });
+    release();
+  }
+  dispatchDetached();
+  return c;
 }
