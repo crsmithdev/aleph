@@ -18,8 +18,9 @@ import { causeOf } from "./outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
 
-export const PLAN_MODEL = "claude-opus-5-5";
+export const PLAN_MODEL = OPUS_MODEL;
 /** Planner replies that fail the check, for one goal, before it runs as one worker run. */
 export const PLAN_TRIES = 2;
 

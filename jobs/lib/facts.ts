@@ -5,6 +5,7 @@ import { openRun } from "./agent-run.ts";
 import { tagged } from "./ledger.ts";
 import { readFile, allJobs } from "./job.ts";
 import { isBuild, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
 
 export interface Fact { fact: string; source: string }
 
@@ -28,7 +29,7 @@ export function parseFacts(result: string): { facts: Fact[]; unsourced: string[]
   return { facts, unsourced };
 }
 
-export const FACTS_MODEL = "claude-opus-5-5";
+export const FACTS_MODEL = OPUS_MODEL;
 
 export interface FactCheck { fact: string; source: string; verdict: "keep" | "reject"; reason: string; scope: string; title: string; kind?: "gotcha" | "concept" }
 

@@ -15,11 +15,12 @@ import { endLost, openRun } from "./agent-run.ts";
 import { factoryDir, gates } from "./factory-status.ts";
 import { git } from "./git.ts";
 import { TRIAGE_CAP, TRIAGE_TRIES } from "./settings.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
 /** Triage runs that end with no verdict, for one item, before it gets an Ask (reason `triage-failed`); `ALEPH_TRIAGE_TRIES` changes it. */
 
 
 /** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */
-export const TRIAGE_MODEL = "claude-opus-5-5";
+export const TRIAGE_MODEL = OPUS_MODEL;
 
 export type Route =
   | { route: "build"; spec: string; after: string[] }

@@ -10,8 +10,9 @@ import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
 import type { Repo } from "./ledger.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
 
-export const AUTHOR_MODEL = "claude-opus-5-5";
+export const AUTHOR_MODEL = OPUS_MODEL;
 /** The file of a goal's scenarios among its hidden files. It is not a test file, so no check runs it. */
 export const SCENARIOS = "scenarios.md";
 /** The note that marks the attempt; the UI reads it as a machine note. */

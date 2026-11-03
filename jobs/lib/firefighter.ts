@@ -26,8 +26,9 @@ import { ciLine, redCi } from "./ci.ts";
 import type { Fate } from "./outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
 import { always, askFromRun, askOf as itemAskOf, editAnswers, logAlways, may, plainAsk, readAlways, routeOf, waitsForSpecEdit } from "./ask.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
 
-export const FIREFIGHTER_MODEL = "claude-opus-5-5";
+export const FIREFIGHTER_MODEL = OPUS_MODEL;
 /** The most actions one run may take; the rest are refused. */
 export const MAX_ACTIONS = 10;
 /**

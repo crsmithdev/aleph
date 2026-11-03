@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/git.ts";
+import { OPUS_MODEL } from "../../jobs/lib/agent-call.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
@@ -104,7 +105,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
     if ((isBuild(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
-      out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
+      out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: OPUS_MODEL });
     }
   });
   return out;

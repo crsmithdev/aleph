@@ -19,8 +19,9 @@ import { git } from "./git.ts";
 import { explainLesson, proposals, type Lesson } from "./corrections.ts";
 import { factoryLog } from "./layout.ts";
 import { EXPLAIN_CAP, EXPLAIN_TRIES } from "./settings.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
 
-export const EXPLAIN_MODEL = "claude-opus-5-5";
+export const EXPLAIN_MODEL = OPUS_MODEL;
 const SECONDS = 300;
 const TAIL = 40;
 

@@ -20,8 +20,9 @@ import { askChris, plainAsk } from "./ask.ts";
 import { factoryDir, issueJob, recordHold, recordSpecCost } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { dispatchDetached } from "./launch.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
 
-export const SPEC_CHECK_MODEL = "claude-opus-5-5";
+export const SPEC_CHECK_MODEL = OPUS_MODEL;
 const NOTE = "spec check:";
 
 export function specCheckPrompt(item: issues.Issue): string {
