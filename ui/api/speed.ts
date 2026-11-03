@@ -9,7 +9,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { flakeNames, flakes } from "../../jobs/lib/factory-status.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isAgentRun, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
 import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
@@ -142,7 +142,6 @@ const STEP: Record<Window, number> = { hour: 60_000, day: HOUR, week: DAY, month
 const COUNT: Record<Window, number> = { hour: 60, day: 24, week: 7, month: 30 };
 
 const HOUR_MS = HOUR;
-const isAgent = (r: Run) => isBuild(r.kind) || r.kind === "recheck";
 const passedState = (st: string) => st === "passed" || st === "landed" || st === "done";
 
 /** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
@@ -154,7 +153,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     const t = t0(r);
     if (Number.isFinite(t)) firstStart.set(r.job, Math.min(firstStart.get(r.job) ?? Infinity, t));
     if (issueOf(r) === undefined) continue;
-    const m = isAgent(r) ? agentsOf : r.kind === "land" && r.condition === "landed" ? landsOf : null;
+    const m = isAgentRun(r.kind) ? agentsOf : r.kind === "land" && r.condition === "landed" ? landsOf : null;
     if (!m) continue;
     const g = goalOf(r);
     if (!m.has(g)) m.set(g, []);
@@ -175,7 +174,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
   const rows = new Map<Class, Row[]>(CLASSES.map((c) => [c, []]));
   const skipped: Row[] = [];
   for (const r of runs) {
-    if (!isAgent(r) || issueOf(r) === undefined) continue;
+    if (!isAgentRun(r.kind) || issueOf(r) === undefined) continue;
     const a = t0(r), b = Date.parse(r.ended ?? "");
     if (!(a >= since) || a > now || !(b >= a) || b - a > MAX_RUN) continue;
     const g = goalOf(r), reason = r.reason ?? "";
@@ -276,7 +275,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   const jobs = new Map<string, Run[]>();
   for (const r of runs) jobs.set(r.job, [...(jobs.get(r.job) ?? []), r]);
   for (const rs of jobs.values()) {
-    const agents = rs.filter((r) => { const a = Date.parse(r.started), b = Date.parse(r.ended ?? ""); return isAgent(r) && b >= a && b - a <= MAX_RUN; });
+    const agents = rs.filter((r) => { const a = Date.parse(r.started), b = Date.parse(r.ended ?? ""); return isAgentRun(r.kind) && b >= a && b - a <= MAX_RUN; });
     const landed = Math.min(...rs.filter((r) => r.kind === "land" && (r.condition === "landed" || r.condition === "done")).map((r) => Date.parse(r.ended ?? "")).filter(Number.isFinite));
     // A job can run again after it lands; what finished the work is the last finish before the land.
     const ends = agents.filter((r) => passedState(r.condition) || r.condition === "awaiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
@@ -291,7 +290,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     const n = issueOf(r);
     if (n === undefined) continue;
     const key = `${r.repo}-${n}`;
-    if (isAgent(r)) {
+    if (isAgentRun(r.kind)) {
       const a = Date.parse(r.started);
       if (a < (firstStart.get(key) ?? Infinity)) firstStart.set(key, a);
     } else if (r.kind === "triage") {
@@ -420,7 +419,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
     if (!(t0 >= since.getTime()) || t0 > now.getTime() || !(t1 >= t0) || t1 - t0 > MAX_RUN) continue;
     const secs = (t1 - t0) / 1000;
-    const kind = r.kind === "recheck" || r.kind === "build" ? "agent" : r.kind;
+    const kind = isAgentRun(r.kind) ? "agent" : r.kind;
     if (kind in times) times[kind].push(secs);
     for (const c of r.checks ?? []) {
       if (!checks.has(c.name)) checks.set(c.name, []);
@@ -436,7 +435,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   // A fix round is a worker run of the goal that a failed check or the reviewer sent back (`failed` set).
   const rounds = new Map<string, number>();
   for (const r of all) {
-    if (!isAgent(r)) continue;
+    if (!isAgentRun(r.kind)) continue;
     if (r.failed) rounds.set(r.job, (rounds.get(r.job) ?? 0) + 1);
   }
   // Landed issues: a land run of an issue with no number all share the one key "none". An issue's fix rounds are the most any of its landing runs' jobs needed.
@@ -456,11 +455,11 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   };
   if (fit) {
     const weekOf = new Map<string, number>();
-    for (const r of all) if (isAgent(r) && issueOf(r) !== undefined) weekOf.set(`${r.repo}-${issueOf(r)}`, (weekOf.get(`${r.repo}-${issueOf(r)}`) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
+    for (const r of all) if (isAgentRun(r.kind) && issueOf(r) !== undefined) weekOf.set(`${r.repo}-${issueOf(r)}`, (weekOf.get(`${r.repo}-${issueOf(r)}`) ?? 0) + (share(fit, r.cost, r.model)?.pct ?? 0));
     const keys = [...new Set(landed.filter((r) => issueOf(r) !== undefined).map((r) => `${r.repo}-${issueOf(r)}`))];
     const per = keys.map((g) => weekOf.get(g) ?? 0);
     const nRuns = new Map<string, number>();
-    for (const r of all) if (isAgent(r) && issueOf(r) !== undefined) nRuns.set(`${r.repo}-${issueOf(r)}`, (nRuns.get(`${r.repo}-${issueOf(r)}`) ?? 0) + 1);
+    for (const r of all) if (isAgentRun(r.kind) && issueOf(r) !== undefined) nRuns.set(`${r.repo}-${issueOf(r)}`, (nRuns.get(`${r.repo}-${issueOf(r)}`) ?? 0) + 1);
     issues.usage = keys.map((g) => {
       const m = g.lastIndexOf("-");
       return { goal: g, href: `#/issues/${encodeURIComponent(g.slice(0, m))}/${g.slice(m + 1)}`, week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };

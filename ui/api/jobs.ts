@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { git } from "../../jobs/lib/git.ts";
 import { OPUS_MODEL } from "../../jobs/lib/agent-call.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
-import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
+import { isAgentRun, isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
@@ -104,7 +104,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     if (logs.length) info.logs = logs;
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
-    if ((isBuild(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
+    if (isAgentRun(r.kind) && hasFile(e, "review.md")) {
       out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: OPUS_MODEL });
     }
   });
