@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { closeAndFile } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
-import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { askOf, allRuns, isAwaiting, isAgentRun, isLive, loadRegistry, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { relatedTests } from "./related.ts";
 import { coversAll, stopFields, type ChecksStop } from "./checks.ts";
 import { LOCK_BUSY, type Cause } from "./outcome.ts";
@@ -36,7 +36,7 @@ export type Verdict = Pick<Run, "condition" | "reason" | "cause" | "checkName" |
 export type Landing = { outcome: Verdict; code: number };
 
 /** The run a land of this job takes its terms from: the last agent or recheck run. */
-export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => isBuild(e.run.kind) || e.run.kind === "recheck").at(-1);
+export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => isAgentRun(e.run.kind)).at(-1);
 
 /**
  * The one rule for which runs may land, and on what terms. A passed agent run may land, and it opens a check
@@ -44,7 +44,7 @@ export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => 
  * Every other run gives null.
  */
 export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: boolean } | null {
-  if (!isBuild(agent.kind) && agent.kind !== "recheck") return null;
+  if (!isAgentRun(agent.kind)) return null;
   if (agent.condition === "passed") return { manual: agent.say !== undefined, held: false, asked: false };
   const needs = isAwaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
   if (needs === "manual") return { manual: true, held: false, asked: true };

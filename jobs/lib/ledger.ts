@@ -194,6 +194,9 @@ export const isAwaiting = (state: State): boolean => state === "awaiting";
 /** A build run. */
 export const isBuild = (kind: Run["kind"]): boolean => kind === "build";
 
+/** A run of the job's agent: a build or a recheck. */
+export const isAgentRun = (kind: Run["kind"]): boolean => kind === "build" || kind === "recheck";
+
 /** The number of the run's `on` (`<repo>-<n>`, for the run's repo). A dotted `on` gives the goal's `<n>.<m>` as a string. */
 export function onOf(run: Run): number | string | undefined {
   if (run.on === undefined) return undefined;

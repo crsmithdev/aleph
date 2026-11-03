@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
-import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, isAgentRun, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { keepDiff } from "./jobdiff.ts";
@@ -270,7 +270,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     const last = runs.at(-1)!;
     if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const r = last.run;
-    if (!isBuild(r.kind) && r.kind !== "recheck") refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
+    if (!isAgentRun(r.kind)) refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
     if (r.condition !== "stuck" && r.condition !== "failed") refuse(`${name} is ${r.condition}, not stuck or failed`);
     const repo = loadRegistry()[r.repo ?? ""];
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);

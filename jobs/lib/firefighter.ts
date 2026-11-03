@@ -12,7 +12,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import { missingSections } from "./goal-spec.ts";
-import { allRuns, askOf, isAwaiting, isBuild, isLost, runsDir, loadRegistry, lock, onOf, reviewOf, tell, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf, isAwaiting, isAgentRun, isBuild, isLost, runsDir, loadRegistry, lock, onOf, reviewOf, tell, type Entry, type Repo } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile, type Job } from "./job.ts";
 import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
@@ -176,7 +176,7 @@ function context(e: Event, jobs: Job[]): string {
   const j = e.job ? jobs.findLast((x) => x[0].run.repo === e.repo && x[0].run.name === e.job) : undefined;
   if (j) {
     const last = lastReal(j);
-    const agent = j.findLast((x) => isBuild(x.run.kind) || x.run.kind === "recheck") ?? last;
+    const agent = j.findLast((x) => isAgentRun(x.run.kind)) ?? last;
     parts.push(`Run folder: ${last.folder}${agent !== last ? ` (agent run: ${agent.folder})` : ""}`);
     if (last.run.stat) parts.push(`Diff stat:\n${last.run.stat}`);
     for (const f of RUN_FILES) {
@@ -286,7 +286,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       if (issue !== undefined) store.note(repo, issue, `firefighter: dropped ${a.job}: ${a.reason}${a.after ? `; after ${a.after.join(", ")}` : ""}`);
       return waits ? { refused: `${describe(a)}: dropped, but after not set: ${waits}` } : { applied: describe(a) };
     }
-    const agent = runs.findLast((e) => isBuild(e.run.kind) || e.run.kind === "recheck") ?? last;
+    const agent = runs.findLast((e) => isAgentRun(e.run.kind)) ?? last;
     if (!reviewVerdict(readFile(agent, "review.md") ?? "")) return { refused: `${describe(a)}: the reviewer has no verdict yet` };
     const r2 = reviewOf(agent);
     if (!r2 || r2.call === "pending" || r2.call === "error") return { refused: `${describe(a)}: review has no verdict yet` };

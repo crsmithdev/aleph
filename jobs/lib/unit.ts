@@ -13,7 +13,7 @@ import { gitPrelude, q } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk, type AskReason } from "./ask.ts";
-import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, askOf, isAwaiting, isAgentRun, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
@@ -207,8 +207,8 @@ export async function unit(folder: string): Promise<void> {
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
   process.exitCode = code;
-  if (isBuild(run.kind) || run.kind === "recheck") startReview(folder);
-  if ((isBuild(run.kind) || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
+  if (isAgentRun(run.kind)) startReview(folder);
+  if (isAgentRun(run.kind) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
@@ -523,7 +523,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
 export async function reviewBack(folder: string): Promise<void> {
   const run = readRun(folder);
   const r2 = readCall(folder);
-  if (!run || (!isBuild(run.kind) && run.kind !== "recheck") || !isAwaiting(run.condition)) return;
+  if (!run || !isAgentRun(run.kind) || !isAwaiting(run.condition)) return;
   if (r2?.call === "land" && needsOf(askOf(run)) === "held" && existsSync(join(folder, "review.md")) && reviewVerdict(readFileSync(join(folder, "review.md"), "utf8"))?.pass) {
     updateRun(folder, { condition: "passed", ask: undefined, reason: undefined, cause: undefined });
     dispatchDetached();

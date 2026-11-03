@@ -18,7 +18,7 @@ import { factoryDir } from "./factory-status.ts";
 import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
-import { askOf, isBuild, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { askOf, isAgentRun, isBuild, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 
 // ---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ export const MERGE_SECONDS = 600;
  */
 export function nextStep(run: Run, autoland: boolean, lands?: Run[]): Run["next"] {
   if (isBuild(run.kind) && run.failed) return "worker";
-  if (isBuild(run.kind) || run.kind === "recheck") return run.condition === "passed" && (run.land || autoland) ? "land" : undefined;
+  if (isAgentRun(run.kind)) return run.condition === "passed" && (run.land || autoland) ? "land" : undefined;
   return run.kind === "land" ? afterLand(run, lands) : undefined;
 }
 
@@ -340,7 +340,7 @@ export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
   // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
   if (r.kind === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
   // A build or recheck with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
-  if ((isBuild(r.kind) || r.kind === "recheck") && hasWork) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
+  if (isAgentRun(r.kind) && hasWork) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
   return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
 }
 

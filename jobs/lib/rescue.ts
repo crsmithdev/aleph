@@ -22,7 +22,7 @@ import { fetchOrigin, git } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isAgentRun, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
@@ -63,7 +63,7 @@ const killed = (jobs: Job[]): Job[] => {
   return jobs.filter((j) => {
     const last = lastReal(j);
     const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isBuild(r.kind) || r.kind === "recheck" || r.kind === "land")
+    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land")
       && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
   });
 };
@@ -283,7 +283,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   };
 
   if (isKilled) {
-    const step = killedStep(stuck, (isBuild(r.kind) || r.kind === "recheck") && hasWork(stuck));
+    const step = killedStep(stuck, isAgentRun(r.kind) && hasWork(stuck));
     // The real recheck takes only a stuck or failed run, so the killed run ends failed first, as a killed land does.
     if (r.kind === "land" || step.action === "recheck") {
       writeFileSync(join(last.folder, "exit"), "143");

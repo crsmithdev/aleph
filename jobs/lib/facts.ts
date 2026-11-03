@@ -4,7 +4,7 @@ import { basename, join } from "node:path";
 import { openRun } from "./agent-run.ts";
 import { tagged } from "./ledger.ts";
 import { readFile, allJobs } from "./job.ts";
-import { isBuild, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { isAgentRun, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
 
 export interface Fact { fact: string; source: string }
@@ -155,7 +155,7 @@ ${v.source}
 export async function factsGate(repo: Repo, landed: Entry, commit: string, log: (line: string) => void): Promise<{ kept: string[]; rejected: { fact: string; reason: string }[] } | null> {
   const name = landed.run.name;
   const job = allJobs().find((j) => j[0].run.job === landed.run.job) ?? [landed];
-  const worker = job.findLast((e) => isBuild(e.run.kind) || e.run.kind === "recheck");
+  const worker = job.findLast((e) => isAgentRun(e.run.kind));
   const result = (worker && readFile(worker, "result.md")) ?? "";
   const { facts, unsourced } = parseFacts(result);
   for (const line of unsourced) log(`${name}: fact dropped, no source: ${line}`);
