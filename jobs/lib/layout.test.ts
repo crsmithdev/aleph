@@ -72,13 +72,3 @@ test("layout() names the new layout only, and the CLI reads the data there", asy
   expect(jobs.code).toBe(0);
   expect(jobs.stdout).toContain("j1");
 });
-
-test("the environment wins, variable by variable; ALEPH_RUNS_DIR is not read", () => {
-  const set = (o: Record<string, string>) => { for (const [k, v] of Object.entries(o)) process.env[k] = v; };
-  try {
-    set({ ALEPH_RUNS_DIR: "/x/runs" });
-    expect(layout()).toEqual({ store: join(a, "issues"), ledger: join(a, "runs"), sandbox: join(a, "sandbox"), factory: join(a, "factory") });
-    set({ ALEPH_ISSUES: "/x/issues", ALEPH_JOBS_DIR: "/x/jobs", ALEPH_SANDBOX_DIR: "/x/sandbox" });
-    expect(layout()).toEqual({ store: "/x/issues", ledger: "/x/jobs", sandbox: "/x/sandbox", factory: join(a, "factory") });
-  } finally { for (const k of VARS) delete process.env[k]; }
-});

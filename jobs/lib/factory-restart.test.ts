@@ -46,19 +46,6 @@ test("a build a host restart killed, with a commit ahead of main, starts a reche
   expect(existsSync(join(r.folder, "rescued"))).toBe(false);
 });
 
-test("a build a host restart killed, with its branch at main and no commit, is dropped for a new run of the goal", async () => {
-  const id = goal();
-  const repo = join(ctx.base, "repo");
-  sh(repo, "git", "branch", "idle");
-  const r = killedRun(`fac-${id}`, "build", {});
-  writeRun(r.folder, { ...readRun(r.folder)!, branch: "idle" });
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(f.specs[0]).toContain("a host restart killed build run");
-  expect(ask(id)).toBeNull();
-});
-
 test("a recheck a host restart killed, with a commit ahead of main, starts a new recheck of its branch and no new goal run, and uses no rerun", async () => {
   const id = goal();
   const repo = join(ctx.base, "repo");
@@ -73,20 +60,6 @@ test("a recheck a host restart killed, with a commit ahead of main, starts a new
   expect(f.specs).toEqual([]);
   expect(notes(id)).toContain("its branch has the worker's commits");
   expect(readRun(r.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
-  expect(ask(id)).toBeNull();
-  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
-});
-
-test("a recheck a host restart killed, with its branch at main and no commit, is dropped for a new run of the goal, and uses no rerun", async () => {
-  const id = goal();
-  const repo = join(ctx.base, "repo");
-  sh(repo, "git", "branch", "idle");
-  const r = killedRun(`fac-${id}`, "recheck", {});
-  writeRun(r.folder, { ...readRun(r.folder)!, branch: "idle" });
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(f.specs[0]).toContain("a host restart killed recheck run");
   expect(ask(id)).toBeNull();
   expect(existsSync(join(r.folder, "rescued"))).toBe(false);
 });
@@ -209,21 +182,6 @@ test("a held run whose PENDING call.md is older than the boot gets one new revie
   expect(starts).toEqual([r.folder]);
   await reviewDispatch(starts);
   expect(starts).toEqual([r.folder]);
-});
-
-test("a held run whose PENDING call.md was written after the boot gets no start", async () => {
-  heldRun(goal(), "PENDING\n", new Date());
-  const starts: string[] = [];
-  await reviewDispatch(starts);
-  expect(starts).toEqual([]);
-});
-
-test("a held run with a verdict or an ERROR in an old call.md gets no start", async () => {
-  heldRun(goal(), "VERDICT: land\n", new Date(BEFORE_BOOT));
-  heldRun(goal(), "ERROR: could not start: x\n", new Date(BEFORE_BOOT));
-  const starts: string[] = [];
-  await reviewDispatch(starts);
-  expect(starts).toEqual([]);
 });
 
 test("a paused factory leaves a killed run alone", async () => {

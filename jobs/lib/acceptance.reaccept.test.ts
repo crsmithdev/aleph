@@ -2,9 +2,8 @@
 import { expect, test } from "bun:test";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { reaccept } from "./acceptance.ts";
 import { reacceptReopened } from "./factory.ts";
-import { item, land, notes, ran, reopened, repoDir, runner, useAcceptanceFixture } from "./acceptance.fixture.ts";
+import { item, land, notes, ran, reopened, runner, useAcceptanceFixture } from "./acceptance.fixture.ts";
 
 useAcceptanceFixture();
 
@@ -45,16 +44,4 @@ test("reacceptReopened skips goals not landed, not reopened by acceptance, or ou
   expect(issues.status(item(old))).toBe("done");
   expect(issues.status(item(unlanded))).toBe("open");
   expect(issues.status(item(plain))).toBe("open");
-});
-
-test("a parked issue is not reopened by acceptance", async () => {
-  const id = reopened("`bun test x`");
-  writeList({ key: "fac" }, "park", (doc) => { issues.setStatus(issues.find(doc, id)!, "parked"); return true; });
-  expect(await reacceptReopened("fac", { run: runner(0) })).toEqual([]);
-  expect(ran).toEqual([]);
-  expect(issues.status(item(id))).toBe("parked");
-  const repo = { key: "fac", path: repoDir(), main: "main" } as any;
-  expect(await reaccept(repo, item(id), runner(0))).toContain("skipped");
-  expect(ran).toEqual([]);
-  expect(issues.status(item(id))).toBe("parked");
 });

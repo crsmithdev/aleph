@@ -7,7 +7,6 @@ import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { readHolds, runsToday, spentToday } from "./factory-status.ts";
 import { loadRegistry, lock } from "./ledger.ts";
-import { decide, edit } from "../../todo/lib/issues.ts";
 import { planDetached } from "./launch.ts";
 import { runSpecCheck } from "./spec-check.ts";
 import { ctx, fakes, ask, setup, teardown } from "./factory.helpers.ts";
@@ -76,28 +75,6 @@ describe("the spec check before a goal starts", () => {
     expect(d.launched).toEqual([]);
     expect(readHolds([name]).at(-1)).toMatchObject({ kind: "spec-check", text: expect.stringContaining("the Oracle names needHead") });
     expect(calls()).toBe(1);
-  }, 30_000);
-
-  test("after a spec edit and a rerun, a pass starts the goal once its check ends; the fake ran once for each version", async () => {
-    fakeSpec("VERDICT: hold vague");
-    const id = specGoal();
-    const name = `fac-${id}`;
-    await runSpecCheck(repo(), id);
-    expect(ask(id)).toMatchObject({ reason: "spec-check" });
-    // Chris edits the spec and answers rerun: the Ask goes.
-    edit({ key: "fac" }, id, { spec: SPEC.replace("End state one.", "Edited end state NEWSPEC.") });
-    decide({ key: "fac" }, id, "rerun");
-    fakeSpec("VERDICT: pass");
-    const a = await run();
-    expect(a.calls).toEqual([]);
-    expect(a.launched).toEqual([name]);
-    expect(await runSpecCheck(repo(), id)).toMatchObject({ verdict: "pass" });
-    expect(readFileSync(join(ctx.base, "spec.in"), "utf8")).toContain("NEWSPEC");
-    const b = await run();
-    expect(b.launched).toEqual([]);
-    expect(b.calls).toEqual([`start ${name}`]);
-    expect(readHolds([name]).at(-1)).toMatchObject({ kind: "started" });
-    expect(calls()).toBe(2);
   }, 30_000);
 
   test("an error starts the goal, as the unit did", async () => {

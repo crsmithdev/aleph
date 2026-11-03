@@ -1,8 +1,9 @@
+// Archived goal tests from jobs/lib/launch.priority.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, setup, state, teardown } from "../cli.helpers";
-import { actionJob, job, land as landJob } from "../inproc";
+import { base, setup, state, teardown } from "../../../jobs/cli.helpers";
+import { actionJob, job, land as landJob } from "../../../jobs/inproc";
 
 beforeAll(setup);
 afterAll(teardown);

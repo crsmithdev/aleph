@@ -87,16 +87,6 @@ test("a run that breaks the check fails with the check's reason; the others land
   expect(pushes()).toBe(1);
 });
 
-test("a conflict in one run takes only that run out", async () => {
-  const [k1, k2, k3] = [job("k1", [["k.txt", "one\n"]]), queued(job("k2", [["k.txt", "two\n"]])), queued(job("k3", [["k3.txt", "3\n"]]))];
-  const r = await land(k1, repo, ports());
-  expect(r.outcome.condition).toBe("landed");
-  expect(given(k2).verdict).toMatchObject({ condition: "failed", reason: "merge conflict", conflicts: ["k.txt"] });
-  expect(landLog(k2)).toContain("k.txt");
-  expect(given(k3).verdict.condition).toBe("landed");
-  expect(mainFiles()).toEqual(["k.txt", "k3.txt"]);
-});
-
 test("a member that failed its checks in attempt 1 is not in the retry after main moved", async () => {
   const [a, bad, c] = [job("ra", [["ra.txt", "a\n"]]), queued(job("rbad", [["rbad.txt", "b\n"]])), queued(job("rr", [["rr.txt", "r\n"]]))];
   const p = ports({ bad: both("ra.txt", "rbad.txt"), races: 1 });

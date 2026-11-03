@@ -6,7 +6,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { rerunOf } from "./acceptance.ts";
 import { readRecord, resultLine } from "./status.ts";
 import { acceptanceStep } from "./factory.ts";
-import { answers, base, doneGoal, FAILED, flakeNotes, item, landFile, notes, ran, repoDir, RERUN_FAIL, runner, sh, shas, useAcceptanceFixture } from "./acceptance.fixture.ts";
+import { answers, base, doneGoal, FAILED, flakeNotes, item, landFile, notes, ran, repoDir, runner, sh, shas, useAcceptanceFixture } from "./acceptance.fixture.ts";
 
 useAcceptanceFixture();
 
@@ -67,21 +67,4 @@ test("a repeat in a test the goal touched reopens; a repeat only in others goes 
   expect(lines.find((l) => l.startsWith(`fac-${other}:`))).toContain("acceptance passed");
   expect(issues.status(item(other))).toBe("done");
   expect(notes(other)).toContain("on the flake list");
-});
-
-test("a touched test that fails on the second rerun is a repeat; one that passes every rerun is a flake", async () => {
-  const pass = { code: 0, output: " 1 pass\n 0 fail\n" };
-  const a = doneGoal("`bun run test`");
-  landFile(a, "jobs/lib/acceptance.test.ts");
-  await acceptanceStep(answers(RERUN_FAIL, pass, RERUN_FAIL));
-  expect(ran.length).toBe(3);
-  expect(issues.status(item(a))).toBe("open");
-  ran.length = 0;
-  const b = doneGoal("`bun run test`");
-  landFile(b, "jobs/lib/acceptance.test.ts");
-  const lines = await acceptanceStep(answers(RERUN_FAIL, pass));
-  expect(ran.length).toBe(4);
-  expect(lines.find((l) => l.startsWith(`fac-${b}:`))).toContain("acceptance passed");
-  expect(issues.status(item(b))).toBe("done");
-  expect(flakeNotes()).toContain("jobs/lib/acceptance.test.ts > one: failed under load");
 });

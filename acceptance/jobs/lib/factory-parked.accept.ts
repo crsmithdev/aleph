@@ -1,8 +1,9 @@
+// Archived goal tests from jobs/lib/factory-parked.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readList, writeList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
-import { dispatchIssues } from "./factory.ts";
-import { goal, change, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { readList, writeList } from "../../../todo/lib/store.ts";
+import * as issues from "../../../todo/lib/todo.ts";
+import { dispatchIssues } from "../../../jobs/lib/factory.ts";
+import { goal, change, fakes, dispatch, setup, teardown } from "../../../jobs/lib/factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);

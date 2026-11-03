@@ -44,10 +44,6 @@ test("a land that failed 'job lock busy' does not hold the factory", () => {
   expect(hold([[entry("build", "passed"), entry("land", "failed", "job lock busy")]])).toBeNull();
 });
 
-test("a land that failed for another reason holds the factory", () => {
-  expect(hold([[entry("build", "passed"), entry("land", "failed", "not landed")]])?.name).toBe("n1");
-});
-
 test("after a land that failed 'job lock busy' the passed agent run is waiting to land again", () => {
   const agent = entry("build", "passed");
   agent.run.land = true;

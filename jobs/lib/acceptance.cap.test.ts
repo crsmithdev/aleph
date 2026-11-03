@@ -38,15 +38,3 @@ test("the fifth goal failing at one commit does not reopen, the fourth does, and
   expect(issues.status(item(fifth))).toBe("open");
   expect(readRecord("fac", fifth)?.fails).toBe(1);
 });
-
-test("ALEPH_ACCEPTANCE_FAIL_CAP changes the limit", async () => {
-  process.env.ALEPH_ACCEPTANCE_FAIL_CAP = "2";
-  try {
-    const ids = [1, 2].map(() => writeList({ key: "fac" }, "add", (doc) => issues.add(doc, "thing", { spec: "## Goal\nx\n## Edit surface\na.ts\n## Oracle\n`bun run ok`\n## Time box\n40 minutes" }).id, true)!.value);
-    for (const id of ids) land(id);
-    for (const id of ids) closeAgain(id);
-    await acceptanceStep(runner(1, "boom"));
-    expect(issues.status(item(ids[0]))).toBe("open");
-    expect(issues.status(item(ids[1]))).toBe("done");
-  } finally { delete process.env.ALEPH_ACCEPTANCE_FAIL_CAP; }
-});

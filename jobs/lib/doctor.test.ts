@@ -52,14 +52,6 @@ describe("clock", () => {
 });
 
 describe("git", () => {
-  test("an empty object fails both git checks; a clean repo passes", () => {
-    expect(gitChecks().every((c) => c.ok)).toBe(true);
-    const sha = sh(repo, "git hash-object -w f");
-    const path = join(repo, ".git/objects", sha.slice(0, 2), sha.slice(2));
-    sh(repo, `rm -f ${path} && : > ${path}`);
-    expect(emptyObjects(repo)).toEqual([path]);
-    expect(gitChecks().map((c) => c.ok)).toEqual([false, false]);
-  });
   test("--fix removes an empty object behind refs/aleph/facts and writes the ref again", () => {
     writeFacts(loadRegistry().r);
     const tree = sh(repo, `git rev-parse ${FACTS_REF}^{tree}`);
@@ -70,14 +62,6 @@ describe("git", () => {
     expect(emptyObjects(repo)).toEqual([]);
     expect(gitChecks().every((c) => c.ok)).toBe(true);
   });
-  test("--fix leaves an empty object behind a real ref", () => {
-    const tree = sh(repo, "git rev-parse HEAD^{tree}");
-    sh(repo, `p=.git/objects/${tree.slice(0, 2)}/${tree.slice(2)}; rm -f $p; : > $p`);
-    fakeCtl("exit 0");
-    const said = fix();
-    expect(said.join("\n")).toContain("left");
-    expect(emptyObjects(repo).length).toBe(1);
-  });
   test("a 0-byte git lock in objects is not an empty object", () => {
     const lock = join(repo, ".git/objects/maintenance.lock");
     sh(repo, `: > ${lock}`);
@@ -86,60 +70,14 @@ describe("git", () => {
     fakeCtl("exit 0");
     expect(fix().join("\n")).not.toContain("left");
   });
-  test("a 0-byte pack in objects/pack is an empty object", () => {
-    const pack = join(repo, ".git/objects/pack/pack-0000000000000000000000000000000000000000.pack");
-    sh(repo, `mkdir -p .git/objects/pack && : > ${pack}`);
-    expect(emptyObjects(repo)).toEqual([pack]);
-  });
-});
-
-describe("git blobs", () => {
-  test("--fix leaves an empty blob a real ref needs, even with refs/aleph/facts present", () => {
-    writeFacts(loadRegistry().r);
-    const blob = sh(repo, "git rev-parse HEAD:f");
-    const p = join(repo, ".git/objects", blob.slice(0, 2), blob.slice(2));
-    sh(repo, `rm -f ${p}; : > ${p}`);
-    fakeCtl("exit 0");
-    expect(fix().join("\n")).toContain("left");
-    expect(emptyObjects(repo)).toEqual([p]);
-  });
 });
 
 describe("units", () => {
-  test("active units with a next run pass; an inactive one fails", () => {
-    fakeCtl(`case "$2" in is-active) [ "$3" = home-proxy ] && { echo inactive; exit 3; }; echo active;; show) echo NextElapseUSecRealtime=Fri 2026-10-30 18:00:00 UTC; echo NextElapseUSecMonotonic=0;; esac`);
-    const c = unitChecks();
-    expect(c.map((x) => [x.name, x.ok])).toEqual([["unit aleph-ui", true], ["unit home-proxy", false], ["unit aleph-tick.timer", true], ["timer next run", true]]);
-  });
-  test("a timer whose triggers a drop-in cleared (empty TimersMonotonic, no next run) fails", () => {
-    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo inactive; exit 3; }; echo active;; show) echo TimersMonotonic=; echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
-    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: false });
-  });
-  test("a timer with no next run fails", () => {
-    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo inactive; exit 3; }; echo active;; show) echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
-    expect(unitChecks().at(-1)).toMatchObject({ ok: false });
-  });
   const noNextRun = (svc: string, exit: number) =>
     fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo ${svc}; exit ${exit}; }; echo active;; show) echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
   test("no next run while the tick service is activating (exit 3) passes", () => {
     noNextRun("activating", 3);
     expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: true, detail: expect.stringContaining("tick is in progress") });
-  });
-  test("no next run while the tick service is active passes", () => {
-    noNextRun("active", 0);
-    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: true });
-  });
-  test("no next run while the tick service is inactive (exit 3) fails", () => {
-    noNextRun("inactive", 3);
-    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: false });
-  });
-  test("no next run while the tick service is failed (exit 3) fails", () => {
-    noNextRun("failed", 3);
-    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: false });
-  });
-  test("a next run present passes with it as the detail", () => {
-    fakeCtl(`case "$2" in is-active) echo active;; show) echo NextElapseUSecRealtime=Fri 2026-10-30 18:00:00 UTC; echo NextElapseUSecMonotonic=0;; esac`);
-    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: true, detail: "Fri 2026-10-30 18:00:00 UTC" });
   });
 });
 

@@ -1,0 +1,50 @@
+// Archived goal tests from jobs/lib/firefighter.red.test.ts: `bun run accept` runs them, `bun run test` does not.
+// The firefighter and a red main: the red event, and the add that files its fix.
+import { expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { readList } from "../../../todo/lib/store.ts";
+import { layout } from "../../../jobs/lib/layout.ts";
+import { applyActions, prompt } from "../../../jobs/lib/firefighter.ts";
+import { fresh, key, ports, useFirefighterFixture } from "../../../jobs/lib/firefighter.fixture.ts";
+
+useFirefighterFixture();
+
+const SPEC = "## Goal\nThe test passes.\n\n## Edit surface\n- ui/browser.test.ts: the row.\n\n## Oracle\n- bun test passes.";
+
+test("an add for a red main files a high priority issue naming the cause; without a red main it is refused", async () => {
+  fresh([{ title: "other" }]);
+  const add = { do: "add" as const, repo: key, title: "Fix ui/browser.test.ts:172 after 77803ea reordered Queued", body: SPEC };
+  const none = await applyActions([add], ports());
+  expect(none.refused.length).toBe(1);
+  expect(readList({ key })!.items.length).toBe(1);
+  mkdirSync(layout().factory, { recursive: true });
+  writeFileSync(join(layout().factory, "ci.json"), JSON.stringify({ [key]: { repo: key, ok: false, sha: "77803ea", url: "u", since: "2026-11-02T17:15:00Z", sinceSha: "77803ea4c", runs: 1 } }));
+  const f = await applyActions([add, add], ports());
+  expect(f.applied.length).toBe(2);
+  const items = readList({ key })!.items;
+  expect(items.length).toBe(2);
+  const it = items.find((i) => i.title === add.title)!;
+  expect(it.fm.priority).toBe("high");
+  expect(it.notes.join("\n")).toContain("still red");
+});
+
+const redCi = () => {
+  mkdirSync(layout().factory, { recursive: true });
+  writeFileSync(join(layout().factory, "ci.json"), JSON.stringify({ [key]: { repo: key, ok: false, sha: "77803ea", url: "u", since: "2026-11-02T17:15:00Z", sinceSha: "77803ea4c", runs: 1 } }));
+};
+
+test("an add whose body has no Oracle is refused, names Oracle and files nothing", async () => {
+  fresh([{ title: "other" }]);
+  redCi();
+  const body = "## Goal\nx\n\n## Edit surface\n- a.ts";
+  const f = await applyActions([{ do: "add", repo: key, title: "Fix red", body }], ports());
+  expect(f.applied.length).toBe(0);
+  expect(f.refused.join("\n")).toContain("Oracle");
+  expect(readList({ key })!.items.length).toBe(1);
+});
+
+test("the prompt for a red event has the three-header template", () => {
+  const p = prompt([{ key: "ci:r:abc", kind: "red", repo: key, line: "r CI red" }]);
+  for (const h of ["## Goal", "## Edit surface", "## Oracle"]) expect(p).toContain(h);
+});

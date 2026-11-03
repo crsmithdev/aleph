@@ -1,9 +1,10 @@
+// Archived goal tests from jobs/lib/acceptance.parent.test.ts: `bun run accept` runs them, `bun run test` does not.
 // A repeat in a test the goal did not touch: acceptance runs it at the goal's parent and at its newest commit.
 import { expect, test } from "bun:test";
-import * as issues from "../../todo/lib/todo.ts";
-import type { Runner } from "./checks.ts";
-import { acceptanceStep } from "./factory.ts";
-import { doneGoal, flakeNotes, item, landFile, notes, parentOf, ran, repoDir, RERUN_FAIL, runner, sh, useAcceptanceFixture } from "./acceptance.fixture.ts";
+import * as issues from "../../../todo/lib/todo.ts";
+import type { Runner } from "../../../jobs/lib/checks.ts";
+import { acceptanceStep } from "../../../jobs/lib/factory.ts";
+import { doneGoal, flakeNotes, item, landFile, notes, parentOf, ran, repoDir, RERUN_FAIL, runner, sh, useAcceptanceFixture } from "../../../jobs/lib/acceptance.fixture.ts";
 
 useAcceptanceFixture();
 
