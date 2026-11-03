@@ -58,7 +58,6 @@ Invoke a skill as `/aleph:<name>`. Claude can also start one by itself, except t
 | `improve-codebase-architecture` † | Finds deepening candidates, reports them as HTML, grills the one you pick |
 | `tidy` | Removes junk and dead code behind a green build, and checks a repo is ready to show |
 | `docs-writing` | Writes and audits docs with Diátaxis type gating |
-| `blog-writing` | Writes and reviews blog posts and essays, then runs `humanizer` |
 | `humanizer` | Rewrites prose so it does not read as written by AI |
 | `writing-for-agents` | How to write a skill, an `AGENTS.md` or a `CLAUDE.md` |
 | `vault` | Reads and writes the memory vault |
@@ -147,4 +146,4 @@ CI runs the type check and the suite on every push. The suite does not prove tha
 
 ## Credits
 
-`tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `codebase-design`, `domain-modeling`, `grill-with-docs` and `improve-codebase-architecture` are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, `skills/LICENSE-mattpocock`). `docs-writing` is adapted from [mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT, `skills/LICENSE-mblode`). `humanizer` is [blader/humanizer](https://github.com/blader/humanizer) 3.1.0 at `8c307f3`, unmodified (MIT, `skills/LICENSE-humanizer`). `blog-writing` is adapted from [getsentry/skills](https://github.com/getsentry/skills) `blog-writing-guide` at `f57ada2` (Apache-2.0, `skills/LICENSE-sentry`), with the AI-pattern list and Strunk's chapters 3 and 5 from [softaworks/agent-toolkit](https://github.com/softaworks/agent-toolkit) at `3027f20` (MIT, `skills/LICENSE-agent-toolkit`). `skills/blog-writing/signs-of-ai-writing.md` is [Wikipedia:Signs of AI writing](https://en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing), CC BY-SA 4.0, unmodified.
+`tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `codebase-design`, `domain-modeling`, `grill-with-docs` and `improve-codebase-architecture` are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, `skills/LICENSE-mattpocock`). `docs-writing` is adapted from [mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT, `skills/LICENSE-mblode`). `humanizer` is [blader/humanizer](https://github.com/blader/humanizer) 3.1.0 at `8c307f3`, unmodified (MIT, `skills/LICENSE-humanizer`).

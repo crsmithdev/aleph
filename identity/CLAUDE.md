@@ -64,9 +64,7 @@ name every time. Say the thing itself, not a metaphor for it. Tables, list
 items and headers keep their fragments.
 
 Blog posts, essays, letters and other writing for people to read as writing
-are not STE: they keep the writer's voice. Use `aleph:blog-writing` for a blog
-post or essay; it ends with `aleph:humanizer`. Run `aleph:humanizer` over the
-rest.
+are not STE: they keep the writer's voice. Run `aleph:humanizer` over them.
 
 Code: match the codebase's style; early returns; commands and errors in
 fenced blocks.
