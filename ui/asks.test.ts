@@ -25,7 +25,6 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
   review: () => ofRuns(run("review", { reviewCall: { call: "back", reason: "tests are missing" } })),
   question: () => ofRuns(run("question", { question: "Which port?" })),
-  manual: () => ofRuns(run("manual")),
   "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })),
   "spec-check": () => ofIssues(issue({ reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" })),
   "run-cap": () => ofIssues(issue({ reason: "run-cap", question: RUN_CAP })),
@@ -86,18 +85,16 @@ describe("asks", () => {
     });
   }
 
-  test("the checked hint of host-check and manual says it runs nothing", () => {
-    for (const r of ["host-check", "manual"]) {
-      const h = CASES[r]().flatMap((i) => i.actions).find((a) => a.act === "checked")!.hint;
-      expect(h).toContain("runs nothing");
-      expect(h).toContain("Records that you ran this check yourself");
-    }
+  test("the checked hint of host-check says it runs nothing", () => {
+    const h = CASES["host-check"]().flatMap((i) => i.actions).find((a) => a.act === "checked")!.hint;
+    expect(h).toContain("runs nothing");
+    expect(h).toContain("Records that you ran this check yourself");
     expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
   });
 
   test("the kind: approval for review, held-path, proposal and firefighter; input for the rest; an Ask's own kind wins", () => {
     for (const r of ["review", "held-path", "proposal", "firefighter", "proposal-skill"]) expect(kindOf(r), r).toBe("approval");
-    for (const r of ["question", "manual", "no-commit", "part-dropped", "triage-failed", "host-check", "rescue", "run-cap", "acceptance-failed", "spec-check"]) expect(kindOf(r), r).toBe("input");
+    for (const r of ["question", "no-commit", "part-dropped", "triage-failed", "host-check", "rescue", "run-cap", "acceptance-failed", "spec-check"]) expect(kindOf(r), r).toBe("input");
     expect(kindOf("question", "approval")).toBe("approval");
     expect(CASES["held-path"]()[0].kind).toBe("approval");
     expect(CASES.review()[0].kind).toBe("approval");
@@ -126,7 +123,6 @@ describe("asks", () => {
     expect(QUESTION_ISSUE()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", option: "B" });
     expect(CASES["part-dropped"]()[0].problem).toBe("A goal of aleph-387 was dropped and no other goal of it is open.");
     expect(CASES["part-dropped"]()[0].actions.map((a) => a.label)).toEqual(["Approve Close with what landed", "Approve Plan the missing part", "Close the issue"]);
-    expect(CASES.manual()[0].problem).toBe("The manual check of aleph-27 must be run by you, on the host.");
     expect(CASES["proposal-check"]()[0].problem).toBe("The correction memory proposes a check for aleph: Run the formatter before landing.");
     expect(CASES["proposal-check"]()[0].title).toBe("Format first");
     expect(CASES["proposal-check"]()[0].actions.map((a) => a.label)).toEqual(["Add a check to aleph", "Add no check"]);

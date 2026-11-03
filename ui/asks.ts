@@ -77,7 +77,6 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
     return `The reviewer could not reach a verdict on ${c.id} in two tries.`;
   },
   question: (c) => c.run ? `The worker on ${c.id} asked: ${clean(c.run.question) || "it needs an answer"}` : sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
-  manual: (c) => `The manual check of ${c.id} must be run by you, on the host.`,
   "part-dropped": (c) => `A goal of ${c.id} was dropped and no other goal of it is open.`,
   "spec-check": (c) => `The spec check found that the spec of ${c.id} cannot be met as written: ${clean(c.issue?.question).replace(/\.$/, "")}.`,
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
@@ -144,7 +143,7 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
         return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
       case "start": return [a("decide", "Start the work", "Makes the issue a goal, and the factory starts it.", { ...issue, approve: "true" })];
       case "checked":
-        return [a("checked", "Mark it checked", reason === "host-check" || reason === "manual"
+        return [a("checked", "Mark it checked", reason === "host-check"
           ? `Records that you ran this check yourself: ${noteOf(c) || "the check"}. It runs nothing and tests nothing.`
           : "Closes the issue as done; use this after the check has run.", issue)];
       case "approve":

@@ -408,7 +408,6 @@ test("landTerms: which runs may land, and how", () => {
   expect(needs({ condition: "passed" })).toEqual({ manual: false, held: false, asked: false });
   expect(needs({ condition: "passed", say: "look" })).toEqual({ manual: true, held: false, asked: false });
   expect(landTerms({ kind: "recheck", condition: "passed" } as Run)).toEqual({ manual: false, held: false, asked: false });
-  expect(needs(ask("manual") as Partial<Run>)).toEqual({ manual: true, held: false, asked: true });
   expect(needs(ask("held-path") as Partial<Run>)).toEqual({ manual: false, held: true, asked: true });
   expect(needs(ask("question", "input") as Partial<Run>)).toBeNull();
   expect(needs({ condition: "failed" })).toBeNull();

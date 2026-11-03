@@ -51,8 +51,8 @@ Triage is one read-only run per issue (`claude-opus-5-5`, with Read, Grep and Gl
 | Route | Does |
 |---|---|
 | `build` | Writes the issue's spec |
-| `plan` | Writes the spec and sets `plan`, so a planner run (`claude-fable-5-1`) splits it into goals |
-| `close` | Marks the issue dropped, with the reason as a note |
+| `plan` | Writes the spec and sets `plan`, so a planner run (`claude-opus-5-5`) splits it into goals |
+| `close` | Marks the issue done, with the reason as `closed_why` |
 | `done` | Marks the issue done |
 | `ask` | Sets an Ask with a question and options; a check that only the host can run has the reason `host-check` |
 
@@ -118,7 +118,7 @@ A diff that changes a path in the repo's `held` list, other than a test, waits f
 
 ### The land
 
-Lands of one repo go one at a time, in the order they became ready. A land merges the branch onto `origin/main` in memory (`git merge-tree`), runs the checks on that tree, and pushes that tree as one squash commit. The commit ends with `Issue: <repo>-<n>`, `Goal: <repo>-<n>.<k>` and `Job: <job>`.
+Lands of one repo go one at a time, in the order they became ready. A land merges the branch onto `origin/main` in memory (`git merge-tree`), runs the checks on that tree, and pushes that tree as one squash commit. The commit ends with `Issue: <repo>-<n>` when the run is on an issue, then `Job: <job>`. A held land also writes `Held-by:` with the name of the lander.
 
 - **Batch.** The land that takes the lock also takes the passed runs queued behind it, up to `ALEPH_LAND_BATCH` (8). It checks the last commit once and pushes all of them in one push. If the checks fail, it splits the batch in half until it finds the run that fails.
 - **Skipped checks.** When `origin/main` is still the commit a run's checks passed on, the land pushes without the checks.

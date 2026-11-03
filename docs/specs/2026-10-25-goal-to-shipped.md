@@ -126,7 +126,7 @@ Per Goal) sets these limits:
 | 1 | Intake | An item arrives from the chat, the CLI or the UI; `/aleph:goal` is an optional grill in front of it | Chris |
 | 2 | Spec | What done means and how it is checked: the Goal, the Edit surface and the Oracle. A spec check holds a spec that does not match the code | triage, or the session that files it |
 | 3 | Decompose | Tasks, each sized to finish in one run; large goals only | planner model |
-| 4 | Seal | A fresh author writes hidden checks from the goal alone; they must fail on `main` to count | author model |
+| 4 | Seal | A fresh author writes prose scenarios from the goal alone, and the reviewer checks them on the branch. Hidden tests are added by hand with `aleph issue hidden`. No code runs them on `main` first | author model, Chris |
 | 5 | Make | One worker per task, in its own isolated workspace | worker model |
 | 6 | Check | Tests, the sealed scenarios, a fresh reviewer that marks every clause and judges test edits, the browser step. Capped fix rounds | deterministic, reviewer model |
 | 7 | Deliver | Code lands on `origin/main` through the factory's land | deterministic |

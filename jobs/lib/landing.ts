@@ -41,14 +41,13 @@ export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => 
 
 /**
  * The one rule for which runs may land, and on what terms. A passed agent run may land, and it opens a check
- * when it says one. A run that needs Chris only for a manual check, a held path or the reviewer may land when he says so (`asked`).
+ * when it says one. A run that needs Chris only for a held path or the reviewer may land when he says so (`asked`).
  * Every other run gives null.
  */
 export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: boolean } | null {
   if (!isAgentRun(agent.kind)) return null;
   if (agent.condition === "passed") return { manual: agent.say !== undefined, held: false, asked: false };
   const needs = isAwaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
-  if (needs === "manual") return { manual: true, held: false, asked: true };
   if (needs === "held" || needs === "review") return { manual: false, held: true, asked: true };
   return null;
 }

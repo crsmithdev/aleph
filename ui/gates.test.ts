@@ -97,11 +97,11 @@ test("POST /api/gates/revoke/:reason runs `aleph always revoke`, and refuses a r
 const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, explained: false,
   actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, args: { repo: "r", id: id.split("-")[1] }, recommended: false }], details: {}, repo: "r" });
 
-test("splitAsks keeps the Asks routed to Chris and puts host and manual checks in the chores", () => {
+test("splitAsks keeps the Asks routed to Chris and puts host checks in the chores", () => {
   // run-cap is not handed to the firefighter in the fixture's always.json, so it stays Chris's.
-  const { asks, chores } = splitAsks([askItem("run-cap", "r-1"), askItem("host-check", "r-2"), askItem("manual", "r-3")]);
+  const { asks, chores } = splitAsks([askItem("run-cap", "r-1"), askItem("host-check", "r-2")]);
   expect(asks.map((a) => a.id)).toEqual(["r-1"]);
-  expect(chores.map((a) => a.id)).toEqual(["r-2", "r-3"]);
+  expect(chores.map((a) => a.id)).toEqual(["r-2"]);
 });
 
 const data = () => ({

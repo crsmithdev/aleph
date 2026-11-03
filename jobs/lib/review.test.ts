@@ -233,7 +233,7 @@ describe("review", () => {
   test("a run that is not held starts none", async () => {
     const { startReview } = await import("./review.ts");
     expect(startReview(held("passed", { condition: "passed", ask: undefined }))).toBe(false);
-    expect(startReview(held("manual", { ask: { kind: "input", reason: "manual", question: "check", options: [], why: [] } }))).toBe(false);
+    expect(startReview(held("question", { ask: { kind: "input", reason: "question", question: "check", options: [], why: [] } }))).toBe(false);
   });
 });
 

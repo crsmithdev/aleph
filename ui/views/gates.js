@@ -23,7 +23,6 @@ export const REASONS = {
   review: ["Reviewer holds", "The reviewer held the run and no fix rounds are left."],
   proposal: ["Proposals", "Work that is a proposal, such as a dependency update, before it starts."],
   question: ["Questions", "A run or a triage stopped on a choice that the spec leaves open."],
-  manual: ["Manual checks", "A goal whose Oracle needs a person to look."],
   "no-commit": ["Runs with no commit", "The last 3 runs of a goal ended with nothing committed."],
   "part-dropped": ["Dropped parts", "A part of an issue was dropped and no other part is open."],
   "triage-failed": ["Failed triage", "Triage of an issue failed twice."],
@@ -92,7 +91,7 @@ export function renderWaiting(d) {
     (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;
 }
 
-/** The host-check and manual-check Asks as one checklist, each with its own "Mark it checked". */
+/** The host-check Asks as one checklist, each with its own "Mark it checked". */
 export function renderChores(d) {
   const rows = d.chores.map((i) => {
     const a = (i.actions ?? []).find((x) => x.act === "checked");

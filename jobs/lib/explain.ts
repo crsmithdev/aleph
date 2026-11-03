@@ -128,7 +128,7 @@ Rules:
 - Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. No action${decision ? " and no option" : ""} is left without an effect.
 - State only what you read. Where you did not read something, say "I did not check X".
 - Do not repeat the button's label or what the store does (an Ask cleared, a note added); say what happens to the named things in this case.
-- For "checked" on a host check or a manual check, say that the click records a claim and runs nothing, and name what was to be done.
+- For "checked" on a host check, say that the click records a claim and runs nothing, and name what was to be done.
 - "recommend" is null when you cannot tell from what you read.
 `;
 

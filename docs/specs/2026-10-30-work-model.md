@@ -105,7 +105,7 @@ Run     ~/.aleph/runs/<time>-<repo>-<id>-<kind>/state.json
 
 Ask     { kind: input | approval, reason, question, options[{label, line, after?}], recommended?, why[] }
   approval reasons: review, held-path, proposal
-  input reasons:    question, manual, no-commit, part-dropped, triage-failed, host-check, rescue
+  input reasons:    question, no-commit, part-dropped, triage-failed, host-check, rescue
 
 Always  ~/.aleph/factory/always.json: reason → { action, at }
 ```
@@ -160,7 +160,7 @@ issue.stage = dropped | done                        from status
 
 ### Commit trailers
 
-New lands write `Issue: <issue id>` and `Goal: <goal id>`. Readers accept `Item:` as an issue reference for history. The trailer reader is the one legacy reader that stays after the contract step.
+New lands write `Issue: <issue id>` and `Job: <job>`, and `Held-by:` for a held land. They write no `Goal:` trailer. Readers accept `Item:` as an issue reference for history. The trailer reader is the one legacy reader that stays after the contract step.
 
 ### CLI
 

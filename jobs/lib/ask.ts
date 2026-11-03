@@ -47,7 +47,7 @@ export interface Reason {
   /** The action the Always button takes. Empty: the factory has no rule that acts on this reason, so the card offers no auto-yes. */
   always: string;
   /** The word a run's news and prompts use for this wait. */
-  needs?: "manual" | "question" | "held" | "review";
+  needs?: "question" | "held" | "review";
 }
 export interface Granted { action: string; at: string }
 
@@ -56,6 +56,8 @@ const proposal: Reason = { kind: "approval", name: "Lesson", actions: ["approve"
 /**
  * Every reason the factory asks Chris. The first group is the spec's Ask reasons. The second group is kept as it was,
  * because the spec names no new home for it: run-cap, acceptance-failed, firefighter and the `proposal-<kind>:<place>` keys.
+ * No Ask has the reason firefighter: it is only an Always rule. With `land` granted, the firefighter lands runs that change
+ * a held security path (firefighter.ts).
  */
 const REASONS = {
   "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "firefighter", needs: "held" },
@@ -63,7 +65,6 @@ const REASONS = {
   "proposal": { kind: "approval", name: "Proposal", actions: ["start", "deny"], always: "start" },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop; firefighter): one reason now, so it lists both.
   "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny", "firefighter"], always: "recommended", needs: "question" },
-  "manual": { kind: "input", name: "Manual check", actions: ["checked", "deny"], always: "", needs: "manual" },
   "no-commit": { kind: "input", name: "No commit", actions: ["rerun", "close"], always: "firefighter" },
   "part-dropped": { kind: "input", name: "Part dropped", actions: ["rerun", "close"], always: "" },
   "triage-failed": { kind: "input", name: "Triage failed", actions: ["retry", "close"], always: "retry" },
@@ -111,7 +112,7 @@ export const reasonOf = (given: string | undefined): string => (given && ASK_REA
 export const kindOf = (reason: string, given?: string): Ask["kind"] =>
   given === "input" || given === "approval" ? given : ASK_REASONS[reason]?.kind ?? "input";
 
-/** The kind of wait an ask is, from its reason: manual, question, held or review; else none. */
+/** The kind of wait an ask is, from its reason: question, held or review; else none. */
 export const needsOf = (ask: Ask | undefined): Reason["needs"] => (ask ? ASK_REASONS[ask.reason]?.needs : undefined);
 
 /** What an awaiting run waits on. A run with no ask of its own asks a question. */

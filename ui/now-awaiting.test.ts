@@ -150,7 +150,7 @@ import { ASK_REASONS } from "../jobs/lib/ask.ts";
 const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } => {
   const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", condition: "awaiting", ask: { kind: why === "held-path" || why === "review" ? "approval" : "input", reason: why }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
   const iss = (o: object) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o }], lessons: [] as any[] });
-  if (["held-path", "review", "manual"].includes(reason)) return run(reason, reason === "review" ? { reviewCall: { call: "ask", reason: "r" } } : {});
+  if (["held-path", "review"].includes(reason)) return run(reason, reason === "review" ? { reviewCall: { call: "ask", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
   if (reason.startsWith("proposal-")) return { runs: [] as any[], issues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {

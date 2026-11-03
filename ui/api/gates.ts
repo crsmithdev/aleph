@@ -24,7 +24,7 @@ export const LOG_DAYS = 7, LOG_MAX = 200;
 const DAY = 86_400_000;
 
 /** The Ask reasons whose Asks are host chores: a step on this machine that Chris marks checked. */
-const CHORES = new Set(["host-check", "manual"]);
+const CHORES = new Set(["host-check"]);
 
 export type By = "You" | "Rule" | "Firefighter" | "Gate";
 export interface LogEntry { at: string; by: By; item: string; what: string; count?: number; first?: string }
