@@ -17,7 +17,7 @@ import { note, noteFlake, readHidden, reopen as storeReopen, writeList } from ".
 import { cloneAndSetup } from "./checks.ts";
 import { git } from "./git.ts";
 import { SCENARIOS } from "./author.ts";
-import { gitPrelude, q } from "./agent-call.ts";
+import { gitPrelude, OPUS_MODEL, q } from "./agent-call.ts";
 import { outcome as agentOutcome } from "./gate.ts";
 import { checkSlot, tell, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
@@ -205,7 +205,7 @@ export const sandboxScenarios: ScenarioCheck = async (repo, sha, scenarios) => {
     const b = git(repo.path, "bundle", "create", join(rdir, "out", "accept.bundle"), ref);
     if (!b.ok) return { output: `bundle failed: ${b.out}`, infra: true };
     const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
+      "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const script = [
       "set -e", "exec 3>&1 1>&2", ...gitPrelude("../out/accept.bundle", [`+${ref}:${ref}`]), `git switch -q --detach ${q(ref)}`,
       `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`,

@@ -3,10 +3,13 @@
  * the folder, the spawn, the time box, the cost, the ending, and the cleanup after a dead process.
  * `ALEPH_<ROLE>_CMD` replaces `claude`, which is how a test gives a fake, and
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
+ * `agentCall` is the other kind: a sandboxed `claude` call (the worker and the two reviewers) under srt.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { replyOf } from "./gate.ts";
+import { gitPrelude, q } from "./agent-call.ts";
+import { outcome, replyOf, type Outcome } from "./gate.ts";
+import { sandboxed, stallReason, type Step } from "./sandbox.ts";
 import { allRuns, lock, readRun, runsDir, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
 import { roleCmd, roleSeconds } from "./settings.ts";
 
@@ -109,4 +112,44 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
       release();
     }
   }
+}
+
+/** The three sandboxed `claude` calls. */
+export type AgentRole = "worker" | "scenario reviewer" | "browser reviewer";
+
+/** A git bundle the script fetches `refs` from before the setup lines, which run with stdout on stderr. */
+export interface AgentBundle { bundle: string; refs: string[]; setup: string[] }
+
+/** Why a sandboxed call gave no usable reply, and its kind. */
+export interface AgentCause { kind: "stalled" | "time-box" | "other"; reason: string }
+
+export type AgentOptions = Parameters<typeof sandboxed>[2];
+
+/**
+ * The call's script. With a bundle, setup output goes to stderr, so the agent's own stdout is the whole log;
+ * without one, the script only runs the argv.
+ */
+export function agentScript(argv: string[], bundle?: AgentBundle): string {
+  const run = `exec ${argv.map(q).join(" ")}`;
+  if (!bundle) return run;
+  return ["set -e", "exec 3>&1 1>&2", ...gitPrelude(bundle.bundle, bundle.refs), ...bundle.setup, "exec 1>&3 3>&-", run].join("\n");
+}
+
+/** The cause the call states: a stall, the time box, or a reply that is not ok; null when the reply is ok. */
+export function agentCause(r: Step, o: Outcome): AgentCause | null {
+  if (r.stalled) return { kind: "stalled", reason: stallReason() };
+  if (r.timedOut) return { kind: "time-box", reason: "time box" };
+  if (!o.ok) return { kind: "other", reason: o.line || `exit ${r.code}` };
+  return null;
+}
+
+/**
+ * One sandboxed `claude` call in the run folder `dir`: it runs the script under srt and reads the stdout log,
+ * or "" when the log is missing. The caller keeps its own paths, env, limits and writes.
+ */
+export async function agentCall(role: AgentRole, dir: string, bundle: AgentBundle | undefined, argv: string[], o: AgentOptions):
+  Promise<{ role: AgentRole; outcome: Outcome; step: Step; cause: AgentCause | null }> {
+  const step = await sandboxed(dir, agentScript(argv, bundle), o);
+  const out = outcome(existsSync(o.stdout) ? readFileSync(o.stdout, "utf8") : "");
+  return { role, outcome: out, step, cause: agentCause(step, out) };
 }

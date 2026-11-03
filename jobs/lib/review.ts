@@ -9,15 +9,15 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { q } from "./agent-call.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
+import { agentCall } from "./agent-run.ts";
 import { BROWSER, browserStep, changedViews, startUiServer } from "./review-browser.ts";
 import { areasOf, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
-import { outcome } from "./gate.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
 import { startUnit } from "./launch.ts";
-import { linkBins, runPath, sandboxed, stallReason, stallSeconds, workerToken, writeHome } from "./sandbox.ts";
+import { linkBins, runPath, stallSeconds, workerToken, writeHome } from "./sandbox.ts";
 
 /**
  * The reviewer's profile: it reads the run folder, writes only in review/ (its
@@ -182,18 +182,15 @@ async function review(folder: string): Promise<void> {
     };
     delete env.ANTHROPIC_API_KEY;
     const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
+      "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const log = join(folder, "review.log");
     const once = async (): Promise<string | null> => {
-      const r = await sandboxed(folder, `exec ${argv.map(q).join(" ")}`, {
+      const { outcome: o, cause } = await agentCall("browser reviewer", folder, undefined, argv, {
         ...REVIEW_SANDBOX, cwd: "review/work", env, stdin: text, stdout: log, stderr: log,
         limit: Number(process.env.ALEPH_REVIEW_CALL_TIMEOUT ?? 1500), stall: stallSeconds(),
       });
-      const o = outcome(existsSync(log) ? readFileSync(log, "utf8") : "");
       writeFileSync(md, o.result.trimEnd() + "\n");
-      if (r.stalled) return stallReason();
-      if (r.timedOut) return "time box";
-      if (!o.ok) return o.line || `exit ${r.code}`;
+      if (cause) return cause.reason;
       return parseVerdict(o.result) ? null : "no VERDICT line";
     };
     // A reviewer that gives no verdict runs once more; a second miss stays with Chris as an error.

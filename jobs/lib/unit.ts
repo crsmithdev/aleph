@@ -9,16 +9,17 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
-import { gitPrelude, q } from "./agent-call.ts";
+import { OPUS_MODEL, q } from "./agent-call.ts";
+import { agentCall } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
-import { heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
+import { heldRule, securityChange, testFindings, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk, type AskReason } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isAgentRun, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
-import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
+import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallSeconds, workerToken } from "./sandbox.ts";
 import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./acceptance.ts";
 import { HIDDEN_UNREADABLE, checksInSandbox, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
@@ -374,12 +375,10 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const argv = [workerCmd(), "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       ...(run.model ? ["--model", run.model] : [])];
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
-    const script = [
-      "set -e", "exec 3>&1 1>&2",
-      ...gitPrelude("../in.bundle", [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])]),
-      prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`,
-      ...repo.setup, "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
-    ].join("\n");
+    const bundle = {
+      bundle: "../in.bundle", refs: [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])],
+      setup: [prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`, ...repo.setup],
+    };
     phase("worker");
     // Chrome stays outside the sandbox: the worker's shot requests are served here, through a bridge into its network namespace.
     const reach = async (url: string) => {
@@ -390,9 +389,9 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       return { url: new URL(u.pathname + u.search + u.hash, b.url).href, stop: b.stop, stderr: b.stderr };
     };
     const shots = serveShots(dir, { reach });
-    let w: Awaited<ReturnType<typeof sandboxed>>;
+    let w: Awaited<ReturnType<typeof agentCall>>;
     try {
-      w = await sandboxed(dir, script, {
+      w = await agentCall("worker", dir, bundle, argv, {
         read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
         env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
         stdout: join(folder, "output.log"), stderr: join(folder, "stderr.log"), limit: workSeconds(run),
@@ -401,15 +400,13 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       });
     } finally { await shots.stop(); }
     child = null;
-    const o = agentOutcome(readFileSync(join(folder, "output.log"), "utf8"));
+    const o = w.outcome;
     writeFileSync(join(folder, "result.md"), o.result);
     const spent = (o.cost ?? 0) + (authorCost ?? 0);
     const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
     fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
-    if (w.stalled) return stuck("stalled", stallReason(), facts);
-    if (w.timedOut) return stuck("time-box", "time box", facts);
-    if (!o.ok) return stuck("other", o.line, facts);
+    if (w.cause) return stuck(w.cause.kind, w.cause.reason, facts);
 
     // The worker's processes are gone with its sandbox. Only this step reads work/.
     phase("bundle");
@@ -641,28 +638,28 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const text = reviewPrompt(run.name, spec, diff, findings, scenarios);
     writeFileSync(join(folder, "review-prompt.md"), text);
     const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
-    const script = [
-      "set -e", "exec 3>&1 1>&2", ...gitPrelude("../out/out.bundle", [`+refs/heads/${branch}:refs/heads/${branch}`]), `git switch -q ${q(branch)}`,
-      // The scenarios need code that runs. A failed setup shows when the reviewer runs it, so it does not stop the review.
-      ...(scenarios ? [`{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`] : []),
-      "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
-    ].join("\n");
+      "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
+    const bundle = {
+      bundle: "../out/out.bundle", refs: [`+refs/heads/${branch}:refs/heads/${branch}`],
+      setup: [
+        `git switch -q ${q(branch)}`,
+        // The scenarios need code that runs. A failed setup shows when the reviewer runs it, so it does not stop the review.
+        ...(scenarios ? [`{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`] : []),
+      ],
+    };
     const log = join(folder, "review.log");
-    const w = await sandboxed(rdir, script, {
+    const w = await agentCall("scenario reviewer", rdir, bundle, argv, {
       read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
       env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
       stdout: log, stderr: join(folder, "review.err"), limit: reviewSeconds(), stall: stallSeconds(),
       onSpawn: (p) => { child = p; },
     });
     child = null;
-    const o = agentOutcome(existsSync(log) ? readFileSync(log, "utf8") : "");
+    const o = w.outcome;
     writeFileSync(join(folder, "review.md"), o.result);
     const cost = o.cost;
     const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
-    if (w.stalled) return none(stallReason());
-    if (w.timedOut) return none("time box");
-    if (!o.ok) return none(o.line || `exit ${w.code}`);
+    if (w.cause) return none(w.cause.reason);
     const v = reviewVerdict(o.result);
     if (!v) return none("no VERDICT line");
     for (const aside of tagged(o.result, "SET-ASIDE")) note(repo, goal!, `sealed checks: the reviewer set aside: ${aside}`);
