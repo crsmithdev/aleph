@@ -297,7 +297,7 @@ describe("review browser step", () => {
     process.env.ALEPH_REVIEW_CMD = reviewer(join(base, "seen-prompt"), 0);
     const folder = held("ui-prompt", { on: `demo-${uiTodo}` });
     await runReview(folder);
-    const prompt = readFileSync(join(folder, "review-prompt.md"), "utf8");
+    const prompt = readFileSync(join(folder, "call-prompt.md"), "utf8");
     expect(prompt).not.toContain("bun ui/server.ts");
     expect(prompt).not.toContain("Start `bun");
     expect(prompt).toContain(join(folder, "browser/report.md"));
@@ -319,7 +319,7 @@ describe("review browser step", () => {
     expect(existsSync(argvFile)).toBe(false);
     expect(readdirSync(join(folder, "browser"))).toEqual([]);
     expect(readFileSync(join(base, "seen-plain"), "utf8").trim()).toBe("none");
-    expect(readFileSync(join(folder, "review-prompt.md"), "utf8")).not.toContain("browser/report.md");
+    expect(readFileSync(join(folder, "call-prompt.md"), "utf8")).not.toContain("browser/report.md");
     expect(await reviewAt(folder)).toEqual({ call: "land" });
   }, 30_000);
 

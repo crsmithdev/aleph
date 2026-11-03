@@ -142,6 +142,16 @@ describe("review", () => {
     expect(await reviewAt(folder)).toEqual({ call: "land" });
   });
 
+  test("the review keeps the first reviewer's prompt, so a sealed run stays sealed", async () => {
+    const { runReview } = await import("./review.ts");
+    const folder = held("sealed");
+    writeFileSync(join(folder, "review-prompt.md"), "## Sealed scenarios\n- s\n");
+    process.env.ALEPH_REVIEW_CMD = fakeClaude("VERDICT: land");
+    await runReview(folder);
+    expect(readFileSync(join(folder, "review-prompt.md"), "utf8")).toBe("## Sealed scenarios\n- s\n");
+    expect(existsSync(join(folder, "call-prompt.md"))).toBe(true);
+  });
+
   test("a silent reviewer is stopped at ALEPH_STALL_SECONDS, twice, and the error says stalled", async () => {
     const { runReview } = await import("./review.ts");
     const folder = held("silent");

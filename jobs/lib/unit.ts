@@ -412,7 +412,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       authorCost = await seal(repo, goalId);
     }
     const argv = [workerCmd(), "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      ...(run.model ? ["--model", run.model] : [])];
+      "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", ...(run.model ? ["--model", run.model] : [])];
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const bundle = {
       bundle: "../in.bundle", refs: [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])],
@@ -609,8 +609,8 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
 const REVIEW = `You are the reviewer of job \`%NAME%\`. The working directory is a clone of the
 branch the worker made for the goal issue below; read the code there as needed.
 Judge whether the diff does what the issue asks, whether the tests cover it, and
-whether it breaks anything. Do not change files. The factory already ran the repo's checks on this branch and
-they passed. Do not run the full test suite or repeat-run loops: you have a time
+whether it breaks anything. Do not change tracked files. The factory ran the checks that this change reaches
+on this branch, and they passed. Do not run the full test suite or repeat-run loops: you have a time
 box, and a long command ends it with no verdict. Run only a few targeted commands
 of your own, each ending in well under a minute. ${FOREGROUND}
 

@@ -170,7 +170,7 @@ async function review(folder: string): Promise<void> {
       name: run.name, branch: run.branch, main: repo.main, checks: repo.checks.map((c) => c.run),
       tsc: existsSync(join(work, "tsconfig.json")) && existsSync(join(work, "node_modules", "typescript")), ui, folder, spec,
     });
-    writeFileSync(runFile(folder, "review-prompt.md"), text);
+    writeFileSync(runFile(folder, "call-prompt.md"), text);
     // The reviewer's home is in the scratch folder, so its settings and git identity are writable there.
     // The reviewer's tmp/ sits in the run folder, as a worker's does in its own.
     const home = join(scratch, "home");
@@ -218,7 +218,7 @@ export function startReview(folder: string): boolean {
   writeFileSync(join(folder, CALL_FILE), "PENDING\n");
   try {
     // Its own transient unit: the run's unit stops its whole cgroup when the run ends.
-    const err = runFile(folder, "review.err");
+    const err = runFile(folder, "call.err");
     startUnit(["review", folder], { unit: `aleph-${basename(folder)}-review`, cwd: folder, output: { file: err },
       props: [`--property=StandardOutput=append:${err}`, `--property=StandardError=append:${err}`] });
   } catch (e: any) {

@@ -28,15 +28,17 @@ import { jobSpec, runFile } from "./run-files.ts";
 // A worker that backgrounds a command and ends its turn is never woken again in a headless run.
 export const FOREGROUND = "Run every command in the foreground and wait for it: nothing wakes you after your turn ends.";
 
-const FIXED = (run: Run, main: string) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`. Work
+// The parsers read a tag on any line; this order keeps the worker's final text readable.
+const ENDING = "After the summary come your tag lines, and the `QUESTION:` line, when you have one, is the last line.";
+
+const FIXED = (run: Run) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`. Work
 only there. Commit every change on the branch; the run fails if anything is
 left uncommitted or untracked. Never merge, never push, never touch another
 branch. \`aleph issue\` is not your push: it writes the list of issues on main by
-itself, so use it for every change to the list. If the previous run was a
-failed land, merge \`origin/${main}\` into the branch, resolve the conflicts,
-and commit. If you need a decision from Chris, stop
-and make your last line \`QUESTION: <one question>\`. ${TAG_FORMAT} ${FOREGROUND} End with a
-summary of what you did and what you ran: at most 120 words of prose, plus a list only for separate items.`;
+itself, so use it for every change to the list. If you need a decision from Chris, stop
+and print a line \`QUESTION: <one question>\`. ${TAG_FORMAT} ${FOREGROUND} End with a
+summary of what you did and what you ran: at most 120 words of prose, plus a list only for separate items.
+${ENDING}`;
 
 /** What the worker runs before it ends: the repo's own checks, else today's sentence. */
 function checksSentence(checks: Check[]): string {
@@ -49,11 +51,10 @@ const FACTORY = (run: Run, main: string, checks: Check[] = []) => `You are a wor
 a sandbox. You see this repo and nothing else of the machine, and the network
 reaches only the Anthropic API and npm. Do the goal below. Commit every change
 on the branch: only commits leave the sandbox. Never switch to another branch
-and never push. If the previous run's land conflicted, merge \`origin/${main}\`
-into the branch and resolve the conflicts so that both changes survive. Nobody
+and never push. Nobody
 answers questions during the run: when you must choose, take the answer you
-would recommend and print a line \`DEFAULT: <question> -> <answer>\`. \`DEFAULT:\` is for choices the Oracle does not settle. If you cannot meet a clause of the Oracle (for example, because the clause conflicts with another clause of the spec), stop: do not defer that clause, and make your last line \`QUESTION: <question that names the Oracle clause>\`. Do not use \`DEFAULT:\` or \`FOLLOWUP:\` for that clause. For work
-you find but do not do, print a line \`FOLLOWUP: <title>\`; a \`FOLLOWUP:\` must not cover anything the Oracle names. A test that fails or times out and is not the goal's own, and passes again alone or on a rerun, is a flake: print one line \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\` for it. End the result with zero or more lines
+would recommend and print a line \`DEFAULT: <question> -> <answer>\`. \`DEFAULT:\` is for choices the Oracle does not settle. If you cannot meet a clause of the Oracle (for example, because the clause conflicts with another clause of the spec), stop: do not defer that clause, and print a line \`QUESTION: <question that names the Oracle clause>\`. Do not use \`DEFAULT:\` or \`FOLLOWUP:\` for that clause. For work
+you find but do not do, print a line \`FOLLOWUP: <title>\`; a \`FOLLOWUP:\` must not cover anything the Oracle names. A test that fails or times out and is not the goal's own, and passes again alone or on a rerun, is a flake: print one line \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\` for it. Print zero or more lines
 \`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`, for durable
 facts about the repo or its tools that you learned and checked. ${TAG_FORMAT} If the goal already
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
@@ -63,7 +64,7 @@ cannot do the goal makes no commit and gives the reason in its final text; it do
 ${checksSentence(checks)} Chrome cannot start in the sandbox. For a screenshot of a page
 served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
 the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
-Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items.`;
+Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
 
 /**
  * The goal's checks for the brief: its test files stored on the issue, with how to run them, or "" when it has none.
@@ -83,7 +84,7 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
     const n = onOf(run);
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
-  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run, repo.main)), `## Spec\n\n${jobSpec(folder, run)}`];
+  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${jobSpec(folder, run)}`];
   const goal = goalChecks(repo, run);
   if (goal) parts.push(goal);
   const runs = jobById(run.job) ?? [];

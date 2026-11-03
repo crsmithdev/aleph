@@ -29,8 +29,13 @@ import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { dispatchIssues } from "./factory.ts";
 
 test("a reply with a backslash before a backtick still parses, and an escaped backslash stays", () => {
-  const p = parseFactChecks('{"verdicts":[{"fact":"\\`ledger.ts\\` holds C:\\\\x","verdict":"keep","reason":"r"}]}');
-  expect(Array.isArray(p) && p[0].fact).toBe("`ledger.ts` holds C:\\x");
+  const p = parseFactChecks('{"verdicts":[{"verdict":"keep","reason":"\\`ledger.ts\\` holds C:\\\\x"}]}');
+  expect(Array.isArray(p) && p[0].reason).toBe("`ledger.ts` holds C:\\x");
+});
+
+test("a verdict needs no fact field and matches its fact by position; an old reply's fact field is ignored", () => {
+  expect(parseFactChecks('{"verdicts":[{"verdict":"keep","reason":"r","kind":"concept"}]}')).toEqual([{ fact: "", source: "", verdict: "keep", reason: "r", scope: "global", title: "", kind: "concept" }]);
+  expect(parseFactChecks('{"verdicts":[{"fact":"old","verdict":"reject","reason":"r"}]}')).toEqual([{ fact: "", source: "", verdict: "reject", reason: "r", scope: "global", title: "" }]);
 });
 
 test("a reply with no JSON fails the run and rejects every fact", async () => {

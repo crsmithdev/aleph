@@ -9,9 +9,9 @@ import { join } from "node:path";
  */
 export type RunFile =
   | "state.json" | "pid" | "exit"
-  | "spec.md" | "command.txt" | "prompt.md" | "review-prompt.md"
+  | "spec.md" | "command.txt" | "prompt.md" | "review-prompt.md" | "call-prompt.md"
   | "output.log" | "stderr.log" | "setup.log" | "next.log" | "dispatch.log" | "trace.log" | "checks.log" | "hidden.log" | "land.log"
-  | "result.md" | "review.md" | "call.md" | "review.log" | "review.err" | "review.pid"
+  | "result.md" | "review.md" | "call.md" | "review.log" | "review.err" | "call.err" | "review.pid"
   | "asked" | "asked-spec" | "rescued" | "paused-next" | "batch.json"
   | "gh" | "review";
 

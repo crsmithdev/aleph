@@ -68,8 +68,9 @@ test("the reviewer prompt names a deleted test; without findings it has no test 
   expect(reviewPrompt("n", "goal", "diff", f)).toContain("The diff deletes the test a.test.ts");
   expect(reviewPrompt("n", "goal", "diff", [])).not.toContain("Test changes");
   const p = reviewPrompt("n", "goal", "diff", []);
-  expect(p).toContain("already ran the repo's checks");
+  expect(p).toContain("ran the checks that this change reaches");
   expect(p).toContain("they passed");
+  expect(p).toContain("Do not change tracked files.");
   expect(p).toContain("Do not run the full test suite");
 });
 

@@ -36,7 +36,10 @@ export interface FactCheck { fact: string; source: string; verdict: "keep" | "re
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 
-/** The verdicts in the reviewer's output (the whole output, or its outermost braces), or why they fail the check. `source` is filled in by the caller. */
+/**
+ * The verdicts in the reviewer's output (the whole output, or its outermost braces), or why they fail the check.
+ * A verdict matches its fact by position: the caller fills in `fact` and `source`, and a `fact` field in the reply is ignored.
+ */
 export function parseFactChecks(output: string): FactCheck[] | string {
   let raw: any;
   const braces = output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1);
@@ -48,12 +51,10 @@ export function parseFactChecks(output: string): FactCheck[] | string {
   if (!Array.isArray(raw.verdicts)) return "no verdicts list";
   const out: FactCheck[] = [];
   for (const [i, v] of raw.verdicts.entries()) {
-    const fact = str(v?.fact);
-    if (!fact) return `entry ${i + 1} has no fact`;
-    if (v.verdict !== "keep" && v.verdict !== "reject") return `entry ${i + 1} has verdict ${JSON.stringify(v.verdict)}`;
+    if (v?.verdict !== "keep" && v.verdict !== "reject") return `entry ${i + 1} has verdict ${JSON.stringify(v.verdict)}`;
     const reason = str(v.reason);
     if (!reason) return `entry ${i + 1} has no reason`;
-    out.push({ fact, source: "", verdict: v.verdict, reason, scope: str(v.scope) || "global", title: str(v.title), ...(v.kind === "gotcha" || v.kind === "concept" ? { kind: v.kind } : {}) });
+    out.push({ fact: "", source: "", verdict: v.verdict, reason, scope: str(v.scope) || "global", title: str(v.title), ...(v.kind === "gotcha" || v.kind === "concept" ? { kind: v.kind } : {}) });
   }
   return out;
 }
@@ -61,16 +62,14 @@ export function parseFactChecks(output: string): FactCheck[] | string {
 export function factsPrompt(facts: Fact[], commit: string): string {
   return `You review facts that a worker claims to have learned about a repo. Your working directory is the repo. The work landed as commit ${commit}: read the repo as landed with \`git show ${commit}:<path>\`, or read the files here. You have read-only tools. Change nothing.
 
-Land commit: ${commit}
-
 Facts, each with its cited source:
 ${facts.map((f, i) => `${i + 1}. ${f.fact}\n   source: ${f.source}`).join("\n")}
 
 For each fact, open its cited source and judge: keep it only when that source shows the fact, and it is durable and true of the repo or its tools; reject it otherwise. Reply with one JSON object and nothing else:
 
-{"verdicts": [{"fact": "<the fact>", "verdict": "keep" | "reject", "reason": "<one sentence>", "scope": "<the repo key, or global>", "title": "<Title Case note title>"}]}
+{"verdicts": [{"verdict": "keep" | "reject", "reason": "<one sentence>", "scope": "<the repo key, or global>", "title": "<Title Case note title>", "kind": "gotcha" | "concept"}]}
 
-Give exactly one entry per fact, in the order above.
+Give exactly one entry per fact, in the order above, and do not repeat the fact. The kind is \`concept\` when the fact says how a part of the repo or its tools works by design, and \`gotcha\` when it is a trap: behaviour that surprises a reader and costs time.
 `;
 }
 
