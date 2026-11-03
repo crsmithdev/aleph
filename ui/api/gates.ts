@@ -28,7 +28,7 @@ const DAY = 86_400_000;
 const CHORES = new Set(["host-check", "manual"]);
 
 export type By = "You" | "Rule" | "Firefighter" | "Gate";
-export interface LogEntry { at: string; by: By; item: string; what: string }
+export interface LogEntry { at: string; by: By; item: string; what: string; count?: number; first?: string }
 
 /** The Asks routed to Chris, split into the ones to decide and the host chores. */
 export function splitAsks(items: AskItem[]): { asks: AskItem[]; chores: AskItem[] } {
@@ -99,9 +99,23 @@ function noteEntries(): LogEntry[] {
   return out;
 }
 
+/** One entry for each run of Gate entries with the same item and what, in time order among the Gate entries: `at` is the last line's time, `first` the first's, `count` the lines. A single line gets neither. */
+function collapse(entries: LogEntry[]): LogEntry[] {
+  const out: LogEntry[] = [];
+  for (const e of [...entries].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
+    const last = out.at(-1);
+    if (last && last.item === e.item && last.what === e.what) {
+      last.first ??= last.at;
+      last.count = (last.count ?? 1) + 1;
+      last.at = e.at;
+    } else out.push({ ...e });
+  }
+  return out;
+}
+
 /** The log: the gate holds, the Always rules Chris set, the Rule and Firefighter lines and his answers; the last LOG_DAYS days, newest first, LOG_MAX of each actor at most, so a busy actor does not push the others out. */
 export function log(now = Date.now()): LogEntry[] {
-  const holds: LogEntry[] = allHolds().filter((h) => h.kind !== "started").map((h) => ({ at: h.at, by: "Gate", item: h.name, what: `${h.kind}: ${h.text}` }));
+  const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h): LogEntry => ({ at: h.at, by: "Gate", item: h.name, what: `${h.kind}: ${h.text}` })));
   const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "You", item: "rule", what: `${reason}: set to ${g.action}` }));
   return [...holds, ...set, ...tickEntries(), ...noteEntries()]

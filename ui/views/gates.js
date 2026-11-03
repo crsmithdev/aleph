@@ -155,7 +155,7 @@ export function renderLog(d, by) {
   const pick = Object.keys(BY).find((k) => k.toLowerCase() === by) ?? "All";
   const chips = ["All", ...Object.keys(BY)].map((k) => `<a class="fchip" href="#/gates${k === "All" ? "" : `?by=${k.toLowerCase()}`}"${k === pick ? ' aria-current="true"' : ""}>${esc(k)}</a>`).join("");
   const entries = d.log.entries.filter((e) => pick === "All" || e.by === pick);
-  const rows = entries.map((e) => `<tr><td class="time">${esc(when(e.at))}</td><td><span class="badge ${BY[e.by]}">${esc(e.by)}</span></td><td>${itemLink(e.item)}</td><td class="what">${esc(e.what)}</td></tr>`).join("");
+  const rows = entries.map((e) => `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td><span class="badge ${BY[e.by]}">${esc(e.by)}</span></td><td>${itemLink(e.item)}</td><td class="what">${esc(e.what)}${e.count ? ` <span class="quiet">×${e.count}</span>` : ""}</td></tr>`).join("");
   return `<section id="gates-log" aria-label="Log">${sectionHead("Log", { aside: `The last ${d.log.days} days, at most ${d.log.max} entries of each actor.` })}` +
     `<nav class="fchips" aria-label="Filter the log">${chips}</nav>` +
     (rows ? dataTable(heads(["When", "By", "Item", "What"]), rows) : empty("No entry in this window.")) + `</section>`;

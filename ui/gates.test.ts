@@ -5,9 +5,11 @@ import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gate.ts";
 import { DAY_CAP, LIVE_CAP } from "../jobs/lib/settings.ts";
-import { gatesBody, securityFacts, splitAsks } from "./api/gates.ts";
+import { gatesBody, log, securityFacts, splitAsks } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
+// @ts-ignore lib.js is plain JS, shared with the page
+import { when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
 
@@ -147,6 +149,58 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toContain('aria-current="true">You<');
   expect(h).toContain("rescue: set to recommended");
   expect(h).not.toContain("rescue: recommended<");
+});
+
+const withHolds = (rows: any[], f: () => void) => {
+  const file = join(process.env.ALEPH_FACTORY_DIR!, "holds.jsonl");
+  const was = readFileSync(file, "utf8");
+  writeFileSync(file, rows.map((x) => JSON.stringify(x)).join("\n") + "\n");
+  try { f(); } finally { writeFileSync(file, was); }
+};
+const hold = (min: number, name = "r-9", text = "busy") => ({ at: ago(min), name, kind: "gate", text });
+const gateLines = () => log().filter((e) => e.by === "Gate");
+
+test("log collapses a run of identical Gate lines into one with count, first and last time", () => {
+  withHolds([hold(30), hold(20), hold(10)], () => {
+    const g = gateLines();
+    expect(g.length).toBe(1);
+    expect(g[0].count).toBe(3);
+    expect(Date.parse(g[0].first!)).toBeCloseTo(Date.now() - 30 * 60_000, -4);
+    expect(Date.parse(g[0].at)).toBeCloseTo(Date.now() - 10 * 60_000, -4);
+  });
+});
+
+test("a different Gate line between identical ones ends the run", () => {
+  withHolds([hold(30), hold(20, "r-9", "other"), hold(10)], () => expect(gateLines().length).toBe(3));
+  withHolds([hold(30), hold(20, "r-8"), hold(10)], () => expect(gateLines().length).toBe(3));
+});
+
+test("a You or Rule line between identical Gate lines does not split them", () => {
+  withHolds([hold(55), hold(5)], () => {
+    const l = log();
+    expect(l.filter((e) => e.by === "Gate").length).toBe(1);
+    expect(l.filter((e) => e.by === "Gate")[0].count).toBe(2);
+    expect(l.some((e) => e.by === "You")).toBe(true);
+    expect(l.some((e) => e.by === "Rule")).toBe(true);
+  });
+});
+
+test("a single Gate line has no count and no first", () => {
+  withHolds([hold(5)], () => {
+    const g = gateLines();
+    expect(g.length).toBe(1);
+    expect("count" in g[0]).toBe(false);
+    expect("first" in g[0]).toBe(false);
+  });
+});
+
+test("renderLog draws a collapsed entry as one row (after the header) with the count and both times", () => {
+  const d = data();
+  d.log.entries = [{ at: ago(10), first: ago(30), count: 37, by: "Gate", item: "r-9", what: "gate: busy" }] as any;
+  const h = gates.renderLog(d, undefined);
+  expect(h.match(/<tr>/g)!.length).toBe(2);
+  expect(h).toContain("×37");
+  expect(h).toContain(`${when(ago(30))} – ${when(ago(10))}`);
 });
 
 test("a revoke line in tick.log is a You entry on the rule, and an always line stays a Rule entry", async () => {
