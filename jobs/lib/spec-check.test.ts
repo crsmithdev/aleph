@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { writeList } from "../../todo/lib/store.ts";
+import { reader, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ctx, notes, setup, teardown } from "./factory.helpers.ts";
-import { checkSpec, specHash, specCheckPrompt, specVerdict } from "./spec-check.ts";
+import { specVersion } from "./goal-spec.ts";
+import { checkSpec, specCheckPrompt, specVerdict } from "./spec-check.ts";
 
 const SPEC = "## Goal\nGOALTEXT\n\n## Edit surface\nSURFACE\n\n## Oracle\nORACLETEXT\n";
 let old: string | undefined;
@@ -25,6 +26,8 @@ function stub(text: string, code = 0): string {
   process.env.ALEPH_SPECCHECK_CMD = bin;
   return calls;
 }
+/** The spec version of item `id` now. */
+const version = (id: number) => specVersion(reader().item("fac", id)!);
 const count = (calls: string) => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").length : 0);
 
 test("the prompt holds the three parts of the spec and the verdict instruction", () => {
@@ -39,17 +42,11 @@ test("specVerdict reads pass, hold with problems, and null", () => {
   expect(specVerdict("no verdict here")).toBeNull();
 });
 
-test("specHash is short and ignores surrounding whitespace", () => {
-  expect(specHash("  a\n")).toBe(specHash("a"));
-  expect(specHash("a")).not.toBe(specHash("b"));
-  expect(specHash("a").length).toBeLessThan(20);
-});
-
 test("a pass writes its note, returns the cost, and a second call skips", async () => {
   const calls = stub("ok\nVERDICT: pass");
   const id = add();
   expect(await checkSpec(repo(), id)).toEqual({ verdict: "pass", cost: 0.25 });
-  expect(notes(id)).toContain(`spec check: ${specHash(SPEC)} pass`);
+  expect(notes(id)).toContain(`spec check: ${version(id)} pass`);
   expect(count(calls)).toBe(1);
   expect(readFileSync(calls, "utf8")).not.toContain(join(ctx.base, "repo\n"));
   expect(await checkSpec(repo(), id)).toEqual({ verdict: "skip" });
@@ -64,14 +61,14 @@ test("a hold carries its problems", async () => {
   stub("VERDICT: hold \"ORACLETEXT\" is outside the surface: add it");
   const id = add();
   expect(await checkSpec(repo(), id)).toEqual({ verdict: "hold", problems: "\"ORACLETEXT\" is outside the surface: add it", cost: 0.25 });
-  expect(notes(id)).toContain(`spec check: ${specHash(SPEC)} hold: "ORACLETEXT" is outside the surface: add it`);
+  expect(notes(id)).toContain(`spec check: ${version(id)} hold: "ORACLETEXT" is outside the surface: add it`);
 });
 
 test("a failed call or a reply with no verdict is an error that is not tried again", async () => {
   const calls = stub("", 1);
   const id = add();
   expect((await checkSpec(repo(), id)).verdict).toBe("error");
-  expect(notes(id)).toContain(`spec check: ${specHash(SPEC)} error: `);
+  expect(notes(id)).toContain(`spec check: ${version(id)} error: `);
   expect((await checkSpec(repo(), id)).verdict).toBe("skip");
   expect(count(calls)).toBe(1);
   const calls2 = stub("rambling");

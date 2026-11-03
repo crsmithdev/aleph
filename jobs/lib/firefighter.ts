@@ -11,6 +11,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
+import { missingSections } from "./goal-spec.ts";
 import { allRuns, askOf, isAwaiting, isWorker, isLost, runsDir, loadRegistry, lock, onOf, reviewOf, tell, type Entry, type Repo } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, asked as runAsked, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
@@ -224,9 +225,6 @@ ${red ? `- {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
 `;
 }
 
-const SPEC_SECTIONS = ["Goal", "Edit surface", "Oracle"];
-const specMissing = (body: string) => SPEC_SECTIONS.filter((h) => !new RegExp(`^##\\s+${h}\\s*$`, "mi").test(body));
-
 /** A held security path the branch changes, or null; "unknown" when there is no branch to read. */
 export function securityPath(repo: Repo, branch: string | undefined): string | null | "unknown" {
   if (!branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok) return "unknown";
@@ -303,7 +301,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (a.do === "add") {
     const red = redCi().some((c) => c.repo === repo.key) || redBaselines().some((b) => b.repo === repo.key);
     if (!red) return { refused: `${describe(a)}: the firefighter files no issues except for a red main; use tell` };
-    const missing = SPEC_SECTIONS.filter((h) => !new RegExp(`^##\\s+${h}\\s*$`, "mi").test(a.body ?? ""));
+    const missing = missingSections(a.body ?? "");
     if (missing.length) return { refused: `${describe(a)}: the body lacks ${missing.map((h) => `## ${h}`).join(", ")}; the spec check needs ## Goal, ## Edit surface and ## Oracle` };
     const w = store.writeList(repo, "todo: red main", (doc) => {
       const same = doc.items.find((i) => i.title === a.title && issues.status(i) === "open");
@@ -350,7 +348,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   // next first worker run checks the spec again, and holds again if it still lacks something.
   // Only a body with all three sections answers it, and only when Chris handed spec-check to the firefighter;
   // otherwise the Ask stays with Chris.
-  if (a.body !== undefined && store.askOf(item)?.reason === "spec-check" && handed("spec-check") && specMissing(a.body).length === 0) {
+  if (a.body !== undefined && store.askOf(item)?.reason === "spec-check" && handed("spec-check") && missingSections(a.body).length === 0) {
     const w = await refusal(async () => verbs.decide(repo, a.n, "firefighter edited the spec; the spec check runs again before the next worker run"));
     if (w) return { refused: `${describe(a)}: the spec is edited, but the spec-check Ask stays: ${w}` };
   }

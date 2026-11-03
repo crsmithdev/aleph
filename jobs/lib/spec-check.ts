@@ -2,9 +2,8 @@
  * The spec check: before a goal's first worker run, one read-only `claude -p` run reads the whole
  * spec (Goal, Edit surface, Oracle) against a clone of `origin/<main>` and says whether the spec
  * can be met. A hold names each problem with a change to the spec. The check runs once for each
- * version of the spec: the issue's note carries the spec's hash, so an edit makes it run again.
+ * version of the spec (goal-spec.ts): the issue's note carries the version, so an edit makes it run again.
  */
-import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +12,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
 import { git } from "./git.ts";
+import { isVersion, specVersion } from "./goal-spec.ts";
 import type { Repo } from "./ledger.ts";
 
 export const SPEC_CHECK_MODEL = "claude-opus-5-5";
@@ -56,15 +56,16 @@ export function specVerdict(reply: string): { pass: true } | { pass: false; prob
   return null;
 }
 
-/** A short sha256 of the trimmed spec. */
-export const specHash = (spec: string): string => createHash("sha256").update(spec.trim()).digest("hex").slice(0, 12);
-
 export async function checkSpec(repo: Repo, id: number | string): Promise<{ verdict: "pass" | "hold" | "skip" | "error"; problems?: string; cost?: number }> {
   const item = reader().item(repo.key, id);
   if (!item || !item.spec.trim()) return { verdict: "skip" };
-  const hash = specHash(item.spec);
-  if (item.notes.some((n) => n.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").startsWith(`${NOTE} ${hash}`))) return { verdict: "skip" };
-  const say = (text: string) => { note(repo, issues.refOf(item), `${NOTE} ${hash} ${text}`); };
+  const checked = (n: string) => {
+    const m = n.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").match(/^spec check: (\S+)/);
+    return !!m && isVersion(item, m[1]);
+  };
+  if (item.notes.some(checked)) return { verdict: "skip" };
+  const version = specVersion(item);
+  const say = (text: string) => { note(repo, issues.refOf(item), `${NOTE} ${version} ${text}`); };
   let clone: string | undefined;
   let cost: number | undefined;
   try {

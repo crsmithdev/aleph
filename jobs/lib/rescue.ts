@@ -12,6 +12,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
+import { isVersion, specVersion } from "./goal-spec.ts";
 import { clearAsk, note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { endRun } from "./agent-run.ts";
 import { always, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
@@ -162,9 +163,6 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
   }
 }
 
-/** The text of a goal that a run reads: an edit of any of these is a new spec. */
-const specOf = (item: issues.Issue): string => JSON.stringify([item.title, item.request, item.spec]);
-
 /**
  * A run that ended with no commit and a question waits for a spec edit. When the goal's spec is no longer the one it asked
  * about, the run is dropped and the Ask comes off the item, so the next dispatch starts a run on the edited spec.
@@ -180,7 +178,7 @@ async function releaseEdited(act: Rescue): Promise<void> {
     const issue = issueOf(runs);
     if (!repo || issue === undefined) continue;
     const item = reader().item(repo.key, issue);
-    if (!item || issues.status(item) !== "open" || specOf(item) === was.trim()) continue;
+    if (!item || issues.status(item) !== "open" || isVersion(item, was)) continue;
     const release = await lock(`rescue-${r.repo}-${r.name}`, rescueWaitMs());
     if (!release) continue;
     try {
@@ -367,7 +365,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (specQuestion) {
     const q = r.question || (readFile(last, "result.md") ?? "").split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1)?.slice("QUESTION:".length).trim() || reason;
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
-    if (item) writeFileSync(join(last.folder, "asked-spec"), specOf(item) + "\n");
+    if (item) writeFileSync(join(last.folder, "asked-spec"), specVersion(item) + "\n");
     const text = `${name} ended with no commit and asked: ${q} The goal waits for a spec edit; the factory starts it again when you edit it. Or drop it.`;
     return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.condition}`]));
   }

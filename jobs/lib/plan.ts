@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
+import { missingSections, surfacePaths } from "./goal-spec.ts";
 import { askPartDropped, note, partsOf, readList, writeList } from "../../todo/lib/store.ts";
 import { allRuns, lock, type Repo } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
@@ -20,7 +21,6 @@ import type { Tier } from "./route.ts";
 export const PLAN_MODEL = "claude-opus-5-5";
 /** Planner replies that fail the check, for one goal, before it runs as one worker run. */
 export const PLAN_TRIES = 2;
-const SECTIONS = ["Goal", "Edit surface", "Oracle", "Time box"] as const;
 
 export type Rate = (spec: string) => Promise<Tier | null>;
 export interface Child { title: string; spec: string; waits: number[] }
@@ -28,8 +28,9 @@ export interface Child { title: string; spec: string; waits: number[] }
 /** The top-level folders the paths of a goal's Edit surface name. A file at the repo's root names none. */
 export function topFolders(body: string): string[] {
   const found = new Set<string>();
-  for (const m of section(body, "Edit surface").matchAll(/(?:^|[\s`(,*])([A-Za-z0-9_.@-]+)\/[^\s`),]*/g)) {
-    if (m[1] !== "." && m[1] !== "..") found.add(m[1]);
+  for (const path of surfacePaths(body)) {
+    const top = path.split("/");
+    if (top.length > 1 && top[0] !== "" && top[0] !== "." && top[0] !== "..") found.add(top[0]);
   }
   return [...found].sort();
 }
@@ -69,7 +70,9 @@ export function parsePlan(output: string, least = 2): Child[] | string {
     if (!title) return `child ${n} has no title`;
     if (title.length > 60) return `child ${n}'s title is over 60 characters`;
     if (!body) return `child ${n} has no body`;
-    for (const s of SECTIONS) if (!section(body, s)) return `child ${n} has no ${s}`;
+    // The planner's goals also need a Time box.
+    const missing = [...missingSections(body), ...(section(body, "Time box") ? [] : ["Time box"])];
+    if (missing.length) return `child ${n} has no ${missing[0]}`;
     if (!realOracle(section(body, "Oracle"))) return `child ${n}'s Oracle names no command or test file`;
     const waits = c.waits_on ?? [];
     if (!Array.isArray(waits) || waits.some((w: unknown) => !Number.isInteger(w) || (w as number) < 1 || (w as number) >= n)) return `child ${n} waits on something that is not an earlier child`;

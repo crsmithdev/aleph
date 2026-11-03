@@ -8,7 +8,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { join } from "node:path";
 import { flakeTracker, reader, type Reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { section } from "../../todo/lib/todo.ts";
+import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { asked, allJobs, isOpen, lastReal, openJob, type Job } from "./job.ts";
 import { layout } from "./layout.ts";
@@ -297,9 +297,6 @@ const BUSY_CONFLICTS = 3;
 
 const BUSY_MS = 7 * 86_400_000;
 
-/** The paths named in a goal's Edit surface. */
-const surfaceOf = (body: string): string[] => section(body, "Edit surface").split(/[^\w./@-]+/).map((t) => t.replace(/\.+$/, "")).filter(Boolean);
-
 /**
  * Why a goal waits for an open job: both name the same busy file in their Edit surface, so one
  * of the two lands would conflict. A job waiting for Chris does not count, as it can wait for hours.
@@ -310,7 +307,7 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
     if (run.kind !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
     for (const f of run.conflicts ?? []) counts.set(f, (counts.get(f) ?? 0) + 1);
   }
-  const mine = surfaceOf(item.spec).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
+  const mine = surfacePaths(item.spec).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
   if (!mine.length) return null;
   const lists = reader({ fetch: false });
   for (const j of jobs) {
@@ -318,7 +315,7 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
     const on = onOf(last);
     if (last.repo !== repo.key || on === undefined || !isOpen(j) || isAwaiting(last.condition)) continue;
     const theirs = lists.item(repo.key, on);
-    const shared = theirs && surfaceOf(theirs.spec).find((f) => mine.includes(f));
+    const shared = theirs && surfacePaths(theirs.spec).find((f) => mine.includes(f));
     if (shared) return `waits for ${last.name}: both change the busy file ${shared}`;
   }
   return null;
