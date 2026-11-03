@@ -12,17 +12,24 @@ import { bashResult, resultText } from "./digest.ts";
 type Entry = Record<string, any>;
 
 const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
-/** A Bash command that changes files. */
-const BASH_EDIT = /\bsed\s+(-\w*i|--in-place)|\bgit\s+(apply|checkout|restore|commit|merge)\b|\bpatch\b|<<-?\s*['"]?\w+|(^|[^>&])>>?\s*[\w./~$"'-]|\btee\b/;
+/** A Bash command that changes files. A `git commit` changes none, so its part of the command (often a heredoc message) is not read. */
+const BASH_EDIT = /\bsed\s+(-\w*i|--in-place)|\bgit\s+(apply|checkout|restore|merge)\b|\bpatch\b|<<-?\s*['"]?\w+|(^|[^>&])>>?\s*[\w./~$"'-]|\btee\b/;
+const bashEdits = (command: string) => BASH_EDIT.test(command.replace(/\bgit\s+commit\b[\s\S]*$/, ""));
 /** A Bash command that reads code or compares it with something. */
 const READS = /\b(grep|rg|sed|cat|head|tail|awk|diff|wc|nl)\b|\bgit\s+(show|grep|diff|log)\b|\bdoc-claims\b|\bbun\s+(run\s+)?test\b/;
 const CODE_FILE = /[\w@./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|sh|py|md)\b/g;
 
-/** Whether `message` says a doc, a spec or a README matches, agrees with or is backed by the code. */
+/** Whether `message` says a doc or a README matches, agrees with or is backed by the code. */
 export function claimsDocMatch(message: string): boolean {
-  const doc = String.raw`(?:docs?|documentation|readme|spec|settings?\s+defaults|defaults)`;
-  const match = String.raw`(?:match(?:es|ed)?|agree[sd]?|consistent|in\s+sync|accurate|correct|compared|checked|confirmed|verified|as\s+the\s+code\s+(?:on\s+\w+\s+)?has\s+them)`;
-  return new RegExp(String.raw`\b${doc}\b[^.\n]{0,120}\b${match}\b|\b${match}\b[^.\n]{0,120}\b${doc}\b`, "i").test(message)
+  const doc = String.raw`(?:docs?|documentation|readme|settings?\s+defaults|defaults)`;
+  const strong = String.raw`(?:match(?:es|ed)?|agree[sd]?|consistent|in\s+sync)`;
+  const weak = String.raw`(?:accurate|correct|compared|checked|confirmed|verified)`;
+  // Within one sentence: a period ends it only before a space or the end, so `docs/ui.md` stays inside.
+  const gap = String.raw`(?:[^.\n]|\.(?=\S)){0,120}`;
+  const pair = (verb: string) => new RegExp(String.raw`\b${doc}\b${gap}\b${verb}\b|\b${verb}\b${gap}\b${doc}\b`, "i");
+  // A weak verb counts only when the sentence also names the code side: "an edited spec is checked first" is no claim.
+  const code = /\bcode\b|\bsettings?\b|[\w@./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|sh|py)\b/i;
+  return message.split(/\.(?=\s|$)|\n/).some((s) => pair(strong).test(s) || (pair(weak).test(s) && code.test(s)))
     || /\bas\s+the\s+code\s+(?:on\s+\w+\s+)?has\s+them\b/i.test(message);
 }
 
@@ -47,7 +54,7 @@ function calls(entries: Entry[]): Call[] {
   return out;
 }
 
-const isEdit = (c: Call) => EDIT_TOOLS.has(c.name) || (c.name === "Bash" && BASH_EDIT.test(String(c.input.command ?? "")));
+const isEdit = (c: Call) => EDIT_TOOLS.has(c.name) || (c.name === "Bash" && bashEdits(String(c.input.command ?? "")));
 
 /** What the message claims that the turn does not back, one sentence each. Empty: no claim, or all backed. */
 export function docClaimProblems(entries: Entry[], message: string): string[] {

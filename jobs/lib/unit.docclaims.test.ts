@@ -1,0 +1,76 @@
+import { afterEach, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { nextBrief } from "./continuation.ts";
+import type { Run } from "./ledger.ts";
+import { docClaims } from "./unit.ts";
+
+let n = 0;
+const dirs: string[] = [];
+afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }); });
+
+/** A worker's stream-json output.log: a tool call and its result per step, with the system and result lines around them. */
+function run(steps: [name: string, input: Record<string, unknown>, out: string][]): string {
+  const folder = mkdtempSync(join(tmpdir(), "aleph-docclaims-"));
+  dirs.push(folder);
+  const lines: unknown[] = [{ type: "system", subtype: "init" }];
+  for (const [name, input, out] of steps) {
+    const id = `t${n++}`;
+    lines.push({ type: "assistant", message: { role: "assistant", content: [{ type: "tool_use", id, name, input }] } });
+    lines.push({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: out }] } });
+  }
+  lines.push({ type: "result", subtype: "success", result: "" });
+  writeFileSync(join(folder, "output.log"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  return folder;
+}
+const edit = (f = "docs/factory.md"): [string, Record<string, unknown>, string] => ["Edit", { file_path: f }, "ok"];
+const bash = (command: string, out: string): [string, Record<string, unknown>, string] => ["Bash", { command }, out];
+
+const claim = "The stall default in docs/factory.md matches the code: `600`.";
+
+test("a claim that a run after the last edit shows backs passes", () => {
+  const f = run([edit(), bash("grep -n stall docs/factory.md jobs/lib/sandbox.ts", "docs/factory.md:91: (600)\njobs/lib/sandbox.ts:125: ?? 600")]);
+  expect(docClaims(f, claim)).toBeNull();
+});
+
+test("a claim whose only comparing run comes before the last edit fails and names it", () => {
+  const f = run([bash("grep -n stall docs/factory.md jobs/lib/sandbox.ts", "600"), edit()]);
+  expect(docClaims(f, claim)).toContain("no run after the last edit reads or compares the code");
+});
+
+test("a claim whose comparing run was cut before the claimed value fails and names the value", () => {
+  const out = `${"x".repeat(3000)} 600 ${"y".repeat(3000)}`;
+  const f = run([edit(), bash("grep -rn stall docs/factory.md jobs/lib/sandbox.ts", out)]);
+  expect(docClaims(f, claim)).toContain("`600`");
+});
+
+test("a cited file:line that no run shows fails and names the location", () => {
+  const f = run([edit(), bash("grep -n stall docs/factory.md", "docs/factory.md:91: stalled")]);
+  expect(docClaims(f, "I confirmed the doc matches the code at `jobs/lib/sandbox.ts:125`.")).toContain("`jobs/lib/sandbox.ts:125`");
+});
+
+test("facts given as the code on main has them, with the code file never read, fail and name the file", () => {
+  const f = run([edit("docs/spec.md"), bash("grep -n stall docs/spec.md", "stall")]);
+  expect(docClaims(f, "The spec gives the stall rule in jobs/lib/sandbox.ts as the code on main has them.")).toContain("`jobs/lib/sandbox.ts`");
+});
+
+test("a final message with no doc claim passes, whatever the transcript", () => {
+  const f = run([bash("grep -n stall docs/factory.md", "600"), edit()]);
+  expect(docClaims(f, "I added the stall row to docs/factory.md. Tests pass.")).toBeNull();
+});
+
+test("a run with no output.log passes", () => {
+  const folder = mkdtempSync(join(tmpdir(), "aleph-docclaims-"));
+  dirs.push(folder);
+  expect(docClaims(folder, claim)).toBeNull();
+});
+
+test("the next worker's fix note gives each problem", () => {
+  const f = run([bash("grep -n stall docs/factory.md", "600"), edit()]);
+  expect(docClaims(f, claim)).not.toBeNull();
+  expect(readFileSync(join(f, "checks.log"), "utf8")).toStartWith("## doc-claims: exit 1\n");
+  const { note } = nextBrief(f, { failed: "doc-claims" } as Run);
+  expect(note).toContain("The check `doc-claims` failed");
+  expect(note).toContain("no run after the last edit reads or compares the code");
+});

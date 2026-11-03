@@ -28,6 +28,7 @@ import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { backCheck, brief, checkBack, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, reviewHold, nextBrief } from "./continuation.ts";
 import { startReview } from "./review.ts";
+import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
 import { postTrace } from "./trace.ts";
 import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
@@ -153,6 +154,22 @@ type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" 
 
 /** A verdict that waits for Chris: the condition `awaiting` and the Ask. */
 /** The outcome of a factory run that the check runners stopped. */
+/**
+ * The Stop gate's doc-claim check (hooks/lib/docclaims.ts) on a finished worker run: the run's transcript
+ * (output.log, stream-json) against its final message. A sandboxed worker does not load the gate, so this
+ * is where its final message gets the check. Null when the message makes no such claim or the transcript
+ * backs it; else the reason, which also goes into checks.log for the next worker's fix note.
+ */
+export function docClaims(folder: string, result: string): string | null {
+  const log = join(folder, "output.log");
+  if (!existsSync(log)) return null;
+  const entries = readFileSync(log, "utf8").split("\n").flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
+  const problems = docClaimProblems(entries, result);
+  if (!problems.length) return null;
+  appendFileSync(join(folder, "checks.log"), `## doc-claims: exit 1\nThe final message says a doc matches the code, and the transcript does not back it:\n${problems.map((p) => `- ${p}`).join("\n")}\nRun a command after the last edit that shows both the doc text and the code values, or drop the claim.\n\n`);
+  return `doc claims: ${problems.join("; ")}`;
+}
+
 const stoppedByChecks = (why: ChecksStop, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, ...stopFields(why), ...extra }, code: 1 });
 const awaiting = (reason: AskReason, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
   ({ condition: "awaiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
@@ -428,6 +445,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
+    const claims = docClaims(folder, o.result);
+    if (claims) return stoppedByChecks({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(earlier, "doc-claims", claims, fixRounds()) });
     const hidden = hiddenOf(repo, run);
     if (!hidden) return stuck("infra", HIDDEN_UNREADABLE, facts);
     const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
