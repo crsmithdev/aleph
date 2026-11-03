@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readFetched, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { fetchOrigin, git, gitWith } from "./git.ts";
+import { fetchOrigin, git, gitWith, jobCommit } from "./git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
@@ -190,6 +190,34 @@ export function itemOnMain(repo: { path: string; key: string; main: string } | u
   }
   const hit = landedCommits(repo.path, main, repo.key, n)[0];
   return hit ? hit.slice(0, 7) : null;
+}
+
+/**
+ * Where a job's or an item's work is on origin/<main>, or null. Each test runs when its input is given, in this order:
+ * a `Job:` trailer of `job` (the full sha; `how` "Job trailer"), an `Issue:` trailer of `item` (the short sha;
+ * "Issue trailer"), then, while `branch` exists and has a net change, a merge of it into main that leaves main's tree
+ * as it is (the full sha of main; "content"): the work is already there, however it got there.
+ * `fetch` says whether to fetch origin once first; without it the ref is read as it is.
+ */
+export function onMain(repo: { path: string; key: string; main: string } | undefined, o: { job?: string; item?: number | string; branch?: string; fetch: boolean }): { commit: string; how: "Job trailer" | "Issue trailer" | "content" } | null {
+  if (!repo) return null;
+  if (o.fetch) fetchOrigin(repo.path);
+  const main = `origin/${repo.main}`;
+  if (o.job) {
+    const trailer = jobCommit(repo.path, repo.main, o.job);
+    if (trailer) return { commit: trailer, how: "Job trailer" };
+  }
+  const there = itemOnMain(repo, o.item);
+  if (there) return { commit: there, how: "Issue trailer" };
+  if (!o.branch) return null;
+  const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${o.branch}`);
+  if (!tip.ok) return null;
+  const fork = git(repo.path, "merge-base", tip.out, main).out;
+  const treeOf = (rev: string) => git(repo.path, "rev-parse", `${rev}^{tree}`).out;
+  if (!fork || treeOf(tip.out) === treeOf(fork)) return null;
+  const merged = git(repo.path, "merge-tree", "--write-tree", main, tip.out);
+  if (merged.ok && merged.out.split("\n")[0] === treeOf(main)) return { commit: git(repo.path, "rev-parse", main).out, how: "content" };
+  return null;
 }
 
 /** The items of `ns` that the facts hold, with the stage() context for them: one `landedIndex` for all. */

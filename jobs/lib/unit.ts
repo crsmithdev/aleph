@@ -10,7 +10,7 @@ import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
 import { gitPrelude, q } from "./agent-call.ts";
-import { addWorktree, fetchOrigin, git, jobCommit } from "./git.ts";
+import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk, type AskReason } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isBuild, isWorker, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
@@ -30,7 +30,7 @@ import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
 import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
-import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
+import { FACTS_REF, onMain, writeFacts } from "./status.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewerCmd, reviewSeconds, workerCmd } from "./settings.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
@@ -76,27 +76,6 @@ function recorder(folder: string): (c: CheckResult) => void {
   let all: CheckResult[] = [];
   updateRun(folder, { checks: all });
   return (c) => { all = [...all, c]; updateRun(folder, { checks: all }); };
-}
-
-/**
- * Where a job's work is on origin/<main>, or null. First a `Job:` trailer: the
- * squash carries one, and so does each worker commit. Then, while the branch
- * exists and has a net change, a merge of it into main that leaves main's tree
- * as it is: the work is already there, however it got there.
- */
-export function onMain(repo: Repo, run: Run): { commit: string; how: string } | null {
-  const main = `origin/${repo.main}`;
-  const trailer = jobCommit(repo.path, repo.main, run.job);
-  if (trailer) return { commit: trailer, how: "Job trailer" };
-  if (!run.branch) return null;
-  const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${run.branch}`);
-  if (!tip.ok) return null;
-  const fork = git(repo.path, "merge-base", tip.out, main).out;
-  const treeOf = (rev: string) => git(repo.path, "rev-parse", `${rev}^{tree}`).out;
-  if (!fork || treeOf(tip.out) === treeOf(fork)) return null;
-  const merged = git(repo.path, "merge-tree", "--write-tree", main, tip.out);
-  if (merged.ok && merged.out.split("\n")[0] === treeOf(main)) return { commit: git(repo.path, "rev-parse", main).out, how: "content" };
-  return null;
 }
 
 /**
@@ -292,8 +271,7 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
   const dropped = (jobById(run.job) ?? []).some((e) => e.run.condition === "dropped");
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
-  if (repo && !dropped && onOf(run) !== undefined) fetchOrigin(repo.path);
-  const there = dropped ? null : itemOnMain(repo, onOf(run));
+  const there = dropped ? null : onMain(repo, { item: onOf(run), fetch: onOf(run) !== undefined })?.commit;
   if (dropped || there) {
     appendFileSync(join(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
     updateRun(folder, { next: undefined });

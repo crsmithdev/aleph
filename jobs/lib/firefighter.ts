@@ -16,8 +16,8 @@ import { allRuns, askOf, isAwaiting, isWorker, isLost, runsDir, loadRegistry, lo
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile, type Job } from "./job.ts";
 import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
-import { git, jobCommit } from "./git.ts";
-import { itemOnMain } from "./status.ts";
+import { git } from "./git.ts";
+import { itemOnMain, onMain } from "./status.ts";
 import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
 import { writeRerun } from "./continuation.ts";
 import { factoryDir, factoryRepos, redBaselines } from "./factory-status.ts";
@@ -276,7 +276,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     if (a.do === "drop") {
       // The reply may leave the fate off. A goal whose own commit (its Job or its Issue trailer) is on origin/main is met on main; a reason that names another goal of the repo already on main is work that goal did.
       const other = a.reason.match(new RegExp(`\\b${repo.key}-(\\d+)\\b`, "g"))?.map((r) => r.slice(repo.key.length + 1)).find((n) => Number(n) !== issue && itemOnMain(repo, Number(n)));
-      const fate = a.fate ?? (jobCommit(repo.path, repo.main, last.run.job) || itemOnMain(repo, issue) ? "already-met" : other ? "duplicate" : undefined);
+      const fate = a.fate ?? (onMain(repo, { job: last.run.job, item: issue, fetch: false }) ? "already-met" : other ? "duplicate" : undefined);
       const why = await ports.drop(a.job, a.reason, fate);
       if (why) return { refused: `${describe(a)}: ${why}` };
       writeRerun(a.job, `The last run was dropped by the firefighter: ${a.reason}`);

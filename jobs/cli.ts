@@ -10,7 +10,8 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { allRuns, isLive, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
 import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
-import { onMain, reviewBack, unit } from "./lib/unit.ts";
+import { reviewBack, unit } from "./lib/unit.ts";
+import { onMain } from "./lib/status.ts";
 import { removeBranch } from "./lib/landing.ts";
 import { fetchOrigin, git } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
@@ -94,7 +95,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
       fetched.add(repo.key);
       fetchOrigin(repo.path);
     }
-    const found = onMain(repo, last.run);
+    const found = onMain(repo, { job: last.run.job, branch: last.run.branch, fetch: false });
     if (found) {
       updateRun(last.folder, { condition: "landed", commit: found.commit, reason: `found on main (${found.how})`, cause: undefined, ask: undefined, told: true });
       removeBranch(repo, last.run);

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git } from "./git.ts";
-import { facts, itemOnMain, repoStages, recentRepos } from "./status.ts";
+import { facts, itemOnMain, onMain, repoStages, recentRepos } from "./status.ts";
 import { writeRun } from "./ledger.ts";
 import type { Repo, Run } from "./ledger.ts";
 import type { Doc, Issue } from "../../todo/lib/todo.ts";
@@ -199,4 +199,42 @@ test("a commit with Issue and a plain-number Goal trailer resolves for that old 
   sh(other, "git", "push", "-q", "origin", "HEAD:main");
   sh(clone, "git", "fetch", "-q");
   expect(itemOnMain(repo, 7)).toMatch(/^[0-9a-f]{7}$/);
+});
+
+test("onMain finds a Job trailer, an Issue trailer and a branch's content, and fetches only when asked", () => {
+  const b = mkdtempSync(join(tmpdir(), "onmain-"));
+  try {
+    const bare = join(b, "o.git"), me = join(b, "me"), other = join(b, "other");
+    sh(b, "git", "init", "-q", "--bare", "-b", "main", bare);
+    sh(b, "git", "clone", "-q", bare, me);
+    commit(me, "first");
+    sh(me, "git", "push", "-q", "origin", "HEAD:main");
+    sh(b, "git", "clone", "-q", bare, other);
+    const r = { path: me, key: "demo", main: "main" };
+    // A branch with new work is not on main.
+    sh(me, "git", "checkout", "-q", "-b", "work");
+    commit(me, "new work");
+    expect(onMain(r, { job: "j-new", item: 7, branch: "work", fetch: false })).toBeNull();
+    // A commit pushed after the last fetch is seen only with fetch.
+    commit(other, "by job\n\nJob: j-1");
+    sh(other, "git", "push", "-q", "origin", "HEAD:main");
+    expect(onMain(r, { job: "j-1", fetch: false })).toBeNull();
+    const byJob = onMain(r, { job: "j-1", fetch: true });
+    expect(byJob?.how).toBe("Job trailer");
+    expect(byJob?.commit).toBe(sh(other, "git", "rev-parse", "HEAD"));
+    commit(other, "by item\n\nIssue: demo-5");
+    sh(other, "git", "push", "-q", "origin", "HEAD:main");
+    const byItem = onMain(r, { item: 5, fetch: true });
+    expect(byItem).toEqual({ commit: sh(other, "git", "rev-parse", "--short=7", "HEAD"), how: "Issue trailer" });
+    // The branch's change is already in main's tree: content.
+    sh(me, "git", "checkout", "-q", "-b", "same", "origin/main");
+    writeFileSync(join(me, "same.txt"), "same");
+    sh(me, "git", "add", "-A"); sh(me, "git", "commit", "-qm", "same change");
+    sh(other, "git", "pull", "-q", "origin", "main");
+    writeFileSync(join(other, "same.txt"), "same");
+    sh(other, "git", "add", "-A"); sh(other, "git", "commit", "-qm", "same change by hand");
+    sh(other, "git", "push", "-q", "origin", "HEAD:main");
+    const same = onMain(r, { branch: "same", fetch: true });
+    expect(same).toEqual({ commit: sh(other, "git", "rev-parse", "HEAD"), how: "content" });
+  } finally { rmSync(b, { recursive: true, force: true }); }
 });

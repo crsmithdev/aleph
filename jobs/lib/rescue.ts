@@ -18,7 +18,7 @@ import { endRun } from "./agent-run.ts";
 import { always, askFromRun, clearAsk, logAlways, needsOf, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { factoryRepos as sandboxRepos, holders } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
-import { fetchOrigin, git, jobCommit } from "./git.ts";
+import { fetchOrigin, git } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
@@ -26,7 +26,7 @@ import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isWorker, isLive, isSt
 import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
-import { itemOnMain } from "./status.ts";
+import { onMain } from "./status.ts";
 import { rescueWaitMs } from "./settings.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
@@ -184,11 +184,8 @@ type Stuck = StuckRun & { name: string; issue: number | string | undefined };
 
 /** The commit of this job or this item on main, or `{ onMain: null }` when the item is closed without one; null when neither. */
 function foundDone({ r, repo, issue }: Pick<Stuck, "r" | "repo" | "issue">): { onMain: string | null } | null {
-  fetchOrigin(repo.path);
-  const mine = jobCommit(repo.path, repo.main, r.job);
-  if (mine) return { onMain: mine.slice(0, 7) };
-  const there = itemOnMain(repo, issue);
-  if (there) return { onMain: there };
+  const found = onMain(repo, { job: r.job, item: issue, fetch: true });
+  if (found) return { onMain: found.commit.slice(0, 7) };
   const item = issue === undefined ? undefined : reader().item(repo.key, issue);
   return item && (issues.status(item) === "done" || issues.status(item) === "dropped") ? { onMain: null } : null;
 }

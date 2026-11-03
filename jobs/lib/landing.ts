@@ -8,14 +8,14 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { closeAndFile } from "../../todo/lib/store.ts";
-import { fetchOrigin, followMain, git, jobCommit } from "./git.ts";
+import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { relatedTests } from "./related.ts";
 import { coversAll, stopFields, type ChecksStop } from "./checks.ts";
 import { LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
-import { itemOnMain } from "./status.ts";
+import { onMain } from "./status.ts";
 import { RELANDS, TODO_PATH } from "./continuation.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
@@ -378,7 +378,8 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
       const open: Member[] = [];
       for (const m of members) {
         // A land that pushed and then died finds its own commit here and does not merge again.
-        const pushed = jobCommit(repo.path, main, m.run.job);
+        const hit = onMain(repo, { job: m.run.job, item: onOf(m.run), fetch: false });
+        const pushed = hit?.how === "Job trailer" ? hit.commit : "";
         if (pushed) {
           m.log(`already on main as ${pushed}`);
           finish(m, { outcome: { condition: "landed", commit: pushed }, code: 0, after: () => {
@@ -392,7 +393,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
           continue;
         }
         // A commit by hand, or by another job, that names the item: this land must not add a second one.
-        const there = itemOnMain(repo, onOf(m.run));
+        const there = hit?.commit;
         if (there) {
           m.log(`item landed as ${there}`);
           finish(m, { outcome: { condition: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }); removeBranch(repo, m.run); } });

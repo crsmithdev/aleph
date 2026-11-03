@@ -13,8 +13,8 @@ import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "./landing.ts";
-import { fetchOrigin, git, jobCommit } from "./git.ts";
-import { itemOnMain } from "./status.ts";
+import { git } from "./git.ts";
+import { onMain } from "./status.ts";
 import { refuse } from "./refusal.ts";
 import { gates, liveEntries } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -153,8 +153,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
     const item = on ?? (open && issueOf(open));
-    if (first && item !== undefined) fetchOrigin(repo.path);
-    const landedAs = first ? itemOnMain(repo, item) : null;
+    const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     // A factory run has no worktree: its branch comes and goes as a bundle.
     const worktree = repo.sandbox ? undefined : first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
@@ -222,10 +221,9 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const unchecked = manual && !a.checked;
     const repo = loadRegistry()[agent.repo!];
     const item = onOf(agent);
-    if (item !== undefined) fetchOrigin(repo.path);
     // A land that pushed and died before it closed the item: its own `Job:` commit on main is that land, so the land unit finishes it (landing.ts). Another job's commit, or a commit by hand, that names the item still refuses.
-    const ownPush = item !== undefined && agent.job !== undefined && jobCommit(repo.path, repo.main, agent.job) !== "";
-    const landedAs = ownPush ? null : itemOnMain(repo, item);
+    const found = onMain(repo, { job: item !== undefined ? agent.job : undefined, item, fetch: item !== undefined });
+    const landedAs = found?.how === "Job trailer" ? null : found?.commit;
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
     return await dispatch({
       kind: "land", job: agent.job, name, repo: agent.repo, branch: agent.branch, worktree: agent.worktree,
