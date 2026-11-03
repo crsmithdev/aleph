@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "./ledger.ts";
 import { checksInSandbox } from "./checks.ts";
-import { baselineChecks } from "./unit.ts";
+import { baselineChecks } from "./checks.ts";
 
 // The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

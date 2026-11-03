@@ -11,11 +11,10 @@ import { join } from "node:path";
 import { clearAsk, file, readList, sourceOf, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { always, logAlways, plainAsk, readAsk } from "./ask.ts";
-import { fetchOrigin, git } from "./git.ts";
+import { fetchOrigin, git, NO_SUBMODULES } from "./git.ts";
 import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { type Repo } from "./ledger.ts";
-import { NO_SUBMODULES } from "./unit.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 
 export interface Proposal { name: string; current: string; latest: string }

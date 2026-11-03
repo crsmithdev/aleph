@@ -16,7 +16,7 @@ import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { clearRerun, endKilledFacts, rerunNote, rescueStuck, type Rescue } from "./rescue.ts";
-import { readBaseline } from "./outcome.ts";
+import { readBaseline, type Fate } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, jobsNamed, lastReal, openJob } from "./job.ts";
 import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -27,15 +27,17 @@ import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
-import { detached } from "./launch.ts";
+import { baselineChecks } from "./checks.ts";
+import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
+import { dispatchDetached, planDetached } from "./launch.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
-import type { Tier } from "./route.ts";
+import { route, type Tier } from "./route.ts";
 import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, readStalls, recordHold, redLine, runsToday, spentToday, stallFile } from "./factory-status.ts";
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
-import { DAY_CAP, dispatchOn } from "./settings.ts";
+import { DAY_CAP, rescueOn } from "./settings.ts";
 
 export function setPaused(on: boolean): void {
   mkdirSync(factoryDir(), { recursive: true });
@@ -661,28 +663,6 @@ export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Coun
 }
 
 /**
- * Start `aleph dispatch` detached, for a transition that may free a slot, clear a hold or ready a
- * goal: the caller never waits for the baseline checks, and a failure never reaches it. Off when
- * `ALEPH_DISPATCH=off`; the tick still dispatches.
- */
-export function dispatchDetached(): void {
-  if (!dispatchOn()) return;
-  detached(["dispatch"], join(factoryDir(), "dispatch.log"));
-}
-
-/** Start `aleph triage <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
-export function triageDetached(repo: Repo, id: number): void {
-  if (!dispatchOn() || !repo.sandbox) return;
-  detached(["triage", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
-}
-
-/** Start `aleph plan <repo>-<id>` detached, for a large goal; it never fails the caller. */
-export function planDetached(repo: Repo, id: number): void {
-  if (!dispatchOn() || !repo.sandbox) return;
-  detached(["plan", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
-}
-
-/**
  * Plan one goal at once, as `aleph plan` does, under the dispatch's gates: not paused, no hold,
  * no failed probe, a factory repo. When it ends, the children or the fallback worker start from
  * a dispatch of their own.
@@ -695,4 +675,21 @@ export async function planNow(repo: Repo, id: number): Promise<{ planned: string
   factoryLog(`plan ${repo.key}-${id}: ${"planned" in r ? `into ${r.planned.join(",")}` : r.why}`);
   dispatchDetached();
   return r;
+}
+
+/** The factory's ports onto the transitions, each in-process; each returns the refusal, or null. */
+const landGoal = (name: string) => refusal(async () => { await (await land(name, {}, { output: "ignore" })).child?.exited; });
+/** A safe default drop: quiet, as the factory writes the issue note and the news. */
+const dropGoal = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
+const recheckGoal = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
+
+/** `aleph dispatch`: one dispatch of the ready goals. A failed probe starts no run. */
+export async function runDispatch() {
+  const g = gates({ only: ["pause", "probe"] });
+  if (g?.gate === "probe") {
+    factoryLog("the last probe failed; no run started");
+    return { started: [], skipped: [g.why] };
+  }
+  // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
+  return dispatchIssues(startGoal, baselineChecks, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
 }

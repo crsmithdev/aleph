@@ -142,7 +142,7 @@ describe("sweep", () => {
 });
 
 test("the deps prelude carries both NO_SUBMODULES lines", async () => {
-  const { NO_SUBMODULES } = await import("./unit.ts");
+  const { NO_SUBMODULES } = await import("./git.ts");
   const script = outdatedScript({ key: "k", main: "main", setup: [] } as unknown as Repo, "refs/remotes/origin/main");
   expect(script.split("\n")[0]).toContain(`git init -q . && ${NO_SUBMODULES.join(" && ")} && git fetch`);
 });

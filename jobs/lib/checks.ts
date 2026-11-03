@@ -3,14 +3,14 @@
  * It owns the choice of checks, the slot, the time limit, the one rerun, the
  * log and the flake record. The caller gives what runs one check.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { factoryDir, flakes, flakyFile, type Flake } from "./factory-status.ts";
 import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledger.ts";
-import { sandboxed } from "./sandbox.ts";
+import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
-import { NO_SUBMODULES } from "./unit.ts";
+import { git, NO_SUBMODULES } from "./git.ts";
 
 /** Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock ended the check. `null` is a pass. */
 export type ChecksStop = Stated & { reason: string; timedOut?: boolean };
@@ -158,4 +158,25 @@ export async function checksInSandbox(t: CheckTask, dir: string, bundle: string,
   mkdirSync(join(dir, "hidden"), { recursive: true });
   for (const [name, text] of Object.entries(hiddenFiles)) writeFileSync(join(dir, "hidden", name), text);
   return runHidden(t, { name: "hidden", run: `cp -r ../hidden .hidden; ${t.repo.hiddenRun}` }, exec(["hidden"]));
+}
+
+/** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else why not. For the factory's baseline. */
+export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<string | null> {
+  // The fixed name is safe: baseline() in factory.ts holds lock(`baseline-${repo.key}`) around this.
+  const dir = makeRunFolder(`baseline-${repo.key}`);
+  const ref = `refs/aleph/baseline/${repo.key}`;
+  try {
+    rmSync(logs, { recursive: true, force: true });
+    mkdirSync(logs, { recursive: true });
+    git(repo.path, "update-ref", ref, commit);
+    const b = git(repo.path, "bundle", "create", join(dir, "out", "base.bundle"), ref);
+    if (!b.ok) return `bundle failed: ${b.out}`;
+    const all = git(repo.path, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean);
+    return (await checksInSandbox({ folder: logs, repo, changed: all, phase: () => {} }, dir, "out/base.bundle", ref))?.reason ?? null;
+  } catch (e) {
+    return `baseline did not run: ${e instanceof Error ? e.message : e}`;
+  } finally {
+    git(repo.path, "update-ref", "-d", ref);
+    removeRunFolder(dir);
+  }
 }

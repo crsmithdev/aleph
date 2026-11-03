@@ -103,7 +103,7 @@ await runChecks({ folder: ${JSON.stringify(base)}, repo, changed: [], phase: () 
 });
 
 test("the check prelude carries both NO_SUBMODULES lines", async () => {
-  const { NO_SUBMODULES } = await import("./unit.ts");
+  const { NO_SUBMODULES } = await import("./git.ts");
   const lines = cloneAndSetup([], "b", "r", "").split("\n");
   expect(lines.slice(1, 4)).toEqual(["git init -q .", ...NO_SUBMODULES]);
 });

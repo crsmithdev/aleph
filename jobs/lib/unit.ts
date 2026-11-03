@@ -4,7 +4,7 @@
  * command. Both end with state.json, then `exit`, then the news.
  */
 import { SCENARIOS, seal } from "./author.ts";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
@@ -22,19 +22,15 @@ import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVer
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./acceptance.ts";
 import { checksInSandbox, runChecks, stopFields, type ChecksStop } from "./checks.ts";
-import { dispatchDetached } from "./factory.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { afterLand, bounceNote, isMergeBounce, land, mergePrompt, MERGE_MODEL, MERGE_SECONDS, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
-import { runLogged, startUnit } from "./launch.ts";
+import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
 import { FACTS_REF, itemOnMain, writeFacts } from "./status.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewerCmd, reviewSeconds, workerCmd } from "./settings.ts";
-
-export { git };
-export { NO_SUBMODULES };
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -252,27 +248,6 @@ async function sandboxChecks(id: string, folder: string, repo: Repo, commit: str
     const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
     if (!b.ok) return { cause: "infra", reason: `bundle failed: ${b.out}` };
     return await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/land.bundle", ref, hidden);
-  } finally {
-    git(repo.path, "update-ref", "-d", ref);
-    removeRunFolder(dir);
-  }
-}
-
-/** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else why not. For the factory's baseline. */
-export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<string | null> {
-  // The fixed name is safe: baseline() in factory.ts holds lock(`baseline-${repo.key}`) around this.
-  const dir = makeRunFolder(`baseline-${repo.key}`);
-  const ref = `refs/aleph/baseline/${repo.key}`;
-  try {
-    rmSync(logs, { recursive: true, force: true });
-    mkdirSync(logs, { recursive: true });
-    git(repo.path, "update-ref", ref, commit);
-    const b = git(repo.path, "bundle", "create", join(dir, "out", "base.bundle"), ref);
-    if (!b.ok) return `bundle failed: ${b.out}`;
-    const all = git(repo.path, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean);
-    return (await checksInSandbox({ folder: logs, repo, changed: all, phase: () => {} }, dir, "out/base.bundle", ref))?.reason ?? null;
-  } catch (e) {
-    return `baseline did not run: ${e instanceof Error ? e.message : e}`;
   } finally {
     git(repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);

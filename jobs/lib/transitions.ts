@@ -11,20 +11,18 @@ import { needsOf } from "./ask.ts";
 import { askOf, CALL_FILE, isAwaiting, isBuild, isWorker, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
-import { baselineChecks, git } from "./unit.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "./landing.ts";
-import { fetchOrigin, jobCommit } from "./git.ts";
+import { fetchOrigin, git, jobCommit } from "./git.ts";
 import { itemOnMain } from "./status.ts";
 import { refuse } from "./refusal.ts";
-import { dispatchDetached, dispatchIssues } from "./factory.ts";
 import { gates, liveEntries } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { route, type Tier } from "./route.ts";
-import { startUnit, type Output } from "./launch.ts";
+import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
-import { jobSeconds, pidWaitMs, rescueOn } from "./settings.ts";
+import { jobSeconds, pidWaitMs } from "./settings.ts";
 
 /** The message of a transition that refused or threw, or null when it went through: the factory's ports answer this. */
 export async function refusal(f: () => Promise<unknown>): Promise<string | null> {
@@ -348,21 +346,4 @@ export async function startGoal(repo: Repo, name: string, id: number | string, s
     return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
   }
   return refusal(async () => { await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(model ? { model } : {}) }, { output: "ignore" })).child?.exited; });
-}
-
-/** The factory's ports onto the transitions, each in-process; each returns the refusal, or null. */
-const landGoal = (name: string) => refusal(async () => { await (await land(name, {}, { output: "ignore" })).child?.exited; });
-/** A safe default drop: quiet, as the factory writes the issue note and the news. */
-const dropGoal = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
-const recheckGoal = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
-
-/** `aleph dispatch`: one dispatch of the ready goals. A failed probe starts no run. */
-export async function runDispatch() {
-  const g = gates({ only: ["pause", "probe"] });
-  if (g?.gate === "probe") {
-    factoryLog("the last probe failed; no run started");
-    return { started: [], skipped: [g.why] };
-  }
-  // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
-  return dispatchIssues(startGoal, baselineChecks, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
 }

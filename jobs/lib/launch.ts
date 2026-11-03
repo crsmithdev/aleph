@@ -6,8 +6,10 @@
  */
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { LOW } from "./ledger.ts";
+import { factoryDir } from "./factory-status.ts";
+import { LOW, type Repo } from "./ledger.ts";
 import { runPath } from "./sandbox.ts";
+import { dispatchOn } from "./settings.ts";
 
 /** jobs/cli.ts, the `aleph` command. */
 export const CLI = join(import.meta.dir, "..", "cli.ts");
@@ -91,4 +93,26 @@ export async function runLogged(args: string[], log: string): Promise<number | n
   } catch {
     return null;
   }
+}
+
+/**
+ * Start `aleph dispatch` detached, for a transition that may free a slot, clear a hold or ready a
+ * goal: the caller never waits for the baseline checks, and a failure never reaches it. Off when
+ * `ALEPH_DISPATCH=off`; the tick still dispatches.
+ */
+export function dispatchDetached(): void {
+  if (!dispatchOn()) return;
+  detached(["dispatch"], join(factoryDir(), "dispatch.log"));
+}
+
+/** Start `aleph triage <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
+export function triageDetached(repo: Repo, id: number): void {
+  if (!dispatchOn() || !repo.sandbox) return;
+  detached(["triage", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
+}
+
+/** Start `aleph plan <repo>-<id>` detached, for a large goal; it never fails the caller. */
+export function planDetached(repo: Repo, id: number): void {
+  if (!dispatchOn() || !repo.sandbox) return;
+  detached(["plan", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
 }
