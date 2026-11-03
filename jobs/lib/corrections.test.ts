@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
+import { titleProblem } from "../../todo/lib/todo.ts";
 import { explainLesson, mine, proposals, readStore } from "./corrections.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 
@@ -132,6 +133,9 @@ describe("standing proposals", () => {
     await mine(NOW);
     expect(stored().lessons[0]).toMatchObject({ state: "approved", issue: "fac-1" });
     expect(readList(repo)!.items.length).toBe(1);
+    const [item] = readList(repo)!.items;
+    expect(item.fm.kind).toBe("proposal");
+    expect(titleProblem(item.title)).toBeNull();
     expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("always: proposal-check:fac: approve on fac-1");
   });
 

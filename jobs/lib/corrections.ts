@@ -16,13 +16,14 @@ import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
 import { always, logAlways, type Ask } from "./ask.ts";
 import { causeOf } from "./outcome.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
-import { PROPOSE_AT, ruleCmd } from "./settings.ts";
+import { PROPOSE_AT } from "./settings.ts";
+import { cutTitle, writeLine, writeTitle } from "./title.ts";
+import { titleProblem } from "../../todo/lib/todo.ts";
 
 export const CORRECTION_AT = 0.7;
 const WINDOW = 14 * 24 * 3600_000;
 const QUOTE = 300;
 const SENTENCE = 160;
-const TITLE = 60;
 
 export interface Signal { id: string; source: "chris" | "gate" | "drop"; at: string; quote: string; link: string }
 export type Kind = "check" | "claude-md" | "skill";
@@ -56,49 +57,8 @@ const cut = (s: string) => s.slice(0, QUOTE);
 /** Text that is not Chris typing: notifications, subagent hand-backs, bridge relays, slash-command wrappers. */
 const NOT_CHRIS = /^\s*(?:<task-notification>|<agent-message|<system-reminder>|\[From the bridge|<command-)/;
 
-/**
- * One line of text from a nested Haiku `claude -p` given a system prompt and an input.
- * Jev answers typed questions and writes no text. "" when it fails or finds nothing.
- */
-async function writeLine(system: string, input: string, max: number): Promise<string> {
-  const cmd = ruleCmd();
-  const env = { ...process.env };
-  delete env.CLAUDECODE;
-  delete env.CLAUDE_CODE_ENTRYPOINT;
-  delete env.ANTHROPIC_API_KEY;
-  env.MAX_THINKING_TOKENS = "0";
-  try {
-    const proc = Bun.spawn([cmd, "-p", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
-    const timer = setTimeout(() => proc.kill(), 30_000);
-    const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
-    const code = await proc.exited;
-    clearTimeout(timer);
-    if (code !== 0) return "";
-    let result = stdout;
-    try { result = JSON.parse(stdout).result ?? stdout; } catch { /* plain text */ }
-    return String(result).trim().split("\n")[0].trim().slice(0, max);
-  } catch {
-    return "";
-  }
-}
-
 const RULE_SYSTEM = "You turn one correction into the rule it teaches. Reply with exactly one sentence in the imperative, under 160 characters, that states how Claude should work across tasks (for example: Run the checks after the last edit before claiming they pass). No quotes, no preamble, nothing about the single task.";
-const TITLE_SYSTEM = "You title one rule as an issue title. Reply with exactly one imperative title of at most 60 characters, no final period, no quotes, no preamble.";
 const writeRule = (quote: string) => writeLine(RULE_SYSTEM, quote, SENTENCE);
-
-/** The sentence cut to 60 characters at a word boundary. */
-function cutTitle(sentence: string): string {
-  const t = sentence.trim().replace(/\.$/, "");
-  if (t.length <= TITLE) return t;
-  const head = t.slice(0, TITLE + 1);
-  const i = head.lastIndexOf(" ");
-  return (i > 0 ? head.slice(0, i) : head.slice(0, TITLE)).trim();
-}
-
-async function writeTitle(sentence: string): Promise<string> {
-  const t = (await writeLine(TITLE_SYSTEM, sentence, TITLE)).replace(/\.$/, "").trim();
-  return t || cutTitle(sentence);
-}
 
 /** The skills under `<repo.path>/skills/*\/SKILL.md`: name to description. */
 function repoSkills(repo: Repo): Record<string, string> {
@@ -380,7 +340,7 @@ export function approve(id: string, repo: Place): string {
   ].join("\n");
   let ids: number[];
   try {
-    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title ?? `${KIND_TITLE[kind]}: ${l.sentence}`, source: "memory", spec: body }]);
+    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title && !titleProblem(l.title) ? l.title : cutTitle(l.sentence), kind: "proposal", source: "memory", spec: body }]);
   } catch (e) {
     return `the work store refused: ${(e as Error).message}`;
   }

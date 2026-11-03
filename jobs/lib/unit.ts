@@ -34,6 +34,7 @@ import { postTrace } from "./trace.ts";
 import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
 import { FACTS_REF, onMain, writeFacts } from "./status.ts";
+import { writeTitle } from "./title.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile, workerCmd } from "./settings.ts";
 import { jobSpec, jobSpecFile, runFile } from "./run-files.ts";
 
@@ -443,7 +444,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     writeFileSync(runFile(folder, "result.md"), o.result);
     const spent = (o.cost ?? 0) + (authorCost ?? 0);
     const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
-    fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
+    await fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
     if (w.cause) return stuck(w.cause.kind, w.cause.reason, facts);
 
@@ -698,14 +699,14 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
 }
 
 /**
- * A worker's `FOLLOWUP:` lines each become an issue with `source: worker` (the line as the title, the run in its request),
+ * A worker's `FOLLOWUP:` lines each become a `task` with `source: worker`: the title writer's title, and the run and the whole line in its request,
  * filed in one store commit. An empty line such as "none" files nothing, and a line on the topic of an open issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
  */
-export function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
+export async function fileFollowups(repo: Repo, run: Run, lines: string[]): Promise<void> {
   const lists = reader();
   const open = (lists.list(repo.key)?.items ?? []).filter((i) => issues.status(i) === "open");
   const fresh: string[] = [];
-  for (const title of titles) {
+  for (const title of lines) {
     if (/^(none|n\/a|nothing)\.?$/i.test(title.trim())) continue;
     // Chris paused flake follow-ups on 1 Nov 2026: a line about a flake is a tracker note, and files no issue.
     if (/\bflak/i.test(title)) { noteFlakes(repo, run, [title]); continue; }
@@ -717,7 +718,8 @@ export function fileFollowups(repo: Repo, run: Run, titles: string[]): void {
   if (!fresh.length) return;
   const on = onOf(run);
   const priority = (on === undefined ? undefined : lists.item(repo.key, on)?.fm.priority as string | undefined) ?? "medium";
-  fileIssues(repo, `followups from ${run.name}`, fresh.map((title) => ({ title, priority, source: "worker" as const, request: `A follow-up the worker met in run ${run.name}.` })));
+  const titles = await Promise.all(fresh.map(writeTitle));
+  fileIssues(repo, `followups from ${run.name}`, fresh.map((line, n) => ({ title: titles[n], kind: "task", priority, source: "worker" as const, request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${line}` })));
 }
 
 const PATH = /[\w.-]+(?:\/[\w.-]+)+|[\w-]+\.(?:ts|js|md|json)\b/g;
