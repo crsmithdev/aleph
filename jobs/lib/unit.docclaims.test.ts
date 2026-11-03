@@ -124,3 +124,15 @@ test("a doc or spec written through a Bash heredoc, the code never read, is name
   }
 });
 
+test("a script, a test fixture or a sed pattern that quotes the phrase is not doc text", () => {
+  for (const cmd of [
+    "python3 - <<'EOF'\nopen('a.test.ts','w').write('The stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.')\nEOF",
+    "sed -i 's/as the code on main has them in jobs\\/cli.ts/x/' docs/verify-gate.md",
+    "cat > a.test.ts <<'EOF'\nThe stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.\nEOF",
+    "python3 - <<'EOF'\nt = 'cat > docs/spec.md <<X and aleph issue add: the default in jobs/lib/sandbox.ts is 600, as the code on main has them.'\nEOF",
+  ]) {
+    const f = run([bash(cmd, "")]);
+    expect(docClaims(f, "I edited it.")).toBeNull();
+  }
+});
+

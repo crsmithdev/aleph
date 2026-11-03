@@ -66,10 +66,17 @@ function calls(entries: Entry[]): Call[] {
 
 const isEdit = (c: Call) => EDIT_TOOLS.has(c.name) || (c.name === "Bash" && bashEdits(String(c.input.command ?? "")));
 
-/** The text a call writes: a Write's content, an Edit's new text, or a Bash edit's command (a heredoc body, as in `aleph issue add --spec - <<EOF`). */
+/** A Bash command that writes a doc or a spec, read from its first line (a heredoc body that quotes such a command is not one): a heredoc or redirect into a `.md` file, or an `aleph issue` write. */
+const WRITES_DOC = /\baleph\s+issue\s+(add|edit|note)\b|(>>?|\btee\s+(-a\s+)?)\s*["']?[\w@./~-]+\.md\b/;
+
+/**
+ * The doc or spec text a call writes: a Write's content or an Edit's new text on a `.md` file, or the command of a
+ * Bash call that writes a doc or a spec (`cat > docs/spec.md <<EOF`, `aleph issue add --spec - <<EOF`). Test
+ * fixtures, scripts and `sed` patterns that quote a doc are not doc text.
+ */
 function docWritten(c: Call): string {
-  if (c.name === "Bash") return isEdit(c) ? String(c.input.command ?? "") : "";
-  if (!EDIT_TOOLS.has(c.name)) return "";
+  if (c.name === "Bash") { const cmd = String(c.input.command ?? ""); return isEdit(c) && WRITES_DOC.test(cmd.split("\n")[0]!) ? cmd : ""; }
+  if (!EDIT_TOOLS.has(c.name) || !/\.md$/i.test(String(c.input.file_path ?? ""))) return "";
   return [c.input.content, c.input.new_string, ...(Array.isArray(c.input.edits) ? c.input.edits.map((e: Entry) => e.new_string) : [])].filter((x) => typeof x === "string").join("\n");
 }
 
