@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { accept, reaccept, oracleCommands, rerunOf, unshown } from "./acceptance.ts";
+import { accept, archiveOracle, reaccept, oracleCommands, rerunOf, unshown } from "./acceptance.ts";
+import { loadRegistry } from "./ledger.ts";
 import { runOnCommit, type Runner } from "./checks.ts";
 import { readRecord, resultLine } from "./status.ts";
 import { acceptanceStep, dispatchIssues, reacceptReopened } from "./factory.ts";
@@ -112,6 +113,27 @@ test("a done goal whose Oracle command passes gets the pass note and stays done"
   // Once: a second step runs nothing.
   await acceptanceStep(runner(0));
   expect(ran.length).toBe(1);
+});
+
+test("a pass copies the goal's hidden tests to acceptance/<name>/ on main in a commit of its own, once", async () => {
+  const id = doneGoal("`bun test jobs/lib/acceptance.test.ts`");
+  writeHidden({ key: "fac" }, id, {
+    "x.test.ts": 'import { a } from "../jobs/lib/a.ts";\nconst p = join(import.meta.dir, "..", "jobs");\n',
+    "scenarios.md": "1. It works.\n",
+  });
+  const landed = sh(repoDir(), "git", "rev-parse", "origin/main");
+  const lines = await acceptanceStep(runner(0), undefined, async () => ({ output: "CHECK: pass scenario 1: ok" }));
+  const head = sh(repoDir(), "git", "rev-parse", "--short=7", "origin/main");
+  expect(lines[0]).toContain(`acceptance passed at ${landed.slice(0, 7)}; oracle archived as ${head}`);
+  expect(sh(repoDir(), "git", "rev-parse", "origin/main~1")).toBe(landed);
+  expect(sh(repoDir(), "git", "ls-tree", "-r", "--name-only", "origin/main", "acceptance")).toBe(`acceptance/fac-${id}/x.accept.ts`);
+  expect(sh(repoDir(), "git", "show", `origin/main:acceptance/fac-${id}/x.accept.ts`)).toBe(
+    '// @ts-nocheck\nimport { a } from "../../jobs/lib/a.ts";\nconst p = join((import.meta.dir + "/.."), "..", "jobs");');
+  expect(sh(repoDir(), "git", "log", "-1", "--format=%(trailers:key=Issue,valueonly)", "origin/main")).toBe("");
+  // The main checkout follows.
+  expect(sh(repoDir(), "git", "rev-parse", "--short=7", "HEAD")).toBe(head);
+  expect(archiveOracle(loadRegistry().fac, `fac-${id}`)).toBeNull();
+  expect(sh(repoDir(), "git", "rev-parse", "--short=7", "origin/main")).toBe(head);
 });
 
 test("a command that passed on a commit does not run again for another goal; a new commit runs it", async () => {

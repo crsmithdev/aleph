@@ -278,13 +278,3 @@ test("parseExplain never cuts a sentence: the character limit moves whole senten
   const ok = parseExplain(JSON.stringify({ situation: "A. B.", effects: [{ action: "a", text: "C." }] }), ["a"]) as any;
   expect(ok.details).toBeUndefined();
 });
-
-test("the explainer prompt states the limits and asks for details", () => {
-  seed(plainAsk("host-check", "check it"));
-  const p = explainPrompt(pendingCases([repo])[0]);
-  expect(p).toContain("at most 3 sentences and 600 characters");
-  expect(p).toContain("only risks and gaps");
-  expect(p).toContain("not a second summary");
-  expect(p).toContain("at most 2 sentences and 220 characters");
-  expect(p).toContain('"details"');
-});

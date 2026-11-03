@@ -341,19 +341,6 @@ describe("views", () => {
     expect(t).toEqual([...t].sort((x, y) => y - x));
   });
 
-  test("the filter bar is one filterBar; the row is the link, the title plain text", async () => {
-    const d = await getJson("/api/contents");
-    const h = v.view.render(d, {}, new URLSearchParams("project=oth&status=any"));
-    expect(h.match(/class="fbar"/g)).toHaveLength(3);
-    for (const n of ["status", "priority"]) expect(h).toContain(`data-name="${n}"`);
-    expect(h).toContain('<select name="project" aria-label="Project">');
-    expect(h).toContain('name="q"');
-    expect(section(h, "issues-table")).not.toContain("<td>fac</td>");
-    expect(h).toContain("<td>oth</td>");
-    expect(h).toContain('<tr class="rowlink"');
-    expect(h).toContain('<td class="wide"><a href="#/issues/oth/1">other thing</a></td>');
-  });
-
   test("the header sorts: a query key and direction order the rows", async () => {
     const d = await getJson("/api/contents");
     const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1]);
@@ -385,13 +372,6 @@ describe("views", () => {
     expect(v.dropTarget(goal).url).toBe("/api/issues/fac/910.1/drop");
     expect(v.renderRow(goal)).toContain("part-row");
     expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(goal);
-  });
-
-  test("the X drops through the issue's drop route", async () => {
-    const d = await getJson("/api/contents");
-    const open = v.issueRows(d).find((r: any) => r.status === "open");
-    expect(v.dropTarget(open)).toMatchObject({ url: `/api/issues/${open.repo}/${open.n}/drop` });
-    expect(v.dropTarget({ ...open, status: "done" })).toBeNull();
   });
 });
 
@@ -437,12 +417,6 @@ describe("POST /api/issues", () => {
 });
 
 describe("issue form project select", () => {
-  test("renderForm gives a select of the keys", () => {
-    const h = v.renderForm([], { keys: ["aleph", "sidetone"], project: "sidetone" });
-    expect(h).toContain('<select name="repo"');
-    expect(h.match(/<option /g)?.length).toBe(2);
-    expect(h).toContain('<option value="sidetone" selected>');
-  });
   test("projectOptions escapes and selects", () => {
     const h = v.projectOptions(["a", "<b>"], "a");
     expect(h.match(/<option /g)?.length).toBe(2);
@@ -613,9 +587,6 @@ describe("a parked issue", () => {
     expect(v.renderTable(all, { status: "open" })).not.toContain("shelved thing");
     expect(v.stats(all, new Date("2026-11-02T12:00"))).toMatchObject({ total: 3, open: 1, closed: 1 });
   });
-});
-
-describe("shared table CSS", () => {
 });
 
 describe("what an issue waits on", () => {

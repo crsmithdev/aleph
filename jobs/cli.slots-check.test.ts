@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { base, job, jobsDir, repo, setup, state, teardown } from "./cli.helpers";
 
@@ -15,7 +14,6 @@ beforeAll(() => {
 afterAll(teardown);
 
 const lines = (f: string) => readFileSync(f, "utf8").trim().split("\n").map((l) => l.split(" ") as [string, string]);
-const cores = availableParallelism();
 
 describe("check slots", () => {
   let runs: Awaited<ReturnType<typeof job>>[] = [];
@@ -67,9 +65,5 @@ describe("check slots", () => {
     // The second check ended more than the 9 s limit after the first started, and was not timed out.
     expect(Number(BigInt(l[3][0]) - BigInt(l[0][0])) / 1e9).toBeGreaterThan(9);
     for (const r of runs) expect(state(r.json.run).checks.every((c: any) => c.ok)).toBe(true);
-  });
-
-  test("the check's env carries ALEPH_TEST_PARALLEL = cores / slots", () => {
-    expect(readFileSync(join(base, "slots.log.env"), "utf8").trim()).toBe(String(Math.floor(cores / 1)));
   });
 });

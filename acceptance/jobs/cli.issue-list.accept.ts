@@ -1,5 +1,6 @@
+// Archived goal tests from jobs/cli.issue-list.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { aleph, setup, teardown } from "./cli.helpers";
+import { aleph, setup, teardown } from "../../jobs/cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);

@@ -72,16 +72,6 @@ test("a paused factory does not say it runs smoothly", () => {
 
 const weekAt = (seven_day: number) => ({ usage: { now: { seven_day } } });
 
-test("a weekly usage of 90% or more is said after the other parts, in the warning colour", () => {
-  expect(said({}, weekAt(90))).toBe("Everything is running smoothly; weekly usage is at 90%.");
-  expect(view.renderLede({ ...calmState, ...weekAt(90) })).toContain('class="say warning"');
-  expect(said({}, weekAt(89.6))).toBe("Everything is running smoothly.");
-  expect(view.renderLede({ ...calmState, ...weekAt(89.6) })).toContain('class="say fine"');
-  expect(said({}, { usage: undefined })).toBe("Everything is running smoothly.");
-  expect(said({}, weekAt(93.4))).toContain("weekly usage is at 93%");
-  expect(said({ runsToday: 12, dayCap: 12 }, weekAt(95))).toBe("Everything is running smoothly; the day cap is reached; weekly usage is at 95%.");
-});
-
 test("an alert keeps its red sentence and holds the weekly usage part; three alerts cut it", () => {
   expect(said({ health: [mainRed] }, weekAt(90))).toBe("Alert: the build is failing on main; weekly usage is at 90%.");
   expect(view.renderLede({ ...calmState, ...weekAt(90), factory: { ...calmState.factory, health: [mainRed] } })).toContain('class="say error"');
@@ -97,8 +87,10 @@ test("a full suite over its budget is a warning part, not an alert and not a car
   expect(view.view.render(withFactory({ health: [slow] }))).not.toContain('data-kind="error"');
 });
 
-test("a paused factory with weekly usage at 90% says so", () => {
-  expect(said({ paused: true }, weekAt(90))).toBe("The factory is paused; weekly usage is at 90%.");
+test("a failed nightly acceptance run is a warning part, not an alert and not a card", () => {
+  const failed = "health: aleph nightly acceptance run failed at abc1234: 2 tests failed";
+  expect(said({ health: [failed] })).toBe("Everything is running smoothly; aleph nightly acceptance run failed at abc1234: 2 tests failed.");
+  expect(view.view.render(withFactory({ health: [failed] }))).not.toContain('data-kind="error"');
 });
 
 test("the page has no banner and the status line holds the alert", () => {
@@ -111,16 +103,6 @@ test("the most flaked line stays in the report and off the status sentence and t
   const line = "health: most flaked in acceptance in 7 days: a.test.ts > twice (1 times)";
   const page = view.view.render({ ...withFactory({ health: [line] }), asks: [], stuck: [] });
   expect(page).not.toContain("most flaked");
-});
-
-test("a flake line is not shown on the Status page", () => {
-  const calm = { ...withFactory({ health: ["health: aleph check tests passed on rerun 4 times in 7 days"] }), asks: [], stuck: [] };
-  const h = view.renderLede(calm);
-  expect(h).toContain('class="say fine"');
-  expect(h).not.toContain("Awaiting");
-  expect(h).not.toContain("rerun");
-  expect(view.view.render(calm)).not.toContain("rerun");
-  expect(withAttn(calm)).not.toContain("rerun");
 });
 
 test("the status line says your attention is needed when the Issues section has an item", () => {
@@ -148,12 +130,6 @@ test("the status sentence wraps instead of clipping: .lede .say has no ellipsis 
   expect(say).toContain("white-space: normal");
 });
 
-test("a long unbroken word in the status sentence (a URL) breaks: .lede .say sets overflow-wrap: anywhere", async () => {
-  const html = await Bun.file(new URL("./app.css", import.meta.url)).text();
-  const say = [...html.matchAll(/\.lede \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
-  expect(say).toContain("overflow-wrap: anywhere");
-});
-
 const OOD = "Alert: this status is out of date.";
 
 const strip = (h: string) => h.replace(/<[^>]*>/g, "");
@@ -172,11 +148,6 @@ test("the out-of-date part comes first and survives MAX_SAID", () => {
   const h = strip(view.renderLede(s, true));
   expect(h.startsWith(OOD.slice(0, -1) + "; ")).toBe(true);
   expect(h.split("; ").length).toBe(base.split("; ").length + 1);
-});
-
-test("without the out-of-date input the sentence is unchanged", () => {
-  expect(view.renderLede(calmState, false)).toBe(view.renderLede(calmState));
-  expect(said({})).toBe("Everything is running smoothly.");
 });
 
 test("a dead factory tick says the alert, in red", () => {

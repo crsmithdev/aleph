@@ -15,7 +15,7 @@ import { section } from "../../todo/lib/todo.ts";
 import { plainAsk, setAsk, type Ask } from "./ask.ts";
 import { note, noteFlake, readHidden, reopen as storeReopen, writeList } from "../../todo/lib/store.ts";
 import { lastLines, runOnCommit, type Ran, type Runner } from "./checks.ts";
-import { git } from "./git.ts";
+import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
 import { SCENARIOS } from "./author.ts";
 import { gitPrelude, OPUS_MODEL, q } from "./agent-call.ts";
 import { outcome as agentOutcome } from "./gate.ts";
@@ -377,8 +377,53 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOn
   const seen = flaked.length ? `; on the flake list: ${flaked.join(", ")}` : "";
   const bad = note(repo, ref, `acceptance: pass at ${sha}${seen}`);
   writeRecord(repo.key, ref, { result: "pass", sha, fails: prev?.fails ?? 0 });
-  return `${name}: acceptance passed at ${sha}${seen}${bad ? ` (no issue note: ${bad})` : ""}`;
+  return `${name}: acceptance passed at ${sha}${seen}${archived(repo, name)}${bad ? ` (no issue note: ${bad})` : ""}`;
 }
+
+/** The archive of accepted goals' tests on main, which `bun run accept` runs and `bun run test` does not. */
+export const ARCHIVE = "acceptance";
+const PUSHES = 3;
+
+/**
+ * A hidden test file as it reads in `acceptance/<name>/`, one folder deeper than `.hidden/`: its relative imports and
+ * `import.meta.dir` reach one level further up, and tsc does not check it, as it never checked `.hidden/`.
+ */
+export const archivedText = (text: string): string =>
+  "// @ts-nocheck\n" + text.replace(/(\bfrom\s*|\bimport\s*\(\s*)(["'])\.\.\//g, "$1$2../../").replaceAll("import.meta.dir", '(import.meta.dir + "/..")');
+
+/** A test file's archive name: `x.test.ts` becomes `x.accept.ts`, so the suite's file names do not take it. */
+export const archivedName = (file: string): string => file.replace(/\.(test|spec)(\.[cm]?[jt]sx?)$/, ".accept$2");
+
+/**
+ * Copy the accepted goal `name`'s hidden test files to `acceptance/<name>/` on origin/<main>, as one commit of its own.
+ * Returns null when the goal has none or the copy is there already, else the commit or why there is none.
+ */
+export function archiveOracle(repo: Repo, name: string): string | null {
+  let files: Record<string, string>;
+  try {
+    const { [SCENARIOS]: _, ...tests } = readHidden(repo, name);
+    files = tests;
+  } catch (e: any) { return `oracle not archived: ${e?.message ?? e}`; }
+  if (!Object.keys(files).length) return null;
+  const put = Object.fromEntries(Object.entries(files).map(([n, text]) => [`${ARCHIVE}/${name}/${archivedName(n)}`, archivedText(text)]));
+  for (let attempt = 1; ; attempt++) {
+    const f = fetchOrigin(repo.path, repo.main);
+    if (!f.ok) return `oracle not archived: fetch failed: ${f.out}`;
+    const base = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
+    let tree: string;
+    try { tree = treeWithFiles(repo.path, `${base}^{tree}`, put); } catch (e: any) { return `oracle not archived: ${e?.message ?? e}`; }
+    if (tree === git(repo.path, "rev-parse", `${base}^{tree}`).out) return null;
+    const c = git(repo.path, "commit-tree", tree, "-p", base, "-m", `Archive the accepted oracle of ${name} in ${ARCHIVE}/${name}`);
+    if (!c.ok) return `oracle not archived: commit-tree failed: ${c.out}`;
+    if (git(repo.path, "push", "-q", "origin", `${c.out}:refs/heads/${repo.main}`).ok) {
+      git(repo.path, "fetch", "-q", "origin", repo.main);
+      followMain(repo.path, repo.main);
+      return `oracle archived as ${c.out.slice(0, 7)}`;
+    }
+    if (attempt === PUSHES) return `oracle not archived: push refused ${PUSHES} times`;
+  }
+}
+const archived = (repo: Repo, name: string): string => { const r = archiveOracle(repo, name); return r ? `; ${r}` : ""; };
 
 /** The results the report has not listed, oldest file first; each is then marked shown. */
 export function unshown(): string[] {
@@ -444,5 +489,5 @@ export async function reaccept(repo: Repo, item: issues.Issue, run: Runner = run
   }
   const bad = note(repo, issues.refOf(item), `acceptance: pass at ${sha} (re-run after an infra error): ${passed.map((c) => `\`${c}\` exited 0`).join(", ")}`, { done: true });
   if (!bad) writeRecord(repo.key, issues.refOf(item), { result: "pass", sha, fails: readRecord(repo.key, issues.refOf(item))?.fails ?? 0 });
-  return `${name}: re-accept passed at ${sha}; closed as done${bad ? ` (no issue note: ${bad})` : ""}`;
+  return `${name}: re-accept passed at ${sha}; closed as done${archived(repo, name)}${bad ? ` (no issue note: ${bad})` : ""}`;
 }

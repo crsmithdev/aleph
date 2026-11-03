@@ -5,7 +5,9 @@ import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { correctionsDue, dispatchIssues, episodeStep, report, setPaused, stalled, stallStep } from "./factory.ts";
 import { spentToday, runsToday, health, writeBaseline } from "./factory-status.ts";
-import { lock, readRun, writeRun } from "./ledger.ts";
+import { loadRegistry, lock, readRun, writeRun } from "./ledger.ts";
+import { git } from "./git.ts";
+import { runNightly } from "./nightly-accept.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
 
@@ -258,6 +260,21 @@ test("health warns when the last full suite of a repo took more than the budget"
   try { expect(said()).toEqual([]); } finally { delete process.env.ALEPH_SUITE_BUDGET_S; }
   // The last run is the one that ended last, not the one that started last.
   suite("20261103-000000-c", "2026-11-03T00:03:00Z", 90);
+  expect(said()).toEqual([]);
+});
+
+test("health warns while the last nightly acceptance run failed; a pass shows nothing", () => {
+  const said = () => health().filter((l) => l.includes("nightly acceptance"));
+  const repo = loadRegistry().fac;
+  expect(said()).toEqual([]);
+  // The run sees origin/main in a worktree of its own, which is gone after.
+  let seen = "";
+  const r = runNightly(repo, (cwd) => { seen = git(cwd, "rev-parse", "HEAD").out; return { code: 1, output: " 3 pass\n 2 fail\nRan 5 tests" }; });
+  expect(seen).toBe(git(repo.path, "rev-parse", "origin/main").out);
+  expect(r).toMatchObject({ repo: "fac", ok: false, fails: 2 });
+  expect(said()).toEqual([`health: fac nightly acceptance run failed at ${r.sha}: 2 tests failed`]);
+  expect(git(repo.path, "worktree", "list").out.split("\n")).toHaveLength(1);
+  runNightly(repo, () => ({ code: 0, output: " 5 pass\n 0 fail" }));
   expect(said()).toEqual([]);
 });
 

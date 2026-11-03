@@ -1,7 +1,8 @@
+// Archived goal tests from jobs/cli.reviewer-background.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, file, specFile, state, setup, teardown } from "../../jobs/cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);

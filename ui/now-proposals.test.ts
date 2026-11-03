@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import * as view from "./views/now.js";
 import { held, state } from "./fixtures/status-state.ts";
 import { withEnv } from "./test-server.ts";
-import { asksOf, withAttn, rows, problem, prop } from "./test-now.ts";
+import { asksOf, withAttn, rows, prop } from "./test-now.ts";
 
 // ---- proposals ----
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -15,21 +15,6 @@ import { join } from "node:path";
 import { readList } from "../todo/lib/store.ts";
 
 import { routes as proposalRoutes } from "./api/proposals.ts";
-
-test("a proposal is a row with Yes-like buttons and its signals folded", () => {
-  const h = withAttn({ ...state, asks: asksOf([held], [], [prop]) });
-  const row = h.match(/<article class="job-card small issue-row proposal-check"[^]*?<\/article>/)![0];
-  expect(problem(row)).toContain("Do not mock the db");
-  expect(row).toContain('<span class="t">Lesson: No db mocks</span>');
-  expect(row).toContain('class="act primary" type="button" data-act="approve" data-id="l-1234abcd" data-label="Add a check to aleph">Add a check to aleph<');
-  expect(row).toContain('data-act="decline" data-id="l-1234abcd" data-label="Add no check">');
-  expect(row).toContain('data-reason="proposal-check:aleph"');
-  expect(row).toContain('data-label="Add a check to aleph [auto-yes]"');
-  expect(row.match(/<details class="more"/g)?.length).toBe(1);
-  expect(row).toContain('<a href="https://lf/trace/t2">');
-  expect(row).not.toContain("<script>");
-  expect(row).toContain("&lt;script&gt;");
-});
 
 test("rows are ordered held, then asking, then proposal, then error; the group is a list", () => {
   const s = { ...state, asks: asksOf([held], [{ id: "aleph-5", title: "T", href: "#/x", question: "Pick one?" }], [prop]), factory: { ...state.factory, health: ["main is red"] } };

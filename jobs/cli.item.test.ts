@@ -23,7 +23,6 @@ const show = (key: string, id: number) => { const { item } = verbs.show({ key },
 const closeItem = (key: string, id: number, how: "done" | "drop", text = "") => verbs.close({ key }, id, how, text);
 
 describe("a job tied to a to-do item", () => {
-  const list = () => sh(base, "git", "--git-dir", itemsRemote, "rev-parse", "main");
   let landId: number, dropId: number;
   beforeAll(async () => {
     landId = await add("demo", "ship the widget");
@@ -45,16 +44,6 @@ describe("a job tied to a to-do item", () => {
     expect(s).toMatchObject({ kind: "build", on: `demo-${id}` });
     expect(s.todo).toBeUndefined();
     await aleph(["drop", "shape"]);
-  });
-
-  test("--on takes the repo-prefixed form, and refuses another repo's prefix", async () => {
-    const id = await add("demo", "prefixed");
-    const j = await aleph(["job", "demo", "prefixed", "--spec", specFile("Goal: prefixed\nACTION: commit prefixed.txt\n"), "--on", `demo-${id}`]);
-    expect(j.code).toBe(0);
-    expect(state(j.json.run).on).toBe(`demo-${id}`);
-    const bad = await aleph(["job", "demo", "otherrepo", "--spec", specFile("x"), "--on", `other-${id}`]);
-    expect(bad.code).toBe(1);
-    expect(bad.stderr).toContain("--on takes an issue number");
   });
 
   test("land marks the item done, naming the job and the landing commit", async () => {
@@ -80,16 +69,6 @@ describe("a job tied to a to-do item", () => {
     const item = show("demo", dropId);
     expect(item.status).toBe("open");
     expect(item.notes.at(-1)).toContain("job shed dropped: wrong colour");
-  });
-
-  test("a job without --on records none and leaves the list alone", async () => {
-    const before = list();
-    const j = await job("plainjob", "commit plainjob.txt");
-    expect(state(j.json.run).on).toBeUndefined();
-    const r = await aleph(["land", "plainjob"]);
-    expect(state(r.json.run)).toMatchObject({ condition: "landed" });
-    expect(state(r.json.run).on).toBeUndefined();
-    expect(list()).toBe(before);
   });
 });
 

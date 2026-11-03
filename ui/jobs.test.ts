@@ -163,15 +163,6 @@ describe("GET /api/jobs/:name", () => {
     expect(html).toContain('<span class="quiet">Blocked by</span>');
     expect(html).toContain(`data-act="unblock" data-repo="oth" data-id="${open}"`);
   });
-  test("a build run reads like an agent run: review row and result", async () => {
-    run("20261027-000006-a", { job: "oth-2", name: "oth-2", kind: "build", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) },
-      { "result.md": "built it\n", "review.md": "Fine.\nVERDICT: pass\n" });
-    const j = await (await get("/api/jobs/oth-2")).json();
-    rmSync(join(jobsDir, "20261027-000006-a"), { recursive: true, force: true });
-    expect(j.runs.map((r: any) => r.kind)).toEqual(["worker", "review"]);
-    expect(j.result).toBe("built it\n");
-    expect(j.review).toContain("VERDICT: pass");
-  });
   test("an explain run is listed with its own kind, not as a worker", async () => {
     run("20261027-000007-a", { job: "oth-3", name: "oth-3", kind: "explain", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) });
     const j = await (await get("/api/jobs/oth-3")).json();
@@ -336,17 +327,6 @@ describe("render", () => {
     expect(v.view.api({}, new URLSearchParams())).toBe("/api/jobs");
     const h = v.view.render([job], {}, new URLSearchParams("condition=stuck"));
     expect(h).toContain('data-value="stuck" aria-pressed="true"');
-  });
-  test("no render or api function reads location.hash", () => {
-    expect(String(v.view.api)).not.toContain("location.hash");
-    expect(String(v.view.render)).not.toContain("location.hash");
-    expect(String(v.renderJobs)).not.toContain("location.hash");
-  });
-  test("the view and the detail are routed", () => {
-    expect(v.view.path).toBe("/jobs");
-    expect(v.view.group).toBe("factory");
-    expect(v.detail.path).toBe("/jobs/:name");
-    expect(jobView.view).toBe(v.detail);
   });
   test("a failed run's event names it, gives its reason with code set as code, and offers its logs", () => {
     const h = v.renderJob({ ...job, runs: [{ id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });

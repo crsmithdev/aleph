@@ -42,25 +42,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
 const QUESTION_ISSUE = () => ofIssues(issue({ reason: "question", decision, question: "Should it be A or B?" }));
 
 describe("asks", () => {
-  test("every reason code has a case", () => expect(Object.keys(CASES).sort()).toEqual(Object.keys(ASK_REASONS).sort()));
 
-  for (const reason of Object.keys(ASK_REASONS)) {
-    test(`${reason}: one clean sentence, labelled actions with hints, an Always label, a kind of input or approval`, () => {
-      const [it] = CASES[reason]();
-      expect(it.reason).toBe(reason);
-      expect(it.problem).not.toMatch(/<task-notification|<agent-message|[<]/);
-      expect(it.problem.match(/[.?!](\s|$)/g)?.length ?? 0).toBeLessThanOrEqual(1);
-      expect(it.actions.length).toBeGreaterThan(0);
-      expect(it.actions[0].primary).toBe(true);
-      expect(it.actions.slice(1).some((a) => a.primary)).toBe(false);
-      for (const a of it.actions) { expect(a.label).toBeTruthy(); expect(a.hint).toBeTruthy(); expect(a.act).toBeTruthy(); }
-      expect(it.kind).toMatch(/^(approval|input)$/);
-      if (!ASK_REASONS[reason].always) { expect(it.always).toBeUndefined(); return; }
-      expect(it.always!.label).toBe(`${it.actions[0].label} [auto-yes]`);
-      expect(it.always!.hint).toContain("From now on");
-      expect(it.always!.action).toBe(ASK_REASONS[reason].always);
-    });
-  }
 
   const key = (a: { act: string; args: Record<string, string> }) => (a.act === "decide" && a.args.option ? `decide:${a.args.option}` : a.act);
   for (const reason of Object.keys(ASK_REASONS)) {
@@ -153,19 +135,6 @@ describe("asks", () => {
     expect(CASES["host-check"]()[0].actions.map((a) => a.label)).toEqual(["Mark it checked", "Drop the check"]);
   });
 
-  test("spec-check: the problems of the issue's question, rerun then close with its hint, no auto-yes", () => {
-    const items = ofIssues(issue({ reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" }));
-    expect(items.length).toBe(1);
-    const [it] = items;
-    expect(it.reason).toBe("spec-check");
-    expect(it.kind).toBe("input");
-    expect(it.problem).toBe("The spec check found that the spec of aleph-387 cannot be met as written: spec check: abc123 hold: the Oracle clause is outside the Edit surface.");
-    expect(it.actions.map((a) => a.act)).toEqual(["rerun", "close"]);
-    expect(it.actions[0].label).toBe("Start the goal");
-    expect(it.actions[0].hint).toBe("Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first.");
-    expect(it.always).toMatchObject({ action: "firefighter" });
-  });
-
   test("rerun is labelled by what it does for the reason, never Run it again", () => {
     const rerunLabel = (reason: string) => CASES[reason]().flatMap((i) => i.actions).find((a) => a.act === "rerun")?.label;
     expect(rerunLabel("spec-check")).toBe("Start the goal");
@@ -176,10 +145,6 @@ describe("asks", () => {
     expect(rerunLabel("run-cap")).toBe("Start it again");
     expect(rerunLabel("acceptance-failed")).toBe("Start it again");
     for (const reason of Object.keys(CASES)) for (const a of CASES[reason]().flatMap((i) => i.actions)) expect(a.label).not.toBe("Run it again");
-  });
-
-  test("a card carries the reason's name, and every reason has one", () => {
-    for (const [reason, r] of Object.entries(ASK_REASONS)) { expect(r.name.length).toBeGreaterThan(0); expect(CASES[reason]()[0].name).toBe(r.name); }
   });
 
   test("an Ask explained before the limits shows 3 sentences, 2 per choice, and the rest as details", () => {

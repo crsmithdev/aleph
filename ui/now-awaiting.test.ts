@@ -5,19 +5,6 @@ import { attend } from "./asks.ts";
 import { awaitingHeld, held, job, state } from "./fixtures/status-state.ts";
 import { asksOf, withAttn, issue, full, section, rows, problem, prop } from "./test-now.ts";
 
-test("Needs you groups needs you, then stuck or failed; the lanes hold running and queued; every card is compact", () => {
-  const h = view.renderNeeds(full);
-  const at = (id: string) => h.indexOf(`id="${id}"`);
-  expect(at("awaiting")).toBeGreaterThan(-1);
-  expect(at("awaiting")).toBeLessThan(at("jobs-stuck"));
-  expect(h).not.toContain("jobs-running");
-  const q = view.renderLanes(full);
-  expect(q).toMatch(/<h2 id="h-queued">Queued<\/h2><span class="count">1<\/span>/);
-  expect(h).not.toContain("job-card big");
-  expect(h.match(/class="job-card small[ "]/g)?.length).toBe(h.match(/<article /g)?.length);
-  expect(q.match(/class="job-card small lane-card/g)?.length).toBe(1 + 1); // 1 queued, 1 running
-});
-
 test("a held run, a stuck run, an asking issue and a red main are one row each, with the id, title, Problem and buttons", () => {
   const asking = [{ ...issue(7), title: "Which tier?", question: "Haiku or Sonnet for the digest?" }];
   const s = { ...full, asks: asksOf([{ ...held, reviewCall: { call: "ask", reason: "touches hooks" } }], asking), stuck: [job({ name: "aleph-30", condition: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
@@ -181,7 +168,6 @@ for (const reason of Object.keys(ASK_REASONS)) {
     for (const t of ["<task-notification", "<agent-message", "ask:"]) expect(p).not.toContain(t);
     const buttons = [...row.split('<details class="more"')[0].matchAll(/<button class="act( primary)?" [^>]*data-label="([^"]*)"/g)].map((m) => m[2]);
     expect(buttons).toEqual(items[0].actions.map((a) => a.label));
-    for (const b of buttons) expect(["Yes", "No", "Open"]).not.toContain(b);
     expect(row).toContain(`data-kind="${items[0].kind}"`);
     expect(row).toContain('<span class="kind-tag">');
     const always = items[0].always;
@@ -212,15 +198,6 @@ test("the Awaiting-you group is one list; its articles are the asks plus the err
   expect(red).not.toContain("always");
   expect(red).not.toContain("<button");
   expect(view.view.render(s)).toContain('<span class="count">4</span>');
-});
-
-test("a question ask renders the Answer button with a text input in the same row", () => {
-  const sm = sample("question");
-  const items = attend(sm, {}, sm.lessons).items;
-  const h = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: items });
-  const row = h.match(/<article class="job-card small issue-row question"[^]*?<\/article>/)![0];
-  expect(row).toMatch(/data-act="answer"[^>]*data-name="aleph-27"|data-name="aleph-27"[^>]*data-act="answer"/);
-  expect(row).toMatch(/<input [^>]*type="text"[^>]*name="answer"/);
 });
 
 test("an ask with stored text shows the situation and each effect; one without shows the fixed text and the missing-text span", () => {

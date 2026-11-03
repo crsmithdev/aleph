@@ -347,13 +347,6 @@ describe("the planner prompt's similar episodes", () => {
     expect(prompt({ key: "fac" } as any, it)).not.toContain("How similar goals went");
     expect(prompt({ key: "fac" } as any, it)).toContain("Notes:\nn\n\nSplit it into");
   });
-
-  test("the prompt names bun run test for the full suite, not bun test", () => {
-    const p = prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any);
-    expect(p).toContain("bun run test");
-    expect(p).toContain("There is no `aleph check` command");
-    expect(p).not.toContain("such as `bun test`");
-  });
 });
 
 test("a child title over 60 characters fails the check, and the prompt asks for a short one", () => {

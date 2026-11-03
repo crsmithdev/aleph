@@ -1,5 +1,6 @@
+// Archived goal tests from jobs/cli.factory-background.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { aleph, file, specFile, setup, state, teardown, fakeLog } from "./cli.helpers";
+import { aleph, file, specFile, setup, state, teardown, fakeLog } from "../../jobs/cli.helpers";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 

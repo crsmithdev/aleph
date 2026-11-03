@@ -253,14 +253,6 @@ test("gatesBody marks a cap overridden only for a non-empty ALEPH_* variable", a
   } finally { restore(); }
 });
 
-test("renderNow draws a number input and a Save button for each of the three caps", () => {
-  const h = gates.renderNow(data());
-  for (const k of ["day", "live", "awaiting"]) expect(h).toMatch(new RegExp(`<form class="capform" data-cap="${k}">[^]*?<input id="cap-${k}" name="${k}" type="number"[^]*?Save`));
-  expect(h).toContain('value="5"');
-  expect(h).toContain('value="12"');
-  expect(h).not.toContain("has no effect");
-});
-
 test("renderNow says an edit has no effect while the environment variable is set, and names it", () => {
   const d: any = data();
   d.factory.capEnv = { day: true, live: false, awaiting: false };

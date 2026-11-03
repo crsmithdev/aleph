@@ -1,7 +1,8 @@
+// Archived goal tests from jobs/cli.dispatch.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, passed, quiet, startScript, setup, teardown, seedItem, patchItem, until } from "./cli.helpers";
+import { aleph, base, jobsDir, passed, quiet, startScript, setup, teardown, seedItem, patchItem, until } from "../../jobs/cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);

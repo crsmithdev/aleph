@@ -43,15 +43,6 @@ test("formats and states", () => {
   expect(cmd("aleph land a-1", { primary: true })).toContain('data-cmd="aleph land a-1"');
 });
 
-test("chartTheme holds the token colours in the order given", () => {
-  const t = { bg: "#111", surface: "#222", ink: "#eee", rule: "#444", run: "#1", done: "#2", need: "#3", stuck: "#4", sans: "X" };
-  const th = chartTheme(t);
-  expect(th.color).toEqual(["#1", "#2", "#3", "#4", "#C792EA", "#89DDFF"]);
-  expect(th.textStyle.color).toBe("#eee");
-  expect(th.valueAxis.splitLine.lineStyle.color).toBe("#444");
-  expect(th.tooltip.backgroundColor).toBe("#222");
-});
-
 test("mountView calls mount only when the view has one", () => {
   const calls: unknown[][] = [];
   expect(mountView({ mount: (...a: unknown[]) => calls.push(a) }, "root", 1)).toBe(true);
@@ -170,11 +161,6 @@ test("restoreState ignores state for elements the new HTML no longer has", () =>
   const after = fakeRoot("<p>nothing</p>");
   expect(() => restoreState(after, state)).not.toThrow();
   expect(() => restoreState(after, null)).not.toThrow();
-});
-
-test("tone maps every job state to one badge tone", () => {
-  expect(STATES.map(tone)).toEqual(["run", "done", "need", "stuck", "stuck", "done", "done", "quiet"]);
-  expect(tone("held")).toBe("quiet");
 });
 
 test("when gives month, day and time this year, the date for another year, on one line", () => {

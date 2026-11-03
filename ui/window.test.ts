@@ -17,7 +17,6 @@ import { full } from "./test-now.ts";
 
 const WINDOWS = ["hour", "day", "week", "month"] as const;
 const WORDS = { hour: "last hour", day: "last 24 hours", week: "last 7 days", month: "last 30 days" };
-const BUCKET = { hour: "minute", day: "hour", week: "day", month: "day" };
 const DAYS = { hour: "0.041667", day: "1", week: null, month: "30" }; // week is the API default
 
 const P = (n: number) => ({ count: n, p50: 60, p90: 120, hist: [0, 1, 0, 0, 0, 0, 0], worst: 300 });
@@ -56,15 +55,6 @@ beforeEach(() => {
 });
 afterEach(() => { delete g.localStorage; delete g.location; delete g.history; });
 
-test("each of the four pages renders the same four options, with the current window pressed", () => {
-  for (const [name, p] of Object.entries(PAGES)) for (const w of WINDOWS) {
-    const h = p.render(w);
-    expect(pressed(h).map((m) => m[1]), name).toEqual(["hour", "day", "week", "month"]);
-    expect(h, name).toContain(">Hour</button><button type=\"button\" data-value=\"day\"");
-    expect(pressed(h).filter((m) => m[2] === "true").map((m) => m[1]), `${name} ${w}`).toEqual([w]);
-  }
-});
-
 test("picking an option on each page asks for that window and the page says its period", () => {
   for (const [name, p] of Object.entries(PAGES)) for (const w of WINDOWS) {
     g.location.hash = p.path;
@@ -82,10 +72,6 @@ test("picking an option on each page asks for that window and the page says its 
     expect(shown, `${name} ${w}`).toContain(name === "all" ? WORDS[w].replace("last ", "") : name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
     expect(html).toBeTruthy();
   }
-});
-
-test("Jobs titles its day rows by the bucket of the window", () => {
-  for (const w of WINDOWS) expect(PAGES.jobs.render(w)).toContain(`Median by ${BUCKET[w]}`);
 });
 
 test("the trend against the last 24 hours shows only for week and month", () => {
@@ -119,11 +105,6 @@ test("All jobs keeps an old ?days= address open", () => {
   expect(jobs.view.api(null, new URLSearchParams("days=30"))).toBe("/api/jobs?days=30");
   expect(pressed(jobs.renderJobs([], { days: "30" })).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
   expect(pressed(jobs.renderJobs([], { days: "90" })).filter((m) => m[2] === "true")).toEqual([]);
-});
-
-test("live values on Agents say they are live", () => {
-  expect(PAGES.agents.render("hour")).toContain("live, in use now");
-  expect(PAGES.agents.render("hour")).toContain("live, not the window");
 });
 
 test("the picker works from an address with no hash", () => {

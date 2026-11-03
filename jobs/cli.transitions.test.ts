@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, env, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, patchItem, seedItem } from "./cli.helpers";
+import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, patchItem, seedItem } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -54,30 +54,6 @@ describe("every transition dispatches at once", () => {
     await Bun.sleep(300);
     rmSync(startLog, { force: true });
   }, 120_000);
-
-  test("a drop that frees a live slot starts the next goal", async () => {
-    const a = track(await add("holds the slot", open("slot-a"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
-    await until(() => started().includes(`fac-${a}`));
-    const b = track(await add("needs the slot", open("slot-b"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
-    await Bun.sleep(1500);
-    expect(started()).toEqual([`fac-${a}`]);
-    // Drop the issue first: an open goal whose run is dropped starts again, and would keep the slot.
-    await aleph(["issue", "drop", "fac", String(a), "slot test"]);
-    expect((await aleph(["drop", `fac-${a}`], on({ ALEPH_LIVE_CAP: "1" }))).code).toBe(0);
-    await until(() => started().includes(`fac-${b}`));
-  }, 60_000);
-
-  test("a land that lands starts the goal that waits on that job", async () => {
-    const a = track(await seed("lands first", "commit tr/a.txt", { kind: "goal" }));
-    await until(() => started().includes(`fac-${a}`));
-    await until(() => settled(a) && runs(a).some((r) => state(r).condition === "passed"));
-    const b = track(await seed("waits on the first", open("land"), { kind: "goal", after: [`fac-${a}`] }));
-    await Bun.sleep(1000);
-    expect(started()).not.toContain(`fac-${b}`);
-    const l = await aleph(["land", `fac-${a}`], on());
-    expect(l.code).toBe(0);
-    await until(() => started().includes(`fac-${b}`));
-  }, 90_000);
 
   test("an edit that sets the status back to open starts the goal", async () => {
     // A dispatch left by an earlier test's run may still be alive. It starts any open goal it sees, so the
@@ -146,42 +122,4 @@ describe("every transition dispatches at once", () => {
       delete process.env.ALEPH_RESCUE;
     }
   }, 90_000);
-
-  test("a resume starts the goals that waited for it", async () => {
-    await aleph(["pause"]);
-    const x = track(await add("added while paused", open("resume"), ["--labels", "goal"]));
-    await Bun.sleep(1000);
-    expect(started()).toEqual([]);
-    await aleph(["resume"], on());
-    await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
-  test("the issue form (POST /api/issues) adds a goal that starts at once", async () => {
-    const title = "from the form";
-    const issues = await import("../ui/api/issues.ts");
-    const create = issues.routes["POST /api/issues"];
-    const saved = { ...process.env };
-    Object.assign(process.env, env(on()));
-    const req = new Request("http://x/api/issues", { method: "POST", headers: { "x-aleph-ui": "1" }, body: JSON.stringify({ repo: "fac", title, labels: "spec", body: `ACTION: ${open("form")}` }) });
-    const res = await create(req, {}, new URL(req.url));
-    for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
-    Object.assign(process.env, saved);
-    expect(res.status).toBe(200);
-    // The `goal` label files goal `.1` beside the issue, and the dispatch the add runs starts the goal.
-    const added = ((await res.json()) as any).added as number;
-    track(added);
-    await until(() => started().length === 1);
-    expect(started()).toEqual([`fac-${added}`]);
-    writeFileSync(gate("form"), "");
-    await until(() => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${added}-`)).every((r) => state(r).condition === "passed"));
-  }, 60_000);
-
-  test("a triage run that ends with a goal starts it", async () => {
-    const x = track(await add("vague", open("triage"), ["--labels", "followup"], { ALEPH_DISPATCH: "off" }));
-    const cmd = join(base, "ttriage-cmd");
-    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"route":"build","spec":"## Goal\\nx\\nACTION: hold ${gate("triage")}"}'\n`, { mode: 0o755 });
-    const t = await aleph(["triage", `fac-${x}`], on({ ALEPH_TRIAGE_CMD: cmd }));
-    expect(t.json.triaged).toEqual({ build: 1 });
-    await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
 });

@@ -9,10 +9,14 @@ A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Facto
 ```bash
 systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
 systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
+systemctl --user link ~/aleph/jobs/systemd/aleph-accept.service
+systemctl --user enable --now ~/aleph/jobs/systemd/aleph-accept.timer
 aleph sandbox probe     # check the sandbox isolation from inside its profile
 ```
 
-The `aleph-tick` timer runs `aleph tick` every 5 minutes. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
+The `aleph-tick` timer runs `aleph tick` every 5 minutes. The `aleph-accept` timer runs `aleph accept-nightly aleph` at 03:30.
+
+When a goal passes acceptance, its hidden test files go to `acceptance/<repo>-<n>/` on main, in a commit of their own. A goal's tests stay out of the suite: `bun run test` does not run `acceptance/`, and `bun run accept` does. A failed nightly run is a health line on the Status page until a later run passes. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
 
 ## Commands
 
@@ -20,6 +24,7 @@ The `aleph-tick` timer runs `aleph tick` every 5 minutes. To start the tick afte
 |---|---|
 | `aleph dispatch` | Starts a run for each ready goal, up to the caps |
 | `aleph tick` | Dispatches, triages, and does the periodic work; the timer runs it |
+| `aleph accept-nightly <repo>` | Runs `bun run accept` on `origin/main` in a worktree of its own, and keeps the result for the health line |
 | `aleph triage <repo>-<n>` | Triages one issue now |
 | `aleph status [<repo>-<n>[.<k>]] [--json]` | The state of one issue, or of each open issue in the recent repos |
 | `aleph jobs` | Open jobs, then the jobs that ended in the last 24 hours |

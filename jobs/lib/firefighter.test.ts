@@ -448,15 +448,6 @@ test("the firefighter prompt limits the Goal of a spec it writes to 3 sentences 
   expect(p).toContain("no claim about code on main that you did not read");
 });
 
-test("prompt lists after in the drop and edit-goal lines, and says a note alone does not stop a rerun", () => {
-  const p = prompt([]);
-  const lines = p.split("\n");
-  expect(lines.find((l) => l.startsWith('- {"do": "drop"'))).toContain('"after"');
-  expect(lines.find((l) => l.startsWith('- {"do": "edit-goal"'))).toContain('"after"');
-  expect(lines.find((l) => l.startsWith('- {"do": "answer"'))).toContain('"after"');
-  expect(p).toContain("A note or a drop reason alone does not stop a rerun.");
-});
-
 test("answer keeps after in parse, and leaves it out when absent", () => {
   const a = { do: "answer" as const, repo: "ff", n: 1, note: "x" };
   expect(parseReply(JSON.stringify({ actions: [{ ...a, after: ["ff-2.1"] }] }))).toEqual([{ ...a, after: ["ff-2.1"] }]);

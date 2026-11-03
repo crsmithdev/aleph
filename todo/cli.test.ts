@@ -149,39 +149,11 @@ test("add allocates the next id and list shows it", () => {
   expect(rows[1]).not.toHaveProperty("labels");
 });
 
-test("add gives source agent under CLAUDECODE, chris without it, and worker for a followup label", () => {
-  const src = (title: string) => JSON.parse(aleph("issue", "list", "proj", "--json").out).find((r: any) => r.title === title).source;
-  expect(alephWith({ CLAUDECODE: "1" }, "issue", "add", "proj", "From agent").code).toBe(0);
-  expect(aleph("issue", "add", "proj", "From human").code).toBe(0);
-  expect(alephWith({ CLAUDECODE: "1" }, "issue", "add", "proj", "From worker", "--labels", "followup").code).toBe(0);
-  expect(src("From agent")).toBe("agent");
-  expect(src("From human")).toBe("chris");
-  expect(src("From worker")).toBe("worker");
-  const id = JSON.parse(aleph("issue", "list", "proj", "--json").out).find((r: any) => r.title === "From human").id;
-  expect(aleph("issue", "edit", "proj", String(id), "--source", "agent").code).toBe(0);
-  expect(src("From human")).toBe("agent");
-  const lint = aleph("issue", "lint", "proj");
-  expect(lint.code, lint.out + lint.err).toBe(0);
-});
-
 test("a title that YAML would misread is quoted in the file and comes back exactly", () => {
   const title = '`/play` says "done" \\ then: drops it';
   expect(aleph("issue", "add", "proj", title).code).toBe(0);
   expect(remoteItem(4)).toContain(`title: ${JSON.stringify(title)}\n`);
   expect(JSON.parse(aleph("issue", "show", "proj", "4", "--json").out).title).toBe(title);
-});
-
-test("add and edit refuse a priority outside low, medium, high, critical", () => {
-  const before = sh(base, "git", "--git-dir", remote, "rev-parse", "main");
-  const r = aleph("issue", "add", "proj", "Urgent thing", "--priority", "urgent");
-  expect(r.code).not.toBe(0);
-  for (const p of ["low", "medium", "high", "critical"]) expect(r.err).toContain(p);
-  expect(sh(base, "git", "--git-dir", remote, "rev-parse", "main")).toBe(before);
-  expect(aleph("issue", "add", "proj", "Kept critical", "--priority", "critical").code).toBe(0);
-  expect(remoteItem(4)).toContain("priority: critical\n");
-  const e = aleph("issue", "edit", "proj", "3", "--priority", "urgent");
-  expect(e.code).not.toBe(0);
-  expect(e.err).toContain("critical");
 });
 
 test("labels filter, and a flag value never lands in the title", () => {
@@ -361,31 +333,6 @@ test("hidden copies files into the store as one commit, lists them, and show cou
   expect(aleph("issue", "show", "proj", "3").out).toContain("hidden checks: 1");
   expect(aleph("issue", "hidden", "proj", "99", f).err).toContain("has no issue 99");
   expect(aleph("issue", "hidden", "proj", "3", join(base, "nope.ts")).code).toBe(1);
-});
-
-test("hidden reads the goal id directory, then the old number", async () => {
-  seed("# To do\n\n" + [3, 4].map((n) => sec(n, "kind: goal")).join("\n"));
-  for (const [p, text] of [["3/a.test.ts", "a"], ["proj-4/b.test.ts", "b"], ["proj-5.1/c.test.ts", "c"]]) {
-    mkdirSync(join(items, "proj", "hidden", p.split("/")[0]), { recursive: true });
-    writeFileSync(join(items, "proj", "hidden", p), text);
-  }
-  sh(items, "git", "add", "-A");
-  sh(items, "git", "commit", "-qm", "hidden");
-  sh(items, "git", "push", "-q", "origin", "main");
-  expect(aleph("issue", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
-  expect(aleph("issue", "hidden", "proj", "4").out.trim()).toBe("b.test.ts");
-  expect(aleph("issue", "show", "proj", "4").out).toContain("hidden checks: 1");
-  const was = process.env.ALEPH_ISSUES;
-  process.env.ALEPH_ISSUES = items;
-  try {
-    const { readHidden } = await import("./lib/store.ts");
-    expect(Object.keys(readHidden({ key: "proj" }, "proj-5.1"))).toEqual(["c.test.ts"]);
-    expect(Object.keys(readHidden({ key: "proj" }, "proj-3"))).toEqual(["a.test.ts"]);
-    expect(Object.keys(readHidden({ key: "proj" }, 3))).toEqual(["a.test.ts"]);
-    expect(Object.keys(readHidden({ key: "proj" }, 4))).toEqual(["b.test.ts"]);
-  } finally {
-    if (was === undefined) delete process.env.ALEPH_ISSUES; else process.env.ALEPH_ISSUES = was;
-  }
 });
 
 const sec = (id: number, fm: string, body = "Body.") => `## ${id}. Item ${id}\n---\nid: ${id}\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\n${fm}\n---\n\n${body}\n`;

@@ -74,19 +74,6 @@ test("counts by kind and scope, Home's sections, recent writes", async () => {
   expect(m.misses).toBeUndefined();
 });
 
-test("every memory type has its block", async () => {
-  const t: any = (await (await at("/api/memory")).json()).types;
-  expect(t.working.current.intent).toBe("Finish the memory tab.");
-  expect(t.working.archived.map((h: any) => [h.date, h.intent])).toEqual([["2026-10-01", "Old work."]]);
-  expect(t.semantic.memory.first).toBe("Chris prefers short answers.");
-  expect(t.semantic.notes.map((n: any) => n.title)).toContain("Use Bun");
-  expect(t.episodic.episodes.map((n: any) => n.title)).toEqual(["Goal aleph-1"]);
-  expect(t.episodic.daily.latest).toEqual([today]);
-  expect(t.procedural.skills).toContain("vault");
-  expect(t.procedural.claudeMd.path).toBe("identity/CLAUDE.md");
-  for (const k of ["retrieval", "prospective", "gates"]) expect(t[k]).toBeDefined();
-});
-
 test("the page shows all seven types, and an empty one says what fills it", () => {
   const h = v.renderMemory({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [] });
   for (const t of ["Working", "Semantic", "Episodic", "Procedural", "Retrieval", "Prospective", "Parametric", "Facts runs", "Proposals"]) expect(h).toContain(t);

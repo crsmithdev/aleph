@@ -31,6 +31,7 @@ import type { Fate } from "./lib/outcome.ts";
 import { refuse, Refusal } from "./lib/refusal.ts";
 import { probe } from "./lib/probe.ts";
 import { smokeStep } from "./lib/smoke.ts";
+import { runNightly } from "./lib/nightly-accept.ts";
 import * as doctor from "./lib/doctor.ts";
 import { sweep } from "./lib/deps.ts";
 import { recordReview, runReview } from "./lib/review.ts";
@@ -483,6 +484,13 @@ try {
     case "accept": {
       const lines = await reacceptReopened(positional[0] ?? refuse("usage: aleph accept <repo> [--reopened-since <iso>] [--before <iso>]"), { since: flag("reopened-since"), before: flag("before") });
       console.log(lines.join("\n") || "nothing to re-accept");
+      break;
+    }
+    case "accept-nightly": {
+      const key = positional[0] ?? refuse("usage: aleph accept-nightly <repo>");
+      const r = runNightly(loadRegistry()[key] ?? refuse(`no repo ${key} in the registry`));
+      out(r);
+      if (!r.ok) process.exit(1);
       break;
     }
     case "tick": await tickCmd(); break;

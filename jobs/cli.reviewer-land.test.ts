@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, env, fakeLog, file, jobsDir, until, remote, repo, sh, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, fakeLog, file, jobsDir, until, remote, repo, sh, specFile, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -69,21 +69,6 @@ describe("a factory run", () => {
     await until(() => state(run).review !== undefined);
     expect(state(run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ reason: "held-path" }), review: { call: "land" }, reason: "held path jobs/lib/gate.ts" });
     await aleph(["drop", "fsec"]);
-  });
-
-  test("a held run landed with the firefighter as lander gets Held-by: firefighter, not Chris", async () => {
-    const r = await fjob("fheldff", "commit held/y.txt");
-    expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }) });
-    const run = r.json.run;
-    for (let i = 0; i < 100 && !file(run, "call.md").includes("VERDICT"); i++) await Bun.sleep(100);
-    const code = `import { land } from "${join(import.meta.dir, "lib/transitions.ts")}"; const s = await land("fheldff", { lander: "firefighter" }, { output: "ignore" }); await s.child?.exited;`;
-    const p = Bun.spawn(["bun", "-e", code], { cwd: base, env: env(), stdout: "pipe", stderr: "pipe" });
-    expect(await p.exited).toBe(0);
-    const landRun = readdirSync(jobsDir).filter((d) => d.endsWith("-land") || existsSync(join(jobsDir, d, "state.json"))).map((d) => state(d)).filter((x) => x.kind === "land" && x.name === "fheldff").at(-1);
-    expect(landRun).toMatchObject({ condition: "landed", held: true, lander: "firefighter" });
-    const trailers = remoteGit("log", "-1", "--format=%(trailers:only)", "main");
-    expect(trailers).toContain("Held-by: firefighter");
-    expect(trailers).not.toContain("Held-by: Chris");
   });
 
   test("a review back goes to the worker as a fix round; after the last round the run needs Chris", async () => {

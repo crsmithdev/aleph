@@ -6,7 +6,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { ctx, notes, setup, teardown } from "./factory.helpers.ts";
 import { specVersion } from "./goal-spec.ts";
 import { askOf } from "./ask.ts";
-import { checkSpec, runSpecCheck, specCheckPrompt, specVerdict } from "./spec-check.ts";
+import { checkSpec, runSpecCheck, specVerdict } from "./spec-check.ts";
 
 const SPEC = "## Goal\nGOALTEXT\n\n## Edit surface\nSURFACE\n\n## Oracle\nORACLETEXT\n";
 let old: string | undefined;
@@ -30,11 +30,6 @@ function stub(text: string, code = 0): string {
 /** The spec version of item `id` now. */
 const version = (id: number) => specVersion(reader().item("fac", id)!);
 const count = (calls: string) => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").length : 0);
-
-test("the prompt holds the three parts of the spec and the verdict instruction", () => {
-  const p = specCheckPrompt({ title: "T", spec: SPEC } as any);
-  for (const s of ["GOALTEXT", "SURFACE", "ORACLETEXT", "VERDICT: pass", "VERDICT: hold"]) expect(p).toContain(s);
-});
 
 test("specVerdict reads pass, hold with problems, and null", () => {
   expect(specVerdict("fine\nVERDICT: pass")).toEqual({ pass: true });

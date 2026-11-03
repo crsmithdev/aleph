@@ -1,0 +1,13 @@
+# The nightly run of the archived goal tests: `bun run accept` on origin/main.
+# A failure is a health line on the Status page; it files no issue.
+#   systemctl --user link ~/aleph/jobs/systemd/aleph-accept.service
+#   systemctl --user enable --now ~/aleph/jobs/systemd/aleph-accept.timer
+#   journalctl --user -u aleph-accept -n 20;  ~/.aleph/factory/accept-nightly.json
+[Unit]
+Description=aleph nightly acceptance run
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h/aleph
+ExecStart=%h/.bun/bin/bun %h/aleph/jobs/cli.ts accept-nightly aleph

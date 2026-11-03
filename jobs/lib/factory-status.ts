@@ -18,6 +18,7 @@ import { allRuns, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, typ
 import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
+import { nightlyLine } from "./nightly-accept.ts";
 import { AWAITING_CAP, DAY_CAP, LIVE_CAP, suiteBudgetSeconds } from "./settings.ts";
 
 export const factoryDir = () => layout().factory;
@@ -341,7 +342,7 @@ export function suiteLines(runs: Entry[] = allRuns()): string[] {
   return [...last].filter(([, s]) => s.seconds > budget).map(([repo, s]) => `health: ${repo} full suite took ${s.seconds} s; the budget is ${budget} s`);
 }
 
-/** The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, a slow full suite, and flakes. `jobs` and `lists` are the caller's, when it has read them already. */
+/** The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, a slow full suite, a failed nightly acceptance run, and flakes. `jobs` and `lists` are the caller's, when it has read them already. */
 export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {}): string[] {
   const lines: string[] = [];
   const lists = o.lists ?? reader();
@@ -349,6 +350,8 @@ export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {
   lines.push(...suiteLines(o.jobs?.flat()));
   const smoke = smokeLine();
   if (smoke) lines.push(smoke);
+  const nightly = nightlyLine();
+  if (nightly) lines.push(nightly);
   const w = waiting(o.jobs);
   if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
   const p = lastProbe();

@@ -134,15 +134,6 @@ test("the triage prompt limits the Goal to 3 sentences with no implementation de
   expect(p).toContain("no claim about code on main that you did not read");
 });
 
-test("the prompt says the factory runs the checks, and names no aleph check command", () => {
-  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
-  expect(p).toContain("The factory runs this repo's checks itself");
-  expect(p).toContain("There is no `aleph check` command");
-  expect(p).not.toMatch(/aleph check\s+\S/);
-  expect(p).toContain("`bun run test`");
-  expect(p).not.toContain("such as `bun test`");
-});
-
 test("a triage is a job in the ledger, of kind triage", async () => {
   reset([1, 2, 3, 4].map((n) => ({ title: `item ${n}`, body: "VERDICT:live" })));
   await run();

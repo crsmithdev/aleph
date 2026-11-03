@@ -91,7 +91,7 @@ const WEEKLY_WARN = 90;
 /** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
 const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?|most flaked in acceptance/;
 /** Health lines that are warnings, not alerts: the status sentence says them in the warning colour, and they make no card. */
-const WARN_HEALTH = /full suite took/;
+const WARN_HEALTH = /full suite took|nightly acceptance run failed/;
 
 /** What the status sentence says for an error line, most serious first. A line with no entry is said as it is, after these. */
 const ALERTS = [

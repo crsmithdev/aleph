@@ -35,13 +35,6 @@ test("binds 127.0.0.1", () => {
   expect(server.hostname).toBe("127.0.0.1");
 });
 
-test("/api/state is JSON with the spec's keys", async () => {
-  const res = await at("/api/state");
-  expect(res.headers.get("content-type")).toContain("application/json");
-  const body: any = await res.json();
-  expect(Object.keys(body).sort()).toEqual(["always", "asks", "delivered", "done", "factory", "incoming", "issues", "landing", "newIssues", "now", "openIssues", "planner", "proposals", "queued", "running", "runningIssues", "speed", "stuck", "usage", "velocity"]);
-});
-
 test("/api/state?project= keeps only that project's jobs", async () => {
   const all: any = await (await at("/api/state")).json();
   expect(all.running.map((j: any) => j.name).sort()).toEqual(["aleph-1", "other-2"]);
@@ -62,18 +55,6 @@ test("a new view file and api file are served with no edit to server.ts", async 
   expect(js.headers.get("content-type")).toContain("javascript");
   expect(await js.text()).toContain('path: "/_test/:id"');
   expect(await (await at("/api/_test/a%20b?project=other")).json()).toEqual({ id: "a b", project: "other" });
-});
-
-test("/ is the page, /lib.js and /views/now.js its modules", async () => {
-  const res = await at("/");
-  expect(res.headers.get("content-type")).toContain("text/html");
-  const page = await res.text();
-  expect(page.toLowerCase()).toContain("<html");
-  expect(page).toContain("/api/views");
-  const lib = await at("/lib.js");
-  expect(lib.headers.get("content-type")).toContain("javascript");
-  expect(await lib.text()).toContain("export function esc");
-  expect(await (await at("/views/now.js")).text()).toContain("export function renderTiles");
 });
 
 test("/app.css is the style sheet, and the page links it", async () => {

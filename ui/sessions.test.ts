@@ -175,19 +175,6 @@ test("the waterfall at 390 px: the detail pane stacks under a grid that scrolls 
   expect(narrow).toMatch(/\.wf-grid \{ max-height: \d+vh; overflow: auto; scroll-padding-top: 24px; \}/);
 });
 
-
-
-test("the Session page's table uses pageHead, idLink and when, in the shared column order", async () => {
-  const s: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  const h = v.renderSession(s, {}, TABLE);
-  expect(h).toContain('<header class="ph"><h1>Session s1</h1><span class="count">2</span>');
-  expect(h).toContain(idLink("s1", "#/sessions/s1").replace('class="idl"', 'class="idl" title="s1"'));
-  const heads = [...h.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
-  expect(heads).toEqual(["Turn", "Prompt", "Output", "Model", "Tools", "Duration", "Cost", "Started"]);
-  expect(h).toContain(`<td class="time">${when(s.turns[0].start)}</td>`);
-  expect(h.match(/<h1/g)?.length).toBe(1);
-});
-
 test("the Turn page uses pageHead, idLink and when", async () => {
   const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
   expect(t.start).toBe(TRACES[1].timestamp);

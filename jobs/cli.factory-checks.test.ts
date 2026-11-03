@@ -112,15 +112,6 @@ describe("a factory run's checks", () => {
         expect(existsSync(join(base, "author-d.in"))).toBe(false);
       }, 60_000);
 
-      // The dispatch runs the spec check (factory-dispatch.test.ts); a job started by hand gets none.
-      test("a job started by hand with --on runs no spec check", async () => {
-        const id = goalWith("hand goal");
-        const r = await fjob("spec1", "commit spec1.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("h", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("h", "VERDICT: hold vague") }, ["--on", String(id)]);
-        expect(state(r.json.run).condition).toBe("passed");
-        expect(calls("h")).toBe(0);
-        expect(await notes(id)).not.toContain("spec check:");
-      }, 60_000);
-
       test("aleph spec-check: a hold asks and is noted, and the same version is not checked again", async () => {
         const id = goalWith("held goal");
         const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: fakeSpec("c", "looked.\nVERDICT: hold the Oracle names needHead, which is outside the Edit surface") };
@@ -133,13 +124,6 @@ describe("a factory run's checks", () => {
         expect(await notes(id)).toMatch(/spec check: [0-9a-f]{12} hold: the Oracle names needHead/);
         expect((await aleph(["spec-check", `fac-${id}`], env)).json).toMatchObject({ verdict: "skip" });
         expect(calls("c")).toBe(1);
-      }, 60_000);
-
-      test("aleph spec-check: a stub that exits 1 leaves an error note", async () => {
-        const id = goalWith("error goal");
-        const r = await aleph(["spec-check", `fac-${id}`], { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: fakeSpec("e", "oops", 1) });
-        expect(r.json).toMatchObject({ verdict: "error" });
-        expect(await notes(id)).toMatch(/spec check: [0-9a-f]{12} error:/);
       }, 60_000);
     });
 

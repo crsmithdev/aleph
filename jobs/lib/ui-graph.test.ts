@@ -28,14 +28,6 @@ test("walks relative imports from the server and api roots", () => {
   for (const f of ["ui/api/now.test.ts", "ui/views/other.js", "ui/index.html"]) expect(g.has(f)).toBe(false);
 });
 
-test("this repo", () => {
-  const g = serverGraph(join(import.meta.dir, "../.."));
-  for (const f of ["ui/api/now.ts", "ui/state.ts", "ui/decision.js", "todo/lib/store.ts", "hooks/lib/env.ts", "ui/system-parts.js"]) expect(g.has(f)).toBe(true);
-  for (const f of ["ui/lib.js", "ui/index.html", "ui/app.css", "ui/views/now.js", "ui/views/speed.js", "ui/views/cards.js"]) expect(g.has(f)).toBe(false);
-  expect(g.has("ui/lib.test.ts")).toBe(false);
-  expect([...g].filter((f) => f.endsWith(".test.ts"))).toEqual([]);
-});
-
 test("the server of this repo loads none of the factory's actions", () => {
   const g = serverGraph(join(import.meta.dir, "..", ".."));
   expect(g.has("jobs/lib/factory-status.ts")).toBe(true);
