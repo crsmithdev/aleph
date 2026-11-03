@@ -4,6 +4,8 @@
  * - each default a doc gives for an `ALEPH_*` setting (a table row `| \`ALEPH_X\` | 5 |`, or
  *   `` `ALEPH_X` (5) ``, `` `ALEPH_X` (default 0.05) ``, `` (`ALEPH_X`, 30 minutes) ``, `` `ALEPH_X` (600 s) ``,
  *   `ALEPH_X, else 3020`, `` `ALEPH_X` defaults to 5 ``) against the value the code returns with the variable unset;
+ * - each default a doc gives only in prose, with no setting beside it (`no output for 10 minutes`, `above 0.75 of the
+ *   threshold`), against the code constant that PROSE_DEFAULTS maps the phrase to; a time is converted to seconds;
  * - each `ALEPH_*` name against the source;
  * - each repo path in backticks, in a relative link or in a link to this repo on GitHub, against the tree;
  * - each `path:line` in backticks against the length of that file (a bare file name must name one file of the tree);
@@ -53,6 +55,24 @@ export function defaultClaims(docs: Doc[]): DefaultClaim[] {
     const t = text.match(TABLE);
     if (t) out.push({ file: d.file, line, name: t[1], value: t[2], quote: t[0] });
     for (const re of [PAREN, TIME, PROSE]) for (const m of text.matchAll(re)) out.push({ file: d.file, line, name: m[1], value: m[2], quote: m[0] });
+  });
+  return out;
+}
+
+/** A default stated in prose: the phrase (group 1 is the value), the code file and the pattern whose group 1 is the code's value. */
+export interface ProseDefault { phrase: RegExp; file: string; code: RegExp; name: string }
+
+/** Each prose phrase and the code constant it states. */
+export const PROSE_DEFAULTS: ProseDefault[] = [
+  { phrase: new RegExp(String.raw`\bno output for (\d[\d.]*\s+${UNIT})`, "g"), file: "jobs/lib/sandbox.ts", code: /\bstallSeconds\b[^\n]*?\?\?\s*([\d.]+)/, name: "stallSeconds" },
+  { phrase: /\babove (\d*\.\d+) of the threshold/g, file: "hooks/lib/context.ts", code: /\bDEFAULT_WARN\s*=\s*([\d.]+)/, name: "DEFAULT_WARN" },
+];
+
+/** The defaults the docs state in prose, one per mention. */
+export function proseClaims(docs: Doc[]): (DefaultClaim & { def: ProseDefault })[] {
+  const out: (DefaultClaim & { def: ProseDefault })[] = [];
+  each(docs, (d, text, line) => {
+    for (const def of PROSE_DEFAULTS) for (const m of text.matchAll(def.phrase)) out.push({ file: d.file, line, name: def.name, value: m[1], quote: m[0], def });
   });
   return out;
 }
@@ -194,6 +214,15 @@ export function docProblems(docs: Doc[], truth: Truth): string[] {
     const doc = normalize(c.value);
     const code = asValue(get());
     if (doc !== code) problems.push(`${at}: "${c.quote}" says ${c.name} defaults to ${JSON.stringify(doc)}, the code has ${JSON.stringify(code)}`);
+  }
+  for (const c of proseClaims(docs)) {
+    const at = `${c.file}:${c.line}`;
+    const text = fileText(truth.root, c.def.file);
+    const found = text?.match(c.def.code)?.[1];
+    if (found === undefined) { problems.push(`${at}: "${c.quote}" states the default of ${c.name}, which ${c.def.file} does not give`); continue; }
+    const doc = normalize(c.value);
+    const code = Number(found);
+    if (doc !== code) problems.push(`${at}: "${c.quote}" says ${c.name} defaults to ${JSON.stringify(doc)}, the code has ${JSON.stringify(code)} (${c.def.file})`);
   }
   for (const n of namesIn(docs)) {
     if (!new RegExp(String.raw`\b${n.name}\b`).test(truth.source)) problems.push(`${n.file}:${n.line}: ${n.name} is in no source file`);

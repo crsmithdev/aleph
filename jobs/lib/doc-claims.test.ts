@@ -94,6 +94,33 @@ describe("a doc that does not match fails, quoting the claim", () => {
   });
 });
 
+describe("a default stated only in prose is checked against the code constant", () => {
+  let dir = "";
+  afterEach(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
+  const fixture = (stall: number, warn: number) => {
+    dir = mkdtempSync(join(tmpdir(), "doc-claims-prose-"));
+    mkdirSync(join(dir, "jobs", "lib"), { recursive: true });
+    mkdirSync(join(dir, "hooks", "lib"), { recursive: true });
+    writeFileSync(join(dir, "jobs", "lib", "sandbox.ts"), `export const stallSeconds = (): number => Number(process.env.ALEPH_STALL_SECONDS ?? ${stall});\n`);
+    writeFileSync(join(dir, "hooks", "lib", "context.ts"), `const DEFAULT_WARN = ${warn};\n`);
+    return (text: string) => docProblems([{ file: "docs/x.md", text }], { ...repoTruth(), root: dir });
+  };
+
+  test("no output for 10 minutes passes against 600 and fails against 900", () => {
+    expect(fixture(600, 0.75)("stalled: no output for 10 minutes")).toEqual([]);
+    expect(fixture(900, 0.75)("a\nstalled: no output for 10 minutes")).toEqual([
+      'docs/x.md:2: "no output for 10 minutes" says stallSeconds defaults to 600, the code has 900 (jobs/lib/sandbox.ts)',
+    ]);
+  });
+
+  test("above 0.75 of the threshold passes against 0.75 and fails against 0.8", () => {
+    expect(fixture(600, 0.75)("Warn above 0.75 of the threshold")).toEqual([]);
+    expect(fixture(600, 0.8)("Warn above 0.75 of the threshold")).toEqual([
+      'docs/x.md:1: "above 0.75 of the threshold" says DEFAULT_WARN defaults to 0.75, the code has 0.8 (hooks/lib/context.ts)',
+    ]);
+  });
+});
+
 describe("a run reads the docs as they are at that moment", () => {
   let dir = "";
   afterEach(() => { if (dir) rmSync(dir, { recursive: true, force: true }); });
