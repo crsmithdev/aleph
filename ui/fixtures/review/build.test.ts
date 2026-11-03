@@ -26,10 +26,11 @@ test("the fixture environment points the factory folder under its dest, and a fa
   expect(env.ALEPH_FACTORY_DIR).toBe(join(dest, "factory"));
   Object.assign(process.env, env);
   expect(layout().factory).toBe(join(dest, "factory"));
-  // A token unique to this run, so lines already in the live log can never match it.
+  // A token unique to this run, so lines already in the other log can never match it.
   const line = `demo: acceptance not run: fetch failed ${randomUUID()}`;
   factoryLog(line);
   expect(readFileSync(join(dest, "factory", "tick.log"), "utf8")).toContain(line);
-  const live = join(process.env.HOME || "", ".aleph", "factory", "tick.log");
+  // The factory folder before the fixture: tests/preload.ts points it under its temp folder, never at ~/.aleph.
+  const live = join(saved.ALEPH_FACTORY_DIR!, "tick.log");
   if (existsSync(live)) expect(readFileSync(live, "utf8")).not.toContain(line);
 });

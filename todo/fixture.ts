@@ -82,7 +82,8 @@ function template(): string {
 
 /** Make the fixture before each test of the file that calls this, and remove it after. */
 export function useFixture(): void {
-  afterAll(() => rmSync(templateDir, { recursive: true, force: true }));
+  // One `bun test` process without --parallel runs several files with this module loaded once: the next file builds a new template.
+  afterAll(() => { rmSync(templateDir, { recursive: true, force: true }); templateDir = ""; });
   beforeEach(() => {
     fx.base = mkdtempSync(join(tmpdir(), "aleph-todo-"));
     fx.remote = join(fx.base, "items.git");

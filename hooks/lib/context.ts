@@ -52,8 +52,11 @@ export function read(transcriptPath: string): Reading {
   return { fill, compacted, requests };
 }
 
+/** Claude Code's settings file: ALEPH_CLAUDE_SETTINGS, else ~/.claude/settings.json. */
+export const claudeSettings = (): string => process.env.ALEPH_CLAUDE_SETTINGS ?? join(homedir(), ".claude", "settings.json");
+
 /** Tokens the session can hold before Claude Code compacts it. */
-export function threshold(settingsPath = join(homedir(), ".claude", "settings.json")): number {
+export function threshold(settingsPath = claudeSettings()): number {
   const env = Number(process.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
   let window = Number.isFinite(env) && env > 0 ? env : 0;
   if (!window) {

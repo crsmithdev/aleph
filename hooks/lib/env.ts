@@ -8,12 +8,15 @@ export interface LangfuseConfig {
   secretKey: string;
 }
 
+/** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
+export const envFile = (): string => process.env.ALEPH_ENV_FILE ?? join(homedir(), ".aleph", ".env");
+
 /**
- * Hooks inherit the shell, not a dotenv; read ~/.aleph/.env ourselves. process.env wins.
+ * Hooks inherit the shell, not a dotenv; read the dotenv file (`envFile()`) ourselves. process.env wins.
  * Only LANGFUSE_* keys, plus any `extra` names the caller asks for (the UI server asks for its password): the file also holds model API keys, and a nested `claude -p`
  * that inherits ANTHROPIC_API_KEY bills the API instead of the subscription.
  */
-export function loadDotenv(path = join(homedir(), ".aleph", ".env"), extra: string[] = []): void {
+export function loadDotenv(path = envFile(), extra: string[] = []): void {
   let text: string;
   try { text = readFileSync(path, "utf8"); } catch { return; }
   for (const raw of text.split("\n")) {

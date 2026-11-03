@@ -1,7 +1,7 @@
 /** The per-type blocks of `GET /api/memory`: where aleph keeps each of the seven memory types, read as it is. A source that is absent gives an empty list, never an error. */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { claudeSettings } from "../../hooks/lib/context.ts";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { readStore } from "../../jobs/lib/corrections.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
@@ -84,9 +84,9 @@ function episodic(root: string, wiki: Note[], live: Awaited<ReturnType<typeof se
 
 const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vault-context": "vault-context", "vault-recall": "vault-recall" };
 
-/** Hooks in `~/.claude/settings.json`: event, matcher and command, with 7-day call counts where Langfuse has them. */
+/** Hooks in Claude Code's settings file (`claudeSettings()`): event, matcher and command, with 7-day call counts where Langfuse has them. */
 async function hooks() {
-  const file = join(homedir(), ".claude", "settings.json");
+  const file = claudeSettings();
   let cfg: any = {};
   try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch {}
   const counts = await callsCache.get("calls", uiCacheMs(), async () => {

@@ -23,16 +23,28 @@ const vars: Record<string, string> = {
   ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_REPOS: join(dir, "repos.json"),
   ALEPH_SKILLS_STORE: join(dir, "skills-store.json"), ALEPH_USAGE_FILE: join(dir, "usage.jsonl"),
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
+  ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_JUDGE_FILE: join(dir, "judge"),
+  ALEPH_WORKER_TOKEN: join(dir, "worker-token"),
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
 
+// Bun.spawn and Bun.spawnSync without an `env` give the child the environment this process started with, not
+// process.env, so the child would miss the settings above. Here a call without an `env` passes process.env.
+for (const name of ["spawn", "spawnSync"] as const) {
+  const real = Bun[name] as (...a: any[]) => any;
+  (Bun as any)[name] = (cmd: any, opts?: any) => Array.isArray(cmd)
+    ? real(cmd, { ...opts, env: opts?.env ?? process.env })
+    : real({ ...cmd, env: cmd.env ?? process.env });
+}
+
 // No test reaches a live service through a key or URL it inherits from the shell or ~/.aleph/.env: Langfuse,
 // OpenRouter (the Jev screen), the Anthropic API and its usage endpoint, GitHub (`gh`), and the phone (Sidetone).
-// An empty key counts as set, so loadDotenv does not fill it from ~/.aleph/.env. Port 1 refuses each connection.
+// ALEPH_ENV_FILE names a file that does not exist, so no test reads ~/.aleph/.env. Port 1 refuses each connection.
 // A test that needs one of these points it at a fake server of its own. The live tests (ALEPH_LIVE=1) keep them.
 if (process.env.ALEPH_LIVE !== "1") {
   const nowhere = "http://127.0.0.1:1";
   Object.assign(process.env, {
+    ALEPH_ENV_FILE: join(dir, ".env"),
     LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: nowhere,
     OPENROUTER_API_KEY: "", ALEPH_JEV_URL: `${nowhere}/jev`, ALEPH_USAGE_URL: `${nowhere}/usage`,
     SIDETONE_TELL_URL: `${nowhere}/tell`, GH_CONFIG_DIR: join(dir, "gh"),

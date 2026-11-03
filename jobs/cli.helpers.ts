@@ -112,6 +112,8 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW_CMD: join(base, "fake-review"), ALEPH_FIREFIGHTER_CMD: join(base, "fake-firefighter"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_SANDBOX_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
+    // The "pass" sandbox runs the probe's script with no sandbox, so its denied checks would list ~/.claude and ~/.aleph.
+    ALEPH_PROBE_FAKE: "pass",
     // The tests start more factory runs than a day's cap; the cap has its own test.
     ALEPH_DAY_CAP: "100",
     // No test reaches the live router: its tier for a seed varies, and `opus` sends the seed to a planner.

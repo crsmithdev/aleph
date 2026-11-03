@@ -7,6 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { envFile } from "./env.ts";
 
 export const JEV_MODEL = "typesafe/jev-1.13";
 
@@ -28,10 +29,10 @@ export function setJudgeChoice(choice: JudgeChoice) {
 }
 const URL = () => process.env.ALEPH_JEV_URL ?? "https://openrouter.ai/api/alpha/decisions";
 
-/** OPENROUTER_API_KEY from the environment, else that one key from ~/.aleph/.env. */
+/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file. */
 function apiKey(): string | null {
   if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY;
-  const file = join(homedir(), ".aleph", ".env");
+  const file = envFile();
   if (!existsSync(file)) return null;
   const m = readFileSync(file, "utf8").match(/^\s*(?:export\s+)?OPENROUTER_API_KEY=(.*)$/m);
   return m ? m[1].trim().replace(/^(["'])(.*)\1$/, "$2") : null;
