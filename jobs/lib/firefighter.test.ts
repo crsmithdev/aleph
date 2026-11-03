@@ -519,6 +519,58 @@ test("a close action drops the open job with already-met", async () => {
   expect(dropped.map((d) => d.fate)).toEqual(["already-met"]);
 });
 
+test("a firefighter drop of a run whose goal is on main writes fate already-met to the run's state", async () => {
+  fresh([{ title: "met", goal: true }]);
+  const name = `${key}-1`;
+  const remote = join(base, `remote-met${n}.git`);
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
+  Bun.spawnSync(["git", "remote", "remove", "origin"], { cwd: repoPath() });
+  sh(repoPath(), "git", "remote", "add", "origin", remote);
+  sh(repoPath(), "git", "commit", "-q", "--allow-empty", "-m", `the goal\n\nJob: ${name}`);
+  sh(repoPath(), "git", "push", "-q", "origin", "main");
+  sh(repoPath(), "git", "fetch", "-q", "origin");
+  const folder = run({ name, job: name, condition: "stuck", reason: "no commit", on: name }, {}, 2);
+  reply([{ do: "drop", job: name, reason: "the goal is already met on main" }]);
+  const f = await firefighterStep(defaultPorts);
+  expect(f?.applied).toEqual([`drop ${name}: the goal is already met on main`]);
+  const state = readRun(folder)!;
+  expect(state.condition).toBe("dropped");
+  expect(state.fate).toBe("already-met");
+});
+
+test("a firefighter drop of a run whose goal another job landed writes fate duplicate when the reply names none", async () => {
+  fresh([{ title: "dup", goal: true }]);
+  const name = `${key}-1`;
+  const remote = join(base, `remote-dup${n}.git`);
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
+  Bun.spawnSync(["git", "remote", "remove", "origin"], { cwd: repoPath() });
+  sh(repoPath(), "git", "remote", "add", "origin", remote);
+  sh(repoPath(), "git", "commit", "-q", "--allow-empty", "-m", `the work, by another goal\n\nJob: other-job\nIssue: ${key}-2`);
+  sh(repoPath(), "git", "push", "-q", "origin", "main");
+  sh(repoPath(), "git", "fetch", "-q", "origin");
+  const folder = run({ name, job: name, condition: "stuck", reason: "no commit", on: name }, {}, 2);
+  reply([{ do: "drop", job: name, reason: `${key}-2 did this work` }]);
+  const f = await firefighterStep(defaultPorts);
+  expect(f?.applied).toEqual([`drop ${name}: ${key}-2 did this work`]);
+  expect(readRun(folder)!.fate).toBe("duplicate");
+});
+
+test("a firefighter drop of a run whose goal's own Issue commit is on main writes already-met, not duplicate", async () => {
+  fresh([{ title: "met", goal: true }]);
+  const name = `${key}-1`;
+  const remote = join(base, `remote-own${n}.git`);
+  sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
+  Bun.spawnSync(["git", "remote", "remove", "origin"], { cwd: repoPath() });
+  sh(repoPath(), "git", "remote", "add", "origin", remote);
+  sh(repoPath(), "git", "commit", "-q", "--allow-empty", "-m", `the goal, by an earlier job\n\nJob: other-job\nIssue: ${name}`);
+  sh(repoPath(), "git", "push", "-q", "origin", "main");
+  sh(repoPath(), "git", "fetch", "-q", "origin");
+  const folder = run({ name, job: name, condition: "stuck", reason: "no commit", on: name }, {}, 2);
+  reply([{ do: "drop", job: name, reason: "nothing left to do" }]);
+  await firefighterStep(defaultPorts);
+  expect(readRun(folder)!.fate).toBe("already-met");
+});
+
 const SPEC = "## Goal\nThe test passes.\n\n## Edit surface\n- ui/browser.test.ts: the row.\n\n## Oracle\n- bun test passes.";
 
 test("an add for a red main files a high priority issue naming the cause; without a red main it is refused", async () => {
