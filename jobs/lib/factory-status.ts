@@ -29,7 +29,7 @@ export const holdsFile = () => join(factoryDir(), "holds.jsonl");
 export interface HoldRecord { at: string; name: string; kind: string; text: string }
 
 /** Every record of the holds file, oldest first; a line that does not parse is skipped. */
-function allHolds(): HoldRecord[] {
+export function allHolds(): HoldRecord[] {
   let raw: string;
   try { raw = readFileSync(holdsFile(), "utf8"); } catch { return []; }
   const out: HoldRecord[] = [];
