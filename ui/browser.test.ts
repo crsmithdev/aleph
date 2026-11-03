@@ -146,8 +146,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       if (!(await page.ev(`!!document.querySelector(${JSON.stringify("#view " + sel)})`))) continue;
       const q = JSON.stringify("#view " + sel);
       expect(await page.ev(`(() => { const d = document.querySelector(${q}); d.open = false; const b = d.querySelector(".act"); return !!b && b.offsetParent === null; })()`)).toBe(true);
-      // Height of the card: at most 3 line-heights of content, the meta row, the toggle and the padding.
-      const fits = await page.ev<boolean>(`(() => { const d = document.querySelector(${q}), c = d.closest(".issue-row"); const lh = parseFloat(getComputedStyle(c).lineHeight) || 20; const p = (n) => parseFloat(getComputedStyle(c)[n]) || 0; const t = d.querySelector("summary").getBoundingClientRect().height; const kids = [...c.children].filter((e) => e !== d); const body = kids.reduce((h, e) => h + e.getBoundingClientRect().height, 0); return body <= 4 * lh + 8 && c.getBoundingClientRect().height <= body + t + p("paddingTop") + p("paddingBottom") + 16; })()`);
+      // The card above the fold is at most the meta row and 3 lines, and the closed fold is no taller than its toggle.
+      // The card's own height is not compared: the lane grid stretches a card to the tallest card in its row.
+      const fits = await page.ev<boolean>(`(() => { const d = document.querySelector(${q}), c = d.closest(".issue-row"); const lh = parseFloat(getComputedStyle(c).lineHeight) || 20; const t = d.querySelector("summary").getBoundingClientRect().height; const kids = [...c.children].filter((e) => e !== d); const body = kids.reduce((h, e) => h + e.getBoundingClientRect().height, 0); return body <= 4 * lh + 8 && d.getBoundingClientRect().height <= t + 16; })()`);
       expect(fits).toBe(true);
       await page.ev(`document.querySelector(${q}).querySelector("summary").click()`);
       expect(await page.ev(`(() => { const d = document.querySelector(${q}); const b = d.querySelector(".act"); return d.open && b.offsetParent !== null && b.getBoundingClientRect().top >= d.querySelector("summary").getBoundingClientRect().bottom - 1; })()`)).toBe(true);
