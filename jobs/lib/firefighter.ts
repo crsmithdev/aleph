@@ -73,9 +73,11 @@ export function snapshot(now = Date.now()): Event[] {
       line: `${r.name} started ${runs.length} runs in 30 minutes: ${runs.map((e) => e.run.reason ?? e.run.condition).join("; ")}` });
   }
   for (const b of redBaselines()) if (keys.has(b.repo)) events.push({ key: `red:${b.repo}:${b.commit}`, kind: "red", repo: b.repo, line: `${b.repo} main is red at ${b.commit.slice(0, 7)}: ${b.failed}` });
-  // GitHub CI: one event per red streak, keyed by its first failed commit.
-  for (const c of redCi()) if (keys.has(c.repo)) events.push({ key: `ci:${c.repo}:${c.sinceSha}`, kind: "red", repo: c.repo, line: ciLine(c) });
   const lists = store.reader();
+  // GitHub CI: while the repo has an open red-main issue (its marker is an area, as `add` files it, or a label), its red main gives no event, as the fix is open. Otherwise one event per red head:
+  // the key holds the streak's first failed commit and the head of the last red run, so a new head after a fix is a new event.
+  const fixOpen = (repo: string) => (lists.list(repo)?.items ?? []).some((i) => issues.status(i) === "open" && (store.labels(i).includes("red-main") || store.areasOf(i).includes("red-main")));
+  for (const c of redCi()) if (keys.has(c.repo) && !fixOpen(c.repo)) events.push({ key: `ci:${c.repo}:${c.sinceSha}:${c.sha}`, kind: "red", repo: c.repo, line: ciLine(c) });
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       const ask = store.askOf(item);

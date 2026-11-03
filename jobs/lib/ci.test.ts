@@ -49,11 +49,11 @@ test("a red CI is a health line and one firefighter event per streak; a repo gh 
   expect(ciStep([repo], () => runs).map((c) => c.sinceSha)).toEqual(["c3"]);
   expect(health()).toContain("health: fac CI on main has failed 2 runs in a row since 2026-10-29 03:00 UTC (c3): https://ci/c4");
   const key = snapshot().find((e) => e.kind === "red")?.key;
-  expect(key).toBe("ci:fac:c3");
+  expect(key).toBe("ci:fac:c3:c4");
   // A third failed run is the same streak, so the same event.
   runs = [run("failure", "c5", "2026-10-29T05:00:00Z"), ...runs];
   ciStep([repo], () => runs);
-  expect(snapshot().find((e) => e.kind === "red")?.key).toBe(key);
+  expect(snapshot().find((e) => e.kind === "red")?.key).toBe("ci:fac:c3:c5");
   ciStep([repo], () => null);
   expect(redCi().map((c) => c.runs)).toEqual([3]);
   ciStep([repo], () => [run("failure", "c9", "2026-10-29T09:00:00Z")]);
