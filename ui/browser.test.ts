@@ -223,3 +223,63 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.until('document.querySelector("#nav li")');
   }, 30_000);
 });
+
+describe.skipIf(!chromeUsable)("Status lane cards", () => {
+  let rig: Rig, page: Page;
+  beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 60_000);
+  afterAll(() => rig?.stop());
+
+  const long = "A title that is long enough to wrap onto a second line in a narrow lane card, and then some more words";
+  /** The lanes of Status, rendered by the page's own renderLanes from this state, and put in place of the lanes of the live page. */
+  const fixture = `(async () => {
+    const { renderLanes } = await import("/views/now.js");
+    const long = ${JSON.stringify(long)};
+    const part = { n: 1, m: 3, parent: "r-9", href: "#/issues/r/9" };
+    const now = "2026-11-02T12:00:00Z", at = "2026-11-02T11:56:00Z";
+    const job = (name, priority, title, p, started) => ({ name, repo: "r", item: { priority, title }, part: p, started, run: { kind: "build", started } });
+    const queued = (id, priority, title, p, why) => ({ repo: "r", id, priority, title, part: p, why, at, since: at });
+    const s = { now, factory: {}, done: [],
+      runningIssues: [{ id: "r-20", href: "#/issues/r/20", stage: "working", priority: "high", title: "Short", at, since: at, of: { n: 3, m: 3 } }],
+      running: [
+        job("j-1", "medium", long, part, at),
+        job("j-2", "low", "Short", null, at),
+        job("j-3", "low", long, null, "2026-11-02T10:00:00Z"),
+        job("j-4", "high", "Short", part, "2026-11-02T10:00:00Z"),
+      ],
+      queued: [
+        queued("1", "high", long, part, "waits for r-9"),
+        queued("2", "low", "Short", null, ""),
+        queued("3", "medium", "Short", part, ""),
+        queued("4", "low", long, null, "waits for r-9, which is a long wait"),
+      ] };
+    document.querySelector("#view .lanes").outerHTML = renderLanes(s);
+  })()`;
+
+  for (const w of [1440, 1060]) {
+    test(`at ${w} px the Running and Queued cards share one height, meta row and title font`, async () => {
+      await page.width(w);
+      await page.go("#/");
+      await page.ev(fixture);
+      const m = await page.ev<Record<string, { n: number; h: number[]; ih: number[]; font: string[] }>>(`(() => {
+        const out = {};
+        for (const id of ["running", "queued"]) {
+          const c = [...document.querySelectorAll("#lane-" + id + " .lane-card")];
+          out[id] = { n: c.length, h: c.map((e) => e.getBoundingClientRect().height), ih: c.map((e) => e.querySelector(".ih").getBoundingClientRect().height), font: c.map((e) => { const s = getComputedStyle(e.querySelector(":scope > .t")); return s.fontSize + "/" + s.lineHeight; }) };
+        }
+        out.dim = { n: document.querySelectorAll(".lane-card .badge.dim").length, h: [], ih: [], font: [] };
+        out.part = { n: document.querySelectorAll(".lane-card .part").length, h: [], ih: [], font: [] };
+        out.why = { n: document.querySelectorAll(".lane-card .why").length, h: [], ih: [], font: [] };
+        return out;
+      })()`);
+      expect(m.running!.n).toBe(5);
+      expect(m.queued!.n).toBe(4);
+      expect(m.dim!.n).toBeGreaterThan(0);
+      expect(m.part!.n).toBeGreaterThan(0);
+      expect(m.why!.n).toBeGreaterThan(0);
+      const h = [...m.running!.h, ...m.queued!.h], ih = [...m.running!.ih, ...m.queued!.ih], font = [...m.running!.font, ...m.queued!.font];
+      for (const x of h) expect(Math.abs(x - h[0]!)).toBeLessThan(0.5);
+      for (const x of ih) expect(Math.abs(x - ih[0]!)).toBeLessThan(0.5);
+      expect(new Set(font).size).toBe(1);
+    }, 30_000);
+  }
+});
