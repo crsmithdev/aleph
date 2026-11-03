@@ -34,15 +34,17 @@ createReadStream("", { fd: 3 }).on("data", (d) => {
 `;
 
 let tmp: string, srv: ReturnType<typeof Bun.serve>;
-beforeAll(() => {
-  setup();
-  tmp = mkdtempSync(join(tmpdir(), "factory-shot-"));
-  writeFileSync(join(tmp, "chrome"), FAKE_CHROME, { mode: 0o755 });
-  srv = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("<p>x</p>") });
-});
-afterAll(() => { srv.stop(true); rmSync(tmp, { recursive: true, force: true }); teardown(); });
 
-describe("a factory run", () => {
+/** The run takes about 16 s, so it runs with the tests that start Chrome: only with ALEPH_BROWSER_TESTS=1, as `bun run test:all` sets it. */
+describe.skipIf(process.env.ALEPH_BROWSER_TESTS !== "1")("a factory run", () => {
+  beforeAll(() => {
+    setup();
+    tmp = mkdtempSync(join(tmpdir(), "factory-shot-"));
+    writeFileSync(join(tmp, "chrome"), FAKE_CHROME, { mode: 0o755 });
+    srv = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("<p>x</p>") });
+  });
+  afterAll(() => { srv.stop(true); rmSync(tmp, { recursive: true, force: true }); teardown(); });
+
   test("a worker's aleph-shot call yields a committed PNG of the requested width", async () => {
     const r = await aleph(["job", "fac", "fshot", "--spec", specFile(`Goal: fshot\nACTION: shot http://127.0.0.1:${srv.port}/\n`)], { ALEPH_REVIEW_CHROME: join(tmp, "chrome") });
     const log = (f: string) => { try { return readFileSync(join(fakeLog, f), "utf8"); } catch { return ""; } };

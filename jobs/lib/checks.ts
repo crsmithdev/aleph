@@ -128,6 +128,9 @@ async function setupStep(dir: string, setup: string[], bundle: string, ref: stri
   return { setup: existsSync(code) ? readFileSync(code, "utf8").trim() : null, code: r.code };
 }
 
+/** The env of a check step. ALEPH_BROWSER_TESTS=1 runs the slow tests that start Chrome, which a plain local `bun run test` skips. */
+const CHECK_ENV = { TZ: "UTC", ALEPH_BROWSER_TESTS: "1" };
+
 /**
  * The repo's setup and checks on `ref` of `bundle`, in a fresh clone in
  * `dir/check`: nothing a worker left in work/ runs. Each check is its own srt
@@ -136,7 +139,7 @@ async function setupStep(dir: string, setup: string[], bundle: string, ref: stri
  */
 export async function checksInSandbox(t: CheckTask, dir: string, bundle: string, ref: string, hiddenFiles: Record<string, string> = {}): Promise<ChecksStop | null> {
   const noise = join(t.folder, "check.out");
-  const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, onSpawn: t.onSpawn };
+  const step = { cwd: "check", env: CHECK_ENV, hideCiMissing: true, onSpawn: t.onSpawn };
   t.phase("check setup");
   const s = await withSlot(() => setupStep(dir, t.repo.setup, bundle, ref, { ...step, stdout: noise, stderr: noise }));
   if (s.setup === null) return { cause: "other", reason: `checks did not start (exit ${s.code})` };
@@ -183,7 +186,7 @@ export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
     if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}`, infra: true };
     const logs = join(dir, "stdout.log");
     const at = (f: string) => join(dir, "checklog", f);
-    const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, stdout: logs, stderr: logs };
+    const step = { cwd: "check", env: CHECK_ENV, hideCiMissing: true, stdout: logs, stderr: logs };
     const notStarted = (code: number): Ran => {
       const last = existsSync(logs) ? lastLines(readFileSync(logs, "utf8")) : "";
       return { code: code || 1, output: `the command did not start (exit ${code})${last ? `: ${last}` : ""}`, infra: true };

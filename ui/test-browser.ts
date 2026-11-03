@@ -10,8 +10,12 @@ import { chromeArgv, Pipe } from "../jobs/lib/review-browser.ts";
 
 const CHROME = "/usr/bin/google-chrome";
 
-/** A sandboxed run (srt) has no working Chrome. CI must have one: there a missing Chrome fails, and does not skip. */
-export const chromeUsable = process.env.CI === "true" || (existsSync(CHROME) && Bun.spawnSync([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--dump-dom", "about:blank"], { stdout: "ignore", stderr: "ignore", timeout: 20_000, env: { ...process.env, HOME: tmpdir() } }).exitCode === 0);
+/**
+ * The tests that start Chrome run only with ALEPH_BROWSER_TESTS=1: `bun run test:all`, CI and the factory's checks
+ * set it, and a plain `bun run test` skips them. A sandboxed run (srt) has no working Chrome. CI must have one:
+ * there a missing Chrome fails, and does not skip.
+ */
+export const chromeUsable = process.env.ALEPH_BROWSER_TESTS === "1" && (process.env.CI === "true" || (existsSync(CHROME) && Bun.spawnSync([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--dump-dom", "about:blank"], { stdout: "ignore", stderr: "ignore", timeout: 20_000, env: { ...process.env, HOME: tmpdir() } }).exitCode === 0));
 
 export interface Page {
   errors: string[];

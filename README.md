@@ -136,6 +136,7 @@ See [Factory](docs/factory.md) and [Factory tasks](docs/factory-tasks.md).
 
 ```bash
 bun run test        # the suite, in parallel, with a mock Langfuse
+bun run test:all    # the suite and the slow tests that start Chrome, as CI and the factory's checks run it
 bunx tsc            # the type check
 ALEPH_LIVE=1 bun test tests/live   # needs a running Langfuse and a logged-in claude
 ```
