@@ -2,7 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { CLI, detached, passEnv } from "./launch.ts";
+import { CLI, acceptanceDetached, detached, passEnv } from "./launch.ts";
 
 test("a unit gets every ALEPH_ and SIDETONE_ variable, and nothing else", () => {
   expect(passEnv({ ALEPH_A: "1", SIDETONE_B: "x y", HOME: "/h", PATH: "/p" })).toEqual(["--setenv=ALEPH_A=1", "--setenv=SIDETONE_B=x y"]);
@@ -54,5 +54,22 @@ test("detached starts its verb in a unit of its own, a different one per call", 
 test("detached does not throw when systemd-run fails", async () => {
   await withFakeSystemdRun(1, (dir) => {
     expect(() => detached(["plan", "aleph-1"], join(dir, "logs", "plan.log"))).not.toThrow();
+  });
+});
+
+test("acceptanceDetached starts no process in the foreground, and ignores ALEPH_DISPATCH=off elsewhere", async () => {
+  await withFakeSystemdRun(0, (_dir, argvLog) => {
+    const off = process.env.ALEPH_DISPATCH;
+    process.env.ALEPH_DISPATCH = "off";
+    try {
+      process.env.ALEPH_JOB_FOREGROUND = "1";
+      acceptanceDetached();
+      expect(() => readFileSync(argvLog, "utf8")).toThrow();
+      delete process.env.ALEPH_JOB_FOREGROUND;
+      acceptanceDetached();
+      expect(readFileSync(argvLog, "utf8")).toContain("acceptance");
+    } finally {
+      if (off === undefined) delete process.env.ALEPH_DISPATCH; else process.env.ALEPH_DISPATCH = off;
+    }
   });
 });

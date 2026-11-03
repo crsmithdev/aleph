@@ -19,7 +19,7 @@ import { endKilledFacts, rescueStuck, type Rescue } from "./rescue.ts";
 import { clearRerun, goalBrief } from "./continuation.ts";
 import { type Fate } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, lastReal, openJob } from "./job.ts";
-import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
+import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, sandboxScenarios, unshown, type Runner, type ScenarioCheck } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { endLost } from "./agent-run.ts";
 import { factsGate } from "./facts.ts";
@@ -30,7 +30,7 @@ import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
 import { baselineChecks, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
-import { dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
+import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
 import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
@@ -118,8 +118,9 @@ type Land = (name: string) => Promise<string | null>;
  * `plan` starts an issue's planner detached; the dispatch does not wait for it.
  * `specCheck` starts a goal's spec check detached (spec-check.ts), for a repo with `author` set: a goal
  * starts only once its spec version has a recorded verdict of pass or error.
+ * `acceptance` starts the acceptance run detached (`aleph acceptance`); goal starts do not wait for it.
  */
-export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached, acceptance: () => void = acceptanceDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -141,7 +142,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     if (landed.length) factoryLog(`landed ${landed.join(", ")}`);
   }
   await factsStep();
-  if (checks) await acceptanceStep();
+  if (checks) acceptance();
   const started: string[] = [];
   const skipped: string[] = [];
   const planned: string[] = [];
@@ -299,7 +300,7 @@ const ACCEPTANCE_DAYS = 2;
  * quiet, and only a repeat in a test the goal touched counts. First repeat: the goal reopens with the
  * output as a note and the dispatch starts it again; second: an Ask (input, acceptance-failed). See acceptance.ts.
  */
-export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.clock()): Promise<string[]> {
+export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string[]> {
   const lines: string[] = [];
   const since = issues.today(new Date(now.getTime() - ACCEPTANCE_DAYS * 86_400_000));
   const lists = reader();
@@ -315,7 +316,7 @@ export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.c
         const item = reader().item(repo.key, issues.refOf(listed));
         if (!item || issues.status(item) !== "done" || final(readRecord(repo.key, issues.refOf(item)))) continue;
         if (!itemOnMain(repo, issues.idOf(item))) continue;
-        lines.push(await accept(repo, item, run, now));
+        lines.push(await accept(repo, item, run, now, check));
       } finally {
         release();
       }

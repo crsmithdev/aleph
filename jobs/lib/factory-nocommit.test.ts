@@ -122,7 +122,7 @@ test("an item that the store closes while an earlier goal starts gets no run", a
     f.calls.push(`start ${name}`);
     if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
     return null;
-  }, async () => null, f.land, f.rescue);
+  }, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
   expect(f.calls).toEqual([`start fac-${first}`]);
   expect(out.skipped.join()).toContain(`fac-${second}`);
   expect(out.started).toEqual([`fac-${first}`]);

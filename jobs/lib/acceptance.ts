@@ -13,14 +13,16 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { plainAsk, setAsk, type Ask } from "./ask.ts";
-import { note, noteFlake, reopen as storeReopen, writeList } from "../../todo/lib/store.ts";
-import { q } from "./agent-call.ts";
+import { note, noteFlake, readHidden, reopen as storeReopen, writeList } from "../../todo/lib/store.ts";
 import { cloneAndSetup } from "./checks.ts";
 import { git } from "./git.ts";
+import { SCENARIOS } from "./author.ts";
+import { gitPrelude, q } from "./agent-call.ts";
+import { outcome as agentOutcome } from "./gate.ts";
 import { checkSlot, tell, type Repo } from "./ledger.ts";
-import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
+import { makeRunFolder, removeRunFolder, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { acceptanceDir, acceptanceFile, commitsNaming, readRecord, resultLine, type Accepted, type FailedTest } from "./status.ts";
-import { acceptanceFailCap, quietLoad } from "./settings.ts";
+import { acceptanceFailCap, quietLoad, reviewSeconds, reviewerCmd } from "./settings.ts";
 
 /** The longest a rerun waits for a quiet machine. */
 export const MAX_WAIT_MS = 24 * 3_600_000;
@@ -172,6 +174,70 @@ export const sandboxRunner: Runner = async (repo, sha, command, hidden) => {
   }
 };
 
+/** The numbers of the scenarios in a `scenarios.md` text, in order (`1.` or `1)` at a line start). */
+export const scenarioNumbers = (text: string): number[] => [...text.matchAll(/^\s*(\d+)[.)]\s+\S/gm)].map((m) => Number(m[1]));
+
+/** `pass` or `fail` by scenario number, from the `CHECK: pass|fail scenario <n>: ...` lines of an agent's reply. A fail wins over a pass for one number. */
+export function scenarioMarks(output: string): Map<number, "pass" | "fail"> {
+  const marks = new Map<number, "pass" | "fail">();
+  for (const m of output.matchAll(/^\s*CHECK:\s*(pass|fail)\s+scenario\s+(\d+)\b/gim)) {
+    const n = Number(m[2]), v = m[1].toLowerCase() as "pass" | "fail";
+    if (v === "fail" || !marks.has(n)) marks.set(n, v);
+  }
+  return marks;
+}
+
+/** What the scenario agent said; `infra` marks a fault of the sandbox or the agent call, not a result. */
+export interface Checked { output: string; infra?: boolean }
+/** Check the sealed `scenarios` text against the commit `sha` of the repo's main, with one agent call. */
+export type ScenarioCheck = (repo: Repo, sha: string, scenarios: string) => Promise<Checked>;
+
+const SCENARIO_PROMPT = `You check sealed scenarios of a goal that landed. The working directory is a clone of the repo at the
+commit that holds the goal. Check each scenario below by observing behaviour: read the code, and run a few
+commands of your own, each well under a minute: write throwaway scripts outside the repo's tracked files and
+run them. Do not change any tracked file. Do not run the full test suite. Be sceptical: do not talk yourself
+out of a defect you found. For each scenario write one line, \`CHECK: pass|fail scenario <n>: <what was observed>\`,
+by its number only; do not quote the scenario text. Write a line for every scenario, then stop.`;
+
+/** The default scenario check: a fresh agent reads the commit under srt, as the reviewer does. */
+export const sandboxScenarios: ScenarioCheck = async (repo, sha, scenarios) => {
+  const uid = `${process.pid}-${++calls}`;
+  const rdir = makeRunFolder(`accept-scn-${repo.key}-${uid}`);
+  const ref = `refs/aleph/accept/${repo.key}/s${uid}`;
+  try {
+    git(repo.path, "update-ref", ref, sha);
+    const b = git(repo.path, "bundle", "create", join(rdir, "out", "accept.bundle"), ref);
+    if (!b.ok) return { output: `bundle failed: ${b.out}`, infra: true };
+    const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+      "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
+    const script = [
+      "set -e", "exec 3>&1 1>&2", ...gitPrelude("../out/accept.bundle", [`+${ref}:${ref}`]), `git switch -q --detach ${q(ref)}`,
+      `{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`,
+      "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
+    ].join("\n");
+    const log = join(rdir, "agent.log");
+    const free = await checkSlot();
+    let w;
+    try {
+      w = await sandboxed(rdir, script, {
+        read: ["out/accept.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: `${SCENARIO_PROMPT}\n\n## Scenarios\n\n${scenarios.trim()}\n`,
+        env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
+        stdout: log, stderr: join(rdir, "agent.err"), limit: reviewSeconds(), stall: stallSeconds(),
+      });
+    } finally {
+      free();
+    }
+    if (w.stalled) return { output: stallReason(), infra: true };
+    if (w.timedOut) return { output: "time box", infra: true };
+    const o = agentOutcome(existsSync(log) ? readFileSync(log, "utf8") : "");
+    if (!o.ok) return { output: o.line || `exit ${w.code}`, infra: true };
+    return { output: o.result };
+  } finally {
+    git(repo.path, "update-ref", "-d", ref);
+    removeRunFolder(rdir);
+  }
+};
+
 /** The last `n` lines of `text`, on one line (an issue note is one line), each cut to 200 characters. */
 export const lastLines = (text: string, n = 40): string =>
   text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join(" ⏎ ");
@@ -231,7 +297,7 @@ function failsAt(repo: Repo, sha: string, name: string): number {
  * Run the Oracle of the done goal `item` on origin/<main>, and record what came of it.
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
  */
-export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner, now: Date = issues.clock()): Promise<string> {
+export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner, now: Date = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string> {
   const ref = issues.refOf(item);
   const name = `${repo.key}-${ref}`;
   const prev = readRecord(repo.key, ref);
@@ -247,7 +313,11 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
   if (!sha) return `${name}: acceptance not run: no origin/${repo.main}`;
   const full = waiting?.commit ?? git(repo.path, "rev-parse", `origin/${repo.main}`).out;
   const commands = oracleCommands(item.spec).filter((c) => !namesMissingTestFile(repo, full, c));
-  if (!commands.length) {
+  let scenarios = "";
+  try { scenarios = readHidden(repo, name)[SCENARIOS] ?? ""; } catch (e: any) { return `${name}: acceptance not run: the sealed scenarios are unreadable: ${e?.message ?? e}`; }
+  const numbers = scenarioNumbers(scenarios);
+  if (!numbers.length) scenarios = "";
+  if (!commands.length && !scenarios) {
     writeRecord(repo.key, ref, { result: "skipped", fails: prev?.fails ?? 0 });
     return `${name}: acceptance skipped: the Oracle has no command that starts with bun test, bun run or bunx tsc, or loops over one, or that names a test file missing on ${repo.main}`;
   }
@@ -257,6 +327,31 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
     flaked.push(label);
     const bad = noteFlake(repo, `acceptance ${name}: ${label}: ${how} at ${sha}`);
     if (typeof bad === "string") flaked.push(`(no flake note: ${bad})`);
+  };
+  /** The goal failed: past the cap nothing reopens; else the first fail reopens it, the second asks Chris. `out` goes in the note. */
+  const failed_ = async (command: string, out: string, why: string): Promise<string> => {
+    // Many goals failing at one commit point to a shared fault, not to the goals: none reopens, and each keeps its fail record.
+    const cap = acceptanceFailCap();
+    const count = failsAt(repo, sha, name);
+    if (count >= cap) {
+      writeRecord(repo.key, ref, { result: "fail", sha, command, fails: prev?.fails ?? 0, ...(prev?.since ? { since: prev.since } : {}) });
+      if (cappedAt() === full) return `${name}: acceptance held at ${sha}: the fail cap was reached at this commit`;
+      mkdirSync(acceptanceDir(), { recursive: true });
+      writeFileSync(cappedFile(), JSON.stringify({ commit: full }));
+      const line = `acceptance: ${count} goals failed at ${sha} (limit ${cap}); none reopens, they run again at a later commit`;
+      await tell(line);
+      return line;
+    }
+    const fails = (prev?.fails ?? 0) + 1;
+    if (fails < 2) {
+      const bad = reopen(repo, ref, `acceptance: fail at ${sha}: ${out}`);
+      if (bad) return `${name}: acceptance failed but the issue was not reopened: ${bad}`;
+      writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
+      return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
+    }
+    const bad = reopen(repo, ref, `acceptance: fail again at ${sha}: ${out} | ${why.charAt(0).toLowerCase()}${why.slice(1)}`, plainAsk("acceptance-failed", why, [out]));
+    writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
+    return `${name}: acceptance failed again at ${sha} (${command}); asks Chris${bad ? ` (no issue note: ${bad})` : ""}`;
   };
   // A waiting rerun takes up at its command: the commands before it passed.
   for (const command of waiting ? commands.slice(Math.max(0, commands.indexOf(waiting.command))) : commands) {
@@ -316,29 +411,21 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandb
       }
       if (why) { for (const t of others) flake(t, why); continue; }
     } else for (const t of others) flake(t, "failed twice, in a test the goal did not touch,");
-    // Many goals failing at one commit point to a shared fault, not to the goals: none reopens, and each keeps its fail record.
-    const cap = acceptanceFailCap();
-    const count = failsAt(repo, sha, name);
-    if (count >= cap) {
-      writeRecord(repo.key, ref, { result: "fail", sha, command, fails: prev?.fails ?? 0, ...(prev?.since ? { since: prev.since } : {}) });
-      if (cappedAt() === full) return `${name}: acceptance held at ${sha}: the fail cap was reached at this commit`;
-      mkdirSync(acceptanceDir(), { recursive: true });
-      writeFileSync(cappedFile(), JSON.stringify({ commit: full }));
-      const line = `acceptance: ${count} goals failed at ${sha} (limit ${cap}); none reopens, they run again at a later commit`;
-      await tell(line);
-      return line;
-    }
-    const fails = (prev?.fails ?? 0) + 1;
     const out = `\`${command}\` exited ${r.code}${r.code === 0 ? " with failing tests" : ""}, and the quiet rerun failed too: ${tests.length ? `${tests.slice(0, 40).map((t) => `(fail) ${testLabel(t).slice(0, 200)}`).join(" ⏎ ")} ⏎ ` : ""}${lastLines(r.output)}`;
-    if (fails < 2) {
-      const bad = reopen(repo, ref, `acceptance: fail at ${sha}: ${out}`);
-      if (bad) return `${name}: acceptance failed but the issue was not reopened: ${bad}`;
-      writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
-      return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
+    return failed_(command, out, `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`);
+  }
+  if (scenarios) {
+    let got: Awaited<ReturnType<ScenarioCheck>>;
+    try { got = await check(repo, full, scenarios); } catch (e: any) { got = { output: String(e?.message ?? e), infra: true }; }
+    if (got.infra) return `${name}: acceptance not run: the scenario check: ${lastLines(got.output)}`;
+    const marks = scenarioMarks(got.output);
+    const missing = numbers.filter((n) => !marks.has(n));
+    if (missing.length) return `${name}: acceptance not run: the scenario check gave no CHECK line for scenario ${missing.join(", ")}`;
+    const bad = numbers.filter((n) => marks.get(n) === "fail");
+    if (bad.length) {
+      const which = `scenario${bad.length > 1 ? "s" : ""} ${bad.join(", ")}`;
+      return failed_(which, `${which} failed`, `Sealed ${which} still fail${bad.length > 1 ? "" : "s"} after the rerun, so the factory stopped; fix it or the goal.`);
     }
-    const bad = reopen(repo, ref, `acceptance: fail again at ${sha}: ${out} | the Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, plainAsk("acceptance-failed", `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`, [out]));
-    writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
-    return `${name}: acceptance failed again at ${sha} (${command}); asks Chris${bad ? ` (no issue note: ${bad})` : ""}`;
   }
   const seen = flaked.length ? `; on the flake list: ${flaked.join(", ")}` : "";
   const bad = note(repo, ref, `acceptance: pass at ${sha}${seen}`);

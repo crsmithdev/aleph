@@ -24,7 +24,7 @@ test("a goal turned back into an issue during the baseline is not started", asyn
     baselined = true;
     await change(id, (item) => { item.spec = ""; });
     return null;
-  });
+  }, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(baselined).toBe(true);
   expect(calls).toEqual([]);
   expect(out.skipped).toEqual([]);
@@ -36,7 +36,7 @@ test("a goal closed during the baseline is not started", async () => {
   const out = await dispatchIssues(async (_repo, name) => { calls.push(name); return null; }, async () => {
     await change(id, (item) => issues.setStatus(item, "done"));
     return null;
-  });
+  }, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(calls).toEqual([]);
   expect(out.skipped).toEqual([]);
 });
@@ -52,7 +52,7 @@ test("a goal given an after while an earlier goal starts is not started", async 
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => { item.fm.after = [`fac-${other}.1`]; });
     return null;
-  }, async () => null);
+  }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
   expect(out.skipped).toEqual([`fac-${second}: blocked: after fac-${other}.1`]);
@@ -80,7 +80,7 @@ test("a goal turned back into an issue while an earlier goal starts is not start
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => { item.spec = ""; });
     return null;
-  }, async () => null);
+  }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
   expect(out.skipped).toEqual([`fac-${second}: not a goal`]);
@@ -95,7 +95,7 @@ test("a goal closed while an earlier goal starts is not started", async () => {
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
     return null;
-  }, async () => null);
+  }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
   expect(out.skipped).toEqual([`fac-${second}: not a goal`]);
@@ -108,9 +108,9 @@ test("a goal added while another dispatch holds the baseline is started by the h
   let b: Awaited<ReturnType<typeof dispatchIssues>> | undefined;
   const a = await dispatchIssues(async () => null, async () => {
     added = goal();
-    b = await dispatchIssues(async () => null, async () => null);
+    b = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
     return null;
-  });
+  }, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(b!.started).toEqual([]);
   expect(b!.skipped).toContain(`fac-${added}: main baseline running`);
   expect(a.started).toContain(`fac-${added}`);
@@ -133,10 +133,10 @@ test("a goal added while the baseline of a repo that joined the list runs is sta
     if (repo.key === "fac") first = goal([], "two");
     else {
       second = goal([], "two");
-      b = await dispatchIssues(async () => null, async () => null);
+      b = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
     }
     return null;
-  });
+  }, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(b!.skipped).toContain(`two-${first}: main baseline running`);
   expect(b!.skipped).toContain(`two-${second}: main baseline running`);
   expect(a.started).toContain(`two-${first}`);
@@ -146,7 +146,7 @@ test("a goal added while the baseline of a repo that joined the list runs is sta
 test("a goal that stays open and labelled is started exactly once", async () => {
   const id = goal();
   const calls: string[] = [];
-  const out = await dispatchIssues(async (_repo, name) => { calls.push(name); return null; }, async () => null);
+  const out = await dispatchIssues(async (_repo, name) => { calls.push(name); return null; }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(calls).toEqual([`fac-${id}`]);
   expect(out.started).toEqual([`fac-${id}`]);
   expect(out.skipped).toEqual([]);
@@ -161,7 +161,7 @@ test("with a live cap of 1, the critical goal starts and the others wait", async
   const hi = prio("fac", "critical");
   prio("fac", "medium");
   // A start makes a live run, as the real one does, so the cap counts it.
-  const out = await dispatchIssues(async (_r, name) => { mk(name, "build", "running", { made: Date.now() }); return null; }, async () => null);
+  const out = await dispatchIssues(async (_r, name) => { mk(name, "build", "running", { made: Date.now() }); return null; }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(out.started).toEqual([`fac-${hi}`]);
 });
 
@@ -174,7 +174,7 @@ test("planner items of two repos are planned high first", async () => {
   const lo = add("aaa", "low");
   const hi = add("zzz", "high");
   const order: string[] = [];
-  await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, (repo, id) => { order.push(`${repo.key}-${id}`); });
+  await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, (repo, id) => { order.push(`${repo.key}-${id}`); }, undefined, () => {});
   expect(order).toEqual([`zzz-${hi}`, `aaa-${lo}`]);
 });
 
@@ -231,24 +231,24 @@ test("a goal that waits on an open after gets one hold record; a second dispatch
   const name = `fac-${waiter}`;
   const f = fakes();
   const start = async (r: unknown, n: string, id: number | string, spec: string) => (n === `fac-${blocker}` ? "no slot" : f.start(r, n, id, spec));
-  await dispatchIssues(start, async () => null, f.land, f.rescue);
+  await dispatchIssues(start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
   const recs = () => readHolds([name]);
   expect(recs()).toHaveLength(1);
   expect(recs()[0]).toMatchObject({ name, kind: "waits_on", text: expect.stringContaining(`after fac-${blocker}`) });
   expect(Number.isNaN(Date.parse(recs()[0].at))).toBe(false);
-  await dispatchIssues(start, async () => null, f.land, f.rescue);
+  await dispatchIssues(start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
   expect(recs()).toHaveLength(1);
   expect(readHolds([`fac-${blocker}`]).map((r) => r.kind)).toEqual(["start"]);
   await change(blocker, (item) => issues.setStatus(item, "done"));
   mk(`fac-${blocker}`, "build", "passed", { commit: "abc" });
-  await dispatchIssues(f.start, async () => null, f.land, f.rescue);
+  await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
   expect(recs().map((r) => r.kind)).toContain("started");
 });
 
 test("a goal that a red main holds gets one hold record", async () => {
   const id = goal();
-  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
-  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
+  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), undefined, undefined, undefined, undefined, undefined, () => {});
+  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), undefined, undefined, undefined, undefined, undefined, () => {});
   const recs = readHolds([`fac-${id}`]);
   expect(recs).toHaveLength(1);
   expect(recs[0].kind).toBe("red");
@@ -285,7 +285,7 @@ describe("the spec check before a goal starts", () => {
   const run = async () => {
     const f = fakes();
     const launched: string[] = [];
-    const out = await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, planDetached, (r, ref) => { launched.push(`${r.key}-${ref}`); });
+    const out = await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, planDetached, (r, ref) => { launched.push(`${r.key}-${ref}`); }, () => {});
     return { out, calls: f.calls, launched };
   };
   let saved: string | undefined;
@@ -368,7 +368,7 @@ describe("each skip in the goal loop gets one hold record", () => {
     const name = `fac-${id}`;
     const release = (await lock(`goal-${name}`, 0))!;
     try {
-      const out = await dispatchIssues(async () => null, async () => null);
+      const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
       expect(out.skipped).toEqual([`${name}: another dispatch is starting it`]);
     } finally {
       release();
@@ -387,7 +387,7 @@ describe("each skip in the goal loop gets one hold record", () => {
       return item;
     });
     try {
-      const out = await dispatchIssues(async () => null, async () => null);
+      const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
       expect(out.skipped).toEqual([`${name}: the item is parked`]);
     } finally {
       spy.mockRestore();
@@ -401,14 +401,14 @@ describe("each skip in the goal loop gets one hold record", () => {
     const out = await dispatchIssues(async (_repo, name) => {
       if (name === `fac-${first}`) await change(second, (item) => { item.spec = ""; });
       return null;
-    }, async () => null);
+    }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
     expect(out.skipped).toEqual([`fac-${second}: not a goal`]);
     expect(readHolds([`fac-${second}`])).toMatchObject([{ kind: "not-a-goal", text: "not a goal" }]);
   });
 
   test("a goal skipped because the factory paused while its rating ran", async () => {
     const id = goal();
-    const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, async () => { setPaused(true); return null; });
+    const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, async () => { setPaused(true); return null; }, undefined, undefined, () => {});
     setPaused(false);
     expect(out.skipped).toEqual([`fac-${id}: paused`]);
     expect(readHolds([`fac-${id}`])).toMatchObject([{ kind: "paused", text: "paused" }]);

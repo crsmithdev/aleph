@@ -9,6 +9,8 @@ import { checkSlot } from "./ledger.ts";
 import { readRecord, resultLine } from "./status.ts";
 import { acceptanceStep, dispatchIssues, reacceptReopened } from "./factory.ts";
 import { askOf } from "./ask.ts";
+import { writeHidden } from "../../todo/lib/store.ts";
+import type { ScenarioCheck } from "./acceptance.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
@@ -166,7 +168,7 @@ test("a failing command reopens the goal with the last 40 lines and it is dispat
   expect(notes(id)).not.toContain("line 20 ");
   expect(notes(id)).not.toContain("line 1 ");
   const specs: string[] = [];
-  const out = await dispatchIssues(async (_r, _name, _id, spec) => { specs.push(spec); return null; }, async () => null);
+  const out = await dispatchIssues(async (_r, _name, _id, spec) => { specs.push(spec); return null; }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(out.started).toEqual([`fac-${id}`]);
   expect(specs).toHaveLength(1);
   expect(specs[0]).toContain("acceptance: fail at");
@@ -190,7 +192,7 @@ test("a second failure sets an Ask, names the command, and dispatches nothing", 
   expect(issues.status(item(id))).toBe("open");
   expect(readRecord("fac", id)?.fails).toBe(2);
   const started: string[] = [];
-  const out = await dispatchIssues(async (_r, name) => { started.push(name); return null; }, async () => null);
+  const out = await dispatchIssues(async (_r, name) => { started.push(name); return null; }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(out.started).toEqual([]);
   expect(started).toEqual([]);
   expect(await acceptanceStep(runner(3))).toEqual([]);
@@ -699,4 +701,67 @@ test("a parked issue is not reopened by acceptance", async () => {
   expect(await reaccept(repo, item(id), runner(0))).toContain("skipped");
   expect(ran).toEqual([]);
   expect(issues.status(item(id))).toBe("parked");
+});
+
+const SCN = "1. the secret widget turns purple\n2. the hidden gizmo hums\n";
+const seal = (id: number) => writeHidden({ key: "fac" }, `fac-${id}`, { "scenarios.md": SCN });
+const scn = (output: string): ScenarioCheck => async () => ({ output });
+const allPass = scn("CHECK: pass scenario 1: ok\nCHECK: pass scenario 2: ok");
+const oneFail = scn("CHECK: pass scenario 1: ok\nCHECK: fail scenario 2: the gizmo hums not");
+
+test("scenarios only: all pass writes pass", async () => {
+  const id = doneGoal("It works.");
+  seal(id);
+  const lines = await acceptanceStep(runner(0), undefined, allPass);
+  expect(lines[0]).toContain("acceptance passed");
+  expect(readRecord("fac", id)?.result).toBe("pass");
+  expect(ran).toEqual([]);
+});
+
+test("a failed scenario reopens by number only; a second fail asks Chris", async () => {
+  const id = doneGoal("It works.");
+  seal(id);
+  await acceptanceStep(runner(0), undefined, oneFail);
+  expect(issues.status(item(id))).toBe("open");
+  expect(notes(id)).toContain("acceptance: fail at");
+  expect(notes(id)).toContain("scenario 2");
+  expect(notes(id)).not.toContain("gizmo");
+  expect(notes(id)).not.toContain("widget");
+  land(id);
+  closeAgain(id);
+  await acceptanceStep(runner(0), undefined, oneFail);
+  expect(askOf(item(id))).toMatchObject({ kind: "input", reason: "acceptance-failed" });
+  expect(notes(id)).not.toContain("gizmo");
+});
+
+test("no command and no scenarios is still skipped", async () => {
+  const id = doneGoal("It works.");
+  await acceptanceStep(runner(0), undefined, allPass);
+  expect(readRecord("fac", id)?.result).toBe("skipped");
+});
+
+test("commands and scenarios: pass only when both pass", async () => {
+  const id = doneGoal("`bun run ok`");
+  seal(id);
+  await acceptanceStep(runner(0), undefined, oneFail);
+  expect(readRecord("fac", id)?.result).toBe("fail");
+  const id2 = doneGoal("`bun run ok2`");
+  seal(id2);
+  await acceptanceStep(runner(0), undefined, allPass);
+  expect(readRecord("fac", id2)?.result).toBe("pass");
+  const id3 = doneGoal("`bun run bad`");
+  seal(id3);
+  let asked = false;
+  await acceptanceStep(runner(3, "boom"), undefined, async () => { asked = true; return { output: "CHECK: pass scenario 1: ok\nCHECK: pass scenario 2: ok" }; });
+  expect(readRecord("fac", id3)?.result).toBe("fail");
+  expect(asked).toBe(false);
+});
+
+test("a scenario with no CHECK line writes no new final record", async () => {
+  const id = doneGoal("It works.");
+  seal(id);
+  const lines = await acceptanceStep(runner(0), undefined, scn("CHECK: pass scenario 1: ok"));
+  expect(lines[0]).toContain("acceptance not run");
+  expect(readRecord("fac", id)).toBeNull();
+  expect(issues.status(item(id))).toBe("done");
 });

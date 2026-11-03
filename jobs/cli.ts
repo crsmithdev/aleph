@@ -20,7 +20,7 @@ import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
 import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
 import { ciStep } from "./lib/ci.ts";
-import { behind, correctionsStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
+import { acceptanceStep, behind, correctionsStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
 import { smokeFile, factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
@@ -480,6 +480,7 @@ try {
     case "dispatch": await dispatchCmd(); break;
     case "triage": await triageCmd(); break;
     case "plan": await planCmd(); break;
+    case "acceptance": out({ acceptance: await acceptanceStep() }); break;
     case "spec-check": await specCheckCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;

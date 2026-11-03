@@ -28,7 +28,7 @@ afterEach(teardown);
     const f = fakes();
     // The blocker itself cannot start, so it stays open.
     const start = async (r: unknown, n: string, id: number | string, spec: string) => (n === `fac-${blocker}` ? "no slot" : f.start(r, n, id, spec));
-    const out = await dispatchIssues(start, async () => null, f.land, f.rescue);
+    const out = await dispatchIssues(start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
     expect(f.calls).not.toContain(`start fac-${waiter}`);
     expect(out.started).not.toContain(`fac-${waiter}`);
     expect(readHolds([`fac-${waiter}`]).map((r) => r.kind)).toEqual(["waits_on"]);
@@ -37,7 +37,7 @@ afterEach(teardown);
   test("gate red main: a goal is not started while main is red and gets a red hold", async () => {
     const id = goal();
     const f = fakes();
-    const out = await dispatchIssues(f.start, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), f.land, f.rescue);
+    const out = await dispatchIssues(f.start, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), f.land, f.rescue, undefined, undefined, undefined, () => {});
     expect(f.calls).toEqual([]);
     expect(out.started).toEqual([]);
     expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["red"]);
@@ -51,7 +51,7 @@ afterEach(teardown);
     const second = mkGoal();
     mk(`fac-${first}`, "build", "passed");
     const f = fakes();
-    await dispatchIssues(f.start, async () => null, f.land, f.rescue);
+    await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
     expect(f.calls).not.toContain(`start fac-${second}`);
     expect(readHolds([`fac-${second}`]).map((r) => r.kind)).toEqual(["busy"]);
   });

@@ -24,7 +24,7 @@ test("a parked goal is not started, and is started once it is open again", async
 test("a goal parked during the baseline is not started", async () => {
   const id = goal();
   const f = fakes();
-  await dispatchIssues(f.start, async () => { await park(id); return null; }, f.land, f.rescue);
+  await dispatchIssues(f.start, async () => { await park(id); return null; }, f.land, f.rescue, undefined, undefined, undefined, () => {});
   expect(f.calls).toEqual([]);
 });
 
@@ -32,7 +32,7 @@ test("a parked plan issue gets no planner run", async () => {
   const id = writeList({ key: "fac" }, "add", (doc) => { const i = issues.add(doc, "plan me"); i.fm.plan = "true"; issues.setStatus(i, "parked"); return i.id; }, true)!.value;
   const planned: string[] = [];
   const f = fakes();
-  const out = await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, (_r, n) => { planned.push(`${n}`); });
+  const out = await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, (_r, n) => { planned.push(`${n}`); }, undefined, () => {});
   expect(planned).toEqual([]);
   expect(out.planned).toBeUndefined();
   expect(f.calls).toEqual([]);
@@ -51,7 +51,7 @@ test("a parked parent whose parts are done is not closed; an open one is", async
   const parked = parentWithDonePart(true);
   const open = parentWithDonePart(false);
   const f = fakes();
-  await dispatchIssues(f.start, async () => null, f.land, f.rescue);
+  await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
   expect(statusOf(open)).toBe("done");
   expect(statusOf(parked)).toBe("parked");
 });

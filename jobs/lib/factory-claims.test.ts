@@ -125,7 +125,7 @@ test("a pass that began before a pause starts nothing after it", async () => {
     mkdirSync(factoryDir(), { recursive: true });
     writeFileSync(join(factoryDir(), "paused"), "");
     return null;
-  }, async () => null);
+  }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.skipped.at(-1)).toEndWith(": paused");
 });
@@ -258,7 +258,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
 test("without rescue actions a stuck run still holds the factory", async () => {
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "time box" });
-  const out = await dispatchIssues(async () => null, async () => null);
+  const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(out.held).toContain("Held:");
 });
 
@@ -285,7 +285,7 @@ test("two dispatches at once rescue one stuck job once", async () => {
   mk(name, "build", "stuck", { reason: "time box" });
   const f = fakes();
   const slow = { ...f.rescue, drop: async (n: string, r: string) => { await Bun.sleep(300); return f.rescue.drop(n, r); } };
-  await Promise.all([dispatchIssues(f.start, async () => null, f.land, slow), dispatchIssues(f.start, async () => null, f.land, slow)]);
+  await Promise.all([dispatchIssues(f.start, async () => null, f.land, slow, undefined, undefined, undefined, () => {}), dispatchIssues(f.start, async () => null, f.land, slow, undefined, undefined, undefined, () => {})]);
   expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);
 });
 

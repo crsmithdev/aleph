@@ -97,7 +97,7 @@ export function fakes() {
   const start = async (_r: unknown, name: string, _id: number | string, spec: string) => { calls.push(`start ${name}`); specs.push(spec); return null; };
   return { calls, rescue, land, specs, start };
 }
-export const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start, async () => null, f.land, f.rescue);
+export const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
 
 
 // A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.
@@ -107,4 +107,4 @@ export const claimed = (name: string, result: string) => {
   return mk(name, "build", "stuck", { reason: "no commit" }, { "result.md": result });
 };
 export const withChecks = (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<ChecksStop | null>) =>
-  dispatchIssues(f.start, checks, f.land, f.rescue);
+  dispatchIssues(f.start, checks, f.land, f.rescue, undefined, undefined, undefined, () => {});
