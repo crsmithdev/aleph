@@ -21,6 +21,7 @@ import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
 import { writeBaseline } from "./factory-status.ts";
 import { runFile } from "./run-files.ts";
+import { writeTitle } from "./title.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
 export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
@@ -63,14 +64,14 @@ export function waitingToLand(jobs = allJobs()): string[] {
 }
 
 /**
- * After the push: the job's issue done in the work store, and a new issue for
- * an open manual check. Returns what happened to each, for the land log.
+ * After the push: the job's issue done in the work store, and a new `check` issue for
+ * an open manual check, titled `title`. Returns what happened to each, for the land log.
  */
-function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number } {
+function closeItems(repo: Repo, run: Run, title = ""): { todo?: string; checkItem?: number } {
   const open = run.check === "open";
   const on = onOf(run);
   if (on === undefined && !open) return {};
-  const w = closeAndFile(repo, `todo: job ${run.name} landed`, on, `job ${run.name} landed`, open ? [{ title: `Check ${run.name}: ${run.say}`, areas: ["check"] }] : []);
+  const w = closeAndFile(repo, `todo: job ${run.name} landed`, on, `job ${run.name} landed`, open ? [{ title, kind: "check", request: `The manual check of run ${run.name}: ${run.say}` }] : []);
   return { todo: w.todo, checkItem: w.ids[0] };
 }
 
@@ -363,6 +364,8 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
     const members = [leader, ...queuedLands(repo, id, run, cap - 1)];
     for (const m of members.slice(1)) m.log(`taken into the batch of ${run.name}'s land ${id}`);
     if (members.length > 1) log(`batch of ${members.length}`, members.map((m) => m.run.name).join("\n"));
+    // The title of each open manual check's issue, written before the land: closeItems runs after the push.
+    const checkTitles = new Map(await Promise.all(members.filter((m) => m.run.check === "open").map(async (m) => [m, await writeTitle(m.run.say ?? m.run.name)] as const)));
 
     // Members that failed in an earlier attempt keep their verdict and are not tried again.
     const failedBefore = new Map<Member, Landing & { after?: () => void }>();
@@ -385,7 +388,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
           m.log(`already on main as ${pushed}`);
           finish(m, { outcome: { condition: "landed", commit: pushed }, code: 0, after: () => {
             // The land that pushed may have died before it closed the item.
-            const { todo, checkItem } = closeItems(repo, m.run);
+            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m));
             if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
             if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
             removeBranch(repo, m.run);
@@ -415,7 +418,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         phase("land");
         if (step("push", "push", "-q", "origin", `${result.tip}:refs/heads/${main}`).ok) {
           for (const { m, commit } of ok) {
-            const { todo, checkItem } = closeItems(repo, m.run);
+            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m));
             if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
             if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
             removeBranch(repo, m.run);

@@ -80,7 +80,7 @@ describe("a factory run", () => {
     // The tracker and the followup issue; the FLAKE line itself files no issue.
     expect(items.length).toBe(before + 2);
     expect(items.map((i: any) => i.title)).not.toContain("a.test.ts > slow one: timed out, passed alone");
-    const tracker = (await issueList("fac", { label: "flakes" })).json;
+    const tracker = (await issueList("fac", { kind: "flake" })).json;
     expect(tracker).toHaveLength(1);
     const full = (await issueShow("fac", tracker[0].id)).json;
     expect(JSON.stringify(full)).toContain("job fflake: a.test.ts > slow one: timed out, passed alone");

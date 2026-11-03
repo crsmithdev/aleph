@@ -414,10 +414,7 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
 export const file = (repo: Place, message: string, filed: Filing[]): number[] =>
   filed.length ? closeAndFile(repo, message, undefined, "", filed).ids : [];
 
-/** The label of the one issue that collects the flakes runs meet. */
-export const FLAKES = "flakes";
-
-/** The open item labelled `flakes`, the lowest id when there are several; undefined when there is none. */
+/** The open flake tracker (`tracker: true`), the lowest id when there are several; undefined when there is none. */
 export function flakeTracker(doc: Doc): Issue | undefined {
   return doc.items
     .filter((i) => i.sub === undefined && status(i) === "open" && isTracker(i))
@@ -434,8 +431,8 @@ export function noteFlake(repo: Place, text: string): { id: number } | string {
   try {
     const w = writeList(repo, `todo: flake: ${text}`, (doc) => {
       const tracker = flakeTracker(doc) ?? issues.add(doc, "Flaky tests seen by runs", {
+        kind: "flake",
         priority: "low",
-        labels: [FLAKES],
         tracker: true,
         request: "Flaky tests that runs met and did not cause. Each note is one flake a run saw. Chris picks from these notes which flakes to fix.",
       });

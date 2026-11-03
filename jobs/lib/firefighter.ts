@@ -28,6 +28,7 @@ import type { Fate } from "./outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
 import { always, askFromRun, askOf as itemAskOf, editAnswers, logAlways, may, plainAsk, readAlways, routeOf, waitsForSpecEdit } from "./ask.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
+import { writeTitle } from "./title.ts";
 
 export const FIREFIGHTER_MODEL = OPUS_MODEL;
 /** The most actions one run may take; the rest are refused. */
@@ -210,7 +211,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - A land with a merge conflict, a run that loops with no commit, or a goal that is already met on main is fixed without Chris: drop the first two; for a goal already met on main use close (it drops the open job and marks the issue done), never sent to Chris.
 - A how-to-build question (code structure, which module, naming, test shape, whether to wait for an issue) is yours to decide: answer with the decision. A product choice (what the product does for Chris, what he sees, what it costs, what comes first) stays with Chris, unless Chris has handed its reason to you.
 - The firefighter files no follow-up issues. A flaky, slow or timing-out test that is not the run's own goal is a \`flake\` action: the code adds it as a note on the repo's flake tracker; Chris picks from that issue which flakes get a goal.${red ? `
-- A red main is the one case for an issue: name the cause (the commit and the test or check that fails and why) in an \`add\` for that repo, with a title and a body that says what to change. The body is the issue's spec and must have these three sections, or the code refuses the add and files nothing:
+- A red main is the one case for an issue: name the cause (the commit and the test or check that fails and why) in an \`add\` for that repo, with a title (${issues.TITLE_RULE}) and a body that says what to change. The body is the issue's spec and must have these three sections, or the code refuses the add and files nothing:
 \`\`\`
 ## Goal
 <the behaviour that holds once main is green, in at most 3 sentences>
@@ -318,10 +319,12 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     if (!red) return { refused: `${describe(a)}: the firefighter files no issues except for a red main; use tell` };
     const missing = missingSections(a.body ?? "");
     if (missing.length) return { refused: `${describe(a)}: the body lacks ${missing.map((h) => `## ${h}`).join(", ")}; the spec check needs ## Goal, ## Edit surface and ## Oracle` };
+    // A title that already keeps the rule is kept, so the same red main finds its open issue again.
+    const title = issues.titleProblem(a.title) ? await writeTitle(a.title) : a.title;
     const w = store.writeList(repo, "todo: red main", (doc) => {
-      const same = doc.items.find((i) => i.title === a.title && issues.status(i) === "open");
+      const same = doc.items.find((i) => i.title === title && issues.status(i) === "open");
       if (same) { issues.note(same, `firefighter: still red: ${a.body}`); return same.id; }
-      return issues.add(doc, a.title, { priority: "high", labels: ["red-main"], spec: a.body || a.title }).id;
+      return issues.add(doc, title, { kind: "bug", priority: "high", labels: ["red-main"], spec: a.body || a.title }).id;
     }, true);
     return w ? { applied: `${describe(a)} (${repo.key}-${w.value})` } : { refused: `${describe(a)}: no issue written` };
   }

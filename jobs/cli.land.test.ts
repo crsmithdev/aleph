@@ -52,7 +52,9 @@ describe("land", () => {
     expect(s).toMatchObject({ kind: "land", condition: "landed", check: "open", say: "run it on the phone" });
     expect(remoteHead()).toBe(s.commit);
     const item = (await issueShow("demo", s.checkItem)).json;
-    expect(item).toMatchObject({ title: "Check phonelater: run it on the phone", status: "open", areas: ["check"] });
+    expect(item).toMatchObject({ title: "run it on the phone", status: "open", areas: [] });
+    expect(item.title).not.toContain(": ");
+    expect(item.request).toContain("phonelater");
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit)).toBe("android/later.txt");
     expect(told).toContain("demo/phonelater landed; check open");
     // The list of `aleph jobs` is built in jobs/cli.ts, not in a library: a landed job stays in it while its check is open.

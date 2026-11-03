@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../todo/lib/todo.ts";
-import { areasOf, isSorted, readList, writeList } from "../../../todo/lib/store.ts";
+import { isSorted, readList, writeList } from "../../../todo/lib/store.ts";
 
 import { countsLine, parseRoute, prompt, triageIssue, triageOpen, TRIAGE_MODEL } from "../../../jobs/lib/triage.ts";
 import { saveProbe } from "../../../jobs/lib/factory-status.ts";
@@ -387,7 +387,7 @@ describe("the flake route", () => {
     expect(t.triaged).toEqual({ close: 1 });
     expect(countsLine(t.triaged)).toBe("close 1");
     const list = readList(repo)!;
-    const tracker = list.items.find((i) => areasOf(i).includes("flakes"))!;
+    const tracker = list.items.find((i) => i.fm.kind === "flake")!;
     expect(tracker).toBeDefined();
     expect(tracker.notes.at(-1)).toContain(`triage of ${repo.key}-1: a.test.ts > does x: timed out under load`);
     expect(issues.status(item(1))).toBe("done");

@@ -97,7 +97,7 @@ const idOf = (ref: number | string) => (/^\d+\.\d+$/.test(String(ref)) ? String(
 export const issueAdd = (key: string, title: string, fields: verbs.Fields = {}, extra: Record<string, string> = {}) =>
   call(async () => { const repo = loadRegistry()[key]!; verbs.checkFields(fields); return (await verbs.add(repo, title, fields)).result; }, extra);
 /** `aleph issue list <repo> [--status <s>] [--label <l>] --json`. */
-export const issueList = (key: string, o: { status?: string; label?: string } = {}) => call(() => verbs.list(loadRegistry()[key]!, o).map(verbs.brief));
+export const issueList = (key: string, o: { status?: string; label?: string; kind?: string } = {}) => call(() => verbs.list(loadRegistry()[key]!, o).map(verbs.brief));
 /** `aleph issue show <repo> <ref> --json`. */
 export const issueShow = (key: string, ref: number | string) => call(() => {
   const { item: i, hidden } = verbs.show(loadRegistry()[key]!, idOf(ref));

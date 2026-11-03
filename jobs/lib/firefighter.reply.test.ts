@@ -21,7 +21,8 @@ test("a flake action notes the repo's flake tracker, makes it when missing, file
   const f = await applyActions([{ do: "flake", repo: key, text: "a.test.ts > t: timed out" }, { do: "flake", repo: key, text: "b.test.ts > u: slow" }], ports());
   const items = readList({ key })!.items;
   expect(items.length).toBe(2);
-  const tracker = items.find((i) => areasOf(i).includes("flakes"))!;
+  const tracker = items.find((i) => i.fm.kind === "flake")!;
+  expect(areasOf(tracker)).toEqual([]);
   expect(tracker.notes.filter((x) => x.includes("firefighter: ")).length).toBe(2);
   expect(tracker.notes.join("\n")).toContain("firefighter: a.test.ts > t: timed out");
   expect(f.applied.length).toBe(2);

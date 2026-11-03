@@ -28,6 +28,18 @@ test("an add for a red repo files the body as the spec", async () => {
   expect(it.spec).toBe(SPEC);
 });
 
+test("an add files kind bug with the label red-main and a title the rule accepts", async () => {
+  fresh([{ title: "other" }]);
+  redCi();
+  const f = await applyActions([{ do: "add", repo: key, title: "Red main: the browser test fails on the row count.", body: SPEC }], ports());
+  expect(f.applied.length).toBe(1);
+  const it = readList({ key })!.items.at(-1)!;
+  expect(it.fm.kind).toBe("bug");
+  expect(store.areasOf(it)).toContain("red-main");
+  expect(issues.titleProblem(it.title)).toBeNull();
+  expect(it.title).toBe("the browser test fails on the row count");
+});
+
 test("a saved red CI gives one red event; while a red-main issue is open it gives none; a new head after it is done gives one, and the same head then none", async () => {
   fresh([{ title: "other" }]);
   redCi();

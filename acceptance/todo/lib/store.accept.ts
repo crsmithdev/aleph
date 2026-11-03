@@ -160,7 +160,8 @@ describe("the flake tracker", () => {
     expect(commits()).toBe(before + 1);
     const t = item(r, 2);
     expect(t.title).toBe("Flaky tests seen by runs");
-    expect(store.areasOf(t)).toEqual([store.FLAKES]);
+    expect(t.fm.kind).toBe("flake");
+    expect(store.areasOf(t)).toEqual([]);
     expect(t.fm.tracker).toBe("true");
     expect(store.isSorted(store.readList(r)!, t)).toBe(true);
     expect(issues.status(t)).toBe("open");

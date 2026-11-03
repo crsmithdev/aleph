@@ -63,7 +63,7 @@ describe("a worker's FOLLOWUP line (criterion 15)", () => {
     expect((await actionJob("fflakeup", "flake-followup", {}, "fac")).code).toBe(0);
     const all = await titles();
     expect(all.map((i) => i.title)).not.toContain(line);
-    const tracker = all.find((i) => i.areas.includes("flakes"));
+    const tracker = all.find((i) => i.tracker);
     expect((await issueShow("fac", tracker.id)).json.notes.join("\n")).toContain(`job fflakeup: ${line}`);
   }, 60_000);
 });
