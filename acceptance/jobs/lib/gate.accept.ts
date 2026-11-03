@@ -37,7 +37,7 @@ test("the reviewer prompt asks for the verdict first, fail-only CHECK lines with
   expect(p).toContain("at most 80 words");
   expect(p).toContain("does not repeat the CHECK lines");
   expect(p).not.toContain("pass|fail");
-  expect(p).toContain("names every");
+  expect(p).toContain("without its reason");
   expect(p).toContain("not only the first one");
   const s = reviewPrompt("n", "goal", "diff", [], "1. a scenario");
   expect(s).toContain("do not quote or mention the scenarios");

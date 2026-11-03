@@ -599,7 +599,7 @@ Write the verdict first, in one sentence. Then write one line for each failure o
 (\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Say each thing once.
 The text outside the CHECK lines is at most 80 words, and the VERDICT line does not repeat the CHECK lines. The
 number of CHECK lines has no cap. End with one line: \`VERDICT: pass\` when nothing failed, or
-\`VERDICT: hold <reason>\`. The hold reason names every failure in one short line, separated by \`; \`, and
+\`VERDICT: hold <the failed clauses, each named by a few words without its reason>\`, separated by \`; \`, and
 not only the first one.`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
