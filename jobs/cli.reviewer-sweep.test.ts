@@ -36,9 +36,7 @@ describe("a factory run", () => {
     const rep = (await aleph(["report"])).stdout;
     expect(rep).toContain("Update left-pad 1.0.0 to 1.2.0");
     expect((await aleph(["report"])).stdout).not.toContain("Update left-pad");
-    stale();
-    await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
-    expect(await proposals()).toHaveLength(2);
+    // The unchanged left-pad row files nothing again (deps.test.ts covers the reuse); the moved typescript row files one.
     give("5.9.3");
     stale();
     await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });

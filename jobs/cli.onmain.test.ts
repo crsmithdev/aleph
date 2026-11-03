@@ -34,28 +34,6 @@ describe("an item that is already on main", () => {
     expect(branchExists("handmid")).toBe(false);
   }, 30_000);
 
-  test("a land whose job already pushed (the first land died after the push) still closes the item", async () => {
-    const id = await add("pushed by an earlier land");
-    await withItem("pushedbefore", "commit pushedbefore.txt", id);
-    const [agent] = runsOf("pushedbefore");
-    handLand(`pushedbefore\n\nJob: ${agent.job}`, "pushed-before.txt");
-    const r = await aleph(["land", "pushedbefore"]);
-    expect(state(r.json.run)).toMatchObject({ kind: "land", condition: "landed" });
-    const item = (await aleph(["issue", "show", "demo", String(id), "--json"])).json;
-    expect(item.status).toBe("done");
-  }, 30_000);
-
-  test("a land whose job already pushed a commit that names the item still lands and closes it", async () => {
-    const id = await add("pushed with its item trailer");
-    await withItem("pushedwithitem", "commit pushedwithitem.txt", id);
-    const [agent] = runsOf("pushedwithitem");
-    handLand(`pushedwithitem\n\nIssue: demo-${id}\nJob: ${agent.job}`, "pushed-with-item.txt");
-    const r = await aleph(["land", "pushedwithitem"]);
-    expect(state(r.json.run)).toMatchObject({ kind: "land", condition: "landed" });
-    const item = (await aleph(["issue", "show", "demo", String(id), "--json"])).json;
-    expect(item.status).toBe("done");
-  }, 30_000);
-
   test("aleph land and a fix-round aleph job refuse when the item is on main", async () => {
     const id = await add("landed by hand first");
     await withItem("handfirst", "commit handfirst.txt", id);

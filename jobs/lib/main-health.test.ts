@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { mainRed, redMains, writeBaseline } from "./factory-status.ts";
+import { health, mainRed, redMains, writeBaseline } from "./factory-status.ts";
 import type { Repo } from "./ledger.ts";
 
 let base: string;
@@ -49,4 +49,5 @@ test("every red main, the baselines first, with the ids the firefighter keys its
   const reds = redMains();
   expect(reds.map((r) => [r.repo, r.source, r.id])).toEqual([["fac", "baseline", `red:fac:${"a".repeat(40)}`], ["demo", "ci", "ci:demo:d0:d1"]]);
   expect(reds[0].line).toBe("fac main is red at aaaaaaa: types");
+  expect(health()).toContain("health: fac main is red at aaaaaaa: types");
 });

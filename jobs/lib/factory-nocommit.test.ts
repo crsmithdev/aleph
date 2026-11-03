@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
+import { health } from "./factory-status.ts";
 import { AWAITING_CAP } from "./settings.ts";
 import { allRuns } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
@@ -214,6 +215,10 @@ test("ALEPH_AWAITING_CAP=1 with one awaiting run skips the next start with the a
     expect(out.started).toEqual([]);
     expect(out.skipped).toContain(`fac-${next}: 1 runs wait for Chris`);
     expect(f.specs).toEqual([]);
+    expect(health()).toContain("health: 1 runs wait for Chris; no new run starts");
+    // A drop of the awaiting run frees its place.
+    await f.rescue.drop(`fac-${waiter}`, "test over");
+    expect((await dispatch(f)).started).toContain(`fac-${next}`);
   } finally {
     delete process.env.ALEPH_AWAITING_CAP;
   }

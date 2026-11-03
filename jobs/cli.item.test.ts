@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../todo/lib/todo.ts";
 import * as verbs from "../todo/lib/issues.ts";
-import { aleph, base, env, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown, addOld, patchItem } from "./cli.helpers";
+import { aleph, base, env, file, itemsRemote, job, jobsDir, other, remote, repo, sh, specFile, state, worktree, setup, teardown, addOld } from "./cli.helpers";
 
 // The issue verbs run in this process; the store reads its paths from the environment, as the child's `env()` sets them.
 const STORE_KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_DISPATCH"];
@@ -147,7 +147,6 @@ describe("fate from git", () => {
 });
 
 describe("prospective memory", () => {
-  const NOW = { ALEPH_NOW: "2026-10-27T12:00:00" };
   // A fresh probe, so the tick does not run one.
   beforeAll(() => {
     mkdirSync(join(base, "factory"), { recursive: true });
@@ -155,20 +154,6 @@ describe("prospective memory", () => {
   });
   // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `after` on an old-shape item now. The tick below does the dispatching.
   const addGoal = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
-
-  test("a tick skips an issue that waits on an open item until it is ready", async () => {
-    const first = await add("fac", "the first thing", { spec: "ACTION: commit first.txt" });
-    const second = await add("fac", "waits on the first", { spec: "ACTION: commit second.txt", after: [`fac-${first}`] });
-    const t = await aleph(["tick"], { ...NOW, ALEPH_LIVE_CAP: "0" });
-    expect(t.json.skipped).toContain(`fac-${second}: blocked: after fac-${first}`);
-    expect(t.json.started).not.toContain(`fac-${second}`);
-    patchItem("fac", `${first}`, { status: "done" });
-    expect((await aleph(["tick"], NOW)).json.started).toContain(`fac-${second}`);
-    // The second goal's run may end stuck, which holds the factory: clear it.
-    await aleph(["drop", `fac-${second}`]);
-    closeItem("fac", second, "drop", "test over");
-    for (const id of [first, second]) closeItem("fac", id, "drop", "test over");
-  }, 60_000);
 
   test("a goal waiting on several items comes due once every one is done", async () => {
     const a = await addGoal("wait a"), b = await addGoal("wait b");

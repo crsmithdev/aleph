@@ -106,7 +106,10 @@ describe("a factory run", () => {
   test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines file a worker issue", async () => {
     const r = await fjob("fdefault", "defaults");
     expect(state(r.json.run)).toMatchObject({ condition: "passed", cost: 0.25, defaults: ["which colour? -> blue"] });
-    expect((await aleph(["issue", "list", "fac", "--json"])).json.filter((i: any) => i.title === "paint the fence" && i.source === "worker")).toHaveLength(1);
+    const filed = (await aleph(["issue", "list", "fac", "--json"])).json.filter((i: any) => i.title === "paint the fence" && i.source === "worker");
+    expect(filed).toHaveLength(1);
+    expect((await aleph(["issue", "show", "fac", String(filed[0].id), "--json"])).json.request).toContain("fdefault");
+    expect((await aleph(["status", `fac-${filed[0].id}`])).stdout).toContain("new");
     expect(existsSync(join(base, "factory", "followups.log"))).toBe(false);
     const rep = await aleph(["report"]);
     expect(rep.stdout).toContain("fac/fdefault passed");

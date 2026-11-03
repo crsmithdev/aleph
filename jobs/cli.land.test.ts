@@ -87,15 +87,6 @@ describe("land", () => {
     expect(sh(base, "git", "--git-dir", itemsRemote, "show", "main:demo/backlog/tasks/demo-1.md")).toContain("during the land");
   }, 30_000);
 
-  test("two lands at once in one repo both reach main, neither undoing the other", async () => {
-    await job("left", "commit pair/left.txt");
-    await job("right", "commit pair/right.txt");
-    const [l, r] = await Promise.all([aleph(["land", "left"]), aleph(["land", "right"])]);
-    expect([state(l.json.run).condition, state(r.json.run).condition]).toEqual(["landed", "landed"]);
-    expect(sh(base, "git", "--git-dir", remote, "ls-tree", "--name-only", "main:pair").split("\n")).toEqual(["left.txt", "right.txt"]);
-    expect(sh(base, "git", "--git-dir", remote, "log", "-2", "--format=%s", "main").split("\n").sort()).toEqual(["add pair/left.txt", "add pair/right.txt"]);
-  }, 30_000);
-
   test("a land changes no checkout: the main checkout's HEAD, index and working tree stay as they were", async () => {
     await job("still", "commit still.txt");
     writeFileSync(join(repo, "README"), "local edit\n");

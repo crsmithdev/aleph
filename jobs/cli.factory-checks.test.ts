@@ -22,19 +22,6 @@ describe("a factory run's checks", () => {
     };
     const runs = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
 
-    test("a run whose code fails the hidden test is stuck with the count, and no source reaches the note", async () => {
-      const id = await hiddenItem();
-      const r = await fjob("hidbad", "commit hidbad.txt", { ALEPH_FIX_ROUNDS: "0" }, ["--on", String(id)]);
-      expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "hidden check failed: 1 of 1 tests" });
-      expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
-      expect(file(r.json.run, "hidden.log")).toContain("SECRET-HIDDEN-LINE");
-      expect(file(r.json.run, "checks.log")).not.toContain("SECRET-HIDDEN-LINE");
-      expect(file(r.json.run, "prompt.md")).not.toContain("SECRET-HIDDEN-LINE");
-      expect(runsLeft()).toEqual([]);
-      expect((await aleph(["report"])).stdout).toContain("hidden 0/1");
-      await aleph(["drop", "hidbad"]);
-    }, 30_000);
-
     test("the same hidden test failing on two runs in a row asks instead of starting a third", async () => {
       const id = await hiddenItem();
       await fjob("hidtwice", "commit hidtwice.txt", {}, ["--on", String(id)]);
@@ -54,6 +41,10 @@ describe("a factory run's checks", () => {
       const rs = runs("hidfix");
       expect(rs.map((x) => [x.kind, x.condition])).toEqual([["build", "stuck"], ["build", "passed"], ["land", "landed"]]);
       expect(rs[0]).toMatchObject({ reason: "hidden check failed: 1 of 1 tests", failed: "hidden", next: "worker" });
+      expect(rs[0].checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
+      expect(file(rs[0].id, "hidden.log")).toContain("SECRET-HIDDEN-LINE");
+      expect(file(rs[0].id, "checks.log")).not.toContain("SECRET-HIDDEN-LINE");
+      expect(file(rs[0].id, "prompt.md")).not.toContain("SECRET-HIDDEN-LINE");
       const p = readFileSync(join(fakeLog, "prompt"), "utf8");
       expect(p).toContain("hidden check failed: 1 of 1 tests");
       expect(p).toContain("hid file exists");
@@ -64,6 +55,7 @@ describe("a factory run's checks", () => {
       expect(rs[1].checks.at(-1)).toMatchObject({ ok: true, passed: 1, total: 1 });
       expect(readFileSync(join(jobsDir, rs[2].id, "land.log"), "utf8")).toContain("checks skipped");
       expect(runsLeft()).toEqual([]);
+      expect((await aleph(["report"])).stdout).toContain("hidden 1/1");
     }, 60_000);
 
     describe("a fresh author", () => {
@@ -152,13 +144,6 @@ describe("a factory run's checks", () => {
       }, 60_000);
     });
 
-    test("an item with no hidden files runs the same checks as before", async () => {
-      const id = (await aleph(["issue", "add", "fac", "no hidden"])).json.added;
-      const r = await fjob("hidnone", "commit hidnone.txt", {}, ["--on", String(id)]);
-      expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
-      expect(existsSync(join(jobsDir, r.json.run, "hidden.log"))).toBe(false);
-      await aleph(["drop", "hidnone"]);
-    }, 30_000);
   });
 
   describe("flaky checks", () => {
@@ -255,6 +240,9 @@ describe("a factory run's checks", () => {
     test("a check that always fails is still stuck, with one rerun in its log", async () => {
       const r = await fjob("flk3", "fail-always", { ALEPH_FIX_ROUNDS: "0" });
       expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "tests failed" });
+      // With ALEPH_FIX_ROUNDS=0 there is no fix round: one run, and no next.
+      expect(readdirSync(jobsDir).filter((d) => d.includes("-fac-flk3-"))).toHaveLength(1);
+      expect(state(r.json.run).next).toBeUndefined();
       const log = file(r.json.run, "checks.log");
       expect(log.match(/## tests: exit 1/g)).toHaveLength(2);
       expect(log).toContain("run again");
@@ -289,17 +277,10 @@ describe("a factory run's checks", () => {
       await aleph(["drop", "fixn"]);
     }, 30_000);
 
-    test("ALEPH_FIX_ROUNDS=0 is stuck at once, as before", async () => {
-      await fjob("fix0", "fail-always", { ALEPH_FIX_ROUNDS: "0" });
-      const rs = runs("fix0");
-      expect(rs.length).toBe(1);
-      expect(rs[0]).toMatchObject({ condition: "stuck", reason: "tests failed" });
-      expect(rs[0].next).toBeUndefined();
-      await aleph(["drop", "fix0"]);
-    }, 30_000);
-
     test("the time box and an error result get no fix round", async () => {
       await fjob("fixbox", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
+      expect(runs("fixbox").map((x) => [x.condition, x.reason])).toEqual([["stuck", "time box"]]);
+      expect(runsLeft()).toEqual([]);
       await fjob("fixerr", "error");
       expect(runs("fixbox").map((x) => x.reason)).toEqual(["time box"]);
       expect(runs("fixerr").map((x) => x.reason)).toEqual(["API Error: 500"]);

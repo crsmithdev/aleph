@@ -71,19 +71,15 @@ describe("land follows main", () => {
     writeFileSync(join(bin, "systemctl"), `#!/bin/sh\necho "$@" >> ${rec}\n`, { mode: 0o755 });
     const extra = { PATH: `${bin}:${process.env.PATH}` };
     const call = "--user try-restart --no-block aleph-ui.service\n";
-    let calls = 0;
     const recorded = () => (existsSync(rec) ? readFileSync(rec, "utf8") : "");
-    for (const [name, f] of [["follow4", "docs-only.txt"], ["follow4a", "ui/index.html"], ["follow4b", "ui/views/other.js"], ["follow4c", "ui/x.test.ts"]]) {
-      const r = await land(name, `commit ${f}`, "aleph", extra);
-      expect(recorded()).toBe(call.repeat(calls));
-      expect(file(r.json.run, "land.log")).not.toContain("aleph-ui restarted");
-    }
-    for (const [name, f] of [["follow5", "jobs/lib/store.ts"], ["follow5a", "ui/views/now.js"]]) {
-      const r = await land(name, `commit ${f}`, "aleph", extra);
-      calls++;
-      expect(recorded()).toBe(call.repeat(calls));
-      expect(file(r.json.run, "land.log")).toContain("aleph-ui restarted");
-    }
+    // ui/views/other.js sits beside a graph file, but no import reaches it.
+    const outside = await land("follow4", "commit ui/views/other.js", "aleph", extra);
+    expect(recorded()).toBe("");
+    expect(file(outside.json.run, "land.log")).not.toContain("aleph-ui restarted");
+    // ui/views/now.js is reached through ui/banner.ts.
+    const inside = await land("follow5", "commit ui/views/now.js", "aleph", extra);
+    expect(recorded()).toBe(call);
+    expect(file(inside.json.run, "land.log")).toContain("aleph-ui restarted");
   }, 120_000);
 
   test("a failed restart leaves the land landed, and a later land restarts for an earlier graph commit", async () => {

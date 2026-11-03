@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { join } from "node:path";
 import { setPaused } from "./factory.ts";
 import { saveProbe } from "./factory-status.ts";
-import { gates, hold } from "./factory-status.ts";
+import { gates, health, hold } from "./factory-status.ts";
 import { waitingToLand } from "./landing.ts";
 import { ctx, setup, teardown } from "./factory.helpers.ts";
 
@@ -22,11 +22,12 @@ test("gates returns the first reason, in the order pause, hold, probe, live cap,
     expect(order()).toBe("pause");
     setPaused(false);
     expect(order()).toBe("hold");
-    expect(gates({ jobs: [] })?.gate).toBe("probe");
+    expect(gates({ jobs: [] })).toMatchObject({ gate: "probe", why: "the sandbox probe at 2026-10-28T00:00:00Z failed: x" });
+    expect(health()).toContain("health: the sandbox probe at 2026-10-28T00:00:00Z failed: x");
     saveProbe({ at: "2026-10-28T00:00:00Z", ok: true, failed: [] });
     expect(gates({ jobs: [] })?.gate).toBe("live");
     process.env.ALEPH_LIVE_CAP = "5";
-    expect(gates({ jobs: [] })?.gate).toBe("day");
+    expect(gates({ jobs: [] })).toMatchObject({ gate: "day", why: "cap of 0 runs in 24 hours" });
     process.env.ALEPH_DAY_CAP = "100";
     expect(gates({ jobs: [] })?.gate).toBe("awaiting");
     process.env.ALEPH_AWAITING_CAP = "5";

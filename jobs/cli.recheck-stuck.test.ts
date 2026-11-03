@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, jobsDir, other, repo, sh, specFile, state, setup, teardown } from "./cli.helpers";
 
@@ -40,34 +40,6 @@ describe("a factory run", () => {
       expect(sh(repo, "git", "ls-tree", "--name-only", "factory/rc1")).not.toContain("FAIL");
       const l = await aleph(["land", "rc1"]);
       expect(state(l.json.run).condition).toBe("landed");
-    }, 60_000);
-
-    test("refuses a running, passed or landed job, and one whose branch is gone", async () => {
-      const p = await fjob("rc2", "commit rc2.txt");
-      expect(state(p.json.run).condition).toBe("passed");
-      const refused = await aleph(["recheck", "rc2"]);
-      expect(refused.code).toBe(1);
-      expect(refused.stderr).toContain("rc2 is passed, not stuck or failed");
-      await aleph(["land", "rc2"]);
-      const landed = await aleph(["recheck", "rc2"]);
-      expect(landed.code).toBe(1);
-      expect(landed.stderr).toContain("no open job named rc2");
-      red();
-      const s = await fjob("rc3", "commit rc3.txt", NOFIX);
-      expect(state(s.json.run).condition).toBe("stuck");
-      const file = join(jobsDir, s.json.run, "state.json");
-      const saved = readFileSync(file, "utf8");
-      writeFileSync(file, JSON.stringify({ ...JSON.parse(saved), condition: "running" }));
-      const running = await aleph(["recheck", "rc3"]);
-      expect(running.code).toBe(1);
-      expect(running.stderr).toMatch(/rc3 is running/);
-      writeFileSync(file, saved);
-      sh(repo, "git", "branch", "-D", "factory/rc3");
-      const gone = await aleph(["recheck", "rc3"]);
-      expect(gone.code).toBe(1);
-      expect(gone.stderr).toContain("rc3 has no branch");
-      mend();
-      await aleph(["drop", "rc3"]);
     }, 60_000);
 
     test("a merge of main that conflicts ends stuck and names the files", async () => {

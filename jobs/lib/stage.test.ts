@@ -44,6 +44,12 @@ const ISSUES_NEW: Row[] = [
   { name: "new issue: stuck from its goal", stage: "stuck", build: async () => { const n = issue(); newRun(seedGoal("fac", n, 1), { kind: "build", condition: "failed" }); return n; } },
   { name: "new issue: done", stage: "done", build: async () => issue({ status: "done" }) },
   { name: "new issue: dropped", stage: "dropped", build: async () => issue({ status: "dropped" }) },
+  { name: "new issue: dropped while a trailer commit on main names it", stage: "dropped", build: async () => {
+    const n = issue({ status: "dropped" });
+    sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(n)}`);
+    sh(repo, "git", "push", "-q", "origin", "main");
+    return n;
+  } },
 ];
 
 const GOALS_NEW: Row[] = [
@@ -145,6 +151,7 @@ test("aleph status prints the same stage as JSON and as one line, with the repo 
   expect(r.json.why).toMatch(/after fac-\d/);
   const text = await aleph(["status", ref(id)]);
   expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage}: ${r.json.why}`.replace(/\bfac-(?=\d)/g, ""));
+  expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no issue 999");
 }, 90_000);
 
 // The open issue with no spec: triage sorts it in a sandbox repo only. `demo` has no `sandbox`; `fac` has it.

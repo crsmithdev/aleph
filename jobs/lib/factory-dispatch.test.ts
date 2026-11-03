@@ -105,12 +105,15 @@ test("a goal closed while an earlier goal starts is not started", async () => {
 test("a goal added while another dispatch holds the baseline is started by the holder", async () => {
   goal();
   let added = 0;
+  let checksRun = 0;
   let b: Awaited<ReturnType<typeof dispatchIssues>> | undefined;
   const a = await dispatchIssues(async () => null, async () => {
+    checksRun++;
     added = goal();
-    b = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
+    b = await dispatchIssues(async () => null, async () => { checksRun++; return null; }, undefined, undefined, undefined, undefined, undefined, () => {});
     return null;
   }, undefined, undefined, undefined, undefined, undefined, () => {});
+  expect(checksRun).toBe(1);
   expect(b!.started).toEqual([]);
   expect(b!.skipped).toContain(`fac-${added}: main baseline running`);
   expect(a.started).toContain(`fac-${added}`);
@@ -245,10 +248,17 @@ test("a goal that waits on an open after gets one hold record; a second dispatch
   expect(recs().map((r) => r.kind)).toContain("started");
 });
 
-test("a goal that a red main holds gets one hold record", async () => {
+test("a goal that a red main holds gets one hold record; main's checks run once for its commit", async () => {
   const id = goal();
-  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), undefined, undefined, undefined, undefined, undefined, () => {});
-  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), undefined, undefined, undefined, undefined, undefined, () => {});
+  let checksRun = 0;
+  const red = async () => { checksRun++; return { cause: "check" as const, checkName: "tests", reason: "tests failed" }; };
+  const first = await dispatchIssues(async () => null, red, undefined, undefined, undefined, undefined, undefined, () => {});
+  const second = await dispatchIssues(async () => null, red, undefined, undefined, undefined, undefined, undefined, () => {});
+  expect(checksRun).toBe(1);
+  for (const out of [first, second]) {
+    expect(out.started).toEqual([]);
+    expect(out.skipped).toEqual([expect.stringMatching(new RegExp(`^fac-${id}: main is red at [0-9a-f]{7}: tests$`))]);
+  }
   const recs = readHolds([`fac-${id}`]);
   expect(recs).toHaveLength(1);
   expect(recs[0].kind).toBe("red");

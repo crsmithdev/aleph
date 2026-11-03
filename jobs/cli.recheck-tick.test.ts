@@ -26,22 +26,6 @@ describe("a factory run", () => {
     expect(id).toBeGreaterThan(0);
   }, 30_000);
 
-  test("a tick starts no run while the waiting cap binds, and a drop frees a place", async () => {
-    mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const env = { ALEPH_AWAITING_CAP: "2" };
-    await fjob("fwait1", "commit held/w1.txt");
-    await fjob("fwait2", "commit held/w2.txt");
-    const id = seedItem("fac", "behind the cap", { kind: "goal" }, "ACTION: commit capped.txt\n".trim());
-    const t = await aleph(["tick"], env);
-    expect(t.json.started).toEqual([]);
-    expect(t.json.skipped).toContain(`fac-${id}: 2 runs wait for Chris`);
-    expect((await aleph(["report"], env)).stdout).toContain("health: 2 runs wait for Chris; no new run starts");
-    await aleph(["drop", "fwait1"]);
-    expect((await aleph(["tick"], env)).json.started).toEqual([`fac-${id}`]);
-    await aleph(["drop", "fwait2"]);
-  }, 30_000);
-
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));

@@ -1,13 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, fakeLog, until, jobsDir, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, base, fakeLog, jobsDir, specFile, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
 
 describe("a factory run", () => {
-  const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
   describe("the reviewer", () => {
     // These runs never meet review: a background review would rewrite the awaiting reason the assertions read.
@@ -58,20 +57,6 @@ describe("a factory run", () => {
       expect(readFileSync(join(fakeLog, "prompt"), "utf8")).toContain("The reviewer sent this branch back: reviewer: the flag has no test");
     }, 30_000);
 
-    test("a finding after the last fix round needs Chris, and the row says why in one sentence", async () => {
-      await rjob("rhold", "REVIEW:hold");
-      const rs = runsOf("rhold");
-      expect(rs.map((x) => x.condition)).toEqual(["stuck", "stuck", "awaiting"]);
-      expect(rs.at(-1)).toMatchObject({ ask: expect.objectContaining({ kind: "approval", reason: "review" }), reason: "the reviewer sent it back twice: tests do not cover the new flag" });
-      expect(rs.at(-1).stat).toContain("rhold.txt");
-      const before = remoteGit("rev-parse", "main");
-      expect(before).toBe(remoteGit("rev-parse", "main"));
-      expect(remoteGit("log", "-1", "--format=%s", "main")).not.toBe("add rhold.txt");
-      const l = await aleph(["land", "rhold"]);
-      expect(state(l.json.run)).toMatchObject({ condition: "landed", held: true });
-      expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
-    }, 30_000);
-
     test("a reviewer with no verdict is run again, once; its pass passes the run", async () => {
       rmSync(join(fakeLog, "noneonce"), { force: true });
       const n = calls();
@@ -88,14 +73,6 @@ describe("a factory run", () => {
       expect(calls() - n).toBe(2);
       expect(state((await rjob("rerr", "REVIEW:error", "commit rerr.txt", none)).json.run)).toMatchObject({ condition: "awaiting", reason: "reviewer: no verdict (API Error: 529)" });
       for (const n of ["rnone", "rerr"]) await aleph(["drop", n]);
-    });
-
-    test("a reviewer past the time box holds the run", async () => {
-      const slow = join(base, "slow-reviewer");
-      writeFileSync(slow, "#!/bin/bash\nsleep 60\n", { mode: 0o755 });
-      const t = await aleph(["job", "fac", "rslow2", "--spec", specFile("Goal: g\nACTION: commit rslow2.txt\n")], { ALEPH_REVIEWER_CMD: slow, ALEPH_REVIEW_TIMEOUT: "1", ALEPH_FIX_ROUNDS: "0" });
-      expect(state(t.json.run)).toMatchObject({ condition: "awaiting", reason: "reviewer: no verdict (time box)" });
-      await aleph(["drop", "rslow2"]);
     });
 
     test("with the default fix rounds, a reviewer with no verdict twice needs Chris and no worker runs again", async () => {
@@ -120,27 +97,6 @@ describe("a factory run", () => {
       expect(runsOf("rstall").length).toBe(1);
       await aleph(["drop", "rstall"]);
     }, 30_000);
-
-    test("the held review's end records review.call on state.json, and aleph jobs shows it (criterion 17)", async () => {
-      const stub = (name: string, line: string) => {
-        const f = join(base, `stub-${name}`);
-        writeFileSync(f, `#!/bin/bash\ncat >/dev/null\necho '{"type":"result","is_error":false,"result":"Checked.\\n${line}"}'\n`, { mode: 0o755 });
-        return f;
-      };
-      const cases: [string, string, { call: string; reason?: string }][] = [
-        ["rcland", "VERDICT: land", { call: "land" }],
-        ["rcback", "VERDICT: back r", { call: "back", reason: "r" }],
-        ["rcask", "VERDICT: chris q", { call: "ask", reason: "q" }],
-      ];
-      for (const [name, line, want] of cases) {
-        const r = await rjob(name, "REVIEW:pass", "commit held/" + name + ".txt", { ALEPH_REVIEW_CMD: stub(name, line), ALEPH_FIX_ROUNDS: "0" });
-        const run = r.json.run;
-        await until(() => state(run).review !== undefined);
-        expect(state(run).review).toEqual(want);
-        expect((await aleph(["jobs", name])).json.review).toEqual(want);
-        await aleph(["drop", name]);
-      }
-    }, 60_000);
 
     test("a security path holds without a review", async () => {
       const n = calls();

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, fakeLog, file, remote, repo, sh, specFile, state, told, setup, teardown } from "./cli.helpers";
+import { aleph, base, fakeLog, file, jobsDir, remote, repo, sh, specFile, state, told, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -37,9 +37,16 @@ describe("a factory run", () => {
   test("the land pushes the tested tree with Issue and Job trailers, and the clean main checkout follows", async () => {
     const id = (await aleph(["issue", "add", "fac", "a factory item"])).json.added;
     const j = await fjob("fitem", "commit fitem.txt", {}, ["--on", String(id)]);
+    const s0 = state(j.json.run);
+    expect(s0).toMatchObject({ kind: "build", on: `fac-${id}`, condition: "passed" });
+    expect(s0.todo).toBeUndefined();
+    expect(j.json.run).toEndWith("-build");
+    // An item with no hidden files runs the plain checks and writes no hidden.log.
+    expect(s0.checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
+    expect(existsSync(join(jobsDir, j.json.run, "hidden.log"))).toBe(false);
     const r = await aleph(["land", "fitem"]);
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "land", condition: "landed" });
+    expect(s).toMatchObject({ kind: "land", condition: "landed", on: `fac-${id}` });
     const shown = (await aleph(["report"])).stdout;
     expect(shown).toContain("delivered:");
     expect(shown).toContain("checked by: tests");
@@ -50,23 +57,8 @@ describe("a factory run", () => {
     expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain")]).toEqual([remoteGit("rev-parse", "main"), ""]);
     expect(factoryBranch("fitem")).toBe(false);
     expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("done");
+    expect((await aleph(["status", `fac-${id}`])).stdout).toContain("done");
     expect(runsLeft()).toEqual([]);
-  });
-
-  test("an issue lands with Issue and Job trailers; its run is a build run on it, and the issue is done", async () => {
-    const GOAL = "## Goal\n\nAdd a file.\n\n## Oracle\n\n`bun test`\n\n## Time box\n\n10 minutes\n";
-    const added = (await aleph(["issue", "add", "fac", "t", "--spec", "-"], { ALEPH_DISPATCH: "off" }, GOAL)).json;
-    const id = added.added as number;
-    const j = await fjob("fgoal", "commit fgoal.txt", {}, ["--on", `${id}`]);
-    const s0 = state(j.json.run);
-    expect(s0).toMatchObject({ kind: "build", on: `fac-${id}`, condition: "passed" });
-    expect(s0.todo).toBeUndefined();
-    expect(j.json.run).toEndWith("-build");
-    const r = await aleph(["land", "fgoal"]);
-    expect(state(r.json.run)).toMatchObject({ kind: "land", condition: "landed", on: `fac-${id}` });
-    expect(remoteGit("log", "-1", "--format=%B", "main").trim()).toBe(`add fgoal.txt\n\nIssue: fac-${id}\nJob: ${j.json.job}`);
-    const st = await aleph(["status", `fac-${id}`]);
-    expect(st.stdout).toContain("done");
   });
 
   test("an error result, no result, a line after the result, or no commit ends stuck", async () => {
@@ -107,30 +99,6 @@ describe("a worker's FOLLOWUP line (criterion 15)", () => {
     await aleph(["issue", "done", "fac", String(open.id), "test over"]);
     await aleph(["drop", "fsame"]);
   });
-
-  test("files an issue with source worker that status calls new; FLAKE adds a tracker note and no issue", async () => {
-    const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
-    const before = (await titles()).map((i) => i.id);
-    const r = await aleph(["job", "fac", "ffollow", "--spec", specFile("Goal: ffollow\nACTION: defaults\n")]);
-    expect(r.code, r.stderr).toBe(0);
-    const added = (await titles()).filter((i) => !before.includes(i.id));
-    expect(added).toHaveLength(1);
-    expect(added[0]).toMatchObject({ title: "paint the fence", source: "worker" });
-    const full = (await aleph(["issue", "show", "fac", String(added[0].id), "--json"])).json;
-    expect(full.request).toContain("ffollow");
-    expect((await aleph(["status", `fac-${added[0].id}`])).stdout).toContain("new");
-    expect(existsSync(join(base, "factory", "followups.log"))).toBe(false);
-
-    const mid = (await titles()).length;
-    const f = await aleph(["job", "fac", "fflake2", "--spec", specFile("Goal: fflake2\nACTION: flake\n")]);
-    expect(f.code, f.stderr).toBe(0);
-    const after = await titles();
-    // A tracker (once) and the followup line's issue, but none for the FLAKE line.
-    expect(after.length).toBe(mid + 2);
-    expect(after.map((i) => i.title)).not.toContain("a.test.ts > slow one: timed out, passed alone");
-    const tracker = after.find((i) => i.areas.includes("flakes"));
-    expect((await aleph(["issue", "show", "fac", String(tracker.id), "--json"])).json.notes.join("\n")).toContain("job fflake2: a.test.ts > slow one");
-  }, 60_000);
 
   test("a FOLLOWUP line about a flake is a tracker note and files no issue", async () => {
     const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
