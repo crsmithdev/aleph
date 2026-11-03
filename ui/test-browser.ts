@@ -47,7 +47,8 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
   const argv = chromeArgv(profile);
   const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"], env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
   const cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
-  await cdp.send("Browser.getVersion");
+  // The first call waits for Chrome to start; 30 s as in shot.ts and review-browser.ts, since a busy CI runner took over 15 s (runs 41675736380, cc2f927ff).
+  await cdp.send("Browser.getVersion", {}, undefined, 30_000);
 
   const open = async (hash = "#/"): Promise<Page> => {
     const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });

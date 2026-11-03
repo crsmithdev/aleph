@@ -26,10 +26,12 @@ function entry(id: string, extra: Partial<Run> = {}): Entry {
   return { id, folder, run };
 }
 
-/** A process whose command line names the folder, as a unit's does. */
-function liveIn(folder: string): number {
+/** A process whose command line names the folder, as a unit's does; it returns once the child has exec'd bash. */
+async function liveIn(folder: string): Promise<number> {
   const p = Bun.spawn(["bash", "-c", `sleep 30; : ${folder}`]);
   kids.push(p);
+  const named = () => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(folder); } catch { return false; } };
+  for (const end = Date.now() + 5000; !named() && Date.now() < end;) await Bun.sleep(10);
   markStarted(folder, p.pid);
   return p.pid;
 }
@@ -43,8 +45,7 @@ test("each state of a run's process", async () => {
   markStarted(lost.folder, 999_999_999);
   expect(processState(lost)).toBe("lost");
   const live = entry("e");
-  liveIn(live.folder);
-  await Bun.sleep(50);
+  await liveIn(live.folder);
   expect(processState(live)).toBe("live");
   expect(isRunning(live) && isRunning(starting)).toBe(true);
   markEnded(live.folder, 0);
@@ -61,8 +62,7 @@ test("the first end is the one kept", () => {
 
 test("stop ends a live run's process", async () => {
   const e = entry("a");
-  liveIn(e.folder);
-  await Bun.sleep(50);
+  await liveIn(e.folder);
   expect(processState(e)).toBe("live");
   await stop(e, 5000);
   expect(processState(e)).toBe("lost");

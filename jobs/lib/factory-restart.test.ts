@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
 import { lock, readRun, writeRun } from "./ledger.ts";
@@ -124,6 +124,9 @@ test("a run from before this boot whose pid's process names its folder is live a
   // The sleep comes first: bash execs a last command, and its cmdline would lose the folder.
   const p = Bun.spawn(["bash", "-c", `sleep 20; : ${r.folder}`], { stdout: "ignore", stderr: "ignore" });
   try {
+    // Until the child execs bash, its cmdline is this process's; under load the dispatch could read that first.
+    const named = () => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(r.folder); } catch { return false; } };
+    for (const end = Date.now() + 5000; !named() && Date.now() < end;) await Bun.sleep(10);
     writeFileSync(join(r.folder, "pid"), String(p.pid));
     const f = fakes();
     await dispatch(f);
