@@ -323,3 +323,16 @@ test("askFromRun marks the run asked, and with a spec the run waits for a spec e
     rmSync(e.folder, { recursive: true, force: true });
   }
 });
+
+test("every reason has a non-empty display name", () => {
+  for (const [reason, r] of Object.entries(ASK_REASONS)) expect(r.name.trim().length, reason).toBeGreaterThan(0);
+  expect(ASK_REASONS["spec-check"].name).toBe("Spec check");
+  expect(ASK_REASONS["proposal-skill"].name).toBe("Lesson");
+});
+
+test("details round-trips through setAsk and askOf", () => {
+  const i = item();
+  setAsk(i, { ...ask, details: "More text." });
+  expect(askOf(i)?.details).toBe("More text.");
+  expect(askOf(item({ ask: "input", question: "q" }))?.details).toBeUndefined();
+});

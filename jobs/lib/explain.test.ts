@@ -260,3 +260,29 @@ test("ALEPH_EXPLAIN_CAP=1 explains the item first and the lesson in the second s
   await explainStep([repo]);
   expect(lesson().situation).toBeTruthy();
 });
+
+test("parseExplain keeps 5 sentences of the situation and 2 of an effect, and moves the rest to details whole", () => {
+  const sit = Array.from({ length: 8 }, (_, i) => `S${i + 1}.`).join(" ");
+  const t = parseExplain(JSON.stringify({ situation: sit, effects: [{ action: "a", text: "E1. E2. E3. E4." }], details: "Own." }), ["a"]) as any;
+  expect(t.situation).toBe("S1. S2. S3. S4. S5.");
+  expect(t.effects[0].text).toBe("E1. E2.");
+  expect(t.details).toBe("S6. S7. S8. E3. E4. Own.");
+});
+
+test("parseExplain never cuts a sentence: the character limit moves whole sentences, and a long first sentence stays", () => {
+  const long = "x".repeat(300) + ".";
+  const t = parseExplain(JSON.stringify({ situation: `Short. ${"y".repeat(595)}.`, effects: [{ action: "a", text: long + " Next." }] }), ["a"]) as any;
+  expect(t.situation).toBe("Short.");
+  expect(t.effects[0].text).toBe(long);
+  expect(t.details).toBe(`${"y".repeat(595)}. Next.`);
+  const ok = parseExplain(JSON.stringify({ situation: "A. B.", effects: [{ action: "a", text: "C." }] }), ["a"]) as any;
+  expect(ok.details).toBeUndefined();
+});
+
+test("the explainer prompt states the limits and asks for details", () => {
+  seed(plainAsk("host-check", "check it"));
+  const p = explainPrompt(pendingCases([repo])[0]);
+  expect(p).toContain("at most 5 sentences and 600 characters");
+  expect(p).toContain("at most 2 sentences and 220 characters");
+  expect(p).toContain('"details"');
+});

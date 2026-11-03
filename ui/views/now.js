@@ -292,7 +292,8 @@ function askDetails(i) {
   const d = i.details ?? {};
   const isRun = i.key?.startsWith("run:");
   const sig = (d.signals ?? []).map((g) => `<li>${esc(g.at)} ${esc(g.source)}: ${esc(g.quote)}${isUrl(g.link) ? ` <a href="${esc(g.link)}">link</a>` : ""}</li>`).join("");
-  const body = (d.note ? `<p class="quiet q">${esc(d.note)}</p>` : "") +
+  const body = (i.more ?? []).map((t) => `<p class="quiet q">${esc(localId(t, i.repo))}</p>`).join("") +
+    (d.note ? `<p class="quiet q">${esc(d.note)}</p>` : "") +
     (d.ask ? decisionBody(d.ask) : "") +
     (sig ? `<ul>${sig}</ul>` : "") +
     (d.review ? `<p class="quiet q">Reviewer: ${esc(d.review.call)}${d.review.reason ? `: ${esc(d.review.reason)}` : ""}</p>` : "") +
@@ -325,7 +326,7 @@ export function askRow(i, now = new Date().toISOString(), folded = false) {
   const choices = acts.map((a) => choice(actionButton(a), a.hint, inputFor(a), !!a.recommended));
   if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
   return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
-    needHead(i.kind, i.id, i.href, i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.explained === false ? ' <span class="muted">The case text is missing; this is the fixed text for this reason.</span>' : ""}</p>`, i.priority, { at: i.at, since: i.since, now, part: i.part }) +
+    needHead(i.kind, i.id, i.href, i.name ? `${i.name}: ${i.title}` : i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.explained === false ? ' <span class="muted">The case text is missing; this is the fixed text for this reason.</span>' : ""}</p>`, i.priority, { at: i.at, since: i.since, now, part: i.part }) +
     (folded ? choiceFold : (_k, body) => body)(i.key ?? i.id, `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i)) + `</article>`;
 }
 

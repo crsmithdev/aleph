@@ -3,7 +3,7 @@
  * the page only renders. One entry per run, issue or goal that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/corrections.ts";
-import { actionsOn, ASK_REASONS, kindOf, reasonOf, type Ask, type Granted } from "../jobs/lib/ask.ts";
+import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Granted } from "../jobs/lib/ask.ts";
 // @ts-ignore plain JS, shared with the page
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
@@ -11,9 +11,9 @@ import type { Job, NewIssue } from "./state.ts";
 
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string>; /** The Ask's recommend names this action. */ recommended: boolean }
 export interface AskItem {
-  key: string; reason: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
+  key: string; reason: string; /** The reason's display name, the kind on the card's title line. */ name?: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
   /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string; /** True when `situation` and the hints are the stored text. */ explained: boolean;
-  actions: Action[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
+  actions: Action[]; /** What the limits moved out of the card's text, and the explainer's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
   /** The priority of the issue, goal or run's item it is about; none for a proposal. */
@@ -47,11 +47,11 @@ const sentence = (s: string) => (/[.?!]$/.test(s) ? s : `${s}.`);
 
 type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
 /** The text a row shows: the Ask of its run or issue, else the stored text of its lesson. */
-const askIn = (c: Ctx): Pick<Ask, "situation" | "effects" | "recommend"> | undefined => {
+const askIn = (c: Ctx): Pick<Ask, "situation" | "details" | "effects" | "recommend"> | undefined => {
   const ask = c.run?.ask ?? c.issue?.ask;
   if (ask) return ask;
   const l = c.lesson;
-  return l?.situation ? { situation: l.situation, effects: l.effects, recommend: l.recommend } : undefined;
+  return l?.situation ? { situation: l.situation, details: l.details, effects: l.effects, recommend: l.recommend } : undefined;
 };
 /** The first sentence of the note behind a check, cleaned. */
 const noteOf = (c: Ctx): string => {
@@ -111,7 +111,20 @@ function words(l: Lesson | undefined) {
 }
 for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) => `The correction memory proposes ${words(c.lesson).problem}: ${clean(c.lesson?.sentence).replace(/\.$/, "")}.`;
 
-function actionsFor(reason: string, c: Ctx): Action[] {
+/** `rerun` by what it does for each reason. */
+const RERUN: Record<string, { label: string; hint: string }> = {
+  "spec-check": { label: "Start the goal", hint: "Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first." },
+  "no-commit": { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the goal." },
+  "part-dropped": { label: "Close as done", hint: "Sets the issue to done; nothing more runs for it." },
+  "run-cap": { label: "Start it again", hint: "Clears the Ask and lets the factory start the goal again." },
+  "acceptance-failed": { label: "Start it again", hint: "Clears the Ask and lets the factory start the goal again." },
+};
+const rerun = (reason: string, args: Record<string, string>): Action => {
+  const r = RERUN[reason] ?? { label: "Start it again", hint: "Clears the label and lets the factory start the goal again." };
+  return { act: "rerun", label: r.label, hint: r.hint, primary: false, args, recommended: false };
+};
+
+function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
   const run: Record<string, string> = c.run ? { name: c.run.name } : {};
   const [repo, n] = c.issue ? c.id.split(/-(?=\d+(?:\.\d+)?$)/) : ["", ""];
   const issue = { repo, id: n };
@@ -122,9 +135,7 @@ function actionsFor(reason: string, c: Ctx): Action[] {
       case "drop":
         return c.run ? [a("drop", "Drop the job", "Discards the run's branch; the issue stays open.", run)]
           : [a("drop", "Drop the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
-      case "rerun": return [a("rerun", "Run it again", reason === "spec-check"
-        ? "Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first."
-        : "Clears the label and lets the factory start the goal again.", issue)];
+      case "rerun": return [rerun(reason, issue)];
       case "retry": return [a("retriage", "Run triage again", "Removes the label; the next tick triages the issue again.", issue)];
       case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
       case "deny":
@@ -166,6 +177,15 @@ function actionsFor(reason: string, c: Ctx): Action[] {
       const e = ask.effects?.find((f) => is(x, f.action));
       if (e?.text) x.hint = e.text;
     }
+  }
+  // The limit covers the effect or hint text only, not what is added below.
+  for (const x of acts) {
+    const { kept, rest } = limitText(x.hint, LIMITS.choice);
+    x.hint = kept;
+    if (rest) more.push(`${x.label}: ${rest}`);
+  }
+  if (ask?.situation) {
+    const is = (x: Action, name: string) => names.get(x) === name || x.act === name;
     const rec = ask.recommend && acts.find((x) => is(x, ask.recommend!.action));
     if (rec && ask.recommend) {
       rec.recommended = true;
@@ -212,12 +232,18 @@ function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
 }
 
 function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string, priority?: string): AskItem {
-  const actions = actionsFor(reason, c);
+  const more: string[] = [];
+  const stored0 = askIn(c)?.situation;
+  const said = stored0 ? limitText(stored0, LIMITS.situation) : null;
+  if (said?.rest) more.push(said.rest);
+  const actions = actionsFor(reason, c, more);
+  const extra = askIn(c)?.details?.trim();
+  if (extra) more.push(extra);
   const r = ASK_REASONS[reason];
   const problem = PROBLEM[reason](c);
-  const stored = askIn(c)?.situation;
+  const stored = said?.kept;
   return {
-    key, reason, kind: kindOf(reason, kind), id: c.id, href, title, problem, situation: stored || problem, explained: !!stored, actions,
+    key, reason, name: r.name, kind: kindOf(reason, kind), id: c.id, href, title, problem, situation: stored || problem, explained: !!stored, actions, ...(more.length ? { more } : {}),
     ...(c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };

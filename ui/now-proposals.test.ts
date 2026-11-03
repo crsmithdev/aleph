@@ -20,7 +20,7 @@ test("a proposal is a row with Yes-like buttons and its signals folded", () => {
   const h = withAttn({ ...state, asks: asksOf([held], [], [prop]) });
   const row = h.match(/<article class="job-card small issue-row proposal-check"[^]*?<\/article>/)![0];
   expect(problem(row)).toContain("Do not mock the db");
-  expect(row).toContain('<span class="t">No db mocks</span>');
+  expect(row).toContain('<span class="t">Lesson: No db mocks</span>');
   expect(row).toContain('class="act primary" type="button" data-act="approve" data-id="l-1234abcd" data-label="Add a check to aleph">Add a check to aleph<');
   expect(row).toContain('data-act="decline" data-id="l-1234abcd" data-label="Add no check">');
   expect(row).toContain('data-reason="proposal-check:aleph"');

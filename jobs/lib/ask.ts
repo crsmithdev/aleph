@@ -30,6 +30,8 @@ export interface Ask {
   why: string[];
   /** Plain sentences on what this item is about and why it waits for Chris. */
   situation?: string;
+  /** What the case text left out, or what the explainer put apart: shown under Details. */
+  details?: string;
   /** One per action of the reason. For a decision with options, `action` may be `decide:<option label>`. */
   effects?: { action: string; text: string }[];
   /** The action the factory recommends, and why. */
@@ -38,6 +40,8 @@ export interface Ask {
 
 export interface Reason {
   kind: Ask["kind"];
+  /** The short display name of the reason: the first word of a card's title line. */
+  name: string;
   actions: string[];
   /** The action the Always button takes. Empty: the factory has no rule that acts on this reason, so the card offers no auto-yes. */
   always: string;
@@ -46,33 +50,54 @@ export interface Reason {
 }
 export interface Granted { action: string; at: string }
 
-const proposal: Reason = { kind: "approval", actions: ["approve", "decline"], always: "approve" };
+const proposal: Reason = { kind: "approval", name: "Lesson", actions: ["approve", "decline"], always: "approve" };
 
 /**
  * Every reason the factory asks Chris. The first group is the spec's Ask reasons. The second group is kept as it was,
  * because the spec names no new home for it: run-cap, acceptance-failed, firefighter and the `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
-  "held-path": { kind: "approval", actions: ["land", "drop"], always: "firefighter", needs: "held" },
-  "review": { kind: "approval", actions: ["land", "drop"], always: "firefighter", needs: "review" },
-  "proposal": { kind: "approval", actions: ["start", "deny"], always: "start" },
+  "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "firefighter", needs: "held" },
+  "review": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "firefighter", needs: "review" },
+  "proposal": { kind: "approval", name: "Proposal", actions: ["start", "deny"], always: "start" },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop; firefighter): one reason now, so it lists both.
-  "question": { kind: "input", actions: ["answer", "drop", "decide", "deny", "firefighter"], always: "recommended", needs: "question" },
-  "manual": { kind: "input", actions: ["checked", "deny"], always: "", needs: "manual" },
-  "no-commit": { kind: "input", actions: ["rerun", "close"], always: "firefighter" },
-  "part-dropped": { kind: "input", actions: ["rerun", "close"], always: "" },
-  "triage-failed": { kind: "input", actions: ["retry", "close"], always: "retry" },
-  "host-check": { kind: "input", actions: ["checked", "deny"], always: "" },
-  "spec-check": { kind: "input", actions: ["rerun", "close"], always: "firefighter" },
-  "rescue": { kind: "input", actions: ["decide", "drop"], always: "recommended" },
+  "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny", "firefighter"], always: "recommended", needs: "question" },
+  "manual": { kind: "input", name: "Manual check", actions: ["checked", "deny"], always: "", needs: "manual" },
+  "no-commit": { kind: "input", name: "No commit", actions: ["rerun", "close"], always: "firefighter" },
+  "part-dropped": { kind: "input", name: "Part dropped", actions: ["rerun", "close"], always: "" },
+  "triage-failed": { kind: "input", name: "Triage failed", actions: ["retry", "close"], always: "retry" },
+  "host-check": { kind: "input", name: "Manual check", actions: ["checked", "deny"], always: "" },
+  "spec-check": { kind: "input", name: "Spec check", actions: ["rerun", "close"], always: "firefighter" },
+  "rescue": { kind: "input", name: "Question", actions: ["decide", "drop"], always: "recommended" },
   // Not Ask reasons of the spec; no new home is named for them.
-  "run-cap": { kind: "input", actions: ["rerun", "close"], always: "firefighter" },
-  "acceptance-failed": { kind: "input", actions: ["rerun", "close"], always: "firefighter" },
-  "firefighter": { kind: "approval", actions: ["land", "drop"], always: "land" },
+  "run-cap": { kind: "input", name: "Run cap", actions: ["rerun", "close"], always: "firefighter" },
+  "acceptance-failed": { kind: "input", name: "Acceptance failed", actions: ["rerun", "close"], always: "firefighter" },
+  "firefighter": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "land" },
   "proposal-check": proposal,
   "proposal-claude-md": proposal,
   "proposal-skill": proposal,
 } satisfies Record<string, Reason>;
+
+/** The limits on the text a card shows: the case text, and each choice's text. */
+export const LIMITS = { situation: { sentences: 5, chars: 600 }, choice: { sentences: 2, chars: 220 } } as const;
+
+/** The sentences of a text, in order. A full stop inside a word or a path is not an end. */
+export const sentencesOf = (text: string): string[] => text.trim().split(/(?<=[.!?]["')\]]?)\s+/).filter(Boolean);
+
+/**
+ * The text within a limit and the rest. Whole sentences only: the first sentence stays whole even when it is over the
+ * character limit, and later sentences stay while the count and the characters fit.
+ */
+export function limitText(text: string, limit: { sentences: number; chars: number }): { kept: string; rest: string } {
+  const all = sentencesOf(text);
+  let n = 0, len = 0;
+  for (const s of all) {
+    const next = len + (n ? 1 : 0) + s.length;
+    if (n >= limit.sentences || (n > 0 && next > limit.chars)) break;
+    n++; len = next;
+  }
+  return { kept: all.slice(0, n).join(" "), rest: all.slice(n).join(" ") };
+}
 
 /** A reason the table names. A stored Ask keeps its reason as a string. */
 export type AskReason = keyof typeof REASONS;
@@ -159,6 +184,7 @@ export function askOf(item: issues.Issue): Ask | null {
   if (kind !== "input" && kind !== "approval") return null;
   const why = item.fm.why;
   const situation = text(item.fm.situation);
+  const details = text(item.fm.details);
   const effects = lines(item.fm.effects).map(splitPair);
   const recommend = text(item.fm.recommend) ? splitPair(text(item.fm.recommend)) : null;
   return {
@@ -166,6 +192,7 @@ export function askOf(item: issues.Issue): Ask | null {
     ...(text(item.fm.recommended) ? { recommended: text(item.fm.recommended) } : {}),
     why: typeof why === "string" ? why.split(",").map((s) => s.trim()).filter(Boolean) : lines(why),
     ...(situation ? { situation } : {}),
+    ...(details ? { details } : {}),
     ...(effects.length ? { effects: effects.map((e) => ({ action: e.action, text: e.text })) } : {}),
     ...(recommend ? { recommend: { action: recommend.action, why: recommend.text } } : {}),
   };
@@ -185,6 +212,8 @@ export function setAsk(item: issues.Issue, ask: Ask): void {
   item.fm.why = ask.why;
   const situation = flat(ask.situation);
   if (situation) item.fm.situation = situation;
+  const details = flat(ask.details);
+  if (details) item.fm.details = details;
   const effects = (ask.effects ?? []).filter((e) => flat(e.action)).map((e) => `${flat(e.action)}${SEP}${flat(e.text)}`);
   if (effects.length) item.fm.effects = effects;
   if (ask.recommend && flat(ask.recommend.action)) item.fm.recommend = `${flat(ask.recommend.action)}${SEP}${flat(ask.recommend.why)}`;
@@ -192,7 +221,7 @@ export function setAsk(item: issues.Issue, ask: Ask): void {
 
 /** Take the item's Ask off. */
 export function clearAsk(item: issues.Issue): void {
-  for (const k of ["ask", "reason", "question", "options", "recommended", "why", "situation", "effects", "recommend"]) delete item.fm[k];
+  for (const k of ["ask", "reason", "question", "options", "recommended", "why", "situation", "details", "effects", "recommend"]) delete item.fm[k];
 }
 
 /** The prose note of an ask, for the CLI and the history. */

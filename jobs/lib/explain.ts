@@ -12,7 +12,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { awaitsChris, reader, writeList } from "../../todo/lib/store.ts";
-import { ASK_REASONS, actionsOn, askOf, reasonOf, setAsk, type Ask } from "./ask.ts";
+import { ASK_REASONS, LIMITS, actionsOn, askOf, limitText, reasonOf, setAsk, type Ask } from "./ask.ts";
 import { allRuns, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { git } from "./git.ts";
@@ -33,7 +33,7 @@ export type Case =
   | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue }
   | { at: "lesson"; on: string; repo?: Repo; lesson: Lesson };
 
-export type Text = Pick<Ask, "situation" | "effects" | "recommend">;
+export type Text = Pick<Ask, "situation" | "details" | "effects" | "recommend">;
 
 const factoryRepos = (): Repo[] => Object.values(loadRegistry()).filter((r) => r.sandbox);
 const empty = (ask: Ask | null | undefined): ask is Ask => !!ask && !ask.situation?.trim();
@@ -120,9 +120,10 @@ const REPLY = (acts: string[], decision: boolean): string => `# Your reply
 
 Reply with one JSON object and nothing else:
 
-{"situation": "<2 to 5 plain sentences naming the files, what they are for, and what the run did>", "effects": [{"action": "<an action, or decide:<option label>>", "text": "<what happens in this case: to the named things, downstream, what stays undone, what it unblocks, and whether it does the work or only records a claim>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null}
+{"situation": "<2 to 5 plain sentences naming the files, what they are for, and what the run did>", "effects": [{"action": "<an action, or decide:<option label>>", "text": "<at most 2 short sentences: what happens in this case: to the named things, downstream, what stays undone, what it unblocks, and whether it does the work or only records a claim>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null, "details": "<optional: anything more Chris may want, kept out of the text above>"}
 
 Rules:
+- Hard limits: "situation" is at most ${LIMITS.situation.sentences} sentences and ${LIMITS.situation.chars} characters. Each effect "text" is at most ${LIMITS.choice.sentences} sentences and ${LIMITS.choice.chars} characters. Put anything more in "details", which Chris reads only if he opens it. Text over a limit is moved to "details" by sentence.
 - Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. No action${decision ? " and no option" : ""} is left without an effect.
 - State only what you read. Where you did not read something, say "I did not check X".
 - Do not repeat the button's label or what the store does (an Ask cleared, a note added); say what happens to the named things in this case.
@@ -163,19 +164,26 @@ export function parseExplain(output: string, actions: string[]): Text | string {
     try { raw = JSON.parse(s); break; } catch {}
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
-  const situation = str(raw.situation);
+  const moved: string[] = [];
+  const keep = (t: string, limit: { sentences: number; chars: number }): string => {
+    const { kept, rest } = limitText(t, limit);
+    if (rest) moved.push(rest);
+    return kept;
+  };
+  const situation = keep(str(raw.situation), LIMITS.situation);
   if (!situation) return "no situation";
   if (!Array.isArray(raw.effects)) return "no effects list";
   const effects: { action: string; text: string }[] = [];
   for (const e of raw.effects) {
     const action = str(e?.action), text = str(e?.text);
-    if (actions.includes(action) && text && !effects.some((x) => x.action === action)) effects.push({ action, text });
+    if (actions.includes(action) && text && !effects.some((x) => x.action === action)) effects.push({ action, text: keep(text, LIMITS.choice) });
   }
   const missing = actions.filter((a) => !effects.some((e) => e.action === a));
   if (missing.length) return `no effect for ${missing.join(", ")}`;
   const rec = raw.recommend && typeof raw.recommend === "object" ? { action: str(raw.recommend.action), why: str(raw.recommend.why) } : null;
   const recommend = rec && rec.action && actions.includes(rec.action) ? rec : undefined;
-  return { situation, effects: actions.map((a) => effects.find((e) => e.action === a)!), ...(recommend ? { recommend } : {}) };
+  const details = [...moved, str(raw.details)].filter(Boolean).join(" ");
+  return { situation, ...(details ? { details } : {}), effects: actions.map((a) => effects.find((e) => e.action === a)!), ...(recommend ? { recommend } : {}) };
 }
 
 const sameAsk = (a: Ask | null | undefined, b: Ask): boolean => !!a && reasonOf(a.reason) === reasonOf(b.reason) && a.question === b.question && !a.situation?.trim();

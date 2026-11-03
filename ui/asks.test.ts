@@ -116,7 +116,7 @@ describe("asks", () => {
     expect(CASES.question()[0].problem).toBe("The worker on aleph-27 asked: Which port?");
     expect(CASES.question()[0].actions.map((a) => a.label)).toEqual(["Answer and rerun", "Drop the job"]);
     expect(CASES["no-commit"]()[0].problem).toBe("The last 3 runs of aleph-387 ended with no commit, so the factory stopped starting it.");
-    expect(CASES["no-commit"]()[0].actions.map((a) => a.label)).toEqual(["Run it again", "Close the issue"]);
+    expect(CASES["no-commit"]()[0].actions.map((a) => a.label)).toEqual(["Start a new run", "Close the issue"]);
     expect(CASES["run-cap"]()[0].problem).toBe("The factory started aleph-387 3 times in one hour, so it stopped starting it until you run it again.");
     expect(CASES["triage-failed"]()[0].problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
     expect(CASES["triage-failed"]()[0].actions.map((a) => a.label)).toEqual(["Run triage again", "Close the issue"]);
@@ -165,9 +165,36 @@ describe("asks", () => {
     expect(it.kind).toBe("input");
     expect(it.problem).toBe("The spec check found that the spec of aleph-387 cannot be met as written: spec check: abc123 hold: the Oracle clause is outside the Edit surface.");
     expect(it.actions.map((a) => a.act)).toEqual(["rerun", "close"]);
-    expect(it.actions[0].label).toBe("Run it again");
+    expect(it.actions[0].label).toBe("Start the goal");
     expect(it.actions[0].hint).toBe("Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first.");
     expect(it.always).toMatchObject({ action: "firefighter" });
+  });
+
+  test("rerun is labelled by what it does for the reason, never Run it again", () => {
+    const rerunLabel = (reason: string) => CASES[reason]().flatMap((i) => i.actions).find((a) => a.act === "rerun")?.label;
+    expect(rerunLabel("spec-check")).toBe("Start the goal");
+    expect(rerunLabel("no-commit")).toBe("Start a new run");
+    expect(rerunLabel("part-dropped")).toBeUndefined(); // an Ask with options decides instead
+    const bare = ofIssues(issue({ reason: "part-dropped", question: "A goal was dropped." }))[0];
+    expect(bare.actions.find((a) => a.act === "rerun")?.label).toBe("Close as done");
+    expect(rerunLabel("run-cap")).toBe("Start it again");
+    expect(rerunLabel("acceptance-failed")).toBe("Start it again");
+    for (const reason of Object.keys(CASES)) for (const a of CASES[reason]().flatMap((i) => i.actions)) expect(a.label).not.toBe("Run it again");
+  });
+
+  test("a card carries the reason's name, and every reason has one", () => {
+    for (const [reason, r] of Object.entries(ASK_REASONS)) { expect(r.name.length).toBeGreaterThan(0); expect(CASES[reason]()[0].name).toBe(r.name); }
+  });
+
+  test("an Ask explained before the limits shows 5 sentences, 2 per choice, and the rest as details", () => {
+    const nine = Array.from({ length: 9 }, (_, i) => `Sentence ${i + 1}.`).join(" ");
+    STORE = { situation: nine, details: "Extra.", effects: [{ action: "rerun", text: "One. Two. Three. Four." }, { action: "close", text: "Closes." }] };
+    try {
+      const [it] = ofIssues(issue({ reason: "spec-check", question: "q" }));
+      expect(it.situation).toBe("Sentence 1. Sentence 2. Sentence 3. Sentence 4. Sentence 5.");
+      expect(it.actions[0].hint).toBe("One. Two.");
+      expect(it.more).toEqual(["Sentence 6. Sentence 7. Sentence 8. Sentence 9.", "Start the goal: Three. Four.", "Extra."]);
+    } finally { STORE = undefined; }
   });
 
   test("a goal's ask names the issue and goal in its action args", () => {
