@@ -292,6 +292,21 @@ The planner runs detached: each detached start is a transient systemd unit of it
 
 A reply that fails the check, or a planner that exits non-zero, is retried once at once. After a second failure the goal starts as one worker run, as before, with a note on the issue that says why; the ledger's two failed plan runs keep it from being planned again. Plan runs count toward the day cap, and the UI shows them like triage runs ("Planning", "Split", "No plan"); a `planned` parent is not in the Queued list.
 
+### Spec check (2 Nov)
+
+The spec check runs in a process of its own, which the dispatch starts; the unit does not run it (`jobs/lib/unit.ts` has no `checkSpec` and no spec-check phase).
+
+When the dispatch starts it: `dispatchIssues` (`jobs/lib/factory.ts`) starts a goal's spec check for each goal whose repo has `author` and `sandbox` set and that is not a research goal, when the goal's current spec version has no recorded verdict. It does this through `specCheckDetached` (`jobs/lib/launch.ts`), which starts `aleph spec-check <repo>-<n>` detached and does nothing for a repo without `sandbox`. The dispatch records a `spec-check` hold on the goal with the reason `spec check running`, and skips the goal.
+
+How it runs: `runSpecCheck` (`jobs/lib/spec-check.ts`) runs under the goal's lock `spec-check-<repo>-<n>` (`specCheckLock`). A check counts as running while that lock is held, or for 16 minutes after the dispatch starts it and before the process takes the lock (`markLaunched`, `specChecking`), so a second dispatch starts no second check. `checkSpec` clones the repo, checks out `origin/<main>`, and makes one read-only run of the agent with the model `claude-opus-5-5` (`SPEC_CHECK_MODEL`), the tools Read, Grep and Glob, and a time box of 900 s. It writes the note `spec check: <version> <verdict>` on the issue. When the process ends it calls `dispatchDetached()`, so a goal that passed starts at once.
+
+What each verdict does:
+- `pass`: the goal starts.
+- `hold`: the check sets a `spec-check` Ask on the issue (`askChris`) and the dispatch records the hold `spec-check` with the problems. While the Ask is open the goal is skipped (`spec check held`). Once the Ask is gone, for example because Chris answered with a rerun and no edit, the goal starts, and that version is not checked again.
+- `error` (the reply has no `VERDICT:` line, or the clone, fetch, checkout or agent run failed): the note records the error, the goal starts, and that version is not checked again.
+
+Cost: a check that reports a cost is appended to `spec-checks.jsonl` (`recordSpecCost`). `spentToday` counts it in the day's spend. `runsToday` does not count it toward the run cap.
+
 ### Firefighter (28 Oct)
 
 The firefighter does the watching and acting that Claude did by hand in the chat (`jobs/lib/firefighter.ts`, called from `aleph tick` by `firefighterStep` in `jobs/lib/factory.ts`, after the triage and the episodes, held or not: the hold is what it clears; only the pause stops it). Each tick code takes a snapshot of factory repos: open jobs whose last run is `needs-you`, `stuck` or `failed`; a goal with more than 3 agent runs started in 30 minutes; a red baseline in `baseline.json`; open `needs-chris` issues; runs `running` whose process is gone. Each event has a key that changes when the thing does (the run's folder, the baseline's commit, the issue's note count). The keys are kept in `firefighter.json` in the factory directory, saved every tick, so an event is judged once and one that clears and comes back is new again. No new key: no run, no cost.
