@@ -36,3 +36,19 @@ test("a factory log line written under the fixture environment lands under the f
   const live = join(process.env.HOME || "", ".aleph", "factory", "tick.log");
   if (existsSync(live)) expect(readFileSync(live, "utf8")).not.toContain("demo: acceptance not run: fetch failed");
 });
+
+test("every fixture project has a real origin under dest that fetches and matches main", () => {
+  const dest = join(dir, "fx");
+  buildReviewFixture(dest);
+  const git = (key: string, ...args: string[]) => {
+    const p = Bun.spawnSync(["git", "-C", join(dest, "repos", key), ...args], { stdout: "pipe", stderr: "pipe" });
+    return { code: p.exitCode, out: p.stdout.toString().trim() };
+  };
+  const keys = Object.keys(JSON.parse(readFileSync(join(import.meta.dir, "repos.json"), "utf8")));
+  expect(keys.length).toBeGreaterThan(0);
+  for (const key of keys) {
+    expect(git(key, "fetch", "-q", "origin").code).toBe(0);
+    expect(git(key, "remote", "get-url", "origin").out.startsWith(dir)).toBe(true);
+    expect(git(key, "rev-parse", "origin/main").out).toBe(git(key, "rev-parse", "main").out);
+  }
+});

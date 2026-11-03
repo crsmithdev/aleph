@@ -52,11 +52,16 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   }
   writeFileSync(join(dest, "repos.json"), JSON.stringify(registry, null, 2) + "\n");
   // Each project is a git repo with one commit, so the pages that read a repo's log and branches find one.
-  for (const r of Object.values(registry) as { path: string }[]) {
+  // Each also gets a bare `origin` under `<dest>/remotes/<key>.git`, so `git fetch origin` works.
+  for (const [key, r] of Object.entries(registry) as [string, { path: string }][]) {
+    const bare = join(dest, "remotes", `${key}.git`);
     mkdirSync(r.path, { recursive: true });
+    mkdirSync(join(dest, "remotes"), { recursive: true });
     sh(r.path, "git", "init", "-q", "-b", "main");
     sh(r.path, "git", "commit", "-q", "--allow-empty", "-m", "start");
-    sh(r.path, "git", "update-ref", "refs/remotes/origin/main", "HEAD");
+    sh(dest, "git", "init", "-q", "--bare", "-b", "main", bare);
+    sh(r.path, "git", "remote", "add", "origin", bare);
+    sh(r.path, "git", "push", "-q", "-u", "origin", "main");
   }
   const shift = Date.now() - 2 * 3600_000 - ANCHOR;
   copyPlain(join(src, "jobs"), join(dest, "jobs"));
