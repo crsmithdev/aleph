@@ -38,13 +38,15 @@ function follow(dir: string, options: WatchOptions, counts: (file: string) => bo
   watchers.push(w);
 }
 
+/** A run's folder also holds its worker's whole file tree, so only the two files the page reads count. */
+export const countsInLedger = (file: string): boolean => /^[^/]+\/(state\.json|call\.md)$/.test(file);
+/** The logs change on every line of output and the page does not show them. */
+export const countsInFactory = (file: string): boolean => !file.endsWith(".log");
+
 function start(): void {
   const { store, ledger } = layout();
-  // A run's folder also holds its worker's whole file tree, so only the two files the page reads count.
-  follow(ledger, { recursive: true }, (file) => /^[^/]+\/(state\.json|call\.md)$/.test(file));
-  // The logs change on every line of output and the page does not show them.
-  const notLog = (file: string) => !file.endsWith(".log");
-  follow(factoryDir(), {}, notLog);
+  follow(ledger, { recursive: true }, countsInLedger);
+  follow(factoryDir(), {}, countsInFactory);
   // Each issue write moves this ref; the page reads the issues from it.
   follow(join(store, ".git", "refs", "remotes", "origin"), {}, (file) => file === "main");
   ping = setInterval(() => send(PING), PING_MS);

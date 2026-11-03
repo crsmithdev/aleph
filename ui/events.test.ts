@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync, renameSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { countsInFactory, countsInLedger } from "./api/events.ts";
 
 let base: string, runs: string, factory: string, ref: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void;
@@ -56,11 +57,10 @@ test("a state.json moved into place sends a change, as the ledger writes it", as
   expect(await changeAfter(() => { writeFileSync(tmp, "{}"); renameSync(tmp, join(runs, "old", "state.json")); }, 5000)).toBe(true);
 });
 
-test("a file in a worker's tree sends no change, also one named state.json", async () => {
-  mkdirSync(join(runs, "old", "work", "jobs", "a"), { recursive: true });
-  expect(await changeAfter(() => { writeFileSync(join(runs, "old", "work", "x.ts"), "x"); writeFileSync(join(runs, "old", "work", "jobs", "a", "state.json"), "{}"); writeFileSync(join(runs, "old", ".state.json.1"), "{}"); }, 1500)).toBe(false);
-});
-
-test("a log write sends no change", async () => {
-  expect(await changeAfter(() => { writeFileSync(join(runs, "old", "output.log"), "x"); writeFileSync(join(factory, "tick.log"), "x"); }, 1500)).toBe(false);
+// The watchers pass names relative to the folder, as the tests above show; these files must not count.
+test("a file in a worker's tree, a temp state file and a log count as no change", () => {
+  for (const f of ["old/work/x.ts", "old/work/jobs/a/state.json", "old/.state.json.1", "old/output.log"]) expect(countsInLedger(f)).toBe(false);
+  for (const f of ["old/state.json", "new/call.md"]) expect(countsInLedger(f)).toBe(true);
+  expect(countsInFactory("tick.log")).toBe(false);
+  expect(countsInFactory("paused")).toBe(true);
 });

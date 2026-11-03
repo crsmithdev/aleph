@@ -40,7 +40,7 @@ export { setPaused };
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
-import { DAY_CAP, rescueOn } from "./settings.ts";
+import { DAY_CAP, goalLockWaitMs, rescueOn } from "./settings.ts";
 
 
 /**
@@ -177,7 +177,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     if (first.kind !== "ready") { recordHold(name, first.kind, first.why); skipped.push(`${name}: ${first.why}`); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
-    const release = await lock(`goal-${name}`);
+    const release = await lock(`goal-${name}`, goalLockWaitMs());
     if (!release) { recordHold(name, "locked", "another dispatch is starting it"); skipped.push(`${name}: another dispatch is starting it`); continue; }
     try {
       const jobs = allJobs();

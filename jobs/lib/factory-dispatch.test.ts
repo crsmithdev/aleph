@@ -367,14 +367,16 @@ describe("each skip in the goal loop gets one hold record", () => {
     const id = goal();
     const name = `fac-${id}`;
     const release = (await lock(`goal-${name}`, 0))!;
+    process.env.ALEPH_GOAL_LOCK_WAIT_MS = "200";
     try {
       const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
       expect(out.skipped).toEqual([`${name}: another dispatch is starting it`]);
     } finally {
+      delete process.env.ALEPH_GOAL_LOCK_WAIT_MS;
       release();
     }
     expect(readHolds([name])).toMatchObject([{ kind: "locked", text: "another dispatch is starting it" }]);
-  }, 40_000);
+  });
 
   test("a goal parked after the first read", async () => {
     const id = goal();

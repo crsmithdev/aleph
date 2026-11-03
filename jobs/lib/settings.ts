@@ -76,6 +76,8 @@ export const checkSeconds = () => num("ALEPH_CHECK_TIMEOUT", 1200);
 export const reviewSeconds = () => num("ALEPH_REVIEW_TIMEOUT", 600);
 export const reviewDiffMax = () => num("ALEPH_REVIEW_DIFF_MAX", 200000);
 export const fixRounds = () => num("ALEPH_FIX_ROUNDS", 2);
+/** How long a dispatch waits for another dispatch's goal lock before it skips the goal. */
+export const goalLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 export const landBatch = () => Math.max(1, Math.floor(num("ALEPH_LAND_BATCH", 8)) || 1);

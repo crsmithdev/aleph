@@ -5,7 +5,7 @@ import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { correctionsDue, dispatchIssues, episodeStep, report, setPaused, stalled, stallStep } from "./factory.ts";
 import { spentToday, runsToday, health, writeBaseline } from "./factory-status.ts";
-import { readRun, writeRun } from "./ledger.ts";
+import { lock, readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
 
@@ -202,6 +202,21 @@ test("stalled counts a red baseline only on the commit origin/main still has", a
   expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
   await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
   expect(stalled()).toEqual([]);
+});
+
+test("writeBaseline waits for the baseline-file lock, here and in another process, and both entries survive", async () => {
+  const file = join(ctx.base, "factory", "baseline.json");
+  const release = (await lock("baseline-file"))!;
+  const child = Bun.spawn(["bun", "-e", `import { writeBaseline } from ${JSON.stringify(join(import.meta.dir, "factory-status.ts"))};
+await writeBaseline("b", () => ({ repo: "b", commit: "2", ok: true }));`], { env: { ...process.env }, stdout: "ignore", stderr: "pipe" });
+  const here = writeBaseline("a", () => ({ repo: "a", commit: "1", ok: true }));
+  await Bun.sleep(500);
+  expect(existsSync(file)).toBe(false);
+  expect(child.exitCode).toBeNull();
+  release();
+  expect(await here).toBe(true);
+  expect(await child.exited, await new Response(child.stderr).text()).toBe(0);
+  expect(Object.keys(JSON.parse(readFileSync(file, "utf8"))).sort()).toEqual(["a", "b"]);
 });
 
 test("a blocked goal does not stall; a live agent run leaves a ready goal out", async () => {

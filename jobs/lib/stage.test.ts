@@ -1,10 +1,19 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { aleph, repo, seedGoal, seedItem, seedRun, setup, sh, teardown } from "../cli.helpers";
+import { aleph, env, repo, seedGoal, seedItem, seedRun, setup, sh, teardown } from "../cli.helpers";
 import * as issues from "../../todo/lib/todo.ts";
+import { loadRegistry } from "./ledger.ts";
 import { subjectOf } from "./stage.ts";
+import { repoStages } from "./status.ts";
 
-beforeAll(setup);
-afterAll(teardown);
+// The rows call repoStages in-process, as `aleph status <ref>` does, under the CLI's environment; one row runs the CLI.
+let restore: () => void;
+beforeAll(async () => {
+  await setup();
+  const saved = { ...process.env };
+  Object.assign(process.env, env());
+  restore = () => { for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k]; Object.assign(process.env, saved); };
+});
+afterAll(() => { restore(); teardown(); });
 
 // One fixture item per stage, each built through the CLI seam of cli.helpers:
 // seeded new-shape item and run files.
@@ -109,7 +118,10 @@ const GOALS_DOTTED: Row[] = [
 
 const built = new Map<string, Promise<number | string>>();
 const idOf = (row: Row) => { if (!built.has(row.name)) built.set(row.name, row.build()); return built.get(row.name)!; };
-const statusOf = async (row: Row) => { const r = await aleph(["status", ref(await idOf(row)), "--json"]); expect(r.code, r.stderr).toBe(0); return r.json; };
+const statusOf = async (row: Row) => {
+  const n = String(await idOf(row));
+  return repoStages(loadRegistry().fac, { fetch: true, items: [n.includes(".") ? n : Number(n)] })[0];
+};
 
 // The rows run one after another: each writes to the one store.
 for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new shape", GOALS_NEW], ["goals, dotted", GOALS_DOTTED]] as const) {
@@ -120,12 +132,20 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new sha
         expect(s).toMatchObject({ id: ref(await idOf(row)), stage: row.stage, ...(row.of ? { of: row.of } : {}) });
         if (!row.of) expect(s.of).toBeUndefined();
         expect(s.why).toMatch(row.why ?? /./);
-        const text = await aleph(["status", ref(await idOf(row))]);
-        expect(text.stdout.trim()).toBe(`${s.id} ${s.stage}: ${s.why}`.replace(/\bfac-(?=\d)/g, ""));
-      }, 90_000);
+      });
     }
   });
 }
+
+test("aleph status prints the same stage as JSON and as one line, with the repo key cut from local refs", async () => {
+  const id = await idOf(GOALS_NEW[1]);
+  const r = await aleph(["status", ref(id), "--json"]);
+  expect(r.code, r.stderr).toBe(0);
+  expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(GOALS_NEW[1]))));
+  expect(r.json.why).toMatch(/after fac-\d/);
+  const text = await aleph(["status", ref(id)]);
+  expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage}: ${r.json.why}`.replace(/\bfac-(?=\d)/g, ""));
+}, 90_000);
 
 // The open issue with no spec: triage sorts it in a sandbox repo only. `demo` has no `sandbox`; `fac` has it.
 describe("an open issue with no spec, by repo", () => {
