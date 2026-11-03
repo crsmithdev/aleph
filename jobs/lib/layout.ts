@@ -3,7 +3,7 @@
  * reader (docs/specs/2026-10-30-work-model.md, "Migration rules"): the new layout
  * (issues, runs, sandbox, factory) under ~/.aleph. The environment wins, variable by variable.
  */
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -28,4 +28,9 @@ export function factoryLog(line: string): void {
   const dir = layout().factory;
   mkdirSync(dir, { recursive: true });
   appendFileSync(join(dir, "tick.log"), `${new Date().toISOString()} ${line}\n`);
+}
+
+/** The whole tick.log, or "" when there is none. */
+export function readFactoryLog(): string {
+  try { return readFileSync(join(layout().factory, "tick.log"), "utf8"); } catch { return ""; }
 }

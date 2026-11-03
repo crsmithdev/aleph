@@ -23,7 +23,7 @@ import { ciStep } from "./lib/ci.ts";
 import { acceptanceStep, behind, correctionsStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
-import { smokeFile, factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
+import { factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
 import { factoryLog } from "./lib/layout.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import type { Fate } from "./lib/outcome.ts";
@@ -354,7 +354,7 @@ async function tickCmd(): Promise<void> {
   const episodes = await episodeStep();
   try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
   try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }
-  await smokeStep(smokeFile());
+  await smokeStep();
   const f = await firefighterStep();
   out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f?.run ? { firefighter: f } : {}) });
 }

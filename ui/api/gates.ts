@@ -5,12 +5,12 @@
  * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
  * `POST /api/standing/:reason` (standing.ts).
  */
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, readAlways, routeOf } from "../../jobs/lib/ask.ts";
 import { ciLine, redCi } from "../../jobs/lib/ci.ts";
-import { allHolds, baselines, factoryDir, factoryRepos, gates, redLine, waiting } from "../../jobs/lib/factory-status.ts";
+import { allHolds, baselines, factoryRepos, gates, redLine, waiting } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
+import { readFactoryLog } from "../../jobs/lib/layout.ts";
 import { AWAITING_CAP, CAP_KEYS, DAY_CAP, LIVE_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
 import { reader } from "../../todo/lib/store.ts";
 import type { AskItem } from "../asks.ts";
@@ -65,8 +65,7 @@ const REF = /\b[a-z][\w.]*?-\d+(?:\.\d+)?\b/i;
 
 /** The Rule and Firefighter lines of tick.log: the Always actions (`always:`, `<name>: always:`, `standing:`) and the firefighter's lines. */
 function tickEntries(): LogEntry[] {
-  let raw = "";
-  try { raw = readFileSync(join(factoryDir(), "tick.log"), "utf8"); } catch { return []; }
+  const raw = readFactoryLog();
   const out: LogEntry[] = [];
   for (const l of raw.split("\n")) {
     const m = /^(\S+) (.*)$/.exec(l);

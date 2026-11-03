@@ -6,7 +6,7 @@
  * commit at refs/aleph/facts, so `aleph status` inside the sandbox gives the
  * same answer as Chris's session from the same bundle.
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readFetched, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -17,7 +17,7 @@ import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type S
 import { layout } from "./layout.ts";
 
 export const acceptanceDir = () => join(layout().factory, "acceptance");
-export const acceptanceFile = (key: string, id: number | string) => join(acceptanceDir(), `${key}-${id}.json`);
+const acceptanceFile = (key: string, id: number | string) => join(acceptanceDir(), `${key}-${id}.json`);
 
 export interface Accepted {
   /** `pass`, `skipped` (no runnable command), or `fail`. */
@@ -41,6 +41,12 @@ export interface FailedTest { file?: string; name: string }
 
 /** What a failure runs again: `rerun`, on the commit that failed. */
 export interface Retest { commit: string; command: string; rerun: string; tests: FailedTest[]; /** When the wait for a quiet machine began (ISO time). After `MAX_WAIT_MS` the rerun runs whatever the load. */ since?: string }
+
+/** Writes the goal's acceptance record. */
+export function writeRecord(key: string, id: number | string, r: Accepted): void {
+  mkdirSync(acceptanceDir(), { recursive: true });
+  writeFileSync(acceptanceFile(key, id), JSON.stringify(r, null, 2) + "\n");
+}
 
 export function readRecord(key: string, id: number | string): Accepted | null {
   try { return JSON.parse(readFileSync(acceptanceFile(key, id), "utf8")); } catch { return null; }

@@ -21,7 +21,7 @@ import { gitPrelude, q } from "./agent-call.ts";
 import { outcome as agentOutcome } from "./gate.ts";
 import { checkSlot, tell, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
-import { acceptanceDir, acceptanceFile, commitsNaming, readRecord, resultLine, type Accepted, type FailedTest } from "./status.ts";
+import { acceptanceDir, commitsNaming, readRecord, resultLine, writeRecord, type Accepted, type FailedTest } from "./status.ts";
 import { acceptanceFailCap, quietLoad, reviewSeconds, reviewerCmd } from "./settings.ts";
 
 /** The longest a rerun waits for a quiet machine. */
@@ -29,10 +29,6 @@ export const MAX_WAIT_MS = 24 * 3_600_000;
 /** Reruns of a touched test that passed once, before it counts as a flake. */
 const EXTRA_RERUNS = 2;
 
-function writeRecord(key: string, id: number | string, r: Accepted): void {
-  mkdirSync(acceptanceDir(), { recursive: true });
-  writeFileSync(acceptanceFile(key, id), JSON.stringify(r, null, 2) + "\n");
-}
 
 /** A record that ends the goal's acceptance: nothing runs again for it. */
 export const final = (r: Accepted | null): boolean => !!r && (r.result !== "fail" || r.fails >= 2);

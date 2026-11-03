@@ -3,8 +3,8 @@
  * What it reads of its state is in factory-status.ts. Its state lives in
  * ~/.aleph/factory, which no sandbox can see. See docs/specs/2026-10-26-seed-factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
@@ -35,17 +35,13 @@ import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
-import { writeBaseline, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, readStalls, recordHold, redLine, runsToday, spentToday, stallFile } from "./factory-status.ts";
+import { writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
+export { setPaused };
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
 import { DAY_CAP, rescueOn } from "./settings.ts";
 
-export function setPaused(on: boolean): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  if (on) writeFileSync(pauseFile(), new Date().toISOString() + "\n");
-  else rmSync(pauseFile(), { force: true });
-}
 
 /**
  * The facts gate for every landed job of a factory repo that has a commit, no facts marker on its land run and no facts run yet. A land that
@@ -207,7 +203,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       }
       if (d.kind === "no-commit") {
         recordHold(name, d.kind, d.why);
-        writeStreakMark(name);
+        markStreak(name);
         const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
         const bad = askChris(repo, ref, plainAsk("no-commit", text), text);
         if (bad) factoryLog(`${name}: no issue note: ${bad}`);
@@ -219,7 +215,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
         const bad = askChris(repo, ref, plainAsk("run-cap", text), text);
         if (bad) factoryLog(`${name}: no issue note: ${bad}`);
-        else writeCapMark(name);
+        else markCap(name);
         skipped.push(`${name}: ${d.why}`);
         continue;
       }
@@ -247,7 +243,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       }
       const why = await start(repo, name, ref, spec, tier);
       if (why) { recordHold(name, "start", why); skipped.push(`${name}: ${why}`); }
-      else { recordHold(name, "started", "started"); started.push(name); rmSync(capFile(name), { force: true }); if (rerun) clearRerun(name); }
+      else { recordHold(name, "started", "started"); started.push(name); clearCap(name); if (rerun) clearRerun(name); }
     } finally {
       release();
     }
@@ -364,16 +360,6 @@ export async function reacceptReopened(repoKey: string, o: { since?: string; bef
   return lines;
 }
 
-
-const writeStreakMark = (name: string) => {
-  mkdirSync(dirname(streakFile(name)), { recursive: true });
-  writeFileSync(streakFile(name), new Date().toISOString() + "\n");
-};
-
-const writeCapMark = (name: string) => {
-  mkdirSync(dirname(capFile(name)), { recursive: true });
-  writeFileSync(capFile(name), new Date().toISOString() + "\n");
-};
 
 const localDay = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
@@ -520,8 +506,7 @@ export function stalled(jobs = allJobs(), lists = reader()): string[] {
 /** The tick's record of `stalled`: each key with the time a tick first saw it. A key that moved drops out, so its time starts again. */
 export function stallStep(now = Date.now()): void {
   const seen = readStalls();
-  mkdirSync(factoryDir(), { recursive: true });
-  writeFileSync(stallFile(), JSON.stringify(Object.fromEntries(stalled().map((k) => [k, seen[k] ?? new Date(now).toISOString()]))));
+  writeStalls(Object.fromEntries(stalled().map((k) => [k, seen[k] ?? new Date(now).toISOString()])));
 }
 
 /** How far a checkout is behind origin/<main>, with the diff a pull would bring. */

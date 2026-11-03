@@ -3,10 +3,10 @@
  * It owns the choice of checks, the slot, the time limit, the one rerun, the
  * log and the flake record. The caller gives what runs one check.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { factoryDir, flakes, flakyFile, type Flake } from "./factory-status.ts";
-import { checkSlot, lock, onOf, type Check, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { recordFlake } from "./factory-status.ts";
+import { checkSlot, onOf, type Check, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { SCENARIOS } from "./author.ts";
 import { readHidden } from "../../todo/lib/store.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
@@ -29,21 +29,6 @@ export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ 
 
 /** The names on bun's `(fail)` lines, each one once: its summary repeats them. */
 const failedTests = (log: string): string[] => [...new Set(log.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm).map((m) => m[1]))];
-
-/** Add a row to flaky.json under a lock, because runs in other processes add rows too. Returns false when the lock stays busy. */
-async function recordFlake(row: Flake): Promise<boolean> {
-  const release = await lock("flaky");
-  if (!release) return false;
-  try {
-    mkdirSync(factoryDir(), { recursive: true });
-    const tmp = `${flakyFile()}.tmp`;
-    writeFileSync(tmp, JSON.stringify([...flakes(), row], null, 2) + "\n");
-    renameSync(tmp, flakyFile());
-    return true;
-  } finally {
-    release();
-  }
-}
 
 /** Run `fn` holding a check slot: the slot is freed when `fn` settles, also when it throws. */
 export async function withSlot<T>(fn: () => T | Promise<T>): Promise<T> {

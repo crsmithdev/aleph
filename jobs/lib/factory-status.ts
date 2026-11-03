@@ -4,15 +4,15 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { flakeTracker, reader, type Reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { allJobs, isOpen, lastReal, openJob, type Job } from "./job.ts";
 import { asked } from "./ask.ts";
-import { layout } from "./layout.ts";
+import { layout, readFactoryLog } from "./layout.ts";
 import { allRuns, isAwaiting, isWorker, isLive, isStarting, loadRegistry, lock, onOf, type Entry, type Repo } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
@@ -20,7 +20,7 @@ import { AWAITING_CAP, DAY_CAP, LIVE_CAP } from "./settings.ts";
 
 export const factoryDir = () => layout().factory;
 
-export const pauseFile = () => join(factoryDir(), "paused");
+const pauseFile = () => join(factoryDir(), "paused");
 
 export const probeFile = () => join(factoryDir(), "probe.json");
 
@@ -57,6 +57,13 @@ export function recordHold(name: string, kind: string, text: string): void {
 const DAY = 24 * 3600_000;
 
 export const paused = () => existsSync(pauseFile());
+
+/** Pauses the factory (the `paused` file holds the time) or, with `on` false, resumes it. */
+export function setPaused(on: boolean): void {
+  mkdirSync(factoryDir(), { recursive: true });
+  if (on) writeFileSync(pauseFile(), new Date().toISOString() + "\n");
+  else rmSync(pauseFile(), { force: true });
+}
 
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 
@@ -188,15 +195,30 @@ export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: str
   return null;
 }
 
+/** Add a row to flaky.json under a lock, because runs in other processes add rows too. Returns false when the lock stays busy. */
+export async function recordFlake(row: Flake): Promise<boolean> {
+  const release = await lock("flaky");
+  if (!release) return false;
+  try {
+    mkdirSync(factoryDir(), { recursive: true });
+    const tmp = `${flakyFile()}.tmp`;
+    writeFileSync(tmp, JSON.stringify([...flakes(), row], null, 2) + "\n");
+    renameSync(tmp, flakyFile());
+    return true;
+  } finally {
+    release();
+  }
+}
+
 export interface Flake { repo: string; check: string; run: string; at: string; tests?: string[] }
-export const flakyFile = () => join(factoryDir(), "flaky.json");
+const flakyFile = () => join(factoryDir(), "flaky.json");
 export const flakes = (): Flake[] => {
   try { return JSON.parse(readFileSync(flakyFile(), "utf8")); } catch { return []; }
 };
 
 export interface Baseline { repo: string; commit: string; ok: boolean; failed?: string }
 
-export const baselineFile = () => join(factoryDir(), "baseline.json");
+const baselineFile = () => join(factoryDir(), "baseline.json");
 
 export const baselines = (): Record<string, Baseline> => {
   try { return JSON.parse(readFileSync(baselineFile(), "utf8")); } catch { return {}; }
@@ -246,9 +268,13 @@ const STALL_MS = 15 * 60_000;
 /** A land run live for longer than this is stuck: 99% of land runs end within 20 minutes. */
 const LAND_STUCK_MS = 30 * 60_000;
 
-export const stallFile = () => join(factoryDir(), "stalls.json");
+const stallFile = () => join(factoryDir(), "stalls.json");
 
-export const smokeFile = () => join(factoryDir(), "smoke.json");
+/** The tick's record of stalled work: each key with the time a tick first saw it. */
+export function writeStalls(stalls: Record<string, string>): void {
+  mkdirSync(factoryDir(), { recursive: true });
+  writeFileSync(stallFile(), JSON.stringify(stalls));
+}
 
 export const readStalls = (): Record<string, string> => {
   try { return JSON.parse(readFileSync(stallFile(), "utf8")); } catch { return {}; }
@@ -279,7 +305,7 @@ export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {
   const lines: string[] = [];
   const lists = o.lists ?? reader();
   lines.push(...stallLines(now, o.jobs));
-  const smoke = smokeLine(smokeFile());
+  const smoke = smokeLine();
   if (smoke) lines.push(smoke);
   const w = waiting(o.jobs);
   if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
@@ -325,8 +351,7 @@ export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {
 
 /** The firefighter's lines of the factory log in the last 24 hours, newest last, at most `n`: what the Status page shows. */
 export function firefighterLines(now = Date.now(), n = 8): { at: string; line: string }[] {
-  let text = "";
-  try { text = readFileSync(join(factoryDir(), "tick.log"), "utf8"); } catch { return []; }
+  const text = readFactoryLog();
   return text.split("\n").flatMap((l) => {
     const m = /^(\S+) (firefighter[: ].*)$/.exec(l);
     return m && now - Date.parse(m[1]) < DAY ? [{ at: m[1], line: m[2] }] : [];
@@ -382,7 +407,13 @@ export function goalFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Dat
   };
 }
 
-export const streakFile = (name: string) => join(factoryDir(), "streak", `${name}.txt`);
+const streakFile = (name: string) => join(factoryDir(), "streak", `${name}.txt`);
+/** Marks now as when the streak set an Ask on the goal's item. */
+export function markStreak(name: string): void {
+  mkdirSync(dirname(streakFile(name)), { recursive: true });
+  writeFileSync(streakFile(name), new Date().toISOString() + "\n");
+}
+
 /** When the streak last set an Ask on the goal's item (ms), or null. Runs before it no longer count. */
 const streakMark = (name: string): number | null => {
   if (!existsSync(streakFile(name))) return null;
@@ -400,7 +431,18 @@ function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   return n;
 }
 
-export const capFile = (name: string) => join(factoryDir(), "cap", `${name}.txt`);
+const capFile = (name: string) => join(factoryDir(), "cap", `${name}.txt`);
+
+/** Marks that the cap's Ask was set for the goal. */
+export function markCap(name: string): void {
+  mkdirSync(dirname(capFile(name)), { recursive: true });
+  writeFileSync(capFile(name), new Date().toISOString() + "\n");
+}
+
+/** Clears the cap mark: a start has followed the Ask. */
+export function clearCap(name: string): void {
+  rmSync(capFile(name), { force: true });
+}
 
 /** Whether the cap's Ask was set for the goal and no start has followed. */
 const capMarked = (name: string): boolean => existsSync(capFile(name));
