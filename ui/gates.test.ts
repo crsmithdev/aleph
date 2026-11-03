@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gate.ts";
+import { DAY_CAP, LIVE_CAP } from "../jobs/lib/settings.ts";
 import { gatesBody, securityFacts, splitAsks } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
@@ -55,7 +56,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
   expect(Object.keys(d).sort()).toEqual(["asks", "chores", "factory", "gated", "held", "log", "main", "now", "repoHeld", "rules", "sandbox"]);
-  expect(Object.keys(d.factory).sort()).toEqual(["awaiting", "awaitingCap", "dayCap", "hold", "liveCap", "liveRuns", "paused", "probe", "runsToday"]);
+  expect(Object.keys(d.factory).sort()).toEqual(["awaiting", "awaitingCap", "capEnv", "dayCap", "hold", "liveCap", "liveRuns", "paused", "probe", "runsToday"]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
   const by = (k: string) => d.rules.find((r: any) => r.reason === k);
@@ -146,4 +147,46 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toContain('aria-current="true">You<');
   expect(h).toContain("rescue: set to recommended");
   expect(h).not.toContain("rescue: recommended<");
+});
+
+const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
+const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/gates/caps", { method: "POST", headers, body: JSON.stringify(b) });
+
+test("POST /api/gates/caps merges keys, keeps awaiting, and the readers see them", async () => {
+  const restore = withEnv({ ALEPH_DAY_CAP: "", ALEPH_LIVE_CAP: "" });
+  try {
+    writeFileSync(capsPath(), JSON.stringify({ awaiting: 7 }));
+    const r = await postCaps({ day: 20, live: 4 });
+    expect(r.status).toBe(200);
+    expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ awaiting: 7, day: 20, live: 4 });
+    expect(await r.json()).toEqual({ day: 20, live: 4, awaiting: 7 });
+    expect(DAY_CAP()).toBe(20);
+    expect(LIVE_CAP()).toBe(4);
+  } finally { restore(); }
+});
+
+test("POST /api/gates/caps refuses a missing header with 403 and bad values with 422, and leaves the file", async () => {
+  const seed = JSON.stringify({ day: 9, awaiting: 2 });
+  writeFileSync(capsPath(), seed);
+  expect((await postCaps({ day: 5 }, {})).status).toBe(403);
+  for (const v of [0, -1, 2.5, "x"]) {
+    const r = await postCaps({ day: v });
+    expect(r.status).toBe(422);
+    expect(typeof (await r.json()).error).toBe("string");
+  }
+  expect(readFileSync(capsPath(), "utf8")).toBe(seed);
+});
+
+test("writing awaiting replaces the old waiting key", async () => {
+  writeFileSync(capsPath(), JSON.stringify({ waiting: 3 }));
+  expect((await postCaps({ awaiting: 3 })).status).toBe(200);
+  expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ awaiting: 3 });
+});
+
+test("gatesBody marks a cap overridden only for a non-empty ALEPH_* variable", async () => {
+  const restore = withEnv({ ALEPH_DAY_CAP: "3", ALEPH_LIVE_CAP: "", ALEPH_AWAITING_CAP: "" });
+  try {
+    const d: any = await body();
+    expect(d.factory.capEnv).toEqual({ day: true, live: false, awaiting: false });
+  } finally { restore(); }
 });

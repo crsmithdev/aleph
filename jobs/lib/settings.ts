@@ -7,7 +7,7 @@
  * Each function reads at each call: a test changes the environment in-process, and launch.ts hands
  * every ALEPH_* variable to the units it starts.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { layout } from "./layout.ts";
@@ -21,6 +21,28 @@ function capsFile(): Record<string, unknown> {
     return c && typeof c === "object" && !Array.isArray(c) ? c : {};
   } catch { return {}; }
 }
+
+export const CAP_KEYS = ["day", "live", "awaiting"] as const;
+export type CapKey = (typeof CAP_KEYS)[number];
+
+/** Merges the given caps into caps.json: whole file to a temp file, then a rename. Writes `awaiting`, drops the old `waiting`. Throws on a value that is not an integer of 1 or more. */
+export function writeCaps(patch: Partial<Record<CapKey, unknown>>): Record<string, unknown> {
+  for (const k of CAP_KEYS) {
+    const v = patch[k];
+    if (v !== undefined && !(typeof v === "number" && Number.isInteger(v) && v >= 1)) throw new Error(`${k} must be an integer of 1 or more`);
+  }
+  const next: Record<string, unknown> = { ...capsFile() };
+  for (const k of CAP_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
+  if (patch.awaiting !== undefined) delete next.waiting;
+  const file = join(layout().factory, "caps.json");
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(next, null, 2) + "\n");
+  renameSync(tmp, file);
+  return next;
+}
+
+/** Whether the environment variable overrides caps.json: the same rule as cap(). */
+export const capEnvSet = (envName: string): boolean => (process.env[envName] ?? "") !== "";
 
 /** The environment variable first, then caps.json, then the default. */
 function cap(envName: string, key: string, dflt: number): number {

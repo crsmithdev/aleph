@@ -11,6 +11,7 @@ import { ASK_REASONS, readAlways, routeOf } from "../../jobs/lib/ask.ts";
 import { ciLine, redCi } from "../../jobs/lib/ci.ts";
 import { allHolds, baselines, factoryDir, factoryRepos, gates, redLine, waiting } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
+import { AWAITING_CAP, CAP_KEYS, DAY_CAP, LIVE_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
 import { reader } from "../../todo/lib/store.ts";
 import type { AskItem } from "../asks.ts";
 import { runCli } from "../cli.ts";
@@ -129,7 +130,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks">, securi
   const f = state.factory;
   return {
     now: state.now,
-    factory: { paused: f.paused, hold: f.hold, probe: f.probe, liveRuns: f.liveRuns, liveCap: f.liveCap, runsToday: f.runsToday, dayCap: f.dayCap, awaiting: waiting(jobs), awaitingCap: f.awaitingCap },
+    factory: { paused: f.paused, hold: f.hold, probe: f.probe, liveRuns: f.liveRuns, liveCap: f.liveCap, runsToday: f.runsToday, dayCap: f.dayCap, awaiting: waiting(jobs), awaitingCap: f.awaitingCap, capEnv: { day: capEnvSet("ALEPH_DAY_CAP"), live: capEnvSet("ALEPH_LIVE_CAP"), awaiting: capEnvSet("ALEPH_AWAITING_CAP") } },
     gated: gates({ jobs }),
     main: mainCi(),
     ...splitAsks(state.asks),
@@ -144,6 +145,15 @@ export const routes: Routes = {
   "GET /api/gates": async () => {
     const [{ state }, security] = await Promise.all([loadState(), securityFacts()]);
     return Response.json(gatesBody(state, security));
+  },
+  "POST /api/gates/caps": async (req) => {
+    if (!sameSite(req)) return text("forbidden", 403);
+    const body: any = await req.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return Response.json({ error: "body must be a JSON object" }, { status: 422 });
+    const patch: Record<string, unknown> = {};
+    for (const k of CAP_KEYS) if (k in body) patch[k] = body[k];
+    try { writeCaps(patch); } catch (e) { return Response.json({ error: (e as Error).message }, { status: 422 }); }
+    return Response.json({ day: DAY_CAP(), live: LIVE_CAP(), awaiting: AWAITING_CAP() });
   },
   "POST /api/gates/revoke/:reason": async (req, params) => {
     if (!sameSite(req)) return text("forbidden", 403);
