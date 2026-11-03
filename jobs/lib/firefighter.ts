@@ -113,16 +113,20 @@ function saveSnapshot(events: Event[]): void {
 export type Action =
   | { do: "land"; job: string }
   | { do: "drop"; job: string; reason: string; after?: string[]; fate?: Fate }
-  | { do: "close"; repo: string; n: number; note: string }
-  | { do: "note"; repo: string; n: number; text: string }
+  | { do: "close"; repo: string; n: number | string; note: string }
+  | { do: "note"; repo: string; n: number | string; text: string }
   | { do: "add"; repo: string; title: string; body: string }
   | { do: "flake"; repo: string; text: string }
-  | { do: "answer"; repo: string; n: number; note: string; after?: string[] }
-  | { do: "edit-goal"; repo: string; n: number; body?: string; after?: string[] }
+  | { do: "answer"; repo: string; n: number | string; note: string; after?: string[] }
+  | { do: "edit-goal"; repo: string; n: number | string; body?: string; after?: string[] }
   | { do: "tell"; text: string };
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
-const num = (v: unknown): number | null => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null);
+/** An issue number: a whole `n` as a number, a plan child's `"<n>.<k>"` as that string (so `"1102.10"` stays apart from `"1102.1"`). */
+const num = (v: unknown): number | string | null => {
+  if (typeof v === "string" && /^\s*[1-9]\d*\.[1-9]\d*\s*$/.test(v)) return v.trim();
+  return Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null;
+};
 /** The issue ids (`<repo>-<n>` or `<repo>-<n>.<k>`) in a string, a comma list or an array: any other value is ignored, as triage's verdict ignores it. */
 const refs = (v: unknown): string[] | undefined => {
   const all = (Array.isArray(v) ? v : typeof v === "string" ? v.split(",") : []).map((x) => text(x)).filter((x): x is string => !!x);
@@ -231,11 +235,11 @@ ${events.map((e) => `## ${e.kind}: ${e.line}\n\n${context(e, jobs)}`).join("\n\n
 Reply with one JSON object and nothing else: {"actions": [ ... ]}, each action one of
 - {"do": "land", "job": "<job name>"}
 - {"do": "drop", "job": "<job name>", "reason": "<why; the next run reads it>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"], "fate": "optional: already-met when the goal is met on main, duplicate when another goal did the work"}
-- {"do": "close", "repo": "<repo>", "n": <issue number>, "note": "<why the goal is already met>"}
-- {"do": "note", "repo": "<repo>", "n": <issue number>, "text": "<note>"}
+- {"do": "close", "repo": "<repo>", "n": <n> or "<n>.<k>", "note": "<why the goal is already met>"}
+- {"do": "note", "repo": "<repo>", "n": <n> or "<n>.<k>", "text": "<note>"}
 ${red ? `- {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}\n` : ""}- {"do": "flake", "repo": "<repo>", "text": "<test file> > <test name>: <what was seen>"}
-- {"do": "answer", "repo": "<repo>", "n": <issue number>, "note": "<the decision>", "after": ["<optional <repo>-<n>.<k>: the open goals it really waits for>"]}
-- {"do": "edit-goal", "repo": "<repo>", "n": <issue number>, "body": "<the new goal body, optional>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"]}
+- {"do": "answer", "repo": "<repo>", "n": <n> or "<n>.<k>", "note": "<the decision>", "after": ["<optional <repo>-<n>.<k>: the open goals it really waits for>"]}
+- {"do": "edit-goal", "repo": "<repo>", "n": <n> or "<n>.<k>", "body": "<the new goal body, optional>", "after": ["<repo>-<n>.<k>", "optional: the open goals this waits for"]}
 - {"do": "tell", "text": "<one sentence for Chris>"}
 `;
 }

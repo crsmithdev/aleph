@@ -27,3 +27,15 @@ test("a flake action notes the repo's flake tracker, makes it when missing, file
   expect(f.applied.length).toBe(2);
   expect(log()).toContain(`firefighter: did flake ${key}: a.test.ts > t: timed out`);
 });
+
+test("parseReply reads a plan child's n as the string <n>.<k>, so 1102.10 stays apart from 1102.1", () => {
+  const one = (n: unknown) => parseReply(JSON.stringify({ actions: [{ do: "edit-goal", repo: "r", n, body: "b" }] }));
+  expect(one("1102.3")).toEqual([{ do: "edit-goal", repo: "r", n: "1102.3", body: "b" }]);
+  expect(one("1102.10")).toEqual([{ do: "edit-goal", repo: "r", n: "1102.10", body: "b" }]);
+  expect(one(7)).toEqual([{ do: "edit-goal", repo: "r", n: 7, body: "b" }]);
+  expect(one("1102.x")).toEqual(["edit-goal without a repo, n, and a body or after"]);
+});
+
+test("the prompt's action lines tell the model to quote a plan child's number", async () => {
+  expect(await Bun.file(new URL("./firefighter.ts", import.meta.url)).text()).toContain('"n": <n> or "<n>.<k>"');
+});
