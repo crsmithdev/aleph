@@ -84,7 +84,8 @@ export interface Run {
   made?: number;
 }
 
-export interface Check { name: string; run: string; when?: string[] }
+/** `tests`: globs of the test files that `run` takes as arguments, so a land can run only the related ones. */
+export interface Check { name: string; run: string; when?: string[]; tests?: string[] }
 export interface Repo {
   key: string; path: string; env?: string; main: string;
   setup: string[]; checks: Check[]; manual: { when: string[]; say: string }[]; note?: string;

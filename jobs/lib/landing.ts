@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { closeAndFile } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git, jobCommit } from "./git.ts";
 import { needsOf } from "./ask.ts";
-import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
+import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { relatedTests } from "./related.ts";
 import { coversAll, stopFields, type ChecksStop } from "./checks.ts";
 import { LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
@@ -24,8 +25,8 @@ import { baselineFile, baselines, factoryDir } from "./factory-status.ts";
 export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
 
 export interface LandPorts {
-  /** The repo's checks on `commit`, which holds the work of `runs`. `changed` is what the commit changes. */
-  check(commit: string, runs: Run[], changed: string[]): Promise<CheckReport>;
+  /** The repo's checks on `commit`, which holds the work of `runs`. `changed` is what the commit changes. `only`, when given, runs in place of the repo's checks. */
+  check(commit: string, runs: Run[], changed: string[], only?: Check[]): Promise<CheckReport>;
   /** Start land runs for up to `room` runs waiting to land, and return when they are in the queue. */
   pull(room: number): Promise<void>;
 }
@@ -219,6 +220,34 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
   return items;
 }
 
+const names = (repo: Repo, from: string, to: string) => git(repo.path, "diff", "--name-only", from, to).out.split("\n").filter(Boolean);
+const quote = (f: string) => `'./${f.replaceAll("'", "'\\''")}'`;
+
+/**
+ * The checks for one run whose own checks passed on an older origin/<main>, or null for all of the repo's checks.
+ * Only the work of main's new commits together with the run's work is new. A check with `tests` globs runs only the
+ * test files that depend on a file both sides changed, and does not run when the two sides share no file. The other
+ * checks run whole.
+ */
+function narrowed(ctx: Attempt, items: Pending[], base: string): { checks: Check[]; line: string } | null {
+  const { repo, tips } = ctx;
+  const run = items[0].m.run;
+  if (items.length !== 1 || !repo.checks.some((c) => c.tests) || !run.checkedBase || !run.checkedTip || run.checkedTip !== tips.get(items[0].m)) return null;
+  if (!git(repo.path, "merge-base", "--is-ancestor", run.checkedBase, base).ok) return null;
+  const mine = new Set(names(repo, run.checkedBase, run.checkedTip));
+  const both = names(repo, run.checkedBase, base).filter((f) => mine.has(f));
+  const tests = both.length ? relatedTests(repo.path, items[0].commit, both, repo.checks.flatMap((c) => c.tests ?? [])) : [];
+  if (!tests) return null;
+  const checks = repo.checks.flatMap((c): Check[] => {
+    if (!c.tests) return [c];
+    const mineToo = tests.filter((f) => c.tests!.some((g) => new Bun.Glob(g).match(f)));
+    return mineToo.length ? [{ ...c, run: `${c.run} ${mineToo.map(quote).join(" ")}` }] : [];
+  });
+  const line = !both.length ? `checks narrowed: main's new commits share no file with the run since ${run.checkedBase}`
+    : `checks narrowed: ${both.length} file${both.length > 1 ? "s" : ""} changed on both sides, ${tests.length} related test file${tests.length === 1 ? "" : "s"}`;
+  return { checks, line: `${line}\n${[...both, ...tests.map((t) => `test: ${t}`)].join("\n")}`.trimEnd() };
+}
+
 /** The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>. */
 async function check(ctx: Attempt, items: Pending[], base: string): Promise<ChecksStop | null> {
   const { repo, leader, base0, tips, checksOf, log, ports } = ctx;
@@ -233,6 +262,16 @@ async function check(ctx: Attempt, items: Pending[], base: string): Promise<Chec
     return null;
   }
   const tip = items.at(-1)!.commit;
+  // A narrowed run does not cover the tip: the next baseline runs every check on it.
+  const narrow = narrowed(ctx, items, base);
+  if (narrow) {
+    log(narrow.line);
+    if (!narrow.checks.length) { checksOf.set(items[0].m, first.checks); return null; }
+    const report = await ports.check(tip, [first], changed, narrow.checks);
+    checksOf.set(items[0].m, report.checks);
+    if (report.why && items[0].m !== ctx.leader && report.log !== undefined) items[0].m.log("checks.log", report.log);
+    return report.why;
+  }
   log(`checks on ${items.length} run${items.length > 1 ? "s" : ""}`, items.map((i) => i.m.run.name).join("\n"));
   const report = await ports.check(tip, items.map((i) => i.m.run), changed);
   for (const i of items) checksOf.set(i.m, report.checks);

@@ -128,7 +128,8 @@ function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, s
   const logFile = join(folder, "checks.log");
   return {
     pull: (room) => pullWaiting(repo, run, room),
-    check: async (commit, runs, changed) => {
+    check: async (commit, runs, changed, only) => {
+      const on = only ? { ...repo, checks: only } : repo;
       const before = existsSync(logFile) ? readFileSync(logFile, "utf8").length : 0;
       let why: ChecksStop | null;
       if (repo.sandbox) {
@@ -139,10 +140,10 @@ function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, s
           if (!files) { readable = false; break; }
           for (const [name, text] of Object.entries(files)) hidden[name in hidden ? `${r.on ?? onOf(r)}-${name}` : name] = text;
         }
-        why = readable ? await sandboxChecks(id, folder, repo, commit, changed, phase, hidden) : { cause: "infra", reason: HIDDEN_UNREADABLE };
+        why = readable ? await sandboxChecks(id, folder, on, commit, changed, phase, hidden) : { cause: "infra", reason: HIDDEN_UNREADABLE };
       } else {
         const owner = runs.find((r) => r.worktree && existsSync(r.worktree)) ?? runs[0];
-        why = await worktreeChecks(folder, owner, repo, env, commit, changed, phase);
+        why = await worktreeChecks(folder, owner, on, env, commit, changed, phase);
       }
       return { why, checks: readRun(folder)?.checks, log: existsSync(logFile) ? readFileSync(logFile, "utf8").slice(before) : undefined };
     },
