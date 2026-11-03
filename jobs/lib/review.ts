@@ -9,6 +9,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { q } from "./agent-call.ts";
 import { BROWSER, browserStep, changedViews, startUiServer } from "./review-browser.ts";
 import { areasOf, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
@@ -180,7 +181,6 @@ async function review(folder: string): Promise<void> {
       HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"),
     };
     delete env.ANTHROPIC_API_KEY;
-    const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const log = join(folder, "review.log");

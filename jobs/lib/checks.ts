@@ -10,7 +10,8 @@ import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledg
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
-import { git, NO_SUBMODULES } from "./git.ts";
+import { gitPrelude } from "./agent-call.ts";
+import { git } from "./git.ts";
 
 /** Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock ended the check. `null` is a pass. */
 export type ChecksStop = Stated & { reason: string; timedOut?: boolean };
@@ -118,16 +119,13 @@ async function runHidden(t: CheckTask, check: Check, exec: CheckExec): Promise<C
 /** The checks that apply to the task, each run by `exec` on a tree the caller set up. */
 export const runChecks = (t: CheckTask, exec: CheckExec): Promise<ChecksStop | null> => runAll(t, chosen(t), exec);
 
-export const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
-
 /**
  * The script lines that make a fresh clone of `ref` from `bundle` (a path relative to the run folder) and run
  * the repo's setup commands; `after` is the text that follows the setup group, e.g. its redirect.
  */
 export function cloneAndSetup(setup: string[], bundle: string, ref: string, after: string): string {
   return [
-    "set -e", "git init -q .", ...NO_SUBMODULES,
-    `git fetch -q ../${bundle} ${q(`+${ref}:refs/heads/check`)}`, "git switch -q check", "set +e",
+    "set -e", ...gitPrelude(`../${bundle}`, [`+${ref}:refs/heads/check`]), "git switch -q check", "set +e",
     `{ ${setup.map((c) => `${c} && `).join("")}true; } ${after}`,
   ].join("\n");
 }

@@ -11,7 +11,8 @@ import { join } from "node:path";
 import { readList, sourceOf, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { always, askOf, clearAsk, logAlways, plainAsk, setAsk } from "./ask.ts";
-import { fetchOrigin, git, NO_SUBMODULES } from "./git.ts";
+import { gitPrelude, q } from "./agent-call.ts";
+import { fetchOrigin, git } from "./git.ts";
 import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { type Repo } from "./ledger.ts";
@@ -57,9 +58,8 @@ function save(r: Record_): void {
 
 /** The sandbox script: a fresh clone of `main` from the bundle, the repo's setup, then `bun outdated`. */
 export function outdatedScript(repo: Repo, main: string): string {
-  const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
   return [
-    `git init -q . && ${NO_SUBMODULES.join(" && ")} && git fetch -q ../in.bundle ${q(`+${main}:${main}`)} && git switch -q -c deps ${q(`origin/${repo.main}`)} >&2 || exit 1`,
+    `${gitPrelude("../in.bundle", [`+${main}:${main}`]).join(" && ")} && git switch -q -c deps ${q(`origin/${repo.main}`)} >&2 || exit 1`,
     `${repo.setup.join(" && ") || "true"} >&2`,
     process.env.ALEPH_OUTDATED_CMD ?? "bun outdated",
   ].join("\n");

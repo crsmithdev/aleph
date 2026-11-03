@@ -9,7 +9,8 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
-import { addWorktree, fetchOrigin, git, jobCommit, NO_SUBMODULES } from "./git.ts";
+import { gitPrelude, q } from "./agent-call.ts";
+import { addWorktree, fetchOrigin, git, jobCommit } from "./git.ts";
 import { heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk, type AskReason } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isBuild, isWorker, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
@@ -433,11 +434,10 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     }
     const argv = [workerCmd(), "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       ...(run.model ? ["--model", run.model] : [])];
-    const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const script = [
-      "set -e", "exec 3>&1 1>&2", "git init -q .", ...NO_SUBMODULES,
-      `git fetch -q ../in.bundle ${q(`+${main}:${main}`)} ${q(`+${FACTS_REF}:${FACTS_REF}`)}${prev ? ` ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}` : ""}`,
+      "set -e", "exec 3>&1 1>&2",
+      ...gitPrelude("../in.bundle", [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])]),
       prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`,
       ...repo.setup, "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
     ].join("\n");
@@ -522,7 +522,6 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
   if (!item) return { outcome: { condition: "stuck", cause: "other", reason: `no issue ${on}` }, code: 1 };
   const dir = makeRunFolder(id);
   try {
-    const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const claude = workerCmd();
     const common = ["--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions"];
     const env = { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1", ENABLE_TOOL_SEARCH: "false" };
@@ -769,12 +768,10 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     try { scenarios = goal === undefined ? "" : readHidden(repo, goal)[SCENARIOS] ?? ""; } catch { return { reason: "reviewer: no verdict (the sealed scenarios are unreadable)", none: true }; }
     const text = reviewPrompt(run.name, spec, diff, findings, scenarios);
     writeFileSync(join(folder, "review-prompt.md"), text);
-    const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
     const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", "claude-opus-5-5"];
     const script = [
-      "set -e", "exec 3>&1 1>&2", "git init -q .", ...NO_SUBMODULES,
-      `git fetch -q ../out/out.bundle ${q(`+refs/heads/${branch}:refs/heads/${branch}`)}`, `git switch -q ${q(branch)}`,
+      "set -e", "exec 3>&1 1>&2", ...gitPrelude("../out/out.bundle", [`+refs/heads/${branch}:refs/heads/${branch}`]), `git switch -q ${q(branch)}`,
       // The scenarios need code that runs. A failed setup shows when the reviewer runs it, so it does not stop the review.
       ...(scenarios ? [`{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`] : []),
       "exec 1>&3 3>&-", `exec ${argv.map(q).join(" ")}`,
