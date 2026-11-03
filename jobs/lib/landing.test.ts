@@ -3,8 +3,8 @@ import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { prompt as unitPrompt } from "./unit.ts";
-import { afterLand, bounceNote, isMergeBounce, land, landTerms, MERGE_MODEL, MERGE_SECONDS, type LandPorts } from "./landing.ts";
+import { afterLand, bounceNote, brief as unitPrompt, isMergeBounce, MERGE_MODEL, MERGE_SECONDS } from "./continuation.ts";
+import { land, landTerms, type LandPorts } from "./landing.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import { readRun, writeRun, type Entry, type Repo, type Run } from "./ledger.ts";

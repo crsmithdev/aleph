@@ -12,9 +12,10 @@ import { fetchOrigin, followMain, git, jobCommit } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isBuild, isLive, loadRegistry, lock, onOf, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { coversAll, stopFields, type ChecksStop } from "./checks.ts";
-import { causeOf, LOCK_BUSY, type Cause } from "./outcome.ts";
+import { LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
 import { itemOnMain } from "./status.ts";
+import { RELANDS, TODO_PATH } from "./continuation.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
 import { baselineFile, baselines, factoryDir } from "./factory-status.ts";
@@ -71,10 +72,6 @@ function closeItems(repo: Repo, run: Run): { todo?: string; checkItem?: number }
   const w = closeAndFile(repo, `todo: job ${run.name} landed`, on, `job ${run.name} landed`, open ? [{ title: `Check ${run.name}: ${run.say}`, areas: ["check"] }] : []);
   return { todo: w.todo, checkItem: w.ids[0] };
 }
-
-// The lists left product repos for the work store. A branch made before that
-// still has the old file, and landing it would bring the file back.
-const TODO_PATH = "docs/todo.md";
 
 const MOVED = "main moved during the land; land again";
 const OWN_LIST = `the branch changes ${TODO_PATH}; change the list with aleph issue`;
@@ -447,53 +444,4 @@ function followCheckout(repo: Repo, log: (step: string, out?: string) => void): 
   } catch (e) {
     log(`aleph-ui not restarted: ${e instanceof Error ? e.message : e}`);
   }
-}
-
-const BOUNCES = 2;
-const RELANDS = 3;
-
-/**
- * What the unit starts after a failed land. A land that conflicts, or that
- * refuses a branch that changes the list, goes back to the worker, at most
- * BOUNCES times a job; a land that lost a race lands again, at most RELANDS times.
- */
-export function afterLand(run: Run): Run["next"] {
-  if (run.condition !== "failed") return undefined;
-  const lands = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land").map((e) => e.run);
-  if (run.conflicts?.length) return lands.filter((r) => r.conflicts?.length).length <= BOUNCES ? "worker" : undefined;
-  if (causeOf(run) === "moved") return lands.filter((r) => causeOf(r) === "moved").length <= RELANDS ? "land" : undefined;
-  return undefined;
-}
-
-/** What the worker reads when a land sent the job back. */
-export function bounceNote(run: Run): string {
-  return causeOf(run) === "own-list"
-    ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
-    : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
-}
-
-/** The model of a merge run: the cheapest tier the factory routes a worker to. */
-export const MERGE_MODEL = "haiku";
-/** The time limit of a merge run, in seconds. */
-export const MERGE_SECONDS = 600;
-
-/** Whether the next run is a merge run: a conflict bounce, not an `own-list` one. */
-export const isMergeBounce = (land: Run): boolean => causeOf(land) !== "own-list" && !!land.conflicts?.length;
-
-/**
- * The whole prompt of a merge run: the conflicted paths, the last commit on main that touched each,
- * and the goal's title when the store has one. No spec text, no notes.
- */
-export function mergePrompt(land: Run, repo: Repo, title?: string): string {
-  const main = `origin/${repo.main}`;
-  const paths = (land.conflicts ?? []).map((p) => {
-    const last = git(repo.path, "log", "-1", "--format=%h %s", main, "--", p).out.trim();
-    return `- ${p}${last ? ` (last commit on ${main}: ${last})` : ""}`;
-  });
-  return [
-    `# Merge ${main} into this branch`,
-    ...(title ? [`Goal: ${title}`] : []),
-    `A land of this branch conflicted with ${main}. This run does one task and nothing else: merge ${main} into the branch, resolve the conflicts so that the change on main and this job's change both survive, and commit. Do not start other work.`,
-    `Conflicted paths:\n${paths.join("\n")}`,
-  ].join("\n\n") + "\n";
 }

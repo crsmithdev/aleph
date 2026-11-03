@@ -9,19 +9,20 @@
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
  * the goal; a land lands again. None of them uses up a rerun.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { endRun } from "./agent-run.ts";
 import { always, askFromRun, clearAsk, logAlways, needsOf, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
-import { factoryDir, factoryRepos as sandboxRepos, holders } from "./factory-status.ts";
+import { factoryRepos as sandboxRepos, holders } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
 import { fetchOrigin, git, jobCommit } from "./git.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
+import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isWorker, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isWorker, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
@@ -43,32 +44,10 @@ type Land = (name: string) => Promise<string | null>;
 /** The state of the repo's main (factory.ts `baseline`). */
 type CheckMain = (repo: Repo) => Promise<Baseline>;
 
-const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
-/** The note the goal's next run reads, under "Note on the last run". */
-export function writeRerun(name: string, note: string): void {
-  mkdirSync(dirname(rerunFile(name)), { recursive: true });
-  writeFileSync(rerunFile(name), note + "\n");
-}
-export const rerunNote = (name: string): string => (existsSync(rerunFile(name)) ? readFileSync(rerunFile(name), "utf8").trim() : "");
-export const clearRerun = (name: string): void => rmSync(rerunFile(name), { force: true });
-
 const RERUN_OPTIONS = [
   { label: "Rerun", line: "Drop the stuck run and start the goal again as it is" },
   { label: "Another way", line: "Start the goal again, taking a different route than the run that failed" },
 ];
-
-type Case = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
-
-/** Which safe case a stuck or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
-function caseOf(r: Entry["run"], onMainOrDone: boolean, claim: string | null): Case | null {
-  const cause = causeOf(r);
-  if (cause === "no-commit") return onMainOrDone ? "duplicate" : claim !== null ? "claimed" : "no-commit";
-  if (cause === "time-box" && r.kind !== "land") return "time-box";
-  if (cause === "infra" || cause === "lock-busy") return "infra";
-  if (r.kind === "land" && cause === "conflict") return "land-conflict";
-  if (r.kind === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
-  return null;
-}
 
 /** When this host booted, in ms. */
 const bootedAt = (): number => Number(readFileSync("/proc/stat", "utf8").match(/^btime (\d+)$/m)![1]) * 1000;
@@ -200,11 +179,8 @@ async function releaseEdited(act: Rescue): Promise<void> {
   }
 }
 
-/** One action on a run. `dropReason` is the drop's text, when it is not `noted`; `told` is the news, when it is not `noted`. */
-type Step = { action: "drop" | "land again" | "recheck"; rerun?: string; dropReason?: string; noted: string; told?: string; done?: boolean; fate?: Fate };
-
 /** The run a rescue acts on, and what its goal is. */
-type Stuck = { last: Entry; r: Entry["run"]; repo: Repo; name: string; issue: number | string | undefined; reason: string };
+type Stuck = StuckRun & { name: string; issue: number | string | undefined };
 
 /** The commit of this job or this item on main, or `{ onMain: null }` when the item is closed without one; null when neither. */
 function foundDone({ r, repo, issue }: Pick<Stuck, "r" | "repo" | "issue">): { onMain: string | null } | null {
@@ -217,65 +193,21 @@ function foundDone({ r, repo, issue }: Pick<Stuck, "r" | "repo" | "issue">): { o
   return item && (issues.status(item) === "done" || issues.status(item) === "dropped") ? { onMain: null } : null;
 }
 
+/** Whether the run's branch exists. */
+const hasBranch = ({ r, repo }: Pick<Stuck, "r" | "repo">): boolean => !!r.branch && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok;
+
+/** The last commit on main that changed the files a land conflicted in, after a fetch; empty when none. */
+function touched({ r, repo }: Pick<Stuck, "r" | "repo">): string {
+  const files = r.conflicts ?? [];
+  fetchOrigin(repo.path);
+  return files.length ? git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%h %s", "--", ...files).out : "";
+}
+
 /** Whether a branch has commits ahead of main: the worker's finished work, since commits reach the branch only after the worker ended. */
 function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
   if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) return false;
   const ahead = git(repo.path, "rev-list", "--count", `${repo.main}..refs/heads/${r.branch}`);
   return ahead.ok && Number(ahead.out) > 0;
-}
-
-/** The step for a run that a host restart killed. The goal did not cause this: no rescue mark, so the goal keeps its rerun. */
-function killedStep(stuck: Stuck): Step {
-  const { last, r } = stuck;
-  const text = `a host restart killed ${r.kind} run ${last.id}`;
-  // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
-  if (r.kind === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
-  // A build or recheck with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
-  if ((isBuild(r.kind) || r.kind === "recheck") && hasWork(stuck)) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
-  return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
-}
-
-/** The step for a worker's claim that the goal is met, by `red`, the red line of main. */
-function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null): Step {
-  const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
-  if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "already-met" };
-  return {
-    action: "drop",
-    rerun: `The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`,
-    noted: `${said}, but ${red}; dropped, and the goal reruns once`,
-  };
-}
-
-/** The step for an infrastructure failure: a land lands again, a run with a branch is rechecked, and any other run reruns. */
-function infraStep({ last, r, repo, reason }: Stuck): Step {
-  const text = `${r.kind} run ${last.id} failed for infrastructure (${reason}): `;
-  if (r.kind === "land") return { action: "land again", noted: `${text}landed again, once`, told: `${text}landing again` };
-  if (r.branch && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) return { action: "recheck", noted: `${text}rechecked, once`, told: `${text}rechecking` };
-  return { action: "drop", rerun: `The last run failed before it made a branch: ${reason}.`, dropReason: `${text}dropped for one rerun`, noted: `${text}dropped; the goal reruns once`, told: `${text}the goal reruns` };
-}
-
-/** The step for a land that hit a merge conflict. The note names the files and what last changed them on main. */
-function conflictStep({ last, r, repo }: Stuck): Step {
-  const files = r.conflicts ?? [];
-  fetchOrigin(repo.path);
-  const touched = files.length ? git(repo.path, "log", `origin/${repo.main}`, "-1", "--format=%h %s", "--", ...files).out : "";
-  const what = `${files.join(", ") || "unknown files"}${touched ? `, last changed on ${repo.main} by ${touched}` : ""}`;
-  return {
-    action: "drop",
-    rerun: `The last land failed with a merge conflict in ${what}. Another goal landed on the same lines first; this run starts from the current ${repo.main}.`,
-    noted: `${r.kind} run ${last.id}: merge conflict in ${what}; dropped, and the goal reruns once from current ${repo.main}`,
-  };
-}
-
-/** The step for a run that stopped with nothing to keep. The note quotes the end of its log. */
-function rerunStep({ last, r, reason }: Stuck, key: "no-commit" | "land-checks"): Step {
-  const why = key === "no-commit" ? "the last run made no commit" : `the checks failed after the land merged main (${reason})`;
-  const file = key === "land-checks" ? "checks.log" : "result.md";
-  return {
-    action: "drop",
-    rerun: `${why[0].toUpperCase()}${why.slice(1)}. The last 20 lines of its ${file}:\n\n\`\`\`\n${tailOf(last, file, 20) || "(empty)"}\n\`\`\``,
-    noted: `${r.kind} run ${last.id}: ${why}; dropped, and the goal reruns once`,
-  };
 }
 
 /** Whether the planner cannot split this issue: it is a part (id `n.m`), has parts, or has had a planner run that split it. */
@@ -321,7 +253,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   };
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
-  const specQuestion = causeOf(r) === "no-commit" && (!!r.question || /^\s*QUESTION:/m.test(readFile(last, "result.md") ?? ""));
+  const asked = askedQuestion(r, readFile(last, "result.md") ?? "");
+  const specQuestion = asked !== null;
   // `spec`: the run asked about this issue's spec, so it waits for a spec edit.
   const chris = async (question: string, ask: Ask, spec?: issues.Issue) => {
     // An Always rule to take the recommendation: Rerun drops the run, and the goal reruns. Not for a run that asked a question.
@@ -353,7 +286,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   };
 
   if (isKilled) {
-    const step = killedStep(stuck);
+    const step = killedStep(stuck, (isBuild(r.kind) || r.kind === "recheck") && hasWork(stuck));
     // The real recheck takes only a stuck or failed run, so the killed run ends failed first, as a killed land does.
     if (r.kind === "land" || step.action === "recheck") {
       writeFileSync(join(last.folder, "exit"), "143");
@@ -364,14 +297,14 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
 
   const noCommit = causeOf(r) === "no-commit";
   if (specQuestion) {
-    const q = r.question || (readFile(last, "result.md") ?? "").split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1)?.slice("QUESTION:".length).trim() || reason;
+    const q = asked || reason;
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
     const text = `${name} ended with no commit and asked: ${q} The goal waits for a spec edit; the factory starts it again when you edit it. Or drop it.`;
     return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.condition}`]), item);
   }
   const found = noCommit ? foundDone(stuck) : null;
   const claim = noCommit ? alreadyMet(readFile(last, "result.md") ?? "") : null;
-  const key = caseOf(r, !!found, claim);
+  const key = rescueCase(r, !!found, claim);
   if (!key) return chris(`${name} is ${r.condition} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.condition} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 
   const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);
@@ -387,8 +320,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   }
   if (key === "duplicate") {
     markRescued(last, key);
-    const onMain = found?.onMain;
-    return take({ action: "drop", noted: `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "already-met" });
+    return take(duplicateStep(stuck, found?.onMain));
   }
   if (key === "time-box") {
     // No rerun of the same goal: a plain issue goes to the planner to be split; a part, or an issue the planner has split, asks.
@@ -403,5 +335,5 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   }
   if (earlier) return chris(`${name} hit the same case again (${key}: ${reason}); a rerun did not clear it. Drop it, or change the goal?`, choice(`${name} hit the same case again (${key}): how should the factory go on?`, ["A rerun did not clear it"]));
   markRescued(last, key);
-  return take(key === "infra" ? infraStep(stuck) : key === "land-conflict" ? conflictStep(stuck) : rerunStep(stuck, key as "no-commit" | "land-checks"));
+  return take(key === "infra" ? infraStep(stuck, r.kind !== "land" && hasBranch(stuck)) : key === "land-conflict" ? conflictStep(stuck, touched(stuck)) : rerunStep(stuck, key as "no-commit" | "land-checks"));
 }

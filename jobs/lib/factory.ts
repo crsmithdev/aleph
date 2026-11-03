@@ -15,9 +15,10 @@ import { itemOnMain, readRecord, repoStages } from "./status.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
-import { clearRerun, endKilledFacts, rerunNote, rescueStuck, type Rescue } from "./rescue.ts";
+import { endKilledFacts, rescueStuck, type Rescue } from "./rescue.ts";
+import { clearRerun, goalBrief } from "./continuation.ts";
 import { readBaseline, type Fate } from "./outcome.ts";
-import { allJobs, checkedBy, lookMinutes, sealed, jobsNamed, lastReal, openJob } from "./job.ts";
+import { allJobs, checkedBy, lookMinutes, sealed, lastReal, openJob } from "./job.ts";
 import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { endLost } from "./agent-run.ts";
@@ -213,9 +214,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         skipped.push(`${name}: ${d.why}`);
         continue;
       }
-      const again = rerunNote(name);
-      const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.condition === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
-      const spec = `# ${item.title}\n\n${item.spec.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
+      const { spec, rerun } = goalBrief(item, name, jobs);
       let tier: Tier | null | undefined;
       if (rate && !isResearch(item)) {
         const p = await needsPlan(repo, item, spec, rate);
@@ -225,7 +224,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       }
       const why = await start(repo, name, ref, spec, tier);
       if (why) { recordHold(name, "start", why); skipped.push(`${name}: ${why}`); }
-      else { recordHold(name, "started", "started"); started.push(name); rmSync(capFile(name), { force: true }); if (again) clearRerun(name); }
+      else { recordHold(name, "started", "started"); started.push(name); rmSync(capFile(name), { force: true }); if (rerun) clearRerun(name); }
     } finally {
       release();
     }

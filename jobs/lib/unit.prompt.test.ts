@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ALREADY_MET, alreadyMet } from "./gate.ts";
 import { parseFacts } from "./facts.ts";
-import { prompt } from "./unit.ts";
+import { brief as prompt } from "./continuation.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "unit-prompt-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));

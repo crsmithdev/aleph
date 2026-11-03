@@ -11,20 +11,21 @@ import * as issues from "../../todo/lib/todo.ts";
 import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader, writeList } from "../../todo/lib/store.ts";
 import { checkSpec } from "./spec-check.ts";
 import { addWorktree, fetchOrigin, git, jobCommit, NO_SUBMODULES } from "./git.ts";
-import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
+import { heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk, setAsk, type AskReason } from "./ask.ts";
-import { tagged, askOf, isAwaiting, isBuild, isWorker, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type Check, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, askOf, isAwaiting, isBuild, isWorker, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
-import { allJobs, jobById, notes, openJob, readFile } from "./job.ts";
+import { allJobs, jobById, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
-import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, RESEARCH_PROMPT, serveFetches, writeWebServer } from "./research.ts";
+import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, serveFetches, writeWebServer } from "./research.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./acceptance.ts";
 import { checksInSandbox, runChecks, stopFields, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
-import { afterLand, bounceNote, isMergeBounce, land, mergePrompt, MERGE_MODEL, MERGE_SECONDS, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
+import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
+import { backCheck, brief, checkBack, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, researchBrief, reviewHold, nextBrief } from "./continuation.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
 import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
@@ -68,69 +69,6 @@ export function resultText(log: string): string {
     }
   }
   return result ?? text;
-}
-
-// A worker that backgrounds a command and ends its turn is never woken again in a headless run.
-const FOREGROUND = "Run every command in the foreground and wait for it: nothing wakes you after your turn ends.";
-
-const FIXED = (run: Run, main: string) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`. Work
-only there. Commit every change on the branch; the run fails if anything is
-left uncommitted or untracked. Never merge, never push, never touch another
-branch. \`aleph issue\` is not your push: it writes the list of issues on main by
-itself, so use it for every change to the list. If the previous run was a
-failed land, merge \`origin/${main}\` into the branch, resolve the conflicts,
-and commit. If you need a decision from Chris, stop
-and make your last line \`QUESTION: <one question>\`. ${FOREGROUND} End with a
-short summary of what you did and what you ran.`;
-
-/** What the worker runs before it ends: the repo's own checks, else today's sentence. */
-function checksSentence(checks: Check[]): string {
-  if (!checks.length) return "Run the repo's tests before you end.";
-  const list = checks.map((c) => `\n- \`${c.name}\`: \`${c.run}\`${c.when?.length ? ` (when ${c.when.join(", ")} change)` : ""}`).join("");
-  return `Run each of the repo's checks before you end, and fix what fails:${list}\n`;
-}
-
-const FACTORY = (run: Run, main: string, checks: Check[] = []) => `You are a worker on job \`${run.name}\`, in a git repo on branch \`${run.branch}\`, inside
-a sandbox. You see this repo and nothing else of the machine, and the network
-reaches only the Anthropic API and npm. Do the goal below. Commit every change
-on the branch: only commits leave the sandbox. Never switch to another branch
-and never push. If the previous run's land conflicted, merge \`origin/${main}\`
-into the branch and resolve the conflicts so that both changes survive. Nobody
-answers questions during the run: when you must choose, take the answer you
-would recommend and print a line \`DEFAULT: <question> -> <answer>\`. \`DEFAULT:\` is for choices the Oracle does not settle. If you cannot meet a clause of the Oracle (for example, because the clause conflicts with another clause of the spec), stop: do not defer that clause, and make your last line \`QUESTION: <question that names the Oracle clause>\`. Do not use \`DEFAULT:\` or \`FOLLOWUP:\` for that clause. For work
-you find but do not do, print a line \`FOLLOWUP: <title>\`; a \`FOLLOWUP:\` must not cover anything the Oracle names. A test that fails or times out and is not the goal's own, and passes again alone or on a rerun, is a flake: print one line \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\` for it. End the result with zero or more lines
-\`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`, for durable
-facts about the repo or its tools that you learned and checked. If the goal already
-holds on your branch and no edit is needed, make no commit, run the repo's tests,
-and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
-files, the lines and the commit on \`${main}\` that show it. A worker that
-cannot do the goal makes no commit and gives the reason in its final text; it does not commit a note.
-${checksSentence(checks)} Chrome cannot start in the sandbox. For a screenshot of a page
-served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
-the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
-Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a short summary of what you did and what you ran.`;
-
-/** The fixed text, the spec, every note in order, and the previous run's files. */
-export function prompt(id: string, folder: string, run: Run, repo: Repo): string {
-  const first = join(folder, "..", run.job);
-  if (run.merge) {
-    const land = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land" && e.id !== id).at(-1)?.run;
-    const n = onOf(run);
-    return mergePrompt(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
-  }
-  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run, repo.main)), `## Spec\n\n${readFileSync(join(first, "spec.md"), "utf8").trim()}`];
-  const runs = jobById(run.job) ?? [];
-  if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
-  const prev = runs[runs.findIndex((e) => e.id === id) - 1];
-  if (prev) {
-    const p = prev.run;
-    parts.push(`## Previous run: ${p.kind}, ${p.condition}${needsOf(askOf(p)) ? ` (${needsOf(askOf(p))})` : ""}${p.reason ? `: ${p.reason}` : ""}`);
-    for (const f of ["result.md", "checks.log", "land.log"] as const) {
-      const text = readFile(prev, f);
-      if (text !== undefined) parts.push(`### ${f}\n\n${text.trim()}`);
-    }
-  }
-  return parts.join("\n\n") + "\n";
 }
 
 /** A recorder that starts the run's `checks` over and adds each check that ran. */
@@ -325,7 +263,7 @@ export async function unit(folder: string): Promise<void> {
   }
 
   let ended = updateRun(folder, { ...outcome, phase: undefined, ended: new Date().toISOString() });
-  const next = nextStep(ended, repo);
+  const next = nextStep(ended, !!repo?.autoland);
   if (next) ended = updateRun(folder, { next });
   writeFileSync(join(folder, "exit"), String(code));
   process.exitCode = code;
@@ -341,72 +279,8 @@ async function dispatchFree(folder: string): Promise<void> {
   await runLogged(["dispatch"], join(folder, "dispatch.log"));
 }
 
-
-/**
- * What the unit starts after a run ends. A land follows afterLand; an agent run
- * lands when it passes, when it was started with --land or its repo lands by itself.
- */
-function nextStep(run: Run, repo: Repo | undefined): Run["next"] {
-  if (isBuild(run.kind) && run.failed) return "worker";
-  if (isBuild(run.kind) || run.kind === "recheck") return run.condition === "passed" && (run.land || repo?.autoland) ? "land" : undefined;
-  return run.kind === "land" ? afterLand(run) : undefined;
-}
-
 /** The worker's time limit: a merge run has a short one. */
 const workSeconds = (run: Run): number => (run.merge ? MERGE_SECONDS : jobSeconds());
-
-/** The last 80 lines of the named check's section of the run's checks.log. */
-function checkLog(folder: string, name: string): string {
-  const file = join(folder, "checks.log");
-  if (!existsSync(file)) return "";
-  const section = readFileSync(file, "utf8").split(/^## /m).findLast((x) => x.startsWith(`${name}: exit`)) ?? "";
-  return section.split("\n").slice(1).join("\n").trimEnd().split("\n").slice(-80).join("\n");
-}
-
-/** The failing tests of a run's hidden.log, each with the lines of its failure that precede its `(fail)` line. */
-function hiddenFailures(folder: string): { name: string; failure: string }[] {
-  const file = join(folder, "hidden.log");
-  const lines = (existsSync(file) ? readFileSync(file, "utf8") : "").split("\n");
-  const seen = new Map<string, string>();
-  let block: string[] = [];
-  for (const line of lines) {
-    const m = line.match(/^\(fail\) (.*?)(?: \[[\d.]+m?s\])?$/);
-    if (m) {
-      if (!seen.has(m[1])) seen.set(m[1], block.slice(-10).join("\n").slice(-600));
-      block = [];
-    } else if (/^\(pass\)/.test(line)) block = [];
-    else if (line.trim()) block.push(line.trimEnd());
-  }
-  return [...seen].map(([name, failure]) => ({ name, failure }));
-}
-
-/**
- * A sealed test that fails unchanged twice: the run before this one also failed the hidden check with the same
- * failing names. A third blind fix round would guess again, so the Ask names the tests and quotes their failures,
- * and Chris tells a wrong test from a wrong branch. Null when the failures differ or there is no run before.
- */
-function repeatedHidden(folder: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
-  const prev = earlier.at(-1);
-  if (!prev || prev.run.failed !== "hidden") return null;
-  const now = hiddenFailures(folder);
-  const before = hiddenFailures(join(runsDir(), prev.id)).map((f) => f.name).sort();
-  const names = now.map((f) => f.name).sort();
-  if (!names.length || names.join("\n") !== before.join("\n")) return null;
-  const quoted = now.slice(0, 5).map((f) => `- ${f.name}${f.failure ? `\n${f.failure.split("\n").map((l) => `    ${l}`).join("\n")}` : ""}`).join("\n");
-  return {
-    names,
-    question: `The sealed test${names.length > 1 ? "s" : ""} failed the same way on two runs in a row, so no blind fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
-  };
-}
-
-/**
- * The fix-round note for a failed hidden check: the reason and the names of
- * the failing tests, read from hidden.log. Never the log, never the source.
- */
-function hiddenNote(folder: string, run: Run): string {
-  const names = hiddenFailures(folder).map((f) => f.name);
-  return `${run.reason}\n${names.length ? `\nThe failing tests:\n${names.map((n) => `- ${n}`).join("\n")}\n` : ""}\nThe tests are hidden: their source and log are not available. Fix the cause, run the tests, and commit.`;
-}
 
 /** Start the next run as `aleph land` or `aleph job` would, in-process. What it prints and its refusal go to next.log. */
 async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): Promise<void> {
@@ -430,19 +304,13 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
     updateRun(folder, { next: undefined });
     return;
   }
-  const note = run.failed === "hidden"
-    ? hiddenNote(folder, run)
-    : run.failed === "review"
-    ? `The reviewer sent this branch back: ${run.reason}\n\nFix what it names, run the tests, and commit.`
-    : run.failed
-    ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
-    : bounceNote(run);
-  const merge = next === "worker" && !run.failed && isMergeBounce(run);
+  const back = nextBrief(folder, run);
+  const merge = next === "worker" && back.merge;
   const log = join(folder, "next.log");
   try {
     const s = next === "land"
       ? await startLand(run.name, {}, { output: { file: log } })
-      : await startJob({ repo: run.repo!, name: run.name, spec: note, land: true, ...(merge ? { merge: true, model: MERGE_MODEL } : {}) }, { output: { file: log } });
+      : await startJob({ repo: run.repo!, name: run.name, spec: back.note, land: true, ...(merge ? { merge: true, model: MERGE_MODEL } : {}) }, { output: { file: log } });
     appendFileSync(log, JSON.stringify(s.started, null, 2) + "\n");
     await s.child?.exited;
   } catch (e: any) {
@@ -502,7 +370,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const argv = [workerCmd(), "-p", "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : [])];
-  const text = prompt(id, folder, run, repo);
+  const text = brief(id, folder, run, repo);
   writeFileSync(join(folder, "prompt.md"), text);
   phase("worker");
   const w = await exec(argv, { cwd: wt, env: workerEnv, out: join(folder, "output.log"), limit: workSeconds(run), stdin: text });
@@ -512,8 +380,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   // The state rule: the first match wins.
   if (w.timedOut) return fail("stalled", "timed out: worker");
   if (w.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.code}` }, code: w.code };
-  const question = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1);
-  if (question) return { outcome: { ...awaiting("question", question.slice("QUESTION:".length).trim()), question: question.slice("QUESTION:".length).trim() }, code: 0 };
+  const question = questionOf(result);
+  if (question !== undefined) return { outcome: { ...awaiting("question", question), question }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail("other", `uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
@@ -578,7 +446,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
         return { outcome: { condition: "dropped", reason: `spec check held: ${problems}`, cost }, code: 0 };
       }
     }
-    const text = prompt(id, folder, run, repo);
+    const text = brief(id, folder, run, repo);
     writeFileSync(join(folder, "prompt.md"), text);
     let authorCost: number | undefined;
     if (repo.author && !prev && goalId !== undefined) {
@@ -639,7 +507,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no-commit", "no commit", facts);
 
     // Each earlier run of the job that a failed check sent back is a fix round.
-    const earlierRuns = (jobById(run.job) ?? []).filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed);
+    const earlierRuns = earlierRounds(jobById(run.job) ?? [], id);
     const earlier = earlierRuns.map((e) => e.run);
     const done = earlier.length;
     if (done) facts.round = done;
@@ -650,14 +518,12 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
     if (failed) {
       // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
-      const check = readRun(folder)?.checks?.findLast((c) => !c.ok)?.name;
-      const sent = !failed.timedOut && (failed.cause === "check" ? failed.checkName === check : check === "hidden" && failed.cause === "hidden-check");
-      if (!check || !sent) return stoppedByChecks(failed, facts);
+      const check = backCheck(failed, readRun(folder)?.checks?.findLast((c) => !c.ok)?.name);
+      if (!check) return stoppedByChecks(failed, facts);
       const rounds = fixRounds();
       const same = check === "hidden" && done < rounds ? repeatedHidden(folder, earlierRuns) : null;
       if (same) return { outcome: { ...awaiting("question", same.question), question: same.question, cause: "hidden-check", reason: failed.reason, ...facts }, code: 0 };
-      if (done < rounds) return stoppedByChecks(failed, { ...facts, failed: check, round: done });
-      return stoppedByChecks(failed, { ...facts, ...(rounds > 0 ? { reason: `${failed.reason} after ${done} fix rounds` } : {}) });
+      return stoppedByChecks(failed, { ...facts, ...checkBack(earlier, check, failed.reason, rounds) });
     }
     facts.checkedBase = base;
     facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
@@ -684,11 +550,8 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
     const env = { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1", ENABLE_TOOL_SEARCH: "false" };
     const net = { domains: ["api.anthropic.com"], localBinding: false };
     const log = join(folder, "output.log");
-    const prior = jobById(run.job) ?? [];
-    const before = prior[prior.findIndex((e) => e.id === id) - 1]?.run.reason;
     const goal = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
-    const text = [RESEARCH_PROMPT, `## The goal\n\n${goal}`,
-      ...notes(prior).map((n) => `## Note ${n.name}\n\n${n.text.trim()}`), ...(before ? [`## Why the previous report failed\n\n${before}`] : [])].join("\n\n") + "\n";
+    const text = researchBrief(id, goal, jobById(run.job) ?? []);
     writeFileSync(join(folder, "prompt.md"), text);
     const argv = [claude, "-p", "--session-id", run.session!, ...common, "--tools", "WebSearch", "--strict-mcp-config", "--mcp-config", writeWebServer(dir), ...(run.model ? ["--model", run.model] : [])];
     phase("worker");
@@ -738,9 +601,6 @@ async function researchAgent(id: string, folder: string, run: Run, repo: Repo): 
   }
 }
 
-/** "once", "twice", "3 times". */
-const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
-
 /**
  * After the checks pass: a security path waits for Chris with no reviewer. Else
  * the reviewer, then the held rule: a held run the reviewer passes gets the second
@@ -758,11 +618,8 @@ export async function heldAndReview(id: string, folder: string, run: Run, repo: 
   const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
   const bad = await oracleFailure(folder, run, repo, branch, ports.runner ?? sandboxRunner, phase);
   if (bad) {
-    const done = earlier?.length ?? 0;
-    const rounds = fixRounds();
     const why = { cause: "check" as const, checkName: "oracle", reason: bad };
-    if (earlier && done < rounds) return stoppedByChecks(why, { ...facts, failed: "oracle", round: done });
-    return stoppedByChecks(why, { ...facts, ...(earlier && rounds > 0 ? { reason: `${bad} after ${done} fix rounds` } : {}) });
+    return stoppedByChecks(why, { ...facts, ...checkBack(earlier, "oracle", bad, fixRounds()) });
   }
   phase("review");
   const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
@@ -776,12 +633,9 @@ export async function heldAndReview(id: string, folder: string, run: Run, repo: 
   }
   if (!rv.reason) return rule ? held(rule) : { outcome: { condition: "passed", ...facts }, code: 0 };
   if (rv.none) return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
-  if (earlier) {
-    if (earlier.length < fixRounds()) return { outcome: { condition: "stuck", cause: "reviewer", reason: rv.reason, stat, ...facts, failed: "review", round: earlier.length }, code: 1 };
-    const back = earlier.filter((r) => r.failed === "review").length;
-    if (back) return { outcome: { ...awaiting("review", sentBack(back, rv.reason), [stat]), cause: "reviewer", reason: sentBack(back, rv.reason), stat, ...facts }, code: 0 };
-  }
-  return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
+  const hold = reviewHold(earlier, rv.reason, fixRounds());
+  if ("round" in hold) return { outcome: { condition: "stuck", cause: "reviewer", reason: rv.reason, stat, ...facts, failed: "review", round: hold.round }, code: 1 };
+  return { outcome: { ...awaiting("review", hold.reason, [stat]), cause: "reviewer", reason: hold.reason, stat, ...facts }, code: 0 };
 }
 
 /**
@@ -810,9 +664,6 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   return null;
 }
 
-/** The reason of a run that came back from the reviewer after the last fix round. */
-const sentBack = (n: number, reason: string) => `the reviewer sent it back ${times(n)}: ${reason.replace(/^reviewer:\s*/, "")}`;
-
 /**
  * A held run whose review says `back` goes to the worker as a fix round, while
  * rounds are left; after the last round it stays with Chris, its reason saying so.
@@ -830,15 +681,15 @@ export async function reviewBack(folder: string): Promise<void> {
     return;
   }
   if (!isBuild(run.kind) || r2?.call !== "back") return;
-  const earlier = (jobById(run.job) ?? []).filter((e) => e.id !== basename(folder) && isBuild(e.run.kind) && e.run.failed).map((e) => e.run);
+  const earlier = earlierRounds(jobById(run.job) ?? [], basename(folder)).map((e) => e.run);
   const reason = r2.reason ?? "no reason given";
-  if (earlier.length < fixRounds()) {
-    const ended = updateRun(folder, { condition: "stuck", ask: undefined, cause: "reviewer", reason, failed: "review", round: earlier.length, next: "worker" });
+  const hold = reviewHold(earlier, reason, fixRounds());
+  if ("round" in hold) {
+    const ended = updateRun(folder, { condition: "stuck", ask: undefined, cause: "reviewer", reason, failed: "review", round: hold.round, next: "worker" });
     await start(folder, ended, "worker");
     return;
   }
-  const back = earlier.filter((r) => r.failed === "review").length;
-  if (back) updateRun(folder, { cause: "reviewer", reason: sentBack(back, reason) });
+  if (hold.back) updateRun(folder, { cause: "reviewer", reason: hold.reason });
 }
 
 /**
