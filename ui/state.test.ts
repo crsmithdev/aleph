@@ -9,7 +9,7 @@ import { state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
-import { facts } from "../jobs/lib/status.ts";
+import { facts, repoStages } from "../jobs/lib/status.ts";
 
 let base: string, jobsDir: string, factory: string;
 let restore: () => void;
@@ -340,11 +340,12 @@ describe("the review fixture", () => {
       const registry = loadRegistry();
       for (const key of Object.keys(registry)) {
         const doc = readList({ key })!;
+        // The function `aleph status <id>` calls, once for the repo instead of one process per item.
+        const of = new Map(repoStages(registry[key], { fetch: true }).map((st) => [st.id, st.stage]));
         for (const item of doc.items) {
           const id = `${key}-${refOf(item)}`;
-          const p = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "status", id, "--json"], { env: { ...process.env, ...env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
-          expect(p.exitCode, `${id}: ${p.stderr}`).toBe(0);
-          const stage = JSON.parse(p.stdout.toString()).stage as string;
+          expect(of.has(id), id).toBe(true);
+          const stage = of.get(id)!;
           stages[stage] = (stages[stage] ?? 0) + 1;
           if (incoming.has(id)) expect(incoming.get(id), id).toBe(stage);
           // A part has no list entry of its own: the lists hold its parent.
@@ -364,8 +365,7 @@ describe("the review fixture", () => {
       restoreEnv();
       rmSync(home, { recursive: true, force: true });
     }
-  // One `jobs/cli.ts status` process per fixture item (34 here, about 120 ms each), so it needs more than the 5 s default under load. Matches the 30 s the test script uses.
-  }, 30000);
+  });
 });
 
 describe("waiting entries", () => {

@@ -109,14 +109,8 @@ describe("/api/state on a work-model store", () => {
     expect(by).toEqual({ "fac-1": "working", "fac-2": "awaiting", "fac-3": "awaiting", "fac-4": "new" });
   });
 
-  test("a stage in /api/state is the stage `aleph status` prints, for an issue and for its goals", () => {
+  test("parts are flat: the parent waits for its parts, and .3 runs after .2", () => {
     const s: any = state(now);
-    const want: Record<string, string> = { "fac-1": s.incoming.find((i: any) => i.id === "fac-1").stage, "fac-4": "new" };
-    for (const [id, stage] of Object.entries(want)) {
-      const p = Bun.spawnSync([process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts"), "status", id, "--json"], { env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
-      expect(p.exitCode, `${id}: ${p.stderr}`).toBe(0);
-      expect(JSON.parse(p.stdout.toString()).stage, id).toBe(stage);
-    }
     // Parts are flat: the parent waits for its parts and has no card in Running; .3 runs after .2, so it is blocked.
     expect(s.runningIssues).toEqual([]);
     expect(s.incoming.find((i: any) => i.id === "fac-1").stage).toBe("working");

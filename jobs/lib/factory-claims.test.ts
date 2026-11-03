@@ -88,7 +88,7 @@ for (const red of [false, true]) {
   });
 }
 
-test("no commit, the item open, first time: dropped and the goal reruns once, with the last 20 lines of result.md", async () => {
+test("no commit, the item open, first time: dropped with no fate and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
   const f = fakes();
@@ -100,6 +100,7 @@ test("no commit, the item open, first time: dropped and the goal reruns once, wi
   expect(f.specs[0]).toContain("line 30");
   expect(f.specs[0]).not.toContain("line 10\n");
   expect(notes(id)).toContain("made no commit");
+  expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
 });
 
 const dottedGoal = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(issues.addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." })), true)!.value;
@@ -141,19 +142,6 @@ test("the second no-commit run with no claim asks Chris: no drop and the issue s
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
   expect(ask(id)).not.toBeNull();
   expect(notes(id)).toContain("hit the same case again");
-});
-
-test("a repeated no-commit run on an issue already sent back to triage once gets an Ask", async () => {
-  const id = goal();
-  const f = fakes();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
-  await dispatch(f);
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
-  await dispatch(f);
-  // Triage rewrote the goal and the run ends with no commit again.
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
-  await dispatch(f);
-  expect(ask(id)).not.toBeNull();
 });
 
 test("an infrastructure failure of an agent run is rechecked once; of a land, landed again once", async () => {
@@ -300,13 +288,4 @@ test("a rescue whose lock wait runs out skips the job and does not throw", async
     await dispatch(f);
     expect(f.calls).toEqual([]);
   } finally { delete process.env.ALEPH_RESCUE_WAIT_MS; release(); }
-});
-
-test("a first no-commit run on an open item is dropped for a rerun and states no fate", async () => {
-  const id = goal();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
-  const f = fakes();
-  await dispatch(f);
-  expect(f.calls[0]).toBe(`drop fac-${id}`);
-  expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
 });

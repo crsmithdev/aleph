@@ -138,8 +138,8 @@ test("the check issue filed after a land takes the priority of the landed issue"
   expect(issues.find(doc, 2)!.fm.priority).toBe("critical");
 });
 
-test("a batch of three: one check call, one push, three commits, each with its own Job trailer", async () => {
-  const [a, b, c] = [job("t1", [["t1.txt", "1\n"]]), queued(job("t2", [["t2.txt", "2\n"]])), queued(job("t3", [["t3.txt", "3\n"]]))];
+test("a batch of three: one check call, one push, three commits, each with its own Job and Issue trailers", async () => {
+  const [a, b, c] = [job("t1", [["t1.txt", "1\n"]], { on: "demo-11" }), queued(job("t2", [["t2.txt", "2\n"]], { on: "demo-12" })), queued(job("t3", [["t3.txt", "3\n"]], { on: "demo-13" }))];
   const p = ports();
   const r = await land(a, repo, p);
   expect(r).toMatchObject({ code: 0, outcome: { condition: "landed" } });
@@ -149,15 +149,10 @@ test("a batch of three: one check call, one push, three commits, each with its o
   expect(given(c).checks).toEqual([{ name: "fake", ok: true, seconds: 0 }]);
   for (const e of [a, b, c]) expect(remote("log", "-1", "--format=%s", `--grep=^Job: ${e.run.job}$`, "main")).toBe(`add ${e.run.name}.txt`);
   expect(remote("log", "-1", "--format=%H", `--grep=^Job: ${b.run.job}$`, "main")).toBe(given(b).verdict.commit);
+  for (const [e, n] of [[a, 11], [b, 12], [c, 13]] as const) expect(remote("log", "-1", "--format=%b", `--grep=^Job: ${e.run.job}$`, "main")).toContain(`Issue: demo-${n}\n`);
   expect(remote("rev-list", "--count", "main")).toBe("4");
   expect(landLog(a)).toContain("batch of 3");
   expect(existsSync(join(repo.path, "t3.txt"))).toBe(true);
-});
-
-test("in a batch each commit has the Issue trailer of its own run", async () => {
-  const [a, b, c] = [job("t1", [["t1.txt", "1\n"]], { on: "demo-11" }), queued(job("t2", [["t2.txt", "2\n"]], { on: "demo-12" })), queued(job("t3", [["t3.txt", "3\n"]], { on: "demo-13" }))];
-  expect(await land(a, repo, ports())).toMatchObject({ code: 0, outcome: { condition: "landed" } });
-  for (const [e, n] of [[a, 11], [b, 12], [c, 13]] as const) expect(remote("log", "-1", "--format=%b", `--grep=^Job: ${e.run.job}$`, "main")).toContain(`Issue: demo-${n}\n`);
 });
 
 test("a queued land with a batch verdict in its folder returns that verdict", async () => {
@@ -361,18 +356,17 @@ test("a member that failed its checks in attempt 1 is not in the retry after mai
   expect(mainFiles()).not.toContain("rbad.txt");
 });
 
-for (const names of [["tla", "tlbad", "tlr"], ["tl2a", "tl2bad"]]) {
-  test(`a member that failed in attempt 1 does not take the leader out when main moves twice: batch of ${names.length}`, async () => {
-    const [lead, bad, ...rest] = names.map((n, i) => { const e = job(n, [[`${n}.txt`, "x\n"]]); return i ? queued(e) : e; });
-    const r = await land(lead, repo, ports({ bad: both(`${names[0]}.txt`, `${names[1]}.txt`), races: 2, raceOn: (n) => n[0] === names[0] && !n.includes(names[1]) }));
-    expect(r.outcome.condition).toBe("landed");
-    expect(given(bad).verdict.condition).toBe("failed");
-    for (const e of rest) expect(given(e).verdict.condition).toBe("landed");
-    expect(landLog(lead).split("main moved; merging again").length - 1).toBe(2);
-    expect(mainFiles()).toContain(`${names[0]}.txt`);
-    expect(mainFiles()).not.toContain(`${names[1]}.txt`);
-  });
-}
+test("a member that failed in attempt 1 does not take the leader out when main moves twice", async () => {
+  const names = ["tla", "tlbad", "tlr"];
+  const [lead, bad, ...rest] = names.map((n, i) => { const e = job(n, [[`${n}.txt`, "x\n"]]); return i ? queued(e) : e; });
+  const r = await land(lead, repo, ports({ bad: both(`${names[0]}.txt`, `${names[1]}.txt`), races: 2, raceOn: (n) => n[0] === names[0] && !n.includes(names[1]) }));
+  expect(r.outcome.condition).toBe("landed");
+  expect(given(bad).verdict.condition).toBe("failed");
+  for (const e of rest) expect(given(e).verdict.condition).toBe("landed");
+  expect(landLog(lead).split("main moved; merging again").length - 1).toBe(2);
+  expect(mainFiles()).toContain(`${names[0]}.txt`);
+  expect(mainFiles()).not.toContain(`${names[1]}.txt`);
+});
 
 test("a job already on main by its Job trailer lands as that commit and does not merge again", async () => {
   const e = job("pushed", [["p.txt", "p\n"]]);

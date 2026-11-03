@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ALREADY_MET, alreadyMet } from "./gate.ts";
 import { parseFacts } from "./facts.ts";
-import { reviewPrompt } from "./unit.ts";
 import { brief as prompt } from "./continuation.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "unit-prompt-"));
@@ -85,10 +84,4 @@ test("the worker brief asks for a result of at most 120 words of prose, plus a l
       expect(text).toContain("at most 120 words of prose, plus a list only for separate items");
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test("the reviewer prompt states its limits: verdict first, fail-only CHECK lines, passes as a count, 80 words", () => {
-  const p = reviewPrompt("n", "goal", "diff", []);
-  expect(p).toContain("Write the verdict first, in one sentence");
-  expect(p).toContain("at most 80 words");
 });

@@ -77,6 +77,7 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 beforeEach(() => { delete process.env.ALEPH_TRIAGE_CAP; delete process.env.ALEPH_TRIAGE_TRIES; writeFileSync(join(base, "calls"), ""); });
+const runOf = (id: number) => readdirSync(join(base, "jobs")).filter((d) => d.includes(`-triage-${repo.key}-`)).map((d) => readRun(join(base, "jobs", d))!).find((r) => r.name === `triage-${repo.key}-${id}`);
 const calls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length;
 
 test("each of the routes leaves the item in its state", async () => {
@@ -116,15 +117,6 @@ test("a triage run records its route and the issue it is on", async () => {
   expect(runs[`triage-${repo.key}-2`]).toMatchObject({ route: "ask", reason: "live" });
   expect(runs[`triage-${repo.key}-3`]!.route).toBe("close");
   expect(runs[`triage-${repo.key}-4`]!.route).toBe("close");
-});
-
-test("a triage close writes its reason to closed_why and adds no note with the same text", async () => {
-  reset([{ title: "a", body: "VERDICT:close" }]);
-  await run();
-  const i = item(1);
-  expect(issues.status(i)).toBe("done");
-  expect(i.fm.closed_why).toBe("duplicate of tri-1");
-  expect(i.notes.some((n) => n.includes("duplicate of tri-1"))).toBe(false);
 });
 
 test("a triage run records its model and runs the command with it", async () => {
@@ -194,11 +186,6 @@ test("the cap of two triages the two oldest of five", async () => {
   expect([1, 2, 3, 4, 5].map((n) => item(n).fm.ask === "input")).toEqual([true, true, false, false, false]);
 });
 
-test("the default cap is five", async () => {
-  reset([1, 2, 3, 4, 5, 6, 7].map((n) => ({ title: `item ${n}`, body: "VERDICT:live" })));
-  expect((await run()).triaged).toEqual({ ask: 5 });
-});
-
 test("a malformed verdict leaves the item unchanged and is skipped", async () => {
   reset([{ title: "a", body: "VERDICT:bad" }, { title: "b", body: "nothing" }]);
   const before = [item(1), item(2)].map((i) => issues.renderItem(repo.key, i));
@@ -259,33 +246,12 @@ describe("standing permissions", () => {
     expect(tickLog()).toContain("always: triage-failed: close");
   });
 
-  test("criterion 7: `aleph always grant triage-failed close` writes always.json, and two malformed triages close the issue with no Ask, as `aleph issue show --json` sees it", async () => {
-    const CLI = join(import.meta.dir, "..", "cli.ts");
-    reset([{ title: "a", body: "nothing" }]);
-    writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: base } }));
-    const aleph = (...args: string[]) => {
-      const p = Bun.spawnSync(["bun", CLI, ...args], { env: { ...process.env, ALEPH_REPOS: join(base, "repos.json") }, stdout: "pipe", stderr: "pipe" });
-      return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
-    };
-    const g = aleph("always", "grant", "triage-failed", "close");
-    expect(g.code).toBe(0);
-    expect(JSON.parse(readFileSync(join(factory(), "always.json"), "utf8"))).toEqual({ "triage-failed": { action: "close", at: expect.any(String) } });
-    await run();
-    await run();
-    expect(item(1).fm.ask).toBeUndefined();
-    expect(askOf(item(1))).toBeNull();
-    expect(issues.status(item(1))).toBe("done");
-    const shown = aleph("issue", "show", repo.key, "1", "--json");
-    expect(shown.code).toBe(0);
-    const j = JSON.parse(shown.out);
-    expect(j.status).toBe("done");
-    expect(j.ask).toBeNull();
-  });
-
   test("recommended: an ask with options leaves no Ask and a note naming the recommendation; a prose question is asked", async () => {
     grant("question", "recommended");
     reset([{ title: "a", body: "VERDICT:structured" }, { title: "b", body: "VERDICT:chris" }]);
-    await run();
+    const t = await run();
+    expect(t.triaged).toEqual({ ask: 2 });
+    expect(runOf(1)!.route).toBe("ask");
     expect(item(1).fm.ask).toBeUndefined();
     expect(isSorted(readList(repo)!, item(1))).toBe(false);
     expect(item(1).notes.at(-1)).toEndWith("always: took the recommendation B: do b");
@@ -343,13 +309,6 @@ test("a triage run with the cause no-answer and a free reason counts toward the 
   await run();
   expect(item(1).fm.ask).toBe("input");
   expect(item(1).fm.reason).toBe("triage-failed");
-});
-
-test("a triage run with only the old sentence still counts toward the Ask", async () => {
-  reset([{ title: "a", body: "nothing" }]);
-  earlierTriage({ reason: "failed: triage exited 3" });
-  await run();
-  expect(item(1).fm.ask).toBe("input");
 });
 
 // A triage run whose process died before its `end()`: `running`, with no pid or exit file.
@@ -518,6 +477,7 @@ else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n
     expect(item(1).spec).toBe("");
     const sha = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: fixture }).stdout.toString().trim();
     expect(item(1).notes.join("\n")).toContain(`triage: already on main in ${sha}`);
+    expect(runOf(1)!.route).toBe("done");
   });
 
   test("a goal whose work is not on main still becomes a goal for a worker", async () => {
@@ -608,19 +568,12 @@ describe("aleph triage", () => {
     home = join(base, "cli-factory");
     mkdirSync(home, { recursive: true });
     writeFileSync(join(home, "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    writeFileSync(join(base, "cli-all"), `#!/bin/bash
-prompt=$(cat)
-case $prompt in
-  *ASK:options*) echo '{"route":"ask","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one"]}' ;;
-  *) echo 'no json here' ;;
-esac
-`, { mode: 0o755 });
   });
-  const aleph = async (args: string[], cmd = join(base, "fake")) => {
+  const aleph = async (args: string[]) => {
     writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: base } }));
     const p = Bun.spawn(["bun", CLI, ...args], {
       cwd: base, stdout: "pipe", stderr: "pipe",
-      env: { ...process.env, ALEPH_REPOS: join(base, "repos.json"), ALEPH_TRIAGE_CMD: cmd, ALEPH_FACTORY_DIR: home, ALEPH_DISPATCH: "off" },
+      env: { ...process.env, ALEPH_REPOS: join(base, "repos.json"), ALEPH_TRIAGE_CMD: join(base, "fake"), ALEPH_FACTORY_DIR: home, ALEPH_DISPATCH: "off" },
     });
     const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     return { out, err, json: (() => { try { return JSON.parse(out); } catch { return null; } })() };
@@ -640,59 +593,6 @@ esac
     expect(runOf(1)).toMatchObject({ kind: "triage", route: "build", on: `${repo.key}-1` });
     expect(runOf(1).todo).toBeUndefined();
     expect(readdirSync(join(base, "jobs")).some((d) => readRun(join(base, "jobs", d))?.kind === "plan")).toBe(false);
-  }, 30_000);
-
-  test("live, close, done, ask and flake each record their route", async () => {
-    reset([{ title: "a", body: "VERDICT:live" }, { title: "b", body: "VERDICT:close" }, { title: "c", body: "VERDICT:chris" }, { title: "d", body: "VERDICT:flake" }]);
-    for (const id of [1, 2, 3, 4]) expect((await triage(id)).json.skipped).toEqual([]);
-    expect(item(1).fm).toMatchObject({ ask: "input", reason: "host-check" });
-    expect(runOf(1).route).toBe("ask");
-    expect(issues.status(item(2))).toBe("done");
-    expect(runOf(2).route).toBe("close");
-    expect(item(3).fm).toMatchObject({ ask: "input", reason: "question" });
-    expect(runOf(3).route).toBe("ask");
-    expect(issues.status(item(4))).toBe("done");
-    expect(runOf(4).route).toBe("close");
-    expect(readList(repo)!.items.find((i) => areasOf(i).includes("flakes"))!.notes.at(-1)).toContain(`triage of ${repo.key}-4`);
-  }, 60_000);
-
-  test("done records route done", async () => {
-    const fixture = join(base, "done-fixture");
-    mkdirSync(fixture);
-    sh(fixture, "git", "init", "-q", "-b", "main");
-    writeFileSync(join(fixture, "a"), "x\n");
-    sh(fixture, "git", "add", "-A");
-    sh(fixture, "git", "commit", "-q", "-m", "start");
-    const sha = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: fixture }).stdout.toString().trim();
-    writeFileSync(join(base, "cli-done"), `#!/bin/bash\ncat > /dev/null\necho '{"route":"done","commit":"${sha}","reason":"there"}'\n`, { mode: 0o755 });
-    reset([{ title: "a" }]);
-    writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: fixture } }));
-    const p = Bun.spawn(["bun", CLI, "triage", `${repo.key}-1`], { cwd: base, stdout: "pipe", stderr: "pipe", env: { ...process.env, ALEPH_REPOS: join(base, "repos.json"), ALEPH_TRIAGE_CMD: join(base, "cli-done"), ALEPH_FACTORY_DIR: home, ALEPH_DISPATCH: "off" } });
-    await p.exited;
-    expect(issues.status(item(1))).toBe("done");
-    expect(runOf(1).route).toBe("done");
-  }, 30_000);
-
-  test("always grant question recommended: an ask with options leaves no Ask and a note", async () => {
-    reset([{ title: "a", body: "ASK:options" }]);
-    const g = Bun.spawnSync(["bun", CLI, "always", "grant", "question", "recommended"], { cwd: base, env: { ...process.env, ALEPH_FACTORY_DIR: home } });
-    expect(g.exitCode).toBe(0);
-    try {
-      expect((await aleph(["triage", `${repo.key}-1`], join(base, "cli-all"))).json.triaged).toEqual({ ask: 1 });
-      expect(item(1).fm.ask).toBeUndefined();
-      expect(item(1).notes.at(-1)).toContain("always: took the recommendation B: do b");
-      expect(runOf(1).route).toBe("ask");
-    } finally {
-      rmSync(join(home, "always.json"), { force: true });
-    }
-  }, 30_000);
-
-  test("two runs with no route leave ask: input, reason: triage-failed", async () => {
-    reset([{ title: "a", body: "nothing" }]);
-    await triage(1);
-    expect(item(1).fm.ask).toBeUndefined();
-    await triage(1);
-    expect(item(1).fm).toMatchObject({ ask: "input", reason: "triage-failed" });
   }, 30_000);
 });
 

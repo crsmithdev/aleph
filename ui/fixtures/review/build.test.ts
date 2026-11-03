@@ -20,18 +20,12 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("the environment the review fixture returns points the factory folder under its dest", () => {
+test("the fixture environment points the factory folder under its dest, and a factory log line lands there, not in the live factory", () => {
   const dest = join(dir, "fx");
   const env = buildReviewFixture(dest);
   expect(env.ALEPH_FACTORY_DIR).toBe(join(dest, "factory"));
   Object.assign(process.env, env);
   expect(layout().factory).toBe(join(dest, "factory"));
-});
-
-test("a factory log line written under the fixture environment lands under the fixture, not the live factory", () => {
-  const dest = join(dir, "fx");
-  const env = buildReviewFixture(dest);
-  Object.assign(process.env, env);
   // A token unique to this run, so lines already in the live log can never match it.
   const line = `demo: acceptance not run: fetch failed ${randomUUID()}`;
   factoryLog(line);

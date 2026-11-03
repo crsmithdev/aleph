@@ -116,6 +116,7 @@ test("every API answer carries the server's version; the page and its modules ar
 
 test("x-aleph-login is on every API answer behind the gate, and absent without a password", async () => {
   expect((await at("/api/_test/x")).headers.get("x-aleph-login")).toBeNull();
+  expect((await at("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "x" }) })).status).toBe(404);
   const restorePassword = withEnv({ ALEPH_UI_PASSWORD: "hunter2" });
   const { at: g, stop: stopGated } = await withServer({ warm: false });
   try {

@@ -154,6 +154,16 @@ describe("the writes", () => {
     expect(issues.status(item(r, 1))).toBe("open");
   });
 
+  test("notes append in order under one notes marker, and the request keeps its blank line", () => {
+    const r = repo();
+    store.writeList(r, "seed", (doc) => { issues.add(doc, "one", { request: "Written long ago.\n\nDone when it is done." }); return true; });
+    for (const t of ["first finding", "second finding", "third finding"]) expect(store.note(r, 1, t)).toBeNull();
+    expect(item(r, 1).notes.map((l) => l.split(": ").at(-1))).toEqual(["first finding", "second finding", "third finding"]);
+    const text = readFileSync(join(base, "items", r.key, "backlog", "tasks", `${r.key}-1.md`), "utf8");
+    expect(text).toContain("---\n<!-- request -->\nWritten long ago.\n\nDone when it is done.\n<!-- notes -->\n- ");
+    expect(text.match(/<!-- notes -->/g)).toHaveLength(1);
+  });
+
   test("note with a label, after askChris set an ask", () => {
     const r = repo([{ title: "one", labels: ["goal"] }]);
     const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };

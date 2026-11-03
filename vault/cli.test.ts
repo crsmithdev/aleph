@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recallQuery } from "./lib/recall-query.ts";
@@ -49,7 +49,7 @@ describe("init", () => {
     const r = cli("init");
     expect(r.code).toBe(0);
     expect(r.json.commit).toMatch(/^[0-9a-f]{7,}$/);
-    for (const p of ["VAULT.md", "Home.md", "MEMORY.md", "wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "daily", "archive", "attachments", ".obsidian/daily-notes.json", ".gitignore"]) expect(existsSync(join(vault, p))).toBe(true);
+    for (const p of ["VAULT.md", "Home.md", "MEMORY.md", "wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "wiki/episodes/.gitkeep", "daily", "archive", "attachments", ".obsidian/daily-notes.json", ".gitignore"]) expect(existsSync(join(vault, p))).toBe(true);
     const daily = JSON.parse(readFileSync(join(vault, ".obsidian/daily-notes.json"), "utf8"));
     expect(daily).toEqual({ folder: "daily", format: "YYYY-MM-DD" });
     expect(JSON.parse(readFileSync(join(vault, ".obsidian/app.json"), "utf8")).attachmentFolderPath).toBe("attachments");
@@ -837,6 +837,7 @@ describe("provenance and the contradiction screen", () => {
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("Widget Registry");
     expect(r.stderr).toContain("add it to supersedes or fix the draft");
+    expect(r.stderr).toContain("name it in consistent_with");
     expect(snapshot()).toBe(before);
     expect(asked.length).toBe(1);
   });
@@ -861,12 +862,6 @@ describe("provenance and the contradiction screen", () => {
     expect(r.stderr).toContain("No Such Note");
     expect(snapshot()).toBe(before);
   });
-  test("the refusal hint names consistent_with", async () => {
-    reset(0.9);
-    const r = await write(note("Widget Registry Third", { scope: "screen" }));
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("consistent_with");
-  });
   test("p 0.5 writes", async () => {
     await live("Gadget Ledger");
     reset(0.5);
@@ -887,22 +882,20 @@ describe("provenance and the contradiction screen", () => {
     expect(asked.length).toBe(0);
   });
   test("one request holds at most 20 questions", async () => {
-    for (let i = 0; i < 25; i++) await live(`Turbine Number ${"abcdefghijklmnopqrstuvwxy"[i]}`);
+    // 25 live notes put on disk as one commit, not 25 CLI writes: the screen reads the notes from disk.
+    for (const c of "abcdefghijklmnopqrstuvwxy") copyFileSync(note(`Turbine Number ${c}`, { scope: "screen" }), join(v, "wiki", "gotchas", `Turbine Number ${c}.md`));
+    for (const args of [["add", "-A"], ["commit", "-qm", "turbines"]]) expect(Bun.spawnSync(["git", "-C", v, ...args], { env: { ...process.env, ...testEnv } }).exitCode).toBe(0);
     reset(0.1);
     expect((await write(note("Turbine Summary", { scope: "screen" }))).code).toBe(0);
     expect(asked.length).toBe(1);
     expect(Object.keys(asked[0].questions).length).toBe(20);
-  // 26 CLI processes (25 live notes and the write), so it needs more than the 5 s default under load. Matches the 30 s the test script uses.
-  }, 30000);
+  });
 });
 
 describe("episode", () => {
   const episodeBody = (word: string, skip?: string) => ["Goal", "What landed", "How it went", "Cost", "What went wrong"]
     .filter((h) => h !== skip).map((h) => `## ${h}\n${word} ${h.toLowerCase()}\n`).join("\n");
   const episode = (title: string, word: string, skip?: string) => note(title, { kind: "episode" }, episodeBody(word, skip));
-  test("init makes wiki/episodes/", () => {
-    expect(existsSync(join(vault, "wiki/episodes/.gitkeep"))).toBe(true);
-  });
   test("a draft with the five sections is written to wiki/episodes/", () => {
     const r = cli("write", episode("Ledger Episode", "ledger"), "--why", "x");
     expect(r.code).toBe(0);

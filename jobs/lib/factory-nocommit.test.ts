@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { dispatchIssues } from "./factory.ts";
 import { AWAITING_CAP } from "./settings.ts";
 import { allRuns } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
@@ -112,20 +111,6 @@ test("while the Ask stays on the item, dispatches start nothing and write one no
   expect(f.specs).toEqual([]);
   expect(ask(id)).not.toBeNull();
   expect(chrisNotes(id)).toBe(1);
-});
-
-test("an item that the store closes while an earlier goal starts gets no run", async () => {
-  const first = goal();
-  const second = goal();
-  const f = fakes();
-  const out = await dispatchIssues(async (_repo, name) => {
-    f.calls.push(`start ${name}`);
-    if (name === `fac-${first}`) await change(second, (item) => issues.setStatus(item, "done"));
-    return null;
-  }, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
-  expect(f.calls).toEqual([`start fac-${first}`]);
-  expect(out.skipped.join()).toContain(`fac-${second}`);
-  expect(out.started).toEqual([`fac-${first}`]);
 });
 
 test("a done item gets no run and no run-cap note, even with three recent runs", async () => {

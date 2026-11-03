@@ -164,36 +164,6 @@ test("add gives source agent under CLAUDECODE, chris without it, and worker for 
   expect(lint.code, lint.out + lint.err).toBe(0);
 });
 
-test("a write leaves the files of other items byte for byte", () => {
-  const old = remoteItem(3);
-  aleph("issue", "add", "proj", "New one");
-  expect(remoteItem(3)).toBe(old);
-  expect(old).toContain("Written long ago.\n\nDone when it is done.");
-});
-
-test("notes append and never rewrite an existing line", () => {
-  aleph("issue", "add", "proj", "Item four");
-  aleph("issue", "note", "proj", "4", "first finding");
-  const after = aleph("issue", "note", "proj", "4", "second finding");
-  expect(after.code).toBe(0);
-  const shown = JSON.parse(aleph("issue", "show", "proj", "4", "--json").out);
-  expect(shown.notes).toHaveLength(2);
-  expect(shown.notes[0]).toContain("first finding");
-  expect(shown.notes[1]).toContain("second finding");
-  expect(doc(4).match(/<!-- notes -->/g)).toHaveLength(1);
-});
-
-test("done and drop set a field, never move or renumber the item", () => {
-  aleph("issue", "add", "proj", "Ships");
-  aleph("issue", "add", "proj", "Abandoned");
-  expect(aleph("issue", "done", "proj", "4", "landed in abc123").code).toBe(0);
-  expect(aleph("issue", "drop", "proj", "5", "superseded by 4").code).toBe(0);
-  expect(JSON.parse(aleph("issue", "list", "proj", "--json").out).map((r: any) => [r.id, r.status])).toEqual([[3, "open"]]);
-  expect(JSON.parse(aleph("issue", "list", "proj", "--status", "dropped", "--json").out).map((r: any) => r.id)).toEqual([5]);
-  expect(JSON.parse(aleph("issue", "list", "proj", "--status", "done", "--json").out).map((r: any) => r.id)).toEqual([4]);
-  expect(JSON.parse(aleph("issue", "show", "proj", "4", "--json").out).notes[0]).toContain("landed in abc123");
-});
-
 test("a title that YAML would misread is quoted in the file and comes back exactly", () => {
   const title = '`/play` says "done" \\ then: drops it';
   expect(aleph("issue", "add", "proj", title).code).toBe(0);
@@ -201,24 +171,14 @@ test("a title that YAML would misread is quoted in the file and comes back exact
   expect(JSON.parse(aleph("issue", "show", "proj", "4", "--json").out).title).toBe(title);
 });
 
-test("drop refuses without a reason", () => {
-  aleph("issue", "add", "proj", "Item four");
-  const r = aleph("issue", "drop", "proj", "4");
-  expect(r.code).toBe(1);
-  expect(r.err).toContain("say why");
-});
-
 test("add and edit refuse a priority outside low, medium, high, critical", () => {
-  const before = aleph("issue", "list", "proj", "--json").out;
+  const before = sh(base, "git", "--git-dir", remote, "rev-parse", "main");
   const r = aleph("issue", "add", "proj", "Urgent thing", "--priority", "urgent");
   expect(r.code).not.toBe(0);
   for (const p of ["low", "medium", "high", "critical"]) expect(r.err).toContain(p);
-  expect(aleph("issue", "list", "proj", "--json").out).toBe(before);
-  for (const p of ["low", "medium", "high", "critical"]) {
-    expect(aleph("issue", "add", "proj", `Kept ${p}`, "--priority", p).code).toBe(0);
-    const rows = JSON.parse(aleph("issue", "list", "proj", "--json").out);
-    expect(rows.find((x: any) => x.title === `Kept ${p}`).priority).toBe(p);
-  }
+  expect(sh(base, "git", "--git-dir", remote, "rev-parse", "main")).toBe(before);
+  expect(aleph("issue", "add", "proj", "Kept critical", "--priority", "critical").code).toBe(0);
+  expect(remoteItem(4)).toContain("priority: critical\n");
   const e = aleph("issue", "edit", "proj", "3", "--priority", "urgent");
   expect(e.code).not.toBe(0);
   expect(e.err).toContain("critical");
@@ -255,6 +215,7 @@ test("lint refuses an unknown status and a duplicate id, and --fix cannot save i
 
 test("add starts a list for a repo that has none; every other verb refuses", () => {
   seed(null);
+  expect(aleph("issue", "list", "nope").err).toContain("no repo named nope");
   expect(aleph("issue", "list", "proj").code).toBe(1);
   expect(aleph("issue", "list", "proj").err).toContain("the work store has no list for proj");
   const a = aleph("issue", "add", "proj", "The first thing");
@@ -263,11 +224,6 @@ test("add starts a list for a repo that has none; every other verb refuses", () 
   expect(sh(base, "git", "--git-dir", remote, "show", "main:proj/backlog/config.yml")).toContain('task_prefix: "proj"');
   expect(JSON.parse(aleph("issue", "list", "proj", "--json").out)).toHaveLength(1);
   expect(aleph("issue", "lint", "proj").code).toBe(0);
-});
-
-test("an unknown repo and an unknown item both refuse", () => {
-  expect(aleph("issue", "list", "nope").err).toContain("no repo named nope");
-  expect(aleph("issue", "show", "proj", "99").err).toContain("has no issue 99");
 });
 
 test("dates are local, not UTC", () => {
@@ -287,11 +243,6 @@ test("dates are local, not UTC", () => {
   expect(now.endsWith(`-${dayOfMonth.padStart(2, "0")}`)).toBe(true);
 });
 
-test("a write keeps one blank line between the header, the body and the notes", () => {
-  for (let i = 0; i < 3; i++) aleph("issue", "note", "proj", "3", `note ${i}`);
-  expect(doc(3)).toContain("---\n<!-- request -->\nWritten long ago.\n\nDone when it is done.\n<!-- notes -->\n- ");
-});
-
 test("add takes a body of several lines from stdin", () => {
   const a = alephIn({}, "Why it matters.\n\nDone when the gate counts.\n", "issue", "add", "proj", "Count at the gate", "--request", "-");
   expect(a.code).toBe(0);
@@ -300,23 +251,16 @@ test("add takes a body of several lines from stdin", () => {
   expect(remoteItem(4)).toContain("---\n<!-- request -->\nWhy it matters.\n\nDone when the gate counts.");
 });
 
-test("park: the reason is a note, closed_as stays unset, list shows parked and hides done", () => {
+test("park: the reason is a note, closed_as stays unset, list shows parked and --status parked filters", () => {
   aleph("issue", "add", "proj", "Needs a look");
-  aleph("issue", "add", "proj", "Shipped");
-  aleph("issue", "done", "proj", "5", "ok");
   const p = aleph("issue", "edit", "proj", "4", "--status", "parked", "needs more investigation");
   expect(p.code).toBe(0);
   expect(JSON.parse(p.out).status).toBe("parked");
   expect(doc(4)).not.toContain("closed_as");
-  expect(JSON.parse(aleph("issue", "show", "proj", "4", "--json").out).notes.at(-1)).toContain("needs more investigation");
+  expect(doc(4)).toContain("needs more investigation");
   const ids = (...a: string[]) => JSON.parse(aleph("issue", "list", "proj", ...a, "--json").out).map((r: any) => r.id);
   expect(ids()).toEqual([3, 4]);
   expect(ids("--status", "parked")).toEqual([4]);
-  expect(ids("--status", "done")).toEqual([5]);
-  expect(JSON.parse(aleph("issue", "edit", "proj", "4", "--status", "open").out).status).toBe("open");
-  const a = aleph("issue", "add", "proj", "Filed parked", "--status", "parked");
-  expect(JSON.parse(a.out).added).toBe(6);
-  expect(ids("--status", "parked")).toEqual([6]);
 });
 
 test("edit replaces the title, body, priority and labels it is given, and keeps the notes", () => {
@@ -350,12 +294,6 @@ test("list and lint with no repo cover the repos with a run or an item update in
   expect(alephWith(e, "issue", "show").code).toBe(1);
 });
 
-test("edit with nothing to change refuses", () => {
-  const r = aleph("issue", "edit", "proj", "3");
-  expect(r.code).toBe(1);
-  expect(r.err).toContain("give --title, --request, --spec, --priority, --labels, --after");
-});
-
 /** Add item 4 with `fields` in its front matter, as an old writer would have left it. */
 function seedFields(fields: string): void {
   aleph("issue", "add", "proj", "Broken");
@@ -365,17 +303,11 @@ function seedFields(fields: string): void {
   sh(items, "git", "push", "-q", "origin", "main");
 }
 
-test("lint refuses a labels field and names the item", () => {
-  seedFields("labels: [ui]");
+test("lint refuses a labels field and a waiting_on field and names the item", () => {
+  seedFields("labels: [ui]\nwaiting_on: proj-1");
   const l = aleph("issue", "lint", "proj");
   expect(l.code).toBe(1);
   expect(l.err).toContain("item 4: labels is retired");
-});
-
-test("lint refuses a waiting_on field and names the item", () => {
-  seedFields("waiting_on: proj-1");
-  const l = aleph("issue", "lint", "proj");
-  expect(l.code).toBe(1);
   expect(l.err).toContain("item 4: waiting_on is retired");
 });
 
@@ -406,17 +338,9 @@ test("aleph issue lint reads a dotted goal file and names it by its dotted id", 
 });
 
 test("aleph issue is the only command: aleph todo is gone", () => {
-  expect(aleph("issue", "add", "proj", "Under the name").code).toBe(0);
-  const l = JSON.parse(aleph("issue", "list", "proj", "--json").out).slice(-1);
-  const id = String(l[0].id);
+  const before = sh(base, "git", "--git-dir", remote, "rev-parse", "main");
   expect(aleph("todo", "add", "proj", "Under the old name").code).toBe(1);
-  expect(aleph("todo", "list", "proj").code).toBe(1);
-  expect(JSON.parse(aleph("issue", "show", "proj", id, "--json").out).title).toContain("Under the");
-  expect(aleph("issue", "note", "proj", id, "a note").code).toBe(0);
-  expect(aleph("issue", "edit", "proj", id, "--priority", "high").code).toBe(0);
-  expect(aleph("issue", "lint", "proj").code).toBe(0);
-  expect(aleph("issue", "done", "proj", id).code).toBe(0);
-  expect(aleph("issue", "show", "proj", "99").err).toContain("has no issue 99");
+  expect(sh(base, "git", "--git-dir", remote, "rev-parse", "main")).toBe(before);
   const usage = aleph("nonsense").err;
   expect(usage).toContain("|issue|");
   expect(usage).not.toContain("todo");

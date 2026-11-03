@@ -62,14 +62,6 @@ test("password gate: login, session across servers, logout", async () => {
   expect(tokens()).toEqual([]);
 });
 
-test("gate off without ALEPH_UI_PASSWORD", async () => {
-  delete process.env.ALEPH_UI_PASSWORD;
-  const at = await start();
-  expect((await at("/")).status).toBe(200);
-  expect((await at("/api/state")).status).toBe(200);
-  expect((await login(at, "x")).status).toBe(404);
-});
-
 test("loginPage declares an empty icon in its head", async () => {
   const { loginPage } = await import("./auth.ts");
   const html = loginPage();

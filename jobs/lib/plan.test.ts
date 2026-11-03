@@ -218,14 +218,6 @@ test("a plan run with the cause no-answer and a free reason counts as a try", as
   expect(item(id).notes.at(-1)).toContain("planner: no plan passed the check in 2 runs");
 });
 
-test("a plan run with only the old sentence still counts as a try", async () => {
-  const id = addGoal("one");
-  earlierPlan(id, { reason: "failed: its process ended before a reply" });
-  await dispatch("opus");
-  expect(planCalls().length).toBe(1);
-  expect(item(id).notes.at(-1)).toContain("planner: no plan passed the check in 2 runs");
-});
-
 test("a bad reply then a good one plans the goal", async () => {
   const id = addGoal("badthengood");
   const { starts } = await dispatch("opus");

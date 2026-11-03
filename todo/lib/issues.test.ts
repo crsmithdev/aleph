@@ -72,6 +72,33 @@ describe("issue verbs without argv", () => {
     expect(issues.status(item(r, 1))).toBe("open");
   });
 
+  test("done and drop set a status and keep the number; list hides them and --status picks each", () => {
+    const r = repo([{ title: "a" }, { title: "ships" }, { title: "abandoned" }]);
+    issueOps.close(r, 2, "done", "landed in abc123");
+    expect(issueOps.close(r, 3, "drop", "superseded by 2").result.status).toBe("dropped");
+    expect(store.readList(r)!.items.map((i) => [i.id, i.title])).toEqual([[1, "a"], [2, "ships"], [3, "abandoned"]]);
+    expect(item(r, 2).notes.at(-1)).toContain("landed in abc123");
+    const ids = (status?: string) => issueOps.list(r, { status }).map((i) => i.id);
+    expect(ids()).toEqual([1]);
+    expect(ids("done")).toEqual([2]);
+    expect(ids("dropped")).toEqual([3]);
+  });
+
+  test("edit parks with the reason as a note and no closed_as, unparks, and add can file parked", async () => {
+    const r = repo([{ title: "a" }]);
+    expect(issueOps.edit(r, 1, { status: "parked" }, "needs more investigation").result.status).toBe("parked");
+    expect(item(r, 1).fm.closed_as).toBeUndefined();
+    expect(item(r, 1).notes.at(-1)).toContain("needs more investigation");
+    expect(issueOps.edit(r, 1, { status: "open" }).result.status).toBe("open");
+    const a = await issueOps.add(r, "filed parked", { status: "parked" });
+    expect(issues.status(item(r, a.result.added))).toBe("parked");
+  });
+
+  test("edit with nothing to change is refused", () => {
+    const r = repo([{ title: "a" }]);
+    expect(refusal(() => issueOps.edit(r, 1, {}))).toContain("give --title, --request, --spec, --priority, --labels, --after");
+  });
+
   test("decide needs an issue with an Ask, clears it and makes no goal", () => {
     const r = repo([{ title: "a" }, { title: "b" }]);
     for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { setAsk(issues.find(doc, n)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
