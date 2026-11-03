@@ -37,7 +37,7 @@ afterEach(teardown);
   test("gate red main: a goal is not started while main is red and gets a red hold", async () => {
     const id = goal();
     const f = fakes();
-    const out = await dispatchIssues(f.start, async () => "tests failed", f.land, f.rescue);
+    const out = await dispatchIssues(f.start, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), f.land, f.rescue);
     expect(f.calls).toEqual([]);
     expect(out.started).toEqual([]);
     expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["red"]);

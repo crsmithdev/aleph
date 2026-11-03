@@ -7,6 +7,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import type { Rescue } from "./rescue.ts";
 import { allJobs, writeRun, type Run } from "./ledger.ts";
+import type { ChecksStop } from "./checks.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): void {
@@ -105,5 +106,5 @@ export const claimed = (name: string, result: string) => {
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
   return mk(name, "build", "stuck", { reason: "no commit" }, { "result.md": result });
 };
-export const withChecks = (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<string | null>) =>
+export const withChecks = (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<ChecksStop | null>) =>
   dispatchIssues(f.start, checks, f.land, f.rescue);

@@ -51,10 +51,3 @@ export const causeOf = (run: Run): Cause | undefined => statedOf(run)?.cause;
 
 /** The name of the check that stopped the run, if a check did. */
 export const failedCheckOf = (run: Run): string | undefined => statedOf(run)?.checkName;
-
-/** What a baseline runner's sentence says: the checks could not run (`infra`, never recorded), or the name of the check that failed. */
-export type BaselineReading = { infra: true } | { infra?: false; failed: string };
-export function readBaseline(why: string): BaselineReading {
-  if (/^(checks did not start|bundle failed|baseline did not run|worktree gone)/.test(why)) return { infra: true };
-  return { failed: why.replace(/^timed out: check /, "").replace(/ failed$/, "") };
-}

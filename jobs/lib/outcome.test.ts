@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { newsLine, type Run } from "./ledger.ts";
-import { causeOf, readBaseline, failedCheckOf } from "./outcome.ts";
+import { causeOf, failedCheckOf } from "./outcome.ts";
 
 const run = (o: Partial<Run>) => ({ kind: "build", job: "j", name: "n", repo: "fac", condition: "stuck", told: false, started: "", ...o }) as Run;
 
@@ -47,11 +47,4 @@ test("an old run with only the runners' sentence still reads as a cause", () => 
 test("the news names the stated check, and no other cause", () => {
   expect(newsLine(run({ condition: "failed", cause: "check", checkName: "tests", reason: "tests failed" }))).toBe("fac/n failed tests");
   expect(newsLine(run({ condition: "failed", cause: "other", reason: "commit-tree failed" }))).toBe("fac/n failed");
-});
-
-test("readBaseline: infra sentences are infra errors, the others name the failed check", () => {
-  for (const why of ["checks did not start", "bundle failed: x", "baseline did not run", "worktree gone"]) expect(readBaseline(why)).toEqual({ infra: true });
-  expect(readBaseline("tests failed")).toEqual({ failed: "tests" });
-  expect(readBaseline("timed out: check tests")).toEqual({ failed: "tests" });
-  expect(readBaseline("setup failed")).toEqual({ failed: "setup" });
 });

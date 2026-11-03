@@ -247,8 +247,8 @@ test("a goal that waits on an open after gets one hold record; a second dispatch
 
 test("a goal that a red main holds gets one hold record", async () => {
   const id = goal();
-  await dispatchIssues(async () => null, async () => "tests failed");
-  await dispatchIssues(async () => null, async () => "tests failed");
+  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
+  await dispatchIssues(async () => null, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
   const recs = readHolds([`fac-${id}`]);
   expect(recs).toHaveLength(1);
   expect(recs[0].kind).toBe("red");

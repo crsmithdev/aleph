@@ -21,7 +21,7 @@ import { serveShots } from "./shot.ts";
 import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, serveFetches, writeWebServer } from "./research.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./acceptance.ts";
-import { checksInSandbox, runChecks, stopFields, type ChecksStop } from "./checks.ts";
+import { HIDDEN_UNREADABLE, checksInSandbox, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
@@ -119,58 +119,22 @@ function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, s
           if (!files) { readable = false; break; }
           for (const [name, text] of Object.entries(files)) hidden[name in hidden ? `${r.on ?? onOf(r)}-${name}` : name] = text;
         }
-        why = readable ? await sandboxChecks(id, folder, on, commit, changed, phase, hidden) : { cause: "infra", reason: HIDDEN_UNREADABLE };
+        why = readable ? await sandboxChecks(taskOf(folder, on, changed, phase), id, commit, hidden) : { cause: "infra", reason: HIDDEN_UNREADABLE };
       } else {
         const owner = runs.find((r) => r.worktree && existsSync(r.worktree)) ?? runs[0];
-        why = await worktreeChecks(folder, owner, on, env, commit, changed, phase);
+        why = await worktreeChecks(taskOf(folder, on, changed, phase), inWorktree(owner.worktree!, env), owner, commit);
       }
       return { why, checks: readRun(folder)?.checks, log: existsSync(logFile) ? readFileSync(logFile, "utf8").slice(before) : undefined };
     },
   };
 }
 
-/** The checks on the tree in `wt`, with the given environment. */
-const inWorktree = (folder: string, wt: string, repo: Repo, env: Record<string, string | undefined>, changed: string[], phase: (p: string) => void) =>
-  runChecks({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, (check, out, limit) => exec(["bash", "-c", check.run], { cwd: wt, env, out, limit }));
+/** Runs one check in the tree `wt`, with the given environment. */
+const inWorktree = (wt: string, env: Record<string, string | undefined>): CheckExec => (check, out, limit) => exec(["bash", "-c", check.run], { cwd: wt, env, out, limit });
 
-/** The checks on `commit`, in the job's worktree, which is back on its branch after. */
-async function worktreeChecks(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, commit: string, changed: string[], phase: (p: string) => void): Promise<ChecksStop | null> {
-  const wt = run.worktree!;
-  if (!existsSync(wt)) return { cause: "infra", reason: `worktree gone: ${wt}` };
-  if (!git(wt, "checkout", "-q", "--detach", commit).ok) return { cause: "infra", reason: "checkout failed" };
-  try {
-    return await inWorktree(folder, wt, repo, env, changed, phase);
-  } finally {
-    git(wt, "checkout", "-q", "-f", run.branch!);
-  }
-}
-
-const HIDDEN_UNREADABLE = "hidden checks unreadable";
-
-/** The hidden test files of the run's item, none for a run with no item, or null when the work store cannot be read: such a run must not pass without them. Its scenarios go to the reviewer, not to a check. */
-function hiddenOf(repo: Repo, run: Run): Record<string, string> | null {
-  const id = onOf(run);
-  if (id === undefined) return {};
-  try {
-    const { [SCENARIOS]: _, ...tests } = readHidden(repo, id);
-    return tests;
-  } catch { return null; }
-}
-
-/** The checks on a land's squash commit: the commit goes in as a bundle. */
-async function sandboxChecks(id: string, folder: string, repo: Repo, commit: string, changed: string[], phase: (p: string) => void, hidden: Record<string, string>): Promise<ChecksStop | null> {
-  const dir = makeRunFolder(id);
-  const ref = `refs/aleph/land/${id}`;
-  try {
-    git(repo.path, "update-ref", ref, commit);
-    const b = git(repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
-    if (!b.ok) return { cause: "infra", reason: `bundle failed: ${b.out}` };
-    return await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/land.bundle", ref, hidden);
-  } finally {
-    git(repo.path, "update-ref", "-d", ref);
-    removeRunFolder(dir);
-  }
-}
+/** One run of checks: its steps are recorded in the run, and the process of each is kept in `child`. */
+const taskOf = (folder: string, repo: Repo, changed: string[], phase: (p: string) => void): CheckTask =>
+  ({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } });
 
 /**
  * Give each of the worker's commits a `Job:` trailer, so work that reaches
@@ -375,7 +339,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
   stampJob(wt, base, run.job);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
-  const failed = await inWorktree(folder, wt, repo, checkEnv, changed, phase);
+  const failed = await runChecks(taskOf(folder, repo, changed, phase), inWorktree(wt, checkEnv));
   if (failed) return { outcome: { condition: "failed", ...stopFields(failed) }, code: 1 };
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).

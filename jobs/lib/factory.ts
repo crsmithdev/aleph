@@ -17,7 +17,7 @@ import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { endKilledFacts, rescueStuck, type Rescue } from "./rescue.ts";
 import { clearRerun, goalBrief } from "./continuation.ts";
-import { readBaseline, type Fate } from "./outcome.ts";
+import { type Fate } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, lastReal, openJob } from "./job.ts";
 import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
@@ -28,7 +28,7 @@ import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
-import { baselineChecks } from "./checks.ts";
+import { baselineChecks, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
 import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
@@ -104,7 +104,7 @@ export function doneChecker(): (ref: string) => boolean {
 
 /** `tier` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
 type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<string | null>;
-type Checks = (repo: Repo, commit: string, logs: string) => Promise<string | null>;
+type Checks = (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
  * Start every ready goal, in order, until the live cap: an open goal item with
@@ -456,7 +456,7 @@ export type Baseline = { state: "green" } | { state: "red" | "unchecked" | "runn
  * taken starts nothing. Only a failed check is recorded: an error that kept
  * the checks from running is reported but tried again by the next dispatch.
  */
-export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<string | null>): Promise<Baseline> {
+export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>): Promise<Baseline> {
   const unchecked = (line: string): Baseline => ({ state: "unchecked", line });
   if (!fetchOrigin(repo.path).ok) return unchecked("main is unchecked: fetch failed");
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
@@ -471,9 +471,8 @@ export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, 
       b = known();
       if (!b) {
         const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key));
-        const read = why ? readBaseline(why) : null;
-        if (why && read?.infra) return unchecked(`main is unchecked: ${why}`);
-        b = { repo: repo.key, commit, ok: !why, ...(read && !read.infra ? { failed: read.failed } : {}) };
+        if (why && why.cause !== "check") return unchecked(`main is unchecked: ${why.reason}`);
+        b = { repo: repo.key, commit, ok: !why, ...(why ? { failed: why.checkName ?? "" } : {}) };
         const entry = b;
         await writeBaseline(repo.key, () => entry);
       }

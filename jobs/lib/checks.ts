@@ -6,7 +6,9 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { factoryDir, flakes, flakyFile, type Flake } from "./factory-status.ts";
-import { checkSlot, lock, type Check, type CheckResult, type Repo } from "./ledger.ts";
+import { checkSlot, lock, onOf, type Check, type CheckResult, type Repo, type Run } from "./ledger.ts";
+import { SCENARIOS } from "./author.ts";
+import { readHidden } from "../../todo/lib/store.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
@@ -158,8 +160,8 @@ export async function checksInSandbox(t: CheckTask, dir: string, bundle: string,
   return runHidden(t, { name: "hidden", run: `cp -r ../hidden .hidden; ${t.repo.hiddenRun}` }, exec(["hidden"]));
 }
 
-/** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else why not. For the factory's baseline. */
-export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<string | null> {
+/** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else the stop (`infra` when they could not run). For the factory's baseline. */
+export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<ChecksStop | null> {
   // The fixed name is safe: baseline() in factory.ts holds lock(`baseline-${repo.key}`) around this.
   const dir = makeRunFolder(`baseline-${repo.key}`);
   const ref = `refs/aleph/baseline/${repo.key}`;
@@ -168,13 +170,53 @@ export async function baselineChecks(repo: Repo, commit: string, logs: string): 
     mkdirSync(logs, { recursive: true });
     git(repo.path, "update-ref", ref, commit);
     const b = git(repo.path, "bundle", "create", join(dir, "out", "base.bundle"), ref);
-    if (!b.ok) return `bundle failed: ${b.out}`;
+    if (!b.ok) return { cause: "infra", reason: `bundle failed: ${b.out}` };
     const all = git(repo.path, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean);
-    return (await checksInSandbox({ folder: logs, repo, changed: all, phase: () => {} }, dir, "out/base.bundle", ref))?.reason ?? null;
+    const stop = await checksInSandbox({ folder: logs, repo, changed: all, phase: () => {} }, dir, "out/base.bundle", ref);
+    return !stop || stop.cause === "check" ? stop : { ...stop, cause: "infra" };
   } catch (e) {
-    return `baseline did not run: ${e instanceof Error ? e.message : e}`;
+    return { cause: "infra", reason: `baseline did not run: ${e instanceof Error ? e.message : e}` };
   } finally {
     git(repo.path, "update-ref", "-d", ref);
+    removeRunFolder(dir);
+  }
+}
+
+/** The checks on `commit`, in the run's worktree, which is back on its branch after. `exec` runs one check there. */
+export async function worktreeChecks(t: CheckTask, exec: CheckExec, run: Run, commit: string): Promise<ChecksStop | null> {
+  const wt = run.worktree!;
+  if (!existsSync(wt)) return { cause: "infra", reason: `worktree gone: ${wt}` };
+  if (!git(wt, "checkout", "-q", "--detach", commit).ok) return { cause: "infra", reason: "checkout failed" };
+  try {
+    return await runChecks(t, exec);
+  } finally {
+    git(wt, "checkout", "-q", "-f", run.branch!);
+  }
+}
+
+export const HIDDEN_UNREADABLE = "hidden checks unreadable";
+
+/** The hidden test files of the run's item, none for a run with no item, or null when the work store cannot be read: such a run must not pass without them. Its scenarios go to the reviewer, not to a check. */
+export function hiddenOf(repo: Repo, run: Run): Record<string, string> | null {
+  const id = onOf(run);
+  if (id === undefined) return {};
+  try {
+    const { [SCENARIOS]: _, ...tests } = readHidden(repo, id);
+    return tests;
+  } catch { return null; }
+}
+
+/** The checks on a land's squash commit: the commit goes in as a bundle. */
+export async function sandboxChecks(t: CheckTask, id: string, commit: string, hidden: Record<string, string>): Promise<ChecksStop | null> {
+  const dir = makeRunFolder(id);
+  const ref = `refs/aleph/land/${id}`;
+  try {
+    git(t.repo.path, "update-ref", ref, commit);
+    const b = git(t.repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
+    if (!b.ok) return { cause: "infra", reason: `bundle failed: ${b.out}` };
+    return await checksInSandbox(t, dir, "out/land.bundle", ref, hidden);
+  } finally {
+    git(t.repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);
   }
 }

@@ -33,7 +33,7 @@ test("no commit and the worker says the goal is already met, but main is red: dr
   claimed(`fac-${id}`, "Goal: Already met — main has it\n");
   const f = fakes();
   // Red main holds every start, so the goal waits; the rerun is the next dispatch on green main.
-  await withChecks(f, async () => "tests failed");
+  await withChecks(f, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(notes(id)).toContain("but main is red at");
   expect(allRuns()[0].run.fate).toBeUndefined();
@@ -50,7 +50,7 @@ test("no commit and the claim, but main cannot be checked: the run waits for the
   const id = goal();
   claimed(`fac-${id}`, "Goal: Already met\n");
   const f = fakes();
-  await withChecks(f, async () => "checks did not start");
+  await withChecks(f, async () => ({ cause: "infra" as const, reason: "checks did not start" }));
   expect(f.calls).toEqual([]);
   expect(allRuns()[0].run.condition).toBe("stuck");
   expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
@@ -60,7 +60,7 @@ test("a met goal: the claim waits on an unchecked main, then the next dispatch o
   const id = goal();
   claimed(`fac-${id}`, "Goal: Already met — main has it\n");
   const f = fakes();
-  await withChecks(f, async () => "checks did not start");
+  await withChecks(f, async () => ({ cause: "infra" as const, reason: "checks did not start" }));
   expect(f.calls).toEqual([]);
   await withChecks(f, async () => null);
   expect(f.calls).toEqual([`drop fac-${id}`]);
@@ -75,7 +75,7 @@ for (const red of [false, true]) {
     writeFileSync(join(first.folder, "rescued"), "claimed\n");
     claimed(`fac-${id}`, "Goal: Already met\n");
     const f = fakes();
-    await withChecks(f, async () => (red ? "tests failed" : null));
+    await withChecks(f, async () => (red ? { cause: "check" as const, checkName: "tests", reason: "tests failed" } : null));
     if (red) {
       expect(f.calls).toEqual([]);
       expect(ask(id)).not.toBeNull();
