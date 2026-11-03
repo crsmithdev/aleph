@@ -15,7 +15,7 @@ import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
 import { git } from "./git.ts";
 import { isVersion, specVersion } from "./goal-spec.ts";
-import { lastTagged, lock, type Repo } from "./ledger.ts";
+import { lastTagged, lock, TAG_FORMAT, type Repo } from "./ledger.ts";
 import { askChris, plainAsk } from "./ask.ts";
 import { factoryDir, issueJob, recordHold, recordSpecCost } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -45,7 +45,7 @@ Answer three questions:
 2. Does the Edit surface hold the code that each Oracle clause needs to change? Name each clause whose code is outside it.
 3. Does the Oracle ask for something that no check or reviewer can observe? Name each such clause.
 
-End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. Each problem must quote the clause and propose a change to the spec.`;
+End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. Each problem must quote the clause and propose a change to the spec. ${TAG_FORMAT}`;
 }
 
 /** The last `VERDICT:` line of a reply, or null when it has none. */

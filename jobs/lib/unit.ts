@@ -14,7 +14,7 @@ import { agentCall } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, verdict as reviewVerdict } from "./gate.ts";
 import { afterReview, awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
-import { tagged, isAgentRun, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, TAG_FORMAT, isAgentRun, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
@@ -621,7 +621,7 @@ behaviour of a module gets a row in that module's existing test file; a CLI end-
 command wiring. Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
 Write the verdict first, in one sentence. Then write one line for each failure only, each with its reason:
 \`CHECK: fail <clause>: <what was observed>\`. Do not write a CHECK line for a pass: give the passes as a count, such as \`7 of 9 passed\`. A sealed scenario is marked by its number only
-(\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Say each thing once.
+(\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Say each thing once. ${TAG_FORMAT}
 The text outside the CHECK lines is at most 80 words, and the VERDICT line does not repeat the CHECK lines. The
 number of CHECK lines has no cap. End with one line: \`VERDICT: pass\` when nothing failed, or
 \`VERDICT: hold <the failed clauses, each named by a few words without its reason>\`, separated by \`; \`, and

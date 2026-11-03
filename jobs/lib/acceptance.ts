@@ -19,7 +19,7 @@ import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
 import { SCENARIOS } from "./author.ts";
 import { gitPrelude, OPUS_MODEL, q } from "./agent-call.ts";
 import { outcome as agentOutcome } from "./gate.ts";
-import { checkSlot, tagged, tell, type Repo } from "./ledger.ts";
+import { checkSlot, TAG_FORMAT, tagged, tell, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { acceptanceDir, commitsNaming, readRecord, resultLine, writeRecord, type Accepted, type FailedTest } from "./status.ts";
 import { acceptanceFailCap, quietLoad, reviewSeconds, reviewerCmd } from "./settings.ts";
@@ -150,7 +150,7 @@ commit that holds the goal. Check each scenario below by observing behaviour: re
 commands of your own, each well under a minute: write throwaway scripts outside the repo's tracked files and
 run them. Do not change any tracked file. Do not run the full test suite. Be sceptical: do not talk yourself
 out of a defect you found. For each scenario write one line, \`CHECK: pass|fail scenario <n>: <what was observed>\`,
-by its number only; do not quote the scenario text. Write a line for every scenario, then stop.`;
+by its number only; do not quote the scenario text. ${TAG_FORMAT} Write a line for every scenario, then stop.`;
 
 /** The default scenario check: a fresh agent reads the commit under srt, as the reviewer does. */
 export const sandboxScenarios: ScenarioCheck = async (repo, sha, scenarios) => {

@@ -17,7 +17,7 @@ import { factoryDir } from "./factory-status.ts";
 import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
-import { askOf, isAgentRun, isBuild, lastTagged, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { askOf, isAgentRun, isBuild, lastTagged, onOf, runsDir, TAG_FORMAT, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { hiddenOf } from "./checks.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import { jobSpec, runFile } from "./run-files.ts";
@@ -35,7 +35,7 @@ branch. \`aleph issue\` is not your push: it writes the list of issues on main b
 itself, so use it for every change to the list. If the previous run was a
 failed land, merge \`origin/${main}\` into the branch, resolve the conflicts,
 and commit. If you need a decision from Chris, stop
-and make your last line \`QUESTION: <one question>\`. ${FOREGROUND} End with a
+and make your last line \`QUESTION: <one question>\`. ${TAG_FORMAT} ${FOREGROUND} End with a
 summary of what you did and what you ran: at most 120 words of prose, plus a list only for separate items.`;
 
 /** What the worker runs before it ends: the repo's own checks, else today's sentence. */
@@ -55,7 +55,7 @@ answers questions during the run: when you must choose, take the answer you
 would recommend and print a line \`DEFAULT: <question> -> <answer>\`. \`DEFAULT:\` is for choices the Oracle does not settle. If you cannot meet a clause of the Oracle (for example, because the clause conflicts with another clause of the spec), stop: do not defer that clause, and make your last line \`QUESTION: <question that names the Oracle clause>\`. Do not use \`DEFAULT:\` or \`FOLLOWUP:\` for that clause. For work
 you find but do not do, print a line \`FOLLOWUP: <title>\`; a \`FOLLOWUP:\` must not cover anything the Oracle names. A test that fails or times out and is not the goal's own, and passes again alone or on a rerun, is a flake: print one line \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\` for it. End the result with zero or more lines
 \`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`, for durable
-facts about the repo or its tools that you learned and checked. If the goal already
+facts about the repo or its tools that you learned and checked. ${TAG_FORMAT} If the goal already
 holds on your branch and no edit is needed, make no commit, run the repo's tests,
 and print exactly one line \`${ALREADY_MET}: <evidence>\`, the evidence being the
 files, the lines and the commit on \`${main}\` that show it. A worker that

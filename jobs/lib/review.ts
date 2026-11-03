@@ -15,7 +15,7 @@ import { BROWSER, browserStep, changedViews, startUiServer } from "./review-brow
 import { areasOf, reader } from "../../todo/lib/store.ts";
 import { git, gitWith } from "./git.ts";
 import { needsOf } from "./ask.ts";
-import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, updateRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, loadRegistry, onOf, parseVerdict, readCall, readEnvFile, readRun, TAG_FORMAT, updateRun, type Repo, type Run } from "./ledger.ts";
 import { startUnit } from "./launch.ts";
 import { linkBins, runPath, stallSeconds, workerToken, writeHome } from "./sandbox.ts";
 import { jobSpec, runFile } from "./run-files.ts";
@@ -49,6 +49,8 @@ Write down what you found, then end with exactly one line:
 VERDICT: land
 VERDICT: back <reason, one line: what the worker must fix>
 VERDICT: chris <question, one line: what only Chris can decide>
+
+${TAG_FORMAT}
 
 ## Spec
 

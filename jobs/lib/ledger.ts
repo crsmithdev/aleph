@@ -381,7 +381,7 @@ export const TAGS = ["FOLLOWUP", "DEFAULT", "QUESTION", "FACT", "FLAKE", "SET-AS
 export type Tag = (typeof TAGS)[number];
 
 /** One sentence for prompts that says how a tag line is read. */
-export const TAG_FORMAT = "A tag line starts with the tag in capitals and a colon, such as `FACT: <sentence>`; leading spaces, backticks and `*` before the tag and trailing backticks and `*` after the value are ignored, and a lowercase tag is not read.";
+export const TAG_FORMAT = "A tag line starts with the tag in capitals and a colon, such as `<TAG>: <value>`; leading spaces, backticks and `*` before the tag and trailing backticks and `*` after the value are ignored, and a lowercase tag is not read.";
 
 const tagValue = (line: string, tag: string): string | undefined => {
   const m = line.match(/^\s*[`*]*([A-Z][A-Z-]*):(.*)$/);
