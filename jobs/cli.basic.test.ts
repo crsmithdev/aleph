@@ -1,20 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { waitFor } from "../tests/wait.ts";
-import { aleph, base, branchExists, fakeLog, file, job, jobsDir, repo, seedRun, setupLog, sh, specFile, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, branchExists, fakeLog, file, job, jobsDir, seedRun, setupLog, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { actionJob, drop, jobView } from "./inproc";
 
+// The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,
+// the news, the --fate check, and six `aleph job` processes at once. The other cases run in-process in jobs/lib/unit.flow.test.ts.
 beforeAll(setup);
 afterAll(teardown);
 
 describe("job", () => {
-  test("refuses an unknown repo, prints the keys, creates nothing", async () => {
-    const r = await aleph(["job", "nowhere", "alpha", "--spec", specFile("x")]);
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("demo, auto, other, fac");
-    expect(readdirSync(jobsDir)).toEqual([]);
-  });
-
   test("a worker that commits ends passed, with setup, checks, result and news", async () => {
     const r = await aleph(["job", "De mo", "alpha", "--spec", "-"], {}, "Goal: alpha\nACTION: commit a.txt\n");
     expect(r.code).toBe(0);
@@ -39,8 +35,9 @@ describe("job", () => {
     expect(workerEnv).not.toMatch(/^(CLAUDECODE|ANTHROPIC_API_KEY)=/m);
   });
 
+  // In-process, but here: the jobs list below reads the result of this follow-up.
   test("a follow-up runs in the same worktree with the spec, notes and previous result", async () => {
-    const r = await job("alpha", "commit b.txt");
+    const r = await actionJob("alpha", "commit b.txt");
     expect(r.code).toBe(0);
     const first = readdirSync(jobsDir).sort().find((d) => d.endsWith("-demo-alpha-build"))!;
     expect(r.json.job).toBe(first);
@@ -66,12 +63,6 @@ describe("job", () => {
     expect(one.json.checks).toContain("## tests: exit 0");
   });
 
-  test("a name open in another repo is refused, naming that repo", async () => {
-    const r = await job("alpha", "commit c.txt", {}, "other");
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("alpha is open in demo");
-  });
-
   test("with no name, jobs lists the open jobs, then the jobs that ended in the last 24 hours, the latest first", async () => {
     // The runs are seeded with their end times: the order comes from the test, not from how fast the jobs ran.
     const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
@@ -94,92 +85,13 @@ describe("job", () => {
     expect((await aleph(["drop", "alpha"])).code).toBe(1);
   });
 
-  test("drop writes the fate by-hand, none with --quiet, and --fate overrides it", async () => {
-    await job("alpha", "commit p.txt");
-    await aleph(["drop", "alpha", "not", "needed"]);
-    expect(state((await aleph(["jobs", "alpha"])).json.run)).toMatchObject({ fate: "by-hand", reason: "not needed" });
-    await job("alpha", "commit q.txt");
-    await aleph(["drop", "alpha", "--quiet"]);
-    expect(state((await aleph(["jobs", "alpha"])).json.run).fate).toBeUndefined();
-    await job("alpha", "commit f.txt");
-    await aleph(["drop", "alpha", "--fate", "duplicate"]);
-    expect(state((await aleph(["jobs", "alpha"])).json.run)).toMatchObject({ fate: "duplicate", reason: "dropped by Chris" });
-  }, 30_000);
-
   test("drop --fate with an unknown value is refused and the job stays open", async () => {
-    await job("alpha", "commit r.txt");
+    await actionJob("alpha", "commit r.txt");
     const r = await aleph(["drop", "alpha", "--fate", "bogus"]);
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("duplicate, already-met, by-hand");
-    expect((await aleph(["jobs", "alpha"])).json.condition).not.toBe("dropped");
-    await aleph(["drop", "alpha"]);
-  });
-
-  test("a new job with an ended job's name starts fresh, clearing a leftover branch", async () => {
-    sh(repo, "git", "branch", "job/alpha", "origin/main");
-    const r = await job("alpha", "commit d.txt");
-    expect(r.json.job).toBe(r.json.run);
-    expect(r.code).toBe(0);
-    expect(state(r.json.run).condition).toBe("passed");
-    expect(sh(worktree("alpha"), "git", "log", "--format=%s")).toBe("add d.txt\ninit");
-    await aleph(["drop", "alpha"]);
-  });
-});
-
-describe("the state rule", () => {
-  test("a non-zero exit fails", async () => {
-    const r = await job("exits", "exit3");
-    expect(r.code).not.toBe(0);
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "worker exited 3" });
-    expect(told).toContain("demo/exits failed");
-  });
-
-  test("a question needs Chris", async () => {
-    const r = await job("asks", "question");
-    expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
-    expect(told).toContain("demo/asks awaiting question");
-  });
-
-  test("an untracked file fails", async () => {
-    const r = await job("messy", "untracked");
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "uncommitted: stray.txt" });
-  });
-
-  test("no commits is done, and the worktree goes", async () => {
-    const r = await job("idle", "none");
-    expect(state(r.json.run)).toMatchObject({ condition: "done" });
-    expect(existsSync(worktree("idle"))).toBe(false);
-    expect(branchExists("idle")).toBe(false);
-  });
-
-  test("a failing check fails, with its name in the news", async () => {
-    const r = await job("broken", "commit FAIL");
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "tests failed" });
-    expect(told).toContain("demo/broken failed tests");
-    expect(file(r.json.run, "checks.log")).toContain("## tests: exit 1");
-  });
-
-  test("a change under a manual glob runs its checks and passes, keeping what to check", async () => {
-    const r = await job("phone", "commit android/app.txt");
-    expect(state(r.json.run)).toMatchObject({ condition: "passed", say: "run it on the phone" });
-    expect(state(r.json.run).needs).toBeUndefined();
-    expect(readFileSync(join(base, "android.log"), "utf8")).toBe("built\n");
-    await aleph(["drop", "phone"]);
-  });
-
-  test("a worker past its limit is stopped and fails as timed out", async () => {
-    const start = Date.now();
-    const r = await job("stuck", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
-    // The fake worker sleeps 60s, so anything well under that proves the limit
-    // cut it short. The bound was 10s and flaked under load: the assertion is
-    // that the sleep did not run, not that the machine was idle.
-    expect(Date.now() - start).toBeLessThan(30_000);
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: worker" });
-  });
-
-  test("a check past its limit is stopped and fails as timed out", async () => {
-    const r = await job("slowcheck", "commit slow/x.txt", { ALEPH_CHECK_TIMEOUT: "1" });
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: check slow" });
+    expect((await jobView("alpha")).json.condition).not.toBe("dropped");
+    await drop("alpha");
   });
 });
 
@@ -194,14 +106,7 @@ function endedRun(r: { stdout: string }): string {
 }
 
 describe("guards", () => {
-  test("a worker's push goes to aleph-no-push and gh has no credentials", async () => {
-    await job("pusher", "push");
-    expect(readFileSync(join(fakeLog, "push.code"), "utf8").trim()).not.toBe("0");
-    expect(readFileSync(join(fakeLog, "ssh.args"), "utf8")).toContain("aleph-no-push");
-    expect(readFileSync(join(fakeLog, "gh.code"), "utf8").trim()).not.toBe("0");
-    await aleph(["drop", "pusher"]);
-  });
-
+  // Six `aleph job` processes race for the dispatch lock: the process boundary is what this case tests.
   test("six starts at once: five run, one is refused", async () => {
     const names = ["one", "two", "three", "four", "five", "six"];
     const started = names.map((n) => job(n, `hold ${join(fakeLog, "never-created")}`));
@@ -246,20 +151,11 @@ describe("guards", () => {
 
 describe("news", () => {
   test("news that Sidetone missed is printed once by jobs --news", async () => {
-    const r = await job("offline", "exit3", { SIDETONE_TELL_URL: "https://127.0.0.1:1/tell" });
+    const r = await actionJob("offline", "exit3", { SIDETONE_TELL_URL: "https://127.0.0.1:1/tell" });
     expect(state(r.json.run).told).toBe(false);
     const news = await aleph(["jobs", "--news"]);
     expect(news.json).toEqual([{ run: r.json.run, line: "demo/offline failed" }]);
     expect((await aleph(["jobs", "--news"])).json).toEqual([]);
-  });
-
-  test("a run whose process died shows as lost", async () => {
-    const folder = join(jobsDir, "20200101-000000-demo-ghost-agent");
-    mkdirSync(folder);
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", condition: "running", told: false, started: "2020-01-01T00:00:00Z" }));
-    writeFileSync(join(folder, "pid"), "999999");
-    expect((await aleph(["jobs"])).json.find((j: any) => j.name === "ghost")).toMatchObject({ condition: "running", lost: true });
-    expect((await aleph(["drop", "ghost"])).code).toBe(0);
   });
 });
 
@@ -271,12 +167,4 @@ describe("run", () => {
     expect(file(r.json.run, "output.log")).toBe(`${base}\nit's done\n`);
     expect(told).toContain("build finished");
   });
-
-  test("a failing plain command says it failed", async () => {
-    const r = await aleph(["run", "build", "--", "false"]);
-    expect(r.code).toBe(1);
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "exited 1" });
-    expect(told).toContain("build failed");
-  });
 });
-

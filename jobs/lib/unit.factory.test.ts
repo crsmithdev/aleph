@@ -1,17 +1,18 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, fakeLog, file, repo, sh, specFile, state, told, setup, teardown } from "./cli.helpers";
+import { base, fakeLog, file, repo, sh, state, told, setup, teardown } from "../cli.helpers";
+import { actionJob, drop, issueAdd, issueClose, issueList, issueShow, job } from "../inproc.ts";
+import { tick } from "./flow.testkit.ts";
 
+// The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 beforeAll(setup);
 afterAll(teardown);
 
 describe("a factory run", () => {
-  const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
-    aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
+  const fjob = (name: string, action: string) => actionJob(name, action, {}, "fac");
   const factoryBranch = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `factory/${name}`]).exitCode === 0;
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
-
 
   test("the worker's branch comes back as a bundle; the run passes and its run folder is gone", async () => {
     const r = await fjob("fpass", "commit fpass.txt");
@@ -39,46 +40,45 @@ describe("a factory run", () => {
     expect(state((await fjob("ftrail", "trailing")).json.run)).toMatchObject({ condition: "stuck", reason: "one more line" });
     expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
     expect(told).toContain("fac/ferr stuck");
-    for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await aleph(["drop", n]);
+    for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await drop(n);
   });
 
   test("a worker that says the goal is already met, with the checks green on main, closes the item", async () => {
-    const id = (await aleph(["issue", "add", "fac", "timeline already uses itemTimes"])).json.added;
-    const r = await fjob("fmet", "already-met", {}, ["--on", String(id)]);
+    const id = (await issueAdd("fac", "timeline already uses itemTimes")).json.added;
+    const r = await job("fac", "fmet", "Goal: fmet\nACTION: already-met\n", { on: String(id) });
     expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
     // A tick's probe runs the sandbox; a passing probe is written as the other tick tests do.
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const tick = await aleph(["tick"]);
-    expect(tick.json.episodes).toEqual(expect.any(Array));
+    const t = await tick();
+    expect(t.episodes).toEqual(expect.any(Array));
     expect(state(r.json.run)).toMatchObject({ condition: "dropped", reason: expect.stringContaining("the item is done") });
-    expect((await aleph(["issue", "show", "fac", String(id), "--json"])).json.status).toBe("done");
+    expect((await issueShow("fac", id)).json.status).toBe("done");
     expect(runsLeft()).toEqual([]);
   }, 60_000);
-
 });
 
 describe("a worker's FOLLOWUP line (criterion 15)", () => {
+  const titles = async () => (await issueList("fac")).json as any[];
+
   test("a line on the topic of an open issue is a note on it, and files no issue", async () => {
-    const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
-    await aleph(["issue", "add", "fac", "paint the fence"]);
+    await issueAdd("fac", "paint the fence");
     const open = (await titles()).find((i) => i.title === "paint the fence");
     const count = (await titles()).length;
-    const r = await aleph(["job", "fac", "fsame", "--spec", specFile("Goal: fsame\nACTION: defaults\n")]);
+    const r = await actionJob("fsame", "defaults", {}, "fac");
     expect(r.code, r.stderr).toBe(0);
     expect((await titles()).length).toBe(count);
-    expect(JSON.stringify((await aleph(["issue", "show", "fac", String(open.id), "--json"])).json)).toContain("also met in run fsame: paint the fence");
-    await aleph(["issue", "done", "fac", String(open.id), "test over"]);
-    await aleph(["drop", "fsame"]);
+    expect(JSON.stringify((await issueShow("fac", open.id)).json)).toContain("also met in run fsame: paint the fence");
+    await issueClose("fac", open.id, "done", "test over");
+    await drop("fsame");
   });
 
   test("a FOLLOWUP line about a flake is a tracker note and files no issue", async () => {
-    const titles = async () => (await aleph(["issue", "list", "fac", "--json"])).json as any[];
     const line = "Fix the flaky paint test in a.test.ts";
-    expect((await aleph(["job", "fac", "fflakeup", "--spec", specFile(`Goal: fflakeup\nACTION: flake-followup\n`)])).code).toBe(0);
+    expect((await actionJob("fflakeup", "flake-followup", {}, "fac")).code).toBe(0);
     const all = await titles();
     expect(all.map((i) => i.title)).not.toContain(line);
     const tracker = all.find((i) => i.areas.includes("flakes"));
-    expect((await aleph(["issue", "show", "fac", String(tracker.id), "--json"])).json.notes.join("\n")).toContain(`job fflakeup: ${line}`);
+    expect((await issueShow("fac", tracker.id)).json.notes.join("\n")).toContain(`job fflakeup: ${line}`);
   }, 60_000);
 });

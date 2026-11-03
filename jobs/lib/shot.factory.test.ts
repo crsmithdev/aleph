@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { aleph, fakeLog, repo, setup, specFile, state, teardown } from "./cli.helpers";
+import { fakeLog, repo, setup, state, teardown } from "../cli.helpers";
+import { actionJob, drop } from "../inproc.ts";
 
 /** A stand-in for Chrome (as in lib/shot.test.ts): answers captureScreenshot with a PNG header of the requested width. */
 const FAKE_CHROME = `#!${process.execPath}
@@ -46,12 +47,12 @@ describe.skipIf(process.env.ALEPH_BROWSER_TESTS !== "1")("a factory run", () => 
   afterAll(() => { srv.stop(true); rmSync(tmp, { recursive: true, force: true }); teardown(); });
 
   test("a worker's aleph-shot call yields a committed PNG of the requested width", async () => {
-    const r = await aleph(["job", "fac", "fshot", "--spec", specFile(`Goal: fshot\nACTION: shot http://127.0.0.1:${srv.port}/\n`)], { ALEPH_REVIEW_CHROME: join(tmp, "chrome") });
+    const r = await actionJob("fshot", `shot http://127.0.0.1:${srv.port}/`, { ALEPH_REVIEW_CHROME: join(tmp, "chrome") }, "fac");
     const log = (f: string) => { try { return readFileSync(join(fakeLog, f), "utf8"); } catch { return ""; } };
     expect(log("shot.out") + log("shot.code")).toContain("shot:");
     expect(state(r.json.run).condition).not.toBe("stuck");
     const png = Buffer.from(Bun.spawnSync(["git", "-C", repo, "show", "factory/fshot:shot.png"]).stdout);
     expect(png.readUInt32BE(16)).toBe(1440);
-    await aleph(["drop", "fshot"]);
+    await drop("fshot");
   }, 60_000);
 });

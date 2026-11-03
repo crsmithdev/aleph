@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { aleph, file, lf, lfPosts, resetLf, setLfStatus, specFile, state, setup, teardown } from "./cli.helpers";
+import { file, lf, lfPosts, resetLf, setLfStatus, state, setup, teardown } from "../cli.helpers";
+import { actionJob } from "../inproc.ts";
 
+// The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own and posts the trace.
 beforeAll(setup);
 afterAll(teardown);
 
 describe("a factory run", () => {
-  const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
-    aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
-
+  const fjob = (name: string, action: string, extra: Record<string, string> = {}) => actionJob(name, action, extra, "fac");
 
   describe("its Langfuse trace", () => {
     const langfuse = () => ({ LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
@@ -40,5 +40,4 @@ describe("a factory run", () => {
       expect(lfPosts).toEqual([]);
     });
   });
-
 });
