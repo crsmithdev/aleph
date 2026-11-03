@@ -33,7 +33,7 @@ describe("a factory run's checks", () => {
       const notes = async (id: number) => (await aleph(["issue", "show", "fac", String(id)])).stdout;
       const SCENES = "1. SECRET-SCENARIO one is seen.\n2. Another is seen.\n";
 
-      // The dispatch runs the spec check (factory-dispatch.test.ts); a job started by hand gets none.
+      // The dispatch runs the spec check (factory-dispatch.spec-check.test.ts); a job started by hand gets none.
       test("a job started by hand with --on runs no spec check", async () => {
         const id = goalWith("hand goal");
         const r = await fjob("spec1", "commit spec1.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("h", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("h", "VERDICT: hold vague") }, ["--on", String(id)]);

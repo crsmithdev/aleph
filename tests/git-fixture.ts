@@ -19,7 +19,7 @@ function sh(cwd: string, ...args: string[]): void {
 
 const PREFIX = "aleph-fixture-";
 /** The id of process `pid`: its pid and start time, so a new process that gets an old pid has another id. */
-function procId(pid: number | string): string | null {
+export function procId(pid: number | string): string | null {
   try {
     const st = readFileSync(`/proc/${pid}/stat`, "utf8");
     return `${pid}-${st.slice(st.lastIndexOf(")") + 2).split(" ")[19]}`;

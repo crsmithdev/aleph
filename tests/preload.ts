@@ -3,11 +3,21 @@
  * ~/.claude at a folder of its own for this test process, so no test reads or writes Chris's live data.
  * A test that sets one of them itself still wins; the processes a test starts inherit them.
  */
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { procId } from "./git-fixture.ts";
 
-const dir = mkdtempSync(join(tmpdir(), "aleph-test-home-"));
+// bun --parallel never fires process.on("exit"), so each folder carries the id of its process, and a test
+// process deletes the folders of processes that are gone. It leaves folders without an id alone.
+const PREFIX = "aleph-test-home-";
+for (const name of readdirSync(tmpdir()).filter((n) => n.startsWith(PREFIX))) {
+  const m = name.slice(PREFIX.length).match(/^(\d+)-\d+-/);
+  if (m && procId(m[1]) !== name.slice(PREFIX.length, PREFIX.length + m[0].length - 1)) {
+    rmSync(join(tmpdir(), name), { recursive: true, force: true });
+  }
+}
+const dir = mkdtempSync(join(tmpdir(), `${PREFIX}${procId(process.pid)}-`));
 const vars: Record<string, string> = {
   ALEPH_ISSUES: join(dir, "issues"), ALEPH_JOBS_DIR: join(dir, "runs"), ALEPH_SANDBOX_DIR: join(dir, "sandbox"),
   ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), ALEPH_REPOS: join(dir, "repos.json"),
