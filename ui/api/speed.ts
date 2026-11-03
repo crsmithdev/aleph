@@ -360,7 +360,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     for (const e of entries) {
       const r = e.run as Run;
       // Research runs are worker runs; older worker runs have the kind "agent".
-      if (r.kind !== kind && !(key === "worker" && (r.kind === "research" || (r.kind as string) === "agent"))) continue;
+      if (r.kind !== kind && !(key === "worker" && (r.kind === "research" || r.kind === "agent"))) continue;
       const running = r.condition === "running" && alive(e);
       if (running) live++;
       const a = Date.parse(r.started), b = r.ended ? Date.parse(r.ended) : running ? now : NaN;
@@ -385,7 +385,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   let up = 0, peak = 0;
   for (const [, d] of edges) { up += d; if (up > peak) peak = up; }
   for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
-  const inWindow = entries.map((e) => e.run as Run).filter((r) => (isWorker(r.kind) || (r.kind as string) === "agent") && Date.parse(r.started) >= since && Date.parse(r.started) < now);
+  const inWindow = entries.map((e) => e.run as Run).filter((r) => (isWorker(r.kind) || r.kind === "agent") && Date.parse(r.started) >= since && Date.parse(r.started) < now);
   const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
   const span = now - since, hours = roles.reduce((n, r) => n + (r.hours ?? 0), 0);
   return {

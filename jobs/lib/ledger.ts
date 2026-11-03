@@ -19,7 +19,7 @@ export interface CheckResult { name: string; ok: boolean; seconds: number; passe
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
-  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "explain" | "research";
+  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "explain" | "research" | "agent";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   condition: State; phase?: string;
   reason?: string; question?: string; say?: string;
