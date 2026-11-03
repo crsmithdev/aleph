@@ -13,7 +13,7 @@ import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import { allRuns, askOf, isAwaiting, isWorker, isLost, runsDir, loadRegistry, lock, onOf, reviewOf, tell, type Entry, type Repo } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
+import { allJobs, asked as runAsked, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
 import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { writeRerun } from "./rescue.ts";
@@ -336,6 +336,9 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     if (!ask) return { refused: `${describe(a)}: it has no Ask` };
     // A question that offers options is a product choice: it is Chris's unless he handed its reason to the firefighter.
     if (isProductChoice(item) && !handed(ask.reason)) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
+    // A run that ended with a spec question waits for a spec edit (rescue.releaseEdited); clearing its Ask would leave the job open with no Ask and no run.
+    const waiting = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n && runAsked(lastReal(j)) && readFile(lastReal(j), "asked-spec") !== undefined);
+    if (waiting) return { refused: `${describe(a)}: the run ${waiting[0].run.name} asked about the spec and waits for a spec edit; use edit, or drop it` };
     const why = await refusal(async () => verbs.decide(repo, a.n, `firefighter decided: ${a.note}`, a.after ? { after: a.after } : {}));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
