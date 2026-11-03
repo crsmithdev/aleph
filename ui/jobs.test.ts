@@ -240,6 +240,15 @@ describe("render", () => {
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
   });
+  test("the Review tag is the last capital VERDICT line, not an earlier quote or a lowercase verdict", () => {
+    const h = (review: string) => v.renderJob({ ...job, review });
+    expect(h("The old call said VERDICT: hold x.\nAfter the fix:\nVERDICT: pass\n")).toContain('class="badge done">pass<');
+    expect(h("The old call said VERDICT: hold x.\nVERDICT: pass\n")).not.toContain(">hold<");
+    expect(h("**VERDICT:** land\n")).toContain('>land<');
+    expect(h("`VERDICT:` pass\n")).toContain('class="badge done">pass<');
+    expect(h("verdict: pass\n")).not.toContain('class="badge done">pass<');
+    expect(h("verdict: pass\n")).not.toContain('class="badge stuck">pass<');
+  });
   test("the list shows jobs with filters, and an empty state", () => {
     const h = v.renderJobs([job], { repo: "fac", condition: "landed" });
     expect(h).toContain('href="#/jobs/fac-9"');

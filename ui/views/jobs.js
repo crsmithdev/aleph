@@ -221,8 +221,11 @@ function jobKpis(j, now = Date.now()) {
   ]);
 }
 
-/** The Review panel's tag: the verdict the review ends with. */
-const verdictOf = (review) => /VERDICT:\s*(\w+)/i.exec(review ?? "")?.[1]?.toLowerCase();
+/** The Review panel's tag: the word after the last capital `VERDICT:` line, as `parseVerdict` in jobs/lib/ledger.ts reads it. */
+const verdictOf = (review) => {
+  const lines = (review ?? "").split("\n").map((l) => /^\s*[`*]*VERDICT:(.*)$/.exec(l)?.[1]?.replace(/^[`*]+(?=\s)/, "")).filter((v) => v !== undefined);
+  return /^\s*(\w+)/.exec(lines.at(-1) ?? "")?.[1]?.toLowerCase();
+};
 
 /** The Job page: the header and its pills, the KPI strip, the Timeline, the Spec and the Result, then the Detail panels. */
 export function renderJob(j) {
