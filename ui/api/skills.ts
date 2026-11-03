@@ -306,8 +306,10 @@ async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<
   return value ? Response.json(value) : new Response("no such skill", { status: 404 });
 }
 
+/** `GET /api/skills`'s handler: the skills of a window, called in-process by `/api/agents`. */
+export const listSkills = (req: Request): Promise<Response> => cached(new URL(req.url), summary);
+
 export const routes: Routes = {
-  "GET /api/skills": (_req, _p, url) => cached(url, summary),
   "GET /api/skills/:name": (_req, p, url) => cached(url, (a) => {
     const d = detail(a, p.name);
     return d.uses || folders().includes(short(p.name)) ? d : null;

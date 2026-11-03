@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { clearCache } from "./api/skills.ts";
+import { clearCache, listSkills } from "./api/skills.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/skills.js";
@@ -78,7 +78,7 @@ afterAll(() => {
 });
 beforeEach(() => { clearCache(); rmSync(join(tmp, "store.json"), { force: true }); down = false; asked = []; });
 
-const get = async (p: string) => { const r = await appAt(p); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
+const get = async (p: string) => { const r = await (/^\/api\/skills(\?|$)/.test(p) ? listSkills(new Request(`http://localhost${p}`)) : appAt(p)); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
 test("a Skill tool call and a slash command each count as one use", async () => {
   const { status, body } = await get("/api/skills");
@@ -242,14 +242,14 @@ test("pages are fetched concurrently, and serve() warms the cache so the first r
   });
   const restoreEnv = withEnv({ LANGFUSE_BASE_URL: `http://127.0.0.1:${paged.port}` });
   clearCache();
-  const { server: warmed, at, stop } = await withServer();
+  const { server: warmed, stop } = await withServer();
   try {
     await warmed.warmed["skills.ts"]; // the end of the skills warm-up, not a clock
     expect(calls).toBe(12); // 3 lists x 4 pages
     expect(peak["/api/public/traces"]).toBeGreaterThan(1);
     expect(peak["/api/public/observations"]).toBeGreaterThan(1);
     const seen = calls;
-    const r = await at("/api/skills");
+    const r = await listSkills(new Request("http://localhost/api/skills"));
     expect(r.status).toBe(200);
     expect(((await r.json()) as any).skills.length).toBeGreaterThan(0);
     expect(calls).toBe(seen);

@@ -5,8 +5,8 @@
  */
 import type { Routes } from "../server.ts";
 import { activity } from "./activity.ts";
-import { routes as sessionRoutes, windowTraces } from "./sessions.ts";
-import { routes as skillRoutes } from "./skills.ts";
+import { listSessions, windowTraces } from "./sessions.ts";
+import { listSkills } from "./skills.ts";
 
 const WINDOWS = [7, 30, 90];
 
@@ -28,10 +28,11 @@ async function load(req: Request, url: URL): Promise<Response> {
     const project = url.searchParams.get("project") || null;
     const inner = new URL(url);
     inner.searchParams.set("days", String(days));
+    const innerReq = new Request(inner, req);
     const [act, skills, sessions] = await Promise.all([
       activity(days, project),
-      partOf(skillRoutes["GET /api/skills"](req, {}, inner)),
-      partOf(sessionRoutes["GET /api/sessions"](req, {}, inner)),
+      partOf(listSkills(innerReq)),
+      partOf(listSessions(innerReq)),
     ]);
     const { toolTraces = {}, ...rest } = act;
     const links = sessions.error ? {} : await toolSessions(toolTraces, days, project).catch(() => ({}));

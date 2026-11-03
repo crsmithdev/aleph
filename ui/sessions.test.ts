@@ -6,7 +6,7 @@ import { clearCache } from "./langfuse.ts";
 import { clearFit } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead, when } from "./lib.js";
-import { routes } from "./api/sessions.ts";
+import { listSessions, routes } from "./api/sessions.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/session.js";
 
@@ -88,7 +88,7 @@ const call = (key: string, path: string, params: Record<string, string> = {}) =>
 };
 
 test("sessions lists id, project, first prompt, turns, cost, task types", async () => {
-  const d: any = await (await call("GET /api/sessions", "/api/sessions?days=7")).json();
+  const d: any = await (await listSessions(new Request("http://localhost"+"/api/sessions?days=7"))).json();
   expect(d.sessions.map((s: any) => s.id)).toEqual(["s2", "s1"]);
   const s1 = d.sessions[1];
   expect(s1).toMatchObject({ project: "aleph", firstPrompt: "prompt t1 second line", turns: 2, cost: 1, taskTypes: ["code_edit"] });
@@ -97,7 +97,7 @@ test("sessions lists id, project, first prompt, turns, cost, task types", async 
 });
 
 test("the project filter narrows every route", async () => {
-  const d: any = await (await call("GET /api/sessions", "/api/sessions?project=sidetone")).json();
+  const d: any = await (await listSessions(new Request("http://localhost"+"/api/sessions?project=sidetone"))).json();
   expect(d.sessions.map((s: any) => s.id)).toEqual(["s2"]);
   expect((await call("GET /api/sessions/:id", "/api/sessions/s1?project=sidetone", { id: "s1" })).status).toBe(404);
   expect((await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1?project=sidetone", { id: "s1", n: "1" })).status).toBe(404);
@@ -159,10 +159,10 @@ test("a subagent's span and tools nest under the Agent tool span that launched i
 
 
 test("the second request is served from the cache", async () => {
-  await call("GET /api/sessions", "/api/sessions");
+  await listSessions(new Request("http://localhost"+"/api/sessions"));
   const n = hits.length;
   expect(n).toBeGreaterThan(0);
-  await call("GET /api/sessions", "/api/sessions");
+  await listSessions(new Request("http://localhost"+"/api/sessions"));
   expect(hits.length).toBe(n);
 });
 
@@ -280,7 +280,7 @@ test("a long session shows 20 turns and a pager; a long turn folds its earlier t
 test("the sessions list's first prompt skips system text", async () => {
   TRACES.push(trace("t8", "s3", "aleph", iso(2), { input: "<task-notification>agent finished</task-notification>" }), trace("t7", "s3", "aleph", iso(1), { input: "the real ask" }));
   try {
-    const list: any = await (await call("GET /api/sessions", "/api/sessions")).json();
+    const list: any = await (await listSessions(new Request("http://localhost"+"/api/sessions"))).json();
     expect(list.sessions.find((s: any) => s.id === "s3").firstPrompt).toBe("the real ask");
   } finally { TRACES.splice(-2); }
 });

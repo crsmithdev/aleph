@@ -176,39 +176,41 @@ export async function windowTraces(days: number, project: string | null): Promis
   return (await traces(config(), { fromTimestamp: from })).filter((t) => t.sessionId && matches(t, project));
 }
 
-export const routes: Routes = {
-  "GET /api/sessions": async (_req, _p, url) => {
-    const days = Number(url.searchParams.get("days") ?? 7);
-    const project = url.searchParams.get("project") || null;
-    try {
-      const cfg = config();
-      const all = await windowTraces(days, project);
-      const groups = new Map<string, any[]>();
-      for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
-      const ledger = jobs();
-      const fit = await currentFit().catch(() => null);
-      const sessions = [...groups].map(([id, ts]) => {
-        ts.sort(byTime);
-        const job = ledger.get(id);
-        const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
-        const wk = share(fit, langfuse || job?.cost || 0, job?.model);
-        return {
-          ...(wk ? { wk } : {}),
-          id,
-          ...(job ? { label: job.name } : {}),
-          project: projectOf(ts[0]),
-          firstPrompt: line(firstTyped(ts), 160),
-          turns: ts.length,
-          start: ts[0].timestamp,
-          last: ts[ts.length - 1].timestamp,
-          cost: langfuse || job?.cost || 0,
-          taskTypes: taskTypes(ts),
-        };
-      }).sort((a, b) => ms(b.last) - ms(a.last));
-      return Response.json({ base: cfg.baseUrl, projects: Object.keys(loadRegistry()).sort(), sessions });
-    } catch (e) { return fail(e); }
-  },
+/** `GET /api/sessions`'s handler: the sessions of a window, called in-process by `/api/agents`. */
+export async function listSessions(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  const days = Number(url.searchParams.get("days") ?? 7);
+  const project = url.searchParams.get("project") || null;
+  try {
+    const cfg = config();
+    const all = await windowTraces(days, project);
+    const groups = new Map<string, any[]>();
+    for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
+    const ledger = jobs();
+    const fit = await currentFit().catch(() => null);
+    const sessions = [...groups].map(([id, ts]) => {
+      ts.sort(byTime);
+      const job = ledger.get(id);
+      const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
+      const wk = share(fit, langfuse || job?.cost || 0, job?.model);
+      return {
+        ...(wk ? { wk } : {}),
+        id,
+        ...(job ? { label: job.name } : {}),
+        project: projectOf(ts[0]),
+        firstPrompt: line(firstTyped(ts), 160),
+        turns: ts.length,
+        start: ts[0].timestamp,
+        last: ts[ts.length - 1].timestamp,
+        cost: langfuse || job?.cost || 0,
+        taskTypes: taskTypes(ts),
+      };
+    }).sort((a, b) => ms(b.last) - ms(a.last));
+    return Response.json({ base: cfg.baseUrl, projects: Object.keys(loadRegistry()).sort(), sessions });
+  } catch (e) { return fail(e); }
+}
 
+export const routes: Routes = {
   "GET /api/sessions/:id": async (_req, params, url) => {
     try {
       const { cfg, ts } = await sessionTraces(params.id, url.searchParams.get("project") || null);
