@@ -112,7 +112,9 @@ test("File an issue posts the first cause as the title, with the runs and reason
   expect(sent.u).toBe("/api/issues");
   expect(sent.o.headers["X-Aleph-UI"]).toBe("1");
   const b = JSON.parse(sent.o.body);
-  expect(b.title).toBe("Lost time: Issue had landed");
+  expect(b.title).toBe("Cut lost time in Issue had landed");
+  expect(b.title).not.toContain(": ");
+  expect(b.kind).toBe("task");
   expect(b.repo).toBe("aleph");
   expect(b.body).toContain("fx-1: 2.0 h, 6 runs. already met");
   expect(issueFor({ ...D, classes: [] }, "all")).toBeNull();

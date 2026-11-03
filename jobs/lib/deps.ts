@@ -18,6 +18,7 @@ import { factoryLog } from "./layout.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import { outdatedCmd } from "./settings.ts";
+import { cutTitle } from "./title.ts";
 
 export interface Proposal { name: string; current: string; latest: string }
 
@@ -84,7 +85,13 @@ async function outdated(repo: Repo): Promise<string | null> {
   }
 }
 
-const titleOf = (p: Proposal) => `Update ${p.name} ${p.current} to ${p.latest}`;
+const titleOf = (p: Proposal) => cutTitle(`Update ${p.name} to ${p.latest}`);
+/** The package an open issue proposes to update, from its title: `Update <name> to <latest>` or the old `Update <name> <current> to <latest>`. */
+const packageOf = (item: issues.Issue): string | undefined => /^Update (\S+) /.exec(item.title)?.[1];
+/** The proposal in a proposal's spec line, which every title form shares. */
+const SPEC_LINE = /`bun outdated` shows (\S+) at (\S+) in the lockfile and (\S+) as the latest/;
+/** The old title form, for a proposal with no spec line. */
+const OLD_TITLE = /^Update (.+) (\S+) to (\S+)$/;
 
 /** Files one issue per proposal, each with a `proposal` Ask, as one commit; their numbers. A write that fails files none. */
 function fileProposals(repo: Repo, missing: Proposal[]): number[] {
@@ -92,10 +99,9 @@ function fileProposals(repo: Repo, missing: Proposal[]): number[] {
   try {
     return writeList(repo, "dependency proposals", (doc) => missing.map((p) => {
       const item = issues.add(doc, titleOf(p), {
-        priority: "low", source: "deps",
+        kind: "proposal", priority: "low", source: "deps",
         spec: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nApprove it to have the factory plan the update.\n`,
       });
-      item.fm.areas = ["deps"];
       setAsk(item, plainAsk("proposal", `Update ${p.name} from ${p.current} to ${p.latest}?`));
       return item.id;
     }), true)?.value ?? [];
@@ -111,14 +117,15 @@ export function propose(repo: Repo, found: Proposal[]): string[] {
   if (!fresh.length) return [];
   const list = readList(repo);
   if (!list) throw new Error(`the work store has no list for ${repo.key}`);
-  const had = new Map(list.items.map((i) => [i.title, i.id]));
-  const missing = fresh.filter((p) => !had.has(titleOf(p)));
+  // An open proposal for the package, under either title form, is not filed again.
+  const had = new Map(list.items.filter((i) => issues.status(i) === "open" && packageOf(i)).map((i) => [packageOf(i)!, i.id]));
+  const missing = fresh.filter((p) => !had.has(p.name));
   const made = fileProposals(repo, missing);
   if (made.length !== missing.length || made.some((id) => !id)) return [];
-  missing.forEach((p, i) => had.set(titleOf(p), made[i]));
+  missing.forEach((p, i) => had.set(p.name, made[i]));
   const titles: string[] = [];
   for (const p of fresh) {
-    const id = had.get(titleOf(p))!;
+    const id = had.get(p.name)!;
     rec.proposed[`${repo.key}:${p.name}@${p.latest}`] = id;
     titles.push(`${repo.key}-${id} ${titleOf(p)}`);
   }
@@ -165,8 +172,9 @@ function waitingProposal(item: issues.Issue): boolean {
 
 /**
  * With a standing `proposal` grant, each dependency proposal that stays within its major version
- * (`Update <package> <current> to <latest>`, same major) becomes a goal. A major bump, such as
- * typescript 5.9.3 to 7.0.2, and a title that does not parse are left for Chris. Returns the refs started.
+ * (same major, read from the spec line, or from the old title `Update <package> <current> to <latest>`)
+ * becomes a goal. A major bump, such as typescript 5.9.3 to 7.0.2, and a proposal that does not parse are
+ * left for Chris. Returns the refs started.
  */
 export function startProposals(repos: Repo[]): string[] {
   if (always("proposal")?.action !== "start") return [];
@@ -177,7 +185,7 @@ export function startProposals(repos: Repo[]): string[] {
         let changed = false;
         for (const item of doc.items) {
           if (!waitingProposal(item)) continue;
-          const m = /^Update (.+) (\S+) to (\S+)$/.exec(item.title);
+          const m = SPEC_LINE.exec(item.spec || item.request) ?? OLD_TITLE.exec(item.title);
           const [from, to] = [majorOf(m?.[2] ?? ""), majorOf(m?.[3] ?? "")];
           if (from === null || to === null || from !== to) continue;
           clearAsk(item);

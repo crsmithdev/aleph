@@ -37,7 +37,7 @@ describe("a factory run", () => {
       await tick({ ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
       expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toMatch(/deps nolist: .*no list/);
       const rows = [...(await issueList("fac")).json as any[], ...(await issueList("fac", { status: "dropped" })).json as any[]].filter((r) => r.title.startsWith("Update "));
-      expect(rows.map((r) => r.title)).toContain("Update left-pad 1.0.0 to 1.2.0");
+      expect(rows.map((r) => r.title)).toContain("Update left-pad to 1.2.0");
       for (const r of rows) await issueClose("fac", r.id, "drop", "test over");
     } finally {
       writeFileSync(join(base, "repos.json"), reg);

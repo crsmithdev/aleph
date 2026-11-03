@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
-import { parseOutdated, startProposals, sweep } from "./deps.ts";
+import { parseOutdated, propose, startProposals, sweep } from "./deps.ts";
 import { grant } from "./ask.ts";
 import { type Repo } from "./ledger.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
@@ -66,7 +66,7 @@ describe("sweep", () => {
     const [a, b] = await Promise.all([sweep([repo], (l) => errors.push(l)), sweep([repo], (l) => errors.push(l))]);
     expect(errors).toEqual([]);
     // The second sweep to finish finds the proposal already filed, so it returns nothing; a sweep that lost its folder returns null from outdated(), and the command's folder test makes that show as no proposal at all.
-    expect([...a, ...b]).toEqual(["sw1-2 Update left-pad 1.0.0 to 1.2.0"]);
+    expect([...a, ...b]).toEqual(["sw1-2 Update left-pad to 1.2.0"]);
     expect(readdirSync(join(base, "runs")).filter((f) => f.startsWith("deps-"))).toEqual([]);
   });
 
@@ -86,5 +86,17 @@ describe("sweep", () => {
     expect(items[0].fm.ask).toBeUndefined();
     expect(items[1].fm.ask).toBe("approval");
     expect(startProposals([repo])).toEqual([]);
+  });
+
+  test("a proposal files kind proposal under the new title, an open old-title one is not filed again, and a new-title one starts", () => {
+    const repo = { key: "dp3" } as Repo;
+    writeList(repo, "start", (doc) => { issues.add(doc, "Update left-pad 1.0.0 to 1.2.0", {}); return true; }, true);
+    const found = [{ name: "left-pad", current: "1.0.0", latest: "1.3.0" }, { name: "a", current: "1.9.0", latest: "1.10.0" }];
+    expect(propose(repo, found)).toEqual(["dp3-1 Update left-pad to 1.3.0", "dp3-2 Update a to 1.10.0"]);
+    const items = readList(repo)!.items;
+    expect(items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a to 1.10.0"]);
+    expect(items[1].fm).toMatchObject({ kind: "proposal", source: "deps", areas: [] });
+    expect(grant("proposal", "start")).toBeNull();
+    expect(startProposals([repo])).toEqual(["dp3-2"]);
   });
 });

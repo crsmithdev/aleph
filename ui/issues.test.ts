@@ -61,7 +61,7 @@ beforeAll(async () => {
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     seedGoal(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
-    add(doc, "plain task", { labels: ["bug"] });
+    add(doc, "plain task", { kind: "bug", labels: ["bug"] });
     seedGoal(doc, "second goal").fm.after = ["fac-4"];
     seedGoal(doc, "third goal");
     setStatus(doc.items[1], "done");
@@ -86,6 +86,16 @@ describe("GET /api/issues", () => {
     expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: [], after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
     expect((await at("/api/issues?status=bogus")).status).toBe(400);
+  });
+
+  test("a row and the issue page carry the kind, and the views show it as a chip", async () => {
+    const n = 2;
+    const row = (await getJson("/api/issues?repo=fac")).find((r: any) => r.id === n);
+    expect(row.kind).toBe("bug");
+    const d = await getJson(`/api/issues/fac/${n}`);
+    expect(d.kind).toBe("bug");
+    expect(v.renderIssue(d)).toContain('<span class="chip kind">kind: bug</span>');
+    expect(v.renderRow(v.issueRows({ issues: [row] })[0])).toContain('<span class="chip kind">bug</span>');
   });
 
   test("a row carries its stage", async () => {

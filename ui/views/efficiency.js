@@ -57,7 +57,7 @@ export function issueFor(d, key) {
   const s = selection(d, key), first = s.causes[0];
   if (!first || key === FLAKES) return null;
   const rows = s.top.map((x) => `- ${x.goal}: ${hours(x.hours)}, ${plural(x.runs, "run")}. ${x.reason || "No reason recorded."}`);
-  return { repo: REPO, title: `Lost time: ${first.name}`, body: `${first.name}: ${hours(first.hours)}, ${plural(first.runs, "run")} in the last ${period(d)}.\n\n${s.title}, the issues that cost the most:\n${rows.join("\n")}` };
+  return { repo: REPO, title: `Cut lost time in ${first.name}`, kind: "task", body: `${first.name}: ${hours(first.hours)}, ${plural(first.runs, "run")} in the last ${period(d)}.\n\n${s.title}, the issues that cost the most:\n${rows.join("\n")}` };
 }
 
 /** Post the issue for a selection. It returns the answer of the server. */

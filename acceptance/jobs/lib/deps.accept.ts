@@ -41,10 +41,10 @@ describe("propose", () => {
     const repo = { key: "dp1" } as Repo;
     writeList(repo, "start", (doc) => { issues.add(doc, "Update left-pad 1.0.0 to 1.2.0", {}); return true; }, true);
     const found = [{ name: "left-pad", current: "1.0.0", latest: "1.2.0" }, { name: "a", current: "1.9.0", latest: "1.10.0" }];
-    expect(propose(repo, found)).toEqual(["dp1-1 Update left-pad 1.0.0 to 1.2.0", "dp1-2 Update a 1.9.0 to 1.10.0"]);
-    expect(readList(repo)!.items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a 1.9.0 to 1.10.0"]);
+    expect(propose(repo, found)).toEqual(["dp1-1 Update left-pad to 1.2.0", "dp1-2 Update a to 1.10.0"]);
+    expect(readList(repo)!.items.map((i) => i.title)).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update a to 1.10.0"]);
     const filed = readList(repo)!.items[1];
-    expect(filed.fm).toMatchObject({ source: "deps", areas: ["deps"], ask: "approval", reason: "proposal" });
+    expect(filed.fm).toMatchObject({ kind: "proposal", source: "deps", areas: [], ask: "approval", reason: "proposal" });
     expect(filed.fm.labels).toBeUndefined();
     const before = commits();
     expect(propose(repo, found)).toEqual([]);

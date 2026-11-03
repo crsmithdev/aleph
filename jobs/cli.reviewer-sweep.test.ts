@@ -10,7 +10,7 @@ beforeAll(setup);
 afterAll(teardown);
 
 describe("a factory run", () => {
-  test("the nightly sweep files one proposal per stale package, once, and a moved latest files one more", async () => {
+  test("the nightly sweep files one proposal per stale package, once, and a moved latest files none while one is open", async () => {
     const table = (latest: string) => [
       "| Package          | Current | Update | Latest |",
       "|------------------|---------|--------|--------|",
@@ -31,19 +31,18 @@ describe("a factory run", () => {
     stale();
     await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
     const first = await proposals();
-    expect(first.map((r) => r.title).sort()).toEqual(["Update left-pad 1.0.0 to 1.2.0", "Update typescript 5.8.3 to 5.9.2"]);
+    expect(first.map((r) => r.title).sort()).toEqual(["Update left-pad to 1.2.0", "Update typescript to 5.9.2"]);
     for (const r of first) {
-      expect((await issueShow("fac", r.id)).json).toMatchObject({ source: "deps", areas: ["deps"], ask: { kind: "approval", reason: "proposal" } });
+      expect((await issueShow("fac", r.id)).json).toMatchObject({ source: "deps", areas: [], ask: { kind: "approval", reason: "proposal" } });
     }
     const rep = await reportText();
-    expect(rep).toContain("Update left-pad 1.0.0 to 1.2.0");
+    expect(rep).toContain("Update left-pad to 1.2.0");
     expect(await reportText()).not.toContain("Update left-pad");
-    // The unchanged left-pad row files nothing again (deps.test.ts covers the reuse); the moved typescript row files one.
+    // The unchanged left-pad row files nothing again, and nor does the moved typescript row: its proposal is open.
     give("5.9.3");
     stale();
     await aleph(["tick"], { ALEPH_OUTDATED_CMD: cmd, ALEPH_PROBE_FAKE: "pass" });
-    expect((await proposals()).map((r) => r.title)).toContain("Update typescript 5.8.3 to 5.9.3");
-    expect(await proposals()).toHaveLength(3);
+    expect(await proposals()).toHaveLength(2);
     for (const r of await proposals()) await issueClose("fac", r.id, "drop", "test over");
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   }, 120_000);

@@ -32,14 +32,14 @@ const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Numb
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
 export interface Row {
-  id: number; ref: string; repo: string; title: string; status: string; priority: string | null; labels: string[];
+  id: number; ref: string; repo: string; title: string; kind: string; status: string; priority: string | null; labels: string[];
   after: string[]; created: string | null; closed: string | null; source: string | null; updated: string | null; notes: number;
   stage?: string; why?: string;
 }
 
 function row(repo: string, i: todos.Issue): Row {
   return {
-    id: i.id, ref: todos.refOf(i), repo, title: i.title, status: todos.status(i), priority: str(i.fm.priority), labels: areasOf(i),
+    id: i.id, ref: todos.refOf(i), repo, title: i.title, kind: str(i.fm.kind) ?? "task", status: todos.status(i), priority: str(i.fm.priority), labels: areasOf(i),
     after: afterOf(i), created: str(i.fm.created), closed: str(i.fm.closed_at), source: str(i.fm.source), updated: str(i.fm.updated), notes: i.notes.length,
   };
 }
@@ -171,6 +171,8 @@ async function create(req: Request, url: URL): Promise<Response> {
   const labels = given.filter((l: string) => l !== "spec");
   const args = ["issue", "add", repo, title, given.includes("spec") ? "--spec" : "--request", "-"];
   if (labels.length) args.push("--labels", labels.join(","));
+  const kind = str(b.kind);
+  if (kind) args.push("--kind", kind);
   const after = str(b.after)?.trim();
   if (after) args.push("--after", after);
   const { stdout: out, stderr: err, code } = await runCli(args, { stdin: String(b.body ?? "") });
