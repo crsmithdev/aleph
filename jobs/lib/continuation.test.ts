@@ -125,6 +125,7 @@ describe("rescue of a stuck or failed run", () => {
     expect(askedQuestion(r, "no question here")).toBeNull();
     expect(askedQuestion(run({ cause: "check" }), "QUESTION: x")).toBeNull();
     expect(questionOf("  QUESTION: a\nQUESTION: b ")).toBe("b");
+    expect(questionOf("QUESTION: a\n**QUESTION: b**\nquestion: c")).toBe("b");
   });
 
   test("already met: on main or done is a duplicate; a worker's claim is checked on main", () => {

@@ -19,7 +19,7 @@ import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
 import { SCENARIOS } from "./author.ts";
 import { gitPrelude, OPUS_MODEL, q } from "./agent-call.ts";
 import { outcome as agentOutcome } from "./gate.ts";
-import { checkSlot, tell, type Repo } from "./ledger.ts";
+import { checkSlot, tagged, tell, type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { acceptanceDir, commitsNaming, readRecord, resultLine, writeRecord, type Accepted, type FailedTest } from "./status.ts";
 import { acceptanceFailCap, quietLoad, reviewSeconds, reviewerCmd } from "./settings.ts";
@@ -131,7 +131,9 @@ export const scenarioNumbers = (text: string): number[] => [...text.matchAll(/^\
 /** `pass` or `fail` by scenario number, from the `CHECK: pass|fail scenario <n>: ...` lines of an agent's reply. A fail wins over a pass for one number. */
 export function scenarioMarks(output: string): Map<number, "pass" | "fail"> {
   const marks = new Map<number, "pass" | "fail">();
-  for (const m of output.matchAll(/^\s*CHECK:\s*(pass|fail)\s+scenario\s+(\d+)\b/gim)) {
+  for (const line of tagged(output, "CHECK")) {
+    const m = line.match(/^(pass|fail)\s+scenario\s+(\d+)\b/i);
+    if (!m) continue;
     const n = Number(m[2]), v = m[1].toLowerCase() as "pass" | "fail";
     if (v === "fail" || !marks.has(n)) marks.set(n, v);
   }

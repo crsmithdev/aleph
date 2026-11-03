@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { failedTests, oracleCommands, rerunOf } from "./acceptance.ts";
+import { failedTests, oracleCommands, rerunOf, scenarioMarks } from "./acceptance.ts";
 
 // The pure parsers of acceptance.ts: no git repo, no store.
 const FAILED = "jobs/lib/acceptance.test.ts:\n(fail) outer (x) > one [1.00ms]\n\nb.test.ts:\n(fail) two\n 2 fail\n";
@@ -16,4 +16,9 @@ test("failedTests takes each failure with the file above it, and rerunOf names o
   expect(rerunOf("bun run test", [{ file: "b.test.ts", name: "(unnamed)" }])).toBe("bun test --timeout=30000 ./b.test.ts");
   expect(rerunOf("bunx tsc", [])).toBe("bunx tsc");
   expect(rerunOf("bun run test", [{ name: "no file" }])).toBe("bun run test");
+});
+
+test("scenarioMarks reads the capital CHECK lines, wrapped ones too; a fail wins over a pass", () => {
+  const marks = scenarioMarks("  CHECK: pass scenario 1: ok\ncheck: fail scenario 1: lowercase\n**CHECK: pass scenario 2: ok**\nCHECK: fail scenario 2: no\n");
+  expect([...marks]).toEqual([[1, "pass"], [2, "fail"]]);
 });

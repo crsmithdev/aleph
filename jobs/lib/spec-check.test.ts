@@ -5,7 +5,7 @@ import { reader, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ctx, notes, setup, teardown } from "./factory.helpers.ts";
 import { specVersion } from "./goal-spec.ts";
-import { checkSpec } from "./spec-check.ts";
+import { checkSpec, specVerdict } from "./spec-check.ts";
 
 const SPEC = "## Goal\nGOALTEXT\n\n## Edit surface\nSURFACE\n\n## Oracle\nORACLETEXT\n";
 let old: string | undefined;
@@ -29,6 +29,10 @@ function stub(text: string, code = 0): string {
 /** The spec version of item `id` now. */
 const version = (id: number) => specVersion(reader().item("fac", id)!);
 const count = (calls: string) => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").length : 0);
+
+test("specVerdict reads the last capital VERDICT line as lastTagged does: **VERDICT:** pass is pass", () => {
+  expect(specVerdict("VERDICT: hold a\n**VERDICT:** pass\nverdict: hold b")).toEqual({ pass: true });
+});
 
 test("a failed call or a reply with no verdict is an error that is not tried again", async () => {
   const calls = stub("", 1);

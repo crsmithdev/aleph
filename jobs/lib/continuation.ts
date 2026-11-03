@@ -17,7 +17,7 @@ import { factoryDir } from "./factory-status.ts";
 import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
-import { askOf, isAgentRun, isBuild, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { askOf, isAgentRun, isBuild, lastTagged, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { hiddenOf } from "./checks.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import { jobSpec, runFile } from "./run-files.ts";
@@ -269,8 +269,7 @@ export function repeatedHidden(folder: string, earlier: { id: string; run: Run }
 }
 
 /** The worker's question: the text of its last `QUESTION:` line, or undefined when it has none. */
-export const questionOf = (result: string): string | undefined =>
-  result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1)?.slice("QUESTION:".length).trim();
+export const questionOf = (result: string): string | undefined => lastTagged(result, "QUESTION");
 
 // ---------------------------------------------------------------------------
 // The rescue of a stuck or failed run: which case it is, and the step

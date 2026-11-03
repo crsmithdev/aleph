@@ -15,7 +15,7 @@ import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
 import { git } from "./git.ts";
 import { isVersion, specVersion } from "./goal-spec.ts";
-import { lock, type Repo } from "./ledger.ts";
+import { lastTagged, lock, type Repo } from "./ledger.ts";
 import { askChris, plainAsk } from "./ask.ts";
 import { factoryDir, issueJob, recordHold, recordSpecCost } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -50,17 +50,11 @@ End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <p
 
 /** The last `VERDICT:` line of a reply, or null when it has none. */
 export function specVerdict(reply: string): { pass: true } | { pass: false; problems: string } | null {
-  const lines = reply.split("\n").map((l) => l.trim().replace(/^[`*\s]+/, "").replace(/[`*\s]+$/, ""));
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const m = lines[i].match(/^VERDICT:\s*(.*)$/);
-    if (!m) continue;
-    const rest = m[1].trim();
-    if (/^pass\b/i.test(rest)) return { pass: true };
-    const hold = rest.match(/^hold\b[:\s]*(.*)$/i);
-    if (hold) return { pass: false, problems: hold[1].trim() };
-    return null;
-  }
-  return null;
+  const rest = lastTagged(reply, "VERDICT");
+  if (rest === undefined) return null;
+  if (/^pass\b/i.test(rest)) return { pass: true };
+  const hold = rest.match(/^hold\b[:\s]*(.*)$/i);
+  return hold ? { pass: false, problems: hold[1].trim() } : null;
 }
 
 export async function checkSpec(repo: Repo, id: number | string): Promise<{ verdict: "pass" | "hold" | "skip" | "error"; problems?: string; cost?: number }> {
