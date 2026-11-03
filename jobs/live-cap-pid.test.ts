@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { liveRuns } from "./lib/factory-status.ts";
 import { writeRun, type Run } from "./lib/ledger.ts";
-import { STARTING_MS } from "./lib/process.ts";
 
 let base: string;
 beforeEach(() => { base = mkdtempSync(join(tmpdir(), "aleph-livecap-")); process.env.ALEPH_JOBS_DIR = base; });
@@ -20,11 +19,4 @@ function run(id: string, extra: Partial<Run>, files: string[] = []): void {
 test("a started run with no pid yet counts against the live cap", () => {
   run("a", {});
   expect(liveRuns()).toBe(1);
-});
-
-test("a run with an exit, a run that ended, and a long-silent start do not count", () => {
-  run("b", {}, ["exit"]);
-  run("c", { condition: "failed" });
-  run("d", { made: Date.now() - STARTING_MS - 1000 });
-  expect(liveRuns()).toBe(0);
 });

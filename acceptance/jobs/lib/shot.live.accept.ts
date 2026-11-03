@@ -1,19 +1,20 @@
+// Archived goal tests from jobs/lib/shot.live.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// Run on the host, not in a sandbox: ALEPH_SHOT_LIVE=1 bun test jobs/lib/shot.live.test.ts
+// Run on the host, not in a sandbox: ALEPH_SHOT_LIVE=1 bun test acceptance/jobs/lib/shot.live.accept.ts
 const live = process.env.ALEPH_SHOT_LIVE === "1";
 const base = mkdtempSync(join(tmpdir(), "shot-live-"));
 if (live) process.env.ALEPH_SANDBOX_DIR = join(base, "runs");
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
 test.skipIf(!live)("a sandboxed step serves its UI and aleph-shot takes the shot outside", async () => {
-  const { makeRunFolder, sandboxed } = await import("./sandbox.ts");
-  const { serveShots } = await import("./shot.ts");
-  const { bridge, sandboxNetnsPid } = await import("./netns.ts");
-  const repo = join(import.meta.dir, "../..");
+  const { makeRunFolder, sandboxed } = await import("../../../jobs/lib/sandbox.ts");
+  const { serveShots } = await import("../../../jobs/lib/shot.ts");
+  const { bridge, sandboxNetnsPid } = await import("../../../jobs/lib/netns.ts");
+  const repo = join((import.meta.dir + "/../../../jobs/lib"), "../..");
   const dir = makeRunFolder("shot-live");
   const git = Bun.spawnSync(["git", "-C", repo, "bundle", "create", join(dir, "in.bundle"), "HEAD"]);
   expect(git.exitCode).toBe(0);

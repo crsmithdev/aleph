@@ -5,7 +5,6 @@ import { join } from "node:path";
 import type { Repo } from "./ledger.ts";
 import { checksInSandbox, runOnCommit } from "./checks.ts";
 import { checkSlot } from "./ledger.ts";
-import { baselineChecks } from "./checks.ts";
 import { fixture } from "../../tests/git-fixture.ts";
 
 // The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
@@ -46,17 +45,6 @@ afterEach(() => {
     else process.env[k] = saved[k];
   }
   rmSync(base, { recursive: true, force: true });
-});
-
-test("a check run through baselineChecks sees TZ=UTC and date +%Z prints UTC", async () => {
-  const path = join(base, "repo");
-  oneCommit(path);
-  const commit = sh(path, "git", "rev-parse", "HEAD");
-  const repo = {
-    key: "tz", path, main: "main", setup: [], manual: [], autoland: false, sandbox: true, held: [], hiddenRun: "",
-    checks: [{ name: "tz", run: '[ "$TZ" = UTC ] && [ "$(date +%Z)" = UTC ]' }],
-  } as unknown as Repo;
-  expect(await baselineChecks(repo, commit, join(base, "logs"))).toBeNull();
 });
 
 test("checksInSandbox hands each step's process to onSpawn, so a drop can kill a running check", async () => {

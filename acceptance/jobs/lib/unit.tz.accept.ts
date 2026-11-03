@@ -1,0 +1,59 @@
+// Archived goal tests from jobs/lib/unit.tz.test.ts: `bun run accept` runs them, `bun run test` does not.
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { Repo } from "../../../jobs/lib/ledger.ts";
+import { baselineChecks } from "../../../jobs/lib/checks.ts";
+import { fixture } from "../../../tests/git-fixture.ts";
+
+// The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
+const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+function sh(cwd: string, ...args: string[]): string {
+  const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
+  if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
+  return p.stdout.toString().trim();
+}
+
+/** A repo at `path` with one commit "init" of f.txt on main. */
+const oneCommit = (path: string) => fixture("unit-tz", (dir) => {
+  sh(dir, "git", "init", "-q", "-b", "main");
+  writeFileSync(join(dir, "f.txt"), "x\n");
+  sh(dir, "git", "add", ".");
+  sh(dir, "git", "commit", "-q", "-m", "init");
+}, path);
+
+const KEYS =["ALEPH_SANDBOX_CMD", "TZ", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS"];
+let base: string;
+let saved: Record<string, string | undefined>;
+
+beforeEach(() => {
+  base = mkdtempSync(join(tmpdir(), "unit-tz-"));
+  saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
+  Object.assign(process.env, {
+    ALEPH_SANDBOX_CMD: "/usr/bin/env",
+    TZ: "Asia/Tokyo",
+    ALEPH_SANDBOX_DIR: join(base, "runs"),
+    XDG_RUNTIME_DIR: join(base, "run"),
+    ALEPH_CHECK_SLOTS: "1",
+  });
+});
+
+afterEach(() => {
+  for (const k of KEYS) {
+    if (saved[k] === undefined) delete process.env[k];
+    else process.env[k] = saved[k];
+  }
+  rmSync(base, { recursive: true, force: true });
+});
+
+test("a check run through baselineChecks sees TZ=UTC and date +%Z prints UTC", async () => {
+  const path = join(base, "repo");
+  oneCommit(path);
+  const commit = sh(path, "git", "rev-parse", "HEAD");
+  const repo = {
+    key: "tz", path, main: "main", setup: [], manual: [], autoland: false, sandbox: true, held: [], hiddenRun: "",
+    checks: [{ name: "tz", run: '[ "$TZ" = UTC ] && [ "$(date +%Z)" = UTC ]' }],
+  } as unknown as Repo;
+  expect(await baselineChecks(repo, commit, join(base, "logs"))).toBeNull();
+});

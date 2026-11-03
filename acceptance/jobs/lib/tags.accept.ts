@@ -1,5 +1,6 @@
+// Archived goal tests from jobs/lib/tags.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { describe, expect, test } from "bun:test";
-import { lastTagged, parseVerdict, tagged } from "./ledger.ts";
+import { lastTagged, parseVerdict, tagged } from "../../../jobs/lib/ledger.ts";
 
 const reply = (tag: string, a: string, b: string) =>
   [`  ${tag}: ${a}`, `${tag.toLowerCase()}: skipped`, `**${tag}: mid**`, `\`${tag}: tick\``, `${tag}: ${b}`].join("\n");

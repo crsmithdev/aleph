@@ -1,9 +1,10 @@
+// Archived goal tests from jobs/lib/shot.factory.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fakeLog, repo, setup, state, teardown } from "../cli.helpers";
-import { actionJob, drop } from "../inproc.ts";
+import { fakeLog, repo, setup, state, teardown } from "../../../jobs/cli.helpers";
+import { actionJob, drop } from "../../../jobs/inproc.ts";
 
 /** A stand-in for Chrome (as in lib/shot.test.ts): answers captureScreenshot with a PNG header of the requested width. */
 const FAKE_CHROME = `#!${process.execPath}

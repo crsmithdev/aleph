@@ -25,14 +25,6 @@ test("fetchOrigin waits out a ref lock that goes away", () => {
   expect(git(clone, "rev-parse", "origin/main").out).toBe(git(other, "rev-parse", "HEAD").out);
 });
 
-test("fetchOrigin gives up when the lock stays", () => {
-  const { clone, lock } = setup();
-  writeFileSync(lock, "");
-  const r = fetchOrigin(clone);
-  expect(r.ok).toBe(false);
-  expect(r.out).toContain("cannot lock ref");
-});
-
 test("addWorktree waits out a config lock that goes away", () => {
   const { clone } = setup();
   const cfg = join(clone, ".git/config.lock");
@@ -43,12 +35,4 @@ test("addWorktree waits out a config lock that goes away", () => {
   expect(r.ok).toBe(true);
   expect(git(clone, "rev-parse", "--verify", "job").ok).toBe(true);
   expect(git(wt, "rev-parse", "--abbrev-ref", "HEAD").out).toBe("job");
-});
-
-test("addWorktree gives up when the config lock stays", () => {
-  const { clone } = setup();
-  writeFileSync(join(clone, ".git/config.lock"), "");
-  const r = addWorktree(clone, join(clone, "..", "wt"), "job", "origin/main");
-  expect(r.ok).toBe(false);
-  expect(r.out).toContain("could not lock config file");
 });

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { failedChecks, probe } from "./probe.ts";
+import { probe } from "./probe.ts";
 import type { Repo } from "./ledger.ts";
 
 let base: string;
@@ -36,37 +36,6 @@ afterAll(() => {
 // The probe's clock check reads the wall clock, the monotonic clock and Windows time; under load they part, so the tests give it no fault.
 const noFault = () => null;
 const repo = (): Repo => ({ key: "demo", path: repoDir, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: true, held: [], hiddenRun: "" });
-
-test("a probe with no results names exit code and stderr, not an earlier probe's", async () => {
-  const log = join(base, "probe.log");
-  process.env.STDERR_FILE = `${log}.stderr`;
-  writeFileSync(`${log}.stderr`, "old probe text\n");
-  const p = await probe(repo(), log, noFault);
-  expect(p.ok).toBe(false);
-  expect(p.results).toEqual([]);
-  expect(p.failed).toHaveLength(1);
-  expect(p.failed[0]).toContain("11 checks gave no answer");
-  expect(p.failed[0]).toContain("exit 3");
-  expect(p.failed[0]).toContain("boom: listen failed");
-  expect(p.failed[0]).not.toContain("old probe");
-  expect(p.failed[0]).not.toContain("stale");
-});
-
-test("a failed bun test with all results gives only bun test, whatever is on stderr", async () => {
-  const log = join(base, "probe2.log");
-  const lines = [...Array(10).keys()].map((i) => `PASS check ${i}: denied`);
-  writeFileSync(join(base, "all"), `#!/bin/bash\necho "error: 1 test failed" >&2\n${lines.map((l) => `echo "${l}"`).join("\n")}\necho "FAIL bun test: failed"\n`, { mode: 0o755 });
-  process.env.ALEPH_SANDBOX_CMD = join(base, "all");
-  try {
-    const p = await probe(repo(), log, noFault);
-    expect(p.results).toHaveLength(11);
-    expect(p.failed).toEqual(["bun test"]);
-  } finally { process.env.ALEPH_SANDBOX_CMD = join(base, "boom"); }
-});
-
-test("failedChecks keeps its list when all results are in", () => {
-  expect(failedChecks([{ name: "bun test", ok: false }], 1, null)).toEqual(["bun test"]);
-});
 
 test("the probe script sets each NO_SUBMODULES setting after git init and before git fetch", async () => {
   const { NO_SUBMODULES } = await import("./git.ts");

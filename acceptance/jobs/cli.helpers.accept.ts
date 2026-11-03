@@ -1,9 +1,10 @@
+// Archived goal tests from jobs/cli.helpers.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as helpers from "./cli.helpers";
-import { base, env, jobsDir, startScript, setup, teardown } from "./cli.helpers";
+import * as helpers from "../../jobs/cli.helpers";
+import { base, env, jobsDir, startScript, setup, teardown } from "../../jobs/cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);

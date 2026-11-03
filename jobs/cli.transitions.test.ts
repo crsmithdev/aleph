@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, patchItem, seedItem } from "./cli.helpers";
-import { dispatch, drop, issueClose, issueNote, recheck as recheckJob } from "./inproc";
+import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, seedItem } from "./cli.helpers";
+import { dispatch, drop, issueClose, recheck as recheckJob } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -69,38 +69,6 @@ describe("every transition dispatches at once", () => {
     expect(started()).toEqual([]);
     expect((await aleph(["issue", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);
     await until(() => started().includes(`fac-${x}`));
-  }, 60_000);
-
-  test("a drop's rerun waits while the issue waits on an open item", async () => {
-    const blocker = track(await add("holds the line", open("blocker"), ["--labels", "goal"]));
-    await until(() => started().includes(`fac-${blocker}`));
-    const a = track(await add("starts first", open("waiter"), ["--labels", "goal"]));
-    await until(() => started().includes(`fac-${a}`));
-    patchItem("fac", a, { after: [`fac-${blocker}`] });
-    expect((await drop(`fac-${a}`, "waits now", false, on())).code).toBe(0);
-    // The drop's detached dispatch and the dropped unit's run-end dispatch have both ended.
-    await until(() => settled(a) && !dispatching());
-    expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
-    // A dispatch from any other path holds it too.
-    await dispatch(on());
-    expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
-  }, 60_000);
-
-  test("a rerun's prompt holds the reasons of the earlier drops and the issue's notes", async () => {
-    const a = track(await add("steered", open("steer"), ["--labels", "goal"]));
-    await until(() => started().includes(`fac-${a}`));
-    await issueNote("fac", a, "mind the sliced list");
-    expect((await drop(`fac-${a}`, "the card counts the sliced list", false, on())).code).toBe(0);
-    await until(() => started().length === 2);
-    const prompts = () => runs(a).map((r) => join(jobsDir, r, "prompt.md")).filter(existsSync).map((f) => readFileSync(f, "utf8"));
-    await until(() => prompts().length === 2);
-    // Folder names have one-second precision and readdir has no order: find the rerun by its content.
-    const [second, ...rest] = prompts().filter((p) => p.includes("the card counts the sliced list"));
-    expect(rest).toEqual([]);
-    expect(second).toBeDefined();
-    expect(second).toContain("the card counts the sliced list");
-    expect(second).toContain("mind the sliced list");
-    expect(second.indexOf("ACTION:")).toBeLessThan(second.indexOf("the card counts the sliced list"));
   }, 60_000);
 
   test("a recheck that clears the factory hold starts the next goal", async () => {

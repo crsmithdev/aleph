@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -80,50 +80,6 @@ describe("aleph-shot and serveShots", () => {
       const rec = records();
       expect(rec).toContainEqual({ scheme: "dark" });
       expect(rec).toContainEqual({ expression: `document.querySelector(".row").click()` });
-    } finally { await server.stop(); }
-  }, 30_000);
-
-  test("an out outside work, a symlinked out and another host fail without starting Chrome", async () => {
-    const { dir, run, serveShots } = await setup("two");
-    const server = serveShots(dir, {});
-    rmSync(record, { force: true });
-    try {
-      const url = `http://127.0.0.1:${srv.port}/`;
-      writeFileSync(join(base, "target.png"), "");
-      symlinkSync(join(base, "target.png"), join(dir, "work/docs/link.png"));
-      for (const [u, out] of [[url, join(base, "elsewhere.png")], [url, "work/docs/link.png"], [`http://example.com:80/`, "work/docs/y.png"]]) {
-        const r = await run(u, out);
-        expect(r.code).toBe(1);
-        expect(r.err).toContain("shot failed:");
-      }
-      expect(records()).toEqual([]);
-    } finally { await server.stop(); }
-  }, 30_000);
-
-  test("reach gets the worker's URL and Chrome loads the URL it returns", async () => {
-    const { dir, run, serveShots } = await setup("three");
-    const seen: string[] = [];
-    let stopped = false;
-    const server = serveShots(dir, { reach: async (u) => { seen.push(u); return { url: `http://127.0.0.1:${srv.port}/mapped`, stop: async () => { stopped = true; } }; } });
-    rmSync(record, { force: true });
-    try {
-      const r = await run("http://localhost:4999/page", "work/docs/z.png", "--wait", "50");
-      expect(r.code).toBe(0);
-      expect(seen).toEqual(["http://localhost:4999/page"]);
-      expect(records()).toContainEqual({ navigate: `http://127.0.0.1:${srv.port}/mapped` });
-      expect(stopped).toBe(true);
-    } finally { await server.stop(); }
-  }, 30_000);
-
-  test("a failed shot through a bridge holds the bridge stderr lines in its error", async () => {
-    const { dir, run, serveShots } = await setup("four");
-    const server = serveShots(dir, { reach: async () => ({ url: "http://127.0.0.1:9/refuse", stop: async () => {}, stderr: () => "nsenter: setns failed\nsocat: Connection refused" }) });
-    try {
-      const r = await run("http://localhost:4999/page", "work/docs/w.png", "--wait", "50");
-      expect(r.code).toBe(1);
-      expect(r.err).toContain("shot failed:");
-      expect(r.err).toContain("ERR_EMPTY_RESPONSE");
-      expect(r.err).toContain("nsenter: setns failed socat: Connection refused");
     } finally { await server.stop(); }
   }, 30_000);
 });

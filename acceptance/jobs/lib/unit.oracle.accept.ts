@@ -1,13 +1,14 @@
+// Archived goal tests from jobs/lib/unit.oracle.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Runner } from "./checks.ts";
-import { git } from "./git.ts";
-import type { Repo, Run } from "./ledger.ts";
-import { branchPorts } from "./unit.ts";
-import { workerVerdict } from "./worker-verdict.ts";
-import { fixture } from "../../tests/git-fixture.ts";
+import type { Runner } from "../../../jobs/lib/checks.ts";
+import { git } from "../../../jobs/lib/git.ts";
+import type { Repo, Run } from "../../../jobs/lib/ledger.ts";
+import { branchPorts } from "../../../jobs/lib/unit.ts";
+import { workerVerdict } from "../../../jobs/lib/worker-verdict.ts";
+import { fixture } from "../../../tests/git-fixture.ts";
 
 let root = "";
 let repo: Repo;

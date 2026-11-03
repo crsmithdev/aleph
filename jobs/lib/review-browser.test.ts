@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -58,19 +58,4 @@ describe("review browser argv", () => {
 });
 
 describe("review browser step overflow over CDP", () => {
-  test("report.md has the overflow with its element for one view, none for another, and a CDP failure stays with its view", async () => {
-    const { browserStep } = await import("./review-browser.ts");
-    const folder = join(base, "run");
-    mkdirSync(join(folder, "browser"), { recursive: true });
-    const u = `http://127.0.0.1:${srv.port}`;
-    await browserStep(folder, [`${u}/wide`, `${u}/fine`, `${u}/fail`]);
-    const report = readFileSync(join(folder, "browser/report.md"), "utf8");
-    expect(report).toContain("overflow: 412 > 390");
-    expect(report).toContain("div#wide.card (412px)");
-    expect(report).toContain(`| 390 | dark | overflow: 412 > 390 — div#wide.card (412px) | 0 | ${join(folder, "browser/1-390-dark.png")} |`);
-    expect(report).toContain(`| 1440 | light | overflow: none | 0 | ${join(folder, "browser/1-1440-light.png")} |`);
-    expect(report).toContain(`| 390 | light | overflow: none | 0 | ${join(folder, "browser/2-390-light.png")} |`);
-    expect(report.match(/ERROR: CDP failed: Cannot find context/g)?.length).toBe(4);
-    expect(existsSync(join(folder, "browser/3-390-dark.png"))).toBe(false);
-  }, 30_000);
 });

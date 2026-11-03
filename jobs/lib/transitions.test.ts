@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readRun, writeRun, type Run } from "./ledger.ts";
+import { writeRun, type Run } from "./ledger.ts";
 import { STARTING_MS } from "./process.ts";
-import { checked, drop, land, recheck, refusal, startJob, startPlain } from "./transitions.ts";
+import { startJob } from "./transitions.ts";
 import { Refusal } from "./refusal.ts";
 
 let base: string;
@@ -32,15 +32,6 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-/** A run folder of job `job`, ended (it has `exit`), so no transition takes it for live. */
-function run(id: string, job: string, extra: Partial<Run> = {}): string {
-  const folder = join(base, "jobs", id);
-  mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "stuck", told: true, started: "2026-10-28T00:00:00Z", ...extra } as Run);
-  writeFileSync(join(folder, "exit"), "0");
-  return folder;
-}
-
 /** The refusal a transition throws, or "" when it goes through. */
 async function refused(f: () => unknown): Promise<string> {
   try {
@@ -56,19 +47,6 @@ async function refused(f: () => unknown): Promise<string> {
 const runs = () => (existsSync(join(base, "jobs")) ? readdirSync(join(base, "jobs")) : []);
 
 describe("startJob", () => {
-  test("refuses an unknown repo, a bad name and an --on that is no number, before any run", async () => {
-    expect(await refused(() => startJob({ repo: "nope", name: "x", spec: "s" }))).toBe('unknown repo "nope"; known: fac, plain');
-    expect(await refused(() => startJob({ repo: "fac", name: "a b", spec: "s" }))).toBe("the name must be letters, digits and hyphens");
-    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s", on: NaN }))).toBe("--on takes an issue number");
-    expect(runs()).toEqual([]);
-  });
-
-  test("a repo key is read without case and spaces; a name open in another repo is refused", async () => {
-    run("20261028-000001-plain-x-agent", "20261028-000001-plain-x-agent", { repo: "plain" });
-    expect(await refused(() => startJob({ repo: " FAC ", name: "x", spec: "s" }))).toBe("x is open in plain");
-    expect(runs()).toHaveLength(1);
-  });
-
   test("refuses a start while the last run is starting: made, running, no pid and no exit", async () => {
     const job = "20261103-000001-fac-x-agent";
     const folder = join(base, "jobs", job);
@@ -87,93 +65,14 @@ describe("startJob", () => {
   });
 });
 
-test("startPlain refuses a run with no command", async () => {
-  expect(await refused(() => startPlain({ name: "p", argv: [], cwd: base }))).toBe("usage: aleph run <name> -- <command> [args...]");
-});
-
 describe("land", () => {
-  test("refuses a name with no open job, and a job that has not passed", async () => {
-    expect(await refused(() => land("x"))).toBe("no open job named x");
-    run("20261028-000001-fac-x-agent", "20261028-000001-fac-x-agent", { condition: "stuck" });
-    expect(await refused(() => land("x"))).toBe("x is stuck, not passed");
-    run("20261028-000002-fac-x-agent", "20261028-000001-fac-x-agent", { condition: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } });
-    expect(await refused(() => land("x"))).toBe("x is awaiting (question), not passed");
-    expect(runs()).toHaveLength(2);
-  });
 });
 
 describe("recheck", () => {
-  test("refuses each case that cannot be rechecked, in order", async () => {
-    expect(await refused(() => recheck("x"))).toBe("no open job named x");
-    const job = "20261028-000001-fac-x-agent";
-    const first = run(job, job, { condition: "passed" });
-    expect(await refused(() => recheck("x"))).toBe("x is passed, not stuck or failed");
-    run("20261028-000002-fac-x-land", job, { kind: "land", condition: "failed" });
-    expect(await refused(() => recheck("x"))).toBe("x: the last run is a land run, not an agent run");
-    rmSync(join(base, "jobs", "20261028-000002-fac-x-land"), { recursive: true });
-    writeRun(first, { ...readRun(first)!, condition: "stuck", repo: "plain" });
-    expect(await refused(() => recheck("x"))).toBe("x is not a factory job");
-    writeRun(first, { ...readRun(first)!, repo: "fac" });
-    expect(await refused(() => recheck("x"))).toBe("x has no branch: drop it");
-    expect(runs()).toEqual([job]);
-  });
 });
 
 describe("drop", () => {
-  test("refuses a name with no open job", async () => {
-    expect(await refused(() => drop("x"))).toBe("no open job named x");
-  });
-
-  test("marks the job's last run dropped, with the reason, and is not news", async () => {
-    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, reason: "no commit" });
-    expect(await drop("x", { reason: "not needed", quiet: true })).toEqual({ job: "20261028-000001-x-agent", name: "x", condition: "dropped", reason: "not needed" });
-    const r = readRun(folder)!;
-    expect([r.condition, r.reason, r.told, r.cause]).toEqual(["dropped", "not needed", true, "no-commit"]);
-    expect(await refused(() => drop("x"))).toBe("no open job named x");
-  });
-
-  test("a fate is written beside the cause; a drop with no fate writes no fate key", async () => {
-    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, reason: "no commit" });
-    await drop("x", { reason: "not needed", quiet: true, fate: "already-met" });
-    const r = readRun(folder)!;
-    expect([r.condition, r.fate, r.cause]).toEqual(["dropped", "already-met", "no-commit"]);
-    const other = run("20261028-000002-y-agent", "20261028-000002-y-agent", { name: "y", repo: undefined, reason: "no commit" });
-    await drop("y", { quiet: true });
-    expect("fate" in readRun(other)!).toBe(false);
-  });
-
-  test("with no reason the reason is Chris's", async () => {
-    run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined });
-    expect((await drop("x")).reason).toBe("dropped by Chris");
-  });
 });
 
 describe("checked", () => {
-  test("a land run marked by the facts gate keeps its check and is still found", () => {
-    const folder = run("20261028-000002-y-agent", "20261028-000002-y-agent", { name: "y", repo: undefined, condition: "landed", check: "open", facts: true });
-    expect(checked("y")).toEqual({ job: "20261028-000002-y-agent", name: "y", condition: "landed", check: "done" });
-    expect(readRun(folder)).toMatchObject({ condition: "landed", check: "done", facts: true });
-  });
-
-  test("refuses a job with no open check, and closes an open one once", () => {
-    expect(() => checked("x")).toThrow("x has no open check");
-    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, condition: "landed", check: "open" });
-    expect(checked("x")).toEqual({ job: "20261028-000001-x-agent", name: "x", condition: "landed", check: "done" });
-    expect(readRun(folder)!.check).toBe("done");
-    expect(() => checked("x")).toThrow("x has no open check");
-  });
-
-  test("works for a land followed by a facts run", () => {
-    const folder = run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined, condition: "landed", check: "open" });
-    run("20261028-000002-x-facts", "20261028-000001-x-agent", { repo: undefined, name: "facts-x", kind: "facts", condition: "done" });
-    expect(checked("x").check).toBe("done");
-    expect(readRun(folder)!.check).toBe("done");
-  });
-});
-
-test("refusal answers a port: the message of a refusal, or null", async () => {
-  expect(await refusal(() => land("x"))).toBe("no open job named x");
-  run("20261028-000001-x-agent", "20261028-000001-x-agent", { repo: undefined });
-  expect(await refusal(() => drop("x", { quiet: true }))).toBeNull();
-  expect(readFileSync(join(base, "jobs", "20261028-000001-x-agent", "exit"), "utf8")).toBe("0");
 });

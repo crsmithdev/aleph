@@ -1,9 +1,10 @@
+// Archived goal tests from jobs/lib/unit.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lock } from "./ledger.ts";
-import { withSlot } from "./checks.ts";
+import { lock } from "../../../jobs/lib/ledger.ts";
+import { withSlot } from "../../../jobs/lib/checks.ts";
 
 // Slots are locks under $XDG_RUNTIME_DIR: keep this process's own, with one slot, so a held slot is seen at once.
 let dir = "";
@@ -46,7 +47,7 @@ test("while a check holds the slot, another waits for it", async () => {
 
 test("setup git settings stop the .gitmodules read; a real git error still shows", async () => {
   const { mkdirSync, writeFileSync, chmodSync } = await import("node:fs");
-  const { NO_SUBMODULES } = await import("./git.ts");
+  const { NO_SUBMODULES } = await import("../../../jobs/lib/git.ts");
   const d = mkdtempSync(join(tmpdir(), "gm-"));
   try {
     mkdirSync(join(d, "src"));

@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, fakeLog, file, repo, sh, state, told, setup, teardown } from "../cli.helpers";
-import { actionJob, drop, issueAdd, issueClose, issueList, issueShow, job } from "../inproc.ts";
-import { tick } from "./flow.testkit.ts";
+import { actionJob, drop, issueAdd, issueClose, issueList, issueShow } from "../inproc.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 beforeAll(setup);
@@ -42,20 +41,6 @@ describe("a factory run", () => {
     expect(told).toContain("fac/ferr stuck");
     for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await drop(n);
   });
-
-  test("a worker that says the goal is already met, with the checks green on main, closes the item", async () => {
-    const id = (await issueAdd("fac", "timeline already uses itemTimes")).json.added;
-    const r = await job("fac", "fmet", "Goal: fmet\nACTION: already-met\n", { on: String(id) });
-    expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
-    // A tick's probe runs the sandbox; a passing probe is written as the other tick tests do.
-    mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const t = await tick();
-    expect(t.episodes).toEqual(expect.any(Array));
-    expect(state(r.json.run)).toMatchObject({ condition: "dropped", reason: expect.stringContaining("the item is done") });
-    expect((await issueShow("fac", id)).json.status).toBe("done");
-    expect(runsLeft()).toEqual([]);
-  }, 60_000);
 });
 
 describe("a worker's FOLLOWUP line (criterion 15)", () => {

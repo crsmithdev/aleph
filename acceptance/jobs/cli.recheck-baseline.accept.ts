@@ -1,8 +1,9 @@
+// Archived goal tests from jobs/cli.recheck-baseline.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, other, sh, setup, teardown, seedItem } from "./cli.helpers";
-import { dispatch } from "./inproc";
+import { aleph, base, other, sh, setup, teardown, seedItem } from "../../jobs/cli.helpers";
+import { dispatch } from "../../jobs/inproc";
 
 beforeAll(setup);
 afterAll(teardown);

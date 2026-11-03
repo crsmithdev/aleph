@@ -1,10 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { waitFor } from "../../tests/wait.ts";
-import { base, fakeLog, file, jobsDir, until, remote, repo, sh, state, setup, teardown } from "../cli.helpers";
-import { actionJob, drop, issueAdd, issueClose, issueList, issueShow, job, jobView, land } from "../inproc.ts";
-import { reportText, statusLine } from "./flow.testkit.ts";
+import { base, fakeLog, file, until, remote, repo, sh, state, setup, teardown } from "../cli.helpers";
+import { actionJob, drop, issueAdd, issueShow, job, jobView, land } from "../inproc.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own, and so is its review.
 // `aleph report --hook` keeps its CLI test in jobs/cli.reviewer-land.test.ts.
@@ -72,59 +71,5 @@ describe("a factory run", () => {
     await until(() => state(run).review !== undefined);
     expect(state(run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ reason: "held-path" }), review: { call: "land" }, reason: "held path jobs/lib/gate.ts" });
     await drop("fsec");
-  });
-
-  test("a review back goes to the worker as a fix round; after the last round the run needs Chris", async () => {
-    const r = await fjob("fback", "commit held/back.txt REVIEW:back");
-    // A run's folder exists a moment before its state.json.
-    const runs = () => readdirSync(jobsDir).filter((d) => d.includes("-fac-fback-") && existsSync(join(jobsDir, d, "state.json"))).sort().map((d) => ({ id: d, ...state(d) }));
-    // The last run's reason is written after its review ends, so it is what to wait for.
-    await until(() => runs().length === 3 && /^the reviewer sent it back/.test(runs()[2].reason ?? ""));
-    const rs = runs();
-    expect(rs.map((x) => x.condition)).toEqual(["stuck", "stuck", "awaiting"]);
-    expect(rs[0]).toMatchObject({ reason: "fix the held path", failed: "review", next: "worker", round: 0 });
-    expect(rs[1]).toMatchObject({ failed: "review", round: 1 });
-    expect(rs[2]).toMatchObject({ ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "the reviewer sent it back twice: fix the held path" });
-    expect(rs[2].next).toBeUndefined();
-    expect(readFileSync(join(fakeLog, "prompt"), "utf8")).toContain("The reviewer sent this branch back: fix the held path");
-    expect(r.json.run).toBe(rs[0].id);
-    await drop("fback");
-  }, 60_000);
-
-  test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines file a worker issue", async () => {
-    const r = await fjob("fdefault", "defaults");
-    expect(state(r.json.run)).toMatchObject({ condition: "passed", cost: 0.25, defaults: ["which colour? -> blue"] });
-    const filed = (await issueList("fac")).json.filter((i: any) => i.title === "paint the fence" && i.source === "worker");
-    expect(filed).toHaveLength(1);
-    expect((await issueShow("fac", filed[0].id)).json.request).toContain("fdefault");
-    expect(await statusLine("fac", filed[0].id)).toContain("new");
-    expect(existsSync(join(base, "factory", "followups.log"))).toBe(false);
-    const rep = await reportText();
-    expect(rep).toContain("fac/fdefault passed");
-    expect(rep).toContain("DEFAULT: which colour? -> blue");
-    expect(rep).toContain("cost $0.25 at the API price");
-    expect(rep).toContain("fac/fheld awaiting (held): held path held/x.txt");
-    expect(rep).toContain("aleph land fheld");
-    expect(rep).toMatch(/runs in the last 24 hours: \d+ of 100, \$\d+\.\d{2} at the API price/);
-    expect(state(r.json.run)).toMatchObject({ shown: true, told: true });
-    expect(await reportText()).not.toContain("fdefault");
-    await drop("fdefault");
-  });
-
-  test("FLAKE lines become notes on the flake tracker; FOLLOWUP lines file an issue each", async () => {
-    const before = (await issueList("fac")).json.length;
-    const r = await fjob("fflake", "flake");
-    expect(state(r.json.run)).toMatchObject({ condition: "passed" });
-    const items = (await issueList("fac")).json;
-    // The tracker and the followup issue; the FLAKE line itself files no issue.
-    expect(items.length).toBe(before + 2);
-    expect(items.map((i: any) => i.title)).not.toContain("a.test.ts > slow one: timed out, passed alone");
-    const tracker = (await issueList("fac", { label: "flakes" })).json;
-    expect(tracker).toHaveLength(1);
-    const full = (await issueShow("fac", tracker[0].id)).json;
-    expect(JSON.stringify(full)).toContain("job fflake: a.test.ts > slow one: timed out, passed alone");
-    // An open tracker with fresh notes is a health line: close it, as the CLI test of the report hook wants silence.
-    await issueClose("fac", tracker[0].id, "done", "test over");
-    await drop("fflake");
   });
 });

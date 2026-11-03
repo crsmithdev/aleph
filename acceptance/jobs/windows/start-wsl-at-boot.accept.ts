@@ -1,10 +1,11 @@
+// Archived goal tests from jobs/windows/start-wsl-at-boot.test.ts: `bun run accept` runs them, `bun run test` does not.
 // The sandbox has no PowerShell, so this reads the script as text and asserts
 // the contract; a text test is the oracle that fits.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const ps = readFileSync(join(import.meta.dir, "start-wsl-at-boot.ps1"), "utf8");
+const ps = readFileSync(join((import.meta.dir + "/../../../jobs/windows"), "start-wsl-at-boot.ps1"), "utf8");
 
 describe("start-wsl-at-boot.ps1", () => {
   test("runs wsl.exe with sleep infinity as the current user with a password logon", () => {

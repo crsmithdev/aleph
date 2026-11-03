@@ -1,6 +1,7 @@
+// Archived goal tests from jobs/lib/trace.flow.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { file, lf, lfPosts, resetLf, setLfStatus, state, setup, teardown } from "../cli.helpers";
-import { actionJob } from "../inproc.ts";
+import { file, lf, lfPosts, resetLf, setLfStatus, state, setup, teardown } from "../../../jobs/cli.helpers";
+import { actionJob } from "../../../jobs/inproc.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own and posts the trace.
 beforeAll(setup);

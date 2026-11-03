@@ -1,32 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, jobsDir, state, setup, teardown, items, seedItem } from "./cli.helpers";
-import { dispatch, issueAdd, issueList, job, land } from "./inproc";
+import { aleph, base, file, state, setup, teardown, seedItem } from "./cli.helpers";
+import { dispatch, job, land } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
 
 describe("a factory run", () => {
   const fjob = (name: string, action: string, extra: Record<string, string> = {}, o: { land?: boolean } = {}) => job("fac", name, `Goal: ${name}\nACTION: ${action}\n`, o, extra);
-  // `aleph tick`, `pause` and `resume` keep their CLI tests here: each is composed in jobs/cli.ts. The rest is in-process.
-  test("a tick triages an open issue that is not a goal, and its line counts the verdicts", async () => {
-    const cmd = join(base, "triage-fake");
-    writeFileSync(cmd, `#!/bin/bash\ncat > /dev/null\necho '{"route":"live","note":"check the live site"}'\n`, { mode: 0o755 });
-    mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-    const id = (await issueAdd("fac", "needs a live look")).json.added;
-    const first = (await issueList("fac")).json.filter((i: any) => i.status === "open" && !i.ask)[0];
-    const t = await aleph(["tick"], { ALEPH_TRIAGE_CAP: "1", ALEPH_TRIAGE_CMD: cmd });
-    expect(t.json.triaged).toEqual({ ask: 1 });
-    const stored = readFileSync(join(items, "fac", "backlog", "tasks", `fac-${first.id}.md`), "utf8");
-    expect(stored).toContain("ask: input");
-    expect(stored).toContain("reason: host-check");
-    expect(readdirSync(jobsDir).filter((d) => d.endsWith("-triage")).map((d) => state(d).kind)).toContain("triage");
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("triaged ask 1");
-    expect(id).toBeGreaterThan(0);
-  }, 30_000);
 
+  // `aleph pause` and `resume` keep their CLI test here: each is composed in jobs/cli.ts. The rest is in-process.
+  // `aleph tick` keeps its CLI test in jobs/cli.reviewer-sweep.test.ts.
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));

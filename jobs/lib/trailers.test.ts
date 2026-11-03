@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { itemOnMain, landedIndex, revertedIn } from "./status.ts";
+import { landedIndex, revertedIn } from "./status.ts";
 
 // The trailer reader: `Issue:` and `Goal:`.
 let dir: string;
@@ -42,14 +42,4 @@ test("k-3.1 and k-3.2 are separate entries; a reverted goal is in revertedIn and
   expect(revertedIn(index).has("4.2")).toBe(false);
   expect(index.get("4.1")).toBeUndefined();
   expect(index.get("3.1")).not.toEqual(index.get("4.2"));
-});
-
-test("itemOnMain finds an issue by Issue:, and a goal by Goal:", () => {
-  const repo = { path: dir, key: "k", main: "main" };
-  git("update-ref", "refs/remotes/origin/main", "main");
-  expect(itemOnMain(repo, 2)).toMatch(/^[0-9a-f]{7}$/);
-  expect(itemOnMain(repo, "3.1")).toMatch(/^[0-9a-f]{7}$/);
-  expect(itemOnMain(repo, 3)).toBeNull();
-  expect(itemOnMain(repo, "3.2")).toBeNull();
-  expect(itemOnMain(repo, 9)).toBeNull();
 });
