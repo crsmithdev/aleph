@@ -113,3 +113,14 @@ test("a doc written after the code was read passes", () => {
   const f = run([["Read", { file_path: "jobs/lib/sandbox.ts" }, "125: ?? 600"], ["Write", { file_path: "docs/spec.md", content: "The stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.\n" }, "ok"]]);
   expect(docClaims(f, "I wrote docs/spec.md.")).toBeNull();
 });
+
+test("a doc or spec written through a Bash heredoc, the code never read, is named", () => {
+  for (const cmd of [
+    "cat > docs/spec.md <<'EOF'\nThe stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.\nEOF",
+    "aleph issue add aleph \"Fix stalls\" --spec - <<'EOF'\nThe stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.\nEOF",
+  ]) {
+    const f = run([bash(cmd, "")]);
+    expect(docClaims(f, "I filed it.")).toContain("`jobs/lib/sandbox.ts`");
+  }
+});
+

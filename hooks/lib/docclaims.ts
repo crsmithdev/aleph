@@ -5,7 +5,7 @@
  * - a claim with no run after the last edit that reads a doc and compares it with the code;
  * - the values a claim gives (backticked text, numbers) that no such run's visible output shows;
  * - a cited `file:line` that no run's visible output shows;
- * - a code file that a claim, or a doc line "as the code on main has them" that the turn wrote, names
+ * - a code file that a claim, or a line "as the code on main has them" that the turn wrote (by an edit tool or a Bash heredoc or redirect), names
  *   and that no tool call other than an edit touches.
  */
 import { bashResult, resultText } from "./digest.ts";
@@ -66,9 +66,10 @@ function calls(entries: Entry[]): Call[] {
 
 const isEdit = (c: Call) => EDIT_TOOLS.has(c.name) || (c.name === "Bash" && bashEdits(String(c.input.command ?? "")));
 
-/** The text a call writes into a doc: a Write's content or an Edit's new text on a `.md` file. */
+/** The text a call writes: a Write's content, an Edit's new text, or a Bash edit's command (a heredoc body, as in `aleph issue add --spec - <<EOF`). */
 function docWritten(c: Call): string {
-  if (!EDIT_TOOLS.has(c.name) || !/\.md$/i.test(String(c.input.file_path ?? ""))) return "";
+  if (c.name === "Bash") return isEdit(c) ? String(c.input.command ?? "") : "";
+  if (!EDIT_TOOLS.has(c.name)) return "";
   return [c.input.content, c.input.new_string, ...(Array.isArray(c.input.edits) ? c.input.edits.map((e: Entry) => e.new_string) : [])].filter((x) => typeof x === "string").join("\n");
 }
 
@@ -119,7 +120,7 @@ export function docClaimProblems(entries: Entry[], message: string): string[] {
   if (unshown.size) problems.push(`no run's visible output shows ${ticks([...unshown])}`);
 
   // A file counts as read when a call other than an edit names it; writing a doc about it is not reading it.
-  const read = JSON.stringify(all.filter((c) => !EDIT_TOOLS.has(c.name)).map((c) => c.input));
+  const read = JSON.stringify(all.filter((c) => !isEdit(c)).map((c) => c.input));
   for (const s of [...claims, ...written]) {
     const named = [...new Set(s.match(CODE_FILE) ?? [])].filter((f) => !/^https?:/.test(f));
     const unread = named.filter((f) => !read.includes(f.split("/").pop()!));
