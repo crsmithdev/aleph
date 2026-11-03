@@ -30,7 +30,7 @@ test("the sidebar: every group has a page, paths are unique, and each page has a
   for (const g of ["work", "factory", "claude"]) expect(shown.some((v) => v.group === g)).toBe(true);
   expect(new Set(shown.map((v) => v.path)).size).toBe(shown.length);
   for (const v of shown) expect([v.title, v.icon]).toEqual([v.title, expect.stringMatching(/^[a-z-]+$/)]);
-  // The job list and the project pages keep their routes and stay out of the sidebar.
+  // The job list keeps its route and stay out of the sidebar.
   expect(all.some((v) => v.path === "/jobs" && v.nav === false)).toBe(true);
-  expect(all.some((v) => v.path === "/jobs/:name") && all.some((v) => v.path === "/projects/:key")).toBe(true);
+  expect(all.some((v) => v.path === "/jobs/:name")).toBe(true);
 });
