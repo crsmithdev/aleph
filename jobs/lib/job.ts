@@ -117,8 +117,8 @@ const scenariosChecked = (j: Job): boolean =>
     try { return readFileSync(runFile(e.folder, "review-prompt.md"), "utf8").includes("## Sealed scenarios"); } catch { return false; }
   });
 
-/** The job's goal was checked in secret: a hidden check with a total ran, or the reviewer checked sealed scenarios. */
-export const sealed = (j: Job): boolean => j.some((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total)) || scenariosChecked(j);
+/** The job's goal was checked in secret: the reviewer checked sealed scenarios. A hidden check does not count, since the worker's brief shows the hidden test files. */
+export const sealed = (j: Job): boolean => scenariosChecked(j);
 
 /** What checked a job, in the order it ran: its checks, then the reviewers that left a file. Deterministic checks and model judges are named apart. */
 export function checkedBy(j: Job): string[] {
@@ -128,7 +128,7 @@ export function checkedBy(j: Job): string[] {
   return [...names, ...(has("review.md") ? ["reviewer", ...(scenariosChecked(j) ? ["sealed scenarios"] : [])] : []), ...(has(join("browser", "report.md")) ? ["browser review"] : [])];
 }
 
-/** Minutes a spot check of a delivery should take, an estimate: one, one per 200 changed lines, and one more when no sealed check ran. */
+/** Minutes a spot check of a delivery should take, an estimate: one, one per 200 changed lines, and one more unless the reviewer checked sealed scenarios (see `sealed`). */
 export function lookMinutes(changedLines: number, sealed: boolean): number {
   return 1 + Math.ceil(changedLines / 200) + (sealed ? 0 : 1);
 }

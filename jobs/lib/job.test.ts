@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, allJobs, batch, checkedBy, lookMinutes, goal, hasFile, latestFile, latestJob, notes, readFile, tailOf } from "./job.ts";
+import { addNote, allJobs, batch, checkedBy, lookMinutes, goal, hasFile, latestFile, latestJob, notes, readFile, sealed, tailOf } from "./job.ts";
 import { isOpen, writeRun, type Run } from "./ledger.ts";
 import { asked, markAsked } from "./ask.ts";
 import { markRescued, rescued } from "./continuation.ts";
@@ -88,5 +88,12 @@ describe("the evidence of a delivery", () => {
     expect(lookMinutes(1, true)).toBe(2);
     expect(lookMinutes(200, false)).toBe(3);
     expect(lookMinutes(201, false)).toBe(4);
+  });
+  test("a passed hidden check with a total alone is not sealed, so lookMinutes keeps its extra minute", () => {
+    run("20261101-000005-e", "20261101-000005-e", { checks: [{ name: "hidden", ok: true, seconds: 1, passed: 3, total: 3 }] });
+    const j = allJobs()[0];
+    expect(sealed(j)).toBe(false);
+    expect(checkedBy(j)).toEqual(["hidden 3/3"]);
+    expect(lookMinutes(0, sealed(j))).toBe(lookMinutes(0, false));
   });
 });
