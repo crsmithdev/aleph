@@ -21,9 +21,8 @@ import { git } from "./git.ts";
 import { itemOnMain, onMain } from "./status.ts";
 import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
 import { writeRerun } from "./continuation.ts";
-import { factoryDir, factoryRepos, redBaselines } from "./factory-status.ts";
+import { factoryDir, factoryRepos, redMains } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
-import { ciLine, redCi } from "./ci.ts";
 import type { Fate } from "./outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
 import { always, askFromRun, askOf as itemAskOf, editAnswers, logAlways, may, plainAsk, readAlways, routeOf, waitsForSpecEdit } from "./ask.ts";
@@ -87,12 +86,11 @@ export function snapshot(now = Date.now()): Event[] {
     events.push({ key: `loop:${k}:${runs.at(-1)!.id}`, kind: "loop", repo: r.repo!, job: r.name, ...(onOf(r) !== undefined ? { item: onOf(r)! } : {}),
       line: `${r.name} started ${runs.length} runs in 30 minutes: ${runs.map((e) => e.run.reason ?? e.run.condition).join("; ")}` });
   }
-  for (const b of redBaselines()) if (keys.has(b.repo)) events.push({ key: `red:${b.repo}:${b.commit}`, kind: "red", repo: b.repo, line: `${b.repo} main is red at ${b.commit.slice(0, 7)}: ${b.failed}` });
   const lists = store.reader();
   // GitHub CI: while the repo has an open red-main issue (its marker is an area, as `add` files it, or a label), its red main gives no event, as the fix is open. Otherwise one event per red head:
   // the key holds the streak's first failed commit and the head of the last red run, so a new head after a fix is a new event.
   const fixOpen = (repo: string) => (lists.list(repo)?.items ?? []).some((i) => issues.status(i) === "open" && (store.labels(i).includes("red-main") || store.areasOf(i).includes("red-main")));
-  for (const c of redCi()) if (keys.has(c.repo) && !fixOpen(c.repo)) events.push({ key: `ci:${c.repo}:${c.sinceSha}:${c.sha}`, kind: "red", repo: c.repo, line: ciLine(c) });
+  for (const r of redMains()) if (keys.has(r.repo) && (r.source === "baseline" || !fixOpen(r.repo))) events.push({ key: r.id, kind: "red", repo: r.repo, line: r.line });
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       const ask = itemAskOf(item);
@@ -312,7 +310,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (!repo) return { refused: `${describe(a)}: ${a.repo} is not a factory repo` };
   // Chris turned off follow-up issues until the inbox of aleph-826, but a red main must reach a fix: an add is filed only for a repo whose main is red now.
   if (a.do === "add") {
-    const red = redCi().some((c) => c.repo === repo.key) || redBaselines().some((b) => b.repo === repo.key);
+    const red = redMains().some((r) => r.repo === repo.key);
     if (!red) return { refused: `${describe(a)}: the firefighter files no issues except for a red main; use tell` };
     const missing = missingSections(a.body ?? "");
     if (missing.length) return { refused: `${describe(a)}: the body lacks ${missing.map((h) => `## ${h}`).join(", ")}; the spec check needs ## Goal, ## Edit surface and ## Oracle` };

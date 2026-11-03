@@ -35,7 +35,7 @@ import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached }
 import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
-import { writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
+import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
 export { setPaused };
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
@@ -481,16 +481,7 @@ export function stalled(jobs = allJobs(), lists = reader()): string[] {
   if (gates({ only: ["pause", "hold"], jobs })) return [];
   const runs = jobs.flat();
   const live = (kind: string) => runs.some((e) => e.run.kind === kind && isLive(e.folder));
-  const base = baselines(), done = doneChecker();
-  // A red baseline counts only while origin/<main> is still its commit, as redOf in ui/state.ts: one rev-parse per repo per call.
-  const reds = new Map<string, string | null>();
-  const redOf = (repo: Repo): string | null => {
-    if (!reds.has(repo.key)) {
-      const b = base[repo.key];
-      reds.set(repo.key, b && !b.ok && git(repo.path, "rev-parse", `origin/${repo.main}`).out === b.commit ? redLine(b) : null);
-    }
-    return reds.get(repo.key)!;
-  };
+  const done = doneChecker(), redOf = mainRed();
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs) && !live("plan") && !gates({ only: ["day", "awaiting"], jobs })) {
     for (const { repo, item } of openGoals(lists)) {

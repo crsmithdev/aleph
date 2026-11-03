@@ -10,6 +10,7 @@ import { flakeTracker, reader, type Reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
+import { git } from "./git.ts";
 import { allJobs, isOpen, lastReal, openJob, type Job } from "./job.ts";
 import { asked } from "./ask.ts";
 import { layout, readFactoryLog } from "./layout.ts";
@@ -247,10 +248,33 @@ export async function writeBaseline(key: string, decide: (old: Baseline | undefi
   }
 }
 
-/** The baselines that are red now, one per repo. */
-export const redBaselines = (): Baseline[] => Object.values(baselines()).filter((b) => !b.ok);
-
 export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
+
+/** A red main: a failed baseline or a red GitHub CI streak. `id` names the red commit or streak; `line` says it with the repo. */
+export interface RedMain { repo: string; source: "baseline" | "ci"; id: string; line: string }
+
+/** Every red main now, the baselines first: what the health lines, the Gates page and the firefighter report. */
+export function redMains(): RedMain[] {
+  const base = Object.values(baselines()).filter((b) => !b.ok)
+    .map((b): RedMain => ({ repo: b.repo, source: "baseline", id: `red:${b.repo}:${b.commit}`, line: `${b.repo} ${redLine(b)}` }));
+  const ci = redCi().map((c): RedMain => ({ repo: c.repo, source: "ci", id: `ci:${c.repo}:${c.sinceSha}:${c.sha}`, line: ciLine(c) }));
+  return [...base, ...ci];
+}
+
+/**
+ * The red line that stops a goal start, per repo: its baseline failed and origin/<main> is still that commit. A red
+ * record for an older commit no longer counts; the next baseline checks the new one. One rev-parse per repo per query.
+ */
+export function mainRed(): (repo: Repo) => string | null {
+  const base = baselines(), reds = new Map<string, string | null>();
+  return (repo) => {
+    if (!reds.has(repo.key)) {
+      const b = base[repo.key];
+      reds.set(repo.key, b && !b.ok && git(repo.path, "rev-parse", `origin/${repo.main}`).out === b.commit ? redLine(b) : null);
+    }
+    return reds.get(repo.key)!;
+  };
+}
 
 export interface Probe { at: string; ok: boolean; failed: string[] }
 
@@ -312,8 +336,7 @@ export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {
   if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
   const p = lastProbe();
   if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
-  for (const b of Object.values(baselines())) if (!b.ok) lines.push(`health: ${b.repo} ${redLine(b)}`);
-  for (const c of redCi()) lines.push(`health: ${ciLine(c)}`);
+  for (const r of redMains()) lines.push(`health: ${r.line}`);
   const counts = new Map<string, number>();
   for (const f of flakes()) {
     if (!(now - Date.parse(f.at) < 7 * DAY)) continue;

@@ -4,7 +4,7 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { factorySnapshot, goalFacts, redLine } from "../jobs/lib/factory-status.ts";
+import { factorySnapshot, goalFacts, mainRed } from "../jobs/lib/factory-status.ts";
 import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
@@ -462,20 +462,7 @@ export function state(now = new Date()): State {
     a.agent = j.agent ?? false; a.defaults = j.defaults; a.followups = j.followups;
     if (j.trailers) a.trailers = j.trailers;
   }
-  // A red baseline counts while origin/<main> is still the red commit: one rev-parse per repo, not per queued goal.
-  const reds = new Map<string, string | null>();
-  const redOf = (repo: Repo): string | null => {
-    if (!reds.has(repo.key)) {
-      let red: string | null = null;
-      const b = base[repo.key];
-      if (b && !b.ok) {
-        const p = Bun.spawnSync(["git", "-C", repo.path, "rev-parse", `origin/${repo.main}`], { stdout: "pipe", stderr: "ignore" });
-        if (p.stdout.toString().trim() === b.commit) red = redLine(b);
-      }
-      reds.set(repo.key, red);
-    }
-    return reds.get(repo.key)!;
-  };
+  const redOf = mainRed();
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...tickTimer() },

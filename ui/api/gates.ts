@@ -7,8 +7,7 @@
  */
 import { join } from "node:path";
 import { ASK_REASONS, readAlways, routeOf } from "../../jobs/lib/ask.ts";
-import { ciLine, redCi } from "../../jobs/lib/ci.ts";
-import { allHolds, baselines, factoryRepos, gates, redLine, waiting } from "../../jobs/lib/factory-status.ts";
+import { allHolds, baselines, factoryRepos, gates, redMains, waiting } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
 import { readFactoryLog } from "../../jobs/lib/layout.ts";
 import { AWAITING_CAP, CAP_KEYS, DAY_CAP, LIVE_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
@@ -128,7 +127,7 @@ function mainCi() {
   const base = baselines();
   return {
     repos: Object.keys(base).length,
-    red: [...Object.values(base).filter((b) => !b.ok).map((b) => `${b.repo} ${redLine(b)}`), ...redCi().map(ciLine)],
+    red: redMains().map((r) => r.line),
     commits: Object.values(base).map((b) => `${b.repo} ${b.commit.slice(0, 7)}`),
   };
 }
