@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { layout, factoryLog } from "../../../jobs/lib/layout.ts";
@@ -31,10 +32,12 @@ test("a factory log line written under the fixture environment lands under the f
   const dest = join(dir, "fx");
   const env = buildReviewFixture(dest);
   Object.assign(process.env, env);
-  factoryLog("demo: acceptance not run: fetch failed");
-  expect(readFileSync(join(dest, "factory", "tick.log"), "utf8")).toContain("demo: acceptance not run: fetch failed");
+  // A token unique to this run, so lines already in the live log can never match it.
+  const line = `demo: acceptance not run: fetch failed ${randomUUID()}`;
+  factoryLog(line);
+  expect(readFileSync(join(dest, "factory", "tick.log"), "utf8")).toContain(line);
   const live = join(process.env.HOME || "", ".aleph", "factory", "tick.log");
-  if (existsSync(live)) expect(readFileSync(live, "utf8")).not.toContain("demo: acceptance not run: fetch failed");
+  if (existsSync(live)) expect(readFileSync(live, "utf8")).not.toContain(line);
 });
 
 test("every fixture project has a real origin under dest that fetches and matches main", () => {
