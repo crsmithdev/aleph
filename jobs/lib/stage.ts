@@ -15,7 +15,7 @@ import { isOpen, lastReal } from "./job.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 
-export type StageName = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "building" | "blocked" | "planning" | "queued" | "new";
+export type StageName = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "working" | "blocked" | "planning" | "queued" | "new";
 export interface Stage { id: string; stage: StageName; why: string; of?: { n: number; m: number } }
 
 /** What stage() needs of an Ask. */
@@ -104,11 +104,11 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   if (item.parts.length) {
     if (item.plan || live.some((r) => r.kind === "plan")) return out("planning", "planning the rest");
     const n = parts.filter((p) => p.stage === "done").length;
-    return out("building", `${n} of ${item.parts.length} parts done`, { n, m: item.parts.length });
+    return out("working", `${n} of ${item.parts.length} parts done`, { n, m: item.parts.length });
   }
   const last = work.at(-1);
   if (last?.kind === "land") return out("landing", `its job is ${last.condition}`);
-  if (last) return out("building", `its job is ${last.condition}`);
+  if (last) return out("working", `its job is ${last.condition}`);
   const blockers = item.after.filter((ref) => {
     const s = ctx.item(ref);
     return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s, ctx)));

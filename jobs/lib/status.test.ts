@@ -95,7 +95,7 @@ test("a passed agent run whose later land found the job lock busy leaves the ite
   write("20261028-000004-demo-7-land", { kind: "land", condition: "failed", reason: "job lock busy" });
 
   expect(repoStages(repo, { fetch: false, doc: open, items: [7] }).map((s) => [s.id, s.stage, s.why])).toEqual([
-    ["demo-7", "building", "its job is passed"],
+    ["demo-7", "working", "its job is passed"],
   ]);
 });
 
@@ -165,12 +165,12 @@ test("a dotted ref in after, parts and on resolves to the goal, its runs and its
   expect(f.items["5.1"]).toBeDefined();
   expect(f.runs["5.1"]).toBeDefined();
   const st = (items: (number | string)[], doc = open) => repoStages(repo, { fetch: false, doc, items });
-  expect(st(["5.1"]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-5.1", stage: "building" }]);
+  expect(st(["5.1"]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-5.1", stage: "working" }]);
   const blocked = st(["5.2"])[0];
   expect(blocked.stage).toBe("blocked");
   expect(blocked.why).toContain("demo-5.1");
   const issue = st([5])[0];
-  expect(issue.stage).toBe("building");
+  expect(issue.stage).toBe("working");
   expect(issue.of).toEqual({ n: 0, m: 2 });
   // the default lists plain items only
   expect(repoStages(repo, { fetch: false, doc: open }).map((s) => s.id)).toEqual(["demo-5", "demo-5.1", "demo-5.2"]);

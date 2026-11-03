@@ -145,7 +145,7 @@ function details(s, j, extra = "") {
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
-const STATUS_TONE = { awaiting: "need", stuck: "stuck", building: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
+const STATUS_TONE = { awaiting: "need", stuck: "stuck", working: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
 const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
 
 /** "11/02 10:36": the date of a card, in the reader's time; "–" for none. */

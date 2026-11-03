@@ -20,7 +20,7 @@ const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++j
 const ISSUES_NEW: Row[] = [
   { name: "new issue: new", stage: "new", build: async () => issue() },
   { name: "new issue: planning", stage: "planning", build: async () => newRun(issue(), { kind: "plan", condition: "running" }) },
-  { name: "new issue: building 1 of 2", stage: "building", of: { n: 1, m: 2 }, build: async () => {
+  { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
     const n = issue();
     seedGoal("fac", n, 1, { status: "done" }); seedGoal("fac", n, 2);
     return n;
@@ -41,7 +41,7 @@ const GOALS_NEW: Row[] = [
   { name: "new goal: queued", stage: "queued", build: async () => goal() },
   { name: "new goal: blocked", stage: "blocked", why: /after fac-/, build: async () => goal({ after: [ref(goal())] }) },
   { name: "new goal: queued once its after goal is done", stage: "queued", build: async () => goal({ after: [ref(goal({ status: "done" }))] }) },
-  { name: "new goal: building", stage: "building", build: async () => newRun(goal(), { kind: "build", condition: "running" }) },
+  { name: "new goal: working", stage: "working", build: async () => newRun(goal(), { kind: "build", condition: "running" }) },
   { name: "new goal: planning", stage: "planning", build: async () => newRun(goal(), { kind: "plan", condition: "running" }) },
   { name: "new goal: queued once its plan run is done", stage: "queued", build: async () => newRun(goal(), { kind: "plan", condition: "done" }) },
   { name: "new goal: landing", stage: "landing", build: async () => newRun(goal(), { kind: "land", condition: "running" }) },
@@ -96,12 +96,12 @@ const GOALS_DOTTED: Row[] = [
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedGoal("fac", n, 1, { status: "done" }); return seedGoal("fac", n, 2, { after: [ref(a)] });
   } },
-  { name: "dotted issue: building 1 of 2", stage: "building", of: { n: 1, m: 2 }, build: async () => {
+  { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     seedGoal("fac", n, 1, { status: "done" }); seedGoal("fac", n, 2);
     return n;
   } },
-  { name: "dotted goal: building under a run on it", stage: "building", build: async () => {
+  { name: "dotted goal: working under a run on it", stage: "working", build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", condition: "running" }); return a;
   } },

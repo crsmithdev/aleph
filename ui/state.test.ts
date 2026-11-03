@@ -321,7 +321,7 @@ describe("the review fixture", () => {
   const LISTS = ["issues", "queued", "running", "asks", "stuck", "done"] as const;
   /** The list that holds an item of this stage; none for the stages the lists do not name. */
   const LIST_OF: Record<string, (typeof LISTS)[number][]> = {
-    new: ["issues"], queued: ["queued"], building: ["running"], landing: ["running"], awaiting: ["asks"], stuck: ["stuck"], done: ["done"],
+    new: ["issues"], queued: ["queued"], working: ["running"], landing: ["running"], awaiting: ["asks"], stuck: ["stuck"], done: ["done"],
     blocked: ["queued"], planning: [], dropped: [],
   };
 

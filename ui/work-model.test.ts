@@ -106,7 +106,7 @@ describe("/api/state on a work-model store", () => {
   test("incoming lists issues with their stage; goals are not listed there", () => {
     const s: any = state(now);
     const by = Object.fromEntries(s.incoming.map((i: any) => [i.id, i.stage]));
-    expect(by).toEqual({ "fac-1": "building", "fac-2": "awaiting", "fac-3": "awaiting", "fac-4": "new" });
+    expect(by).toEqual({ "fac-1": "working", "fac-2": "awaiting", "fac-3": "awaiting", "fac-4": "new" });
   });
 
   test("a stage in /api/state is the stage `aleph status` prints, for an issue and for its goals", () => {
@@ -119,7 +119,7 @@ describe("/api/state on a work-model store", () => {
     }
     // Parts are flat: the parent waits for its parts and has no card in Running; .3 runs after .2, so it is blocked.
     expect(s.runningIssues).toEqual([]);
-    expect(s.incoming.find((i: any) => i.id === "fac-1").stage).toBe("building");
+    expect(s.incoming.find((i: any) => i.id === "fac-1").stage).toBe("working");
     expect(s.running.find((j: any) => j.name === "fac-1.2").part).toMatchObject({ n: 2, m: 3, parent: "fac-1" });
     expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "blocked"]]);
     expect(s.queued[0].part).toMatchObject({ n: 3, m: 3, parent: "fac-1" });
@@ -147,9 +147,9 @@ describe("the Issue page", () => {
   test("the API gives the ## Request as written, then the goals, each with its Job", async () => {
     const d = await getJson("/api/issues/fac/1");
     expect(d.request).toBe("Do three things.");
-    expect(d.derived).toMatchObject({ item: "fac-1", stage: "building" });
+    expect(d.derived).toMatchObject({ item: "fac-1", stage: "working" });
     expect(d.goals.map((g: any) => [g.id, g.title, g.stage, g.jobs.map((j: any) => j.name)])).toEqual([
-      ["fac-1.1", "first", "done", ["fac-1.1"]], ["fac-1.2", "second", "building", ["fac-1.2"]], ["fac-1.3", "third", "blocked", []],
+      ["fac-1.1", "first", "done", ["fac-1.1"]], ["fac-1.2", "second", "working", ["fac-1.2"]], ["fac-1.3", "third", "blocked", []],
     ]);
     expect(d.goals[0].jobs[0]).toMatchObject({ condition: "landed", kind: "build" });
   });

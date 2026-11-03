@@ -41,7 +41,7 @@ describe("milestone 2", () => {
     const id = (await aleph(["issue", "add", "fac", "derive me"])).json.added;
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "new" });
     await fjobFor("fderive", "commit derive.txt", id);
-    expect(await status(`fac-${id}`)).toMatchObject({ stage: "building", why: "its job is passed" });
+    expect(await status(`fac-${id}`)).toMatchObject({ stage: "working", why: "its job is passed" });
     await aleph(["land", "fderive"]);
     const landed = remoteGit("rev-parse", "main");
     expect(await status(`fac-${id}`)).toMatchObject({ stage: "done", why: `commit ${landed.slice(0, 7)} on origin/main` });

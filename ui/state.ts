@@ -425,7 +425,7 @@ export function state(now = new Date()): State {
       else if (st === "queued" || st === "blocked") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated ?? item.fm.created ?? "") });
       else if (st === "new" && !isTracker(item)) fresh.push({ ...card(), status: st });
       // A parent shows a card in Running only while it waits to close: every part is done.
-      if (st === "building" && mineParts.length) {
+      if (st === "working" && mineParts.length) {
         const of = stageById.get(ref)?.of ?? { n: 0, m: mineParts.length };
         if (of.n >= of.m) runningIssues.push({ id, title: item.title, href, stage: st, priority: priorityOf(item), of, since: pickedUp(id, ...mineParts.map((g) => `${repo.key}-${refOf(g)}`)), at: String(item.fm.updated ?? "") });
       }

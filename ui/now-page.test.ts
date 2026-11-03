@@ -63,7 +63,7 @@ test("the meta row is the id, status, priority, part, date, duration, then why i
 test("a Queued card names a dead blocker and offers to remove only that wait", () => {
   const q = view.renderLanes({ ...state, queued: [{ repo: "aleph", id: 964, title: "t", why: "x", kind: "waits_on", waits: [
     { id: "aleph-963", href: "#/issues/aleph/963", title: "Old <work>", state: "dropped", dead: "dropped" },
-    { id: "aleph-970", href: "#/issues/aleph/970", title: "Live", state: "building", dead: null },
+    { id: "aleph-970", href: "#/issues/aleph/970", title: "Live", state: "working", dead: null },
   ] }] });
   expect(q).toContain('<a href="#/issues/aleph/963">963</a> <span>Old &lt;work&gt;</span> <span class="badge stuck">dropped</span>');
   expect(q).not.toContain("Live");
@@ -75,7 +75,7 @@ test("a Queued card names a dead blocker and offers to remove only that wait", (
 test("Queued cards show why each goal waits", () => {
   const w = (id: number, why: string, kind: string, more: any = {}) => ({ repo: "aleph", id, title: `t${id}`, why, kind, ...more });
   const lanes = view.renderLanes({ ...state, queued: [
-    w(1, "Waits on aleph-630", "waits_on", { waits: [{ id: "aleph-630", href: "#/issues/aleph/630", state: "building" }] }),
+    w(1, "Waits on aleph-630", "waits_on", { waits: [{ id: "aleph-630", href: "#/issues/aleph/630", state: "working" }] }),
     w(3, "Starts at the next dispatch", "ready"),
     w(4, "Waiting for a slot (12 of 12 running)", "gate"),
   ] });
@@ -233,7 +233,7 @@ test("a critical item shows the priority badge in Queued, Running and Latest don
   const badge = '<span class="badge stuck">critical</span>';
   const lanes = view.renderLanes({ ...state,
     queued: [{ repo: "aleph", id: 9, title: "q", why: "", kind: "ready", priority: "critical" }],
-    runningIssues: [{ id: "aleph-8", title: "r", href: "#/issues/aleph/8", stage: "building", priority: "critical", of: { n: 1, m: 1 }, since: "", at: "" }],
+    runningIssues: [{ id: "aleph-8", title: "r", href: "#/issues/aleph/8", stage: "working", priority: "critical", of: { n: 1, m: 1 }, since: "", at: "" }],
     running: [],
     done: [{ ...done(5), priority: "critical" }] });
   expect(lanes.match(/<section id="lane-queued"[^]*?<\/section>/)![0]).toContain(badge);

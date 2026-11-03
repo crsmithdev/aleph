@@ -74,8 +74,8 @@ An Ask stays where it is today: on the run that asked, or in the issue's slot.
 1. `dropped`, from `closed`. `done`, from `closed`, unless every trailer commit is reverted, or from a trailer past `since` that is not reverted.
 2. `awaiting`: its slot, its last real run, or a part.
 3. `stuck`: its last real run is stuck or failed, or a part is stuck.
-4. `building`, with n of m: it has parts.
-5. Among open jobs other than triage and plan runs, as `stage.ts:85` filters them: `landing` if the last real run is a land, otherwise `building`.
+4. `working`, with n of m: it has parts.
+5. Among open jobs other than triage and plan runs, as `stage.ts:85` filters them: `landing` if the last real run is a land, otherwise `working`.
 6. `blocked`: an `after` that is open and not done, as `stage.ts:105` tests it, so a reverted closed item blocks nothing. `closeIssues` likewise counts a closed, reverted part as done.
 7. `planning`: `plan` is set or a plan run is open. `queued`: it has a spec.
 8. `new`: otherwise, including a tracker and a triage run in progress, with `why` saying so. The Status page omits a tracker from its lanes.
