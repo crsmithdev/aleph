@@ -4,6 +4,7 @@
  * 2026-10-30 power loss the wall clock stepped under a running suite.
  */
 import { readFileSync } from "node:fs";
+import { windowsTimeCmd } from "./settings.ts";
 
 export const STEP_LIMIT_MS = 1000;
 export const SKEW_LIMIT_MS = 5000;
@@ -25,7 +26,7 @@ export async function watchWall(windowMs: number, c: Clocks = real): Promise<num
 }
 
 export function onWsl(): boolean {
-  if (process.env.ALEPH_WINDOWS_TIME_CMD) return true;
+  if (windowsTimeCmd()) return true;
   if (process.env.WSL_DISTRO_NAME) return true;
   try { return /microsoft|wsl/i.test(readFileSync("/proc/version", "utf8")); } catch { return false; }
 }
@@ -33,7 +34,7 @@ export function onWsl(): boolean {
 /** Windows time minus WSL time, in milliseconds, or null when Windows could not be asked (or this is not WSL). */
 export function windowsSkew(): number | null {
   if (!onWsl()) return null;
-  const cmd = process.env.ALEPH_WINDOWS_TIME_CMD ?? `powershell.exe -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"`;
+  const cmd = windowsTimeCmd() ?? `powershell.exe -NoProfile -Command "[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()"`;
   const before = Date.now();
   const p = Bun.spawnSync(["bash", "-c", cmd], { stdout: "pipe", stderr: "ignore", stdin: "ignore", timeout: 20_000 });
   const after = Date.now();

@@ -10,6 +10,7 @@ import { dirname } from "node:path";
 import { allRuns, expand } from "../jobs/lib/ledger.ts";
 import { config, traces } from "./langfuse.ts";
 import { staleAsync } from "./stale.ts";
+import { credentialsFileSetting, usageFileSet, usageFileSetting, usageUrl as usageUrlSetting } from "../jobs/lib/settings.ts";
 
 export interface Snapshot { at: string; five_hour: number | null; seven_day: number; seven_day_resets_at: string | null }
 export interface Spend { at: number; model: string; cost: number }
@@ -23,9 +24,9 @@ export const MIN_DOLLARS = 5;
 const HOUR = 3600_000;
 const STALE_MS = 25 * 60_000;
 
-export const usageFile = () => expand(process.env.ALEPH_USAGE_FILE ?? "~/.aleph/usage.jsonl");
-const credentialsFile = () => expand(process.env.ALEPH_CLAUDE_CREDENTIALS ?? "~/.claude/.credentials.json");
-const usageUrl = () => process.env.ALEPH_USAGE_URL ?? "https://api.anthropic.com/api/oauth/usage";
+export const usageFile = () => expand(usageFileSetting());
+const credentialsFile = () => expand(credentialsFileSetting());
+const usageUrl = usageUrlSetting;
 
 /** Whether the last poll failed; the pages say "usage unknown" while it did. */
 let lastFailed = false;
@@ -80,7 +81,7 @@ export async function pollOnce(): Promise<Snapshot | null> {
   lastFailed = snap === null;
   if (!snap) return null;
   // Under `bun test` (NODE_ENV=test) the real ~/.aleph/usage.jsonl is never written: a test that sets a fixed clock and polls would leave a bad row there.
-  if (process.env.NODE_ENV === "test" && !process.env.ALEPH_USAGE_FILE) return snap;
+  if (process.env.NODE_ENV === "test" && !usageFileSet()) return snap;
   try {
     const file = usageFile();
     mkdirSync(dirname(file), { recursive: true });

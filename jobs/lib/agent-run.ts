@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { replyOf } from "./gate.ts";
 import { allRuns, lock, readRun, runsDir, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
+import { roleCmd, roleSeconds } from "./settings.ts";
 
 export interface Call {
   role: string;
@@ -22,10 +23,10 @@ export interface Call {
 
 async function spawn(c: Call, input: string): Promise<{ output: string; text: string; cost?: number; failure?: string }> {
   const role = c.role.toUpperCase();
-  const argv = [process.env[`ALEPH_${role}_CMD`] ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags];
+  const argv = [roleCmd(role), "-p", "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags];
   const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; p.kill(); }, Number(process.env[`ALEPH_${role}_TIMEOUT`] ?? c.seconds) * 1000);
+  const timer = setTimeout(() => { timedOut = true; p.kill(); }, roleSeconds(role, c.seconds) * 1000);
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     const failure = timedOut ? `${c.who} timed out` : code !== 0 ? `${c.who} exited ${code}` : undefined;

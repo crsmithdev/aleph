@@ -22,7 +22,7 @@ import { route, type Tier } from "./route.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
-import { jobSeconds, pidWaitMs } from "./settings.ts";
+import { jobSeconds, pidWaitMs, startCmd } from "./settings.ts";
 
 /** The message of a transition that refused or threw, or null when it went through: the factory's ports answer this. */
 export async function refusal(f: () => Promise<unknown>): Promise<string | null> {
@@ -338,8 +338,9 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
 export async function startGoal(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {
   const model = tier !== undefined ? tier : await route(spec);
   factoryLog(`starting ${name} with model ${model ?? "default"}`);
-  if (process.env.ALEPH_START_CMD) {
-    const p = Bun.spawn([process.env.ALEPH_START_CMD, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
+  const start = startCmd();
+  if (start) {
+    const p = Bun.spawn([start, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
     const code = await p.exited;
     return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
   }

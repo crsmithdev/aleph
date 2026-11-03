@@ -17,6 +17,7 @@ import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { type Repo } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
+import { outdatedCmd } from "./settings.ts";
 
 export interface Proposal { name: string; current: string; latest: string }
 
@@ -61,7 +62,7 @@ export function outdatedScript(repo: Repo, main: string): string {
   return [
     `${gitPrelude("../in.bundle", [`+${main}:${main}`]).join(" && ")} && git switch -q -c deps ${q(`origin/${repo.main}`)} >&2 || exit 1`,
     `${repo.setup.join(" && ") || "true"} >&2`,
-    process.env.ALEPH_OUTDATED_CMD ?? "bun outdated",
+    outdatedCmd(),
   ].join("\n");
 }
 

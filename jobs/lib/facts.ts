@@ -1,11 +1,12 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { openRun } from "./agent-run.ts";
 import { tagged } from "./ledger.ts";
 import { readFile, allJobs } from "./job.ts";
 import { isAgentRun, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
+import { vaultDir } from "./settings.ts";
 
 export interface Fact { fact: string; source: string }
 
@@ -106,7 +107,7 @@ export async function writeFact(v: FactCheck, job: string, kind: "gotcha" | "con
   const title = v.title.replace(/[\/\\:*?"<>|\n\r]+/g, " ").replace(/\s+/g, " ").trim();
   if (!title) return { written: false, reason: "the verdict has no title" };
   // `vault write` replaces a note of the same title; the gate must not.
-  const root = process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault");
+  const root = vaultDir();
   for (const d of ["decisions", "concepts", "entities", "projects", "gotchas", "episodes"].map((f) => join("wiki", f)).concat("archive")) {
     if (existsSync(join(root, d, `${title}.md`))) return { written: false, reason: `a note titled ${title} already exists in ${d}/` };
   }

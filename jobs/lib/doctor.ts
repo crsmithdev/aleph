@@ -9,6 +9,7 @@ import { allRuns, isLost, loadRegistry } from "./ledger.ts";
 import { lastProbe } from "./factory-status.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
 import { FACTS_REF, writeFacts } from "./status.ts";
+import { doctorClockMs, homeUrl, systemctlBin } from "./settings.ts";
 
 export interface Check { name: string; ok: boolean; detail: string }
 
@@ -16,11 +17,11 @@ const ok = (name: string, detail: string): Check => ({ name, ok: true, detail })
 const bad = (name: string, detail: string): Check => ({ name, ok: false, detail });
 
 const PROBE_STALE_MS = 26 * 3600_000;
-const CLOCK_WINDOW_MS = () => Number(process.env.ALEPH_DOCTOR_CLOCK_MS ?? 15_000);
-const HOME_URL = () => process.env.ALEPH_HOME_URL ?? "http://aleph.home/";
+const CLOCK_WINDOW_MS = () => doctorClockMs();
+const HOME_URL = () => homeUrl();
 
 function systemctl(...args: string[]): { ok: boolean; out: string } {
-  const bin = process.env.ALEPH_SYSTEMCTL ?? "systemctl";
+  const bin = systemctlBin();
   try {
     const p = Bun.spawnSync([bin, "--user", ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore", timeout: 15_000 });
     return { ok: p.exitCode === 0, out: (p.stdout.toString() + p.stderr.toString()).trim() };

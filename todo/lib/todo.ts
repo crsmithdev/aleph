@@ -7,6 +7,7 @@
  * a `.k`; its parent comes from its id.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../vault/lib/frontmatter.ts";
+import { nowOverride } from "../../jobs/lib/settings.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
@@ -47,7 +48,7 @@ export const minute = (now = new Date()): string =>
   `${today(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
-export const clock = (): Date => (process.env.ALEPH_NOW ? new Date(process.env.ALEPH_NOW) : new Date());
+export const clock = (): Date => (nowOverride() ? new Date(nowOverride()!) : new Date());
 
 const REF = /^(.+)-(\d+)$/;
 /** A ref in `after`: `<repo>-<n>` or `<repo>-<n>.<k>`. */

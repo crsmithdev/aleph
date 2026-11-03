@@ -5,6 +5,7 @@
  */
 import { cacheFetches } from "../todo/lib/store.ts";
 import { state } from "./state.ts";
+import { stateSlowMs } from "../jobs/lib/settings.ts";
 
 declare const self: Worker;
 
@@ -18,7 +19,7 @@ self.onmessage = (e: MessageEvent<BuildRequest>) => {
   cacheFetches(reuse);
   try {
     // A test makes the build slow on purpose, to show that the server keeps answering meanwhile.
-    const slow = Number(process.env.ALEPH_STATE_SLOW_MS ?? 0);
+    const slow = stateSlowMs();
     if (slow > 0) Bun.sleepSync(slow);
     self.postMessage({ id, state: state() } satisfies BuildReply);
   } catch (err) {

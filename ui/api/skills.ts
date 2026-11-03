@@ -6,13 +6,13 @@
  * last good rows are analysed and the answer says so: `asOf` is when they were fetched, `failed` why the reload failed.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
+import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/settings.ts";
 
 const DAY = 86400_000;
 const TTL = 120_000;
@@ -31,7 +31,7 @@ const day = (iso: string) => iso.slice(0, 10);
 const text = (v: unknown): string => { const x = asValue(v); return typeof x === "string" ? x : x?.prompt ?? x?.text ?? (x == null ? "" : JSON.stringify(x)); };
 const firstLine = (s: string) => s.replace(/<command-message>[\s\S]*?<\/command-message>/g, "").replace(/<[^>]+>/g, " ").split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 200) ?? "";
 
-export const skillsDir = () => process.env.ALEPH_SKILLS_DIR ?? join(import.meta.dir, "..", "..", "skills");
+export const skillsDir = skillsDirSetting;
 const folders = (): string[] => {
   const dir = skillsDir();
   return existsSync(dir) ? readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync(join(dir, d.name, "SKILL.md"))).map((d) => d.name).sort() : [];
@@ -131,7 +131,7 @@ async function fetchRows(cfg: LangfuseConfig, from: Date, to: Date): Promise<{ o
  * whole, to pick up rows that came later than that.
  */
 interface Store { base: string; from: number; through: number; built: number; synced: number; obs: Map<string, Observation>; traces: Map<string, TraceInfo> }
-export const storeFile = () => process.env.ALEPH_SKILLS_STORE ?? join(homedir(), ".aleph", "skills-store.json");
+export const storeFile = skillsStore;
 let store: Store | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 

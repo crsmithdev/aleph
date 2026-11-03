@@ -16,7 +16,7 @@ import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
 import { always, logAlways, type Ask } from "./ask.ts";
 import { causeOf } from "./outcome.ts";
 import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
-import { PROPOSE_AT } from "./settings.ts";
+import { PROPOSE_AT, ruleCmd } from "./settings.ts";
 
 export const CORRECTION_AT = 0.7;
 const WINDOW = 14 * 24 * 3600_000;
@@ -61,7 +61,7 @@ const NOT_CHRIS = /^\s*(?:<task-notification>|<agent-message|<system-reminder>|\
  * Jev answers typed questions and writes no text. "" when it fails or finds nothing.
  */
 async function writeLine(system: string, input: string, max: number): Promise<string> {
-  const cmd = process.env.ALEPH_RULE_CMD ?? "claude";
+  const cmd = ruleCmd();
   const env = { ...process.env };
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;

@@ -9,6 +9,7 @@ import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
 import { loadDotenv } from "../hooks/lib/env.ts";
 import { gateOn, gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";
+import { uiPort } from "../jobs/lib/settings.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
 export type Routes = Record<string, Handler>;
@@ -131,7 +132,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir }: { wa
 if (import.meta.main) {
   loadDotenv(undefined, ["ALEPH_UI_PASSWORD"]);
   const i = process.argv.indexOf("--port");
-  const port = Number(i >= 0 ? process.argv[i + 1] : process.env.ALEPH_UI_PORT ?? 3020);
+  const port = Number(i >= 0 ? process.argv[i + 1] : uiPort() ?? 3020);
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     console.error("usage: aleph-ui [--port <n>]");
     process.exit(2);

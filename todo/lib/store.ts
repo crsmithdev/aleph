@@ -15,6 +15,7 @@ import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../job
 import { layout } from "../../jobs/lib/layout.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
+import { uiFetchTtl as fetchTtlSetting } from "../../jobs/lib/settings.ts";
 
 export { labels };
 
@@ -36,7 +37,7 @@ const fetchedAt = new Map<string, number>();
 
 /** Seconds the UI reuses a fetch of the work store ($ALEPH_UI_FETCH_TTL, default 30). */
 export function uiFetchTtl(): number {
-  const n = Number(process.env.ALEPH_UI_FETCH_TTL ?? 30);
+  const n = fetchTtlSetting();
   return Number.isFinite(n) && n >= 0 ? n : 30;
 }
 

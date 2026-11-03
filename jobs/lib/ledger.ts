@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
 import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
-import { checkSlots } from "./settings.ts";
+import { checkSlots, reposFile } from "./settings.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
@@ -110,7 +110,7 @@ export function expand(p: string): string {
 export const runsDir = () => layout().ledger;
 
 export function loadRegistry(): Record<string, Repo> {
-  const file = expand(process.env.ALEPH_REPOS ?? "~/.aleph/repos.json");
+  const file = expand(reposFile());
   const raw = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
   const repos: Record<string, Repo> = {};
   for (const [key, r] of Object.entries<any>(raw)) {

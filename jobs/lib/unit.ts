@@ -30,7 +30,7 @@ import { postTrace } from "./trace.ts";
 import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
 import { FACTS_REF, onMain, writeFacts } from "./status.ts";
-import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewerCmd, reviewSeconds, workerCmd } from "./settings.ts";
+import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile, workerCmd } from "./settings.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
@@ -170,7 +170,7 @@ export async function unit(folder: string): Promise<void> {
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
   const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
-    ...process.env, ...readEnvFile(repo?.env ?? process.env.ALEPH_RUN_ENV),
+    ...process.env, ...readEnvFile(repo?.env ?? runEnvFile()),
     PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: run.job, ALEPH_JOB_RUN: id, ALEPH_TEST_PARALLEL: String(testParallel()),
   };
   delete env.ANTHROPIC_API_KEY;

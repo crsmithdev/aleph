@@ -1,7 +1,8 @@
 import { join } from "node:path";
+import { cliOverride } from "../jobs/lib/settings.ts";
 
 /** The argv that runs the CLI: `$ALEPH_CLI` when set (the UI tests' fake), else bun on jobs/cli.ts. */
-export const cliArgv = (): string[] => (process.env.ALEPH_CLI ? [process.env.ALEPH_CLI] : [process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts")]);
+export const cliArgv = (): string[] => (cliOverride() ? [cliOverride()!] : [process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts")]);
 
 /** Run `aleph <args>` (`$ALEPH_CLI` when set) and read what it says: the UI's actions are the CLI's commands, in a process of their own. */
 export async function runCli(args: string[], o: { stdin?: string } = {}): Promise<{ code: number; stdout: string; stderr: string }> {

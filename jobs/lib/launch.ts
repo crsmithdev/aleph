@@ -9,13 +9,13 @@ import { dirname, join } from "node:path";
 import { factoryDir } from "./factory-status.ts";
 import { LOW, type Repo } from "./ledger.ts";
 import { runPath } from "./sandbox.ts";
-import { dispatchOn } from "./settings.ts";
+import { dispatchOn, jobForeground } from "./settings.ts";
 
 /** jobs/cli.ts, the `aleph` command. */
 export const CLI = join(import.meta.dir, "..", "cli.ts");
 
 /** Units run in the foreground, as children: the tests, which have no systemd. */
-export const foreground = (): boolean => process.env.ALEPH_JOB_FOREGROUND === "1";
+export const foreground = (): boolean => jobForeground();
 
 /** The environment a unit gets: every `ALEPH_*` and `SIDETONE_*` variable, as `--setenv` flags. */
 export function passEnv(env: Record<string, string | undefined> = process.env): string[] {

@@ -12,7 +12,7 @@ import { activity } from "./activity.ts";
 import { skillsDir } from "./skills.ts";
 import { config, traces } from "../langfuse.ts";
 import { staleAsync } from "../stale.ts";
-import { uiCacheMs } from "../../jobs/lib/settings.ts";
+import { handoffsDir as handoffsSetting, uiCacheMs } from "../../jobs/lib/settings.ts";
 
 /** Langfuse-backed loads, kept `ALEPH_UI_CACHE_TTL` seconds like `vault misses`; a failure is kept as an answer with no data (null). */
 const sessionsCache = staleAsync<Sessions | null>();
@@ -24,7 +24,7 @@ const newest = (xs: (string | undefined | null)[]): string => xs.filter(Boolean)
 const oneLine = (s: string, max = 160) => { const t = s.replace(/\s+/g, " ").trim(); return t.length > max ? t.slice(0, max) + "…" : t; };
 const files = (dir: string, re: RegExp): string[] => { try { return readdirSync(dir).filter((f) => re.test(f)); } catch { return []; } };
 
-export const handoffsDir = () => process.env.ALEPH_HANDOFFS_DIR ?? join(homedir(), ".aleph", "handoffs");
+export const handoffsDir = handoffsSetting;
 
 /** The first non-blank line under a handoff's `## Intent`, else its first line. */
 export function intent(text: string): string {

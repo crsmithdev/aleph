@@ -16,6 +16,7 @@ import { handoffsFor, traceDigest } from "./lib/compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./lib/templates.ts";
 import { recallQuery } from "./lib/recall-query.ts";
 import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, screenCandidates, screenWords, stampProvenance, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./lib/vault.ts";
+import { handoffsDir } from "../jobs/lib/settings.ts";
 
 const [cmd, ...rest] = process.argv.slice(2);
 /**
@@ -554,7 +555,7 @@ async function compile(): Promise<void> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { console.error("usage: vault compile [YYYY-MM-DD]"); process.exit(1); }
   const cfg = langfuseConfig();
   const traces = cfg ? await traceDigest(cfg, date) : { text: "", error: "no Langfuse keys" };
-  const handoffs = handoffsFor(process.env.ALEPH_HANDOFFS ?? join(dirname(resolve(vaultDir())), "handoffs"), date);
+  const handoffs = handoffsFor(handoffsDir(), date);
   const dailyPath = join(root, "daily", `${date}.md`);
   const daily = existsSync(dailyPath) ? readFileSync(dailyPath, "utf8") : "";
   const cited = citedTraces(await loadVault(root));

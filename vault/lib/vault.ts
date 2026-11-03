@@ -4,8 +4,8 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
+import { vaultDir } from "../../jobs/lib/settings.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
 
 export const KINDS = ["decision", "concept", "entity", "project", "gotcha", "episode"] as const;
@@ -39,9 +39,7 @@ export const DECAY_DAYS: Record<Kind, number> = { project: 30, gotcha: 60, decis
  */
 export const CONFIDENCE_FACTOR: Record<string, number> = { measured: 1.5, reported: 1, inferred: 0.5 };
 
-export function vaultDir(): string {
-  return process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault");
-}
+export { vaultDir };
 
 export interface Note {
   path: string;      // absolute

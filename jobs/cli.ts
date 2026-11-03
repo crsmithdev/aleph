@@ -35,6 +35,7 @@ import { sweep } from "./lib/deps.ts";
 import { recordReview, runReview } from "./lib/review.ts";
 import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
+import { jobId } from "./lib/settings.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -224,7 +225,7 @@ async function todoCmd(): Promise<void> {
     }
     case "note": {
       // Chris's answer to an issue that waits for them: not a worker's note (ALEPH_JOB_ID) and not the factory's own.
-      const n = verbs.note(repo, id, text, verbs.isAnswer(text, process.env.ALEPH_JOB_ID));
+      const n = verbs.note(repo, id, text, verbs.isAnswer(text, jobId()));
       warn(n.follow);
       out(n.result);
       if (n.answered) triageDetached(repo, n.result.id);
