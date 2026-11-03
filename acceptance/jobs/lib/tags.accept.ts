@@ -28,3 +28,10 @@ describe("parseVerdict", () => {
     expect(parseVerdict("`VERDICT: chris q`")).toEqual({ call: "ask", reason: "q" });
   });
 });
+
+describe("closing marks right after the colon", () => {
+  test("**VERDICT:** land reads as land", () => {
+    expect(parseVerdict("**VERDICT:** land")).toEqual({ call: "land" });
+    expect(tagged("FACT: **bold** x", "FACT")).toEqual(["**bold** x"]);
+  });
+});

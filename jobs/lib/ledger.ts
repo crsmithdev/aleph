@@ -385,7 +385,7 @@ export const TAG_FORMAT = "A tag line starts with the tag in capitals and a colo
 
 const tagValue = (line: string, tag: string): string | undefined => {
   const m = line.match(/^\s*[`*]*([A-Z][A-Z-]*):(.*)$/);
-  return m && m[1] === tag ? m[2].replace(/[`*\s]+$/, "").trim() : undefined;
+  return m && m[1] === tag ? m[2].replace(/^[`*]+(?=\s)/, "").replace(/[`*\s]+$/, "").trim() : undefined;
 };
 
 /** The value of every line of the text that carries the tag; lines with an empty value are dropped. */
