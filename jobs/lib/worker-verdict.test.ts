@@ -79,6 +79,11 @@ describe("checks", () => {
     expect(calls).toEqual(["checks", "docClaims", "keepGate"]);
     expect((await workerVerdict(branch({ earlier: two }), ports({ kept: reason }).p)).outcome.reason).toBe(`${reason} after 2 fix rounds`);
   });
+
+  test("a second-stage keep-gate failure, a new test that earns no keep, goes back the same way", async () => {
+    const reason = "keep-gate: 1 new test adds no coverage of the changed lines and kills no mutant: a.test.ts > adds";
+    expect((await workerVerdict(branch(), ports({ kept: reason }).p)).outcome).toEqual({ condition: "stuck", cause: "check", checkName: "keep-gate", reason, failed: "keep-gate", round: 0 });
+  });
 });
 
 describe("after the checks", () => {

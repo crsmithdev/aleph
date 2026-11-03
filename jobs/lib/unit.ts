@@ -22,7 +22,7 @@ import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallSeconds, workerToken } from "./sandbox.ts";
 import { oracleCommands } from "./acceptance.ts";
-import { HIDDEN_UNREADABLE, checksInSandbox, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
+import { HIDDEN_UNREADABLE, changedSources, checksInSandbox, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
@@ -475,7 +475,7 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
     keepGate: async () => {
       phase("check keep-gate");
       const head = git(repo.path, "rev-parse", tip).out;
-      const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), o.runner ?? runOnCommit);
+      const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), changedSources(repo.path, base, head), o.runner ?? runOnCommit);
       if (kept) appendFileSync(runFile(folder, "checks.log"), `## keep-gate: exit 1\n${kept.log}\n\n`);
       return kept?.reason ?? null;
     },

@@ -25,7 +25,7 @@ export interface VerdictPorts {
   repeatedHidden(): { question: string } | null;
   /** Why the worker's final message makes a doc claim that its transcript does not back, else null. */
   docClaims(): string | null;
-  /** The keep-gate: why a new test case of the branch does not fail on its base or does not pass on its head, else null. */
+  /** The keep-gate: why a new test case of the branch does not fail on its base, does not pass on its head, or earns no keep, else null. */
   keepGate(): Promise<string | null>;
   /** The diff stat, for an Ask. */
   stat(): string;

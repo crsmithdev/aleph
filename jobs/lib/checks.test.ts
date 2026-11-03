@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cloneAndSetup, keepGate, newCases, runChecks, type CheckExec, type Runner } from "./checks.ts";
+import { addedLines, cloneAndSetup, keepGate, mutants, newCases, runChecks, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
 
@@ -117,7 +117,7 @@ test("newCases: the names of the test and it cases on added lines only", () => {
  * The keep-gate with a runner that runs the command in a plain folder: `code` maps a commit to the source of
  * m.ts there, and `hidden` goes to `.hidden` as runOnCommit gives it. The test file is new on the head.
  */
-async function gate(code: Record<string, string>, testText: string) {
+async function gate(code: Record<string, string>, testText: string, sources: Source[] = []) {
   const commands: string[] = [];
   const runner: Runner = async (_repo, sha, command, hidden) => {
     commands.push(`${sha}: ${command}`);
@@ -129,7 +129,7 @@ async function gate(code: Record<string, string>, testText: string) {
     return { code: p.exitCode ?? 1, output: p.stdout.toString() + p.stderr.toString() };
   };
   const tests = [{ path: "lib/m.test.ts", text: testText, names: ["new", "fixed"] }];
-  return { result: await keepGate({ key: "r" } as Repo, "base", "head", tests, runner), commands };
+  return { result: await keepGate({ key: "r" } as Repo, "base", "head", tests, sources, runner), commands };
 }
 
 describe("the keep-gate", () => {
@@ -154,8 +154,35 @@ describe("the keep-gate", () => {
   });
 
   test("no new case runs nothing", async () => {
-    expect(await keepGate({ key: "r" } as Repo, "base", "head", [], async () => { throw new Error("ran"); })).toBeNull();
+    expect(await keepGate({ key: "r" } as Repo, "base", "head", [], [], async () => { throw new Error("ran"); })).toBeNull();
   });
+
+  describe("the second stage: a new case whose file does not load on the base", () => {
+    const head = "export const other = 1;\nexport function m(x: number) {\n  if (x > 0) return x + 1;\n  return 0;\n}\n";
+    const sources = [{ path: "m.ts", lines: [2, 3, 4, 5], text: head }];
+    const code = { base: "export const other = 1;\n", head };
+
+    test("a case that covers no changed line beyond the other cases and kills no mutant goes back with its name; one that covers a changed line stays", async () => {
+      const { result, commands } = await gate(code, testText.replace("m()).toBe(2)", "m(1)).toBe(2)"), sources);
+      expect(result?.reason).toBe("keep-gate: 1 new test adds no coverage of the changed lines and kills no mutant: lib/m.test.ts > fixed");
+      expect(result?.log).toContain("- lib/m.test.ts > fixed\n");
+      expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "base", "head"]);
+    }, 30_000);
+
+    test("two cases that cover the same changed lines each kill a mutant and stay; a branch with no changed source line runs no second stage", async () => {
+      const twin = testText.replace("m()).toBe(2)", "m(1)).toBe(2)").replace(`expect(typeof m).toBe("function")`, "expect(m(2)).toBe(3)");
+      expect((await gate(code, twin, sources)).result).toBeNull();
+      expect((await gate(code, twin)).commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
+    }, 30_000);
+  });
+});
+
+test("addedLines and mutants: the new-side lines of a diff, and one mutant a changed line, at most `max`, spread evenly", () => {
+  expect(addedLines("@@ -1,0 +2,3 @@\n+a\n@@ -9 +12 @@\n@@ -20,2 +23,0 @@\n")).toEqual([2, 3, 4, 12]);
+  const text = ["// note", "if (a === b && c) go();", "x = n < 3;", "save(x);", "return true;", "const y = 4;", "import { z } from \"z\";"].join("\n");
+  const all = mutants([{ path: "a.ts", lines: [1, 2, 3, 4, 5, 6, 7], text }]);
+  expect(all.map((m) => m.text)).toEqual(["if (a !== b && c) go();", "x = n >= 3;", "", "return false;", "const y = 5;"]);
+  expect(mutants([{ path: "a.ts", lines: [2, 3, 4, 5, 6], text }], 2).map((m) => m.line)).toEqual([2, 4]);
 });
 
 test("cloneAndSetup: the clone steps and the setup group with its log and exit code", () => {

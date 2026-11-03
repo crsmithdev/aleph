@@ -15,6 +15,7 @@ import { checkSeconds } from "./settings.ts";
 import { gitPrelude, q } from "./agent-call.ts";
 import { git } from "./git.ts";
 import { runFile } from "./run-files.ts";
+import type { Plan } from "./keep-earn.ts";
 
 /** Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock ended the check. `null` is a pass. */
 export type ChecksStop = Stated & { reason: string; timedOut?: boolean };
@@ -228,15 +229,72 @@ const unxml = (s: string) => s.replace(/&quot;/g, "\"").replace(/&apos;/g, "'").
 export const junitPassed = (xml: string): { file: string; name: string }[] =>
   [...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"[^>]*\/>/g)].map((m) => ({ file: unxml(m[2]), name: unxml(m[1]) }));
 
+/** The cases in bun's junit report that ran, passed or failed, as `file > name`. */
+const junitRan = (xml: string): Set<string> =>
+  new Set([...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"/g)].map((m) => `${unxml(m[2])} > ${unxml(m[1])}`));
+
 /** Where the keep-gate's command writes its junit report, in the clone. */
 const REPORT = ".keep-gate.xml";
 
+/** A source file that a branch changes: its path, the changed line numbers on the head and its text on the head. */
+export interface Source { path: string; lines: number[]; text: string }
+
+const SOURCE = /\.[cm]?[jt]sx?$/;
+
+/** The line numbers on the new side of a `git diff -U0`. */
+export const addedLines = (diff: string): number[] =>
+  [...diff.matchAll(/^@@ -\S+ \+(\d+)(?:,(\d+))? @@/gm)].flatMap((m) => Array.from({ length: m[2] === undefined ? 1 : Number(m[2]) }, (_, i) => Number(m[1]) + i));
+
+/** The JavaScript and TypeScript files, not test files, that the diff from `base` to `tip` adds or changes. */
+export function changedSources(cwd: string, base: string, tip: string): Source[] {
+  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => SOURCE.test(f) && !TEST_FILE.test(f));
+  return files.flatMap((path) => {
+    const lines = addedLines(git(cwd, "diff", "-U0", base, tip, "--", path).out);
+    return lines.length ? [{ path, lines, text: git(cwd, "show", `${tip}:${path}`).out }] : [];
+  });
+}
+
+/** The mutation operators, in order: a comparison, a logical operator, a boolean, a condition, a constant. */
+const OPS: [RegExp, (m: string) => string][] = [
+  [/===|!==/, (m) => m === "===" ? "!==" : "==="],
+  [/ (?:<=|>=|<|>) /, (m) => ({ " <= ": " > ", " >= ": " < ", " < ": " >= ", " > ": " <= " })[m]!],
+  [/&&|\|\|/, (m) => m === "&&" ? "||" : "&&"],
+  [/\b(?:true|false)\b/, (m) => m === "true" ? "false" : "true"],
+  [/\bif \(/, () => "if (!"],
+  [/\b\d+\b/, (m) => String(Number(m) + 1)],
+];
+const CALL = /^\s*(?:await\s+)?[\w$.]+\(.*\);?\s*$/;
+
+/** One mutant of a source line, or null: the first operator that applies, else the line empty when it is a call statement. */
+export function mutate(line: string): string | null {
+  const t = line.trim();
+  if (!t || /^(?:\/\/|\/?\*|import\b|export\b.*\bfrom\b)/.test(t)) return null;
+  for (const [re, op] of OPS) {
+    const m = re.exec(line);
+    if (m) return line.slice(0, m.index) + op(m[0]) + line.slice(m.index + m[0].length);
+  }
+  return CALL.test(line) ? "" : null;
+}
+
+/** At most `max` mutants of the changed lines, one a line, spread evenly over them. */
+export function mutants(sources: Source[], max = 10): { path: string; line: number; text: string }[] {
+  const all = sources.flatMap((s) => {
+    const text = s.text.split("\n");
+    return s.lines.flatMap((line) => {
+      const m = text[line - 1] === undefined ? null : mutate(text[line - 1]);
+      return m === null ? [] : [{ path: s.path, line, text: m }];
+    });
+  });
+  return all.length <= max ? all : Array.from({ length: max }, (_, i) => all[Math.floor((i * all.length) / max)]);
+}
+
 /**
  * The keep-gate: each new case of `tests` must pass on `tip` and fail on `base`. The head's text of each file
- * runs against the base code, so a file that is new on the head runs there too. Returns the reason and the
- * lines for checks.log, or null. A sandbox fault is not a failure.
+ * runs against the base code, so a file that is new on the head runs there too. A case that did not run on the
+ * base (its file did not load there) must then earn its keep on `sources`, the changed source files: see earnKeep.
+ * Returns the reason and the lines for checks.log, or null. A sandbox fault is not a failure.
  */
-export async function keepGate(repo: Repo, base: string, tip: string, tests: NewTests[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string } | null> {
+export async function keepGate(repo: Repo, base: string, tip: string, tests: NewTests[], sources: Source[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string } | null> {
   if (!tests.length) return null;
   const test = `bun test --reporter=junit --reporter-outfile=${REPORT} ${tests.map((t) => q(`./${t.path}`)).join(" ")}; c=$?; cat ${REPORT}; exit $c`;
   let head = await runner(repo, tip, test);
@@ -250,10 +308,36 @@ export async function keepGate(repo: Repo, base: string, tip: string, tests: New
   if (onBase.infra) return null;
   const fresh = new Set(tests.flatMap((t) => t.names));
   const passed = junitPassed(onBase.output).filter((c) => fresh.has(c.name)).map((c) => `${c.file} > ${c.name}`);
-  if (!passed.length) return null;
-  return {
+  if (passed.length) return {
     reason: `keep-gate: ${passed.length} new test${passed.length > 1 ? "s pass" : " passes"} on the base commit: ${passed.join("; ")}`,
     log: `These new tests pass on the base commit ${base.slice(0, 10)}, without the branch's change, so they do not test it:\n${passed.map((p) => `- ${p}`).join("\n")}\nMake each one fail without the change, or remove it: a committed test needs a lasting reason.`,
+  };
+  const ran = junitRan(onBase.output);
+  const unran = tests.flatMap((t) => t.names.filter((name) => !ran.has(`${t.path} > ${name}`)).map((name) => ({ file: t.path, name })));
+  return earnKeep(repo, tip, tests, unran, sources, runner);
+}
+
+let earnScript: string | undefined;
+
+/**
+ * The keep-gate's second stage. A case that fails on the base because its file does not load there shows only
+ * that the file needs the change: it must also cover a changed line of `sources` that the other cases of the test
+ * files do not cover, or fail on a mutant of a changed line. keep-earn.ts runs it on `tip`, with at most 10 mutants.
+ * A branch with no changed source line has nothing to earn against, so it passes.
+ */
+async function earnKeep(repo: Repo, tip: string, tests: NewTests[], cases: Plan["cases"], sources: Source[], runner: Runner): Promise<{ reason: string; log: string } | null> {
+  if (!cases.length || !sources.length) return null;
+  const plan: Plan = { cases, files: tests.map((t) => t.path), changed: Object.fromEntries(sources.map((s) => [s.path, s.lines])), mutants: mutants(sources) };
+  earnScript ??= readFileSync(join(import.meta.dir, "keep-earn.ts"), "utf8");
+  const r = await runner(repo, tip, "bun .hidden/earn.ts .hidden/plan.json", { "earn.ts": earnScript, "plan.json": JSON.stringify(plan) });
+  const line = r.infra ? undefined : r.output.match(/^KEEP-EARN (.*)$/gm)?.pop();
+  if (!line) return null;
+  const { unearned, mutants: n } = JSON.parse(line.slice("KEEP-EARN ".length)) as { unearned: string[]; mutants: number };
+  if (!unearned.length) return null;
+  const one = unearned.length === 1;
+  return {
+    reason: `keep-gate: ${unearned.length} new test${one ? " adds" : "s add"} no coverage of the changed lines and kill${one ? "s" : ""} no mutant: ${unearned.join("; ")}`,
+    log: `These new tests fail on the base commit only because their file does not load there. On the head they cover no changed line that the other cases of their files do not cover, and they pass on each of the ${n} mutant${n === 1 ? "" : "s"} of the changed lines:\n${unearned.map((u) => `- ${u}`).join("\n")}\nMake each one check what the change does, or remove it: a committed test needs a lasting reason.`,
   };
 }
 
