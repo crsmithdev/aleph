@@ -5,9 +5,14 @@ import { join, relative } from "node:path";
 export const TRAILER = "Co-Authored-By: Claude <noreply@anthropic.com>";
 
 export function git(dir: string, ...args: string[]): { ok: boolean; out: string } {
-  const p = spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "pipe" });
-  const out = (p.stdout.toString() + p.stderr.toString()).trim();
-  return { ok: p.exitCode === 0, out };
+  // Several facts gates write the vault in the same second; a git call that
+  // meets another's index.lock waits and tries again (6 facts lost to it, 1 to 3 Nov).
+  for (let i = 0; ; i++) {
+    const p = spawnSync(["git", "-C", dir, ...args], { stdout: "pipe", stderr: "pipe" });
+    const out = (p.stdout.toString() + p.stderr.toString()).trim();
+    if (p.exitCode === 0 || !out.includes("index.lock") || i === 10) return { ok: p.exitCode === 0, out };
+    Bun.sleepSync(200 * (i + 1));
+  }
 }
 
 export function tracked(dir: string, path: string): boolean {

@@ -39,7 +39,9 @@ const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 /** The verdicts in the reviewer's output (the whole output, or its outermost braces), or why they fail the check. `source` is filled in by the caller. */
 export function parseFactChecks(output: string): FactCheck[] | string {
   let raw: any;
-  for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
+  const braces = output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1);
+  // The last try drops a backslash before a character JSON cannot escape, such as \` in a quoted code span.
+  for (const s of [output.trim(), braces, braces.replace(/\\\\|\\(?!["\\/bfnrtu])/g, (m) => (m === "\\\\" ? m : ""))]) {
     try { raw = JSON.parse(s); break; } catch {}
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";

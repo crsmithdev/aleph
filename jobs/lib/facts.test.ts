@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reviewFacts } from "./facts.ts";
+import { parseFactChecks, reviewFacts } from "./facts.ts";
 
 const FACTS = [{ fact: "alpha holds", source: "a.txt:1" }, { fact: "beta holds", source: "b.txt" }];
 async function review(script: string) {
@@ -27,6 +27,11 @@ async function review(script: string) {
 }
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { dispatchIssues } from "./factory.ts";
+
+test("a reply with a backslash before a backtick still parses, and an escaped backslash stays", () => {
+  const p = parseFactChecks('{"verdicts":[{"fact":"\\`ledger.ts\\` holds C:\\\\x","verdict":"keep","reason":"r"}]}');
+  expect(Array.isArray(p) && p[0].fact).toBe("`ledger.ts` holds C:\\x");
+});
 
 test("a reply with no JSON fails the run and rejects every fact", async () => {
   const { r, state } = await review("echo nothing useful");

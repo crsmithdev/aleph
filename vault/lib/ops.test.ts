@@ -377,6 +377,19 @@ describe("lint --fix", () => {
 });
 
 describe("budget", () => {
+  test("a note write goes through while Home is over budget, and Home stays as it was", async () => {
+    const home = join(vault, "Home.md");
+    (await cli("write", note("Sets The Health Line"), "--why", "x"));
+    const text = readFileSync(home, "utf8");
+    const long = text.replace(/\nHealth:/, "\n" + "- filler\n".repeat(150) + "Health:");
+    writeFileSync(home, long);
+    const r = (await cli("write", note("Written Past A Long Home"), "--why", "x"));
+    expect(r.stderr).not.toContain("refuse");
+    expect(r.code).toBe(0);
+    expect(readFileSync(home, "utf8").split("\n").length).toBe(long.split("\n").length);
+    writeFileSync(home, text);
+    (await cli("write", home, "--why", "restore"));
+  });
   test("an over-budget Home refusal ranks the lines to remove", async () => {
     const home = join(vault, "Home.md");
     const text = readFileSync(home, "utf8");

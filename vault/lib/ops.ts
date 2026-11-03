@@ -208,12 +208,11 @@ async function write(): Promise<void> {
   if (findings.length) refuse(findings, existsSync(dest) && !tracked(root, dest)
     ? `${relative(root, dest)} is in the vault but no write has accepted it. Fix it and rerun, or remove it.`
     : undefined);
-  // Home and MEMORY are budgeted, and a note write cannot shrink either. Asking
-  // before the disk is touched means an over-budget Home refuses a write that
-  // has changed nothing, instead of one that has to be undone.
-  const before = await loadVault(root);
-  const overBudget = budgetFindings(before);
-  if (overBudget.length) refuse(overBudget, "prune the over-budget file first: this write changed nothing" + budgetHint(before));
+  // Home and MEMORY are budgeted. A note write may not make either longer
+  // while it is over, but an over-budget Home does not block a note that
+  // leaves it as it was: the factory's facts gate writes unattended, and from
+  // 1 to 3 Nov it lost 28 kept facts to a Home one line over (lint still warns).
+  const overBudget = budgetFindings(await loadVault(root));
 
   // The contradiction screen. A Jev failure never blocks a write.
   if (judgeChoice() !== "haiku" && draft.fm.kind !== "episode") {
@@ -256,7 +255,7 @@ async function write(): Promise<void> {
   appendDaily(`write [[${draft.title}]] — ${why}`);
   await setHealth();
   const after = await loadVault(root);
-  const budget = budgetFindings(after);
+  const budget = budgetFindings(after).filter((f) => !overBudget.some((b) => b.detail === f.detail));
   if (budget.length) { rollback(touched); refuse(budget, budgetHint(after)); }
   warn(lintVault(after).warn.filter((f) => f.note === draft.title || f.detail.includes(draft.title)));
   const subject = archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`;
