@@ -13,7 +13,7 @@ export const smokeFile = () => join(layout().factory, "smoke.json");
 const PATHS = ["/", "/api/state"];
 const TIMEOUT_MS = 15_000;
 const FAILS_TO_REPORT = 2;
-const port = () => uiPort() ?? "3020";
+const port = uiPort;
 
 interface Smoke { fails: number; reason?: string; at?: string }
 

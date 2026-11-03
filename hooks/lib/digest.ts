@@ -23,7 +23,7 @@ function tail(value: unknown, max = TAIL): string {
 }
 
 /** A Bash result keeps its first and last TAIL chars: a compound command prints its early output first. */
-function bashResult(value: string): string {
+export function bashResult(value: string): string {
   if (value.length <= 2 * TAIL) return value;
   const cut = value.length - 2 * TAIL;
   return `${value.slice(0, TAIL)}…(${cut} chars cut)…${value.slice(-TAIL)}`;
@@ -34,7 +34,7 @@ function head(value: unknown, max = 200): string {
   return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
 
-function resultText(entry: Entry): string {
+export function resultText(entry: Entry): string {
   const tur = entry.toolUseResult;
   if (tur && typeof tur === "object" && !Array.isArray(tur) && ("stdout" in tur || "stderr" in tur)) {
     return [tur.stdout, tur.stderr ? `stderr: ${tur.stderr}` : ""].filter(Boolean).join("\n");

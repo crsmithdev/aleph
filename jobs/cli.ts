@@ -449,6 +449,13 @@ async function doctorCmd(): Promise<void> {
 try {
   switch (cmd) {
     case "doctor": await doctorCmd(); break;
+    case "doc-claims": {
+      // Each doc claim of this repo the code does not back, read now: run it after the last edit of a doc.
+      const r = (await import("./lib/doc-claims-repo.ts")).docClaimsReport();
+      console.log(r.text);
+      if (!r.ok) process.exit(1);
+      break;
+    }
     case "job": await job(); break;
     case "run": await plain(); break;
     case "jobs": jobs(); break;
@@ -512,7 +519,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch|doctor> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch|doctor|doc-claims> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

@@ -1,0 +1,100 @@
+/**
+ * The doc-claims check on this repo: which docs it reads, and the code they are compared with.
+ * `bun jobs/lib/doc-claims-repo.ts` (or `aleph doc-claims`) prints each claim the code does not back
+ * and exits 1; `doc-claims.test.ts` runs the same check as part of `bun run test`, so the factory's
+ * checks run it on the commit a job ends with, after its last edit.
+ */
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { docProblems, type Doc, type Truth } from "./doc-claims.ts";
+import * as s from "./settings.ts";
+import { stallSeconds } from "./sandbox.ts";
+import { JEV_PASS_BELOW } from "../../hooks/lib/judge.ts";
+
+export const ROOT = resolve(import.meta.dir, "..", "..");
+
+/** The docs the check reads: README.md, docs/*.md, llms.txt and compose/README.md. Specs and findings are records of their day, not claims about main. */
+export function repoDocs(root = ROOT): Doc[] {
+  const docs = existsSync(join(root, "docs")) ? readdirSync(join(root, "docs")).filter((f) => f.endsWith(".md")).map((f) => `docs/${f}`) : [];
+  return ["README.md", "llms.txt", "compose/README.md", ...docs].filter((f) => existsSync(join(root, f))).map((file) => ({ file, text: readFileSync(join(root, file), "utf8") }));
+}
+
+/** The repo's files: git's list when the root is a checkout, else a scan without node_modules. */
+function repoFiles(root: string): string[] {
+  const g = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root, stdout: "pipe", stderr: "ignore" });
+  if (g.exitCode === 0) return g.stdout.toString().split("\0").filter(Boolean);
+  return [...new Bun.Glob("**/*").scanSync({ cwd: root })].filter((f) => !f.includes("node_modules"));
+}
+
+/** Runs `fn` with `name` unset and `extra` set, then puts the environment back. */
+function bare<T>(name: string, fn: () => T, extra: Record<string, string> = {}): T {
+  const keys = [name, ...Object.keys(extra)];
+  const saved = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  delete process.env[name];
+  Object.assign(process.env, extra);
+  try { return fn(); } finally {
+    for (const k of keys) if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
+  }
+}
+
+/** A cap with no caps.json: the factory folder points at a path that does not exist. */
+const capped = (name: string, fn: () => number) => () => bare(name, fn, { ALEPH_FACTORY_DIR: join(ROOT, ".doc-claims-no-factory") });
+const plain = (name: string, fn: () => string | number) => () => bare(name, fn);
+
+/** Each setting a doc may give a default for, read from the code with its variable unset. */
+export const DEFAULTS: Truth["defaults"] = {
+  ALEPH_DAY_CAP: capped("ALEPH_DAY_CAP", s.DAY_CAP),
+  ALEPH_LIVE_CAP: capped("ALEPH_LIVE_CAP", s.LIVE_CAP),
+  ALEPH_AWAITING_CAP: capped("ALEPH_AWAITING_CAP", s.AWAITING_CAP),
+  ALEPH_EXPLAIN_CAP: plain("ALEPH_EXPLAIN_CAP", s.EXPLAIN_CAP),
+  ALEPH_EXPLAIN_TRIES: plain("ALEPH_EXPLAIN_TRIES", s.EXPLAIN_TRIES),
+  ALEPH_ACCEPTANCE_FAIL_CAP: plain("ALEPH_ACCEPTANCE_FAIL_CAP", s.acceptanceFailCap),
+  ALEPH_TRIAGE_CAP: plain("ALEPH_TRIAGE_CAP", s.TRIAGE_CAP),
+  ALEPH_TRIAGE_TRIES: plain("ALEPH_TRIAGE_TRIES", s.TRIAGE_TRIES),
+  ALEPH_PROPOSE_AT: plain("ALEPH_PROPOSE_AT", s.PROPOSE_AT),
+  ALEPH_JOB_TIMEOUT: plain("ALEPH_JOB_TIMEOUT", s.jobSeconds),
+  ALEPH_CHECK_TIMEOUT: plain("ALEPH_CHECK_TIMEOUT", s.checkSeconds),
+  ALEPH_REVIEW_TIMEOUT: plain("ALEPH_REVIEW_TIMEOUT", s.reviewSeconds),
+  ALEPH_REVIEW_DIFF_MAX: plain("ALEPH_REVIEW_DIFF_MAX", s.reviewDiffMax),
+  ALEPH_STALL_SECONDS: plain("ALEPH_STALL_SECONDS", stallSeconds),
+  ALEPH_FIX_ROUNDS: plain("ALEPH_FIX_ROUNDS", s.fixRounds),
+  ALEPH_LAND_BATCH: plain("ALEPH_LAND_BATCH", s.landBatch),
+  ALEPH_CHECK_SLOTS: plain("ALEPH_CHECK_SLOTS", s.checkSlots),
+  ALEPH_UI_CACHE_TTL: plain("ALEPH_UI_CACHE_TTL", () => s.uiCacheMs() / 1000),
+  ALEPH_UI_FETCH_TTL: plain("ALEPH_UI_FETCH_TTL", s.uiFetchTtl),
+  ALEPH_UI_PORT: plain("ALEPH_UI_PORT", s.uiPort),
+  ALEPH_WORKER_CMD: plain("ALEPH_WORKER_CMD", s.workerCmd),
+  ALEPH_REVIEWER_CMD: () => bare("ALEPH_REVIEWER_CMD", () => s.reviewerCmd() === "worker-sentinel" ? "the worker command" : s.reviewerCmd(), { ALEPH_WORKER_CMD: "worker-sentinel" }),
+  ALEPH_OUTDATED_CMD: plain("ALEPH_OUTDATED_CMD", s.outdatedCmd),
+  ALEPH_JEV_PASS_BELOW: plain("ALEPH_JEV_PASS_BELOW", JEV_PASS_BELOW),
+};
+
+/** What the docs of `root` are compared with: its source, its CLI source, its files and DEFAULTS. */
+export function repoTruth(root = ROOT): Truth {
+  const files = repoFiles(root);
+  const read = (fs: string[]) => fs.map((f) => { try { return readFileSync(join(root, f), "utf8"); } catch { return ""; } }).join("\n");
+  const code = (f: string) => /^(hooks|jobs|todo|ui|vault|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
+  return {
+    defaults: DEFAULTS,
+    root,
+    files,
+    source: read(files.filter((f) => (code(f) || f === "package.json" || /^compose\/[^/]+$/.test(f) || f === ".env.example") && !f.startsWith("jobs/lib/doc-claims"))),
+    cliSource: read(files.filter((f) => code(f) && !f.startsWith("tests/") && !f.endsWith(".test.ts") && !f.startsWith("jobs/lib/doc-claims"))),
+  };
+}
+
+/** The check on `root` as it is now: each claim the code does not back. */
+export const repoProblems = (root = ROOT): string[] => docProblems(repoDocs(root), repoTruth(root));
+
+/** The check's output: one line per problem, then a count; `ok` when there is none. */
+export function docClaimsReport(root = ROOT): { ok: boolean; text: string } {
+  const problems = repoProblems(root);
+  const n = problems.length;
+  return { ok: !n, text: [...problems, n ? `${n} doc claim${n > 1 ? "s" : ""} the code does not back` : "every checked doc claim matches the code"].join("\n") };
+}
+
+if (import.meta.main) {
+  const r = docClaimsReport();
+  console.log(r.text);
+  process.exit(r.ok ? 0 : 1);
+}

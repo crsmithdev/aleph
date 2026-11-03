@@ -11,6 +11,7 @@
  */
 import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { digest, readEntries, userGrantedSkip } from "./lib/digest.ts";
+import { docClaimProblems } from "./lib/docclaims.ts";
 import { backing, unbackedHashes } from "./lib/hashes.ts";
 import { peek, put, take } from "./lib/handshake.ts";
 import { judge } from "./lib/judge.ts";
@@ -41,7 +42,7 @@ const treeChanged = before !== undefined && after !== undefined && after !== nul
 const changed = treeChanged || (after === null && d.edits.length > 0);
 const unbacked = (message: string, transcript: string | undefined, id: string) => unbackedHashes(message, backing(readEntries(transcript ?? "", id)));
 
-type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "hash" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevClaim?: number | null };
+type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "hash" | "doc-claim" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevClaim?: number | null };
 let outcome: Outcome;
 
 if (!changed) {
@@ -53,12 +54,16 @@ if (!changed) {
   const denials = Number((gate?.input as any)?.denials ?? 0);
   // A deterministic check before the judge: a cited commit hash that nothing in the turn shows.
   const hashes = unbacked(d.finalMessage, input.transcript_path, promptId);
+  const docProblems = hashes.length ? [] : docClaimProblems(readEntries(input.transcript_path ?? "", promptId), d.finalMessage);
   if (denials >= MAX_DENIALS) {
     outcome = { verdict: "pass", kind: "forced", reason: `passed after ${denials} denials`, score: 0.5 };
   } else if (hashes.length) {
     const cited = hashes.map((h) => `${h} (run git show --stat ${h})`).join(", ");
     put(`gate:${promptId}`, { start: gate?.start ?? started, input: { denials: denials + 1 } });
     outcome = { verdict: "deny", kind: "hash", reason: `The final message cites commit ${cited}, and no command or output this turn shows ${hashes.length > 1 ? "them" : "it"}.`, score: 0 };
+  } else if (docProblems.length) {
+    put(`gate:${promptId}`, { start: gate?.start ?? started, input: { denials: denials + 1 } });
+    outcome = { verdict: "deny", kind: "doc-claim", reason: `The final message says a doc matches the code, and ${docProblems.join("; and ")}.`, score: 0 };
   } else {
     const result = await judge(d.text, d.finalMessage);
     if (!result.verdict) {

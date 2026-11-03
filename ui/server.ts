@@ -132,7 +132,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir }: { wa
 if (import.meta.main) {
   loadDotenv(undefined, ["ALEPH_UI_PASSWORD"]);
   const i = process.argv.indexOf("--port");
-  const port = Number(i >= 0 ? process.argv[i + 1] : uiPort() ?? 3020);
+  const port = Number(i >= 0 ? process.argv[i + 1] : uiPort());
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
     console.error("usage: aleph-ui [--port <n>]");
     process.exit(2);

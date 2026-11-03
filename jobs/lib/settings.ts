@@ -111,8 +111,8 @@ export const systemctlBin = () => process.env.ALEPH_SYSTEMCTL ?? "systemctl";
 export const jobForeground = (): boolean => process.env.ALEPH_JOB_FOREGROUND === "1";
 /** The repos file, unexpanded. */
 export const reposFile = () => process.env.ALEPH_REPOS ?? "~/.aleph/repos.json";
-/** The UI port, as the text of the variable. */
-export const uiPort = (): string | undefined => process.env.ALEPH_UI_PORT;
+/** The port aleph-ui listens on, and the one the smoke check calls. */
+export const uiPort = (): string => process.env.ALEPH_UI_PORT ?? "3020";
 export const startCmd = (): string | undefined => process.env.ALEPH_START_CMD;
 export const runEnvFile = (): string | undefined => process.env.ALEPH_RUN_ENV;
 export const uiFetchTtl = () => Number(process.env.ALEPH_UI_FETCH_TTL ?? 30);

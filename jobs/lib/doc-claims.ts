@@ -1,15 +1,18 @@
 /**
- * The check that a doc's claims match the code. It reads the docs as they are when the check runs,
- * so a run after the last edit compares the doc text with the actual values:
+ * The check that a doc's claims match the code. It reads the docs and the tree as they are when the
+ * check runs, so a run after the last edit compares the doc text with the actual values:
  * - each default a doc gives for an `ALEPH_*` setting (a table row `| \`ALEPH_X\` | 5 |`, or
- *   `` `ALEPH_X` (5) ``, `` `ALEPH_X` (default 0.05) ``, `` (`ALEPH_X`, 30 minutes) ``) against the
- *   value the code returns with the variable unset;
+ *   `` `ALEPH_X` (5) ``, `` `ALEPH_X` (default 0.05) ``, `` (`ALEPH_X`, 30 minutes) ``, `` `ALEPH_X` (600 s) ``,
+ *   `ALEPH_X, else 3020`, `` `ALEPH_X` defaults to 5 ``) against the value the code returns with the variable unset;
  * - each `ALEPH_*` name against the source;
- * - each repo path in backticks against the tree;
+ * - each repo path in backticks, in a relative link or in a link to this repo on GitHub, against the tree;
+ * - each `path:line` in backticks against the length of that file (a bare file name must name one file of the tree);
+ * - each `` `name` in `path` `` (also `from`, `of`, `` `path`'s `name` ``) against the text of that file;
+ * - each `` `path` imports only `a` and `b` `` against the imports of that file;
  * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source.
  */
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join, normalize as normPath } from "node:path";
 
 /** One doc: its repo-relative path and its text. */
 export interface Doc { file: string; text: string }
@@ -27,60 +30,125 @@ export interface Truth {
   cliSource: string;
   /** The repo root, for paths. */
   root: string;
+  /** The repo's files, repo-relative, for a bare file name in a `file:line`. Empty: bare names are not checked. */
+  files?: string[];
 }
 
 const NAME = String.raw`ALEPH_[A-Z0-9_]*[A-Z0-9]`;
+const UNIT = String.raw`(?:s|seconds?|minutes?|hours?)`;
 const TABLE = new RegExp(String.raw`^\|\s*\`(${NAME})\`\s*\|\s*([^|]+?)\s*\|`);
-const PAREN = new RegExp(String.raw`\`?(${NAME})\`?\s*\((?:default\s+)?([\d.,_]+)\)`, "g");
-const TIME = new RegExp(String.raw`\`(${NAME})\`,\s*([\d.]+\s+(?:seconds?|minutes?|hours?))\)`, "g");
+const PAREN = new RegExp(String.raw`\`?(${NAME})\`?\s*\((?:default\s+)?([\d.,_]+(?:\s+${UNIT})?)\)`, "g");
+const TIME = new RegExp(String.raw`\`(${NAME})\`,\s*([\d.]+\s+${UNIT})\)`, "g");
+const PROSE = new RegExp(String.raw`\`?(${NAME})\`?,?\s+(?:else|defaults\s+to|default\s+is|by\s+default)\s+(\`[^\`]+\`|[\d.,_]*\d(?:\s+${UNIT}\b)?)`, "g");
+
+/** Calls `fn` on each line of each doc, with its 1-based number. */
+function each(docs: Doc[], fn: (d: Doc, text: string, line: number) => void): void {
+  for (const d of docs) d.text.split("\n").forEach((text, i) => fn(d, text, i + 1));
+}
 
 /** The defaults the docs state, one per mention. */
 export function defaultClaims(docs: Doc[]): DefaultClaim[] {
   const out: DefaultClaim[] = [];
-  for (const d of docs) {
-    d.text.split("\n").forEach((text, i) => {
-      const line = i + 1;
-      const t = text.match(TABLE);
-      if (t) out.push({ file: d.file, line, name: t[1], value: t[2], quote: t[0] });
-      for (const re of [PAREN, TIME]) for (const m of text.matchAll(re)) out.push({ file: d.file, line, name: m[1], value: m[2], quote: m[0] });
-    });
-  }
+  each(docs, (d, text, line) => {
+    const t = text.match(TABLE);
+    if (t) out.push({ file: d.file, line, name: t[1], value: t[2], quote: t[0] });
+    for (const re of [PAREN, TIME, PROSE]) for (const m of text.matchAll(re)) out.push({ file: d.file, line, name: m[1], value: m[2], quote: m[0] });
+  });
   return out;
 }
 
-const UNITS: Record<string, number> = { second: 1, minute: 60, hour: 3600 };
+const UNITS: Record<string, number> = { s: 1, second: 1, minute: 60, hour: 3600 };
 
 /** A doc value as the code would hold it: a number (times in seconds), else the text without backticks. */
 export function normalize(value: string): string | number {
   const v = value.trim();
-  const time = v.match(/^([\d.]+)\s+(second|minute|hour)s?$/);
+  const time = v.match(/^([\d.]+)\s+(s|second|minute|hour)s?$/);
   if (time) return Number(time[1]) * UNITS[time[2]];
   const n = v.replace(/[,_]/g, "");
   if (/^-?\d+(\.\d+)?$/.test(n)) return Number(n);
   return v.replace(/^`(.*)`$/, "$1");
 }
 
+/** The code's value in the form the doc gives it: a numeric string compares as its number. */
+const asValue = (v: string | number): string | number => typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v;
+
 /** The settings a doc names, each `ALEPH_*` word once; `ALEPH_<ROLE>_CMD` patterns are left out. */
 export function namesIn(docs: Doc[]): { name: string; file: string; line: number }[] {
   const seen = new Set<string>();
   const out: { name: string; file: string; line: number }[] = [];
-  for (const d of docs) d.text.split("\n").forEach((text, i) => {
+  each(docs, (d, text, line) => {
     for (const m of text.matchAll(new RegExp(String.raw`\b${NAME}\b(?!<)`, "g"))) {
       if (seen.has(m[0])) continue;
       seen.add(m[0]);
-      out.push({ name: m[0], file: d.file, line: i + 1 });
+      out.push({ name: m[0], file: d.file, line });
     }
   });
   return out;
 }
 
-/** The repo paths a doc gives in backticks: a folder and a file with an extension, not under ~ or /. */
+const PATH = String.raw`(?!\.\.?\/)[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+\.[a-z]{1,5}`;
+const REPO_URL = /https:\/\/github\.com\/crsmithdev\/aleph\/(?:blob|tree)\/main\/([^\s)#]+)/g;
+
+/**
+ * The repo paths a doc gives: a folder and a file with an extension in backticks (not under ~ or /),
+ * the target of a relative markdown link (from the doc's folder), and a link to this repo on GitHub.
+ */
 export function pathsIn(docs: Doc[]): { path: string; file: string; line: number }[] {
   const out: { path: string; file: string; line: number }[] = [];
-  for (const d of docs) d.text.split("\n").forEach((text, i) => {
-    for (const m of text.matchAll(/`([A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+\.[a-z]{1,5})`/g)) out.push({ path: m[1], file: d.file, line: i + 1 });
+  each(docs, (d, text, line) => {
+    for (const m of text.matchAll(new RegExp(String.raw`\`(${PATH})(?::\d+(?:-\d+)?)?\``, "g"))) out.push({ path: m[1], file: d.file, line });
+    for (const m of text.matchAll(/\]\(([^)\s#]+)(?:#[^)\s]*)?\)/g)) {
+      if (/^[a-z]+:/i.test(m[1]) || m[1].startsWith("/") || m[1].startsWith("~")) continue;
+      out.push({ path: normPath(join(dirname(d.file), m[1])).replace(/\/$/, ""), file: d.file, line });
+    }
+    for (const m of text.matchAll(REPO_URL)) out.push({ path: m[1].replace(/\/$/, ""), file: d.file, line });
   });
   return out;
+}
+
+/** The `file:line` and `file:line-line` references in backticks. */
+export function lineRefsIn(docs: Doc[]): { path: string; line: number; quote: string; file: string; at: number }[] {
+  const out: { path: string; line: number; quote: string; file: string; at: number }[] = [];
+  each(docs, (d, text, at) => {
+    for (const m of text.matchAll(/`((?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[a-z]{1,5}):(\d+)(?:-(\d+))?`/g)) {
+      out.push({ path: m[1], line: Number(m[3] ?? m[2]), quote: m[0], file: d.file, at });
+    }
+  });
+  return out;
+}
+
+const IDENT = String.raw`[A-Za-z_$][\w$]*`;
+const SYMBOL_IN = new RegExp(String.raw`\`(${IDENT})(?:\(\))?\`\s+(?:in|from|of)\s+\`(${PATH})\``, "g");
+const SYMBOL_OF = new RegExp(String.raw`\`(${PATH})\`'s\s+\`(${IDENT})(?:\(\))?\``, "g");
+
+/** The code names a doc places in a file: `` `name` in `path` ``, `from`, `of`, and `` `path`'s `name` ``. */
+export function symbolsIn(docs: Doc[]): { symbol: string; path: string; quote: string; file: string; line: number }[] {
+  const out: { symbol: string; path: string; quote: string; file: string; line: number }[] = [];
+  each(docs, (d, text, line) => {
+    for (const m of text.matchAll(SYMBOL_IN)) out.push({ symbol: m[1], path: m[2], quote: m[0], file: d.file, line });
+    for (const m of text.matchAll(SYMBOL_OF)) out.push({ symbol: m[2], path: m[1], quote: m[0], file: d.file, line });
+  });
+  return out;
+}
+
+/** The claims that a file imports only some modules: `` `path` imports only `a`, `b` and `c` ``. */
+export function importClaimsIn(docs: Doc[]): { path: string; modules: string[]; quote: string; file: string; line: number }[] {
+  const out: { path: string; modules: string[]; quote: string; file: string; line: number }[] = [];
+  each(docs, (d, text, line) => {
+    for (const m of text.matchAll(new RegExp(String.raw`\`(${PATH})\`[^.;]*?\bimports\s+only\s+((?:\`[^\`]+\`(?:\s*,\s*|\s+and\s+|,\s+and\s+)?)+)`, "g"))) {
+      out.push({ path: m[1], modules: [...m[2].matchAll(/`([^`]+)`/g)].map((x) => x[1]), quote: m[0].trim(), file: d.file, line });
+    }
+  });
+  return out;
+}
+
+/** The module specifiers a source file imports, static, side-effect, re-export and dynamic. */
+export function importsOf(text: string): string[] {
+  const out = new Set<string>();
+  for (const m of text.matchAll(/^\s*(?:import|export)\b[^"'`;]*?\bfrom\s*["']([^"']+)["']/gm)) out.add(m[1]);
+  for (const m of text.matchAll(/^\s*import\s*["']([^"']+)["']/gm)) out.add(m[1]);
+  for (const m of text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) out.add(m[1]);
+  return [...out];
 }
 
 /** The `--flags` of `aleph` and `aleph-ui` commands in code spans and code blocks, with the command they follow. */
@@ -99,6 +167,23 @@ export function flagsIn(docs: Doc[]): { flag: string; command: string; file: str
   return out;
 }
 
+/** The text of a repo file, or null when it is not a file. */
+function fileText(root: string, path: string): string | null {
+  const p = join(root, path);
+  try { return statSync(p).isFile() ? readFileSync(p, "utf8") : null; } catch { return null; }
+}
+
+/** A repo path for a `file:line`: the path itself, or the one file of the tree with that name. */
+function resolveRef(path: string, truth: Truth): { path?: string; why?: string } {
+  if (path.includes("/") || existsSync(join(truth.root, path))) return { path };
+  const hits = (truth.files ?? []).filter((f) => basename(f) === path);
+  if (hits.length === 1) return { path: hits[0] };
+  return { why: hits.length ? `names ${hits.length} files (${hits.join(", ")})` : "names no file of the repo" };
+}
+
+/** A module a doc names, as the file imports it: a relative one resolved from the file's folder. */
+const moduleKey = (from: string, spec: string): string => spec.startsWith(".") ? normPath(join(dirname(from), spec)) : spec;
+
 /** Each claim the code does not back, as a line that quotes the claim and says what the code has. Empty when all match. */
 export function docProblems(docs: Doc[], truth: Truth): string[] {
   const problems: string[] = [];
@@ -107,7 +192,7 @@ export function docProblems(docs: Doc[], truth: Truth): string[] {
     const get = truth.defaults[c.name];
     if (!get) { problems.push(`${at}: "${c.quote}" states a default for ${c.name}, which the check has no value for`); continue; }
     const doc = normalize(c.value);
-    const code = get();
+    const code = asValue(get());
     if (doc !== code) problems.push(`${at}: "${c.quote}" says ${c.name} defaults to ${JSON.stringify(doc)}, the code has ${JSON.stringify(code)}`);
   }
   for (const n of namesIn(docs)) {
@@ -115,6 +200,32 @@ export function docProblems(docs: Doc[], truth: Truth): string[] {
   }
   for (const p of pathsIn(docs)) {
     if (!existsSync(join(truth.root, p.path))) problems.push(`${p.file}:${p.line}: \`${p.path}\` does not exist`);
+  }
+  for (const r of lineRefsIn(docs)) {
+    const at = `${r.file}:${r.at}`;
+    const { path, why } = resolveRef(r.path, truth);
+    if (!path) { problems.push(`${at}: "${r.quote}" ${why}`); continue; }
+    const text = fileText(truth.root, path);
+    if (text === null) continue; // pathsIn reports a missing path with a folder
+    const lines = text.endsWith("\n") ? text.split("\n").length - 1 : text.split("\n").length;
+    if (r.line < 1 || r.line > lines) problems.push(`${at}: "${r.quote}" cites line ${r.line} of ${path}, which has ${lines} lines`);
+  }
+  for (const s of symbolsIn(docs)) {
+    const text = fileText(truth.root, s.path);
+    if (text === null) continue;
+    if (!new RegExp(String.raw`(?<![\w$])${s.symbol.replace(/\$/g, "\\$")}(?![\w$])`).test(text)) problems.push(`${s.file}:${s.line}: "${s.quote}": ${s.path} has no ${s.symbol}`);
+  }
+  for (const c of importClaimsIn(docs)) {
+    const text = fileText(truth.root, c.path);
+    if (text === null) continue;
+    const has = importsOf(text);
+    const want = new Set(c.modules.map((m) => moduleKey(c.path, m)));
+    const got = new Set(has.map((m) => moduleKey(c.path, m)));
+    const extra = has.filter((m) => !want.has(moduleKey(c.path, m)));
+    const missing = c.modules.filter((m) => !got.has(moduleKey(c.path, m)));
+    if (extra.length || missing.length) {
+      problems.push(`${c.file}:${c.line}: "${c.quote}": ${c.path} imports ${has.length ? has.join(", ") : "nothing"}${missing.length ? `; not ${missing.join(", ")}` : ""}`);
+    }
   }
   for (const f of flagsIn(docs)) {
     if (![`"${f.flag}"`, `'${f.flag}'`, `\`${f.flag}`].some((q) => truth.cliSource.includes(q))) problems.push(`${f.file}:${f.line}: "${f.command}" uses ${f.flag}, which the CLI source does not define`);
