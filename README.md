@@ -46,7 +46,7 @@ Invoke a skill as `/aleph:<name>`. Claude can also start one by itself, except t
 | Skill | Does |
 |---|---|
 | `grill-me` | Interviews you about a plan until you both understand it, with a recommended answer per question |
-| `grill-with-docs` † | `grill-me` that also writes `CONTEXT.md` and ADRs as terms and decisions settle |
+| `grill-with-docs` † | `grill-me` that also writes `GLOSSARY.md` and ADRs as terms and decisions settle |
 | `red-team` | Parallel subagents check a plan, RFC or PR description against the code and rank its flaws |
 | `prior-art` | Surveys open-source projects that solve the same problem and ranks what to take or skip |
 | `to-spec` | Turns the conversation into a spec file |
@@ -54,7 +54,7 @@ Invoke a skill as `/aleph:<name>`. Claude can also start one by itself, except t
 | `tdd` | Red, then green, with tests only at agreed seams |
 | `diagnosing-bugs` | Reproduce, minimise, rank hypotheses, then fix |
 | `codebase-design` | Vocabulary for deep modules: module, interface, seam, adapter |
-| `domain-modeling` | Builds the glossary (`CONTEXT.md`) and records ADRs |
+| `domain-modeling` | Builds the glossary (`GLOSSARY.md`) and records ADRs |
 | `improve-codebase-architecture` † | Finds deepening candidates, reports them as HTML, grills the one you pick |
 | `tidy` | Removes junk and dead code behind a green build, and checks a repo is ready to show |
 | `docs-writing` | Writes and audits docs with Diátaxis type gating |

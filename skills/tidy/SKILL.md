@@ -33,7 +33,7 @@ Sweep first, always. It is cheap, and it clears noise that pass 2 would otherwis
 
 `polish` skips pass 2 because its gate is about the outside of the repo and pass 2 can run for a day. Run the default first when there is time: dead code is something a visitor sees too.
 
-Use the `aleph:codebase-design` vocabulary for what you find, and the **deletion test** in particular: would removing this concentrate complexity, or just move it? Read `CONTEXT.md` for the domain names and `docs/adr/` for decisions you must not re-litigate.
+Use the `aleph:codebase-design` vocabulary for what you find, and the **deletion test** in particular: would removing this concentrate complexity, or just move it? Read `GLOSSARY.md` for the domain names and `docs/adr/` for decisions you must not re-litigate.
 
 ## The line between the passes
 
