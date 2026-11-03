@@ -12,18 +12,11 @@ import { may } from "../../jobs/lib/ask.ts";
 import { runCli } from "../cli.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
 import * as issues from "../../todo/lib/issues.ts";
+import { sameSite, text } from "../http.ts";
 import type { Handler, Routes } from "../server.ts";
-
-const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 
 /** The last run of the job called `name`, or undefined when the ledger has none. */
 const find = (name: string) => latestJob(name)?.at(-1);
-
-function sameSite(req: Request): boolean {
-  if (req.headers.get("x-aleph-ui") !== "1") return false;
-  const origin = req.headers.get("origin");
-  return origin === null || origin === new URL(req.url).origin;
-}
 
 const diff: Handler = (_req, { name }) => {
   const runs = latestJob(name);

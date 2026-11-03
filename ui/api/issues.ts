@@ -23,6 +23,7 @@ import { attend } from "../asks.ts";
 import { githubBase, jobProjector, type NewIssue } from "../state.ts";
 import { filed } from "./speed.ts";
 import { readHolds } from "../../jobs/lib/factory-status.ts";
+import { sameSite } from "../http.ts";
 
 /** An issue or goal id from a route: `7` or `7.1`; null for anything else. */
 const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
@@ -156,8 +157,7 @@ function detail(params: Record<string, string>, url: URL): Response {
 }
 
 async function create(req: Request, url: URL): Promise<Response> {
-  const origin = req.headers.get("origin");
-  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+  if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
   let b: any;
   try { b = await req.json(); } catch { return Response.json({ error: "send JSON" }, { status: 400 }); }
   const project = url.searchParams.get("project");
@@ -181,9 +181,8 @@ async function create(req: Request, url: URL): Promise<Response> {
 }
 
 /** `aleph issue drop <repo> <id>`: the CLI's own command, so the CLI stays the one writer. Answers with its JSON (the new status). */
-async function drop(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
-  const origin = req.headers.get("origin");
-  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+async function drop(req: Request, params: Record<string, string>): Promise<Response> {
+  if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
   const repo = loadRegistry()[params.repo];
   const n = refOf(params.id);
   const none = Response.json({ error: "no such issue" }, { status: 404 });
@@ -202,9 +201,8 @@ async function drop(req: Request, params: Record<string, string>, url: URL): Pro
  * `aleph issue decide <repo> <id> <note>`: Chris's answer to an issue that asks. The body names an option's
  * `label`, or `recommendation: true` for an issue whose question is prose; the note is built here from the issue's own text.
  */
-async function decide(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
-  const origin = req.headers.get("origin");
-  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+async function decide(req: Request, params: Record<string, string>): Promise<Response> {
+  if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
   const repo = loadRegistry()[params.repo];
   const n = refOf(params.id);
   if (!repo || n === null) return Response.json({ error: "no such issue" }, { status: 404 });
@@ -245,9 +243,8 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
  */
 /** `aleph issue edit` from the Issue page: the CLI stays the one writer. A body that opens with `## Request` keeps that heading. */
 /** Stop Waiting: removes the waits that never end, and keeps the others. */
-async function unblock(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
-  const origin = req.headers.get("origin");
-  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+async function unblock(req: Request, params: Record<string, string>): Promise<Response> {
+  if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
   const repo = loadRegistry()[params.repo];
   const n = refOf(params.id);
   const none = Response.json({ error: "no such issue" }, { status: 404 });
@@ -264,9 +261,8 @@ async function unblock(req: Request, params: Record<string, string>, url: URL): 
   return Response.json({ removed: dead });
 }
 
-async function edit(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
-  const origin = req.headers.get("origin");
-  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+async function edit(req: Request, params: Record<string, string>): Promise<Response> {
+  if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
   const repo = loadRegistry()[params.repo];
   const n = refOf(params.id);
   const none = Response.json({ error: "no such issue" }, { status: 404 });
@@ -284,9 +280,8 @@ async function edit(req: Request, params: Record<string, string>, url: URL): Pro
 }
 
 /** `aleph issue note` from the Issue page. */
-async function addNote(req: Request, params: Record<string, string>, url: URL): Promise<Response> {
-  const origin = req.headers.get("origin");
-  if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+async function addNote(req: Request, params: Record<string, string>): Promise<Response> {
+  if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
   const repo = loadRegistry()[params.repo];
   const n = refOf(params.id);
   if (!repo || n === null) return Response.json({ error: "no such issue" }, { status: 404 });
@@ -299,9 +294,8 @@ async function addNote(req: Request, params: Record<string, string>, url: URL): 
 }
 
 function answer(verb: "note" | "decide" | "done", text: string) {
-  return async (req: Request, params: Record<string, string>, url: URL): Promise<Response> => {
-    const origin = req.headers.get("origin");
-    if (req.headers.get("x-aleph-ui") !== "1" || (origin !== null && origin !== url.origin)) return Response.json({ error: "forbidden" }, { status: 403 });
+  return async (req: Request, params: Record<string, string>): Promise<Response> => {
+    if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
     const repo = loadRegistry()[params.repo];
     const n = refOf(params.id);
     const none = Response.json({ error: "no such issue" }, { status: 404 });
@@ -321,11 +315,11 @@ export const routes: Routes = {
   "POST /api/issues/:repo/:id/retriage": answer("note", "Chris: run triage again"),
   "POST /api/issues/:repo/:id/rerun": answer("decide", "Chris: run it again"),
   "POST /api/issues/:repo/:id/checked": answer("done", "Chris: checked on the host"),
-  "POST /api/issues/:repo/:id/unblock": (req, params, url) => unblock(req, params, url),
-  "POST /api/issues/:repo/:id/edit": (req, params, url) => edit(req, params, url),
-  "POST /api/issues/:repo/:id/note": (req, params, url) => addNote(req, params, url),
-  "POST /api/issues/:repo/:id/drop": (req, params, url) => drop(req, params, url),
-  "POST /api/issues/:repo/:id/decide": (req, params, url) => decide(req, params, url),
+  "POST /api/issues/:repo/:id/unblock": (req, params) => unblock(req, params),
+  "POST /api/issues/:repo/:id/edit": (req, params) => edit(req, params),
+  "POST /api/issues/:repo/:id/note": (req, params) => addNote(req, params),
+  "POST /api/issues/:repo/:id/drop": (req, params) => drop(req, params),
+  "POST /api/issues/:repo/:id/decide": (req, params) => decide(req, params),
   "GET /api/issues": (_req, _p, url) => list(url),
   "GET /api/issues/:repo/:n": (_req, params, url) => detail(params, url),
   "POST /api/issues": (req, _p, url) => create(req, url),

@@ -3,15 +3,8 @@
  * `aleph always grant`, run as a subprocess, under the same header and Origin rule as controls.ts. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
 import { runCli } from "../cli.ts";
+import { sameSite, text } from "../http.ts";
 import type { Handler, Routes } from "../server.ts";
-
-const text = (body: string, status: number) => new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
-
-function sameSite(req: Request): boolean {
-  if (req.headers.get("x-aleph-ui") !== "1") return false;
-  const origin = req.headers.get("origin");
-  return origin === null || origin === new URL(req.url).origin;
-}
 
 async function run(args: string[]): Promise<Response> {
   const { stdout, stderr, code } = await runCli(args);
