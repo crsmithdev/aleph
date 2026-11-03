@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readdirSync } from "node:fs";
-import { aleph, jobsDir, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, file, jobsDir, specFile, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -10,10 +10,10 @@ describe("a factory run", () => {
     aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
 
   test("a worker silent for ALEPH_STALL_SECONDS is stuck as stalled, with no fix round", async () => {
-    const t = performance.now();
     const r = await fjob("fstall", "quiet", { ALEPH_STALL_SECONDS: "2" });
-    expect(performance.now() - t).toBeLessThan(10_000);
     expect(state(r.json.run)).toMatchObject({ condition: "stuck", reason: "stalled: no output for 2 seconds" });
+    // The watch stopped the worker in its 30 s sleep: it never printed the line it prints after the sleep.
+    expect(file(r.json.run, "output.log")).not.toContain("did quiet");
     await aleph(["drop", "fstall"]);
   }, 30_000);
 

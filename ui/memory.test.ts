@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { waitFor } from "../tests/wait.ts";
 import { clearCache, warm } from "./api/memory.ts";
 import { memoryTypes } from "./api/memory-types.ts";
 import { writeList } from "../todo/lib/store.ts";
@@ -136,31 +137,30 @@ test("vault misses runs once within ALEPH_UI_CACHE_TTL, and the answer says when
   chmodSync(join(bin, "bun"), 0o755);
   const saveEnv = { PATH: process.env.PATH, TTL: process.env.ALEPH_UI_CACHE_TTL };
   process.env.PATH = `${bin}:${process.env.PATH}`;
-  process.env.ALEPH_UI_CACHE_TTL = "300";  // load cannot use this up; the expiry below is forced by shortening it, not by waiting
+  process.env.ALEPH_UI_CACHE_TTL = "300";
   clearCache();
+  // The clock is the test's: only setSystemTime moves it past the TTL, so load cannot.
+  const t0 = Date.now();
+  setSystemTime(new Date(t0));
   try {
     const a: any = await (await at("/api/memory")).json();
     const b: any = await (await at("/api/memory?project=other")).json();
     expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
     expect(a.misses).toEqual({ days: 7, recalls: 1 });
     expect(b.cachedAt).toBe(a.cachedAt);
-    process.env.ALEPH_UI_CACHE_TTL = "0.001";
-    await Bun.sleep(20);
+    setSystemTime(new Date(t0 + 301_000));
     // The stale answer comes back at once, with the old cachedAt; the reload runs in the background.
     const c: any = await (await at("/api/memory")).json();
     expect(c.cachedAt).toBe(a.cachedAt);
     const lines = () => readFileSync(log, "utf8").trim().split("\n").length;
-    const deadline = Date.now() + 20000;
-    while (lines() < 2 && Date.now() < deadline) await Bun.sleep(20);
+    await waitFor(() => lines() >= 2);
     expect(lines()).toBe(2);
     // The stub has run, but the cache stores its answer a moment later.
     let d: any = c;
-    while (d.cachedAt === a.cachedAt && Date.now() < deadline) {
-      await Bun.sleep(20);
-      d = await (await at("/api/memory")).json();
-    }
-    expect(d.cachedAt).not.toBe(a.cachedAt);
+    await waitFor(async () => (d = await (await at("/api/memory")).json()).cachedAt !== a.cachedAt);
+    expect(d.cachedAt).toBe(new Date(t0 + 301_000).toISOString());
   } finally {
+    setSystemTime();
     process.env.PATH = saveEnv.PATH;
     if (saveEnv.TTL === undefined) delete process.env.ALEPH_UI_CACHE_TTL; else process.env.ALEPH_UI_CACHE_TTL = saveEnv.TTL;
     clearCache();
@@ -258,24 +258,24 @@ test("failed loads are kept for the TTL: no second spawn, no second Langfuse req
 
 test("after the TTL a failed answer comes back at once and the reload runs in the background", async () => {
   const f = await failing("bin-fail-ttl", "300");
+  // The clock is the test's: only setSystemTime moves it past the TTL, so load cannot.
+  const t0 = Date.now();
+  setSystemTime(new Date(t0));
   try {
     await (await at("/api/memory")).json();
     expect(f.calls()).toBe(1);
     const seen = f.requests();
-    process.env.ALEPH_UI_CACHE_TTL = "0.001";
-    await Bun.sleep(20);
-    // The reload's stub waits on the gate, so an answer that waited for the reload cannot arrive before the gate goes.
+    setSystemTime(new Date(t0 + 301_000));
+    // The reload's stub waits on the gate, which the test removes only after the answer: an answer that waited for the reload never comes.
     writeFileSync(f.gate, "");
-    const c = await Promise.race([at("/api/memory"), Bun.sleep(15000).then(() => null)]);
-    expect(c).not.toBeNull();
-    expect(c!.status).toBe(200);
-    expect((await c!.json() as any).misses).toBeUndefined();
+    const c = await at("/api/memory");
+    expect(c.status).toBe(200);
+    expect((await c.json() as any).misses).toBeUndefined();
     rmSync(f.gate);
-    const deadline = Date.now() + 20000;
-    while ((f.calls() < 2 || f.requests() === seen) && Date.now() < deadline) await Bun.sleep(20);
+    await waitFor(() => f.calls() >= 2 && f.requests() > seen);
     expect(f.calls()).toBe(2);
     expect(f.requests()).toBeGreaterThan(seen);
-  } finally { f.done(); }
+  } finally { setSystemTime(); f.done(); }
 });
 
 test("with about 1000 notes the warm call takes under 1 s", async () => {

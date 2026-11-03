@@ -51,7 +51,6 @@ describe("every transition dispatches at once", () => {
     }
     // A detached dispatch from this test may still hold a lock that the next test's dispatch meets.
     await until(() => !dispatching());
-    await Bun.sleep(300);
     rmSync(startLog, { force: true });
   }, 120_000);
 
@@ -59,7 +58,7 @@ describe("every transition dispatches at once", () => {
     // A dispatch left by an earlier test's run may still be alive. It starts any open goal it sees, so the
     // goal is seeded already dropped.
     const x = track(await seed("dropped, then reopened", open("reopen"), { kind: "goal", status: "dropped" }, { ALEPH_DISPATCH: "off" }));
-    await Bun.sleep(300);
+    await until(() => !dispatching());
     expect(started()).toEqual([]);
     expect((await aleph(["issue", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);
     await until(() => started().includes(`fac-${x}`));
@@ -72,7 +71,8 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${a}`));
     patchItem("fac", a, { after: [`fac-${blocker}`] });
     expect((await aleph(["drop", `fac-${a}`, "waits now"], on())).code).toBe(0);
-    await Bun.sleep(2000);
+    // The drop's detached dispatch and the dropped unit's run-end dispatch have both ended.
+    await until(() => settled(a) && !dispatching());
     expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
     // A dispatch from any other path holds it too.
     await aleph(["dispatch"], on());
@@ -104,7 +104,7 @@ describe("every transition dispatches at once", () => {
       const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
       await until(() => runs(s).some((r) => ["stuck", "failed"].includes(state(r).condition)));
       const b = track(await add("held behind it", open("hold-b"), ["--labels", "goal"]));
-      await Bun.sleep(1500);
+      await until(() => !dispatching());
       expect(started()).toEqual([`fac-${s}`]);
       // The recheck is a live run, so the hold no longer counts; the dispatch must not wait for its end.
       const hold = join(base, "gate-hold");

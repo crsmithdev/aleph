@@ -7,13 +7,14 @@ import { cacheFetches, readFetched, readList, readLists, uiFetchTtl, writeList }
 import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
+import { waitFor } from "../tests/wait.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
 let restoreEnv: () => void;
 const fetches = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "fetch").length;
 const doneCount = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "done").length;
 /** Wait until every fetch the shim has logged has ended. */
-const settled = async (): Promise<void> => { for (let i = 0; i < 500 && doneCount() < fetches(); i++) await Bun.sleep(20); };
+const settled = async (): Promise<void> => { await waitFor(() => doneCount() >= fetches(), { timeout: 10_000 }); };
 const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd }); if (p.exitCode) throw new Error(p.stderr.toString()); };
 
 beforeAll(() => {
@@ -64,7 +65,7 @@ test("the UI fetches the work store at most once per 30 s, across reads and requ
   state();
   now.mockRestore();
   // After the first, a fetch runs in the background.
-  for (let i = 0; i < 100 && fetches() < before + 2; i++) await Bun.sleep(20);
+  await waitFor(() => fetches() >= before + 2, { timeout: 2000 });
   expect(fetches()).toBe(before + 2);
 });
 
@@ -91,7 +92,7 @@ test("a write fetches in the foreground even with the cache on, and builds on th
     const before = fetches();
     readList({ key: "a" });
     // The read past the TTL starts one background fetch; its log line can come late under load.
-    for (let i = 0; i < 100 && fetches() < before + 1; i++) await Bun.sleep(20);
+    await waitFor(() => fetches() >= before + 1, { timeout: 2000 });
     expect(fetches()).toBe(before + 1);
     await settled();
     readList({ key: "a" });
@@ -118,7 +119,7 @@ test("with the cache on and warm, a write fetches synchronously once and a read 
     const start = fetches();
     readList({ key: "a" });
     // The warm read past the TTL starts one fetch; wait for it to start and finish.
-    for (let i = 0; i < 100 && fetches() < start + 1; i++) await Bun.sleep(20);
+    await waitFor(() => fetches() >= start + 1, { timeout: 2000 });
     expect(fetches()).toBe(start + 1);
     await settled();
     const before = fetches();
@@ -157,7 +158,7 @@ test("a background fetch that brings an older remote state cannot move origin/ma
   await settled();
   const dones = doneCount();
   try { readList({ key: "a" }); } finally { now.mockRestore(); }
-  for (let i = 0; i < 100 && doneCount() <= dones; i++) await Bun.sleep(20);
+  await waitFor(() => doneCount() > dones, { timeout: 2000 });
   expect(doneCount()).toBeGreaterThan(dones);
   expect(Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: items }).stdout.toString().trim()).toBe(w!.commit);
   expect(readFetched({ key: "a" })!.items.some((i) => i.title === "written")).toBe(true);

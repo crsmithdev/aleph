@@ -6,6 +6,7 @@ import { unitAlive } from "./lib/process.ts";
 export { unitAlive };
 import { config as storeConfig } from "../todo/lib/store.ts";
 import { parseItem, renderItem, setStatus, type Status } from "../todo/lib/todo.ts";
+import { waitFor } from "../tests/wait.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
 export let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
@@ -91,8 +92,7 @@ const tail_ = (s: string) => s.trimEnd().split("\n").slice(-15).join("\n");
  */
 export async function until(f: () => boolean): Promise<void> {
   // Under the 30 s test timeout, so that a timeout here reports the logs below.
-  for (let i = 0; i < 250 && !f(); i++) await Bun.sleep(100);
-  if (f()) return;
+  if (await waitFor(f, { timeout: 25_000, every: 100 })) return;
   const runEnd = existsSync(jobsDir) ? readdirSync(jobsDir).sort().slice(-4).map((r) => `--- ${r}/dispatch.log\n${tail(join(jobsDir, r, "dispatch.log"), 5)}`) : [];
   throw new Error([`until: not true after 25 s`, `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`,
     `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`, ...runEnd].join("\n"));

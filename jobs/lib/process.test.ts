@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { waitFor } from "../../tests/wait.ts";
 import { writeRun, type Entry, type Run } from "./ledger.ts";
 import { isRunning, markEnded, markStarted, processState, STARTING_MS, stop, unitAlive } from "./process.ts";
 
@@ -31,7 +32,7 @@ async function liveIn(folder: string): Promise<number> {
   const p = Bun.spawn(["bash", "-c", `sleep 30; : ${folder}`]);
   kids.push(p);
   const named = () => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(folder); } catch { return false; } };
-  for (const end = Date.now() + 5000; !named() && Date.now() < end;) await Bun.sleep(10);
+  await waitFor(named, { timeout: 5000, every: 10 });
   markStarted(folder, p.pid);
   return p.pid;
 }

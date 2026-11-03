@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { waitFor } from "../tests/wait.ts";
 import { aleph, base, diagnose, jobsDir, quiet, startScript, stateNow, setup, teardown, until as untilQuiet, seedItem } from "./cli.helpers";
 
 beforeAll(setup);
@@ -15,7 +16,7 @@ describe("a factory run", () => {
     const gate = (n: string) => join(base, `gate-${n}`);
     const goal = async (n: string) =>
       seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
-    const until = async (f: () => boolean) => { for (let i = 0; i < 300 && !f(); i++) await Bun.sleep(100); expect(f()).toBe(true); };
+    const until = async (f: () => boolean) => { await waitFor(f, { timeout: 30_000, every: 100 }); expect(f()).toBe(true); };
     const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).condition === "passed");
     const ids: number[] = [];
     beforeAll(() => {
@@ -28,7 +29,7 @@ describe("a factory run", () => {
     afterAll(async () => {
       for (const n of ["d", "e", "f"]) writeFileSync(gate(n), "");
       // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
-      for (let i = 0; i < 30 && !ids.every(settled); i++) await Bun.sleep(100);
+      await waitFor(() => ids.every(settled), { timeout: 3000, every: 100 });
       for (const id of ids) {
         await aleph(["drop", `fac-${id}`]);
         await aleph(["issue", "drop", "fac", String(id), "test over"]);

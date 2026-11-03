@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkSlot } from "./ledger.ts";
+import { lock } from "./ledger.ts";
 import { withSlot } from "./checks.ts";
 
 // Slots are locks under $XDG_RUNTIME_DIR: keep this process's own, with one slot, so a held slot is seen at once.
@@ -21,8 +21,8 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-// Whether a slot can be taken within a moment: false while every slot is held.
-const takeable = () => Promise.race([checkSlot().then((free) => { free(); return true; }), Bun.sleep(300).then(() => false)]);
+// Whether the one slot (ALEPH_CHECK_SLOTS=1) can be taken now: lock() with no wait answers at once, with no time window.
+const takeable = async () => { const free = await lock("check-slot-0", 0); free?.(); return free !== null; };
 
 test("a check whose exec throws frees its slot, and a second check takes it at once", async () => {
   await expect(withSlot(() => { throw new Error("exec failed"); })).rejects.toThrow("exec failed");

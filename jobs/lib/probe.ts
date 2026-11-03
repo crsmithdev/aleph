@@ -67,7 +67,8 @@ function clockFault(start: { wall: number; mono: number }): string | null {
   return null;
 }
 
-export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
+/** `fault` reads the clocks at the end of the probe; the tests pass one that does not read the real clocks. */
+export async function probe(repo: Repo, log: string, fault: typeof clockFault = clockFault): Promise<ProbeResult> {
   // Test hook: ALEPH_PROBE_FAKE=pass|fail records that result without running the sandbox.
   const fake = process.env.ALEPH_PROBE_FAKE;
   if (fake === "pass" || fake === "fail") {
@@ -98,7 +99,7 @@ export async function probe(repo: Repo, log: string): Promise<ProbeResult> {
     const results = readFileSync(log, "utf8").split("\n").filter((l) => /^(PASS|FAIL) /.test(l))
       .map((l) => ({ name: l.slice(5, l.lastIndexOf(": ")), ok: l.startsWith("PASS") }));
     const expected = denied().length + 2;
-    const failed = failedChecks(results, expected, clockFault(started));
+    const failed = failedChecks(results, expected, fault(started));
     if (results.length < expected) {
       const last = lastLines(readFileSync(`${log}.stderr`, "utf8"));
       failed[failed.length - 1] += ` (exit ${step.code}${step.timedOut ? ", time box ended it" : ""}${last ? `; stderr: ${last}` : ""})`;

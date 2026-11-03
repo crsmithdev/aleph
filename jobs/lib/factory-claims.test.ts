@@ -9,6 +9,7 @@ import { hold, factoryDir } from "./factory-status.ts";
 import { readRun, writeRun, allJobs, allRuns, lock } from "./ledger.ts";
 import { ctx, sh, goal, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
 import { askOf } from "./ask.ts";
+import { waitFor } from "../../tests/wait.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -258,7 +259,9 @@ test("a rescue that finds the lock taken waits, then acts once on the state it f
   const release = (await lock(`rescue-fac-${name}`, 0))!;
   const f = fakes();
   const b = dispatch(f);
-  await Bun.sleep(300);
+  // B waits on the lock: lock() makes its own `<name>.new.<pid>.<uuid>` directory before it tries the name.
+  const waiting = () => readdirSync(join(ctx.base, "run", "aleph")).some((n) => n.startsWith(`rescue-fac-${name}.new.`));
+  expect(await waitFor(waiting)).toBe(true);
   expect(f.calls).toEqual([]);
   writeRun(folder, { ...readRun(folder)!, condition: "failed", reason: "time box" });
   release();

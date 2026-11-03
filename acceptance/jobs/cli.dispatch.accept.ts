@@ -2,6 +2,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { waitFor } from "../../tests/wait.ts";
 import { aleph, base, jobsDir, passed, quiet, startScript, setup, teardown, seedItem, patchItem, until } from "../../jobs/cli.helpers";
 
 beforeAll(setup);
@@ -28,7 +29,7 @@ describe("a factory run", () => {
     afterAll(async () => {
       for (const n of ["a", "b", "c"]) writeFileSync(gate(n), "");
       // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
-      for (let i = 0; i < 30 && !ids.every(settled); i++) await Bun.sleep(100);
+      await waitFor(() => ids.every(settled), { timeout: 3000, every: 100 });
       for (const id of ids) {
         await aleph(["drop", `fac-${id}`]);
         await aleph(["issue", "drop", "fac", String(id), "test over"]);

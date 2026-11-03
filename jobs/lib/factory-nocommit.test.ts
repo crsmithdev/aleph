@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
@@ -10,7 +10,7 @@ import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown
 import { clearAsk, setAsk } from "./ask.ts";
 
 beforeEach(setup);
-afterEach(teardown);
+afterEach(() => { setSystemTime(); teardown(); });
 
 test("no commit, the item already done: the run is dropped as a duplicate, once, and the factory is not held", async () => {
   const id = goal();
@@ -90,11 +90,13 @@ test("answering the Ask restarts the no-commit streak; three more no-commit runs
   const f = fakes();
   expect((await dispatch(f)).started).toEqual([]);
   expect(ask(id)).not.toBeNull();
-  await new Promise((r) => setTimeout(r, 20));
+  // The clock is the test's: each step moves it a second, so the Ask's answer comes after the runs before it.
+  const t0 = Date.now();
+  setSystemTime(new Date(t0 + 1000));
   await unlabel(id);
   expect((await dispatch(f)).started).toEqual([`fac-${id}`]);
   // the started run is not a no-commit run; three more finish after the mark
-  await new Promise((r) => setTimeout(r, 20));
+  setSystemTime(new Date(t0 + 2000));
   noCommitRuns(id, 3, 0);
   const g = fakes();
   expect((await dispatch(g)).started).toEqual([]);

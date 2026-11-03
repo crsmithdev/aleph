@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { waitFor } from "../tests/wait.ts";
 import { aleph, base, fakeLog, file, jobsDir, until, remote, repo, sh, specFile, state, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
@@ -37,7 +38,7 @@ describe("a factory run", () => {
     expect(s).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/x.txt" });
     expect(s.stat).toContain("held/x.txt");
     const run = r.json.run;
-    for (let i = 0; i < 100 && !file(run, "call.md").includes("VERDICT"); i++) await Bun.sleep(100);
+    await waitFor(() => file(run, "call.md").includes("VERDICT"), { timeout: 10_000, every: 100 });
     expect(file(run, "call.md")).toContain("VERDICT: chris decide the held path");
     // `aleph review` records the call on state.json once the reviewer has ended (criterion 17): `chris` reads as `ask`.
     await until(() => state(run).review !== undefined);

@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activity, clearCache } from "./api/activity.ts";
 import { withEnv } from "./test-server.ts";
+import { waitFor } from "../tests/wait.ts";
 
 let obsHits = 0;
 /** While a test holds this promise unresolved, the fake Langfuse does not answer observations. */
@@ -76,34 +77,35 @@ describe("activity", () => {
   });
 
   test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, the old answer comes back at once and one reload runs", async () => {
-    // Load cannot use up 300 s; the expiry below is forced by shortening the TTL, not by waiting.
+    // The clock is the test's: only setSystemTime moves it past the TTL, so load cannot.
     const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "300" });
     let release = () => {};
     clearCache();
     try {
+      const t0 = Date.now();
+      setSystemTime(new Date(t0));
       obsHits = 0;
       const a = await activity(7, null, now);
       const b = await activity(7, null, now);
       expect(obsHits).toBe(1);
       expect(b.cachedAt).toBe(a.cachedAt);
       expect(b.tools).toEqual(a.tools);
-      process.env.ALEPH_UI_CACHE_TTL = "0.001";
-      await Bun.sleep(20);
+      setSystemTime(new Date(t0 + 301_000));
       // The fake Langfuse holds the reload, so both stale requests below come while it is in flight.
       hold = new Promise((r) => { release = r; });
       const c = await activity(7, null, now);
       expect(c.cachedAt).toBe(a.cachedAt);
       await activity(7, null, now);
-      for (let i = 0; i < 800 && obsHits < 2; i++) await Bun.sleep(25);
-      process.env.ALEPH_UI_CACHE_TTL = "300";
+      expect(await waitFor(() => obsHits >= 2)).toBe(true);
       release();
       let d = c;
-      for (let i = 0; i < 800 && d.cachedAt === a.cachedAt; i++) { await Bun.sleep(25); d = await activity(7, null, now); }
+      await waitFor(async () => (d = await activity(7, null, now)).cachedAt !== a.cachedAt);
       expect(obsHits).toBe(2);
-      expect(d.cachedAt).not.toBe(a.cachedAt);
+      expect(d.cachedAt).toBe(new Date(t0 + 301_000).toISOString());
       await activity(7, "fac", now);
       expect(obsHits).toBe(3);
     } finally {
+      setSystemTime();
       release();
       hold = Promise.resolve();
       restoreTtl();

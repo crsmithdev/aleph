@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync,  } from "node:fs";
-import { aleph, base, itemsRemote, jobsDir, sh, setup, teardown } from "./cli.helpers";
+import { existsSync, readdirSync } from "node:fs";
+import { aleph, base, dispatching, itemsRemote, jobsDir, sh, setup, teardown, until } from "./cli.helpers";
 
 // Acceptance criterion 14 at the CLI seam: `aleph issue add <repo> "<title>" --goal -` files the issue and its goal `.1`
 // in one store commit, with no triage, and starts the dispatch itself.
@@ -25,7 +25,8 @@ describe("aleph issue add --spec -", () => {
     expect(issue).toContain("source: chris");
     expect(issue).toContain(`<!-- spec -->\n${GOAL.trim()}`);
     expect(issue).not.toMatch(/^(labels|waiting_on|kind|goals|status):/m);
-    await Bun.sleep(500);
+    // A triage would run as a detached `aleph triage`: wait until none is alive, then look for its run.
+    await until(() => !dispatching());
     expect(triageRuns()).toEqual([]);
     const shown = await aleph(["issue", "show", "fac", String(n), "--json"]);
     expect(shown.json).toMatchObject({ source: "chris", areas: [] });

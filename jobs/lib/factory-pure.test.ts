@@ -10,6 +10,7 @@ import { git } from "./git.ts";
 import { runNightly } from "./nightly-accept.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
+import { waitFor } from "../../tests/wait.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -212,7 +213,9 @@ test("writeBaseline waits for the baseline-file lock, here and in another proces
   const child = Bun.spawn(["bun", "-e", `import { writeBaseline } from ${JSON.stringify(join(import.meta.dir, "factory-status.ts"))};
 await writeBaseline("b", () => ({ repo: "b", commit: "2", ok: true }));`], { env: { ...process.env }, stdout: "ignore", stderr: "pipe" });
   const here = writeBaseline("a", () => ({ repo: "a", commit: "1", ok: true }));
-  await Bun.sleep(500);
+  // Both writers wait on the lock: lock() makes a `<name>.new.<pid>.<uuid>` directory for each before it tries the name.
+  const waiters = () => readdirSync(join(ctx.base, "run", "aleph")).filter((n) => n.startsWith("baseline-file.new.")).length;
+  expect(await waitFor(() => waiters() === 2)).toBe(true);
   expect(existsSync(file)).toBe(false);
   expect(child.exitCode).toBeNull();
   release();

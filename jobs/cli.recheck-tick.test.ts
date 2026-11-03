@@ -40,6 +40,10 @@ describe("a factory run", () => {
     const l = await aleph(["land", "fpaused"]);
     expect(state(l.json.run).condition).toBe("landed");
     expect((await aleph(["resume"])).json).toEqual({ paused: false });
-    expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
+    // The start command only logs the goal: the test is about the tick's choice, not about the run it would start.
+    const startCmd = join(base, "pause-start"), startLog = join(base, "pause-start.log");
+    writeFileSync(startCmd, `#!/bin/sh\necho "$2" >> ${startLog}\n`, { mode: 0o755 });
+    expect((await aleph(["tick"], { ALEPH_START_CMD: startCmd })).json.started).toEqual([`fac-${id}`]);
+    expect(readFileSync(startLog, "utf8")).toBe(`fac-${id}\n`);
   }, 30_000);
 });

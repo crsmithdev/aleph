@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import type { Review } from "./ledger.ts";
+import { waitFor } from "../../tests/wait.ts";
 
 let base: string, jobs: string, uiTodo: number, plainTodo: number;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -81,6 +82,13 @@ const fakeClaude = (result: string) => {
   writeFileSync(f, `#!/bin/bash\ncat > /dev/null\nprintf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result })}'\n`, { mode: 0o755 });
   return f;
 };
+/** A fake claude that marks its start, then prints `answer` only once the test releases it: the test acts while the review surely runs. */
+const gatedClaude = (answer: string) => {
+  const f = join(base, `claude-${crypto.randomUUID()}`);
+  writeFileSync(f, `#!/bin/bash\ncat > /dev/null\ntouch ${f}.started\nwhile [ ! -e ${f}.gate ]; do sleep 0.05; done\n${answer}\n`, { mode: 0o755 });
+  return { cmd: f, started: () => waitFor(() => existsSync(`${f}.started`)), release: () => writeFileSync(`${f}.gate`, "") };
+};
+const verdictLand = `printf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result: "VERDICT: land" })}'`;
 const state = (folder: string) => JSON.parse(readFileSync(join(folder, "state.json"), "utf8"));
 const reviewAt = async (folder: string) => (await import("./ledger.ts")).readCall(folder);
 
@@ -186,7 +194,7 @@ describe("review", () => {
     const folder = held("once");
     expect([startReview(folder), existsSync(join(folder, "call.md")) ? readFileSync(join(folder, "call.md"), "utf8") : ""]).toEqual([true, "PENDING\n"]);
     expect(startReview(folder)).toBe(false);
-    for (let i = 0; i < 100 && (await reviewAt(folder))?.call === "pending"; i++) await Bun.sleep(100);
+    await waitFor(async () => (await reviewAt(folder))?.call !== "pending", { timeout: 10_000, every: 100 });
     expect(await reviewAt(folder)).toEqual({ call: "land" });
   });
 
@@ -194,12 +202,12 @@ describe("review", () => {
     const { runReview } = await import("./review.ts");
     const { updateRun } = await import("./ledger.ts");
     const folder = held("race");
-    const slow = join(base, "claude-slow");
-    writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\nprintf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result: "VERDICT: land" })}'\n`, { mode: 0o755 });
-    process.env.ALEPH_REVIEW_CMD = slow;
+    const slow = gatedClaude(verdictLand);
+    process.env.ALEPH_REVIEW_CMD = slow.cmd;
     const running = runReview(folder);
-    await Bun.sleep(300);
+    expect(await slow.started()).toBe(true);
     updateRun(folder, { condition: "dropped", reason: "dropped by Chris" });
+    slow.release();
     await running;
     expect(state(folder)).toMatchObject({ condition: "dropped", reason: "dropped by Chris", ask: expect.objectContaining({ reason: "held-path" }), branch: "job/x" });
     expect(await reviewAt(folder)).toEqual({ call: "land" });
@@ -208,12 +216,12 @@ describe("review", () => {
   test("a second review on a folder refuses while one runs", async () => {
     const { runReview } = await import("./review.ts");
     const folder = held("twice");
-    const slow = join(base, "claude-slow2");
-    writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\nprintf '%s\\n' '${JSON.stringify({ type: "result", is_error: false, result: "VERDICT: land" })}'\n`, { mode: 0o755 });
-    process.env.ALEPH_REVIEW_CMD = slow;
+    const slow = gatedClaude(verdictLand);
+    process.env.ALEPH_REVIEW_CMD = slow.cmd;
     const first = runReview(folder);
-    await Bun.sleep(300);
+    expect(await slow.started()).toBe(true);
     await expect(runReview(folder)).rejects.toThrow("already running");
+    slow.release();
     await first;
     expect(await reviewAt(folder)).toEqual({ call: "land" });
   });
@@ -221,12 +229,12 @@ describe("review", () => {
   test("a drop that removes the run folder does not throw from review", async () => {
     const { runReview } = await import("./review.ts");
     const folder = held("gone");
-    const slow = join(base, "claude-slow3");
-    writeFileSync(slow, `#!/bin/bash\ncat > /dev/null\nsleep 1\necho nothing\n`, { mode: 0o755 });
-    process.env.ALEPH_REVIEW_CMD = slow;
+    const slow = gatedClaude("echo nothing");
+    process.env.ALEPH_REVIEW_CMD = slow.cmd;
     const running = runReview(folder);
-    await Bun.sleep(300);
+    expect(await slow.started()).toBe(true);
     rmSync(folder, { recursive: true, force: true });
+    slow.release();
     await running;
   });
 

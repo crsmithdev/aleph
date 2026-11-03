@@ -33,13 +33,15 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
+// The probe's clock check reads the wall clock, the monotonic clock and Windows time; under load they part, so the tests give it no fault.
+const noFault = () => null;
 const repo = (): Repo => ({ key: "demo", path: repoDir, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: true, held: [], hiddenRun: "" });
 
 test("a probe with no results names exit code and stderr, not an earlier probe's", async () => {
   const log = join(base, "probe.log");
   process.env.STDERR_FILE = `${log}.stderr`;
   writeFileSync(`${log}.stderr`, "old probe text\n");
-  const p = await probe(repo(), log);
+  const p = await probe(repo(), log, noFault);
   expect(p.ok).toBe(false);
   expect(p.results).toEqual([]);
   expect(p.failed).toHaveLength(1);
@@ -56,7 +58,7 @@ test("a failed bun test with all results gives only bun test, whatever is on std
   writeFileSync(join(base, "all"), `#!/bin/bash\necho "error: 1 test failed" >&2\n${lines.map((l) => `echo "${l}"`).join("\n")}\necho "FAIL bun test: failed"\n`, { mode: 0o755 });
   process.env.ALEPH_SANDBOX_CMD = join(base, "all");
   try {
-    const p = await probe(repo(), log);
+    const p = await probe(repo(), log, noFault);
     expect(p.results).toHaveLength(11);
     expect(p.failed).toEqual(["bun test"]);
   } finally { process.env.ALEPH_SANDBOX_CMD = join(base, "boom"); }
@@ -72,7 +74,7 @@ test("the probe script sets each NO_SUBMODULES setting after git init and before
   writeFileSync(join(base, "rec"), `#!/bin/bash\nfor a; do last="$a"; done\nprintf '%s' "$last" > "${out}"\n`, { mode: 0o755 });
   process.env.ALEPH_SANDBOX_CMD = join(base, "rec");
   try {
-    await probe(repo(), join(base, "probe3.log"));
+    await probe(repo(), join(base, "probe3.log"), noFault);
     const script = await Bun.file(out).text();
     const init = script.indexOf("git init -q .");
     const fetch = script.indexOf("git fetch");

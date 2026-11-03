@@ -6,6 +6,7 @@ import { add } from "../todo/lib/todo.ts";
 import { writeList } from "../todo/lib/store.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { stateBuilds } from "./state-load.ts";
+import { waitFor } from "../tests/wait.ts";
 
 // /api/state is built in a worker (ui/state-load.ts). ALEPH_STATE_SLOW_MS makes each build sleep that long first, so the
 // assertions on the timer, the shared builds and the fresh state hold whatever the machine's speed.
@@ -49,23 +50,26 @@ afterAll(() => {
 });
 
 test("a timer in the server keeps firing while /api/state builds", async () => {
-  let last = performance.now(), gap = 0;
-  const timer = setInterval(() => { const t = performance.now(); gap = Math.max(gap, t - last); last = t; }, 10);
+  let ticks = 0;
+  const timer = setInterval(() => { ticks++; }, 10);
   const t0 = performance.now();
   const res = await get();
   const took = performance.now() - t0;
   clearInterval(timer);
   expect(res.status).toBe(200);
   expect(names(await res.json())).toContain("demo-1");
-  // The build slept SLOW ms, and no tick of the timer waited for it.
+  // The build slept SLOW ms, and the timer ticked during it. A build on this thread would let at most one tick
+  // through, since a late interval fires once. A count, not the largest gap: another test file in this process
+  // may block the thread for a while, and only a block of nearly the whole build drops the count under 3.
   expect(took).toBeGreaterThanOrEqual(SLOW);
-  expect(gap).toBeLessThan(SLOW / 2);
+  expect(ticks).toBeGreaterThanOrEqual(3);
 }, 20_000);
 
 test("requests that arrive during a build share the next one", async () => {
   const before = stateBuilds();
   const first = get();
-  await Bun.sleep(SLOW / 4);
+  // The first request's build has started: the five below come during it.
+  await waitFor(() => stateBuilds() > before);
   const rest = await Promise.all(Array.from({ length: 5 }, () => get()));
   const firstBuild = (await first).headers.get("x-aleph-state-build");
   const restBuilds = new Set(rest.map((r) => r.headers.get("x-aleph-state-build")));
@@ -80,8 +84,9 @@ test("a request that starts after a ledger write returns that write, even while 
   writeRun("demo-2");
   expect(names(await (await get()).json())).toContain("demo-2");
   // A build starts before the write; the request after the write does not get it.
+  const built = stateBuilds();
   const older = get();
-  await Bun.sleep(SLOW / 4);
+  await waitFor(() => stateBuilds() > built);
   writeRun("demo-3");
   const after = await (await get()).json();
   expect(names(after)).toContain("demo-3");

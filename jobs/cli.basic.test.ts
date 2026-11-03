@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, branchExists, fakeLog, file, job, jobsDir, repo, setupLog, sh, specFile, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { waitFor } from "../tests/wait.ts";
+import { aleph, base, branchExists, fakeLog, file, job, jobsDir, repo, seedRun, setupLog, sh, specFile, state, told, worktree, setup, teardown } from "./cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -72,21 +73,16 @@ describe("job", () => {
   });
 
   test("with no name, jobs lists the open jobs, then the jobs that ended in the last 24 hours, the latest first", async () => {
-    await job("older", "commit older.txt");
-    await aleph(["drop", "older"]);
-    await job("newer", "commit newer.txt");
-    await aleph(["drop", "newer"]);
-    await job("stale", "commit stale.txt");
-    await aleph(["drop", "stale"]);
-    const folder = (await aleph(["jobs", "stale"])).json.run;
-    const file = join(jobsDir, folder, "state.json");
-    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, "utf8")), ended: new Date(Date.now() - 25 * 3600_000).toISOString() }));
-    await job("open", "commit open.txt");
+    // The runs are seeded with their end times: the order comes from the test, not from how fast the jobs ran.
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+    const ended = (name: string, h: number) => seedRun("demo", { kind: "build", condition: "dropped", name, job: name, ended: hoursAgo(h) });
+    ended("older", 2);
+    ended("newer", 1);
+    ended("stale", 25);
+    seedRun("demo", { kind: "build", condition: "passed", name: "open", job: "open" });
     const names = (await aleph(["jobs"])).json.map((j: any) => j.name).filter((n: string) => ["older", "newer", "stale", "open"].includes(n));
     expect(names).toEqual(["open", "newer", "older"]);
-    await aleph(["drop", "open"]);
-    // About ten CLI calls, so it needs more than the 5 s default under parallel load. Matches the 30 s the test script uses.
-  }, 30_000);
+  });
 
   test("drop removes the worktree and branch and ends the job", async () => {
     const r = await aleph(["drop", "alpha", "not", "needed"]);
@@ -231,8 +227,8 @@ describe("guards", () => {
       expect(refused.code, refused.stdout + refused.stderr + endedRun(refused)).toBe(1);
       expect(refused.stderr).toContain("5 agent runs are live");
       // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
-      let live = await mine();
-      for (const end = Date.now() + 90_000; Date.now() < end && !(live.length === 5 && live.every((j: any) => j.condition === "running" && j.phase === "worker")); live = await mine()) await Bun.sleep(100);
+      let live: any[] = [];
+      await waitFor(async () => (live = await mine()).length === 5 && live.every((j: any) => j.condition === "running" && j.phase === "worker"), { timeout: 90_000, every: 100 });
       expect(live.length).toBe(5);
       expect(live.every((j: any) => j.condition === "running" && j.phase === "worker")).toBe(true);
       for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);
