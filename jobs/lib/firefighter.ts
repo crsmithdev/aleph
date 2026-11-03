@@ -223,6 +223,7 @@ ${red ? `- {"do": "add", "repo": "<repo>", "title": "<title>", "body": "<body>"}
 }
 
 const SPEC_SECTIONS = ["Goal", "Edit surface", "Oracle"];
+const specMissing = (body: string) => SPEC_SECTIONS.filter((h) => !new RegExp(`^##\\s+${h}\\s*$`, "mi").test(body));
 
 /** A held security path the branch changes, or null; "unknown" when there is no branch to read. */
 export function securityPath(repo: Repo, branch: string | undefined): string | null | "unknown" {
@@ -339,7 +340,15 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   const list = store.reader().list(repo.key);
   if (list && store.partsOf(list, item).length) return { refused: `${describe(a)}: it has parts` };
   const why = await refusal(async () => verbs.edit(repo, a.n, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
-  return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
+  if (why) return { refused: `${describe(a)}: ${why}` };
+  // A spec-check hold is about the spec: once the firefighter has rewritten the spec, the Ask is answered. The goal's
+  // next first worker run checks the spec again, and holds again if it still lacks something.
+  // Only a body with all three sections answers it; otherwise the Ask stays with Chris.
+  if (a.body !== undefined && store.askOf(item)?.reason === "spec-check" && specMissing(a.body).length === 0) {
+    const w = await refusal(async () => verbs.decide(repo, a.n, "firefighter edited the spec; the spec check runs again before the next worker run"));
+    if (w) return { refused: `${describe(a)}: the spec is edited, but the spec-check Ask stays: ${w}` };
+  }
+  return { applied: describe(a) };
 }
 
 /** Apply the reply's actions in order, at most MAX_ACTIONS; every outcome is a factory log line. */

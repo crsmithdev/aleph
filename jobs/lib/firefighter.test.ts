@@ -563,3 +563,23 @@ test("the prompt for a red event has the three-header template", () => {
   const p = prompt([{ key: "ci:r:abc", kind: "red", repo: key, line: "r CI red" }]);
   for (const h of ["## Goal", "## Edit surface", "## Oracle"]) expect(p).toContain(h);
 });
+
+test("a spec-check Ask is answered when the firefighter edits the goal's spec, so the spec check runs again", async () => {
+  fresh([{ title: "goal", body: "Ship the thing.\n", goal: true, ask: { ...plain(), reason: "spec-check" } }]);
+  const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, body: "## Goal\nShip.\n## Edit surface\na.ts\n## Oracle\nIt ships.\n" }], ports());
+  expect(r.refused).toEqual([]);
+  expect(item(1).spec).toContain("## Oracle");
+  expect(asked(1)).toBeFalsy();
+});
+
+test("a firefighter edit of only the dependencies leaves a spec-check Ask", async () => {
+  fresh([{ title: "goal", body: "Ship the thing.\n", goal: true, ask: { ...plain(), reason: "spec-check" } }]);
+  await applyActions([{ do: "edit-goal", repo: key, n: 1, after: [] }], ports());
+  expect(asked(1)?.reason).toBe("spec-check");
+});
+
+test("a firefighter edit that still lacks Goal, Edit surface or Oracle keeps the spec-check Ask", async () => {
+  fresh([{ title: "goal", body: "Ship the thing.\n", goal: true, ask: { ...plain(), reason: "spec-check" } }]);
+  await applyActions([{ do: "edit-goal", repo: key, n: 1, body: "## Goal\nShip.\n## Oracle\nIt ships.\n" }], ports());
+  expect(asked(1)?.reason).toBe("spec-check");
+});
