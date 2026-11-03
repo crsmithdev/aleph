@@ -1,9 +1,13 @@
 # Goal to shipped
 
-Written 2026-10-25. Version 7, 2026-11-02. The seed, the planner, the land,
+Written 2026-10-25. Version 8, 2026-11-03. The seed, the planner, the land,
 acceptance, memory and the UI are built. The factory makes code goals only.
 Each piece has its own spec in this folder; this file stays the map.
 Versions 1 to 4 are in git.
+
+Version 8 changes (Chris, 3 Nov):
+
+- The text about non-code goals leaves the map. Git keeps versions 6 and 7.
 
 Version 7 changes (Chris, 2 Nov, after the third factory review):
 
@@ -16,7 +20,6 @@ Version 7 changes (Chris, 2 Nov, after the third factory review):
   the browser step.
 - The second factory repo no longer waits for non-code goals. When it opens
   is Chris's call.
-- Version 6's text about non-code goals below is kept as history and marked.
 
 Version 6 changes (Chris, 1 Nov, after the factory review):
 
@@ -68,15 +71,11 @@ solve. Many goals are in flight at once, and Chris keeps adding more.
 
 ## Scope: personal work, not products
 
-The goals are Chris's own projects, and none is an enterprise product. Since
-version 7 the factory takes code goals only; the rows marked "dropped (v7)"
-were in scope before. Examples:
+The goals are Chris's own projects, and none is an enterprise product. The
+factory takes code goals only. Examples:
 
 | Kind | Example | Delivered to |
 |---|---|---|
-| Writing, dropped (v7) | a blog post draft | the blog repo, as a draft branch |
-| Learning material, dropped (v7) | a training program for AI SWE interviews | a doc or an artifact |
-| Research, dropped (v7) | a survey with ranked sources | `~/.aleph/reports/` and the vault |
 | Small app or tool | an app that helps write blog copy interactively | a repo and a local or preview URL |
 | aleph itself | the pieces below | `origin/main` of aleph, through the factory's land |
 
@@ -97,10 +96,8 @@ This sets four rules:
 2. **Checking is made cheap.** Every delivery comes with its evidence: what was
    checked, by what, and the result. Chris spot-checks; he does not
    re-derive.
-3. **Checks run without Chris where an oracle exists.** Code has tests and a
-   running app. Writing and research, dropped in version 7, have no oracle: a
-   rubric and a judge model would filter them, and Chris's taste is the final check. The report says which
-   kind of check each delivery had.
+3. **Checks run without Chris.** Code has tests and a running app. The report
+   says which checks each delivery had.
 4. **One report, not many messages.** The report is the one place Chris
    reads. It lists, per goal: delivered, needs a look (with a time estimate),
    stuck, or waiting for an answer. Version 3 called it the digest; the seed
@@ -116,8 +113,7 @@ Per Goal) sets these limits:
 - A working factory is a fixed pipeline. One task goes to one agent in one
   isolated workspace. Agents do not talk to each other.
 - Passing visible checks is a weak gate. Agents edit tests to pass them. Code
-  needs checks the worker cannot read or edit; writing needs a rubric applied
-  by a judge that did not write it.
+  needs checks the worker cannot read or edit.
 - Each goal needs an end state. Ona's factory had none, ran out of goals and
   filled its days with chores. The factory idles when no goal is open.
 - Long unattended runs work only against an oracle. Without one, the output
@@ -168,8 +164,7 @@ This follows Anthropic's harness for long-running apps
 Each goal kind has a small set of grading criteria. Each criterion has a hard
 threshold: one criterion below its threshold fails the check, whatever the
 others score. An evaluator that did not make the thing scores it, after it uses
-the thing the way Chris would (Playwright for an app, a read-through for a
-document). The evaluator is calibrated with a few scored examples, because
+the thing the way Chris would (Playwright for an app). The evaluator is calibrated with a few scored examples, because
 Anthropic's evaluator "talked itself into approving" work until it had hard
 thresholds.
 
@@ -177,8 +172,6 @@ thresholds.
 |---|---|---|
 | App or tool | product depth, functionality, visual design, code quality | Anthropic, full-stack harness |
 | Front end | design quality, originality, craft, functionality; the first two weigh more | Anthropic, frontend experiment |
-| Writing, dropped (v7) | to be set in the non-code goal plan; a starting point is the voice sample, clarity, structure, and the humanizer's AI-pattern checks | proposal |
-| Research, dropped (v7) | to be set in the non-code goal plan; a starting point is source credibility, coverage of the question, claims that trace to a fetched source | proposal |
 
 Cost reference (Anthropic, Opus 4.6): one app in 3 h 50 min for $124.70, of
 which planning cost $0.46 and three QA passes about $10.
@@ -258,7 +251,7 @@ The proofs are to-dos 28 and 27. Milestone 2 adds a serial land queue and item
 state derived from `Item:` trailers on `origin/main`.
 
 The seed does not need the UI, the desktop app, model routing beyond one
-default, episodic memory, or the non-code checks. Those are its first goals,
+default or episodic memory. Those are its first goals,
 in this order:
 
 1. Concurrency: the seed's milestone 2, so that several runs land without
@@ -268,11 +261,9 @@ in this order:
    Oct: build it early.
 3. The UI (piece 4, second half): observability, the report and the waiting
    queue as a page, and management of goals.
-4. Non-code goals (dropped in version 7): the rubric and judge checks, and delivery to docs,
-   artifacts and the vault. This opens the personal scope.
-5. The rest of model routing (piece 3): a model tier per stage.
-6. Memory (piece 1).
-7. The Sidetone desktop app (piece 5).
+4. The rest of model routing (piece 3): a model tier per stage.
+5. Memory (piece 1).
+6. The Sidetone desktop app (piece 5).
 
 The reviewer, the baseline check on `main` and the report's extras are also
 later factory goals.
@@ -295,7 +286,7 @@ type its owner, store and gate, and defines milestone 1.
 | Working | the context of one run | `context-gate.ts`, handoffs | a context reset with a file handoff instead of compaction, about every 200K to 300K tokens; each task's run starts from the spec, the task and git log |
 | Semantic | facts and preferences | `MEMORY.md`, `wiki/` | facts learned during a goal enter the vault through a reviewer, never from a worker directly |
 | Episodic | past tasks and how they went | Langfuse traces, `daily/`, handoffs | `vault recall --episodes`: a run finds how a similar task went before; each goal's report entry is kept as an episode |
-| Procedural | rules, skills, workflows | skills, `CLAUDE.md`, hooks | repeated corrections mined from traces become rules or checks; the goal-kind templates are procedures (code is the only kind since version 7) |
+| Procedural | rules, skills, workflows | skills, `CLAUDE.md`, hooks | repeated corrections mined from traces become rules or checks |
 | Retrieval | search over stored material | `vault recall` (substring) | log recall misses; add embeddings only if misses are frequent |
 | Parametric | what the model knows | the model | nothing stored that the model already knows; the routing table (piece 3) picks the model whose knowledge a stage needs |
 | Prospective | future intentions | `aleph todo`, `aleph job` | the work store's goals and tasks (Backlog.md in `~/.aleph/issues`); the factory's timer; questions waiting for Chris |
@@ -328,8 +319,8 @@ The loop above. It revises the agent seats spec with the research before it is
 built: a fresh reviewer as key 2, a land check on test-file edits, risk
 routing, a cap on items waiting for Chris, no seat-to-seat messaging, a "flag
 for human" outcome, stall detection. New parts that the seats spec does not
-have: the goal spec with its checks, decomposition, delivery for non-code work,
-the acceptance run and the report.
+have: the goal spec with its checks, decomposition, the acceptance run and the
+report.
 
 ### 3. Model routing (to-dos 26 and 28)
 
@@ -370,7 +361,6 @@ OpenRouter is the one paid API) and isolation (`srt`).
 | Decision | Options | Recommendation |
 |---|---|---|
 | Delivery without a yes | drafts and local or preview only; also public | Drafts and local or preview only |
-| Non-code checks | dropped in version 7 | — |
 
 ## References
 
