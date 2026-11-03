@@ -150,7 +150,8 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     const open = openJob(name);
     const last = open?.at(-1);
     if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
-    if (last && isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
+    // A run `dispatch` made that has not written its `pid` yet is starting, and counts as running too.
+    if (last && (isLive(last.folder) || isStarting(last))) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
     const item = on ?? (open && issueOf(open));
     const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;

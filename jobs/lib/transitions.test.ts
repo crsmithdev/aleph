@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readRun, writeRun, type Run } from "./ledger.ts";
+import { readRun, STARTING_MS, writeRun, type Run } from "./ledger.ts";
 import { checked, drop, land, recheck, refusal, startJob, startPlain } from "./transitions.ts";
 import { Refusal } from "./refusal.ts";
 
@@ -66,6 +66,23 @@ describe("startJob", () => {
     run("20261028-000001-plain-x-agent", "20261028-000001-plain-x-agent", { repo: "plain" });
     expect(await refused(() => startJob({ repo: " FAC ", name: "x", spec: "s" }))).toBe("x is open in plain");
     expect(runs()).toHaveLength(1);
+  });
+
+  test("refuses a start while the last run is starting: made, running, no pid and no exit", async () => {
+    const job = "20261103-000001-fac-x-agent";
+    const folder = join(base, "jobs", job);
+    mkdirSync(folder, { recursive: true });
+    writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: new Date().toISOString(), made: Date.now() } as Run);
+    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).toBe(`x is running as ${job}`);
+    expect(runs()).toEqual([job]);
+  });
+
+  test("does not refuse for the starting rule once the last run's made is older than STARTING_MS", async () => {
+    const job = "20261103-000002-fac-x-agent";
+    const folder = join(base, "jobs", job);
+    mkdirSync(folder, { recursive: true });
+    writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: new Date().toISOString(), made: Date.now() - STARTING_MS - 1000 } as Run);
+    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).not.toContain("is running as");
   });
 });
 
