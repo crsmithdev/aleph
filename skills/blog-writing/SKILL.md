@@ -89,15 +89,16 @@ Flag and rewrite each of these.
 **Stock AI words and moves:** flag the puffery, empty "-ing" phrases, overused vocabulary and formatting overuse that `aleph:humanizer` lists in §12, §13, §15, §19 and §20.
 Also flag "vital", "multifaceted", "realm" and excessive bullets, which humanizer does not list.
 
-**Rhythm tells:** `aleph:humanizer` owns staccato fragments and smug simplicity (§2), bumper-sticker aphorisms (§3), and three-beat reveals (§1, §6), with before and after examples. Two blog tells are only partly covered there, so flag them here:
+**Rhythm tells:** `aleph:humanizer` owns dramatic fragments (§2), sayings that sound deep (§3), and three-beat reveals (§1, §6), with before and after examples. Three blog tells are only partly covered there, so flag them here:
+- Smug simplicity after a code block. Bad: "That's it. That's all you need." Good: say what the code does, or move on. (Related to §2.)
 - Parallel ad copy, a contrast with no negation. Bad: "Metrics tell you what's broken. Traces tell you why." Good: "Metrics show what's broken, but traces are where you'll actually figure out why." (Related to §1.)
-- Personality only in the bookends: a personal opening, a clinical middle, a call to action at the end. The writer's voice runs through the whole post, with asides such as "this is the part that tripped me up". (Humanizer's "Voice" section covers flat register.)
+- Personality only in the bookends: a personal opening, a clinical middle, a call to action at the end. The writer's voice runs through the whole post, with asides such as "this is the part that tripped me up". (Humanizer's "Voice" section covers this for blog posts.)
 
 When a draft still reads as machine-written and you can't say why, search [`signs-of-ai-writing.md`](signs-of-ai-writing.md) (Wikipedia's field guide, about 25,000 tokens) for the pattern instead of reading it whole.
 
 ## 4. Voice pass
 
-Invoke `aleph:humanizer` on the draft. It finds a voice sample and rewrites the post in the writer's voice. Where humanizer's voice sample and a rule above disagree, the sample wins.
+Find a voice sample: the writer's own earlier posts nearby, such as other posts in the same repo. Prefer text written before November 30, 2022, or text the writer's history shows they wrote. Tell the user which sample you used. Then invoke `aleph:humanizer` on the draft with that sample, and ask for a full rewrite in the writer's voice, sentence by sentence. Where the sample and a rule above disagree, the sample wins.
 
 ## Reviewing a draft
 
