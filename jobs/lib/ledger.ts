@@ -324,7 +324,7 @@ export async function tell(line: string): Promise<boolean> {
 
 /** The last `VERDICT:` line of a review: `land`, `back <reason>` or `chris <question>`; null when it is none of them. */
 export function parseVerdict(result: string): Review | null {
-  const v = result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith("VERDICT:")).map((l) => l.slice(8).trim()).at(-1);
+  const v = lastTagged(result, "VERDICT");
   if (v === undefined) return null;
   if (v === "land") return { call: "land" };
   const m = v.match(/^(back|chris)\s+(\S.*)$/);
@@ -375,6 +375,22 @@ export async function checkSlot(): Promise<() => void> {
 /** The systemd-run properties of every factory run unit: the shell, the UI and Claude Code sessions win when the cores are busy. */
 export const LOW = ["--property=CPUWeight=20", "--nice=10"];
 
-/** The text after `<tag>:` on each line of the result that starts with it. */
-export const tagged = (result: string, tag: string): string[] =>
-  result.split("\n").map((l) => l.trim()).filter((l) => l.startsWith(`${tag}:`)).map((l) => l.slice(tag.length + 1).trim()).filter(Boolean);
+/** The agent output tags: a line `<TAG>: <value>` in a worker's or reviewer's text. `ERROR:` is not one. */
+export const TAGS = ["FOLLOWUP", "DEFAULT", "QUESTION", "FACT", "FLAKE", "SET-ASIDE", "CHECK", "VERDICT"] as const;
+export type Tag = (typeof TAGS)[number];
+
+/** One sentence for prompts that says how a tag line is read. */
+export const TAG_FORMAT = "A tag line starts with the tag in capitals and a colon, such as `FACT: <sentence>`; leading spaces, backticks and `*` before the tag and trailing backticks and `*` after the value are ignored, and a lowercase tag is not read.";
+
+const tagValue = (line: string, tag: string): string | undefined => {
+  const m = line.match(/^\s*[`*]*([A-Z][A-Z-]*):(.*)$/);
+  return m && m[1] === tag ? m[2].replace(/[`*\s]+$/, "").trim() : undefined;
+};
+
+/** The value of every line of the text that carries the tag; lines with an empty value are dropped. */
+export const tagged = (text: string, tag: Tag | string): string[] =>
+  text.split("\n").map((l) => tagValue(l, tag)).filter((v): v is string => !!v);
+
+/** The value of the last line that carries the tag, or undefined when there is none. */
+export const lastTagged = (text: string, tag: Tag | string): string | undefined =>
+  text.split("\n").map((l) => tagValue(l, tag)).filter((v): v is string => v !== undefined).at(-1);
