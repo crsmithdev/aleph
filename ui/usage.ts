@@ -99,7 +99,8 @@ export function startPoller(ms = POLL_MS): () => void {
   return () => clearInterval(timer);
 }
 
-export function readSnapshots(): Snapshot[] {
+/** The snapshots dated at or before `clock`; a row dated after it cannot be a poll that has happened. */
+export function readSnapshots(clock = Date.now()): Snapshot[] {
   const file = usageFile();
   if (!existsSync(file)) return [];
   const out: Snapshot[] = [];
@@ -109,7 +110,7 @@ export function readSnapshots(): Snapshot[] {
       if (typeof s?.at === "string" && Number.isFinite(Date.parse(s.at)) && typeof s.seven_day === "number") out.push({ at: s.at, five_hour: typeof s.five_hour === "number" && Number.isFinite(s.five_hour) ? s.five_hour : null, seven_day: s.seven_day, seven_day_resets_at: s.seven_day_resets_at ?? null });
     } catch { /* a torn line */ }
   }
-  return out.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  return out.filter((s) => Date.parse(s.at) <= clock).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
 /** The snapshots since the last reset: a new reset time or a fall of the 7-day percent starts the window. */
@@ -148,8 +149,8 @@ function solve(A: number[][], b: number[]): number[] | null {
  * under MIN_DOLLARS in the window gets the pooled rate (all rises over all dollars). Null with under
  * MIN_HOURS of snapshots, or with no dollars.
  */
-export function fit(snaps: Snapshot[], spends: Spend[], clock = Date.now()): Fit | null {
-  const w = sinceReset(snaps.filter((s) => Date.parse(s.at) <= clock));
+export function fit(snaps: Snapshot[], spends: Spend[]): Fit | null {
+  const w = sinceReset(snaps);
   if (w.length < 2) return null;
   const t = w.map((s) => Date.parse(s.at));
   const hours = (t.at(-1)! - t[0]) / HOUR;
@@ -217,7 +218,7 @@ const fitCache = staleAsync<Fit | null>();
 /** The current fit, reloaded in the background at most every minute. */
 export function currentFit(): Promise<Fit | null> {
   return fitCache.get("fit", 60_000, async () => {
-    const w = sinceReset(readSnapshots().filter((s) => Date.parse(s.at) <= Date.now()));
+    const w = sinceReset(readSnapshots());
     if (w.length < 2) return null;
     return fit(w, await spends(Date.parse(w[0].at)));
   });
@@ -258,9 +259,7 @@ export function gainSince(w: Snapshot[], ms: number): number | null {
 
 /** What the Status page shows; `now` is null with no snapshot or after the snapshot's week ended; `stale` marks an old or failed one. */
 export function summary(clock = Date.now()): UsageSummary {
-  // A row dated after the clock cannot be a poll that has happened (a fixed-clock write once left one a
-  // few weeks ahead), so it is not the latest snapshot.
-  const w = sinceReset(readSnapshots().filter((s) => Date.parse(s.at) <= clock));
+  const w = sinceReset(readSnapshots(clock));
   const last = w.at(-1);
   const resets = last ? Date.parse(last.seven_day_resets_at ?? "") : NaN;
   const known = last && !(resets <= clock);

@@ -203,7 +203,7 @@ for (const [name, body] of [["null", { five_hour: null }], ["missing", {}], ["no
 
 test("readSnapshots keeps a null or missing five_hour as null and a number as is", () => {
   const f = process.env.ALEPH_USAGE_FILE!;
-  const row = (m: number, extra: object) => JSON.stringify({ at: new Date(T0 + 900 * H + m * 60_000).toISOString(), seven_day: 3, seven_day_resets_at: null, ...extra });
+  const row = (m: number, extra: object) => JSON.stringify({ at: new Date(Date.now() - 900 * H + m * 60_000).toISOString(), seven_day: 3, seven_day_resets_at: null, ...extra });
   require("node:fs").appendFileSync(f, [row(1, { five_hour: null }), row(2, {}), row(3, { five_hour: 12 })].join("\n") + "\n");
   expect(readSnapshots().slice(-3).map((s) => s.five_hour)).toEqual([null, null, 12]);
 });
@@ -274,7 +274,7 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
     write([...good, future]);
     clearFit();
     expect(await currentFit()).toEqual(base);
-    expect(fit([...good, future], sp)).toEqual(baseDirect);
+    expect(readSnapshots().some((s) => s.at === future.at)).toBe(false);
   } finally {
     if (keep === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = keep;
   }
