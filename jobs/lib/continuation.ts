@@ -20,7 +20,6 @@ import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
 import { askOf, isBuild, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
-import { RESEARCH_PROMPT } from "./research.ts";
 
 // ---------------------------------------------------------------------------
 // The worker brief
@@ -86,13 +85,6 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
     }
   }
   return parts.join("\n\n") + "\n";
-}
-
-/** A research worker's brief: the research text, the goal, the job's notes, and why the run before failed. */
-export function researchBrief(id: string, goal: string, job: Job): string {
-  const before = job[job.findIndex((e) => e.id === id) - 1]?.run.reason;
-  return [RESEARCH_PROMPT, `## The goal\n\n${goal}`,
-    ...notes(job).map((n) => `## Note ${n.name}\n\n${n.text.trim()}`), ...(before ? [`## Why the previous report failed\n\n${before}`] : [])].join("\n\n") + "\n";
 }
 
 /**

@@ -8,7 +8,7 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSyn
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
+import { file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
 import { gitPrelude, q } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
@@ -18,14 +18,13 @@ import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
-import { citationFailure, deliver, isResearch, JUDGE_MODEL, judgePrompt, readVerdict, serveFetches, writeWebServer } from "./research.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallReason, stallSeconds, workerToken } from "./sandbox.ts";
 import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./acceptance.ts";
 import { HIDDEN_UNREADABLE, checksInSandbox, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
-import { backCheck, brief, checkBack, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, researchBrief, reviewHold, nextBrief } from "./continuation.ts";
+import { backCheck, brief, checkBack, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, reviewHold, nextBrief } from "./continuation.ts";
 import { startReview } from "./review.ts";
 import { postTrace } from "./trace.ts";
 import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
@@ -193,9 +192,6 @@ export async function unit(folder: string): Promise<void> {
       ({ outcome, code } = await land(entry, repo!, landPorts(entry, repo!, checkEnv)));
     } else if (run.kind === "recheck") {
       ({ outcome, code } = await recheck(id, folder, run, repo!));
-    } else if (repo!.sandbox && (run.kind === "research" || (onOf(run) !== undefined && isResearch(reader().item(repo!.key, onOf(run)!))))) {
-      if (run.kind !== "research") run = updateRun(folder, { kind: "research" });
-      ({ outcome, code } = await researchAgent(id, folder, run, repo!));
     } else if (repo!.sandbox) {
       ({ outcome, code } = await factoryAgent(id, folder, run, repo!));
     } else {
@@ -449,73 +445,6 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     facts.checkedBase = base;
     facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
     return await heldAndReview(id, folder, run, repo, dir, base, branch, facts, earlier);
-  } finally {
-    removeRunFolder(dir);
-  }
-}
-
-/**
- * A research run (research.ts): no repo goes in and no branch comes out. The worker runs under srt with WebSearch and
- * fetch_page, the judge with no tools; a report that passes is delivered, the issue closes, and the run ends done, which does not land.
- */
-async function researchAgent(id: string, folder: string, run: Run, repo: Repo): Promise<{ outcome: Outcome; code: number }> {
-  const phase = (p: string) => updateRun(folder, { phase: p });
-  const on = onOf(run)!;
-  const item = reader().item(repo.key, on);
-  if (!item) return { outcome: { condition: "stuck", cause: "other", reason: `no issue ${on}` }, code: 1 };
-  const dir = makeRunFolder(id);
-  try {
-    const claude = workerCmd();
-    const common = ["--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions"];
-    const env = { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1", ENABLE_TOOL_SEARCH: "false" };
-    const net = { domains: ["api.anthropic.com"], localBinding: false };
-    const log = join(folder, "output.log");
-    const goal = readFileSync(join(folder, "..", run.job, "spec.md"), "utf8").trim();
-    const text = researchBrief(id, goal, jobById(run.job) ?? []);
-    writeFileSync(join(folder, "prompt.md"), text);
-    const argv = [claude, "-p", "--session-id", run.session!, ...common, "--tools", "WebSearch", "--strict-mcp-config", "--mcp-config", writeWebServer(dir), ...(run.model ? ["--model", run.model] : [])];
-    phase("worker");
-    writeFileSync(log, "");
-    const fetches = serveFetches(dir, log);
-    let w: Awaited<ReturnType<typeof sandboxed>>;
-    let pages: Map<string, string>;
-    try {
-      w = await sandboxed(dir, `exec ${argv.map(q).join(" ")}`, {
-        read: [], write: ["home", "work", "tmp"], net, cwd: "work", stdin: text, env,
-        stdout: log, stderr: join(folder, "stderr.log"), limit: jobSeconds(), stall: stallSeconds(),
-        onSpawn: (p) => { child = p; },
-      });
-    } finally { pages = await fetches.stop(); }
-    child = null;
-    const o = agentOutcome(readFileSync(log, "utf8"));
-    writeFileSync(join(folder, "result.md"), o.result);
-    const facts: Partial<Outcome> = o.cost !== undefined ? { cost: o.cost } : {};
-    const stuck = (cause: Cause, reason: string) => ({ outcome: { condition: "stuck" as const, cause, reason, ...facts }, code: 1 });
-    if (w.stalled) return stuck("stalled", stallReason());
-    if (w.timedOut) return stuck("time-box", "time box");
-    if (!o.ok) return stuck("other", o.line);
-    const cites = citationFailure(o.result, pages);
-    if (cites) return stuck("other", cites);
-
-    phase("judge");
-    const judgeLog = join(folder, "judge.log");
-    writeFileSync(judgeLog, "");
-    const judgeArgv = [claude, "-p", ...common, "--tools", "", "--strict-mcp-config", "--model", JUDGE_MODEL];
-    const j = await sandboxed(dir, `exec ${judgeArgv.map(q).join(" ")}`, {
-      read: [], write: ["home", "work", "tmp"], net, cwd: "work", stdin: judgePrompt(goal, o.result, pages), env,
-      stdout: judgeLog, stderr: join(folder, "stderr.log"), limit: jobSeconds(), stall: stallSeconds(),
-      onSpawn: (p) => { child = p; },
-    });
-    child = null;
-    const r = agentOutcome(readFileSync(judgeLog, "utf8"));
-    if (r.cost !== undefined) facts.cost = (facts.cost ?? 0) + r.cost;
-    if (j.timedOut || j.stalled || !r.ok) return stuck("other", `the judge did not finish: ${r.line}`);
-    const v = readVerdict(r.result);
-    if (!v.ok) return stuck("other", v.reason);
-
-    const path = deliver(item.title, `${repo.key}-${on}`, o.result);
-    const closed = closeAndFile(repo, `todo: research ${run.name} delivered`, on, `report: ${path}; ${v.reason}, ${pages.size} pages read`, []);
-    return { outcome: { condition: "done", reason: `report: ${path}; ${v.reason}`, ...facts, ...(closed.todo ? { todo: closed.todo } : {}) }, code: 0 };
   } finally {
     removeRunFolder(dir);
   }

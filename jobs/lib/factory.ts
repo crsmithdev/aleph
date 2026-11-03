@@ -14,7 +14,7 @@ import { factoryLog } from "./layout.ts";
 import { itemOnMain, readRecord, repoStages } from "./status.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isLive, isStarting, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { endKilledFacts, rescueStuck, type Rescue } from "./rescue.ts";
 import { clearRerun, goalBrief } from "./continuation.ts";
 import { type Fate } from "./outcome.ts";
@@ -32,7 +32,6 @@ import { baselineChecks, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
 import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
-import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
 import { writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
@@ -222,7 +221,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       // The spec check runs in a process of its own (it clones the repo and may take 900 s); the dispatch reads its verdict.
       // A pass or an error starts the goal. A hold sets the Ask, so the goal leaves the list until Chris answers; a hold with
       // no Ask left is one Chris answered with a rerun and no edit, and it starts, as a checked version is not checked again.
-      if (repo.author && !isResearch(latest)) {
+      if (repo.author) {
         const running = await specChecking(name);
         const v = running ? null : recordedVerdict(latest);
         if (!v) {
@@ -235,7 +234,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       }
       const { spec, rerun } = goalBrief(item, name, jobs);
       let tier: Tier | null | undefined;
-      if (rate && !isResearch(item)) {
+      if (rate) {
         const p = await needsPlan(repo, item, spec, rate);
         if (paused()) { recordHold(name, "paused", "paused"); skipped.push(`${name}: paused`); continue; }
         if ("plan" in p) { plan(repo, item.id); planned.push(name); continue; }
@@ -530,15 +529,9 @@ function noteSource(title: string): string | undefined {
   return undefined;
 }
 
-/** A research run that delivered: a build run (unit.ts dispatches research as a build) that ended `done` with the reason `report: <path>; <verdict>` (unit.ts researchAgent). No other done run writes that reason. */
-const deliveredReport = (r: Run): boolean => (r.kind === "build" || r.kind === "research") && r.condition === "done" && !!r.reason?.startsWith("report: ");
-
-/** The report path a delivered research run's reason names. */
-const reportPathOf = (r: Run): string => r.reason!.slice("report: ".length).split("; ")[0];
-
 /** The heading a run's report entry goes under. */
 const laneOf = (e: Entry): string =>
-  e.run.condition === "landed" || deliveredReport(e.run) ? "delivered" : isAwaiting(e.run.condition) ? "needs you" : e.run.condition === "stuck" || e.run.condition === "failed" ? "stuck" : "other";
+  e.run.condition === "landed" ? "delivered" : isAwaiting(e.run.condition) ? "needs you" : e.run.condition === "stuck" || e.run.condition === "failed" ? "stuck" : "other";
 
 /** One run as the report gives it. */
 function entry(e: Entry): string {
@@ -548,7 +541,6 @@ function entry(e: Entry): string {
   const prio = (lane === "delivered" || lane === "needs you") && r.repo && r.on ? reader().item(r.repo, issues.parseGoalRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
   const head = `${r.repo}/${r.name} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
-  if (deliveredReport(r)) lines.push(`  report: ${reportPathOf(r)}`);
   if (r.condition === "landed" && r.commit) {
     lines.push(`  commit ${r.commit.slice(0, 7)}`);
     const j = allJobs().find((x) => x[0].run.job === r.job);
