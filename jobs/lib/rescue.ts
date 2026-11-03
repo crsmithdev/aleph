@@ -12,14 +12,14 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { isVersion, specVersion } from "./goal-spec.ts";
-import { clearAsk, note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
+import { isVersion } from "./goal-spec.ts";
+import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { endRun } from "./agent-run.ts";
-import { always, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
+import { always, askFromRun, clearAsk, logAlways, needsOf, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { factoryDir, factoryRepos as sandboxRepos, holders } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
 import { fetchOrigin, git, jobCommit } from "./git.ts";
-import { allJobs, asked, isOpen, issue as issueOf, lastReal, markAsked, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
+import { allJobs, isOpen, issue as issueOf, lastReal, markRescued, readFile, rescued, tailOf, type Job } from "./job.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isBuild, isWorker, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
@@ -100,7 +100,7 @@ const killedReviews = (): string[] => {
   for (const j of allJobs()) {
     const last = lastReal(j);
     const r = last.run;
-    if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.condition) || !["held-path", "review"].includes(runAskOf(r)?.reason ?? "")) continue;
+    if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.condition) || !["held", "review"].includes(needsOf(runAskOf(r)) ?? "")) continue;
     const call = join(last.folder, "call.md");
     try {
       if (readFileSync(call, "utf8").trim() === "PENDING" && statSync(call).mtimeMs < booted) out.push(last.folder);
@@ -171,10 +171,10 @@ async function releaseEdited(act: Rescue): Promise<void> {
   for (const runs of allJobs()) {
     const last = lastReal(runs);
     const r = last.run;
-    const was = readFile(last, "asked-spec");
-    if (was === undefined || !r.repo || !isOpen(runs) || !asked(last) || (r.condition !== "stuck" && r.condition !== "failed")) continue;
+    const waits = waitsForSpecEdit(last);
+    if (!waits || !r.repo || !isOpen(runs) || (r.condition !== "stuck" && r.condition !== "failed")) continue;
     const repo = loadRegistry()[r.repo];
-    const question = (readFile(last, "asked") ?? "").trim();
+    const { version: was, question } = waits;
     const issue = issueOf(runs);
     if (!repo || issue === undefined) continue;
     const item = reader().item(repo.key, issue);
@@ -315,14 +315,15 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const { reason } = stuck;
 
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
-  const record = (text: string, opts: { done?: boolean; ask?: Ask } = {}) => {
+  const record = (text: string, opts: { done?: boolean } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);
   };
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
   const specQuestion = causeOf(r) === "no-commit" && (!!r.question || /^\s*QUESTION:/m.test(readFile(last, "result.md") ?? ""));
-  const chris = async (question: string, ask: Ask) => {
+  // `spec`: the run asked about this issue's spec, so it waits for a spec edit.
+  const chris = async (question: string, ask: Ask, spec?: issues.Issue) => {
     // An Always rule to take the recommendation: Rerun drops the run, and the goal reruns. Not for a run that asked a question.
     if (!specQuestion && ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
       const why = await act.drop(name, question);
@@ -334,8 +335,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
       }
       factoryLog(`${name}: always Rerun failed (${why})`);
     }
-    markAsked(last, question);
-    record(`asks Chris: ${question}`, { ask });
+    const why = askFromRun(last, repo, issue, ask, question, spec);
+    if (why) factoryLog(`${name}: no issue note: ${why}`);
     await say(`asks Chris: ${question}`);
   };
   const take = async (step: Step) => {
@@ -365,9 +366,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (specQuestion) {
     const q = r.question || (readFile(last, "result.md") ?? "").split("\n").map((l) => l.trim()).filter((l) => l.startsWith("QUESTION:")).at(-1)?.slice("QUESTION:".length).trim() || reason;
     const item = issue === undefined ? undefined : reader().item(repo.key, issue);
-    if (item) writeFileSync(join(last.folder, "asked-spec"), specVersion(item) + "\n");
     const text = `${name} ended with no commit and asked: ${q} The goal waits for a spec edit; the factory starts it again when you edit it. Or drop it.`;
-    return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.condition}`]));
+    return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.condition}`]), item);
   }
   const found = noCommit ? foundDone(stuck) : null;
   const claim = noCommit ? alreadyMet(readFile(last, "result.md") ?? "") : null;

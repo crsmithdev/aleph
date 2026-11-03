@@ -13,7 +13,6 @@
  */
 import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/git.ts";
 import { layout } from "../../jobs/lib/layout.ts";
-import { clearAsk as clearAskFields, readAsk, writeAsk, type Ask } from "../../jobs/lib/ask.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
 
@@ -220,10 +219,6 @@ export function writeHidden(repo: Place, id: number | string, files: Record<stri
 
 // The fields.
 
-/** Put `ask` on the item, as `askOf` reads it. */
-export const setAsk = (item: Issue, ask: Ask): void => writeAsk(item, ask);
-/** Take the item's Ask off. */
-export const clearAsk = (item: Issue): void => clearAskFields(item);
 /** An item with an `ask`: it waits for Chris, so it is never dispatched and never triaged. */
 export const awaitsChris = (item: Issue): boolean => item.fm.ask !== undefined;
 
@@ -250,11 +245,6 @@ export const isBuildable = (doc: Doc, item: Issue): boolean =>
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
 /** The item's areas: its `areas`. */
 export const areasOf = (item: Issue): string[] => list(item.fm.areas);
-
-export type { Ask };
-
-/** The item's ask, or null for none. */
-export const askOf = (item: Issue): Ask | null => readAsk(item);
 
 /** An item triage leaves alone: asking, a part, the tracker, to plan, or with a spec or parts. */
 export const isSorted = (doc: Doc, item: Issue): boolean =>
@@ -332,17 +322,16 @@ const why = (e: any): string => e?.message ?? String(e);
 
 /**
  * A note on item `id`, as one commit; with `done` the item is done too, with
- * `label` it gains that label, with `ask` it waits for Chris (`setAsk`).
+ * `label` it gains that label.
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string; ask?: Ask } = {}): string | null {
+export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
       if (!item) return null;
       if (opts.done) issues.setStatus(item, "done");
       if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
-      if (opts.ask) setAsk(item, opts.ask);
       return issues.note(item, text);
     });
     return w ? null : `no issue ${id}`;
@@ -382,37 +371,8 @@ export function reopen(doc: Doc, item: Issue, since: string | null): void {
   if (since) item.fm.since = since;
 }
 
-export const PLAN_REST = "Plan the missing part";
-
-/**
- * Called in the write that sets part `part` to dropped: when its parent is open, has no Ask and no other open part,
- * the parent gets the part-dropped Ask, so the same commit that drops the part asks Chris what now.
- */
-export function askIfPartDropped(doc: Doc, part: Issue, reason: string): void {
-  if (status(part) !== "dropped") return;
-  const issue = parentOf(doc, part);
-  if (!issue || status(issue) !== "open" || awaitsChris(issue)) return;
-  if (partsOf(doc, issue).some((g) => g !== part && status(g) === "open")) return;
-  askPartDropped(issue, `Part ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
-}
-
-/** Put the part-dropped Ask on a parent. */
-export function askPartDropped(issue: Issue, question: string): void {
-  setAsk(issue, {
-    kind: "input",
-    reason: "part-dropped",
-    question,
-    options: [
-      { label: "Close with what landed", line: "Close the issue: the parts that landed are enough." },
-      { label: PLAN_REST, line: "Plan a new part for what the dropped part was to do." },
-    ],
-    why: [],
-  });
-  issue.fm.updated = issues.today();
-}
-
 /** A new issue for `file` and `closeAndFile`; `spec` makes it buildable. */
-export interface Filing { title: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory" | "agent"; ask?: Ask }
+export interface Filing { title: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory" | "agent" }
 
 /**
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,
@@ -438,7 +398,6 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
       ids = filed.map((f) => {
         const item = issues.add(doc, f.title, { labels: f.labels, request: f.request, spec: f.spec, priority: f.priority ?? inherited, source: f.source });
         if (f.areas) item.fm.areas = f.areas;
-        if (f.ask) setAsk(item, f.ask);
         return item.id;
       });
       return true;

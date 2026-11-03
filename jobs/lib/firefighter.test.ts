@@ -5,12 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
-import { areasOf, askOf, readList, setAsk, writeList } from "../../todo/lib/store.ts";
+import { areasOf, readList, writeList } from "../../todo/lib/store.ts";
 import type { Ask } from "./ask.ts";
 import { firefighterStep } from "./factory.ts";
 import { layout } from "./layout.ts";
 import { applyActions, defaultPorts, firefight, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
+import { askOf, setAsk } from "./ask.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;

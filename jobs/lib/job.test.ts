@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, allJobs, batch, checkedBy, lookMinutes, sealed, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markAsked, markRescued, asked, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
+import { addNote, allJobs, batch, checkedBy, lookMinutes, sealed, findJob, goal, hasFile, issue, jobById, lastReal, latestFile, jobsNamed, latestJob, markRescued, notes, openJob, readFile, rescued, stateOf, tailOf, view } from "./job.ts";
 import { isOpen, writeRun, type Run } from "./ledger.ts";
+import { asked, markAsked } from "./ask.ts";
 
 let base: string;
 let saved: string | undefined;

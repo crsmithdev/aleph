@@ -8,6 +8,7 @@
 import { askOf, isAwaiting, loadRegistry, onOf } from "../../jobs/lib/ledger.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { latestJob } from "../../jobs/lib/job.ts";
+import { may } from "../../jobs/lib/ask.ts";
 import { runCli } from "../cli.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
 import * as issues from "../../todo/lib/issues.ts";
@@ -46,7 +47,7 @@ const answerAndRerun: Handler = async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const last = find(name);
   if (!last) return text(`no job named ${name}`, 404);
-  if (!isAwaiting(last.run.condition) || askOf(last.run)?.reason !== "question") return text("this run is not waiting for an answer", 409);
+  if (!isAwaiting(last.run.condition) || may("chris", "answer", askOf(last.run), { run: true })) return text("this run is not waiting for an answer", 409);
   const body: any = await req.json().catch(() => ({}));
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);

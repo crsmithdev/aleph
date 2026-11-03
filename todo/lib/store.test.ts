@@ -5,6 +5,7 @@ import { join } from "node:path";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
+import { askChris, askOf, setAsk } from "../../jobs/lib/ask.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -153,13 +154,14 @@ describe("the writes", () => {
     expect(issues.status(item(r, 1))).toBe("open");
   });
 
-  test("note with a label and an ask", () => {
+  test("note with a label, after askChris set an ask", () => {
     const r = repo([{ title: "one", labels: ["goal"] }]);
     const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
-    expect(store.note(r, 1, "asked", { label: "ui", ask })).toBeNull();
+    expect(askChris(r, 1, ask, "asked")).toBeNull();
+    expect(store.note(r, 1, "asked", { label: "ui" })).toBeNull();
     expect(store.note(r, 1, "asked again", { label: "ui" })).toBeNull();
     expect(store.labels(item(r, 1))).toEqual(["ui"]);
-    expect(store.askOf(item(r, 1))?.question).toBe("A or B?");
+    expect(askOf(item(r, 1))?.question).toBe("A or B?");
   });
 
   test("close is done with a note", () => {
@@ -216,7 +218,7 @@ describe("the writes", () => {
 
   test("sort changes an open, unsorted item only", () => {
     const r = repo([{ title: "new" }, { title: "live" }, { title: "closed" }]);
-    store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, 2)!, { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
+    store.writeList(r, "ask", (doc) => { setAsk(issues.find(doc, 2)!, { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, 3, "x");
     const before = commits();
     expect(store.sort(r, 2, "triage", () => { })).toBe(false);

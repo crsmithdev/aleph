@@ -12,6 +12,7 @@ import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { recentRepos } from "../../jobs/lib/status.ts";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
+import { askIfPartDropped, askOf, clearAsk, decideAsk } from "../../jobs/lib/ask.ts";
 import { triage } from "./triage.ts";
 
 /** The fields `add` and `edit` take. `labels` are the issue's areas. `spec` makes an issue buildable, and `after` is what it waits for. */
@@ -26,7 +27,7 @@ export interface Fields {
   after?: string[];
 }
 
-export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: store.askOf(i), notes: i.notes.length });
+export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(i), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
@@ -149,7 +150,7 @@ export function note(repo: store.Place, id: number | string, text: string, answe
     const i = pick(repo, doc, id);
     const line = issues.note(i, text);
     const answered = answer && store.awaitsChris(i);
-    if (answered) store.clearAsk(i);
+    if (answered) clearAsk(i);
     return { id: i.id, line, answered };
   })!;
   return { result: { repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit }, answered: w.value.answered, follow: w.follow };
@@ -166,14 +167,8 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
     if (issues.status(i) !== "open" || !store.awaitsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
-    const ask = store.askOf(i);
     issues.note(i, text);
-    store.clearAsk(i);
-    if (ask?.reason === "part-dropped") {
-      const planRest = ask.options.find((o) => o.label === store.PLAN_REST);
-      if (planRest && (text.includes(planRest.label) || text.includes(planRest.line))) i.fm.plan = "true";
-      else issues.setStatus(i, "done");
-    }
+    decideAsk(i, text);
     if (fields.after !== undefined) setAfter(repo, doc, i, fields.after);
     return i;
   })!;
@@ -220,7 +215,7 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
     const i = pick(repo, doc, id);
     issues.setStatus(i, how === "done" ? "done" : "dropped", undefined, text || undefined);
     if (text) issues.note(i, text);
-    if (how === "drop") store.askIfPartDropped(doc, i, text);
+    if (how === "drop") askIfPartDropped(doc, i, text);
     return i;
   })!;
   return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };

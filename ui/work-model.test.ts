@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
 import { add, addPart, find, setStatus } from "../todo/lib/todo.ts";
-import { writeAsk } from "../jobs/lib/ask.ts";
+import { setAsk } from "../jobs/lib/ask.ts";
 import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
@@ -57,9 +57,9 @@ beforeAll(async () => {
     // fac-2: one goal that waits for approval; fac-3: an issue that awaits input; fac-4: a new issue.
     const two = add(doc, "Needs a go-ahead", { request: "Ask first.\n" });
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
-    writeAsk(g, { kind: "approval", reason: "proposal", question: "Update left-pad?", options: [], why: [] });
+    setAsk(g, { kind: "approval", reason: "proposal", question: "Update left-pad?", options: [], why: [] });
     const three = add(doc, "A part was dropped", { request: "Plan it.\n" });
-    writeAsk(three, { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
+    setAsk(three, { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);

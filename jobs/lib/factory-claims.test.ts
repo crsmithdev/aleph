@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { askOf, readList, writeList } from "../../todo/lib/store.ts";
+import { readList, writeList } from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { hold, factoryDir } from "./factory-status.ts";
 import { readRun, writeRun, allJobs, allRuns, lock } from "./ledger.ts";
 import { ctx, sh, goal, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
+import { askOf } from "./ask.ts";
 
 beforeEach(setup);
 afterEach(teardown);

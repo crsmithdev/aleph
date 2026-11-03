@@ -2,12 +2,13 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { askOf, flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
+import { flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { accept, reaccept, failedTests, oracleCommands, rerunOf, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
 import { checkSlot } from "./ledger.ts";
 import { readRecord, resultLine } from "./status.ts";
 import { acceptanceStep, dispatchIssues, reacceptReopened } from "./factory.ts";
+import { askOf } from "./ask.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {

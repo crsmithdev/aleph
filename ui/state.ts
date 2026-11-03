@@ -8,9 +8,9 @@ import { factorySnapshot, goalFacts, redLine } from "../jobs/lib/factory-status.
 import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
-import { plainAsk, readAlways, waitOf, type Ask } from "../jobs/lib/ask.ts";
+import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
-import { afterOf, areasOf, askOf, byPriority, partsOf, rank, reader, isTracker } from "../todo/lib/store.ts";
+import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../todo/lib/store.ts";
 import { idOf, parseGoalRef, PRIORITIES, refOf, status } from "../todo/lib/todo.ts";
 import { facts, landedIndex, resultLine, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
@@ -234,7 +234,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     if (v.condition === "awaiting" && v.stat) job.stat = v.stat;
     // An awaiting run with no ask of its own asks a question, as stage() reads it.
     const stored = isAwaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) : undefined;
-    const asked = isAwaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk(waitOf(undefined).reason, "")) : undefined;
+    const asked = isAwaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
     if (asked) job.ask = asked;
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
@@ -246,7 +246,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       : v.condition === "awaiting" ? [
         ...needsYouIssue(v.repo, todo),
         { key: "Job", value: v.job },
-        ...(asked?.reason === "held-path" || asked?.reason === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
+        ...(needsOf(asked) === "held" || needsOf(asked) === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
       ] : [];
     if (trailers.length) job.trailers = trailers;
     return job;

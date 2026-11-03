@@ -8,9 +8,9 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { clearAsk, file, readList, sourceOf, writeList } from "../../todo/lib/store.ts";
+import { readList, sourceOf, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { always, logAlways, plainAsk, readAsk } from "./ask.ts";
+import { always, askOf, clearAsk, logAlways, plainAsk, setAsk } from "./ask.ts";
 import { fetchOrigin, git, NO_SUBMODULES } from "./git.ts";
 import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -83,21 +83,36 @@ async function outdated(repo: Repo): Promise<string | null> {
   }
 }
 
+const titleOf = (p: Proposal) => `Update ${p.name} ${p.current} to ${p.latest}`;
+
+/** Files one issue per proposal, each with a `proposal` Ask, as one commit; their numbers. A write that fails files none. */
+function fileProposals(repo: Repo, missing: Proposal[]): number[] {
+  if (!missing.length) return [];
+  try {
+    return writeList(repo, "dependency proposals", (doc) => missing.map((p) => {
+      const item = issues.add(doc, titleOf(p), {
+        priority: "low", source: "deps",
+        spec: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nApprove it to have the factory plan the update.\n`,
+      });
+      item.fm.areas = ["deps"];
+      setAsk(item, plainAsk("proposal", `Update ${p.name} from ${p.current} to ${p.latest}?`));
+      return item.id;
+    }), true)?.value ?? [];
+  } catch {
+    return [];
+  }
+}
+
 /** Files the proposals for one repo that were not proposed before; returns their titles. */
 export function propose(repo: Repo, found: Proposal[]): string[] {
   const rec = load();
   const fresh = found.filter((p) => !(`${repo.key}:${p.name}@${p.latest}` in rec.proposed));
   if (!fresh.length) return [];
-  const titleOf = (p: Proposal) => `Update ${p.name} ${p.current} to ${p.latest}`;
   const list = readList(repo);
   if (!list) throw new Error(`the work store has no list for ${repo.key}`);
   const had = new Map(list.items.map((i) => [i.title, i.id]));
   const missing = fresh.filter((p) => !had.has(titleOf(p)));
-  const made = file(repo, "dependency proposals", missing.map((p) => ({
-    title: titleOf(p), priority: "low", source: "deps", areas: ["deps"],
-    ask: plainAsk("proposal", `Update ${p.name} from ${p.current} to ${p.latest}?`),
-    spec: `Proposed by the nightly dependency sweep: \`bun outdated\` shows ${p.name} at ${p.current} in the lockfile and ${p.latest} as the latest.\nApprove it to have the factory plan the update.\n`,
-  })));
+  const made = fileProposals(repo, missing);
   if (made.length !== missing.length || made.some((id) => !id)) return [];
   missing.forEach((p, i) => had.set(titleOf(p), made[i]));
   const titles: string[] = [];
@@ -143,7 +158,7 @@ const majorOf = (v: string): number | null => { const m = /^[^\d]*(\d+)\./.exec(
 /** Whether `item` is an open dependency proposal waiting for a yes, (an approval Ask of reason `proposal`, raised by deps). */
 function waitingProposal(item: issues.Issue): boolean {
   if (issues.status(item) !== "open") return false;
-  const ask = readAsk(item);
+  const ask = askOf(item);
   return ask?.kind === "approval" && ask.reason === "proposal" && sourceOf(item) === "deps";
 }
 

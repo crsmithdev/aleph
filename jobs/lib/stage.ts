@@ -8,7 +8,7 @@
  * `runViewOf` read the store's and the ledger's accessors, which give an old-shape
  * item or run and a new-shape one alike.
  */
-import { waitOf } from "./ask.ts";
+import { askOf, waitOf } from "./ask.ts";
 import { askOf as runAsk, isAwaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { isOpen, lastReal } from "./job.ts";
@@ -52,7 +52,7 @@ export interface Ctx {
 }
 
 export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Subject {
-  const a = store.askOf(item);
+  const a = askOf(item);
   return {
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
     after: store.afterOf(item), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),

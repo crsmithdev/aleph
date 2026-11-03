@@ -3,11 +3,12 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { areasOf, clearAsk, isSorted, readList, setAsk, writeList } from "../../todo/lib/store.ts";
-import { askOf } from "../../todo/lib/store.ts";
+import { areasOf, isSorted, readList, writeList } from "../../todo/lib/store.ts";
+
 import { countsLine, parseRoute, prompt, triageIssue, triageOpen, TRIAGE_MODEL } from "./triage.ts";
 import { saveProbe } from "./factory-status.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
+import { askOf, clearAsk, setAsk } from "./ask.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;

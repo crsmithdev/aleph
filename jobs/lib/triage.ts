@@ -6,8 +6,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { isSorted, noteFlake, reader, setAsk, sort } from "../../todo/lib/store.ts";
-import { always, askNote, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
+import { isSorted, noteFlake, reader, sort } from "../../todo/lib/store.ts";
+import { always, askNote, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";

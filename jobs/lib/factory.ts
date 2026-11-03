@@ -6,10 +6,10 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { byPriority, afterOf, askOf, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
+import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { startProposals, takeFresh } from "./deps.ts";
-import { needsOf, plainAsk } from "./ask.ts";
+import { askChris, askOf, needsOf, plainAsk } from "./ask.ts";
 import { factoryLog } from "./layout.ts";
 import { itemOnMain, readRecord, repoStages } from "./status.ts";
 import { firefight, type Fired, type Ports } from "./firefighter.ts";
@@ -199,7 +199,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         recordHold(name, d.kind, d.why);
         writeStreakMark(name);
         const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
-        const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("no-commit", text) });
+        const bad = askChris(repo, ref, plainAsk("no-commit", text), text);
         if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         skipped.push(`${name}: ${d.why}`);
         continue;
@@ -207,7 +207,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       if (d.kind === "run-cap") {
         recordHold(name, d.kind, d.why);
         const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
-        const bad = note(repo, ref, `asks Chris: ${text}`, { ask: plainAsk("run-cap", text) });
+        const bad = askChris(repo, ref, plainAsk("run-cap", text), text);
         if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         else writeCapMark(name);
         skipped.push(`${name}: ${d.why}`);

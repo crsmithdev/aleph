@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { askOf, readList, writeList } from "../../todo/lib/store.ts";
+import { readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { applyActions } from "./firefighter.ts";
-import { grant } from "./ask.ts";
+import { askOf, grant } from "./ask.ts";
 import { goal, mk, lines, notes, ask, fakes, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);

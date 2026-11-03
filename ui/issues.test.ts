@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, setAsk, writeList } from "../todo/lib/store.ts";
+import { readList, writeList } from "../todo/lib/store.ts";
 import { add, addPart, setStatus, type Doc } from "../todo/lib/todo.ts";
 import * as todos from "../todo/lib/todo.ts";
-import { readAsk } from "../jobs/lib/ask.ts";
+import { askOf, setAsk } from "../jobs/lib/ask.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
@@ -487,7 +487,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
 
   test("an option that waits sets after in the same write as the Ask clears", async () => {
     const n = ask(true, "fac-1.1");
-    expect(readAsk(item(n))!.options[0].after).toBe("fac-1.1");
+    expect(askOf(item(n))!.options[0].after).toBe("fac-1.1");
     await withRealCli(async () => {
       const r = await at(`/api/issues/fac/${n}/decide`, { method: "POST", headers: h, body: JSON.stringify({ label: "A" }) });
       expect(r.status).toBe(200);

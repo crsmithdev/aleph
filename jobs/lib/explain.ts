@@ -11,8 +11,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { askOf, awaitsChris, reader, setAsk, writeList } from "../../todo/lib/store.ts";
-import { ASK_REASONS, actionsOn, reasonOf, type Ask } from "./ask.ts";
+import { awaitsChris, reader, writeList } from "../../todo/lib/store.ts";
+import { ASK_REASONS, actionsOn, askOf, reasonOf, setAsk, type Ask } from "./ask.ts";
 import { allRuns, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { git } from "./git.ts";

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { clearAsk, readList } from "../../todo/lib/store.ts";
-import * as store from "../../todo/lib/store.ts";
+import { readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { AWAITING_CAP } from "./settings.ts";
 import { allRuns } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { clearAsk, setAsk } from "./ask.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -173,14 +173,14 @@ test("a cap mark with the label holds the goal below the hour count; once Chris 
   mk(`fac-${g}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - 60_000).toISOString() });
   mkdirSync(join(ctx.base, "factory", "cap"), { recursive: true });
   writeFileSync(capPath(g), "x\n");
-  await change(g, (item) => { store.setAsk(item, { kind: "input", reason: "run-cap", question: "q", options: [], why: [] }); });
+  await change(g, (item) => { setAsk(item, { kind: "input", reason: "run-cap", question: "q", options: [], why: [] }); });
   const out = await dispatch(fakes());
   expect(out.started).not.toContain(`fac-${g}`);
   // An item with an Ask is no goal: the dispatch lists nothing to skip.
   expect(notes(g)).not.toContain("asks Chris:");
   // Chris reruns: the label is removed while 3 starts are in the hour.
   recent(g, 2);
-  await change(g, (item) => store.clearAsk(item));
+  await change(g, (item) => clearAsk(item));
   const f2 = fakes();
   const out2 = await dispatch(f2);
   expect(out2.started).toEqual([`fac-${g}`]);

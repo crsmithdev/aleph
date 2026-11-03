@@ -11,12 +11,12 @@ import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, onOf, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/status.ts";
-import { readAsk } from "../../jobs/lib/ask.ts";
+import { askOf } from "../../jobs/lib/ask.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
 import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, areasOf, askOf, awaitsChris, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
+import { afterOf, areasOf, awaitsChris, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
@@ -214,7 +214,7 @@ async function decide(req: Request, params: Record<string, string>, url: URL): P
   if (!item) return Response.json({ error: "no such issue" }, { status: 404 });
   if (todos.status(item) !== "open" || !awaitsChris(item)) return Response.json({ error: "this issue is not waiting for a decision" }, { status: 409 });
   const body: any = await req.json().catch(() => ({}));
-  const d = readAsk(item);
+  const d = askOf(item);
   let note: string;
   let after: string[] | undefined;
   if (d?.options.length) {

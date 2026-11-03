@@ -7,8 +7,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeF
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../todo/lib/todo.ts";
-import { askOf, readList, setAsk, writeList } from "../todo/lib/store.ts";
-import { plainAsk } from "../jobs/lib/ask.ts";
+import { readList, writeList } from "../todo/lib/store.ts";
+import { askOf, plainAsk, setAsk } from "../jobs/lib/ask.ts";
 import { explainStep } from "../jobs/lib/explain.ts";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 

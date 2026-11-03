@@ -3,8 +3,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { askOf, awaitsChris, readList, setAsk, writeList } from "../../todo/lib/store.ts";
-import { plainAsk, type Ask } from "./ask.ts";
+import { awaitsChris, readList, writeList } from "../../todo/lib/store.ts";
+import { askOf, plainAsk, setAsk, type Ask } from "./ask.ts";
 import { allRuns, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 import { readStore, type Lesson } from "./corrections.ts";
 import { explainPrompt, explainStep, parseExplain, pendingCases } from "./explain.ts";

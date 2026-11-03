@@ -14,7 +14,7 @@ import * as verbs from "../../todo/lib/issues.ts";
 import { missingSections } from "./goal-spec.ts";
 import { allRuns, askOf, isAwaiting, isWorker, isLost, runsDir, loadRegistry, lock, onOf, reviewOf, tell, type Entry, type Repo } from "./ledger.ts";
 import { endLost, openRun } from "./agent-run.ts";
-import { allJobs, asked as runAsked, isOpen, issue as issueOf, lastReal, markAsked, openJob, readFile, type Job } from "./job.ts";
+import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile, type Job } from "./job.ts";
 import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
 import { writeRerun } from "./rescue.ts";
@@ -23,7 +23,7 @@ import { factoryLog } from "./layout.ts";
 import { ciLine, redCi } from "./ci.ts";
 import type { Fate } from "./outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "./transitions.ts";
-import { always, handed, logAlways, plainAsk, readAlways } from "./ask.ts";
+import { always, askFromRun, askOf as itemAskOf, editAnswers, logAlways, may, plainAsk, readAlways, routeOf, waitsForSpecEdit } from "./ask.ts";
 
 export const FIREFIGHTER_MODEL = "claude-opus-5-5";
 /** The most actions one run may take; the rest are refused. */
@@ -41,7 +41,7 @@ export type EventKind = "awaiting" | "stuck" | "failed" | "loop" | "red" | "ask"
 export interface Event { key: string; kind: EventKind; repo: string; job?: string; item?: number | string; line: string; reason?: string; handed?: boolean }
 
 /** Marks an event whose reason Chris handed to the firefighter, and says so on its line. */
-const hand = (e: Event): Event => (e.reason && handed(e.reason) ? { ...e, handed: true, line: `${e.line} (handed to you by Chris)` } : e);
+const hand = (e: Event): Event => (e.reason && routeOf(e.reason) === "firefighter" ? { ...e, handed: true, line: `${e.line} (handed to you by Chris)` } : e);
 
 /** What the snapshot sees now, in factory repos. */
 export function snapshot(now = Date.now()): Event[] {
@@ -81,7 +81,7 @@ export function snapshot(now = Date.now()): Event[] {
   for (const c of redCi()) if (keys.has(c.repo) && !fixOpen(c.repo)) events.push({ key: `ci:${c.repo}:${c.sinceSha}:${c.sha}`, kind: "red", repo: c.repo, line: ciLine(c) });
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      const ask = store.askOf(item);
+      const ask = itemAskOf(item);
       if (issues.status(item) !== "open" || !ask) continue;
       events.push(hand({ key: `ask:${repo.key}-${item.id}:${item.notes.length}`, kind: "ask", repo: repo.key, item: item.id, reason: ask.reason, line: `${repo.key}-${item.id} ${item.title} waits for Chris (${ask.reason}): ${ask.question || item.notes.at(-1) || ""}` }));
     }
@@ -178,7 +178,7 @@ function context(e: Event, jobs: Job[]): string {
 }
 
 export function prompt(events: Event[], jobs = allJobs()): string {
-  const handedReasons = Object.keys(readAlways()).filter((r) => handed(r));
+  const handedReasons = Object.keys(readAlways()).filter((r) => routeOf(r) === "firefighter");
   const handedRule = handedReasons.length
     ? `\n- Chris has handed these reasons to you: ${handedReasons.join(", ")}. Decide every event marked handed yourself: land, drop, answer, edit-goal or close, by the rules above (a handed spec-check event is handled with edit-goal: rewrite the spec with Goal, Edit surface and Oracle, and the spec check reads it before the next worker run); do not send it back to Chris.`
     : "";
@@ -233,10 +233,6 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
   return fork.ok ? securityChange(repo.path, fork.out, `refs/heads/${branch}`) : "unknown";
 }
 
-/** Whether an item's Ask is a product choice: it offers options to pick from (triage's `chris` verdict and the rescue write them). A plain question has none. */
-export const isProductChoice = (item: issues.Issue): boolean => (store.askOf(item)?.options.length ?? 0) > 0;
-
-
 /** How actions reach the factory; each returns the refusal, or null. Tests replace land and drop. */
 export interface Ports {
   land: (name: string) => Promise<string | null>;
@@ -286,8 +282,7 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       const sentence = held === "unknown"
         ? `${a.job} cannot be checked for held security paths, as its branch is gone, so it needs you to land or drop it.`
         : `${a.job} changes ${held}, a held security path, so it needs your review before it lands.`;
-      markAsked(last, sentence);
-      if (issue !== undefined) store.note(repo, issue, `asks Chris: ${sentence}`, { ask: plainAsk("held-path", sentence) });
+      askFromRun(last, repo, issue, plainAsk("held-path", sentence), sentence);
       await ports.tell(`${repo.key}/${a.job}: asks Chris: ${sentence}`);
       return { chris: sentence };
     }
@@ -330,13 +325,10 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
   if (a.do === "answer") {
-    const ask = store.askOf(item);
-    if (!ask) return { refused: `${describe(a)}: it has no Ask` };
-    // A question that offers options is a product choice: it is Chris's unless he handed its reason to the firefighter.
-    if (isProductChoice(item) && !handed(ask.reason)) return { refused: `${describe(a)}: its question is a product choice, which is Chris's` };
-    // A run that ended with a spec question waits for a spec edit (rescue.releaseEdited); clearing its Ask would leave the job open with no Ask and no run.
-    const waiting = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n && runAsked(lastReal(j)) && readFile(lastReal(j), "asked-spec") !== undefined);
-    if (waiting) return { refused: `${describe(a)}: the run ${waiting[0].run.name} asked about the spec and waits for a spec edit; use edit, or drop it` };
+    // A run that ended with a spec question waits for a spec edit (rescue.releaseEdited).
+    const waiting = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n && waitsForSpecEdit(lastReal(j)));
+    const no = may("firefighter", "answer", itemAskOf(item), waiting ? { waiting: waiting[0].run.name } : {});
+    if (no) return { refused: `${describe(a)}: ${no}` };
     const why = await refusal(async () => verbs.decide(repo, a.n, `firefighter decided: ${a.note}`, a.after ? { after: a.after } : {}));
     return why ? { refused: `${describe(a)}: ${why}` } : { applied: describe(a) };
   }
@@ -344,11 +336,8 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (list && store.partsOf(list, item).length) return { refused: `${describe(a)}: it has parts` };
   const why = await refusal(async () => verbs.edit(repo, a.n, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
   if (why) return { refused: `${describe(a)}: ${why}` };
-  // A spec-check hold is about the spec: once the firefighter has rewritten the spec, the Ask is answered. The goal's
-  // next first worker run checks the spec again, and holds again if it still lacks something.
-  // Only a body with all three sections answers it, and only when Chris handed spec-check to the firefighter;
-  // otherwise the Ask stays with Chris.
-  if (a.body !== undefined && store.askOf(item)?.reason === "spec-check" && handed("spec-check") && missingSections(a.body).length === 0) {
+  // A spec-check hold is about the spec: a rewritten spec can answer it; otherwise the Ask stays with Chris.
+  if (editAnswers(itemAskOf(item), a.body)) {
     const w = await refusal(async () => verbs.decide(repo, a.n, "firefighter edited the spec; the spec check runs again before the next worker run"));
     if (w) return { refused: `${describe(a)}: the spec is edited, but the spec-check Ask stays: ${w}` };
   }

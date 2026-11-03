@@ -17,7 +17,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as issues from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
-import { grant, readAlways, revoke } from "./lib/ask.ts";
+import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
 import { ciStep } from "./lib/ci.ts";
 import { behind, correctionsStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
@@ -214,7 +214,7 @@ async function todoCmd(): Promise<void> {
       const { item: i, hidden } = verbs.show(repo, id);
       if (json) { out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, hidden }); return; }
       console.log(`## ${i.id}. ${i.title}`);
-      const ask = store.askOf(i);
+      const ask = askOf(i);
       console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
       console.log(`after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);

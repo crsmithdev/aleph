@@ -8,11 +8,11 @@ import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSyn
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader, setAsk, writeList } from "../../todo/lib/store.ts";
+import { closeAndFile, file as fileIssues, note, noteFlake, readHidden, reader, writeList } from "../../todo/lib/store.ts";
 import { checkSpec } from "./spec-check.ts";
 import { addWorktree, fetchOrigin, git, jobCommit, NO_SUBMODULES } from "./git.ts";
 import { ALREADY_MET, heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
-import { needsOf, plainAsk } from "./ask.ts";
+import { needsOf, plainAsk, setAsk, type AskReason } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isBuild, isWorker, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, runsDir, tell, updateRun, type Check, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, notes, openJob, readFile } from "./job.ts";
@@ -271,7 +271,7 @@ type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" 
 /** A verdict that waits for Chris: the condition `awaiting` and the Ask. */
 /** The outcome of a factory run that the check runners stopped. */
 const stoppedByChecks = (why: ChecksStop, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, ...stopFields(why), ...extra }, code: 1 });
-const awaiting = (reason: string, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
+const awaiting = (reason: AskReason, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
   ({ condition: "awaiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
 
 export async function unit(folder: string): Promise<void> {
@@ -824,7 +824,7 @@ export async function reviewBack(folder: string): Promise<void> {
   const run = readRun(folder);
   const r2 = readCall(folder);
   if (!run || (!isBuild(run.kind) && run.kind !== "recheck") || !isAwaiting(run.condition)) return;
-  if (r2?.call === "land" && askOf(run)?.reason === "held-path" && existsSync(join(folder, "review.md")) && reviewVerdict(readFileSync(join(folder, "review.md"), "utf8"))?.pass) {
+  if (r2?.call === "land" && needsOf(askOf(run)) === "held" && existsSync(join(folder, "review.md")) && reviewVerdict(readFileSync(join(folder, "review.md"), "utf8"))?.pass) {
     updateRun(folder, { condition: "passed", ask: undefined, reason: undefined, cause: undefined });
     dispatchDetached();
     return;

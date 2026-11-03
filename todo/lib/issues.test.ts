@@ -6,6 +6,7 @@ import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import * as issueOps from "./issues.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
+import { askOf, setAsk } from "../../jobs/lib/ask.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -73,19 +74,19 @@ describe("issue verbs without argv", () => {
 
   test("decide needs an issue with an Ask, clears it and makes no goal", () => {
     const r = repo([{ title: "a" }, { title: "b" }]);
-    for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { store.setAsk(issues.find(doc, n)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
-    store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); store.setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
+    for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { setAsk(issues.find(doc, n)!, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
+    store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); setAsk(i, { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     expect(refusal(() => issueOps.decide(r, 99, "yes"))).toContain("has no issue");
     issueOps.decide(r, 2, "yes");
-    expect(store.askOf(item(r, 2))).toBeNull();
+    expect(askOf(item(r, 2))).toBeNull();
     issueOps.decide(r, 1, "yes");
-    expect(store.askOf(item(r, 1))).toBeNull();
+    expect(askOf(item(r, 1))).toBeNull();
     expect(item(r, 1).fm.ask).toBeUndefined();
     expect(item(r, 1).notes.at(-1)).toContain("yes");
     store.writeList(r, "x", (doc) => { issues.add(doc, "plain"); return true; });
     expect(refusal(() => issueOps.decide(r, 4, "yes"))).toContain("not waiting for a decision");
     issueOps.decide(r, 3, "wait");
-    expect(store.askOf(item(r, 3))).toBeNull();
+    expect(askOf(item(r, 3))).toBeNull();
   });
 
 });
