@@ -1,6 +1,7 @@
 /**
- * A fingerprint of a repo and every worktree it lists: HEAD, status, and a
- * hash of the diff. Two equal fingerprints mean the turn changed nothing.
+ * A fingerprint of a repo and every worktree it lists, except subagent
+ * worktrees under .claude/worktrees: HEAD, status, and a hash of the diff.
+ * Two equal fingerprints mean the turn changed nothing.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -16,7 +17,9 @@ function worktreesOf(cwd: string): string[] {
   if (!top) return [];
   const listed = git(top, "worktree", "list", "--porcelain") ?? "";
   const paths = listed.split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice("worktree ".length));
-  return paths.length ? paths : [top];
+  // A subagent's worktree under .claude/worktrees holds another agent's edits, not this turn's, unless cwd is in it.
+  const own = paths.filter((p) => p === top || !p.includes("/.claude/worktrees/"));
+  return own.length ? own : [top];
 }
 
 /** Hash of the bytes of every untracked, non-ignored file. A file that vanishes or cannot be read counts as missing. */

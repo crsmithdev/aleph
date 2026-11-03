@@ -39,6 +39,15 @@ describe("snapshot", () => {
     expect(s1).not.toBe(s0);
     expect(snapshot(w)).toBe(s1);
   });
+  test("leaves out a subagent's worktree under .claude/worktrees, except from inside it", () => {
+    const agent = join(root, ".claude", "worktrees", "agent-x");
+    run(root, "worktree", "add", "-q", agent, "-b", "worktree-agent-x");
+    const s0 = snapshot(root);
+    const inside0 = snapshot(agent);
+    writeFileSync(join(agent, "c.txt"), "c");
+    expect(snapshot(root)).toBe(s0);
+    expect(snapshot(agent)).not.toBe(inside0);
+  });
   test("is null outside a repo", () => {
     const plain = mkdtempSync(join(tmpdir(), "aleph-plain-"));
     expect(snapshot(plain)).toBeNull();
