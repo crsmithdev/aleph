@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { cloneAndSetup, runChecks, type CheckExec } from "./checks.ts";
+import { cloneAndSetup, keepGate, newCases, runChecks, type CheckExec, type Runner } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
 
@@ -106,6 +106,56 @@ test("the check prelude carries both NO_SUBMODULES lines", async () => {
   const { NO_SUBMODULES } = await import("./git.ts");
   const lines = cloneAndSetup([], "b", "r").split("\n");
   expect(lines.slice(1, 4)).toEqual(["git init -q .", ...NO_SUBMODULES]);
+});
+
+test("newCases: the names of the test and it cases on added lines only", () => {
+  const diff = `--- a/x.test.ts\n+++ b/x.test.ts\n+test("adds one", () => {});\n+  it.skip('skips', () => {});\n-test("gone", () => {});\n test("kept", () => {});\n+expect(submit("no")).toBe(1);\n`;
+  expect(newCases(diff)).toEqual(["adds one", "skips"]);
+});
+
+/**
+ * The keep-gate with a runner that runs the command in a plain folder: `code` maps a commit to the source of
+ * m.ts there, and `hidden` goes to `.hidden` as runOnCommit gives it. The test file is new on the head.
+ */
+async function gate(code: Record<string, string>, testText: string) {
+  const commands: string[] = [];
+  const runner: Runner = async (_repo, sha, command, hidden) => {
+    commands.push(`${sha}: ${command}`);
+    const dir = mkdtempSync(join(base, `${sha}-`));
+    writeFileSync(join(dir, "m.ts"), code[sha]);
+    if (sha === "head") { mkdirSync(join(dir, "lib")); writeFileSync(join(dir, "lib", "m.test.ts"), testText); }
+    if (hidden) { mkdirSync(join(dir, ".hidden")); for (const [n, t] of Object.entries(hidden)) writeFileSync(join(dir, ".hidden", n), t); }
+    const p = Bun.spawnSync(["bash", "-c", command], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+    return { code: p.exitCode ?? 1, output: p.stdout.toString() + p.stderr.toString() };
+  };
+  const tests = [{ path: "lib/m.test.ts", text: testText, names: ["new", "fixed"] }];
+  return { result: await keepGate({ key: "r" } as Repo, "base", "head", tests, runner), commands };
+}
+
+describe("the keep-gate", () => {
+  const testText = `import { expect, test } from "bun:test";\nimport { m } from "../m.ts";\ntest("old", () => expect(1).toBe(1));\ntest("new", () => expect(m()).toBe(2));\ntest("fixed", () => expect(typeof m).toBe("function"));\n`;
+
+  test("a new case that passes on the base sends the branch back with its name; the head's file runs on the base code", async () => {
+    const { result, commands } = await gate({ base: "export const m = () => 1;\n", head: "export const m = () => 2;\n" }, testText);
+    expect(result?.reason).toBe("keep-gate: 1 new test passes on the base commit: lib/m.test.ts > fixed");
+    expect(result?.log).toContain("- lib/m.test.ts > fixed\n");
+    expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
+  });
+
+  test("new cases that all fail on the base pass the gate", async () => {
+    const { result } = await gate({ base: "export const other = 1;\n", head: "export const m = () => 2;\n" }, testText);
+    expect(result).toBeNull();
+  });
+
+  test("a new case that fails on the head fails the gate after one rerun, and the base does not run", async () => {
+    const { result, commands } = await gate({ base: "export const m = () => 1;\n", head: "export const m = () => 3;\n" }, testText);
+    expect(result?.reason).toBe("keep-gate: the new tests fail on the head");
+    expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "head"]);
+  });
+
+  test("no new case runs nothing", async () => {
+    expect(await keepGate({ key: "r" } as Repo, "base", "head", [], async () => { throw new Error("ran"); })).toBeNull();
+  });
 });
 
 test("cloneAndSetup: the clone steps and the setup group with its log and exit code", () => {

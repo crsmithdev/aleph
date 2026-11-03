@@ -7,13 +7,14 @@ const run = (r: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "f
 const checked = { checkedBase: "b0", checkedTip: "t1" };
 
 /** Fake ports: each step passes unless given; `calls` names the steps that ran. */
-function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: string; security?: string; rule?: string; oracle?: string; reviews?: ReviewCall[] } = {}) {
+function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: string; kept?: string; security?: string; rule?: string; oracle?: string; reviews?: ReviewCall[] } = {}) {
   const calls: string[] = [];
   const reviews = [...(o.reviews ?? [{ reason: null }])];
   const p: VerdictPorts = {
     checks: async () => { calls.push("checks"); return { stop: o.stop ?? null, failed: o.failed }; },
     repeatedHidden: () => { calls.push("repeatedHidden"); return o.same ? { question: o.same } : null; },
     docClaims: () => { calls.push("docClaims"); return o.claims ?? null; },
+    keepGate: async () => { calls.push("keepGate"); return o.kept ?? null; },
     stat: () => " a.ts | 1 +",
     security: () => { calls.push("security"); return o.security ?? null; },
     heldRule: () => o.rule ?? null,
@@ -70,13 +71,21 @@ describe("checks", () => {
     expect((await workerVerdict(branch(), p)).outcome).toEqual({ condition: "stuck", cause: "check", checkName: "doc-claims", reason: "doc claims: x", failed: "doc-claims", round: 0 });
     expect(calls).toEqual(["checks", "docClaims"]);
   });
+
+  test("a keep-gate failure goes back as the check keep-gate, before a security path, the Oracle and the reviewer", async () => {
+    const reason = "keep-gate: 1 new test passes on the base commit: a.test.ts > adds";
+    const { p, calls } = ports({ kept: reason, security: "jobs/lib/sandbox.ts" });
+    expect((await workerVerdict(branch(), p)).outcome).toEqual({ condition: "stuck", cause: "check", checkName: "keep-gate", reason, failed: "keep-gate", round: 0 });
+    expect(calls).toEqual(["checks", "docClaims", "keepGate"]);
+    expect((await workerVerdict(branch({ earlier: two }), ports({ kept: reason }).p)).outcome.reason).toBe(`${reason} after 2 fix rounds`);
+  });
 });
 
 describe("after the checks", () => {
   test("a pass states the checked base and tip and the reviewer's costs", async () => {
     const { p, calls } = ports({ reviews: [{ reason: null, cost: 0.5 }] });
     expect(await workerVerdict(branch({ facts: { cost: 1 } }), p)).toEqual({ outcome: { condition: "passed", cost: 1.5, ...checked }, code: 0 });
-    expect(calls).toEqual(["checks", "docClaims", "security", "oracle", "review"]);
+    expect(calls).toEqual(["checks", "docClaims", "keepGate", "security", "oracle", "review"]);
   });
 
   test("a security path waits for Chris with no Oracle and no reviewer", async () => {

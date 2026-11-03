@@ -1,8 +1,8 @@
 /**
  * The worker verdict: the policy for a branch after its worker, and for the second review after it.
- * The steps go in this order: the checks (the hidden check last), the doc claims, a security path,
- * the Oracle, the reviewer (a reviewer with no verdict runs once more), and then the held rule. A
- * failure of a check, the Oracle or the reviewer goes back to the worker as a fix round while rounds
+ * The steps go in this order: the checks (the hidden check last), the doc claims, the keep-gate, a
+ * security path, the Oracle, the reviewer (a reviewer with no verdict runs once more), and then the
+ * held rule. A failure of a check, the keep-gate, the Oracle or the reviewer goes back to the worker as a fix round while rounds
  * are left. The ports run each step; unit.ts gives the git and sandbox ones. This module does no IO.
  */
 import { needsOf, plainAsk, type AskReason } from "./ask.ts";
@@ -25,6 +25,8 @@ export interface VerdictPorts {
   repeatedHidden(): { question: string } | null;
   /** Why the worker's final message makes a doc claim that its transcript does not back, else null. */
   docClaims(): string | null;
+  /** The keep-gate: why a new test case of the branch does not fail on its base or does not pass on its head, else null. */
+  keepGate(): Promise<string | null>;
   /** The diff stat, for an Ask. */
   stat(): string;
   /** The security path the diff changes, else null. */
@@ -103,6 +105,8 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   // After the checks, so a doc-claims failure leaves their runs and results as they were.
   const claims = p.docClaims();
   if (claims) return stopped({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(earlier, "doc-claims", claims, rounds) });
+  const kept = await p.keepGate();
+  if (kept) return stopped({ cause: "check", checkName: "keep-gate", reason: kept }, { ...facts, ...checkBack(earlier, "keep-gate", kept, rounds) });
   Object.assign(facts, b.checked);
 
   // A security path waits for Chris with no reviewer.

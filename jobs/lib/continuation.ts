@@ -18,6 +18,7 @@ import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
 import { askOf, isAgentRun, isBuild, onOf, runsDir, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { hiddenOf } from "./checks.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import { jobSpec, runFile } from "./run-files.ts";
 
@@ -64,7 +65,18 @@ served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--widt
 the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
 Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items.`;
 
-/** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
+/**
+ * The goal's checks for the brief: its test files stored on the issue, with how to run them, or "" when it has none.
+ * They stay on the issue and out of the repo. The sealed scenarios are not among them: only the reviewer sees those.
+ */
+function goalChecks(repo: Repo, run: Run): string {
+  const files = Object.entries(hiddenOf(repo, run) ?? {});
+  if (!files.length) return "";
+  const text = files.map(([name, body]) => `### .hidden/${name}\n\n\`\`\`\n${body.trimEnd()}\n\`\`\``).join("\n\n");
+  return `## The goal's checks\n\nThese test files are stored on the issue, not in the repo. The factory runs them after the repo's checks with \`${repo.hiddenRun}\`. To run them yourself, write each one at the path its heading gives and run that command. Never commit them: remove \`.hidden/\` before you end.\n\n${text}`;
+}
+
+/** The worker's brief: the fixed text, the spec, the goal's checks, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, folder: string, run: Run, repo: Repo): string {
   if (run.merge) {
     const land = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land" && e.id !== id).at(-1)?.run;
@@ -72,6 +84,8 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
   const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run, repo.main)), `## Spec\n\n${jobSpec(folder, run)}`];
+  const goal = goalChecks(repo, run);
+  if (goal) parts.push(goal);
   const runs = jobById(run.job) ?? [];
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
@@ -222,11 +236,11 @@ function hiddenFailures(folder: string): { name: string; failure: string }[] {
 
 /**
  * The fix-round note for a failed hidden check: the reason and the names of
- * the failing tests, read from hidden.log. Never the log, never the source.
+ * the failing tests, read from hidden.log. The tests' source is in the brief.
  */
 function hiddenNote(folder: string, run: Run): string {
   const names = hiddenFailures(folder).map((f) => f.name);
-  return `${run.reason}\n${names.length ? `\nThe failing tests:\n${names.map((n) => `- ${n}`).join("\n")}\n` : ""}\nThe tests are hidden: their source and log are not available. Fix the cause, run the tests, and commit.`;
+  return `${run.reason}\n${names.length ? `\nThe failing tests:\n${names.map((n) => `- ${n}`).join("\n")}\n` : ""}\nThe tests are under "The goal's checks" in this brief. Run them, fix the cause, and commit.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -236,8 +250,8 @@ function hiddenNote(folder: string, run: Run): string {
 export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed);
 
 /**
- * A sealed test that fails unchanged twice: the run before this one also failed the hidden check with the same
- * failing names. A third blind fix round would guess again, so the Ask names the tests and quotes their failures,
+ * A goal's check that fails unchanged twice: the run before this one also failed the hidden check with the same
+ * failing names. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
  * and Chris tells a wrong test from a wrong branch. Null when the failures differ or there is no run before.
  */
 export function repeatedHidden(folder: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
@@ -250,7 +264,7 @@ export function repeatedHidden(folder: string, earlier: { id: string; run: Run }
   const quoted = now.slice(0, 5).map((f) => `- ${f.name}${f.failure ? `\n${f.failure.split("\n").map((l) => `    ${l}`).join("\n")}` : ""}`).join("\n");
   return {
     names,
-    question: `The sealed test${names.length > 1 ? "s" : ""} failed the same way on two runs in a row, so no blind fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
+    question: `The goal's test${names.length > 1 ? "s" : ""} on the issue failed the same way on two runs in a row, so no third fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
   };
 }
 

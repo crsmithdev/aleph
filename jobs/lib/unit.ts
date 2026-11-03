@@ -22,7 +22,7 @@ import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallSeconds, workerToken } from "./sandbox.ts";
 import { oracleCommands } from "./acceptance.ts";
-import { HIDDEN_UNREADABLE, checksInSandbox, lastLines, runOnCommit, type Runner, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
+import { HIDDEN_UNREADABLE, checksInSandbox, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
@@ -389,7 +389,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const bundle = {
       bundle: "../in.bundle", refs: [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])],
-      setup: [prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`, ...repo.setup],
+      // The goal's checks that the worker writes to .hidden/ stay out of its commits.
+      setup: [prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`, "echo .hidden/ >> .git/info/exclude", ...repo.setup],
     };
     phase("worker");
     // Chrome stays outside the sandbox: the worker's shot requests are served here, through a bridge into its network namespace.
@@ -462,6 +463,13 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
     },
     repeatedHidden: () => repeatedHidden(folder, o.earlier ?? []),
     docClaims: () => o.result === undefined ? null : docClaims(folder, o.result),
+    keepGate: async () => {
+      phase("check keep-gate");
+      const head = git(repo.path, "rev-parse", tip).out;
+      const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), o.runner ?? runOnCommit);
+      if (kept) appendFileSync(runFile(folder, "checks.log"), `## keep-gate: exit 1\n${kept.log}\n\n`);
+      return kept?.reason ?? null;
+    },
     stat: () => git(repo.path, "diff", "--stat", base, tip).out,
     security: () => securityChange(repo.path, base, tip),
     heldRule: () => heldRule(repo.path, repo.held, base, tip),
@@ -573,6 +581,10 @@ of your own, each ending in well under a minute. ${FOREGROUND}
 
 Check the whole branch before you give a verdict; do not stop at the first defect.
 Check each Oracle clause of the spec, each requirement in the Goal section, and each sealed scenario if there are any.
+The Oracle is a check stored on the issue, so the goal does not need a new committed test. A committed test
+needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting
+behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new
+command wiring. Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
 Write the verdict first, in one sentence. Then write one line for each failure only, each with its reason:
 \`CHECK: fail <clause>: <what was observed>\`. Do not write a CHECK line for a pass: give the passes as a count, such as \`7 of 9 passed\`. A sealed scenario is marked by its number only
 (\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Say each thing once.

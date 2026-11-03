@@ -44,12 +44,11 @@ describe("a factory run's checks", () => {
       expect(rs[0].checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
       expect(file(rs[0].id, "hidden.log")).toContain("SECRET-HIDDEN-LINE");
       expect(file(rs[0].id, "checks.log")).not.toContain("SECRET-HIDDEN-LINE");
-      expect(file(rs[0].id, "prompt.md")).not.toContain("SECRET-HIDDEN-LINE");
+      expect(file(rs[0].id, "prompt.md")).toContain("### .hidden/a.test.ts\n\n```\nimport { expect, test }");
       const p = readFileSync(join(fakeLog, "prompt"), "utf8");
       expect(p).toContain("hidden check failed: 1 of 1 tests");
       expect(p).toContain("hid file exists");
-      expect(p).not.toContain("SECRET-HIDDEN-LINE");
-      expect(p).not.toContain("expect(existsSync");
+      expect(p).toContain("expect(existsSync");
       // The run's own checks ran the hidden check; main had not moved, so the land skipped them.
       expect(rs[1].checks.map((c: any) => c.name)).toEqual(["tests", "tree", "hidden"]);
       expect(rs[1].checks.at(-1)).toMatchObject({ ok: true, passed: 1, total: 1 });

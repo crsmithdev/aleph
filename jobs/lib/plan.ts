@@ -134,7 +134,7 @@ Each "title" is a grammatically correct phrase or sentence of at most 60 charact
   ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)
 
-The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`), or a test file that asserts the end state. There is no \`aleph check\` command: never name one. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`.
+The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. There is no \`aleph check\` command: never name one. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`.
 
 "waits_on" lists the earlier children (by their place in the list, the first is 1) that must land first, because they change the same files or this child builds on them. Children that wait on nothing run at once, side by side, so give a wait whenever two children share a file.
 `;

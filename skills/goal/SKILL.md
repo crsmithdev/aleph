@@ -37,9 +37,14 @@ reasonable check.
 - **Edit surface**: the files or folders the run may change.
 - **Oracle**: acceptance runs only commands in backticks that start with
   `bun test`, `bun run` or `bunx tsc`; any other Oracle is skipped on `main`.
-  So name one of those when the repo can. The check proves the end state, and
-  the worker cannot edit it: a new test that asserts the end state, a command whose output proves it, or a
-  value with its source URL. The factory runs the repo's checks from
+  So name one of those when the repo can. The check proves the end state. It
+  is stored on the issue, and the worker sees it and can run it: a command
+  whose output proves it, a test file stored with `aleph issue hidden <repo>
+  <n> <file>` (the factory runs it after the repo's checks), or a value with
+  its source URL. The Oracle does not ask for a new committed test. A
+  committed test needs a lasting reason: a bug fix gets one regression test at
+  the lowest layer; new lasting module behaviour gets a row in the module's
+  existing test file; a CLI end-to-end test is only for new command wiring. The factory runs the repo's checks from
   `~/.aleph/repos.json` after every run, so an oracle names only real
   commands, for example `bun test <file>`, never a command that does not
   exist, such as `aleph check`. Acceptance does not run an Oracle command with a

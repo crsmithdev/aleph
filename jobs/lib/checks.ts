@@ -4,7 +4,7 @@
  * log and the flake record. The caller gives what runs one check.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { recordFlake } from "./factory-status.ts";
 import { checkSlot, onOf, type Check, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { SCENARIOS } from "./author.ts";
@@ -203,6 +203,59 @@ export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
     removeRunFolder(dir);
   }
 };
+
+/** A test file that a branch adds or changes with new cases: its path, its text on the head and the names of its new cases. */
+export interface NewTests { path: string; text: string; names: string[] }
+
+const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
+
+/** The names of the `test(` and `it(` cases that the added lines of a diff open. */
+export const newCases = (diff: string): string[] =>
+  [...diff.matchAll(/^\+(?!\+\+).*?\b(?:test|it)(?:\.\w+)*\(\s*(["'`])(.+?)\1/gm)].map((m) => m[2]);
+
+/** The test files that the diff from `base` to `tip` adds or changes with a new case. */
+export function newTests(cwd: string, base: string, tip: string): NewTests[] {
+  const files = git(cwd, "diff", "--name-only", "--diff-filter=AM", base, tip).out.split("\n").filter((f) => TEST_FILE.test(f));
+  return files.flatMap((path) => {
+    const names = newCases(git(cwd, "diff", base, tip, "--", path).out);
+    return names.length ? [{ path, text: git(cwd, "show", `${tip}:${path}`).out + "\n", names }] : [];
+  });
+}
+
+const unxml = (s: string) => s.replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#10;/g, "\n").replace(/&amp;/g, "&");
+
+/** The cases that passed in bun's junit report: a `testcase` with no child element. */
+export const junitPassed = (xml: string): { file: string; name: string }[] =>
+  [...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"[^>]*\/>/g)].map((m) => ({ file: unxml(m[2]), name: unxml(m[1]) }));
+
+/** Where the keep-gate's command writes its junit report, in the clone. */
+const REPORT = ".keep-gate.xml";
+
+/**
+ * The keep-gate: each new case of `tests` must pass on `tip` and fail on `base`. The head's text of each file
+ * runs against the base code, so a file that is new on the head runs there too. Returns the reason and the
+ * lines for checks.log, or null. A sandbox fault is not a failure.
+ */
+export async function keepGate(repo: Repo, base: string, tip: string, tests: NewTests[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string } | null> {
+  if (!tests.length) return null;
+  const test = `bun test --reporter=junit --reporter-outfile=${REPORT} ${tests.map((t) => q(`./${t.path}`)).join(" ")}; c=$?; cat ${REPORT}; exit $c`;
+  let head = await runner(repo, tip, test);
+  if (!head.infra && head.code !== 0) head = await runner(repo, tip, test);
+  if (head.infra) return null;
+  if (head.code !== 0) return { reason: "keep-gate: the new tests fail on the head", log: `The new tests fail on the head commit:\n${lastLines(head.output.split("<?xml")[0], 40).replaceAll(" ⏎ ", "\n")}` };
+  // The head's files reach the base clone in `.hidden`, by index, as runOnCommit gives hidden files.
+  const files = Object.fromEntries(tests.map((t, i) => [String(i), t.text]));
+  const copy = tests.map((t, i) => `mkdir -p ${q(dirname(t.path))} && cp .hidden/${i} ${q(t.path)}`).join(" && ");
+  const onBase = await runner(repo, base, `${copy} && { ${test}; }`, files);
+  if (onBase.infra) return null;
+  const fresh = new Set(tests.flatMap((t) => t.names));
+  const passed = junitPassed(onBase.output).filter((c) => fresh.has(c.name)).map((c) => `${c.file} > ${c.name}`);
+  if (!passed.length) return null;
+  return {
+    reason: `keep-gate: ${passed.length} new test${passed.length > 1 ? "s pass" : " passes"} on the base commit: ${passed.join("; ")}`,
+    log: `These new tests pass on the base commit ${base.slice(0, 10)}, without the branch's change, so they do not test it:\n${passed.map((p) => `- ${p}`).join("\n")}\nMake each one fail without the change, or remove it: a committed test needs a lasting reason.`,
+  };
+}
 
 /** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else the stop (`infra` when they could not run). For the factory's baseline. */
 export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<ChecksStop | null> {
