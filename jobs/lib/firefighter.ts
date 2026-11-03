@@ -177,7 +177,7 @@ function context(e: Event, jobs: Job[]): string {
 export function prompt(events: Event[], jobs = allJobs()): string {
   const handedReasons = Object.keys(readAlways()).filter((r) => handed(r));
   const handedRule = handedReasons.length
-    ? `\n- Chris has handed these reasons to you: ${handedReasons.join(", ")}. Decide every event marked handed yourself: land, drop, answer, edit-goal or close, by the rules above; do not send it back to Chris.`
+    ? `\n- Chris has handed these reasons to you: ${handedReasons.join(", ")}. Decide every event marked handed yourself: land, drop, answer, edit-goal or close, by the rules above (a handed spec-check event is handled with edit-goal: rewrite the spec with Goal, Edit surface and Oracle, and the spec check reads it before the next worker run); do not send it back to Chris.`
     : "";
   const red = events.some((e) => e.kind === "red");
   return `You are the factory's firefighter. You read what went wrong and say what to do; the code does it. You have read-only tools (Read, Grep, Glob, and Bash for \`aleph jobs\`, \`aleph issue show|list\`, \`aleph report\`, \`git log|show|diff\`). Change nothing yourself.
@@ -343,8 +343,9 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   if (why) return { refused: `${describe(a)}: ${why}` };
   // A spec-check hold is about the spec: once the firefighter has rewritten the spec, the Ask is answered. The goal's
   // next first worker run checks the spec again, and holds again if it still lacks something.
-  // Only a body with all three sections answers it; otherwise the Ask stays with Chris.
-  if (a.body !== undefined && store.askOf(item)?.reason === "spec-check" && specMissing(a.body).length === 0) {
+  // Only a body with all three sections answers it, and only when Chris handed spec-check to the firefighter;
+  // otherwise the Ask stays with Chris.
+  if (a.body !== undefined && store.askOf(item)?.reason === "spec-check" && handed("spec-check") && specMissing(a.body).length === 0) {
     const w = await refusal(async () => verbs.decide(repo, a.n, "firefighter edited the spec; the spec check runs again before the next worker run"));
     if (w) return { refused: `${describe(a)}: the spec is edited, but the spec-check Ask stays: ${w}` };
   }

@@ -167,7 +167,7 @@ describe("asks", () => {
     expect(it.actions.map((a) => a.act)).toEqual(["rerun", "close"]);
     expect(it.actions[0].label).toBe("Run it again");
     expect(it.actions[0].hint).toBe("Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first.");
-    expect(it.always).toBeUndefined();
+    expect(it.always).toMatchObject({ action: "firefighter" });
   });
 
   test("a goal's ask names the issue and goal in its action args", () => {

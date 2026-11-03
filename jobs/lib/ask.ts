@@ -56,7 +56,7 @@ export const ASK_REASONS: Record<string, Reason> = {
   "part-dropped": { kind: "input", actions: ["rerun", "close"], always: "" },
   "triage-failed": { kind: "input", actions: ["retry", "close"], always: "retry" },
   "host-check": { kind: "input", actions: ["checked", "deny"], always: "" },
-  "spec-check": { kind: "input", actions: ["rerun", "close"], always: "" },
+  "spec-check": { kind: "input", actions: ["rerun", "close"], always: "firefighter" },
   "rescue": { kind: "input", actions: ["decide", "drop"], always: "recommended" },
   // Not Ask reasons of the spec; no new home is named for them.
   "run-cap": { kind: "input", actions: ["rerun", "close"], always: "firefighter" },
