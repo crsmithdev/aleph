@@ -89,12 +89,4 @@ describe("the writers of the new shape", () => {
     expect((await aleph(["issue", "list", "fac", "--label", "audio", "--json"])).json.map((i: any) => i.id)).toEqual([r.json.added]);
     await aleph(["issue", "drop", "fac", String(r.json.added), "test over"]);
   });
-
-  test("--waiting-on is refused on add and edit", async () => {
-    for (const args of [["add", "fac", "w", "--waiting-on", "fac-1"], ["edit", "fac", "1", "--waiting-on", "none"]]) {
-      const r = await aleph(["issue", ...args]);
-      expect(r.code).toBe(1);
-      expect(r.stderr).toContain("--waiting-on");
-    }
-  });
 });

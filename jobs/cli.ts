@@ -47,7 +47,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--request", "--model", "--todo", "--on", "--priority", "--labels", "--status", "--label", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate"];
+const VALUED = ["--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate"];
 const FATES: Fate[] = ["duplicate", "already-met", "by-hand"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
@@ -66,7 +66,6 @@ async function job(): Promise<void> {
   const specArg = flag("spec") ?? refuse("--spec <file|-> is required");
   const [repo, name] = positional;
   const spec = specArg === "-" ? await Bun.stdin.text() : readFileSync(specArg, "utf8");
-  if (rest.includes("--todo")) refuse("--todo is gone: use --on <n>|<n>.<k>|<repo>-<n>[.<k>]");
   const onArg = flag("on");
   await started(await startJob({ repo, name, spec, on: onArg, model: flag("model"), land: rest.includes("--land") }, { command }));
 }
@@ -169,10 +168,7 @@ async function todoCmd(): Promise<void> {
   const label = flag("label");
   // `--request -` or `--spec -` reads that part from stdin: it is prose of several lines.
   const requestArg = flag("request"), specArg = flag("spec");
-  if (rest.includes("--body")) refuse("--body is gone: name the part, --request or --spec");
-  if (rest.includes("--goal")) refuse("--goal is gone: --spec - files the spec on the issue");
   const labelsArg = flag("labels");
-  if (rest.includes("--waiting-on")) refuse("--waiting-on is gone: an issue waits with --after <id>");
   const afterArg = flag("after");
   const fields: verbs.Fields = {
     title: flag("title"),

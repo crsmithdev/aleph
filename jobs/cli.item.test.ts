@@ -38,17 +38,13 @@ describe("a job tied to a to-do item", () => {
     expect(readdirSync(jobsDir).length).toBe(before);
   });
 
-  test("a run writes kind build and on, never todo; --todo is refused and starts nothing", async () => {
+  test("a run writes kind build and on, never todo", async () => {
     const id = await add("demo", "shape check", { spec: "ACTION: commit shape.txt" });
     const j = await aleph(["job", "demo", "shape", "--spec", specFile("Goal: shape\nACTION: commit shape.txt\n"), "--on", `demo-${id}`]);
     const s = state(j.json.run);
     expect(s).toMatchObject({ kind: "build", on: `demo-${id}` });
     expect(s.todo).toBeUndefined();
     await aleph(["drop", "shape"]);
-    const before = readdirSync(jobsDir).length;
-    const r = await aleph(["job", "demo", "shape2", "--spec", specFile("x"), "--todo", String(id)]);
-    expect(r.code).toBe(1);
-    expect(readdirSync(jobsDir).length).toBe(before);
   });
 
   test("--on takes the repo-prefixed form, and refuses another repo's prefix", async () => {
