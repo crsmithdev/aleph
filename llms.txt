@@ -1,0 +1,27 @@
+# aleph
+
+> A personal Claude Code plugin: skills for planning, design, testing, writing and memory; hooks that trace every turn to Langfuse, guard main and judge whether a turn verified what it claims; an Obsidian memory vault; an issue store; and a factory that builds issues in a sandbox and lands them on main. It runs on Bun.
+
+The `aleph` CLI (jobs/cli.ts) is the entry point for issues and the factory. `aleph-ui` (ui/server.ts) serves the web UI. `bun vault/cli.ts` runs the vault. Write issues only through `aleph issue`, and vault notes only through `vault/cli.ts write`.
+
+## Documentation
+
+- [README](https://github.com/crsmithdev/aleph/blob/main/README.md): Install, quick start, the skills and hooks, and the repo layout
+- [Factory](https://github.com/crsmithdev/aleph/blob/main/docs/factory.md): Commands, how an issue becomes a commit, gates, Asks and settings
+- [Factory tasks](https://github.com/crsmithdev/aleph/blob/main/docs/factory-tasks.md): Each factory task, its trigger and what stops duplicate work
+- [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The work store, issues and goals, the `aleph issue` commands and fields
+- [Vault](https://github.com/crsmithdev/aleph/blob/main/docs/vault.md): The memory vault, its commands and its note format
+- [UI](https://github.com/crsmithdev/aleph/blob/main/docs/ui.md): Run aleph-ui, log in, and add a page
+- [Langfuse](https://github.com/crsmithdev/aleph/blob/main/docs/langfuse.md): Set up tracing, and what a trace holds
+
+## Decision records
+
+- [Verify gate](https://github.com/crsmithdev/aleph/blob/main/docs/verify-gate.md): Why and how the Stop hook judges claims of completion
+- [Context gate](https://github.com/crsmithdev/aleph/blob/main/docs/context-gate.md): Why and how the Stop hook warns on context fill and asks for a handoff
+
+## Optional
+
+- [Start at boot](https://github.com/crsmithdev/aleph/blob/main/docs/start-at-boot.md): Start WSL, the UI and the tick after a Windows restart
+- [Langfuse compose](https://github.com/crsmithdev/aleph/blob/main/compose/README.md): Docker inside WSL2 and Langfuse API checks
+- [Specs](https://github.com/crsmithdev/aleph/tree/main/docs/specs): Design specs, one per feature
+- [Findings](https://github.com/crsmithdev/aleph/tree/main/docs/findings): Investigations of flakes and bugs
