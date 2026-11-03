@@ -17,6 +17,7 @@ import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile, type Job } from "./job.ts";
 import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
 import { git } from "./git.ts";
+import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
 import { writeRerun } from "./continuation.ts";
 import { factoryDir, factoryRepos, redBaselines } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -28,6 +29,16 @@ import { always, askFromRun, askOf as itemAskOf, editAnswers, logAlways, may, pl
 export const FIREFIGHTER_MODEL = "claude-opus-5-5";
 /** The most actions one run may take; the rest are refused. */
 export const MAX_ACTIONS = 10;
+/**
+ * How many times the firefighter may edit one goal's spec; the goal's next spec-check Ask then goes to Chris, not handed.
+ * Each spec check starts a build run, so N edits mean N+1 starts; N+1 must not pass MAX_RUNS_PER_HOUR, or run-cap ends the loop first.
+ */
+export const MAX_SPEC_EDITS = MAX_RUNS_PER_HOUR - 1;
+const SPEC_EDIT_NOTE = "firefighter: edited the spec";
+/** The firefighter's spec edits of this goal so far, counted from its notes. */
+const specEditsOf = (item: issues.Issue): number => item.notes.filter((n) => n.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").startsWith(SPEC_EDIT_NOTE)).length;
+/** Whether the spec-check Ask of this goal is the firefighter's: Chris handed the reason and the edit cap is not spent. */
+const specCheckHanded = (item: issues.Issue): boolean => specEditsOf(item) < MAX_SPEC_EDITS;
 /** A goal with more than LOOP_RUNS agent runs started in LOOP_MS loops. */
 const LOOP_RUNS = 3;
 const LOOP_MS = 30 * 60_000;
@@ -83,7 +94,8 @@ export function snapshot(now = Date.now()): Event[] {
     for (const item of lists.list(repo.key)?.items ?? []) {
       const ask = itemAskOf(item);
       if (issues.status(item) !== "open" || !ask) continue;
-      events.push(hand({ key: `ask:${repo.key}-${item.id}:${item.notes.length}`, kind: "ask", repo: repo.key, item: item.id, reason: ask.reason, line: `${repo.key}-${item.id} ${item.title} waits for Chris (${ask.reason}): ${ask.question || item.notes.at(-1) || ""}` }));
+      const ev: Event = { key: `ask:${repo.key}-${item.id}:${item.notes.length}`, kind: "ask", repo: repo.key, item: item.id, reason: ask.reason, line: `${repo.key}-${item.id} ${item.title} waits for Chris (${ask.reason}): ${ask.question || item.notes.at(-1) || ""}` };
+      events.push(ask.reason === "spec-check" && !specCheckHanded(item) ? ev : hand(ev));
     }
   }
   return events;
@@ -337,7 +349,8 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   const why = await refusal(async () => verbs.edit(repo, a.n, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
   if (why) return { refused: `${describe(a)}: ${why}` };
   // A spec-check hold is about the spec: a rewritten spec can answer it; otherwise the Ask stays with Chris.
-  if (editAnswers(itemAskOf(item), a.body)) {
+  if (a.body !== undefined) store.note(repo, a.n, `${SPEC_EDIT_NOTE} (${specEditsOf(item) + 1} of ${MAX_SPEC_EDITS})`);
+  if (specCheckHanded(item) && editAnswers(itemAskOf(item), a.body)) {
     const w = await refusal(async () => verbs.decide(repo, a.n, "firefighter edited the spec; the spec check runs again before the next worker run"));
     if (w) return { refused: `${describe(a)}: the spec is edited, but the spec-check Ask stays: ${w}` };
   }

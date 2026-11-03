@@ -9,9 +9,11 @@ import { areasOf, readList, writeList } from "../../todo/lib/store.ts";
 import type { Ask } from "./ask.ts";
 import { firefighterStep } from "./factory.ts";
 import { layout } from "./layout.ts";
-import { applyActions, defaultPorts, firefight, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
+import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
+import { MAX_SPEC_EDITS, applyActions, defaultPorts, firefight, parseReply, prompt, snapshot, type Ports } from "./firefighter.ts";
 import { readRun, stamp, writeRun, type Run } from "./ledger.ts";
-import { askOf, setAsk } from "./ask.ts";
+import { askOf, plainAsk, setAsk } from "./ask.ts";
+import { checkSpec } from "./spec-check.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -621,4 +623,49 @@ test("a firefighter edit that still lacks Goal, Edit surface or Oracle keeps the
   fresh([{ title: "goal", body: "Ship the thing.\n", goal: true, ask: { ...plain(), reason: "spec-check" } }]);
   await applyActions([{ do: "edit-goal", repo: key, n: 1, body: "## Goal\nShip.\n## Oracle\nIt ships.\n" }], ports());
   expect(asked(1)?.reason).toBe("spec-check");
+});
+
+test("a spec check that always holds is edited by the firefighter at most MAX_SPEC_EDITS times; the next Ask goes to Chris", async () => {
+  fresh([{ title: "goal", body: "Ship the thing.\n", goal: true }]);
+  alwaysFile({ "spec-check": FIREFIGHTER });
+  sh(repoPath(), "git", "update-ref", "refs/remotes/origin/main", "HEAD");
+  const bin = join(base, "holds.sh");
+  const line = JSON.stringify({ type: "result", subtype: "success", result: "VERDICT: hold \"the oracle\": name a test", total_cost_usd: 0 });
+  writeFileSync(bin, `#!/bin/sh\ncat > /dev/null\nprintf '%s\\n' '${line}'\n`);
+  chmodSync(bin, 0o755);
+  const old = process.env.ALEPH_SPECCHECK_CMD;
+  process.env.ALEPH_SPECCHECK_CMD = bin;
+  try {
+    let edits = 0;
+    for (let turn = 1; turn <= MAX_SPEC_EDITS + 3; turn++) {
+      const c = await checkSpec({ key, path: repoPath(), main: "main" } as any, 1);
+      expect(c.verdict).toBe("hold");
+      // As unit.ts does on a hold.
+      writeList({ key }, "spec check held", (doc) => {
+        const it = issues.find(doc, 1)!;
+        setAsk(it, plainAsk("spec-check", c.problems ?? ""));
+        return issues.note(it, `asks Chris: ${c.problems}`);
+      });
+      const ev = snapshot().find((x) => x.kind === "ask")!;
+      if (edits >= MAX_SPEC_EDITS) {
+        expect(ev.handed).toBeUndefined();
+        expect(ev.line).not.toContain("(handed to you by Chris)");
+        break;
+      }
+      expect(ev.handed).toBe(true);
+      const r = await applyActions([{ do: "edit-goal", repo: key, n: 1, body: `## Goal\nShip ${turn}.\n## Edit surface\na.ts\n## Oracle\nIt ships.\n` }], ports());
+      expect(r.refused).toEqual([]);
+      edits++;
+    }
+    expect(edits).toBe(MAX_SPEC_EDITS);
+    // The loop reaches Chris within the run-cap: one build start per check, edits + the last check.
+    expect(MAX_SPEC_EDITS + 1).toBeLessThanOrEqual(MAX_RUNS_PER_HOUR);
+    expect(asked(1)?.reason).toBe("spec-check");
+    expect(asked(1)?.question).toBe('"the oracle": name a test');
+    // A further edit no longer answers the Ask.
+    await applyActions([{ do: "edit-goal", repo: key, n: 1, body: "## Goal\nShip x.\n## Edit surface\na.ts\n## Oracle\nIt ships.\n" }], ports());
+    expect(asked(1)?.reason).toBe("spec-check");
+  } finally {
+    if (old === undefined) delete process.env.ALEPH_SPECCHECK_CMD; else process.env.ALEPH_SPECCHECK_CMD = old;
+  }
 });
