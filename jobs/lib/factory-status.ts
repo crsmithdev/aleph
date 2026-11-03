@@ -4,7 +4,7 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { flakeTracker, reader, type Reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -13,7 +13,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { allJobs, isOpen, lastReal, openJob, type Job } from "./job.ts";
 import { asked } from "./ask.ts";
 import { layout } from "./layout.ts";
-import { allRuns, isAwaiting, isWorker, isLive, isStarting, loadRegistry, onOf, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, isAwaiting, isWorker, isLive, isStarting, loadRegistry, lock, onOf, type Entry, type Repo } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { AWAITING_CAP, DAY_CAP, LIVE_CAP } from "./settings.ts";
@@ -201,6 +201,28 @@ export const baselineFile = () => join(factoryDir(), "baseline.json");
 export const baselines = (): Record<string, Baseline> => {
   try { return JSON.parse(readFileSync(baselineFile(), "utf8")); } catch { return {}; }
 };
+
+/**
+ * The one write of baseline.json. Under one lock for the whole file, it reads the entries, lets `decide` turn the
+ * repo's old entry into its new one (null leaves the file alone), and writes a temp file that it renames over
+ * baseline.json, so a reader never sees a half-written file. Returns whether it wrote.
+ */
+export async function writeBaseline(key: string, decide: (old: Baseline | undefined) => Baseline | null): Promise<boolean> {
+  const release = await lock("baseline-file");
+  if (!release) throw new Error("baseline.json lock busy");
+  try {
+    const all = baselines();
+    const next = decide(all[key]);
+    if (!next) return false;
+    mkdirSync(factoryDir(), { recursive: true });
+    const tmp = `${baselineFile()}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ ...all, [key]: next }, null, 2) + "\n");
+    renameSync(tmp, baselineFile());
+    return true;
+  } finally {
+    release();
+  }
+}
 
 /** The baselines that are red now, one per repo. */
 export const redBaselines = (): Baseline[] => Object.values(baselines()).filter((b) => !b.ok);

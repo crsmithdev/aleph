@@ -5,7 +5,7 @@
  * The repo's checks and the start of more land runs reach this module through
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { closeAndFile } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git, jobCommit } from "./git.ts";
@@ -19,7 +19,7 @@ import { itemOnMain } from "./status.ts";
 import { RELANDS, TODO_PATH } from "./continuation.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
-import { baselineFile, baselines, factoryDir } from "./factory-status.ts";
+import { writeBaseline } from "./factory-status.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
 export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
@@ -284,16 +284,17 @@ async function check(ctx: Attempt, items: Pending[], base: string): Promise<Chec
  * Write `commit` to baseline.json as green, the way the factory's baseline does, so the next dispatch does not run
  * the checks on it again. Never replaces the entry of a commit that is not an ancestor of `commit`.
  */
-async function recordGreen(repo: Repo, commit: string, log: (step: string, out?: string) => void): Promise<void> {
+export async function recordGreen(repo: Repo, commit: string, log: (step: string, out?: string) => void): Promise<void> {
   try {
     const release = await lock(`baseline-${repo.key}`, 60_000);
     if (!release) { log("baseline not recorded: lock busy"); return; }
     try {
-      const old = baselines()[repo.key];
-      if (old && old.commit !== commit && git(repo.path, "cat-file", "-e", `${old.commit}^{commit}`).ok
-        && !git(repo.path, "merge-base", "--is-ancestor", old.commit, commit).ok) { log("baseline not recorded: newer entry"); return; }
-      mkdirSync(factoryDir(), { recursive: true });
-      writeFileSync(baselineFile(), JSON.stringify({ ...baselines(), [repo.key]: { repo: repo.key, commit, ok: true } }, null, 2) + "\n");
+      const wrote = await writeBaseline(repo.key, (old) => {
+        if (old && old.commit !== commit && git(repo.path, "cat-file", "-e", `${old.commit}^{commit}`).ok
+          && !git(repo.path, "merge-base", "--is-ancestor", old.commit, commit).ok) return null;
+        return { repo: repo.key, commit, ok: true };
+      });
+      if (!wrote) { log("baseline not recorded: newer entry"); return; }
       log(`baseline green: ${commit}`);
     } finally {
       release();

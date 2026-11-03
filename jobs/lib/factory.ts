@@ -35,7 +35,7 @@ import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
 import { isResearch } from "./research.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
-import { baselineFile, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, readStalls, recordHold, redLine, runsToday, spentToday, stallFile } from "./factory-status.ts";
+import { writeBaseline, capFile, goalFacts, issueJob, streakFile, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, pauseFile, readStalls, recordHold, redLine, runsToday, spentToday, stallFile } from "./factory-status.ts";
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
@@ -456,7 +456,7 @@ export type Baseline = { state: "green" } | { state: "red" | "unchecked" | "runn
  * taken starts nothing. Only a failed check is recorded: an error that kept
  * the checks from running is reported but tried again by the next dispatch.
  */
-async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<string | null>): Promise<Baseline> {
+export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<string | null>): Promise<Baseline> {
   const unchecked = (line: string): Baseline => ({ state: "unchecked", line });
   if (!fetchOrigin(repo.path).ok) return unchecked("main is unchecked: fetch failed");
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
@@ -474,8 +474,8 @@ async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: s
         const read = why ? readBaseline(why) : null;
         if (why && read?.infra) return unchecked(`main is unchecked: ${why}`);
         b = { repo: repo.key, commit, ok: !why, ...(read && !read.infra ? { failed: read.failed } : {}) };
-        mkdirSync(factoryDir(), { recursive: true });
-        writeFileSync(baselineFile(), JSON.stringify({ ...baselines(), [repo.key]: b }, null, 2) + "\n");
+        const entry = b;
+        await writeBaseline(repo.key, () => entry);
       }
     } finally {
       release();
