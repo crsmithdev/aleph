@@ -12,7 +12,7 @@ import { readHidden } from "../../todo/lib/store.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
-import { gitPrelude } from "./agent-call.ts";
+import { gitPrelude, q } from "./agent-call.ts";
 import { git } from "./git.ts";
 import { runFile } from "./run-files.ts";
 
@@ -109,13 +109,22 @@ export const runChecks = (t: CheckTask, exec: CheckExec): Promise<ChecksStop | n
 
 /**
  * The script lines that make a fresh clone of `ref` from `bundle` (a path relative to the run folder) and run
- * the repo's setup commands; `after` is the text that follows the setup group, e.g. its redirect.
+ * the repo's setup commands. The setup's output goes to checklog/setup.log and its exit code to checklog/setup.code.
  */
-export function cloneAndSetup(setup: string[], bundle: string, ref: string, after: string): string {
+export function cloneAndSetup(setup: string[], bundle: string, ref: string): string {
   return [
     "set -e", ...gitPrelude(`../${bundle}`, [`+${ref}:refs/heads/check`]), "git switch -q check", "set +e",
-    `{ ${setup.map((c) => `${c} && `).join("")}true; } ${after}`,
+    `{ ${setup.map((c) => `${c} && `).join("")}true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code`,
   ].join("\n");
+}
+
+type Step = Omit<Parameters<typeof sandboxed>[2], "read" | "write">;
+
+/** The setup step in `dir/check`: the setup's exit code as text, or null when the step did not get that far. `code` is the sandbox's own exit code. */
+async function setupStep(dir: string, setup: string[], bundle: string, ref: string, step: Step): Promise<{ setup: string | null; code: number }> {
+  const r = await sandboxed(dir, cloneAndSetup(setup, bundle, ref), { ...step, read: [bundle], write: ["check", "checklog", "home", "tmp"] });
+  const code = join(dir, "checklog", "setup.code");
+  return { setup: existsSync(code) ? readFileSync(code, "utf8").trim() : null, code: r.code };
 }
 
 /**
@@ -125,26 +134,75 @@ export function cloneAndSetup(setup: string[], bundle: string, ref: string, afte
  * checklog/.
  */
 export async function checksInSandbox(t: CheckTask, dir: string, bundle: string, ref: string, hiddenFiles: Record<string, string> = {}): Promise<ChecksStop | null> {
-  const script = cloneAndSetup(t.repo.setup, bundle, ref, "> ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code");
   const noise = join(t.folder, "check.out");
   const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, onSpawn: t.onSpawn };
   t.phase("check setup");
-  const r = await withSlot(() => sandboxed(dir, script, { ...step, read: [bundle], write: ["check", "checklog", "home", "tmp"], stdout: noise, stderr: noise }));
-  const code = join(dir, "checklog", "setup.code");
-  if (!existsSync(code)) return { cause: "other", reason: `checks did not start (exit ${r.code})` };
-  const setup = readFileSync(code, "utf8").trim();
-  if (setup !== "0") {
-    appendFileSync(runFile(t.folder, "checks.log"), `## setup: exit ${setup}\n${tail(join(dir, "checklog", "setup.log"), 100)}\n\n`);
+  const s = await withSlot(() => setupStep(dir, t.repo.setup, bundle, ref, { ...step, stdout: noise, stderr: noise }));
+  if (s.setup === null) return { cause: "other", reason: `checks did not start (exit ${s.code})` };
+  if (s.setup !== "0") {
+    appendFileSync(runFile(t.folder, "checks.log"), `## setup: exit ${s.setup}\n${tail(join(dir, "checklog", "setup.log"), 100)}\n\n`);
     return { cause: "check", checkName: "setup", reason: "setup failed" };
   }
   const exec = (read: string[]): CheckExec => (check, out, limit) => sandboxed(dir, check.run, { ...step, read, write: ["check", "home", "tmp"], limit, stdout: out, stderr: out });
   const failed = await runAll(t, chosen(t), exec([]));
   if (failed || !Object.keys(hiddenFiles).length) return failed;
   // The hidden files reach the disk only now, after the repo's own checks have passed.
-  mkdirSync(join(dir, "hidden"), { recursive: true });
-  for (const [name, text] of Object.entries(hiddenFiles)) writeFileSync(join(dir, "hidden", name), text);
+  writeHidden(dir, hiddenFiles);
   return runHidden(t, { name: "hidden", run: `cp -r ../hidden .hidden; ${t.repo.hiddenRun}` }, exec(["hidden"]));
 }
+
+const writeHidden = (dir: string, files: Record<string, string>) => {
+  mkdirSync(join(dir, "hidden"), { recursive: true });
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, "hidden", name), text);
+};
+
+/** The last `n` lines of `text`, on one line (an issue note is one line), each cut to 200 characters. */
+export const lastLines = (text: string, n = 40): string =>
+  text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join(" ⏎ ");
+
+/** `infra` marks a fault of the sandbox, not a result of the command. */
+export interface Ran { code: number; output: string; infra?: boolean }
+/** Runs one command on the commit `sha` of the repo. */
+export type Runner = (repo: Repo, sha: string, command: string, hidden?: Record<string, string>) => Promise<Ran>;
+
+let calls = 0;
+/**
+ * One command on `sha`, as the checks run: the commit goes in as a bundle, and the repo's setup and then the
+ * command run under srt in a fresh clone, with `hidden` in `.hidden`. A setup that fails or a step that does not
+ * start is `infra`, and the command does not run. The command has 1200 seconds.
+ */
+export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
+  // Each call has its own folder and ref, so overlapping runs for one repo cannot remove or overwrite each other's files.
+  const uid = `${process.pid}-${++calls}`;
+  const dir = makeRunFolder(`accept-${repo.key}-${uid}`);
+  const ref = `refs/aleph/accept/${repo.key}/${uid}`;
+  try {
+    git(repo.path, "update-ref", ref, sha);
+    const b = git(repo.path, "bundle", "create", join(dir, "out", "accept.bundle"), ref);
+    if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}`, infra: true };
+    const logs = join(dir, "stdout.log");
+    const at = (f: string) => join(dir, "checklog", f);
+    const step = { cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, stdout: logs, stderr: logs };
+    const notStarted = (code: number): Ran => {
+      const last = existsSync(logs) ? lastLines(readFileSync(logs, "utf8")) : "";
+      return { code: code || 1, output: `the command did not start (exit ${code})${last ? `: ${last}` : ""}`, infra: true };
+    };
+    // One slot for both steps. The time limit is in the command's script, so the wait does not count against it.
+    return await withSlot(async () => {
+      const s = await setupStep(dir, repo.setup, "out/accept.bundle", ref, step);
+      if (s.setup === null) return notStarted(s.code);
+      if (s.setup !== "0") return { code: 1, output: `setup failed\n${readFileSync(at("setup.log"), "utf8")}`, infra: true };
+      if (hidden) writeHidden(dir, hidden);
+      const script = `${hidden ? "cp -r ../hidden .hidden\n" : ""}timeout -k 30 1200 bash -c ${q(command)} > ../checklog/out.log 2>&1; echo $? > ../checklog/code`;
+      const r = await sandboxed(dir, script, { ...step, read: hidden ? ["hidden"] : [], write: ["check", "checklog", "home", "tmp"] });
+      if (!existsSync(at("code"))) return notStarted(r.code);
+      return { code: Number(readFileSync(at("code"), "utf8").trim()), output: existsSync(at("out.log")) ? readFileSync(at("out.log"), "utf8") : "" };
+    });
+  } finally {
+    git(repo.path, "update-ref", "-d", ref);
+    removeRunFolder(dir);
+  }
+};
 
 /** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else the stop (`infra` when they could not run). For the factory's baseline. */
 export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<ChecksStop | null> {

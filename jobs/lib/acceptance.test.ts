@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { flakeTracker, readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { accept, reaccept, failedTests, oracleCommands, rerunOf, sandboxRunner, unshown, type Runner } from "./acceptance.ts";
-import { checkSlot } from "./ledger.ts";
+import { accept, reaccept, failedTests, oracleCommands, rerunOf, unshown } from "./acceptance.ts";
+import { runOnCommit, type Runner } from "./checks.ts";
 import { readRecord, resultLine } from "./status.ts";
 import { acceptanceStep, dispatchIssues, reacceptReopened } from "./factory.ts";
 import { askOf } from "./ask.ts";
@@ -243,27 +243,6 @@ test("a goal closed with no landing on main is not accepted", async () => {
   expect(await acceptanceStep(runner(0))).toEqual([]);
 });
 
-test("the default runner runs the command on origin/main in a clone", async () => {
-  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
-  expect(await sandboxRunner(repo, sha, "bun run ok")).toEqual({ code: 0, output: expect.any(String) });
-  const bad = await sandboxRunner(repo, sha, "bun run bad");
-  expect(bad.code).toBe(3);
-  expect(bad.output).toContain("boom");
-});
-
-test("sandboxRunner: two runs for one repo at the same time do not remove each other's folder", async () => {
-  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
-  const [a, b] = await Promise.all([sandboxRunner(repo, sha, "bun run ok"), sandboxRunner(repo, sha, "bun run bad")]);
-  expect(a.output).not.toContain("bundle failed");
-  expect(b.output).not.toContain("bundle failed");
-  expect(a.code).toBe(0);
-  expect(b.code).toBe(3);
-});
-
 const infra = (output: string): Runner => async () => ({ code: 1, output, infra: true });
 
 test("an infra result leaves the issue done, writes no record and says acceptance not run", async () => {
@@ -289,54 +268,18 @@ test("an infra result after one real failure does not ask Chris or change the re
   expect(readRecord("fac", id)).toEqual(before);
 });
 
-test("sandboxRunner: a sandbox that ends before writing code returns its stdout.log tail", async () => {
-  const fake = join(base, "fake-sandbox.sh");
-  writeFileSync(fake, "#!/bin/sh\necho sandbox-said-this\nexit 7\n");
-  chmodSync(fake, 0o755);
-  process.env.ALEPH_SANDBOX_CMD = fake;
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
-  const r = await sandboxRunner(repo, sha, "bun run ok");
-  expect(r.infra).toBe(true);
-  expect(r.code).toBe(7);
-  expect(r.output).toContain("the command did not start");
-  expect(r.output).toContain("sandbox-said-this");
-});
-
 const withSetup = (setup: string[]) => ({ key: "fac", path: repoDir(), main: "main", setup }) as any;
 
-test("sandboxRunner: a failing setup returns infra with the setup log, and the command does not run", async () => {
-  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  const r = await sandboxRunner(withSetup(["false"]), sha, "bun run bad");
-  expect(r.infra).toBe(true);
-  expect(r.output).toContain("setup failed");
-  expect(r.output).not.toContain("boom");
-  const known = await sandboxRunner(withSetup(["echo KNOWN-SETUP-TEXT-716; false"]), sha, "bun run ok");
-  expect(known.infra).toBe(true);
-  expect(known.output).toContain("setup failed");
-  expect(known.output).toContain("KNOWN-SETUP-TEXT-716");
-});
-
-test("accept through sandboxRunner with a failing setup leaves the goal done, writes no record and adds no fail note", async () => {
+test("accept through runOnCommit with a failing setup leaves the goal done, writes no record and adds no fail note", async () => {
   process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
   const id = doneGoal("`bun run bad`");
-  const line = await accept(withSetup(["false"]), item(id), sandboxRunner);
+  const line = await accept(withSetup(["false"]), item(id), runOnCommit);
   expect(line).toContain("acceptance not run");
   expect(line).toContain("setup failed");
   expect(issues.status(item(id))).toBe("done");
   expect(readRecord("fac", id)).toBeNull();
   expect(notes(id)).not.toContain("acceptance: fail");
   expect(askOf(item(id))).toBeNull();
-});
-
-test("sandboxRunner: a passing setup and a command that exits nonzero is not infra and keeps the exit code", async () => {
-  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  const r = await sandboxRunner(withSetup(["true"]), sha, "bun run bad");
-  expect(r.infra).toBeUndefined();
-  expect(r.code).toBe(3);
-  expect(r.output).toContain("boom");
 });
 
 /** A landed goal the store says is open again, after an acceptance fail. */
@@ -577,32 +520,6 @@ test("an infra error on the rerun keeps the failure waiting and reopens nothing"
   expect(readRecord("fac", id)?.result).toBe("pass");
 });
 
-test("sandboxRunner: waits for a check slot before it runs its command", async () => {
-  process.env.ALEPH_CHECK_SLOTS = "1";
-  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
-  const free = await checkSlot();
-  let done = false;
-  const p = sandboxRunner(repo, sha, "bun run bad").then((r) => { done = true; return r; });
-  await Bun.sleep(1500);
-  expect(done).toBe(false);
-  free();
-  const r = await p;
-  expect(r.code).toBe(3);
-});
-
-test("sandboxRunner: frees the slot after a normal run and after an infra result", async () => {
-  process.env.ALEPH_CHECK_SLOTS = "1";
-  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  expect((await sandboxRunner({ key: "fac", path: repoDir(), main: "main", setup: [] } as any, sha, "bun run ok")).code).toBe(0);
-  (await checkSlot())();
-  const r = await sandboxRunner(withSetup(["false"]), sha, "bun run ok");
-  expect(r.infra).toBe(true);
-  (await checkSlot())();
-});
-
 const pinTest = async (output: string, setup?: () => void) => {
   const id = doneGoal("`bun run test`");
   setup?.();
@@ -638,14 +555,6 @@ test("a generated test name that is not literal in the file is cleared like a wr
   });
   expect(ran[1]).toBe("bun run test");
   expect(flakeNotes()).toContain("(no file) > case 3");
-});
-
-test("the acceptance check step runs with TZ=UTC", async () => {
-  process.env.ALEPH_SANDBOX_CMD = "/usr/bin/env";
-  const sha = sh(repoDir(), "git", "rev-parse", "origin/main");
-  const repo = { key: "fac", path: repoDir(), main: "main", setup: [] } as any;
-  const r = await sandboxRunner(repo, sha, "echo tz=[$TZ]");
-  expect(r.output).toContain("tz=[UTC]");
 });
 
 test("the fifth goal failing at one commit does not reopen, the fourth does, and a later commit reopens as usual", async () => {

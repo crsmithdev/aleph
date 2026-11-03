@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import type { Runner } from "./acceptance.ts";
+import type { Runner } from "./checks.ts";
 import { dispatchIssues } from "./factory.ts";
 import { change, fakes, goal, mk, setup, teardown, dispatch } from "./factory.helpers.ts";
 import { readHolds } from "./factory-status.ts";

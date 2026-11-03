@@ -20,7 +20,7 @@ import { endKilledFacts, rescueStuck, type Rescue } from "./rescue.ts";
 import { clearRerun, goalBrief } from "./continuation.ts";
 import { type Fate } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, lastReal, openJob } from "./job.ts";
-import { accept, final, reaccept, reopenedByAcceptance, sandboxRunner, sandboxScenarios, unshown, type Runner, type ScenarioCheck } from "./acceptance.ts";
+import { accept, final, reaccept, reopenedByAcceptance, sandboxScenarios, unshown, type ScenarioCheck } from "./acceptance.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { endLost } from "./agent-run.ts";
 import { factsGate } from "./facts.ts";
@@ -29,7 +29,7 @@ import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
-import { baselineChecks, type ChecksStop } from "./checks.ts";
+import { baselineChecks, runOnCommit, type ChecksStop, type Runner } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
 import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
@@ -296,7 +296,7 @@ const ACCEPTANCE_DAYS = 2;
  * quiet, and only a repeat in a test the goal touched counts. First repeat: the goal reopens with the
  * output as a note and the dispatch starts it again; second: an Ask (input, acceptance-failed). See acceptance.ts.
  */
-export async function acceptanceStep(run: Runner = sandboxRunner, now = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string[]> {
+export async function acceptanceStep(run: Runner = runOnCommit, now = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string[]> {
   const lines: string[] = [];
   const since = issues.today(new Date(now.getTime() - ACCEPTANCE_DAYS * 86_400_000));
   const lists = reader();

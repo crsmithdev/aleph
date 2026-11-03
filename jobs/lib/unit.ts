@@ -21,8 +21,8 @@ import { allJobs, jobById, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallSeconds, workerToken } from "./sandbox.ts";
-import { lastLines, oracleCommands, sandboxRunner, type Runner } from "./acceptance.ts";
-import { HIDDEN_UNREADABLE, checksInSandbox, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
+import { oracleCommands } from "./acceptance.ts";
+import { HIDDEN_UNREADABLE, checksInSandbox, lastLines, runOnCommit, type Runner, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
@@ -484,7 +484,7 @@ export async function heldAndReview(id: string, folder: string, run: Run, repo: 
   const security = securityChange(repo.path, base, `refs/heads/${branch}`);
   if (security) return held(`held path ${security}`);
   const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
-  const bad = await oracleFailure(folder, run, repo, branch, ports.runner ?? sandboxRunner, phase);
+  const bad = await oracleFailure(folder, run, repo, branch, ports.runner ?? runOnCommit, phase);
   if (bad) {
     const why = { cause: "check" as const, checkName: "oracle", reason: bad };
     return stoppedByChecks(why, { ...facts, ...checkBack(earlier, "oracle", bad, fixRounds()) });

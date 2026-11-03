@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "./ledger.ts";
-import { checksInSandbox } from "./checks.ts";
+import { checksInSandbox, runOnCommit } from "./checks.ts";
+import { checkSlot } from "./ledger.ts";
 import { baselineChecks } from "./checks.ts";
 
 // The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
@@ -97,4 +98,67 @@ test("checksInSandbox states a failed hidden check as hidden-check", async () =>
   const { dir, repo } = sandboxed([], [{ name: "a", run: "true" }]);
   const why = await checksInSandbox({ folder: base, repo, changed: [], phase: () => {} }, dir, "out/in.bundle", "refs/heads/main", { "h.test.ts": "x" });
   expect(why).toEqual({ cause: "hidden-check", reason: "hidden check failed: 2 of 3 tests" });
+});
+
+/** A repo with one commit and its sha, for runOnCommit. */
+function committed(setup: string[] = []) {
+  const path = join(base, "repo");
+  sh(base, "git", "init", "-q", "-b", "main", path);
+  writeFileSync(join(path, "f.txt"), "x\n");
+  sh(path, "git", "add", ".");
+  sh(path, "git", "commit", "-q", "-m", "init");
+  return { repo: { key: "r", path, main: "main", setup } as unknown as Repo, sha: sh(path, "git", "rev-parse", "HEAD") };
+}
+
+test("runOnCommit runs the command on the commit in a clone, with TZ=UTC, and keeps its exit code and output", async () => {
+  const { repo, sha } = committed(["true"]);
+  expect(await runOnCommit(repo, sha, "cat f.txt; echo tz=[$TZ]")).toEqual({ code: 0, output: "x\ntz=[UTC]\n" });
+  const bad = await runOnCommit(repo, sha, "echo boom; exit 3");
+  expect(bad).toEqual({ code: 3, output: "boom\n" });
+});
+
+test("runOnCommit puts the hidden files in .hidden", async () => {
+  const { repo, sha } = committed();
+  expect((await runOnCommit(repo, sha, "cat .hidden/h.test.ts", { "h.test.ts": "sealed" })).output).toBe("sealed");
+  expect((await runOnCommit(repo, sha, "ls -a")).output).not.toContain(".hidden");
+});
+
+test("runOnCommit: two runs for one repo at the same time do not remove each other's folder", async () => {
+  process.env.ALEPH_CHECK_SLOTS = "2";
+  const { repo, sha } = committed();
+  const [a, b] = await Promise.all([runOnCommit(repo, sha, "true"), runOnCommit(repo, sha, "echo boom; exit 3")]);
+  expect([a.code, b.code]).toEqual([0, 3]);
+  expect(a.output + b.output).not.toContain("bundle failed");
+});
+
+test("runOnCommit: a sandbox that ends before setup.code returns infra with its stdout tail", async () => {
+  const { repo, sha } = committed();
+  const fake = join(base, "fake-sandbox.sh");
+  writeFileSync(fake, "#!/bin/sh\necho sandbox-said-this\nexit 7\n");
+  chmodSync(fake, 0o755);
+  process.env.ALEPH_SANDBOX_CMD = fake;
+  const r = await runOnCommit(repo, sha, "true");
+  expect(r).toMatchObject({ code: 7, infra: true });
+  expect(r.output).toContain("the command did not start");
+  expect(r.output).toContain("sandbox-said-this");
+});
+
+test("runOnCommit: a failing setup returns infra with the setup log, and the command does not run", async () => {
+  const { repo, sha } = committed(["echo KNOWN-SETUP-TEXT-716; false"]);
+  const r = await runOnCommit(repo, sha, "echo boom; exit 3");
+  expect(r).toEqual({ code: 1, output: "setup failed\nKNOWN-SETUP-TEXT-716\n", infra: true });
+});
+
+test("runOnCommit waits for a check slot, and frees it after a run and after an infra result", async () => {
+  const { repo, sha } = committed();
+  const free = await checkSlot();
+  let done = false;
+  const p = runOnCommit(repo, sha, "echo boom; exit 3").then((r) => { done = true; return r; });
+  await Bun.sleep(1500);
+  expect(done).toBe(false);
+  free();
+  expect((await p).code).toBe(3);
+  (await checkSlot())();
+  expect((await runOnCommit({ ...repo, setup: ["false"] }, sha, "true")).infra).toBe(true);
+  (await checkSlot())();
 });

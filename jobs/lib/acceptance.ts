@@ -14,7 +14,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { plainAsk, setAsk, type Ask } from "./ask.ts";
 import { note, noteFlake, readHidden, reopen as storeReopen, writeList } from "../../todo/lib/store.ts";
-import { cloneAndSetup } from "./checks.ts";
+import { lastLines, runOnCommit, type Ran, type Runner } from "./checks.ts";
 import { git } from "./git.ts";
 import { SCENARIOS } from "./author.ts";
 import { gitPrelude, OPUS_MODEL, q } from "./agent-call.ts";
@@ -122,53 +122,8 @@ export function oracleCommands(body: string): string[] {
   return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()).filter((c) => RUNNABLE.test(c) && !PLACEHOLDER.test(c));
 }
 
-/** `infra` marks a fault of the sandbox, not a result of the command: the acceptance is not run. */
-export interface Ran { code: number; output: string; infra?: boolean }
-/** Run one command on the commit `sha` of the repo's main. */
-export type Runner = (repo: Repo, sha: string, command: string, hidden?: Record<string, string>) => Promise<Ran>;
-
-/** The default runner: the commit goes in as a bundle, and the repo's setup and then the command run under srt, as the checks do. */
+/** Makes each scenario check's folder and ref its own. */
 let calls = 0;
-export const sandboxRunner: Runner = async (repo, sha, command, hidden) => {
-  // Each call has its own folder and ref, so overlapping runs for one repo cannot remove or overwrite each other's files.
-  const uid = `${process.pid}-${++calls}`;
-  const run = makeRunFolder(`accept-${repo.key}-${uid}`);
-  const ref = `refs/aleph/accept/${repo.key}/${uid}`;
-  try {
-    git(repo.path, "update-ref", ref, sha);
-    const b = git(repo.path, "bundle", "create", join(run, "out", "accept.bundle"), ref);
-    if (!b.ok) return { code: 1, output: `bundle failed: ${b.out}`, infra: true };
-    if (hidden) {
-      mkdirSync(join(run, "out", "hidden"), { recursive: true });
-      for (const [name, text] of Object.entries(hidden)) writeFileSync(join(run, "out", "hidden", name), text);
-    }
-    const script = [
-      cloneAndSetup(repo.setup, "out/accept.bundle", ref, "> ../checklog/setup.log 2>&1 || { echo setup failed >> ../checklog/out.log; cat ../checklog/setup.log >> ../checklog/out.log; touch ../checklog/setup-failed; echo 1 > ../checklog/code; exit 0; }"),
-      ...(hidden ? ["cp -r ../out/hidden .hidden"] : []),
-      `timeout -k 30 1200 bash -c ${q(command)} > ../checklog/out.log 2>&1; echo $? > ../checklog/code`,
-    ].join("\n");
-    const logs = join(run, "stdout.log");
-    // The slot covers the sandboxed call only; the time limit is in the script, so the wait does not count against it.
-    const free = await checkSlot();
-    let r;
-    try {
-      r = await sandboxed(run, script, { read: ["out"], write: ["check", "checklog", "home", "tmp"], cwd: "check", env: { TZ: "UTC" }, hideCiMissing: true, stdout: logs, stderr: logs });
-    } finally {
-      free();
-    }
-    const at = (f: string) => join(run, "checklog", f);
-    // The Oracle did not run: a setup failure is an infra error, and its log is in out.log.
-    if (existsSync(at("setup-failed"))) return { code: 1, output: existsSync(at("out.log")) ? readFileSync(at("out.log"), "utf8") : "setup failed", infra: true };
-    if (!existsSync(at("code"))) {
-      const tail = existsSync(logs) ? lastLines(readFileSync(logs, "utf8")) : "";
-      return { code: r.code || 1, output: `the command did not start (exit ${r.code})${tail ? `: ${tail}` : ""}`, infra: true };
-    }
-    return { code: Number(readFileSync(at("code"), "utf8").trim()), output: existsSync(at("out.log")) ? readFileSync(at("out.log"), "utf8") : "" };
-  } finally {
-    git(repo.path, "update-ref", "-d", ref);
-    removeRunFolder(run);
-  }
-};
 
 /** The numbers of the scenarios in a `scenarios.md` text, in order (`1.` or `1)` at a line start). */
 export const scenarioNumbers = (text: string): number[] => [...text.matchAll(/^\s*(\d+)[.)]\s+\S/gm)].map((m) => Number(m[1]));
@@ -234,10 +189,6 @@ export const sandboxScenarios: ScenarioCheck = async (repo, sha, scenarios) => {
   }
 };
 
-/** The last `n` lines of `text`, on one line (an issue note is one line), each cut to 200 characters. */
-export const lastLines = (text: string, n = 40): string =>
-  text.replace(/\s+$/, "").split("\n").slice(-n).map((l) => l.slice(0, 200)).join(" ⏎ ");
-
 /** Item `id` open again, with `text` as a note and `ask` set on it, in one write. Returns why it could not, or null. */
 function reopen(repo: Repo, id: number | string, text: string, ask?: Ask): string | null {
   try {
@@ -293,7 +244,7 @@ function failsAt(repo: Repo, sha: string, name: string): number {
  * Run the Oracle of the done goal `item` on origin/<main>, and record what came of it.
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
  */
-export async function accept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner, now: Date = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string> {
+export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOnCommit, now: Date = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string> {
   const ref = issues.refOf(item);
   const name = `${repo.key}-${ref}`;
   const prev = readRecord(repo.key, ref);
@@ -471,7 +422,7 @@ export function reopenedByAcceptance(item: issues.Issue, since = -Infinity, befo
  * naming each command; a failure leaves it open with a note, and so does an infra error, with the output tail.
  * Returns a line for the log. The caller has fetched and holds the goal's lock.
  */
-export async function reaccept(repo: Repo, item: issues.Issue, run: Runner = sandboxRunner): Promise<string> {
+export async function reaccept(repo: Repo, item: issues.Issue, run: Runner = runOnCommit): Promise<string> {
   const name = `${repo.key}-${issues.refOf(item)}`;
   if (issues.status(item) !== "done" && issues.status(item) !== "open") return `${name}: re-accept skipped: the item is ${issues.status(item)}`;
   const sha = git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out;

@@ -104,12 +104,12 @@ await runChecks({ folder: ${JSON.stringify(base)}, repo, changed: [], phase: () 
 
 test("the check prelude carries both NO_SUBMODULES lines", async () => {
   const { NO_SUBMODULES } = await import("./git.ts");
-  const lines = cloneAndSetup([], "b", "r", "").split("\n");
+  const lines = cloneAndSetup([], "b", "r").split("\n");
   expect(lines.slice(1, 4)).toEqual(["git init -q .", ...NO_SUBMODULES]);
 });
 
-test("cloneAndSetup: the clone steps, the setup group and the caller's text", () => {
-  expect(cloneAndSetup(["a", "b c"], "out/x.bundle", "refs/h/it's", "> log 2>&1")).toBe(
-    ["set -e", "git init -q .", "git config fetch.recurseSubmodules false", "git config submodule.recurse false", `git fetch -q ../out/x.bundle '+refs/h/it'\\''s:refs/heads/check'`, "git switch -q check", "set +e", "{ a && b c && true; } > log 2>&1"].join("\n"),
+test("cloneAndSetup: the clone steps and the setup group with its log and exit code", () => {
+  expect(cloneAndSetup(["a", "b c"], "out/x.bundle", "refs/h/it's")).toBe(
+    ["set -e", "git init -q .", "git config fetch.recurseSubmodules false", "git config submodule.recurse false", `git fetch -q ../out/x.bundle '+refs/h/it'\\''s:refs/heads/check'`, "git switch -q check", "set +e", "{ a && b c && true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code"].join("\n"),
   );
 });
