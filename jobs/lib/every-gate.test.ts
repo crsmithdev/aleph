@@ -12,7 +12,8 @@ import { readHolds } from "./factory-status.ts";
 import { git } from "./git.ts";
 import { land, type LandPorts } from "./landing.ts";
 import { readRun, writeRun, type Repo, type Run } from "./ledger.ts";
-import { heldAndReview, reviewBack } from "./unit.ts";
+import { branchPorts, reviewBack } from "./unit.ts";
+import { workerVerdict } from "./worker-verdict.ts";
 
 setDefaultTimeout(120_000);
 
@@ -117,7 +118,7 @@ function landSetup(file = "a.txt", held: string[] = []): string {
   return git(path, "rev-parse", "main").out;
 }
 const held = (base: string, review: () => Promise<{ reason: string | null }>, runner: Runner = async () => ({ code: 0, output: "" })) =>
-  heldAndReview("j1-run", folder, base_run, repo, root, base, "work", {}, [], { runner, review: review as never });
+  workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, { ...branchPorts("j1-run", folder, base_run, repo, root, base, "work", { changed: [], runner, review: review as never }), checks: async () => ({ stop: null }) });
 const cleanup = () => { if (root) rmSync(root, { recursive: true, force: true }); root = ""; };
 
 test("gate checks fail: a land whose check port fails the run gives the run condition failed", async () => {
@@ -164,7 +165,7 @@ test("gate checks fail: a land whose check port fails the run gives the run cond
   }
 });
 
-test("gate failed Oracle command: heldAndReview gives condition stuck with checkName oracle and no review", async () => {
+test("gate failed Oracle command: the worker verdict gives condition stuck with checkName oracle and no review", async () => {
   try {
     const b = landSetup();
     let reviews = 0;

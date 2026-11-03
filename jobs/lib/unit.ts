@@ -13,8 +13,8 @@ import { OPUS_MODEL, q } from "./agent-call.ts";
 import { agentCall } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, verdict as reviewVerdict } from "./gate.ts";
-import { needsOf, plainAsk, type AskReason } from "./ask.ts";
-import { tagged, askOf, isAwaiting, isAgentRun, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { afterReview, awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
+import { tagged, isAgentRun, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, openJob } from "./job.ts";
@@ -26,7 +26,7 @@ import { HIDDEN_UNREADABLE, checksInSandbox, lastLines, runOnCommit, type Runner
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
-import { backCheck, brief, checkBack, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, reviewHold, nextBrief } from "./continuation.ts";
+import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, nextBrief } from "./continuation.ts";
 import { startReview } from "./review.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
 import { postTrace } from "./trace.ts";
@@ -151,10 +151,6 @@ function stampJob(wt: string, base: string, job: string): void {
   if (!git(wt, "-c", "core.hooksPath=/dev/null", "rebase", "-q", "--exec", amend, base).ok) git(wt, "rebase", "--abort");
 }
 
-type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
-
-/** A verdict that waits for Chris: the condition `awaiting` and the Ask. */
-/** The outcome of a factory run that the check runners stopped. */
 /**
  * The Stop gate's doc-claim check (hooks/lib/docclaims.ts) on a finished worker run: the run's transcript
  * (output.log, stream-json) against its final message. A sandboxed worker does not load the gate, so this
@@ -171,9 +167,6 @@ export function docClaims(folder: string, result: string): string | null {
   return `doc claims: ${problems.join("; ")}`;
 }
 
-const stoppedByChecks = (why: ChecksStop, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, ...stopFields(why), ...extra }, code: 1 });
-const awaiting = (reason: AskReason, question: string, why: string[] = []): Pick<Outcome, "condition" | "ask"> =>
-  ({ condition: "awaiting", ask: plainAsk(reason, question, why.filter(Boolean)) });
 
 export async function unit(folder: string): Promise<void> {
   // drop sends SIGTERM when no systemd unit is there to stop the cgroup.
@@ -440,70 +433,45 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no-commit", "no commit", facts);
 
     // Each earlier run of the job that a failed check sent back is a fix round.
-    const earlierRuns = earlierRounds(jobById(run.job) ?? [], id);
-    const earlier = earlierRuns.map((e) => e.run);
-    const done = earlier.length;
-    if (done) facts.round = done;
+    const earlier = earlierRounds(jobById(run.job) ?? [], id);
+    if (earlier.length) facts.round = earlier.length;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
-    const hidden = hiddenOf(repo, run);
-    if (!hidden) return stuck("infra", HIDDEN_UNREADABLE, facts);
-    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
-    if (failed) {
-      // A check that failed goes back to the worker, at most FIX_ROUNDS times a job.
-      const check = backCheck(failed, readRun(folder)?.checks?.findLast((c) => !c.ok)?.name);
-      if (!check) return stoppedByChecks(failed, facts);
-      const rounds = fixRounds();
-      const same = check === "hidden" && done < rounds ? repeatedHidden(folder, earlierRuns) : null;
-      if (same) return { outcome: { ...awaiting("question", same.question), question: same.question, cause: "hidden-check", reason: failed.reason, ...facts }, code: 0 };
-      return stoppedByChecks(failed, { ...facts, ...checkBack(earlier, check, failed.reason, rounds) });
-    }
-    // After the existing checks, so a doc-claims failure leaves their runs and results as they were.
-    const claims = docClaims(folder, o.result);
-    if (claims) return stoppedByChecks({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(earlier, "doc-claims", claims, fixRounds()) });
-    facts.checkedBase = base;
-    facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
-    return await heldAndReview(id, folder, run, repo, dir, base, branch, facts, earlier);
+    const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", `refs/heads/${branch}`).out };
+    return await workerVerdict({ earlier: earlier.map((e) => e.run), rounds: fixRounds(), facts, checked }, branchPorts(id, folder, run, repo, dir, base, branch, { changed, earlier, result: o.result }));
   } finally {
     removeRunFolder(dir);
   }
 }
 
 /**
- * After the checks pass: a security path waits for Chris with no reviewer. Else
- * the reviewer, then the held rule: a held run the reviewer passes gets the second
- * review, and `reviewBack` passes it when that says land. `earlier` is the runs
- * of the job that were sent back (a worker run; a recheck has none): a reviewer
- * finding goes back to the worker like a failed check, while rounds are left.
+ * The git and sandbox ports of the worker verdict for `branch` of a run, based on `base`, in the run folder
+ * `dir` that holds out/out.bundle. `earlier` is the job's runs that were sent back, `result` the worker's
+ * final message (a recheck has neither), and `runner` runs the Oracle's commands.
  */
-export async function heldAndReview(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, facts: Partial<Outcome>, earlier?: Run[], ports: { runner?: Runner; review?: typeof review } = {}): Promise<{ outcome: Outcome; code: number }> {
-  const reviewer = ports.review ?? review;
+export function branchPorts(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; result?: string; runner?: Runner; review?: typeof review }): VerdictPorts {
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const stat = git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out;
-  const held = (rule: string) => ({ outcome: { ...awaiting("held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 });
-  const security = securityChange(repo.path, base, `refs/heads/${branch}`);
-  if (security) return held(`held path ${security}`);
-  const rule = heldRule(repo.path, repo.held, base, `refs/heads/${branch}`);
-  const bad = await oracleFailure(folder, run, repo, branch, ports.runner ?? runOnCommit, phase);
-  if (bad) {
-    const why = { cause: "check" as const, checkName: "oracle", reason: bad };
-    return stoppedByChecks(why, { ...facts, ...checkBack(earlier, "oracle", bad, fixRounds()) });
-  }
-  phase("review");
-  const findings = testFindings(repo.path, base, `refs/heads/${branch}`);
-  let rv = await reviewer(id, folder, run, repo, dir, base, branch, findings);
-  if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
-  // A reviewer that gave no verdict runs once more; a second miss is the reviewer's, not the
-  // worker's: it goes to Chris whatever fix rounds are left, since a fix round cannot cure it.
-  if (rv.none) {
-    rv = await reviewer(id, folder, run, repo, dir, base, branch, findings);
-    if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
-  }
-  if (!rv.reason) return rule ? held(rule) : { outcome: { condition: "passed", ...facts }, code: 0 };
-  if (rv.none) return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
-  const hold = reviewHold(earlier, rv.reason, fixRounds());
-  if ("round" in hold) return { outcome: { condition: "stuck", cause: "reviewer", reason: rv.reason, stat, ...facts, failed: "review", round: hold.round }, code: 1 };
-  return { outcome: { ...awaiting("review", hold.reason, [stat]), cause: "reviewer", reason: hold.reason, stat, ...facts }, code: 0 };
+  const tip = `refs/heads/${branch}`;
+  let findings: string[] | undefined;
+  return {
+    checks: async () => {
+      const hidden = hiddenOf(repo, run);
+      if (!hidden) return { stop: { cause: "infra", reason: HIDDEN_UNREADABLE } };
+      const stop = await checksInSandbox({ folder, repo, changed: o.changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip, hidden);
+      return { stop, failed: readRun(folder)?.checks?.findLast((c) => !c.ok)?.name };
+    },
+    repeatedHidden: () => repeatedHidden(folder, o.earlier ?? []),
+    docClaims: () => o.result === undefined ? null : docClaims(folder, o.result),
+    stat: () => git(repo.path, "diff", "--stat", base, tip).out,
+    security: () => securityChange(repo.path, base, tip),
+    heldRule: () => heldRule(repo.path, repo.held, base, tip),
+    oracle: () => oracleFailure(folder, run, repo, branch, o.runner ?? runOnCommit, phase),
+    review: () => {
+      phase("review");
+      findings ??= testFindings(repo.path, base, tip);
+      return (o.review ?? review)(id, folder, run, repo, dir, base, branch, findings);
+    },
+  };
 }
 
 /**
@@ -532,32 +500,25 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   return null;
 }
 
-/**
- * A held run whose review says `back` goes to the worker as a fix round, while
- * rounds are left; after the last round it stays with Chris, its reason saying so.
- * A run held for a held path that the reviewer passed and whose review says `land`
- * has passed both reviews, so it passes and lands like any other run. A security
- * path never gets here: it has no reviewer's verdict. Called by `aleph review` when the review ends.
- */
+/** The second review's call on the run, by afterReview in worker-verdict.ts. Called by `aleph review` when the review ends. */
 export async function reviewBack(folder: string): Promise<void> {
   const run = readRun(folder);
-  const r2 = readCall(folder);
-  if (!run || !isAgentRun(run.kind) || !isAwaiting(run.condition)) return;
-  if (r2?.call === "land" && needsOf(askOf(run)) === "held" && existsSync(runFile(folder, "review.md")) && reviewVerdict(readFileSync(runFile(folder, "review.md"), "utf8"))?.pass) {
+  if (!run) return;
+  const review = existsSync(runFile(folder, "review.md")) ? readFileSync(runFile(folder, "review.md"), "utf8") : undefined;
+  const earlier = () => earlierRounds(jobById(run.job) ?? [], basename(folder)).map((e) => e.run);
+  const next = afterReview(run, review, readCall(folder), earlier, fixRounds());
+  if (!next) return;
+  if ("pass" in next) {
     updateRun(folder, { condition: "passed", ask: undefined, reason: undefined, cause: undefined });
     dispatchDetached();
     return;
   }
-  if (!isBuild(run.kind) || r2?.call !== "back") return;
-  const earlier = earlierRounds(jobById(run.job) ?? [], basename(folder)).map((e) => e.run);
-  const reason = r2.reason ?? "no reason given";
-  const hold = reviewHold(earlier, reason, fixRounds());
-  if ("round" in hold) {
-    const ended = updateRun(folder, { condition: "stuck", ask: undefined, cause: "reviewer", reason, failed: "review", round: hold.round, next: "worker" });
+  if ("round" in next) {
+    const ended = updateRun(folder, { condition: "stuck", ask: undefined, cause: "reviewer", reason: next.reason, failed: "review", round: next.round, next: "worker" });
     await start(folder, ended, "worker");
     return;
   }
-  if (hold.back) updateRun(folder, { cause: "reviewer", reason: hold.reason });
+  updateRun(folder, { cause: "reviewer", reason: next.reason });
 }
 
 /**
@@ -595,11 +556,8 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no-commit", "no commit");
     const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit");
-    const hidden = hiddenOf(repo, run);
-    if (!hidden) return stuck("infra", HIDDEN_UNREADABLE);
-    const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", ref, hidden);
-    if (failed) return stoppedByChecks(failed);
-    return await heldAndReview(id, folder, run, repo, dir, base, branch, { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out });
+    const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out };
+    return await workerVerdict({ rounds: fixRounds(), facts: {}, checked }, branchPorts(id, folder, run, repo, dir, base, branch, { changed }));
   } finally {
     removeRunFolder(dir);
   }

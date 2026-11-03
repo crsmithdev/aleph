@@ -16,7 +16,8 @@ import { allRuns, askOf, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry,
 import { isLost } from "./process.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile, type Job } from "./job.ts";
-import { SECURITY_PATHS, securityChange, verdict as reviewVerdict } from "./gate.ts";
+import { SECURITY_PATHS, securityChange } from "./gate.ts";
+import { landBlock } from "./worker-verdict.ts";
 import { git } from "./git.ts";
 import { itemOnMain, onMain } from "./status.ts";
 import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
@@ -287,10 +288,8 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
       return waits ? { refused: `${describe(a)}: dropped, but after not set: ${waits}` } : { applied: describe(a) };
     }
     const agent = runs.findLast((e) => isAgentRun(e.run.kind)) ?? last;
-    if (!reviewVerdict(readFile(agent, "review.md") ?? "")) return { refused: `${describe(a)}: the reviewer has no verdict yet` };
-    const r2 = reviewOf(agent);
-    if (!r2 || r2.call === "pending" || r2.call === "error") return { refused: `${describe(a)}: review has no verdict yet` };
-    if (r2.call !== "land") return { refused: `${describe(a)}: review says ${r2.call}${r2.reason ? ` (${r2.reason})` : ""}` };
+    const blocked = landBlock(readFile(agent, "review.md"), reviewOf(agent));
+    if (blocked) return { refused: `${describe(a)}: ${blocked}` };
     const held = securityPath(repo, agent.run.branch);
     // Chris let the firefighter land held security paths: the check is skipped, and the land is logged. An unknown branch still goes to Chris.
     const granted = held !== null && held !== "unknown" && always("firefighter")?.action === "land";

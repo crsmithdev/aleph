@@ -5,7 +5,8 @@ import { join } from "node:path";
 import type { Runner } from "./checks.ts";
 import { git } from "./git.ts";
 import type { Repo, Run } from "./ledger.ts";
-import { heldAndReview } from "./unit.ts";
+import { branchPorts } from "./unit.ts";
+import { workerVerdict } from "./worker-verdict.ts";
 
 let root = "";
 let repo: Repo;
@@ -39,7 +40,8 @@ const go = (runner: Runner, earlier: Run[] | undefined = []) => {
   let reviews = 0;
   const review = async () => { reviews++; return { reason: null }; };
   const base = git(repo.path, "rev-parse", "main").out;
-  return heldAndReview("j1-run", folder, run, repo, root, base, "work", {}, earlier, { runner, review }).then((r) => ({ ...r, reviews }));
+  const ports = { ...branchPorts("j1-run", folder, run, repo, root, base, "work", { changed: [], runner, review }), checks: async () => ({ stop: null }) };
+  return workerVerdict({ earlier, rounds: 2, facts: {}, checked: {} }, ports).then((r) => ({ ...r, reviews }));
 };
 
 test("an Oracle command that fails twice is a fix round failed oracle, with no reviewer", async () => {

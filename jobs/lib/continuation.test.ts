@@ -2,10 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ChecksStop } from "./checks.ts";
 import {
-  afterLand, askedQuestion, backCheck, checkBack, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, goalBrief,
-  infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedHidden, rerunStep, rescueCase, reviewHold, writeRerun, type Stuck,
+  afterLand, askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, goalBrief,
+  infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedHidden, rerunStep, rescueCase, writeRerun, type Stuck,
 } from "./continuation.ts";
 import type { Entry, Repo, Run } from "./ledger.ts";
 
@@ -43,12 +42,7 @@ describe("next step after a build or recheck", () => {
   });
 
   test("a check fail under the fix-round cap goes back to the worker with the check's log as its note", () => {
-    const stop: ChecksStop = { cause: "check", checkName: "tests", reason: "tests failed" };
-    const check = backCheck(stop, "tests")!;
-    expect(check).toBe("tests");
-    const fields = checkBack([run({ failed: "tests" })], check, stop.reason, 2);
-    expect(fields).toEqual({ failed: "tests", round: 1 });
-    const ended = run({ condition: "stuck", ...stop, ...fields });
+    const ended = run({ condition: "stuck", cause: "check", checkName: "tests", reason: "tests failed", failed: "tests", round: 1 });
     expect(nextStep(ended, false)).toBe("worker");
     const f = folder("check-fail", { "checks.log": "## lint: exit 0\nok\n## tests: exit 1\n$ bun test\n(fail) a > b\n" });
     const { note, merge } = nextBrief(f, ended);
@@ -58,34 +52,14 @@ describe("next step after a build or recheck", () => {
     expect(merge).toBe(false);
   });
 
-  test("the cap reached: the run stays stuck, its reason counts the rounds; a cap of 0 adds nothing; a recheck has no rounds", () => {
-    const fields = checkBack([run({ failed: "tests" }), run({ failed: "tests" })], "tests", "tests failed", 2);
-    expect(fields).toEqual({ reason: "tests failed after 2 fix rounds" });
-    expect(nextStep(run({ condition: "stuck", ...fields }), true)).toBeUndefined();
-    expect(checkBack([], "tests", "tests failed", 0)).toEqual({});
-    expect(checkBack(undefined, "oracle", "oracle failed: x", 2)).toEqual({});
-  });
-
-  test("only the failed check's own stop goes back: a time-out or another check's stop does not", () => {
-    expect(backCheck({ cause: "check", checkName: "tests", reason: "x", timedOut: true }, "tests")).toBeNull();
-    expect(backCheck({ cause: "check", checkName: "lint", reason: "x" }, "tests")).toBeNull();
-    expect(backCheck({ cause: "check", checkName: "tests", reason: "x" }, undefined)).toBeNull();
-    expect(backCheck({ cause: "hidden-check", reason: "x" }, "hidden")).toBe("hidden");
-    expect(backCheck({ cause: "infra", reason: "x" }, "hidden")).toBeNull();
+  test("a stuck run with no fix round left starts nothing", () => {
+    expect(nextStep(run({ condition: "stuck", reason: "tests failed after 2 fix rounds" }), true)).toBeUndefined();
   });
 
   test("a reviewer hold goes back to the worker with the reviewer's reason while rounds are left", () => {
-    expect(reviewHold([], "reviewer: no test", 2)).toEqual({ round: 0 });
     const ended = run({ condition: "stuck", cause: "reviewer", reason: "reviewer: no test", failed: "review", round: 0 });
     expect(nextStep(ended, false)).toBe("worker");
     expect(nextBrief(folder("review-back"), ended).note).toBe("The reviewer sent this branch back: reviewer: no test\n\nFix what it names, run the tests, and commit.");
-  });
-
-  test("a reviewer hold after the last round waits for Chris, and says how often it went back", () => {
-    const earlier = [run({ failed: "review" }), run({ failed: "tests" })];
-    expect(reviewHold(earlier, "reviewer: still no test", 2)).toEqual({ reason: "the reviewer sent it back once: still no test", back: 1 });
-    expect(reviewHold([run({ failed: "tests" }), run({ failed: "tests" })], "reviewer: x", 2)).toEqual({ reason: "reviewer: x", back: 0 });
-    expect(reviewHold(undefined, "reviewer: x", 2)).toEqual({ reason: "reviewer: x", back: 0 });
   });
 
   test("a failed hidden check's note names the failing tests and never their source", () => {

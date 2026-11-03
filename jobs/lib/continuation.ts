@@ -2,7 +2,7 @@
  * Job continuation: what follows a run that ended, and the brief the next run reads.
  * This module decides and writes the brief; the unit, the land and the rescue start
  * the runs and write the store. The deciders take ledger data and do no IO when given
- * it: nextStep, afterLand, backCheck, checkBack, reviewHold, askedQuestion, rescueCase,
+ * it: nextStep, afterLand, askedQuestion, rescueCase,
  * and the rescue steps but rerunStep. The briefs and notes read the run folders.
  *
  * It owns two markers: the rerun note at <factory>/rerun/<name>.md, which the goal's
@@ -13,7 +13,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join } from "node:path";
 import { reader } from "../../todo/lib/store.ts";
 import { needsOf } from "./ask.ts";
-import type { ChecksStop } from "./checks.ts";
 import { factoryDir } from "./factory-status.ts";
 import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
@@ -231,47 +230,10 @@ function hiddenNote(folder: string, run: Run): string {
 }
 
 // ---------------------------------------------------------------------------
-// Fix rounds: a failed check or a reviewer hold goes back to the worker, at most `cap` times a job
+// Fix rounds: the runs before, and the hidden failures they share. The rule itself is in worker-verdict.ts.
 
 /** The job's fix rounds before run `id`: its other build runs that a check or the reviewer sent back. */
 export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed);
-
-/**
- * The check that the checks' stop sends back to the worker, or null. `check` is the last check of the run that failed.
- * A time-out does not go back, and neither does a stop that is not that check's own failure.
- */
-export function backCheck(stop: ChecksStop, check: string | undefined): string | null {
-  if (!check || stop.timedOut) return null;
-  const own = stop.cause === "check" ? stop.checkName === check : check === "hidden" && stop.cause === "hidden-check";
-  return own ? check : null;
-}
-
-/**
- * What a failed check adds to the stuck run: `failed` and `round`, which send it back, while fewer than `cap`
- * rounds are done; after that, a reason that counts the rounds. A run with no fix rounds (`earlier` absent, a recheck) gets nothing.
- */
-export function checkBack(earlier: Run[] | undefined, check: string, reason: string, cap: number): Pick<Run, "failed" | "round"> | Pick<Run, "reason"> | Record<string, never> {
-  if (!earlier) return {};
-  const done = earlier.length;
-  if (done < cap) return { failed: check, round: done };
-  return cap > 0 ? { reason: `${reason} after ${done} fix rounds` } : {};
-}
-
-/** "once", "twice", "3 times". */
-const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`;
-
-/** The reason of a run that came back from the reviewer after the last fix round. */
-const sentBack = (n: number, reason: string) => `the reviewer sent it back ${times(n)}: ${reason.replace(/^reviewer:\s*/, "")}`;
-
-/**
- * What follows a reviewer hold: a fix round (`round`) while fewer than `cap` rounds are done; else the run
- * waits for Chris with `reason`, which says how often the reviewer sent it back (`back`) when it did.
- */
-export function reviewHold(earlier: Run[] | undefined, reason: string, cap: number): { round: number } | { reason: string; back: number } {
-  if (earlier && earlier.length < cap) return { round: earlier.length };
-  const back = earlier?.filter((r) => r.failed === "review").length ?? 0;
-  return { reason: back ? sentBack(back, reason) : reason, back };
-}
 
 /**
  * A sealed test that fails unchanged twice: the run before this one also failed the hidden check with the same
