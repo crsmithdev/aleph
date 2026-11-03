@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { correctionsDue, dispatchIssues, episodeStep, report, setPaused, stalled, stallStep } from "./factory.ts";
-import { spentToday, runsToday, health } from "./factory-status.ts";
+import { spentToday, runsToday, health, writeBaseline } from "./factory-status.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
@@ -188,6 +188,20 @@ test("stalled lists what could move: a goal, a new issue and a passed run, each 
   setPaused(false);
   writeRun(folder, { ...readRun(folder)!, condition: "stuck" });
   expect(stalled()).toEqual([]); // the hold has its own line
+});
+
+test("stalled counts a red baseline only on the commit origin/main still has", async () => {
+  const repo = join(ctx.base, "repo");
+  const head = () => Bun.spawnSync(["git", "-C", repo, "rev-parse", "origin/main"], { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
+  const id = goal();
+  const fresh = writeList({ key: "fac" }, "add a plan", (doc) => { const i = issues.add(doc, "plan me"); i.fm.plan = "true"; return i.id; }, true)!.value;
+  const old = head();
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "next");
+  sh(repo, "git", "push", "-q", "origin", "main");
+  await writeBaseline("fac", () => ({ repo: "fac", commit: old, ok: false, failed: "tests" }));
+  expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
+  await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
+  expect(stalled()).toEqual([]);
 });
 
 test("a blocked goal does not stall; a live agent run leaves a ready goal out", async () => {
