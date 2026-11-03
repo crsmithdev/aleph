@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, other, sh, setup, teardown, seedItem } from "./cli.helpers";
+import { dispatch } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -17,10 +18,11 @@ describe("a factory run", () => {
     const broken = join(base, "broken-sandbox");
     // Only the baseline's script fails to start; the probe and the runs go through.
     writeFileSync(broken, `#!/bin/bash\ncase "\${@: -1}" in *base.bundle*) exit 3 ;; esac\nexec ${join(base, "pass")} "$@"\n`, { mode: 0o755 });
-    const t = await aleph(["tick"], { ALEPH_SANDBOX_CMD: broken });
+    // The tick's dispatch, in-process; `aleph report` keeps its CLI test.
+    const t = await dispatch({ ALEPH_SANDBOX_CMD: broken });
     expect(t.json.started).toEqual([]);
     expect(t.json.skipped[0]).toContain(`fac-${id}: main is unchecked: checks did not start`);
     expect((await aleph(["report"])).stdout).not.toContain("main is red");
-    expect((await aleph(["tick"])).json.started).toEqual([`fac-${id}`]);
+    expect((await dispatch()).json.started).toEqual([`fac-${id}`]);
   }, 60_000);
 });

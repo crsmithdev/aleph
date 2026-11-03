@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, job, jobsDir, other, remote, sh, state, told, setup, teardown } from "./cli.helpers";
+import { base, file, jobsDir, other, remote, sh, state, told, setup, teardown } from "../cli.helpers";
+import { actionJob, land } from "../inproc";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -20,9 +21,9 @@ describe("land: conflicts", () => {
   const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
 
   test("a conflict records its paths, sends the job back to the worker, and the passed follow-up lands", async () => {
-    await job("mend", "resolve-later mend.txt");
+    await actionJob("mend", "resolve-later mend.txt");
     pushFromOther("mend.txt", "theirs\n");
-    const r = await aleph(["land", "mend"]);
+    const r = await land("mend");
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "merge conflict", conflicts: ["mend.txt"], next: "worker" });
     expect(file(r.json.run, "land.log")).toContain("## conflicts\nmend.txt");
     expect(told).toContain("demo/mend failed; sent back to the worker");

@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, aleph, base, env, file, fjobFor, jobsDir, moveMain, remote, sh, state, stateNow, until, setup, teardown } from "./cli.helpers";
+import { CLI, base, env, file, jobsDir, moveMain, remote, sh, state, stateNow, until, setup, teardown } from "./cli.helpers";
+import { issueAdd, issueShow, job, land as landJob } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -15,10 +16,12 @@ async function killLand(name: string, cli: ReturnType<typeof startLand>): Promis
   cli.kill(9);
   await cli.exited;
 }
-const itemStatus = async (id: number) => (await aleph(["issue", "show", "fac", String(id), "--json"])).json;
+const itemStatus = async (id: number) => (await issueShow("fac", id)).json;
+const fjobFor = (name: string, action: string, id: number) => job("fac", name, `Goal: ${name}\nACTION: ${action}\n`, { on: String(id) });
+// The land that is killed is an `aleph land` process: the crash is what the case tests. The rest is in-process.
 
 test("a land killed at its checks leaves main alone, and the next land finishes the job", async () => {
-  const id = (await aleph(["issue", "add", "fac", "killed at a check"])).json.added;
+  const id = (await issueAdd("fac", "killed at a check")).json.added;
   await fjobFor("killcheck", "commit gate/a.txt", id);
   moveMain(); // A land reuses the job's checks while main has not moved.
   const before = remoteGit("rev-parse", "main");
@@ -33,14 +36,14 @@ test("a land killed at its checks leaves main alone, and the next land finishes 
   rmSync(reached);
 
   // The dead land's lock must not stop this one.
-  const again = await aleph(["land", "killcheck"]);
+  const again = await landJob("killcheck");
   expect(state(again.json.run), file(again.json.run, "land.log")).toMatchObject({ condition: "landed" });
   expect(remoteGit("rev-list", "--count", `${before}..main`)).toBe("1");
   expect((await itemStatus(id)).status).toBe("done");
 }, 60_000);
 
 test("a land killed after its push went through closes the issue on the next land and does not merge again", async () => {
-  const id = (await aleph(["issue", "add", "fac", "killed after the push"])).json.added;
+  const id = (await issueAdd("fac", "killed after the push")).json.added;
   await fjobFor("killpush", "commit killpush.txt", id);
   const hold = join(base, "push-hold"), reached = join(base, "push-reached");
   // The hook runs after the ref moved and before git push returns to the land.
@@ -55,7 +58,7 @@ test("a land killed after its push went through closes the issue on the next lan
   expect(stateNow(landRun("killpush")).condition).not.toBe("landed");
   rmSync(hold);
 
-  const again = await aleph(["land", "killpush"]);
+  const again = await landJob("killpush");
   expect(state(again.json.run), file(again.json.run, "land.log")).toMatchObject({ condition: "landed", commit: pushed });
   expect(remoteGit("rev-parse", "main")).toBe(pushed);
   expect((await itemStatus(id)).status).toBe("done");

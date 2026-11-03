@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "no
 import { join } from "node:path";
 import { waitFor } from "../tests/wait.ts";
 import { aleph, base, diagnose, jobsDir, quiet, startScript, stateNow, setup, teardown, until as untilQuiet, seedItem } from "./cli.helpers";
+import { drop, issueClose } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -31,11 +32,12 @@ describe("a factory run", () => {
       // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
       await waitFor(() => ids.every(settled), { timeout: 3000, every: 100 });
       for (const id of ids) {
-        await aleph(["drop", `fac-${id}`]);
-        await aleph(["issue", "drop", "fac", String(id), "test over"]);
+        await drop(`fac-${id}`);
+        await issueClose("fac", id, "drop", "test over");
       }
     });
 
+    // Two `aleph dispatch` processes at once: the lock between processes is what these cases test.
     test("two dispatches at once start each goal once", async () => {
       const d = await goal("d");
       ids.push(d);

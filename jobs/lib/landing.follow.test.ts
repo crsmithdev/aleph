@@ -1,15 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { aleph, base, file, job, other, repo, sh, state, setup, teardown } from "./cli.helpers";
+import { base, file, other, repo, sh, state, setup, teardown } from "../cli.helpers";
+import { actionJob, land as landJob } from "../inproc";
 
 beforeAll(setup);
 afterAll(teardown);
 
 describe("land follows main", () => {
   const land = async (name: string, action: string, repoKey = "demo", extra: Record<string, string> = {}) => {
-    await job(name, action, {}, repoKey);
-    return aleph(["land", name], extra);
+    await actionJob(name, action, {}, repoKey);
+    return landJob(name, {}, extra);
   };
 
   test("a clean main checkout moves to the landed commit", async () => {

@@ -1,14 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, jobsDir, other, repo, sh, specFile, state, setup, teardown } from "./cli.helpers";
+import { aleph, jobsDir, other, repo, sh, state, setup, teardown } from "./cli.helpers";
+import { drop, job, land, recheck } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
 
 describe("a factory run", () => {
-  const fjob = (name: string, action: string, extra: Record<string, string> = {}, more: string[] = []) =>
-    aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), ...more], extra);
+  const fjob = (name: string, action: string, extra: Record<string, string> = {}) => job("fac", name, `Goal: ${name}\nACTION: ${action}\n`, {}, extra);
+  // `aleph recheck` keeps one CLI test, for its wiring; the other case calls the transition in-process.
   describe("recheck", () => {
     const red = () => {
       sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
@@ -38,7 +39,7 @@ describe("a factory run", () => {
       expect(sh(repo, "git", "merge-base", "--is-ancestor", worker, "factory/rc1")).toBe("");
       expect(sh(repo, "git", "log", "--format=%s", "factory/rc1")).toContain("add rc1.txt");
       expect(sh(repo, "git", "ls-tree", "--name-only", "factory/rc1")).not.toContain("FAIL");
-      const l = await aleph(["land", "rc1"]);
+      const l = await land("rc1");
       expect(state(l.json.run).condition).toBe("landed");
     }, 60_000);
 
@@ -47,11 +48,11 @@ describe("a factory run", () => {
       const r = await fjob("rc4", "commit-fixed rc4.txt", NOFIX);
       expect(state(r.json.run).condition).toBe("stuck");
       mend(["rc4.txt", "different\n"]);
-      const c = await aleph(["recheck", "rc4"], NOFIX);
+      const c = await recheck("rc4", NOFIX);
       expect(state(c.json.run)).toMatchObject({ kind: "recheck", condition: "stuck", conflicts: ["rc4.txt"] });
       expect(state(c.json.run).reason).toContain("rc4.txt");
       expect(kinds("rc4")).toEqual(["build", "recheck"]);
-      await aleph(["drop", "rc4"]);
+      await drop("rc4");
     }, 60_000);
   });
 });

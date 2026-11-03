@@ -2,12 +2,14 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, patchItem, seedItem } from "./cli.helpers";
+import { dispatch, drop, issueClose, issueNote, recheck as recheckJob } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
 
 // Every transition dispatches at once: none of these tests runs `aleph tick`. The dispatch is on, the
-// timer is not, so a run that starts did so from the process call or its detached dispatch.
+// timer is not, so a run that starts did so from the process call or its detached dispatch. The edit keeps its CLI
+// test: the dispatch after an edit is started by jobs/cli.ts. The other transitions are called in-process.
 describe("every transition dispatches at once", () => {
   let startLog: string, startCmd: string;
   const on = (extra: Record<string, string> = {}) => ({ ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog, ...extra });
@@ -17,11 +19,16 @@ describe("every transition dispatches at once", () => {
   // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
   // with its run-end dispatch, has exited.
   const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).condition !== "running" && !unitAlive(join(jobsDir, r)));
-  const add = (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) => addOld(title, action, extra, on(env));
+  // addOld's item, then the dispatch that `add` ran, in-process.
+  const add = async (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) => {
+    const id = await addOld(title, action, extra, { ALEPH_DISPATCH: "off" });
+    await dispatch(on(env));
+    return id;
+  };
   // An old-shape goal, seeded: no verb of `aleph issue` writes one. `aleph dispatch` starts it.
   const seed = async (title: string, action: string, fm: Record<string, unknown> = { kind: "goal" }, env: Record<string, string> = {}) => {
     const id = seedItem("fac", title, fm, `ACTION: ${action}`);
-    await aleph(["dispatch"], on(env));
+    await dispatch(on(env));
     return id;
   };
   const gates = new Set<string>();
@@ -42,10 +49,10 @@ describe("every transition dispatches at once", () => {
     for (const id of ids.splice(0)) {
       await until(() => settled(id));
       // The issue goes first: while it is open and has no live job, a detached dispatch can rerun it.
-      expect((await aleph(["issue", "drop", "fac", String(id), "test over"])).code).toBe(0);
+      expect((await issueClose("fac", id, "drop", "test over")).code).toBe(0);
       // A job that passed, landed or was dropped has no open job to drop. Any other refusal leaves it open,
       // and a stuck or failed one holds every later dispatch.
-      const d = await aleph(["drop", `fac-${id}`]);
+      const d = await drop(`fac-${id}`);
       if (d.code !== 0) expect(d.stderr).toContain("no open job");
       await until(() => settled(id));
     }
@@ -70,20 +77,20 @@ describe("every transition dispatches at once", () => {
     const a = track(await add("starts first", open("waiter"), ["--labels", "goal"]));
     await until(() => started().includes(`fac-${a}`));
     patchItem("fac", a, { after: [`fac-${blocker}`] });
-    expect((await aleph(["drop", `fac-${a}`, "waits now"], on())).code).toBe(0);
+    expect((await drop(`fac-${a}`, "waits now", false, on())).code).toBe(0);
     // The drop's detached dispatch and the dropped unit's run-end dispatch have both ended.
     await until(() => settled(a) && !dispatching());
     expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
     // A dispatch from any other path holds it too.
-    await aleph(["dispatch"], on());
+    await dispatch(on());
     expect(started().filter((n) => n === `fac-${a}`)).toEqual([`fac-${a}`]);
   }, 60_000);
 
   test("a rerun's prompt holds the reasons of the earlier drops and the issue's notes", async () => {
     const a = track(await add("steered", open("steer"), ["--labels", "goal"]));
     await until(() => started().includes(`fac-${a}`));
-    await aleph(["issue", "note", "fac", String(a), "mind the sliced list"]);
-    expect((await aleph(["drop", `fac-${a}`, "the card counts the sliced list"], on())).code).toBe(0);
+    await issueNote("fac", a, "mind the sliced list");
+    expect((await drop(`fac-${a}`, "the card counts the sliced list", false, on())).code).toBe(0);
     await until(() => started().length === 2);
     const prompts = () => runs(a).map((r) => join(jobsDir, r, "prompt.md")).filter(existsSync).map((f) => readFileSync(f, "utf8"));
     await until(() => prompts().length === 2);
@@ -111,7 +118,7 @@ describe("every transition dispatches at once", () => {
       writeFileSync(hold, "");
       try {
         // The gate check holds the recheck live until its dispatch has started the goal. A loaded dispatch that boots after the recheck ended meets the hold again.
-        const recheck = aleph(["recheck", `fac-${s}`], on());
+        const recheck = recheckJob(`fac-${s}`, on());
         await until(() => started().includes(`fac-${b}`));
         rmSync(hold, { force: true });
         expect((await recheck).code).toBe(1);

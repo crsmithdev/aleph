@@ -1,14 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, aleph, base, fakeLog, file, job, other, remote, sh, specFile, state, setup, teardown } from "./cli.helpers";
+import { CLI, aleph, base, fakeLog, file, other, remote, sh, state, setup, teardown } from "./cli.helpers";
+import { actionJob as job, drop, issueAdd, issueClose, job as startJob, land, status as statusOf } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
 
+// `aleph status` with no issue keeps its CLI test: it is built in jobs/cli.ts. The other cases call the library in-process.
 describe("milestone 2", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
-  const status = async (item: string) => (await aleph(["status", item, "--json"])).json;
+  const status = async (item: string) => (await statusOf(item)).json;
   function pushFromOther(message: string, f: string): void {
     sh(other, "git", "pull", "-q", "--rebase", "origin", "main");
     writeFileSync(join(other, f), `${Math.random()}\n`);
@@ -19,7 +21,7 @@ describe("milestone 2", () => {
 
   test("three ready branches land one at a time, in the order their lands were made", async () => {
     for (const n of ["qa", "qb", "qc"]) await job(n, `commit pair/${n}.txt`);
-    const lands = await Promise.all(["qa", "qb", "qc"].map((n) => aleph(["land", n])));
+    const lands = await Promise.all(["qa", "qb", "qc"].map((n) => land(n)));
     const order = lands.map((l) => state(l.json.run)).sort((a, b) => a.made - b.made).map((s) => s.name);
     expect(lands.map((l) => state(l.json.run).condition)).toEqual(["landed", "landed", "landed"]);
     expect(remoteGit("log", "-3", "--reverse", "--format=%s", "main").split("\n")).toEqual(order.map((n) => `add pair/${n}.txt`));
@@ -31,14 +33,14 @@ describe("milestone 2", () => {
     const j = await job("crashed", "commit crashed.txt");
     pushFromOther(`add crashed.txt\n\nJob: ${j.json.job}`, "crashed.txt");
     const pushed = remoteGit("rev-parse", "main");
-    const l = await aleph(["land", "crashed"]);
+    const l = await land("crashed");
     expect(state(l.json.run)).toMatchObject({ condition: "landed", commit: pushed });
     expect(remoteGit("rev-parse", "main")).toBe(pushed);
     expect(file(l.json.run, "land.log")).toContain(`## already on main as ${pushed}`);
   });
 
   test("aleph status with no item gives the stage of each open item in the recent repos", async () => {
-    const id = (await aleph(["issue", "add", "fac", "listed by status"])).json.added;
+    const id = (await issueAdd("fac", "listed by status")).json.added;
     const r = await aleph(["status", "--json"]);
     expect(r.code).toBe(0);
     expect(r.json.find((s: any) => s.id === `fac-${id}`)).toMatchObject({ stage: "new" });
@@ -46,22 +48,22 @@ describe("milestone 2", () => {
     expect(text.split("\n")).toContain("fac");
     expect(text).toContain(`\n  ${id} new: `);
     expect(text).not.toContain(`fac-${id}`);
-    await aleph(["issue", "done", "fac", String(id)]);
+    await issueClose("fac", id, "done");
     expect((await aleph(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);
 
   test("aleph status inside the sandbox, from the bundle, says what it says outside", async () => {
-    const done = (await aleph(["issue", "add", "fac", "landed one"])).json.added;
+    const done = (await issueAdd("fac", "landed one")).json.added;
     pushFromOther(`landed\n\nIssue: fac-${done}`, "landed-one.txt");
-    const open = (await aleph(["issue", "add", "fac", "open one"])).json.added;
+    const open = (await issueAdd("fac", "open one")).json.added;
     const items = [`fac-${done}`, `fac-${open}`];
-    const r = await aleph(["job", "fac", "finside", "--spec", specFile(`Goal: inside\nACTION: status ${CLI} ${items.join(" ")}\n`)]);
+    const r = await startJob("fac", "finside", `Goal: inside\nACTION: status ${CLI} ${items.join(" ")}\n`);
     expect(state(r.json.run).condition).toBe("passed");
     const inside = readFileSync(join(fakeLog, "status-inside"), "utf8").trim().split(/\n(?=\{)/).map((t) => JSON.parse(t));
     const outside = await Promise.all(items.map(status));
     expect(inside).toEqual(outside);
     expect(outside.map((s: any) => s.stage)).toEqual(["done", "new"]);
-    await aleph(["drop", "finside"]);
+    await drop("finside");
   }, 30_000);
 });
 

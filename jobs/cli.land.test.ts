@@ -1,20 +1,22 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, branchExists, file, itemsRemote, job, jobsDir, moveMain, remote, repo, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, branchExists, file, itemsRemote, jobsDir, moveMain, remote, repo, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { actionJob as job, checked, drop, issueShow, jobView, land } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
 
+// `aleph land` and `aleph jobs` keep one CLI test each, for their wiring; the other cases call the transitions in-process.
 describe("land", () => {
   const remoteHead = () => sh(base, "git", "--git-dir", remote, "rev-parse", "main");
 
   test("a job that has not passed is refused", async () => {
     await job("unpassed", "exit3");
-    const r = await aleph(["land", "unpassed"]);
+    const r = await land("unpassed");
     expect(r.code).toBe(1);
     expect(r.stderr).toContain("unpassed is failed, not passed");
-    await aleph(["drop", "unpassed"]);
+    await drop("unpassed");
   });
 
   test("a passed job lands as one commit on main, and the main checkout follows", async () => {
@@ -36,31 +38,32 @@ describe("land", () => {
 
   test("a manual check does not gate the land; --checked lands with no check open", async () => {
     await job("phoneland", "commit android/land.txt");
-    const ok = await aleph(["land", "phoneland", "--checked"]);
+    const ok = await land("phoneland", { checked: true });
     expect(state(ok.json.run).condition).toBe("landed");
     expect(state(ok.json.run).check).toBeUndefined();
-    expect((await aleph(["jobs", "phoneland"])).json.check).toBeUndefined();
+    expect((await jobView("phoneland")).json.check).toBeUndefined();
   });
 
   test("a job with a manual check lands with the check open as a to-do item, until checked", async () => {
     await job("phonelater", "commit android/later.txt");
-    const r = await aleph(["land", "phonelater"]);
+    const r = await land("phonelater");
     expect(r.code).toBe(0);
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", condition: "landed", check: "open", say: "run it on the phone" });
     expect(remoteHead()).toBe(s.commit);
-    const item = (await aleph(["issue", "show", "demo", String(s.checkItem), "--json"])).json;
+    const item = (await issueShow("demo", s.checkItem)).json;
     expect(item).toMatchObject({ title: "Check phonelater: run it on the phone", status: "open", areas: ["check"] });
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit)).toBe("android/later.txt");
     expect(told).toContain("demo/phonelater landed; check open");
+    // The list of `aleph jobs` is built in jobs/cli.ts, not in a library: a landed job stays in it while its check is open.
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ check: "open" });
 
-    const c = await aleph(["checked", "phonelater"]);
+    const c = await checked("phonelater");
     expect(c.code).toBe(0);
-    expect((await aleph(["jobs", "phonelater"])).json).toMatchObject({ condition: "landed", check: "done" });
+    expect((await jobView("phonelater")).json).toMatchObject({ condition: "landed", check: "done" });
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ condition: "landed", check: "done" });
-    expect((await aleph(["issue", "show", "demo", String(s.checkItem), "--json"])).json.status).toBe("done");
-    const again = await aleph(["checked", "phonelater"]);
+    expect((await issueShow("demo", s.checkItem)).json.status).toBe("done");
+    const again = await checked("phonelater");
     expect(again.code).toBe(1);
     expect(again.stderr).toContain("phonelater has no open check");
   });
@@ -80,7 +83,7 @@ describe("land", () => {
     moveMain();
     const before = remoteHead();
     writeFileSync(join(base, "todo-once"), "");
-    const l = await aleph(["land", "patient"]);
+    const l = await land("patient");
     const s = state(l.json.run);
     expect(s).toMatchObject({ condition: "landed" });
     expect(sh(base, "git", "--git-dir", remote, "rev-parse", `${s.commit}~1`)).toBe(before);
@@ -91,7 +94,7 @@ describe("land", () => {
     await job("still", "commit still.txt");
     writeFileSync(join(repo, "README"), "local edit\n");
     const before = [sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain"), sh(repo, "git", "diff")];
-    const r = await aleph(["land", "still"]);
+    const r = await land("still");
     expect(state(r.json.run)).toMatchObject({ condition: "landed" });
     expect(state(r.json.run).reason).toBeUndefined();
     expect([sh(repo, "git", "rev-parse", "HEAD"), sh(repo, "git", "status", "--porcelain"), sh(repo, "git", "diff")]).toEqual(before);
