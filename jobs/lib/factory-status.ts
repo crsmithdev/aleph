@@ -18,7 +18,7 @@ import { allRuns, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, typ
 import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
-import { AWAITING_CAP, DAY_CAP, LIVE_CAP } from "./settings.ts";
+import { AWAITING_CAP, DAY_CAP, LIVE_CAP, suiteBudgetSeconds } from "./settings.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -325,11 +325,28 @@ export function flakeNames(f: Flake): { kind: "test" | "check"; name: string }[]
   return tests.length ? tests.map((name) => ({ kind: "test" as const, name })) : [{ kind: "check", name: f.check }];
 }
 
-/** The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, and flakes. `jobs` and `lists` are the caller's, when it has read them already. */
+/**
+ * A health line for each repo whose last full suite took more than the budget. The full suite is
+ * the check named `tests` or `test`. Only a pass on the first try counts: a rerun doubles the time.
+ */
+export function suiteLines(runs: Entry[] = allRuns()): string[] {
+  const last = new Map<string, { at: string; seconds: number }>();
+  for (const { run } of runs) {
+    const c = run.repo && (run.checks ?? []).find((c) => /^tests?$/.test(c.name) && c.ok && !c.rerun);
+    if (!c) continue;
+    const at = run.ended ?? run.started;
+    if (at >= (last.get(run.repo!)?.at ?? "")) last.set(run.repo!, { at, seconds: c.seconds });
+  }
+  const budget = suiteBudgetSeconds();
+  return [...last].filter(([, s]) => s.seconds > budget).map(([repo, s]) => `health: ${repo} full suite took ${s.seconds} s; the budget is ${budget} s`);
+}
+
+/** The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, a slow full suite, and flakes. `jobs` and `lists` are the caller's, when it has read them already. */
 export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {}): string[] {
   const lines: string[] = [];
   const lists = o.lists ?? reader();
   lines.push(...stallLines(now, o.jobs));
+  lines.push(...suiteLines(o.jobs?.flat()));
   const smoke = smokeLine();
   if (smoke) lines.push(smoke);
   const w = waiting(o.jobs);

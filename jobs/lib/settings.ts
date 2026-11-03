@@ -73,6 +73,8 @@ export const PROPOSE_AT = (): number => {
 
 export const jobSeconds = () => num("ALEPH_JOB_TIMEOUT", 1800);
 export const checkSeconds = () => num("ALEPH_CHECK_TIMEOUT", 1200);
+/** The seconds a repo's full suite may take before the Status page warns. */
+export const suiteBudgetSeconds = () => num("ALEPH_SUITE_BUDGET_S", 120);
 export const reviewSeconds = () => num("ALEPH_REVIEW_TIMEOUT", 600);
 export const reviewDiffMax = () => num("ALEPH_REVIEW_DIFF_MAX", 200000);
 export const fixRounds = () => num("ALEPH_FIX_ROUNDS", 2);

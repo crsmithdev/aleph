@@ -242,6 +242,25 @@ test("health says a stall only after 15 minutes of ticks, and stops when the wor
   expect(health(t0).some((l) => l.includes("24 hours"))).toBe(false);
 });
 
+test("health warns when the last full suite of a repo took more than the budget", () => {
+  const suite = (id: string, ended: string, seconds: number, extra: object = {}) => {
+    const dir = join(ctx.base, "jobs", id);
+    mkdirSync(dir, { recursive: true });
+    writeRun(dir, { kind: "build", job: id, name: id, repo: "fac", condition: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] } as Run);
+  };
+  const said = () => health().filter((l) => l.includes("full suite"));
+  suite("20261103-000001-a", "2026-11-03T00:01:00Z", 135);
+  expect(said()).toEqual(["health: fac full suite took 135 s; the budget is 120 s"]);
+  // A pass on rerun does not count: its time holds two runs.
+  suite("20261103-000002-b", "2026-11-03T00:02:00Z", 300, { rerun: true });
+  expect(said()).toEqual(["health: fac full suite took 135 s; the budget is 120 s"]);
+  process.env.ALEPH_SUITE_BUDGET_S = "200";
+  try { expect(said()).toEqual([]); } finally { delete process.env.ALEPH_SUITE_BUDGET_S; }
+  // The last run is the one that ended last, not the one that started last.
+  suite("20261103-000000-c", "2026-11-03T00:03:00Z", 90);
+  expect(said()).toEqual([]);
+});
+
 test("report puts a done triage run under other", () => {
   const triage = join(ctx.base, "jobs", "20261102-000002-triage-t1-triage");
   mkdirSync(triage, { recursive: true });

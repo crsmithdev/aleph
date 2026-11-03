@@ -89,6 +89,14 @@ test("an alert keeps its red sentence and holds the weekly usage part; three ale
   expect(said(three, weekAt(90))).toBe("Alert: GitHub CI is broken; the build is failing on main; new runs wait for your answers.");
 });
 
+test("a full suite over its budget is a warning part, not an alert and not a card", () => {
+  const slow = "health: aleph full suite took 135 s; the budget is 120 s";
+  expect(said({ health: [slow] })).toBe("Everything is running smoothly; aleph full suite took 135 s; the budget is 120 s.");
+  expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [slow] } })).toContain('class="say warning"');
+  expect(said({ health: [mainRed, slow] })).toBe("Alert: the build is failing on main; aleph full suite took 135 s; the budget is 120 s.");
+  expect(view.view.render(withFactory({ health: [slow] }))).not.toContain('data-kind="error"');
+});
+
 test("a paused factory with weekly usage at 90% says so", () => {
   expect(said({ paused: true }, weekAt(90))).toBe("The factory is paused; weekly usage is at 90%.");
 });
