@@ -17,7 +17,10 @@ const post = (p: string) => at(p, { method: "POST", headers: { "X-Aleph-UI": "1"
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-gates-"));
   // No git store and no repo: this file shares its process with ui/state-load.test.ts, whose timer a blocking git call would stall.
-  writeFileSync(join(base, "repos.json"), "{}");
+  writeFileSync(join(base, "repos.json"), JSON.stringify({
+    held: { path: join(base, "held-repo"), sandbox: true, held: ["src/auth/**"] },
+    plain: { path: join(base, "plain-repo"), sandbox: true },
+  }));
   const factory = join(base, "factory");
   mkdirSync(factory);
   writeFileSync(join(factory, "always.json"), JSON.stringify({ rescue: { action: "recommended", at: ago(30) }, "triage-failed": { action: "close", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } }));
@@ -51,7 +54,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "chores", "factory", "gated", "held", "log", "main", "now", "rules", "sandbox"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "chores", "factory", "gated", "held", "log", "main", "now", "repoHeld", "rules", "sandbox"]);
   expect(Object.keys(d.factory).sort()).toEqual(["awaiting", "awaitingCap", "dayCap", "hold", "liveCap", "liveRuns", "paused", "probe", "runsToday"]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
@@ -60,6 +63,7 @@ test("the body of /api/gates has every section, one rule per Ask reason with onl
   expect(by("host-check").mode).toBe("");
   expect(by("proposal-claude-md").places).toEqual(["proposal-claude-md:global"]);
   expect(d.held).toEqual(SECURITY_PATHS);
+  expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
   expect(d.sandbox.write).toEqual(["<run>/home", "<run>/work", "<run>/tmp"]);
   expect(d.sandbox.denied).toContain("/home");
   expect(d.sandbox.network.domains).toContain("api.anthropic.com");
@@ -106,6 +110,7 @@ const data = () => ({
   chores: [askItem("host-check", "r-2")],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
+  repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   sandbox: { read: ["<run>/in.bundle"], write: ["<run>/work"], denied: ["/home"], network: { domains: ["api.anthropic.com"], localBinding: false } },
   log: { days: 7, max: 200, entries: [{ at: ago(1), by: "Rule", item: "r-5", what: "rescue: recommended" }, { at: ago(2), by: "You", item: "rule", what: "rescue: set to recommended" }] },
 });
@@ -129,6 +134,11 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(h).toContain('data-act="checked" data-repo="r" data-id="2"');
   expect(h).toContain('data-gates="all-done"');
   for (const p of SECURITY_PATHS) expect(h).toContain(`<code class="chip">${p}</code>`);
+  const card = gates.renderHeld(data());
+  expect(card).toContain("<b>r</b>");
+  expect(card).toContain('<code class="chip">src/auth/**</code>');
+  for (const p of SECURITY_PATHS) expect(card).toContain(`<code class="chip">${p}</code>`);
+  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain("No repo names held paths.");
 });
 
 test("the log filter keeps one actor's entries", () => {

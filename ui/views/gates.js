@@ -113,9 +113,15 @@ export function renderRules(d) {
   return `<section id="rules" aria-label="Rules">${sectionHead("Rules", { aside: "Who decides each kind of Ask. Ask me puts it in Waiting for you; the other mode acts and writes a Rule line in the log." })}<div class="rules">${rows}</div></section>`;
 }
 
-/** The security paths: a land that changes one, other than a test, waits for its rule. From gate.ts; read-only. */
+/** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
 export function renderHeld(d) {
-  return `<section class="card" aria-label="Held paths">${sectionHead("Held paths")}<p class="quiet">A land that changes one of these, other than a test, waits for its rule above.</p><div class="held">${d.held.map((p) => `<code class="chip">${esc(p)}</code>`).join("")}</div></section>`;
+  const chips = (l) => l.map((p) => `<code class="chip">${esc(p)}</code>`).join("");
+  const repos = d.repoHeld ?? [];
+  const rows = repos.length
+    ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${chips(r.held)}</div></div>`).join("")
+    : `<p class="quiet">No repo names held paths.</p>`;
+  return `<section class="card" aria-label="Held paths">${sectionHead("Held paths")}<p class="quiet">The security paths wait for Chris before the review. A repo's held paths wait for Chris after its review passes. A test is never held.</p>` +
+    `<div class="held-repo"><b>Every repo</b> <div class="held">${chips(d.held)}</div></div>${rows}</section>`;
 }
 
 /** What a worker step may touch, from the profile sandbox.ts builds. Read-only. */

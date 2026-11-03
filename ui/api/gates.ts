@@ -118,6 +118,11 @@ function mainCi() {
   };
 }
 
+/** The held globs each factory repo names in the registry (`repo.held`), repos with at least one, sorted by repo key. */
+export function repoHeld(): { repo: string; held: string[] }[] {
+  return factoryRepos().filter((r) => r.held.length > 0).map((r) => ({ repo: r.key, held: [...r.held] })).sort((a, b) => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0));
+}
+
 /** The page's data from the Status page's state (its factory snapshot and its asks) and the security facts. */
 export function gatesBody(state: Pick<State, "now" | "factory" | "asks">, security: { held: string[]; sandbox: unknown }) {
   const jobs = allJobs();
@@ -130,6 +135,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks">, securi
     ...splitAsks(state.asks),
     rules: rules(),
     ...security,
+    repoHeld: repoHeld(),
     log: { days: LOG_DAYS, max: LOG_MAX, entries: log() },
   };
 }
