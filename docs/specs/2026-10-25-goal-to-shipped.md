@@ -1,9 +1,22 @@
 # Goal to shipped
 
-Written 2026-10-25. Version 6, 2026-11-01. The seed, the planner, the land,
-acceptance, memory, the UI and research goals are built; other non-code goals
-are not. Each piece has its own spec in this folder; this file stays the map.
+Written 2026-10-25. Version 7, 2026-11-02. The seed, the planner, the land,
+acceptance, memory and the UI are built. The factory makes code goals only.
+Each piece has its own spec in this folder; this file stays the map.
 Versions 1 to 4 are in git.
+
+Version 7 changes (Chris, 2 Nov, after the third factory review):
+
+- Research and every other non-code goal kind leave the plan. The factory
+  makes code: aleph itself, and small apps and tools. The research worker,
+  its judge, its fetch gate and its report lane leave the code (aleph-1112).
+- Rubrics, judges, grading criteria for writing and research, calibration,
+  and delivery to docs, artifacts and the vault leave the plan with them.
+  Code goals are judged by the Oracle, the sealed scenarios, the reviewer and
+  the browser step.
+- The second factory repo no longer waits for non-code goals. When it opens
+  is Chris's call.
+- Version 6's text about non-code goals below is kept as history and marked.
 
 Version 6 changes (Chris, 1 Nov, after the factory review):
 
@@ -55,14 +68,15 @@ solve. Many goals are in flight at once, and Chris keeps adding more.
 
 ## Scope: personal work, not products
 
-The goals are Chris's own projects. Most are not code, and none is an
-enterprise product. Examples:
+The goals are Chris's own projects, and none is an enterprise product. Since
+version 7 the factory takes code goals only; the rows marked "dropped (v7)"
+were in scope before. Examples:
 
 | Kind | Example | Delivered to |
 |---|---|---|
-| Writing | a blog post draft | the blog repo, as a draft branch |
-| Learning material | a training program for AI SWE interviews | a doc or an artifact |
-| Research | a survey with ranked sources | `~/.aleph/reports/` and the vault |
+| Writing, dropped (v7) | a blog post draft | the blog repo, as a draft branch |
+| Learning material, dropped (v7) | a training program for AI SWE interviews | a doc or an artifact |
+| Research, dropped (v7) | a survey with ranked sources | `~/.aleph/reports/` and the vault |
 | Small app or tool | an app that helps write blog copy interactively | a repo and a local or preview URL |
 | aleph itself | the pieces below | `origin/main` of aleph, through the factory's land |
 
@@ -84,8 +98,8 @@ This sets four rules:
    checked, by what, and the result. Chris spot-checks; he does not
    re-derive.
 3. **Checks run without Chris where an oracle exists.** Code has tests and a
-   running app. Writing and research have no oracle: a rubric and a judge model
-   filter them, and Chris's taste is the final check. The report says which
+   running app. Writing and research, dropped in version 7, have no oracle: a
+   rubric and a judge model would filter them, and Chris's taste is the final check. The report says which
    kind of check each delivery had.
 4. **One report, not many messages.** The report is the one place Chris
    reads. It lists, per goal: delivered, needs a look (with a time estimate),
@@ -114,13 +128,13 @@ Per Goal) sets these limits:
 | # | Stage | What happens | Who |
 |---|---|---|---|
 | 1 | Intake | An item arrives from the chat, the CLI or the UI; `/aleph:goal` is an optional grill in front of it | Chris |
-| 2 | Spec | What done means, how it is checked and, for a non-code goal, its kind and where it is delivered | triage, or the session that files it |
+| 2 | Spec | What done means and how it is checked: the Goal, the Edit surface and the Oracle. A spec check holds a spec that does not match the code | triage, or the session that files it |
 | 3 | Decompose | Tasks, each sized to finish in one run; large goals only | planner model |
 | 4 | Seal | A fresh author writes hidden checks from the goal alone; they must fail on `main` to count | author model |
 | 5 | Make | One worker per task, in its own isolated workspace | worker model |
-| 6 | Check | Code: tests, the hidden checks, a fresh reviewer that judges test edits. Writing and research: the rubric, a fresh judge, source checks. Capped fix rounds | deterministic, reviewer model |
-| 7 | Deliver | Code lands on `origin/main` through the factory's land; documents go to their place (a draft branch, a doc, an artifact, the vault) | deterministic |
-| 8 | Accept | Run the Oracle again on `main` | deterministic |
+| 6 | Check | Tests, the sealed scenarios, a fresh reviewer that marks every clause and judges test edits, the browser step. Capped fix rounds | deterministic, reviewer model |
+| 7 | Deliver | Code lands on `origin/main` through the factory's land | deterministic |
+| 8 | Accept | Run the Oracle again on `main`; the recheck of sealed scenarios is aleph-1094 | deterministic |
 | 9 | Report | The report: delivered, needs you, stuck, with what checked each delivery and the time to look | deterministic |
 
 Stages 3 to 8 repeat until the goal's checks pass, the budget ends, or a task
@@ -163,8 +177,8 @@ thresholds.
 |---|---|---|
 | App or tool | product depth, functionality, visual design, code quality | Anthropic, full-stack harness |
 | Front end | design quality, originality, craft, functionality; the first two weigh more | Anthropic, frontend experiment |
-| Writing | to be set in the non-code goal plan; a starting point is the voice sample, clarity, structure, and the humanizer's AI-pattern checks | proposal |
-| Research | to be set in the non-code goal plan; a starting point is source credibility, coverage of the question, claims that trace to a fetched source | proposal |
+| Writing, dropped (v7) | to be set in the non-code goal plan; a starting point is the voice sample, clarity, structure, and the humanizer's AI-pattern checks | proposal |
+| Research, dropped (v7) | to be set in the non-code goal plan; a starting point is source credibility, coverage of the question, claims that trace to a fetched source | proposal |
 
 Cost reference (Anthropic, Opus 4.6): one app in 3 h 50 min for $124.70, of
 which planning cost $0.46 and three QA passes about $10.
@@ -254,7 +268,7 @@ in this order:
    Oct: build it early.
 3. The UI (piece 4, second half): observability, the report and the waiting
    queue as a page, and management of goals.
-4. Non-code goals: the rubric and judge checks, and delivery to docs,
+4. Non-code goals (dropped in version 7): the rubric and judge checks, and delivery to docs,
    artifacts and the vault. This opens the personal scope.
 5. The rest of model routing (piece 3): a model tier per stage.
 6. Memory (piece 1).
@@ -281,7 +295,7 @@ type its owner, store and gate, and defines milestone 1.
 | Working | the context of one run | `context-gate.ts`, handoffs | a context reset with a file handoff instead of compaction, about every 200K to 300K tokens; each task's run starts from the spec, the task and git log |
 | Semantic | facts and preferences | `MEMORY.md`, `wiki/` | facts learned during a goal enter the vault through a reviewer, never from a worker directly |
 | Episodic | past tasks and how they went | Langfuse traces, `daily/`, handoffs | `vault recall --episodes`: a run finds how a similar task went before; each goal's report entry is kept as an episode |
-| Procedural | rules, skills, workflows | skills, `CLAUDE.md`, hooks | repeated corrections mined from traces become rules or checks; the goal-kind templates (code, writing, research) are procedures |
+| Procedural | rules, skills, workflows | skills, `CLAUDE.md`, hooks | repeated corrections mined from traces become rules or checks; the goal-kind templates are procedures (code is the only kind since version 7) |
 | Retrieval | search over stored material | `vault recall` (substring) | log recall misses; add embeddings only if misses are frequent |
 | Parametric | what the model knows | the model | nothing stored that the model already knows; the routing table (piece 3) picks the model whose knowledge a stage needs |
 | Prospective | future intentions | `aleph todo`, `aleph job` | the work store's goals and tasks (Backlog.md in `~/.aleph/issues`); the factory's timer; questions waiting for Chris |
@@ -356,7 +370,7 @@ OpenRouter is the one paid API) and isolation (`srt`).
 | Decision | Options | Recommendation |
 |---|---|---|
 | Delivery without a yes | drafts and local or preview only; also public | Drafts and local or preview only |
-| Non-code checks | rubric and judge only; also a second model's review | Rubric and judge, with sources checked by fetch for research |
+| Non-code checks | dropped in version 7 | — |
 
 ## References
 
