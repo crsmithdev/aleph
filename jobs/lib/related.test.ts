@@ -4,15 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildChecks, buildTests, importMap, relatedTests, type ImportMap } from "./related.ts";
 import type { Repo } from "./ledger.ts";
+import { fixture } from "../../tests/git-fixture.ts";
 
 let dir: string;
 let commit: string;
-const sh = (...args: string[]) => Bun.spawnSync(args, { cwd: dir, env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } }).stdout.toString().trim();
+const shIn = (cwd: string, ...args: string[]) => Bun.spawnSync(args, { cwd, env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } }).stdout.toString().trim();
+const sh = (...args: string[]) => shIn(dir, ...args);
 const TESTS = ["**/*.test.ts"];
 
-beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "aleph-related-"));
-  sh("git", "init", "-q", "-b", "main");
+/** The repo every test starts from: one commit "seed" of the files below. */
+function seed(dir: string): void {
+  shIn(dir, "git", "init", "-q", "-b", "main");
   const files: Record<string, string> = {
     "lib/a.ts": "export const a = 1;\n",
     "lib/b.ts": `import { a } from "./a";\nexport const b = a;\n`,
@@ -31,8 +33,13 @@ beforeEach(() => {
     "lib/lone.ts": "export {};\n",
   };
   for (const [f, t] of Object.entries(files)) { mkdirSync(join(dir, f, ".."), { recursive: true }); writeFileSync(join(dir, f), t); }
-  sh("git", "add", ".");
-  sh("git", "commit", "-qm", "seed");
+  shIn(dir, "git", "add", ".");
+  shIn(dir, "git", "commit", "-qm", "seed");
+}
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "aleph-related-"));
+  fixture("related", seed, dir);
   commit = sh("git", "rev-parse", "HEAD");
 });
 

@@ -7,6 +7,7 @@ export { unitAlive };
 import { config as storeConfig } from "../todo/lib/store.ts";
 import { parseItem, renderItem, setStatus, type Status } from "../todo/lib/todo.ts";
 import { waitFor } from "../tests/wait.ts";
+import { fixture } from "../tests/git-fixture.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
 export let base: string, remote: string, repo: string, other: string, items: string, itemsRemote: string, jobsDir: string, fake: string, reviewer: string, fakeLog: string, setupLog: string;
@@ -293,6 +294,27 @@ function sweepLeftovers(): void {
   } catch {}
 }
 
+/**
+ * The repos and the TLS key of a test file, built once per test process: the remote with one commit "init" and two
+ * clones of it (`repo`, `other`), and the empty work store `items.git` with its clone `items` (one empty commit "start").
+ */
+function buildRepos(dir: string): void {
+  const remote = join(dir, "remote.git"), seed = join(dir, "seed"), items = join(dir, "items");
+  sh(dir, "git", "init", "-q", "--bare", "-b", "main", remote);
+  sh(dir, "git", "clone", "-q", remote, seed);
+  writeFileSync(join(seed, ".gitignore"), ".worktrees/\n");
+  writeFileSync(join(seed, "README"), "demo\n");
+  writeFileSync(join(seed, "old.test.ts"), "test(\"old\", () => {});\n");
+  sh(seed, "git", "add", "."); sh(seed, "git", "commit", "-qm", "init"); sh(seed, "git", "push", "-q", "origin", "main");
+  sh(dir, "git", "init", "-q", "--bare", "-b", "main", join(dir, "items.git"));
+  sh(dir, "git", "clone", "-q", join(dir, "items.git"), items);
+  sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(items, "git", "push", "-q", "origin", "main");
+  sh(dir, "git", "clone", "-q", remote, join(dir, "repo"));
+  sh(dir, "git", "clone", "-q", remote, join(dir, "other"));
+  sh(dir, "openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
+}
+
 export function setup(): void {
   sweepLeftovers();
   base = mkdtempSync(join(tmpdir(), "aleph-jobs-"));
@@ -322,24 +344,11 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
   writeFileSync(join(fakeLog, "ssh"), `#!/bin/sh\necho "$@" > "${join(base, "fake", "ssh.args")}"\nexit 1\n`, { mode: 0o755 });
 
   remote = join(base, "remote.git");
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", remote);
-  const seed = join(base, "seed");
-  sh(base, "git", "clone", "-q", remote, seed);
-  writeFileSync(join(seed, ".gitignore"), ".worktrees/\n");
-  writeFileSync(join(seed, "README"), "demo\n");
-  writeFileSync(join(seed, "old.test.ts"), "test(\"old\", () => {});\n");
-  sh(seed, "git", "add", "."); sh(seed, "git", "commit", "-qm", "init"); sh(seed, "git", "push", "-q", "origin", "main");
   repo = join(base, "repo");
   other = join(base, "other");
-  // The work store, empty: a list starts with its first item.
   itemsRemote = join(base, "items.git");
   items = join(base, "items");
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", itemsRemote);
-  sh(base, "git", "clone", "-q", itemsRemote, items);
-  sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(items, "git", "push", "-q", "origin", "main");
-  sh(base, "git", "clone", "-q", remote, repo);
-  sh(base, "git", "clone", "-q", remote, other);
+  fixture("cli-jobs", buildRepos, base);
 
   // Says it started, then waits while the hold file is there, so a test can kill the land at this check.
   const gate = { name: "gate", run: `touch ${join(base, "gate-reached")}; while [ -f ${join(base, "gate-hold")} ]; do sleep 0.05; done`, when: ["gate/**"] };
@@ -371,8 +380,7 @@ echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
     aleph: { path: repo, checks: [], autoland: false },
   }));
 
-  sh(base, "openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-keyout", "key.pem", "-out", "cert.pem", "-days", "1", "-subj", "/CN=tailnet");
-  lf = Bun.serve({ port: 0, async fetch(req) { lfPosts.push(await req.json()); return new Response("{}", { status: lfStatus }); } });
+  lf =Bun.serve({ port: 0, async fetch(req) { lfPosts.push(await req.json()); return new Response("{}", { status: lfStatus }); } });
   server = Bun.serve({
     port: 0,
     tls: { cert: readFileSync(join(base, "cert.pem"), "utf8"), key: readFileSync(join(base, "key.pem"), "utf8") },

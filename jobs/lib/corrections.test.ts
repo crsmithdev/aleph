@@ -4,12 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
 import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
+import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-function sh(cwd: string, ...args: string[]): void {
-  const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
-  if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
-}
 
 const NOW = Date.parse("2026-10-28T12:00:00Z");
 const ago = (days: number) => new Date(NOW - days * 86400_000).toISOString();
@@ -73,10 +70,7 @@ beforeEach(() => {
     ALEPH_JEV_URL: `http://127.0.0.1:${jev.port}/`, OPENROUTER_API_KEY: "k",
   });
   mkdirSync(join(base, "jobs"), { recursive: true });
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-  sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-  sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+  storeRepos(base);
   const stub = join(base, "rule.sh");
   writeFileSync(stub, RULE_STUB, { mode: 0o755 });
   process.env.ALEPH_RULE_CMD = stub;

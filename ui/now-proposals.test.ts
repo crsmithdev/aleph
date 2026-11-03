@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { readList } from "../todo/lib/store.ts";
 
 import { routes as proposalRoutes } from "./api/proposals.ts";
+import { storeRepos } from "../tests/git-fixture.ts";
 
 test("rows are ordered held, then asking, then proposal, then error; the group is a list", () => {
   const s = { ...state, asks: asksOf([held], [{ id: "aleph-5", title: "T", href: "#/x", question: "Pick one?" }], [prop]), factory: { ...state.factory, health: ["main is red"] } };
@@ -36,14 +37,10 @@ test("the lede says proposals need your attention", () => {
 test("approve and decline handlers", async () => {
   const base = mkdtempSync(join(tmpdir(), "aleph-prop-"));
   let restore = () => {};
-  const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd, stdout: "pipe", stderr: "pipe" }); if (p.exitCode) throw new Error(String(p.stderr)); };
   try {
     restore = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
       ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json") });
-    sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-    sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-    sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-    sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+    storeRepos(base);
     writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
     mkdirSync(join(base, "factory"), { recursive: true });
     const sig = [{ id: "s", source: "chris", at: "2026-10-27T10:00:00Z", quote: "q", link: "" }];

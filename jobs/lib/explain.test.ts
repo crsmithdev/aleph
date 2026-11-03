@@ -10,15 +10,11 @@ import { readStore, type Lesson } from "./corrections.ts";
 import { explainPrompt, explainStep, parseExplain, pendingCases } from "./explain.ts";
 import { liveEntries, runsToday } from "./factory-status.ts";
 import { triageStep } from "./factory.ts";
+import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
 const repo = { key: "exp", path: "", main: "main", sandbox: true } as Repo;
-
-function sh(cwd: string, ...args: string[]): void {
-  const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
-  if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
-}
 
 // The fake explainer: it keeps each prompt, and `FAKE_EXIT` makes it fail.
 const FAKE = `#!/bin/bash
@@ -65,10 +61,7 @@ function awaitingRun(on: string): string {
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-explain-"));
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-  sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-  sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+  storeRepos(base);
   writeFileSync(join(base, "fake"), FAKE);
   chmodSync(join(base, "fake"), 0o755);
   repo.path = base;

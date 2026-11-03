@@ -11,6 +11,7 @@ import { runNightly } from "./nightly-accept.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
 import { waitFor } from "../../tests/wait.ts";
+import { vault as newVault } from "../../tests/git-fixture.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -47,8 +48,7 @@ function withVault(): { vault: string; done: () => void } {
   const old = process.env.ALEPH_VAULT;
   const vault = join(ctx.base, "vault");
   process.env.ALEPH_VAULT = vault;
-  const init = Bun.spawnSync(["bun", join(import.meta.dir, "..", "..", "vault", "cli.ts"), "init"], { env: process.env, stdout: "pipe", stderr: "pipe" });
-  if (init.exitCode !== 0) throw new Error(`vault init: ${init.stderr}`);
+  newVault(vault);
   return { vault, done: () => { if (old === undefined) delete process.env.ALEPH_VAULT; else process.env.ALEPH_VAULT = old; } };
 }
 

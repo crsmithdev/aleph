@@ -9,6 +9,7 @@ import { countsLine, parseRoute, prompt, triageIssue, triageOpen, TRIAGE_MODEL }
 import { saveProbe } from "./factory-status.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 import { askOf, clearAsk, setAsk } from "./ask.ts";
+import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -61,10 +62,7 @@ const run = (done: (r: string) => boolean = () => false) => triageOpen([repo], d
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-triage-"));
   factoryHome = join(base, "factory");
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-  sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-  sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+  storeRepos(base);
   writeFileSync(join(base, "fake"), FAKE);
   chmodSync(join(base, "fake"), 0o755);
   repo.path = base;

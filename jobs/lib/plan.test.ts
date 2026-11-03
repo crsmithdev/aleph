@@ -9,6 +9,7 @@ import { dispatchIssues, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { isLarge, parsePlan, prompt, realOracle, runPlan, topFolders } from "./plan.ts";
 import type { Tier } from "./route.ts";
+import { factoryRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): void {
@@ -58,14 +59,7 @@ beforeEach(() => {
     SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_PLAN_CMD: join(base, "fake"), ALEPH_DISPATCH: "off",
     ALEPH_VAULT: join(base, "vault-empty"),
   });
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "repo.git"));
-  sh(base, "git", "clone", "-q", join(base, "repo.git"), join(base, "repo"));
-  sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "init");
-  sh(join(base, "repo"), "git", "push", "-q", "origin", "main");
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-  sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-  sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+  factoryRepos(base);
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: join(base, "repo"), sandbox: true, autoland: false } }));
 });
 

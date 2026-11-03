@@ -6,6 +6,7 @@ import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
 import { askChris, askOf, setAsk } from "../../jobs/lib/ask.ts";
+import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
@@ -32,10 +33,7 @@ const item = (r: store.Place, id: number) => issues.find(store.readList(r)!, id)
 
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-store-"));
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-  sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-  sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+  storeRepos(base);
   Object.assign(process.env, gitEnv, { ALEPH_ISSUES: join(base, "items") });
 });
 

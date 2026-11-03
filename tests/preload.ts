@@ -15,4 +15,18 @@ const vars: Record<string, string> = {
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
+
+// No test reaches a live service through a key or URL it inherits from the shell or ~/.aleph/.env: Langfuse,
+// OpenRouter (the Jev screen), the Anthropic API and its usage endpoint, GitHub (`gh`), and the phone (Sidetone).
+// An empty key counts as set, so loadDotenv does not fill it from ~/.aleph/.env. Port 1 refuses each connection.
+// A test that needs one of these points it at a fake server of its own. The live tests (ALEPH_LIVE=1) keep them.
+if (process.env.ALEPH_LIVE !== "1") {
+  const nowhere = "http://127.0.0.1:1";
+  Object.assign(process.env, {
+    LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "", LANGFUSE_BASE_URL: nowhere,
+    OPENROUTER_API_KEY: "", ALEPH_JEV_URL: `${nowhere}/jev`, ALEPH_USAGE_URL: `${nowhere}/usage`,
+    SIDETONE_TELL_URL: `${nowhere}/tell`, GH_CONFIG_DIR: join(dir, "gh"),
+  });
+  for (const k of ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]) delete process.env[k];
+}
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));

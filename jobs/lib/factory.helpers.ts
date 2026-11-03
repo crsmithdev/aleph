@@ -8,6 +8,7 @@ import { dispatchIssues } from "./factory.ts";
 import type { Rescue } from "./rescue.ts";
 import { allJobs, writeRun, type Run } from "./ledger.ts";
 import type { ChecksStop } from "./checks.ts";
+import { factoryRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): void {
@@ -30,16 +31,8 @@ export function setup(): void {
     ALEPH_ISSUES: join(dir, "items"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_JOBS_DIR: join(dir, "jobs"),
     ALEPH_FACTORY_DIR: join(dir, "factory"), ALEPH_VAULT: join(dir, "vault"), XDG_RUNTIME_DIR: join(dir, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5", SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off",
   });
-  // The factory repo, with an origin the baseline can fetch.
-  sh(dir, "git", "init", "-q", "--bare", "-b", "main", join(dir, "repo.git"));
-  sh(dir, "git", "clone", "-q", join(dir, "repo.git"), join(dir, "repo"));
-  sh(join(dir, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "init");
-  sh(join(dir, "repo"), "git", "push", "-q", "origin", "main");
-  // The work store, empty: a list starts with its first item.
-  sh(dir, "git", "init", "-q", "--bare", "-b", "main", join(dir, "items.git"));
-  sh(dir, "git", "clone", "-q", join(dir, "items.git"), join(dir, "items"));
-  sh(join(dir, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(dir, "items"), "git", "push", "-q", "origin", "main");
+  // The factory repo, with an origin the baseline can fetch, and the work store, empty: a list starts with its first item.
+  factoryRepos(dir);
   writeFileSync(join(dir, "repos.json"), JSON.stringify({ fac: { path: join(dir, "repo"), sandbox: true, autoland: false } }));
 }
 

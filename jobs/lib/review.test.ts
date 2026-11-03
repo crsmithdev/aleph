@@ -6,6 +6,7 @@ import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import type { Review } from "./ledger.ts";
 import { waitFor } from "../../tests/wait.ts";
+import { storeRepos } from "../../tests/git-fixture.ts";
 
 let base: string, jobs: string, uiTodo: number, plainTodo: number;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -44,10 +45,7 @@ console.log(\`http://127.0.0.1:\${s.port}/\`);
   process.env.ALEPH_REPOS = join(base, "repos.json");
   process.env.ALEPH_ISSUES = join(base, "items");
   // The work store, with one goal labelled ui and one not.
-  sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-  sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-  sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-  sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+  storeRepos(base);
   uiTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a view", { labels: ["ui"], spec: "b" }); return i.id; }, true)!.value;
   plainTodo = writeList({ key: "demo" }, "add", (doc) => { const i = issues.add(doc, "a fix", { spec: "b" }); return i.id; }, true)!.value;
   process.env.TEST_SERVER_MARK = join(base, "server-mark");

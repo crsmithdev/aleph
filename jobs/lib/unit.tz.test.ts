@@ -6,6 +6,7 @@ import type { Repo } from "./ledger.ts";
 import { checksInSandbox, runOnCommit } from "./checks.ts";
 import { checkSlot } from "./ledger.ts";
 import { baselineChecks } from "./checks.ts";
+import { fixture } from "../../tests/git-fixture.ts";
 
 // The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -15,7 +16,15 @@ function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-const KEYS = ["ALEPH_SANDBOX_CMD", "TZ", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS"];
+/** A repo at `path` with one commit "init" of f.txt on main. */
+const oneCommit = (path: string) => fixture("unit-tz", (dir) => {
+  sh(dir, "git", "init", "-q", "-b", "main");
+  writeFileSync(join(dir, "f.txt"), "x\n");
+  sh(dir, "git", "add", ".");
+  sh(dir, "git", "commit", "-q", "-m", "init");
+}, path);
+
+const KEYS =["ALEPH_SANDBOX_CMD", "TZ", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
@@ -41,10 +50,7 @@ afterEach(() => {
 
 test("a check run through baselineChecks sees TZ=UTC and date +%Z prints UTC", async () => {
   const path = join(base, "repo");
-  sh(base, "git", "init", "-q", "-b", "main", path);
-  writeFileSync(join(path, "f.txt"), "x\n");
-  sh(path, "git", "add", ".");
-  sh(path, "git", "commit", "-q", "-m", "init");
+  oneCommit(path);
   const commit = sh(path, "git", "rev-parse", "HEAD");
   const repo = {
     key: "tz", path, main: "main", setup: [], manual: [], autoland: false, sandbox: true, held: [], hiddenRun: "",
@@ -55,10 +61,7 @@ test("a check run through baselineChecks sees TZ=UTC and date +%Z prints UTC", a
 
 test("checksInSandbox hands each step's process to onSpawn, so a drop can kill a running check", async () => {
   const path = join(base, "repo");
-  sh(base, "git", "init", "-q", "-b", "main", path);
-  writeFileSync(join(path, "f.txt"), "x\n");
-  sh(path, "git", "add", ".");
-  sh(path, "git", "commit", "-q", "-m", "init");
+  oneCommit(path);
   const dir = join(base, "sb");
   for (const d of ["check", "checklog", "home", "tmp", "out"]) mkdirSync(join(dir, d), { recursive: true });
   sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
@@ -78,10 +81,7 @@ test("checksInSandbox hands each step's process to onSpawn, so a drop can kill a
 /** A repo with one commit and a bundle of it in a fresh sandbox folder. */
 function sandboxed(setup: string[], checks: { name: string; run: string }[]) {
   const path = join(base, "repo");
-  sh(base, "git", "init", "-q", "-b", "main", path);
-  writeFileSync(join(path, "f.txt"), "x\n");
-  sh(path, "git", "add", ".");
-  sh(path, "git", "commit", "-q", "-m", "init");
+  oneCommit(path);
   const dir = join(base, "sb");
   for (const d of ["check", "checklog", "home", "tmp", "out"]) mkdirSync(join(dir, d), { recursive: true });
   sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
@@ -103,10 +103,7 @@ test("checksInSandbox states a failed hidden check as hidden-check", async () =>
 /** A repo with one commit and its sha, for runOnCommit. */
 function committed(setup: string[] = []) {
   const path = join(base, "repo");
-  sh(base, "git", "init", "-q", "-b", "main", path);
-  writeFileSync(join(path, "f.txt"), "x\n");
-  sh(path, "git", "add", ".");
-  sh(path, "git", "commit", "-q", "-m", "init");
+  oneCommit(path);
   return { repo: { key: "r", path, main: "main", setup } as unknown as Repo, sha: sh(path, "git", "rev-parse", "HEAD") };
 }
 

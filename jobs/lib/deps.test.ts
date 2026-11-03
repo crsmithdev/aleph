@@ -7,6 +7,7 @@ import { readList, writeList } from "../../todo/lib/store.ts";
 import { outdatedScript, parseOutdated, propose, startProposals, sweep } from "./deps.ts";
 import { grant } from "./ask.ts";
 import { type Repo } from "./ledger.ts";
+import { storeRepos } from "../../tests/git-fixture.ts";
 
 const TABLE = `
 | Package          | Current | Update | Latest |
@@ -33,10 +34,6 @@ describe("propose", () => {
   const keys = ["ALEPH_ISSUES", "ALEPH_FACTORY_DIR", ...Object.keys(gitEnv)];
   const saved: Record<string, string | undefined> = {};
   let base: string;
-  const sh = (cwd: string, ...args: string[]) => {
-    const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
-    if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
-  };
 
   const commits = () => {
     const p = Bun.spawnSync(["git", "--git-dir", join(base, "items.git"), "rev-list", "--count", "main"], { stdout: "pipe" });
@@ -46,10 +43,7 @@ describe("propose", () => {
   beforeAll(() => {
     for (const k of keys) saved[k] = process.env[k];
     base = mkdtempSync(join(tmpdir(), "aleph-deps-"));
-    sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-    sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-    sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-    sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+    storeRepos(base);
     Object.assign(process.env, gitEnv, { ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
   });
   afterAll(() => {
@@ -86,10 +80,7 @@ describe("sweep", () => {
   beforeAll(() => {
     for (const k of keys) saved[k] = process.env[k];
     base = mkdtempSync(join(tmpdir(), "aleph-sweep-"));
-    sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
-    sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
-    sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
-    sh(join(base, "items"), "git", "push", "-q", "origin", "main");
+    storeRepos(base);
     sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "origin.git"));
     sh(base, "git", "clone", "-q", join(base, "origin.git"), join(base, "repo"));
     sh(join(base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "start");

@@ -14,6 +14,7 @@ import { land, type LandPorts } from "./landing.ts";
 import { readRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { branchPorts, reviewBack } from "./unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";
+import { fixture } from "../../tests/git-fixture.ts";
 
 setDefaultTimeout(120_000);
 
@@ -98,17 +99,18 @@ const base_run = { kind: "build", job: "j1", name: "j1", condition: "running", c
 function landSetup(file = "a.txt", held: string[] = []): string {
   root = mkdtempSync(join(tmpdir(), "every-gate-"));
   const path = join(root, "repo");
-  mkdirSync(path);
-  git(path, "init", "-q", "-b", "main");
-  git(path, "config", "user.email", "a@b.c");
-  git(path, "config", "user.name", "a");
-  writeFileSync(join(path, "a.txt"), "1");
-  git(path, "add", "."); git(path, "commit", "-qm", "one");
-  git(path, "switch", "-q", "-c", "work");
-  mkdirSync(join(path, file, ".."), { recursive: true });
-  writeFileSync(join(path, file), "2");
-  git(path, "add", "."); git(path, "commit", "-qm", "two");
-  git(path, "switch", "-q", "main");
+  fixture(`every-gate-${file.replaceAll("/", "_")}`, (path) => {
+    git(path, "init", "-q", "-b", "main");
+    git(path, "config", "user.email", "a@b.c");
+    git(path, "config", "user.name", "a");
+    writeFileSync(join(path, "a.txt"), "1");
+    git(path, "add", "."); git(path, "commit", "-qm", "one");
+    git(path, "switch", "-q", "-c", "work");
+    mkdirSync(join(path, file, ".."), { recursive: true });
+    writeFileSync(join(path, file), "2");
+    git(path, "add", "."); git(path, "commit", "-qm", "two");
+    git(path, "switch", "-q", "main");
+  }, path);
   repo = { key: "r", path, main: "main", setup: [], checks: [{ name: "test", run: "bun run test" }], manual: [], autoland: true, sandbox: true, held } as unknown as Repo;
   mkdirSync(join(root, "j1"));
   folder = join(root, "j1-run");

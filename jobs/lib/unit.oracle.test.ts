@@ -7,6 +7,7 @@ import { git } from "./git.ts";
 import type { Repo, Run } from "./ledger.ts";
 import { branchPorts } from "./unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";
+import { fixture } from "../../tests/git-fixture.ts";
 
 let root = "";
 let repo: Repo;
@@ -16,17 +17,18 @@ const run = { kind: "build", job: "j1", name: "j1", condition: "running", checks
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "unit-oracle-"));
   const path = join(root, "repo");
-  mkdirSync(path);
-  git(path, "init", "-q", "-b", "main");
-  git(path, "config", "user.email", "a@b.c");
-  git(path, "config", "user.name", "a");
-  writeFileSync(join(path, "a.txt"), "1");
-  git(path, "add", "."); git(path, "commit", "-qm", "one");
-  git(path, "branch", "work");
-  git(path, "switch", "-q", "work");
-  writeFileSync(join(path, "a.txt"), "2");
-  git(path, "commit", "-qam", "two");
-  git(path, "switch", "-q", "main");
+  fixture("unit-oracle", (path) => {
+    git(path, "init", "-q", "-b", "main");
+    git(path, "config", "user.email", "a@b.c");
+    git(path, "config", "user.name", "a");
+    writeFileSync(join(path, "a.txt"), "1");
+    git(path, "add", "."); git(path, "commit", "-qm", "one");
+    git(path, "branch", "work");
+    git(path, "switch", "-q", "work");
+    writeFileSync(join(path, "a.txt"), "2");
+    git(path, "commit", "-qam", "two");
+    git(path, "switch", "-q", "main");
+  }, path);
   repo = { key: "r", path, main: "main", setup: [], checks: [{ name: "test", run: "bun run test" }], manual: [], autoland: true, sandbox: true, held: [] } as unknown as Repo;
   mkdirSync(join(root, "j1"));
   folder = join(root, "j1-run");
