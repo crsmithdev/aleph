@@ -49,7 +49,9 @@ function reset(items: Seed[]): void {
   repo.key = `tri${++lists}`;
   writeList(repo, "reset", (doc) => {
     for (const i of items) {
-      const item = issues.add(doc, i.title, { request: i.body });
+      // An open issue may keep a title from before the title rule, which add now refuses.
+      const item = issues.add(doc, "Seeded issue", { request: i.body });
+      item.title = i.title;
       if (i.ask) setAsk(item, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
       if (i.after) item.fm.after = i.after;
       if (i.goal) item.spec = i.goal.body;

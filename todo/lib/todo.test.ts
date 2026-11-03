@@ -10,6 +10,17 @@ test("titleProblem passes a part title with its group and refuses length, a fina
   expect(issues.titleProblem("Fix it.")).not.toBeNull();
 });
 
+test("add and edit refuse a bad title, and addPart refuses one over 60 with its group", () => {
+  const doc = issues.blank("r");
+  for (const bad of ["a".repeat(61), "Fix it.", "Check foo: bar"]) {
+    expect(() => issues.add(doc, bad)).toThrow();
+    expect(() => issues.edit(issues.add(doc, "Fix the lane"), { title: bad })).toThrow();
+  }
+  const parent = issues.add(doc, "Lay out the status page");
+  expect(issues.addPart(doc, parent, { title: "[Status layout] Put the metrics on the left", spec: "x" }).title).toBe("[Status layout] Put the metrics on the left");
+  expect(() => issues.addPart(doc, parent, { title: `[Status layout] ${"a".repeat(45)}`, spec: "x" })).toThrow("60");
+});
+
 test("add stores kind task by default, refuses an unknown kind, and addPart copies the parent's kind", () => {
   const doc = issues.blank("r");
   expect(issues.add(doc, "A").fm.kind).toBe("task");
@@ -20,7 +31,8 @@ test("add stores kind task by default, refuses an unknown kind, and addPart copi
 
 test("lint names the bad title of an open or parked item and a missing or unknown kind; fix moves kind areas into kind", () => {
   const doc = issues.blank("r");
-  const item = (title: string, fm: Record<string, unknown>) => { const i = issues.add(doc, title); delete i.fm.kind; Object.assign(i.fm, fm); return i; };
+  // Items from before the rule: the store holds titles that add now refuses.
+  const item = (title: string, fm: Record<string, unknown>) => { const i = issues.add(doc, "Placeholder"); i.title = title; delete i.fm.kind; Object.assign(i.fm, fm); return i; };
   item("Fix the lane height", { kind: "task", areas: ["ui"] });
   item("a".repeat(61), { kind: "task" });
   item("Fix it.", { kind: "task", parked: "true" });
@@ -29,7 +41,9 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   item("Fix red main", { areas: ["red-main", "check"] });
   item("Old goal", { kind: "goal", areas: ["deps"] });
   const bug = item("Fix the bug", { areas: ["bug"] });
-  delete issues.addPart(doc, bug, { title: "[Bug] Find the cause: first", spec: "x" }).fm.kind;
+  const part = issues.addPart(doc, bug, { title: "[Bug] Find the cause", spec: "x" });
+  part.title = "[Bug] Find the cause: first";
+  delete part.fm.kind;
   const found = (id: string) => issues.lint(doc).filter((f) => f.id === id).map((f) => f.problem);
   expect(found("1")).toEqual([]);
   expect(found("2")[0]).toContain("61 characters");

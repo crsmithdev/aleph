@@ -56,7 +56,9 @@ afterEach(() => {
 
 const add = (title: string, o: { done?: boolean } = {}): number =>
   writeList({ key: "fac" }, "add", (doc) => {
-    const item = issues.add(doc, title, { spec: "## Goal\nShip it." });
+    // A done issue keeps a title from before the title rule, which add now refuses.
+    const item = issues.add(doc, "Ship it", { spec: "## Goal\nShip it." });
+    item.title = title;
 
     if (o.done) issues.setStatus(item, "done");
     return item.id;

@@ -70,7 +70,8 @@ export function parsePlan(output: string, least = 2): Child[] | string {
     const n = i + 1;
     const title = text(c?.title), body = text(c?.body);
     if (!title) return `child ${n} has no title`;
-    if (title.length > 60) return `child ${n}'s title is over 60 characters`;
+    const bad = issues.titleProblem(title, { part: true });
+    if (bad) return `child ${n}: ${bad}`;
     if (!body) return `child ${n} has no body`;
     // The planner's goals also need a Time box.
     const missing = [...missingSections(body), ...(section(body, "Time box") ? [] : ["Time box"])];
@@ -128,7 +129,7 @@ ${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 mo
 
 {"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
 
-Each "title" is a grammatically correct phrase or sentence of at most 60 characters. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"). Each body is in the goal format, with all four sections non-empty:
+Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each body is in the goal format, with all four sections non-empty:
   ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)

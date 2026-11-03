@@ -174,7 +174,7 @@ export const kindProblem = (kind: string): string | null => ((KINDS as readonly 
 export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; now?: Date } = {}): Issue {
   const day = today(o.now);
   const kind = o.kind ?? "task";
-  const bad = kindProblem(kind);
+  const bad = kindProblem(kind) ?? titleProblem(title);
   if (bad) throw new Error(bad);
   const given = o.labels ?? [];
   const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("deps") ? "deps" : given.includes("memory") ? "memory" : "chris");
@@ -193,6 +193,8 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
 
 /** Add part `<n>.<k>` under issue `issue` (`k` the next free number), with `after`, the issue's priority and a `source`: the issue's when it is not chris, else agent. */
 export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string; after?: string[]; now?: Date }): Issue {
+  const bad = titleProblem(o.title, { part: true });
+  if (bad) throw new Error(bad);
   const day = today(o.now);
   const sub = nextSub(doc, issue.id);
   const part: Issue = {
@@ -219,6 +221,8 @@ export function note(item: Issue, text: string, now = new Date()): string {
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
 export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; labels?: string[]; areas?: string[] }, now = new Date()): void {
+  const bad = change.title === undefined ? null : titleProblem(change.title, { part: item.sub !== undefined });
+  if (bad) throw new Error(bad);
   if (change.kind !== undefined) item.fm.kind = change.kind;
   if (change.title !== undefined) item.title = change.title;
   if (change.request !== undefined) item.request = change.request;

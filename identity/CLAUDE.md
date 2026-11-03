@@ -108,8 +108,11 @@ same turn you name it, and quote the issue number after that.
 
 Write through the command, never by hand:
 `aleph issue <add|list|show|note|edit|done|drop|lint> <repo> ...`. `add` takes
-`"<title>" [--request -] [--spec -] [--priority high] [--labels a,b]`, `list` takes
-`[--status open|done|dropped] [--label x]`, and `-` reads stdin.
+`"<title>" [--request -] [--spec -] [--priority high] [--kind bug] [--labels a,b]`, `list` takes
+`[--status open|done|dropped] [--label x] [--kind x]`, and `-` reads stdin.
+A title is an imperative of at most 60 characters that says what changes, not
+how, with no final period and no `<words>: ` prefix. `--kind` is `task` (the
+default), `bug`, `check`, `flake` or `proposal`.
 Each write is a commit on `origin/main`, so it reaches main at once, not with
 your branch. Measurements and write-ups go in a findings file or the spec, and
 a note links them.

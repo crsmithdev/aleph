@@ -268,6 +268,6 @@ describe("the planner prompt's similar episodes", () => {
 
 test("a child title over 60 characters fails the check, and the prompt asks for a short one", () => {
   const long = child("x".repeat(61));
-  expect(parsePlan(reply([child("one"), long]))).toBe("child 2's title is over 60 characters");
+  expect(parsePlan(reply([child("one"), long]))).toStartWith("child 2: the title is 61 characters");
   expect(prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any)).toContain("at most 60 characters");
 });

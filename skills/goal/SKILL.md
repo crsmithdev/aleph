@@ -76,7 +76,7 @@ The body has these sections, each non-empty:
 - <question>: <answer>   (only the questions answered by default)
 ```
 
-The title is a grammatically correct phrase or sentence. When the work is part of a larger group, it opens with the group in brackets: `[<group>] <title>`.
+The title is an imperative of at most 60 characters that says what changes, not how, with no final period and no `<words>: ` prefix (`TITLE_RULE` in `todo/lib/todo.ts`). When the work is part of a larger group, it opens with the group in brackets: `[<group>] <title>`. A bug keeps its symptom inside the imperative: "Fix Status Week per issue showing 0.0%". `--kind` says what the issue is: `task` (the default), `bug`, `check`, `flake` or `proposal`.
 
 A new goal:
 
