@@ -36,7 +36,7 @@ test("a claim that a run after the last edit shows backs passes", () => {
 
 test("a claim whose only comparing run comes before the last edit fails and names it", () => {
   const f = run([bash("grep -n stall docs/factory.md jobs/lib/sandbox.ts", "600"), edit()]);
-  expect(docClaims(f, claim)).toContain("no run after the last edit reads or compares the code");
+  expect(docClaims(f, claim)).toContain("no run after the last edit reads the doc and compares it with the code");
 });
 
 test("a claim whose comparing run was cut before the claimed value fails and names the value", () => {
@@ -72,5 +72,44 @@ test("the next worker's fix note gives each problem", () => {
   expect(readFileSync(join(f, "checks.log"), "utf8")).toStartWith("## doc-claims: exit 1\n");
   const { note } = nextBrief(f, { failed: "doc-claims" } as Run);
   expect(note).toContain("The check `doc-claims` failed");
-  expect(note).toContain("no run after the last edit reads or compares the code");
+  expect(note).toContain("no run after the last edit reads the doc and compares it with the code");
+});
+
+test("the reason quotes the claim that no run backs", () => {
+  const f = run([bash("grep -n stall docs/factory.md jobs/lib/sandbox.ts", "600"), edit()]);
+  expect(docClaims(f, claim)).toContain('"The stall default in docs/factory.md matches the code: `600`"');
+});
+
+test("a test run or a diff of names after the last edit does not compare the doc", () => {
+  for (const cmd of ["bun run test", "git diff --stat", "git diff --name-only main"]) {
+    const f = run([edit(), bash(cmd, "docs/factory.md | 2 +-\n1827 pass")]);
+    expect(docClaims(f, claim)).toContain("no run after the last edit reads the doc");
+  }
+});
+
+test("a comparing run cut by head before the claimed value names the value", () => {
+  const f = run([edit(), bash("grep -n stall docs/factory.md jobs/lib/sandbox.ts | head -1", "docs/factory.md:91: stalled: no output")]);
+  expect(docClaims(f, claim)).toContain("`600`");
+});
+
+test("a plain number in the claim counts as a value", () => {
+  const f = run([edit(), bash("grep -n stall docs/factory.md", "docs/factory.md:91: stalled [Output truncated]")]);
+  expect(docClaims(f, "The stall default in docs/factory.md matches the code: 600 seconds.")).toContain("`600`");
+});
+
+test("a code file named by its basename alone, never read, is named", () => {
+  const f = run([edit(), bash("grep -n stall docs/factory.md", "docs/factory.md:91: 600")]);
+  expect(docClaims(f, "The doc matches the default of 600 in sandbox.ts.")).toContain("`sandbox.ts`");
+});
+
+test("a doc the run writes with facts as the code on main has them, the code never read, is named", () => {
+  const f = run([["Write", { file_path: "docs/spec.md", content: "The stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.\n" }, "ok"]]);
+  const r = docClaims(f, "I wrote docs/spec.md.");
+  expect(r).toContain("`jobs/lib/sandbox.ts`");
+  expect(r).toContain("as the code on main has them");
+});
+
+test("a doc written after the code was read passes", () => {
+  const f = run([["Read", { file_path: "jobs/lib/sandbox.ts" }, "125: ?? 600"], ["Write", { file_path: "docs/spec.md", content: "The stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.\n" }, "ok"]]);
+  expect(docClaims(f, "I wrote docs/spec.md.")).toBeNull();
 });

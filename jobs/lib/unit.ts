@@ -445,8 +445,6 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     if (done) facts.round = done;
     const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
     if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
-    const claims = docClaims(folder, o.result);
-    if (claims) return stoppedByChecks({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(earlier, "doc-claims", claims, fixRounds()) });
     const hidden = hiddenOf(repo, run);
     if (!hidden) return stuck("infra", HIDDEN_UNREADABLE, facts);
     const failed = await checksInSandbox({ folder, repo, changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", `refs/heads/${branch}`, hidden);
@@ -459,6 +457,9 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       if (same) return { outcome: { ...awaiting("question", same.question), question: same.question, cause: "hidden-check", reason: failed.reason, ...facts }, code: 0 };
       return stoppedByChecks(failed, { ...facts, ...checkBack(earlier, check, failed.reason, rounds) });
     }
+    // After the existing checks, so a doc-claims failure leaves their runs and results as they were.
+    const claims = docClaims(folder, o.result);
+    if (claims) return stoppedByChecks({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(earlier, "doc-claims", claims, fixRounds()) });
     facts.checkedBase = base;
     facts.checkedTip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
     return await heldAndReview(id, folder, run, repo, dir, base, branch, facts, earlier);

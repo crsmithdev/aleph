@@ -27,6 +27,11 @@ describe("claimsDocMatch", () => {
     expect(claimsDocMatch("The label says that an edited spec is checked first.")).toBe(false);
     expect(claimsDocMatch("The doc says the limit in jobs/lib/ask.ts is correct.")).toBe(true);
   });
+  test("a state verb is a claim alone, and a spec is a doc but a spec check is not", () => {
+    expect(claimsDocMatch("I checked the docs; they are accurate.")).toBe(true);
+    expect(claimsDocMatch("The spec matches the code.")).toBe(true);
+    expect(claimsDocMatch("`checkSpec` strips it before matching `spec check: <hash>`, because a plain `startsWith` never matched.")).toBe(false);
+  });
   test("a message with no such claim is not one", () => {
     expect(claimsDocMatch("I added a section to docs/factory.md.")).toBe(false);
     expect(claimsDocMatch("Tests pass.")).toBe(false);
@@ -62,16 +67,16 @@ describe("docClaimProblems", () => {
   });
   test("cut output that hides the claimed value is named", () => {
     const long = `${"a".repeat(600)}\ntimeout 1800 s\n${"b".repeat(600)}`;
-    const e = [...edit(), ...bash("grep -rn timeout jobs", long)];
+    const e = [...edit(), ...bash("grep -rn timeout jobs docs/factory.md", long)];
     expect(docClaimProblems(e, "The docs match: job timeout `1800 s`.").join()).toContain("`1800 s`");
   });
   test("a value that shows in the head or tail is not hidden", () => {
     const long = `${"a".repeat(300)} 1800 s ${"b".repeat(900)}`;
-    const e = [...edit(), ...bash("grep -rn timeout jobs", long)];
+    const e = [...edit(), ...bash("grep -rn timeout jobs docs/factory.md", long)];
     expect(docClaimProblems(e, "The docs match: job timeout `1800 s`.")).toEqual([]);
   });
   test("a cited file:line no output shows is named, one shown is not", () => {
-    const e = [...edit(), ...bash("grep -n isBuildable jobs/lib/store.ts", "242:export function isBuildable")];
+    const e = [...edit(), ...bash("grep -n isBuildable jobs/lib/store.ts docs/factory.md", "242:export function isBuildable")];
     expect(docClaimProblems(e, "Docs match the code (jobs/lib/store.ts:242).")).toEqual([]);
     expect(docClaimProblems(e, "Docs match the code (jobs/lib/store.ts:300).").join()).toContain("store.ts:300");
   });

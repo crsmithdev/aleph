@@ -1,11 +1,12 @@
 /**
  * The deterministic check on a final message that says a doc matches the code.
- * It reads the turn's entries, not the doc: a message with no such claim is not checked, whatever
- * the docs say. docs/verify-gate.md, decision 10. It names:
- * - a claim with no run after the last edit that reads or compares code;
- * - claimed values (backticked words, numbers with a unit) hidden in a run's cut output, when a run after the last edit was cut;
+ * It reads the turn's entries and the docs the turn writes, not the docs on disk: a turn with no such
+ * claim is not checked, whatever the docs say. docs/verify-gate.md, decision 10. It names:
+ * - a claim with no run after the last edit that reads a doc and compares it with the code;
+ * - the values a claim gives (backticked text, numbers) that no such run's visible output shows;
  * - a cited `file:line` that no run's visible output shows;
- * - a code file the message names ("as the code on main has them") that no tool call touched.
+ * - a code file that a claim, or a doc line "as the code on main has them" that the turn wrote, names
+ *   and that no tool call other than an edit touches.
  */
 import { bashResult, resultText } from "./digest.ts";
 
@@ -15,23 +16,32 @@ const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 /** A Bash command that changes files. A `git commit` changes none, so its part of the command (often a heredoc message) is not read. */
 const BASH_EDIT = /\bsed\s+(-\w*i|--in-place)|\bgit\s+(apply|checkout|restore|merge)\b|\bpatch\b|<<-?\s*['"]?\w+|(^|[^>&])>>?\s*[\w./~$"'-]|\btee\b/;
 const bashEdits = (command: string) => BASH_EDIT.test(command.replace(/\bgit\s+commit\b[\s\S]*$/, ""));
-/** A Bash command that reads code or compares it with something. */
-const READS = /\b(grep|rg|sed|cat|head|tail|awk|diff|wc|nl)\b|\bgit\s+(show|grep|diff|log)\b|\bdoc-claims\b|\bbun\s+(run\s+)?test\b/;
-const CODE_FILE = /[\w@./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|sh|py|md)\b/g;
+/** A Bash command that reads files or compares them; a diff of names or counts only does not. */
+const READS = /\b(grep|rg|sed|cat|head|tail|awk|diff|nl)\b|\bgit\s+(show|grep|diff)\b|\bdoc-claims\b/;
+const NAMES_ONLY = /--(stat|name-only|name-status|numstat|shortstat)\b|\bgrep\s+(-\w*[lLc]\b)/;
+/** Text that names a doc. */
+const NAMES_DOC = /\.md\b|\breadme\b|\bdoc-claims\b/i;
+const CODE_FILE = /[\w@./-]*\w\.(?:ts|tsx|js|jsx|mjs|cjs|json|sh|py)\b/g;
 
-/** Whether `message` says a doc or a README matches, agrees with or is backed by the code. */
-export function claimsDocMatch(message: string): boolean {
-  const doc = String.raw`(?:docs?|documentation|readme|settings?\s+defaults|defaults)`;
-  const strong = String.raw`(?:match(?:es|ed)?|agree[sd]?|consistent|in\s+sync)`;
-  const weak = String.raw`(?:accurate|correct|compared|checked|confirmed|verified)`;
-  // Within one sentence: a period ends it only before a space or the end, so `docs/ui.md` stays inside.
-  const gap = String.raw`(?:[^.\n]|\.(?=\S)){0,120}`;
-  const pair = (verb: string) => new RegExp(String.raw`\b${doc}\b${gap}\b${verb}\b|\b${verb}\b${gap}\b${doc}\b`, "i");
-  // A weak verb counts only when the sentence also names the code side: "an edited spec is checked first" is no claim.
-  const code = /\bcode\b|\bsettings?\b|[\w@./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|sh|py)\b/i;
-  return message.split(/\.(?=\s|$)|\n/).some((s) => pair(strong).test(s) || (pair(weak).test(s) && code.test(s)))
-    || /\bas\s+the\s+code\s+(?:on\s+\w+\s+)?has\s+them\b/i.test(message);
+const DOC = String.raw`(?:docs?|documentation|readme|spec(?![\s-]check)|settings?\s+defaults|defaults)`;
+/** Verbs that state a match on their own. */
+const STATE = String.raw`(?:match(?:es|ed)?|agree[sd]?|consistent|in\s+sync|accurate|correct)`;
+/** Verbs that say something was done; a claim only in a sentence that also names the code side. */
+const ACTION = String.raw`(?:compared|checked|confirmed|verified)`;
+const CODE_SIDE = /\bcode\b|\bsettings?\b|[\w@./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|sh|py)\b/i;
+const AS_CODE = /\bas\s+the\s+code\s+(?:on\s+\w+\s+)?has\s+them\b/i;
+// Within one sentence: a period ends it only before a space or the end, so `docs/ui.md` stays inside.
+const GAP = String.raw`(?:[^.\n]|\.(?=\S)){0,120}`;
+const pair = (verb: string) => new RegExp(String.raw`\b${DOC}\b${GAP}\b${verb}\b|\b${verb}\b${GAP}\b${DOC}\b`, "i");
+const sentences = (text: string) => text.split(/\.(?=\s|$)|\n/).map((s) => s.trim()).filter(Boolean);
+
+/** The sentences of `message` that say a doc, a spec or a README matches, agrees with or is backed by the code. */
+export function claimSentences(message: string): string[] {
+  return sentences(message).filter((s) => pair(STATE).test(s) || (pair(ACTION).test(s) && CODE_SIDE.test(s)) || AS_CODE.test(s));
 }
+
+/** Whether `message` says a doc, a spec or a README matches, agrees with or is backed by the code. */
+export const claimsDocMatch = (message: string): boolean => claimSentences(message).length > 0;
 
 interface Call { index: number; name: string; input: Entry; out: string; visible: string }
 
@@ -56,26 +66,45 @@ function calls(entries: Entry[]): Call[] {
 
 const isEdit = (c: Call) => EDIT_TOOLS.has(c.name) || (c.name === "Bash" && bashEdits(String(c.input.command ?? "")));
 
-/** What the message claims that the turn does not back, one sentence each. Empty: no claim, or all backed. */
+/** The text a call writes into a doc: a Write's content or an Edit's new text on a `.md` file. */
+function docWritten(c: Call): string {
+  if (!EDIT_TOOLS.has(c.name) || !/\.md$/i.test(String(c.input.file_path ?? ""))) return "";
+  return [c.input.content, c.input.new_string, ...(Array.isArray(c.input.edits) ? c.input.edits.map((e: Entry) => e.new_string) : [])].filter((x) => typeof x === "string").join("\n");
+}
+
+const quote = (s: string) => `"${s.length > 120 ? `${s.slice(0, 117)}...` : s}"`;
+const ticks = (xs: string[]) => xs.slice(0, 5).map((x) => `\`${x}\``).join(", ");
+
+/** What the message, or a doc the turn writes, claims that the turn does not back, one sentence each. Empty: no claim, or all backed. */
 export function docClaimProblems(entries: Entry[], message: string): string[] {
-  if (!claimsDocMatch(message)) return [];
   const all = calls(entries);
+  const claims = claimSentences(message);
+  const written = all.flatMap((c) => sentences(docWritten(c)).filter((s) => AS_CODE.test(s)));
+  if (!claims.length && !written.length) return [];
   const lastEdit = all.reduce((n, c) => (isEdit(c) ? c.index : n), -1);
   const after = all.filter((c) => c.index > lastEdit && c.name === "Bash" && !isEdit(c));
   const problems: string[] = [];
 
-  const comparing = after.filter((c) => READS.test(String(c.input.command ?? "")));
-  if (!comparing.length) {
-    problems.push(`no run after the last edit reads or compares the code with the doc text${lastEdit >= 0 ? "" : " (the turn has no edit, so any run counts but none reads code)"}`);
-  }
-
-  const cut = after.filter((c) => c.visible !== c.out);
-  if (cut.length) {
-    const shown = after.map((c) => c.visible).join("\n").toLowerCase();
-    const claimed = new Set<string>();
-    for (const m of message.matchAll(/`([^`\n]{2,60})`|\b(\d+(?:\.\d+)?\s*(?:s|seconds?|minutes?|hours?|ms|%|tries|a tick))\b/g)) claimed.add((m[1] ?? m[2]).trim());
-    const hidden = [...claimed].filter((v) => !shown.includes(v.toLowerCase()) && cut.some((c) => c.out.toLowerCase().includes(v.toLowerCase())));
-    if (hidden.length) problems.push(`the output of ${cut.length > 1 ? "runs" : "a run"} after the last edit was cut, and the cut part holds ${hidden.slice(0, 5).map((v) => `\`${v}\``).join(", ")}, which the digest does not show`);
+  if (claims.length) {
+    const comparing = after.filter((c) => {
+      const cmd = String(c.input.command ?? "");
+      return READS.test(cmd) && !NAMES_ONLY.test(cmd) && (NAMES_DOC.test(cmd) || NAMES_DOC.test(c.visible));
+    });
+    if (!comparing.length) {
+      problems.push(`no run after the last edit reads the doc and compares it with the code, so nothing backs ${claims.slice(0, 3).map(quote).join(", ")}`);
+    } else {
+      const shown = comparing.map((c) => c.visible).join("\n").toLowerCase();
+      const values = new Set<string>();
+      for (const s of claims) {
+        const plain = s.replace(/`?[\w@./-]+\.\w+:\d+(?:-\d+)?`?/g, " ");
+        for (const m of plain.matchAll(/`([^`\n]{1,60})`|(?<![\w.])(\d+(?:\.\d+)?)(?![\w.])/g)) {
+          const v = (m[1] ?? m[2]).trim();
+          if (v && !/[\/]|\.\w{1,4}$/.test(v)) values.add(v);
+        }
+      }
+      const unseen = [...values].filter((v) => !shown.includes(v.toLowerCase()));
+      if (unseen.length) problems.push(`no visible output of a comparing run after the last edit shows ${ticks(unseen)}, which ${claims.length > 1 ? "the claims give" : `${quote(claims[0])} gives`}`);
+    }
   }
 
   const visible = all.map((c) => c.visible).join("\n");
@@ -87,12 +116,15 @@ export function docClaimProblems(entries: Entry[], message: string): string[] {
     const shownAt = visible.includes(`${file}:${line}`) || visible.includes(`${base}:${line}`) || (visible.includes(base) && lines.test(visible)) || all.some((c) => c.name === "Bash" && String(c.input.command ?? "").includes(base) && lines.test(c.visible));
     if (!shownAt) unshown.add(`${file}:${line}`);
   }
-  if (unshown.size) problems.push(`no run's visible output shows ${[...unshown].slice(0, 5).map((s) => `\`${s}\``).join(", ")}`);
+  if (unshown.size) problems.push(`no run's visible output shows ${ticks([...unshown])}`);
 
-  const touched = JSON.stringify(all.map((c) => c.input));
-  const named = new Set((message.match(CODE_FILE) ?? []).filter((f) => !/^https?:/.test(f) && f.includes("/")));
-  const unread = [...named].filter((f) => !touched.includes(f) && !touched.includes(f.split("/").pop()!));
-  if (unread.length) problems.push(`no tool call this turn touches ${unread.slice(0, 5).map((f) => `\`${f}\``).join(", ")}, which the message gives facts about`);
+  // A file counts as read when a call other than an edit names it; writing a doc about it is not reading it.
+  const read = JSON.stringify(all.filter((c) => !EDIT_TOOLS.has(c.name)).map((c) => c.input));
+  for (const s of [...claims, ...written]) {
+    const named = [...new Set(s.match(CODE_FILE) ?? [])].filter((f) => !/^https?:/.test(f));
+    const unread = named.filter((f) => !read.includes(f.split("/").pop()!));
+    if (unread.length) problems.push(`no tool call this turn reads ${ticks(unread)}, which ${quote(s)} gives facts about`);
+  }
 
   return problems;
 }
