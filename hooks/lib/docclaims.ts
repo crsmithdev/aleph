@@ -71,11 +71,17 @@ const WRITES_DOC = /\baleph\s+issue\s+(add|edit|note)\b|(>>?|\btee\s+(-a\s+)?)\s
 
 /**
  * The doc or spec text a call writes: a Write's content or an Edit's new text on a `.md` file, or the command of a
- * Bash call that writes a doc or a spec (`cat > docs/spec.md <<EOF`, `aleph issue add --spec - <<EOF`). Test
- * fixtures, scripts and `sed` patterns that quote a doc are not doc text.
+ * heredoc body of a Bash call that writes a doc or a spec (`cat > docs/spec.md <<EOF`, `aleph issue add --spec - <<EOF`).
+ * The rest of the command, test fixtures, scripts and `sed` patterns that quote a doc are not doc text.
  */
 function docWritten(c: Call): string {
-  if (c.name === "Bash") { const cmd = String(c.input.command ?? ""); return isEdit(c) && WRITES_DOC.test(cmd.split("\n")[0]!) ? cmd : ""; }
+  if (c.name === "Bash") {
+    const [first = "", ...rest] = String(c.input.command ?? "").split("\n");
+    const tag = first.match(/<<-?\s*['"]?(\w+)/)?.[1];
+    if (!tag || !WRITES_DOC.test(first)) return "";
+    const end = rest.findIndex((l) => l.trim() === tag);
+    return rest.slice(0, end < 0 ? rest.length : end).join("\n");
+  }
   if (!EDIT_TOOLS.has(c.name) || !/\.md$/i.test(String(c.input.file_path ?? ""))) return "";
   return [c.input.content, c.input.new_string, ...(Array.isArray(c.input.edits) ? c.input.edits.map((e: Entry) => e.new_string) : [])].filter((x) => typeof x === "string").join("\n");
 }

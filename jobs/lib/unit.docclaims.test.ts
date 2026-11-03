@@ -128,6 +128,7 @@ test("a script, a test fixture or a sed pattern that quotes the phrase is not do
   for (const cmd of [
     "python3 - <<'EOF'\nopen('a.test.ts','w').write('The stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.')\nEOF",
     "sed -i 's/as the code on main has them in jobs\\/cli.ts/x/' docs/verify-gate.md",
+    "sed -i 's/x/a line as the code on main has them, or `aleph issue add`/' docs/verify-gate.md && bun jobs/cli.ts doc-claims",
     "cat > a.test.ts <<'EOF'\nThe stall default in jobs/lib/sandbox.ts is 600, as the code on main has them.\nEOF",
     "python3 - <<'EOF'\nt = 'cat > docs/spec.md <<X and aleph issue add: the default in jobs/lib/sandbox.ts is 600, as the code on main has them.'\nEOF",
   ]) {
