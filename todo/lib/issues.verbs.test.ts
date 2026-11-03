@@ -126,6 +126,7 @@ test("lint refuses a labels field and a waiting_on field and names the item", as
 
 test("aleph issue lint reads a dotted goal file and names it by its dotted id", () => {
   const parent = parse("# To do\n\n## 5. Parent\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\n---\n\nBody.\n").items[0];
+  parent.fm.kind = "task";
   const goal = { ...parent, sub: 1, title: "Goal", fm: { ...parent.fm, id: "5.1" } };
   const put = (due?: string) => {
     seed(null);

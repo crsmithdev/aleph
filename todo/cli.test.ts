@@ -123,8 +123,8 @@ test("list and lint with no repo cover the repos with a run or an item update in
   expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    medium   An old item\nfresh\n  1  open    medium   A new item\n");
   expect(JSON.parse(alephWith(e, "issue", "list", "--status", "done", "--json").out)).toEqual([]);
   const lint = alephWith(e, "issue", "lint");
-  expect(lint.code).toBe(0);
-  expect(JSON.parse(lint.out)).toEqual([{ repo: "proj", items: 1, findings: [] }, { repo: "fresh", items: 1, findings: [] }]);
+  expect(lint.code).toBe(1);
+  expect(JSON.parse(lint.out)).toEqual([{ repo: "proj", items: 1, findings: [{ id: "3", problem: "kind is missing", fixable: true }] }, { repo: "fresh", items: 1, findings: [] }]);
   expect(alephWith(e, "issue", "show").code).toBe(1);
 });
 

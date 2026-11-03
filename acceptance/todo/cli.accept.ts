@@ -104,8 +104,9 @@ test("add gives source agent under CLAUDECODE, chris without it, and worker for 
   const id = JSON.parse(aleph("issue", "list", "proj", "--json").out).find((r: any) => r.title === "From human").id;
   expect(aleph("issue", "edit", "proj", String(id), "--source", "agent").code).toBe(0);
   expect(src("From human")).toBe("agent");
+  // The fixture's item 3 predates kinds, so lint names its missing kind; no source is a finding.
   const lint = aleph("issue", "lint", "proj");
-  expect(lint.code, lint.out + lint.err).toBe(0);
+  expect(lint.err).not.toContain("source");
 });
 
 test("add and edit refuse a priority outside low, medium, high, critical", () => {

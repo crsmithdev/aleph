@@ -287,15 +287,36 @@ export function lint(doc: Doc): Finding[] {
     }
     for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id: refOf(item), problem: `${key} is retired`, fixable: false });
     if (item.fm.id !== undefined && String(item.fm.id) !== refOf(item)) findings.push({ id: refOf(item), problem: `id says ${item.fm.id} but the file says ${refOf(item)}`, fixable: true });
+    const kind = item.fm.kind;
+    if (kind === undefined || kind === "") findings.push({ id: refOf(item), problem: "kind is missing", fixable: true });
+    else if (kindProblem(String(kind))) findings.push({ id: refOf(item), problem: kindProblem(String(kind))!, fixable: true });
+    const title = ["open", "parked"].includes(status(item)) ? titleProblem(item.title, { part: item.sub !== undefined }) : null;
+    if (title) findings.push({ id: refOf(item), problem: title, fixable: false });
   }
   for (const [ref, count] of seen) if (count > 1) findings.push({ id: ref, problem: `${count} items share id ${ref}`, fixable: false });
   return findings.sort(byRef);
 }
 
+/** The areas that say what an issue is, in the order that picks its kind. */
+const KIND_AREAS: [string, Kind][] = [["bug", "bug"], ["red-main", "bug"], ["flakes", "flake"], ["check", "check"], ["deps", "proposal"], ["proposal", "proposal"]];
+/** The kind areas that leave `areas`. `red-main` stays: the firefighter reads it. */
+const MOVED_AREAS = ["bug", "flakes", "check", "deps", "proposal"];
+
+const areaList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
+
 /** Repair what is mechanically repairable. Returns what it changed. */
 export function fix(doc: Doc, now = new Date()): string[] {
   const fixed: string[] = [];
-  for (const item of doc.items) {
+  // A part with no kind area takes its parent's kind, as addPart gives it; so parents go first.
+  for (const item of [...doc.items].sort((a, b) => (a.sub === undefined ? 0 : 1) - (b.sub === undefined ? 0 : 1))) {
+    const areas = areaList(item.fm.areas);
+    if (!item.fm.kind || kindProblem(String(item.fm.kind))) {
+      const parent = item.sub === undefined ? undefined : doc.items.find((p) => p.id === item.id && p.sub === undefined);
+      item.fm.kind = item.fm.kind === "goal" ? "task" : KIND_AREAS.find(([a]) => areas.includes(a))?.[1] ?? (parent?.fm.kind as Kind | undefined) ?? "task";
+      fixed.push(`${refOf(item)}: kind set to ${item.fm.kind}`);
+    }
+    const kept = areas.filter((a) => !MOVED_AREAS.includes(a));
+    if (kept.length < areas.length) { item.fm.areas = kept; fixed.push(`${refOf(item)}: areas ${areas.filter((a) => MOVED_AREAS.includes(a)).join(", ")} removed`); }
     if (item.fm.id === undefined || String(item.fm.id) !== refOf(item)) { item.fm.id = refOf(item); fixed.push(`${refOf(item)}: id set to ${refOf(item)}`); }
     if (!item.fm.created) { item.fm.created = (item.fm.updated as string) || today(now); fixed.push(`${refOf(item)}: created set to ${item.fm.created}`); }
     if (!item.fm.updated) { item.fm.updated = (item.fm.created as string) || today(now); fixed.push(`${refOf(item)}: updated set to ${item.fm.updated}`); }
