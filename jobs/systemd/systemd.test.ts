@@ -19,3 +19,10 @@ test("aleph-ui.service header gives the link command", () => {
 test("aleph-ui.service holds no /home/ path", () => {
   expect(unit).not.toContain("/home/");
 });
+
+test("docs/ui.md gives the link-and-enable step for aleph-ui.service", () => {
+  const doc = readFileSync(join(import.meta.dir, "../../docs/ui.md"), "utf8");
+  expect(doc).toContain("systemctl --user link ~/aleph/jobs/systemd/aleph-ui.service");
+  expect(doc).toContain("systemctl --user enable --now aleph-ui.service");
+  expect(doc).toContain("jobs/systemd/aleph-ui.service");
+});

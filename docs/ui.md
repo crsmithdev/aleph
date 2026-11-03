@@ -8,6 +8,15 @@ aleph-ui --port 3020    # the default port is ALEPH_UI_PORT, else 3020
 
 On the home machine, a systemd user unit (`aleph-ui.service`) runs it, and home-proxy serves it on the LAN as `aleph.home`. After a change to the server, run `systemctl --user restart aleph-ui`. A land restarts it by itself when the change touches a file the server imports.
 
+The unit file is `jobs/systemd/aleph-ui.service`. To install it on the home machine, link it and enable it:
+
+```bash
+systemctl --user link ~/aleph/jobs/systemd/aleph-ui.service
+systemctl --user enable --now aleph-ui.service
+```
+
+If the host already has a plain file at `~/.config/systemd/user/aleph-ui.service`, `systemctl --user link` refuses to replace it, so remove that file first.
+
 ## Log in
 
 Set `ALEPH_UI_PASSWORD` in `~/.aleph/.env` to turn on the password gate. With it unset, the UI has no login, which is the state for tests and a private machine.
