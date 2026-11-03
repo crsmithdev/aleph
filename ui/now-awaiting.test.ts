@@ -271,15 +271,15 @@ test("an ask card and a stuck card keep their choices in a closed fold, and the 
   }
 });
 
-test("a spec-check card's title line starts with its kind; an old 9-sentence situation shows 5 and the rest sits in the closed Details fold", () => {
+test("a spec-check card's title line starts with its kind; an old 9-sentence situation shows 3 and the rest sits in the closed Details fold", () => {
   const nine = Array.from({ length: 9 }, (_, i) => `Sentence ${i + 1}.`).join(" ");
   const ask = { kind: "input", reason: "spec-check", question: "q", options: [], why: [], situation: nine };
   const h = withAttn({ ...state, asks: asksOf([], [{ ...issue(5), title: "Fix it", reason: "spec-check", question: "spec check: x hold: y", ask }]) });
   const row = h.match(/<article class="job-card small issue-row spec-check"[^]*?<\/article>/)![0];
   expect(row).toContain('<span class="t">Spec check: Fix it</span>');
-  expect(problem(row)).toBe("Sentence 1. Sentence 2. Sentence 3. Sentence 4. Sentence 5.");
+  expect(problem(row)).toBe("Sentence 1. Sentence 2. Sentence 3.");
   const fold = row.match(/<details class="more"[^]*?<\/details>/)![0];
   expect(fold).not.toContain(" open");
-  expect(fold).toContain("Sentence 6. Sentence 7. Sentence 8. Sentence 9.");
-  expect(row.slice(0, row.indexOf("<details"))).not.toContain("Sentence 6.");
+  expect(fold).toContain("Sentence 4. Sentence 5. Sentence 6. Sentence 7. Sentence 8. Sentence 9.");
+  expect(row.slice(0, row.indexOf("<details"))).not.toContain("Sentence 4.");
 });

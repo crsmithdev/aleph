@@ -303,6 +303,13 @@ test("a plan job left running by a dead process is ended as failed, and the goal
   expect(out.planned).toEqual([expect.stringContaining(`fac-${id} into`)]);
 });
 
+test("the planner prompt limits each child's Goal to 3 sentences with no implementation design", () => {
+  const p = prompt({ key: "fac" } as any, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as any);
+  expect(p).toContain("the behaviour in at most 3 sentences");
+  expect(p).toContain("no implementation design");
+  expect(p).toContain("no claim about code on main that you did not read");
+});
+
 describe("the planner prompt's similar episodes", () => {
   let vaultSaved: string | undefined;
   beforeEach(() => { vaultSaved = process.env.ALEPH_VAULT; });

@@ -73,13 +73,19 @@ test("the reviewer prompt names a deleted test; without findings it has no test 
   expect(p).toContain("Do not run the full test suite");
 });
 
-test("the reviewer prompt asks for a pass or fail mark on every clause, requirement and scenario, and every failure in the hold", () => {
+test("the reviewer prompt asks for the verdict first, fail-only CHECK lines with a reason, a count of passes, and at most 80 words outside them", () => {
   const p = reviewPrompt("n", "goal", "diff", []);
   expect(p).toContain("each Oracle clause");
   expect(p).toContain("each requirement in the Goal section");
   expect(p).toContain("each sealed scenario");
-  expect(p).toContain("CHECK: pass|fail <clause>: <what was observed>");
-  expect(p).toContain("Before the VERDICT");
+  expect(p).toContain("Write the verdict first, in one sentence");
+  expect(p).toContain("CHECK: fail <clause>: <what was observed>");
+  expect(p).toContain("one line for each failure only, each with its reason");
+  expect(p).toContain("Do not write a CHECK line for a pass");
+  expect(p).toContain("count, such as `7 of 9 passed`");
+  expect(p).toContain("at most 80 words");
+  expect(p).toContain("does not repeat the CHECK lines");
+  expect(p).not.toContain("pass|fail");
   expect(p).toContain("names every");
   expect(p).toContain("not only the first one");
   const s = reviewPrompt("n", "goal", "diff", [], "1. a scenario");

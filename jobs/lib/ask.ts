@@ -80,7 +80,7 @@ const REASONS = {
 } satisfies Record<string, Reason>;
 
 /** The limits on the text a card shows: the case text, and each choice's text. */
-export const LIMITS = { situation: { sentences: 5, chars: 600 }, choice: { sentences: 2, chars: 220 } } as const;
+export const LIMITS = { situation: { sentences: 3, chars: 600 }, choice: { sentences: 2, chars: 220 } } as const;
 
 /** The sentences of a text, in order. A full stop inside a word or a path is not an end. */
 export const sentencesOf = (text: string): string[] => text.trim().split(/(?<=[.!?]["')\]]?)\s+/).filter(Boolean);
@@ -277,15 +277,18 @@ export const logAlways = (reason: string, action: string, ref: string): void => 
 
 // Setting an Ask on an issue.
 
-/** Put `ask` on item `id` with the note `asks Chris: <said>`, as one store write. Returns why it could not, or null. */
-export function askChris(place: Place, id: number | string, ask: Ask, said: string): string | null {
-  const text = `asks Chris: ${said}`;
+/**
+ * Put `ask` on item `id` with the note `asks Chris: <said>`, as one store write. With `said` null the Ask is set and
+ * no note is added (the caller has written the text once already). Returns why it could not, or null.
+ */
+export function askChris(place: Place, id: number | string, ask: Ask, said: string | null): string | null {
+  const text = said === null ? "" : `asks Chris: ${said}`;
   try {
     const w = writeList(place, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
       if (!item) return null;
       setAsk(item, ask);
-      return issues.note(item, text);
+      return said === null ? item : issues.note(item, text);
     });
     return w ? null : `no issue ${id}`;
   } catch (e: any) {

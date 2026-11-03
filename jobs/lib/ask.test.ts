@@ -3,11 +3,19 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askNote, askOf, askPartDropped, asked, clearAsk, decideAsk, editAnswers, grant, kindOf, logAlways, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, routeOf, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askNote, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, editAnswers, grant, kindOf, logAlways, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, routeOf, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "./goal-spec.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
 const ask: Ask = { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
+
+test("askChris with a null text sets the Ask and adds no note", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ask-"));
+  const old = process.env.ALEPH_HOME;
+  try {
+    expect(askChris({ key: "nope" } as any, 1, ask, null)).toBeTruthy();
+  } finally { rmSync(dir, { recursive: true, force: true }); if (old !== undefined) process.env.ALEPH_HOME = old; }
+});
 
 test("setAsk writes the flat fields and askOf reads them back", () => {
   const i = item();

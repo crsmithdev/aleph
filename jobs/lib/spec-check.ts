@@ -132,7 +132,7 @@ export async function specChecking(name: string): Promise<boolean> {
 
 /**
  * `aleph spec-check <repo>-<ref>`, the process the dispatch starts: under the goal's lock, check the spec once
- * for its version. A hold sets the `spec-check` Ask and records the hold; the cost goes into the day's spend.
+ * for its version. A hold sets the `spec-check` Ask (the spec-check note is its only note) and records the hold; the cost goes into the day's spend.
  * It ends with a dispatch, so a passed goal starts at once.
  */
 export async function runSpecCheck(repo: Repo, ref: number | string): Promise<{ verdict: string; problems?: string; cost?: number }> {
@@ -145,7 +145,7 @@ export async function runSpecCheck(repo: Repo, ref: number | string): Promise<{ 
     if (c.cost !== undefined) recordSpecCost(name, c.cost);
     if (c.verdict === "hold") {
       const problems = c.problems ?? "";
-      const bad = askChris(repo, ref, plainAsk("spec-check", problems), problems);
+      const bad = askChris(repo, ref, plainAsk("spec-check", problems), null);
       if (bad) factoryLog(`${name}: spec check held, but the Ask was not written: ${bad}`);
       recordHold(name, "spec-check", problems);
     }

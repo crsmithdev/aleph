@@ -441,6 +441,13 @@ test("parse keeps well-formed goal ids in after, ignores malformed ones, and ref
   expect(parseReply(JSON.stringify({ actions: [{ do: "edit-goal", repo: "ff", n: 1 }] }))).toEqual(["edit-goal without a repo, n, and a body or after"]);
 });
 
+test("the firefighter prompt limits the Goal of a spec it writes to 3 sentences with no implementation design", () => {
+  const p = prompt([]);
+  expect(p).toContain("is the behaviour in at most 3 sentences");
+  expect(p).toContain("no implementation design");
+  expect(p).toContain("no claim about code on main that you did not read");
+});
+
 test("prompt lists after in the drop and edit-goal lines, and says a note alone does not stop a rerun", () => {
   const p = prompt([]);
   const lines = p.split("\n");

@@ -36,7 +36,7 @@ itself, so use it for every change to the list. If the previous run was a
 failed land, merge \`origin/${main}\` into the branch, resolve the conflicts,
 and commit. If you need a decision from Chris, stop
 and make your last line \`QUESTION: <one question>\`. ${FOREGROUND} End with a
-short summary of what you did and what you ran.`;
+summary of what you did and what you ran: at most 120 words of prose, plus a list only for separate items.`;
 
 /** What the worker runs before it ends: the repo's own checks, else today's sentence. */
 function checksSentence(checks: Check[]): string {
@@ -63,7 +63,7 @@ cannot do the goal makes no commit and gives the reason in its final text; it do
 ${checksSentence(checks)} Chrome cannot start in the sandbox. For a screenshot of a page
 served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
 the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
-Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a short summary of what you did and what you ran.`;
+Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items.`;
 
 /** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, folder: string, run: Run, repo: Repo): string {

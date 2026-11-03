@@ -129,7 +129,7 @@ ${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 mo
 {"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
 
 Each "title" is a grammatically correct phrase or sentence of at most 60 characters. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"). Each body is in the goal format, with all four sections non-empty:
-  ## Goal (what and why, short)
+  ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)

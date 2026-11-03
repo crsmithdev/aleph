@@ -97,7 +97,8 @@ test("each of the routes leaves the item in its state", async () => {
   expect(item(1).spec).not.toContain("## Request");
 
   expect(issues.status(item(2))).toBe("done");
-  expect(item(2).notes.at(-1)).toContain("duplicate of tri-1");
+  expect(item(2).fm.closed_why).toBe("duplicate of tri-1");
+  expect(item(2).notes.some((n) => n.includes("duplicate of tri-1"))).toBe(false);
 
   expect(askOf(item(3))).toMatchObject({ kind: "input", reason: "question", question: "Which plan, A or B?" });
   expect(item(3).notes.at(-1)).toContain("Which plan, A or B?");
@@ -117,12 +118,28 @@ test("a triage run records its route and the issue it is on", async () => {
   expect(runs[`triage-${repo.key}-4`]!.route).toBe("close");
 });
 
+test("a triage close writes its reason to closed_why and adds no note with the same text", async () => {
+  reset([{ title: "a", body: "VERDICT:close" }]);
+  await run();
+  const i = item(1);
+  expect(issues.status(i)).toBe("done");
+  expect(i.fm.closed_why).toBe("duplicate of tri-1");
+  expect(i.notes.some((n) => n.includes("duplicate of tri-1"))).toBe(false);
+});
+
 test("a triage run records its model and runs the command with it", async () => {
   reset([{ title: "a", body: "VERDICT:close" }]);
   await run();
   const dir = readdirSync(join(base, "jobs")).find((d) => d.includes(`-triage-${repo.key}-`))!;
   expect(readRun(join(base, "jobs", dir))).toMatchObject({ model: TRIAGE_MODEL });
   expect(readFileSync(join(base, "calls"), "utf8")).toContain(`--model ${TRIAGE_MODEL} --tools Read Grep Glob`);
+});
+
+test("the triage prompt limits the Goal to 3 sentences with no implementation design", () => {
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(p).toContain("the behaviour in at most 3 sentences");
+  expect(p).toContain("no implementation design");
+  expect(p).toContain("no claim about code on main that you did not read");
 });
 
 test("the prompt says the factory runs the checks, and names no aleph check command", () => {

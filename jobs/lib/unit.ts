@@ -613,13 +613,15 @@ they passed. Do not run the full test suite or repeat-run loops: you have a time
 box, and a long command ends it with no verdict. Run only a few targeted commands
 of your own, each ending in well under a minute. ${FOREGROUND}
 
-Check the whole branch before you give a verdict; do not stop at the first defect. Before the VERDICT
-line, write one line for each Oracle clause of the spec and each requirement in the Goal section, and
-one for each sealed scenario if there are any, and mark each pass or fail:
-\`CHECK: pass|fail <clause>: <what was observed>\`. A sealed scenario is marked by its number only
-(\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Then end with one line:
-\`VERDICT: pass\` when every line passed, or \`VERDICT: hold <reason>\`. The hold reason names every
-failure in one line, separated by \`; \`, and not only the first one.`;
+Check the whole branch before you give a verdict; do not stop at the first defect.
+Check each Oracle clause of the spec, each requirement in the Goal section, and each sealed scenario if there are any.
+Write the verdict first, in one sentence. Then write one line for each failure only, each with its reason:
+\`CHECK: fail <clause>: <what was observed>\`. Do not write a CHECK line for a pass: give the passes as a count, such as \`7 of 9 passed\`. A sealed scenario is marked by its number only
+(\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Say each thing once.
+The text outside the CHECK lines is at most 80 words, and the VERDICT line does not repeat the CHECK lines. The
+number of CHECK lines has no cap. End with one line: \`VERDICT: pass\` when nothing failed, or
+\`VERDICT: hold <reason>\`. The hold reason names every failure in one short line, separated by \`; \`, and
+not only the first one.`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
 when the goal does not call for the change, or the change weakens a check the

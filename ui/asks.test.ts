@@ -186,14 +186,14 @@ describe("asks", () => {
     for (const [reason, r] of Object.entries(ASK_REASONS)) { expect(r.name.length).toBeGreaterThan(0); expect(CASES[reason]()[0].name).toBe(r.name); }
   });
 
-  test("an Ask explained before the limits shows 5 sentences, 2 per choice, and the rest as details", () => {
+  test("an Ask explained before the limits shows 3 sentences, 2 per choice, and the rest as details", () => {
     const nine = Array.from({ length: 9 }, (_, i) => `Sentence ${i + 1}.`).join(" ");
     STORE = { situation: nine, details: "Extra.", effects: [{ action: "rerun", text: "One. Two. Three. Four." }, { action: "close", text: "Closes." }] };
     try {
       const [it] = ofIssues(issue({ reason: "spec-check", question: "q" }));
-      expect(it.situation).toBe("Sentence 1. Sentence 2. Sentence 3. Sentence 4. Sentence 5.");
+      expect(it.situation).toBe("Sentence 1. Sentence 2. Sentence 3.");
       expect(it.actions[0].hint).toBe("One. Two.");
-      expect(it.more).toEqual(["Sentence 6. Sentence 7. Sentence 8. Sentence 9.", "Start the goal: Three. Four.", "Extra."]);
+      expect(it.more).toEqual(["Sentence 4. Sentence 5. Sentence 6. Sentence 7. Sentence 8. Sentence 9.", "Start the goal: Three. Four.", "Extra."]);
     } finally { STORE = undefined; }
   });
 

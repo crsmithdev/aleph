@@ -261,12 +261,12 @@ test("ALEPH_EXPLAIN_CAP=1 explains the item first and the lesson in the second s
   expect(lesson().situation).toBeTruthy();
 });
 
-test("parseExplain keeps 5 sentences of the situation and 2 of an effect, and moves the rest to details whole", () => {
+test("parseExplain keeps 3 sentences of the situation and 2 of an effect, and moves the rest to details whole", () => {
   const sit = Array.from({ length: 8 }, (_, i) => `S${i + 1}.`).join(" ");
   const t = parseExplain(JSON.stringify({ situation: sit, effects: [{ action: "a", text: "E1. E2. E3. E4." }], details: "Own." }), ["a"]) as any;
-  expect(t.situation).toBe("S1. S2. S3. S4. S5.");
+  expect(t.situation).toBe("S1. S2. S3.");
   expect(t.effects[0].text).toBe("E1. E2.");
-  expect(t.details).toBe("S6. S7. S8. E3. E4. Own.");
+  expect(t.details).toBe("S4. S5. S6. S7. S8. E3. E4. Own.");
 });
 
 test("parseExplain never cuts a sentence: the character limit moves whole sentences, and a long first sentence stays", () => {
@@ -282,7 +282,9 @@ test("parseExplain never cuts a sentence: the character limit moves whole senten
 test("the explainer prompt states the limits and asks for details", () => {
   seed(plainAsk("host-check", "check it"));
   const p = explainPrompt(pendingCases([repo])[0]);
-  expect(p).toContain("at most 5 sentences and 600 characters");
+  expect(p).toContain("at most 3 sentences and 600 characters");
+  expect(p).toContain("only risks and gaps");
+  expect(p).toContain("not a second summary");
   expect(p).toContain("at most 2 sentences and 220 characters");
   expect(p).toContain('"details"');
 });

@@ -208,7 +208,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - A red main is the one case for an issue: name the cause (the commit and the test or check that fails and why) in an \`add\` for that repo, with a title and a body that says what to change. The body is the issue's spec and must have these three sections, or the code refuses the add and files nothing:
 \`\`\`
 ## Goal
-<the behaviour that holds once main is green>
+<the behaviour that holds once main is green, in at most 3 sentences>
 
 ## Edit surface
 - <file>: <what changes there>
@@ -217,6 +217,7 @@ export function prompt(events: Event[], jobs = allJobs()): string {
 - <an observable clause, such as the test or check that passes>
 \`\`\`
   The code files it as a high priority issue; the event is not looked at again, so without it the red stays unfixed. Use \`tell\` only to add words to it.` : ""}
+- The \`## Goal\` of a spec you write (in an \`add\` or an \`edit-goal\` body) is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read. Oracle and Edit surface keep their detail.
 - On a drop, set \`fate\` to already-met when the goal is met on main, and to duplicate when another goal did the work.
 - When a run cannot pass until another open goal lands, drop it with \`after\` set to that goal, or use edit-goal with \`after\`. A note or a drop reason alone does not stop a rerun.
 - When you answer an Ask on an item whose \`after\` is done or wrong, set \`after\` to the open goals that really block it.

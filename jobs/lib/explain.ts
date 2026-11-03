@@ -121,10 +121,10 @@ const REPLY = (acts: string[], decision: boolean): string => `# Your reply
 
 Reply with one JSON object and nothing else:
 
-{"situation": "<2 to 5 plain sentences naming the files, what they are for, and what the run did>", "effects": [{"action": "<an action, or decide:<option label>>", "text": "<at most 2 short sentences: what happens in this case: to the named things, downstream, what stays undone, what it unblocks, and whether it does the work or only records a claim>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null, "details": "<optional: anything more Chris may want, kept out of the text above>"}
+{"situation": "<1 to 3 plain sentences naming the files, what they are for, and what the run did>", "effects": [{"action": "<an action, or decide:<option label>>", "text": "<at most 2 short sentences: what happens in this case: to the named things, downstream, what stays undone, what it unblocks, and whether it does the work or only records a claim>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null, "details": "<optional: only risks and gaps, not a second summary or an account of the process>"}
 
 Rules:
-- Hard limits: "situation" is at most ${LIMITS.situation.sentences} sentences and ${LIMITS.situation.chars} characters. Each effect "text" is at most ${LIMITS.choice.sentences} sentences and ${LIMITS.choice.chars} characters. Put anything more in "details", which Chris reads only if he opens it. Text over a limit is moved to "details" by sentence.
+- Hard limits: "situation" is at most ${LIMITS.situation.sentences} sentences and ${LIMITS.situation.chars} characters. Each effect "text" is at most ${LIMITS.choice.sentences} sentences and ${LIMITS.choice.chars} characters. "details" holds only risks and gaps: not a second summary and not an account of the process. Chris reads it only if he opens it. Text over a limit is moved to "details" by sentence.
 - Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. No action${decision ? " and no option" : ""} is left without an effect.
 - State only what you read. Where you did not read something, say "I did not check X".
 - Do not repeat the button's label or what the store does (an Ask cleared, a note added); say what happens to the named things in this case.

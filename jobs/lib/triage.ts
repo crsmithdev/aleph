@@ -128,7 +128,7 @@ ${mainSince(repo, item)}
 Reply with one JSON object and nothing else, with one of these routes:
 
 - {"route": "build", "spec": "<spec>", "after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]}: the issue is work one factory run can do alone. The issue keeps its own title and text; "spec" is written on it. "spec" is in this format, with these four sections:
-  ## Goal (what and why, short)
+  ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
   ## Time box (default: 45 minutes, one run)
@@ -179,7 +179,6 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
       issues.note(item, `triage: a flake, noted on ${repo.key}-${tracker}`);
     } else if (v.route === "close") {
       issues.setStatus(item, "done", undefined, v.reason);
-      issues.note(item, `triage: closed: ${v.reason}`);
     } else if (v.route === "ask" && v.ask.recommended && always("question")?.action === "recommended") {
       // The issue stays unsorted: the next triage reads this note and routes it.
       const o = v.ask.options.find((x) => x.label === v.ask.recommended) ?? v.ask.options[0]!;

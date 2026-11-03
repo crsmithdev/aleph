@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { reader, writeList } from "../../todo/lib/store.ts";
+import { readList, reader, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ctx, notes, setup, teardown } from "./factory.helpers.ts";
 import { specVersion } from "./goal-spec.ts";
-import { checkSpec, specCheckPrompt, specVerdict } from "./spec-check.ts";
+import { askOf } from "./ask.ts";
+import { checkSpec, runSpecCheck, specCheckPrompt, specVerdict } from "./spec-check.ts";
 
 const SPEC = "## Goal\nGOALTEXT\n\n## Edit surface\nSURFACE\n\n## Oracle\nORACLETEXT\n";
 let old: string | undefined;
@@ -62,6 +63,18 @@ test("a hold carries its problems", async () => {
   const id = add();
   expect(await checkSpec(repo(), id)).toEqual({ verdict: "hold", problems: "\"ORACLETEXT\" is outside the surface: add it", cost: 0.25 });
   expect(notes(id)).toContain(`spec check: ${version(id)} hold: "ORACLETEXT" is outside the surface: add it`);
+});
+
+test("a spec-check hold adds exactly one new note, the one with the hold text, and sets the Ask", async () => {
+  stub("VERDICT: hold \"ORACLETEXT\" is outside the surface: add it");
+  const id = add();
+  const before = readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes.length;
+  expect((await runSpecCheck(repo(), id)).verdict).toBe("hold");
+  const after = readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes;
+  expect(after.length).toBe(before + 1);
+  expect(after.at(-1)).toContain(`spec check: ${version(id)} hold: "ORACLETEXT" is outside the surface: add it`);
+  expect(after.some((n) => n.includes("asks Chris:"))).toBe(false);
+  expect(askOf(reader().item("fac", id)!)).toMatchObject({ reason: "spec-check" });
 });
 
 test("a failed call or a reply with no verdict is an error that is not tried again", async () => {
