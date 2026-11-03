@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
-import { askOf, CALL_FILE, isAwaiting, isBuild, isWorker, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { keepDiff } from "./jobdiff.ts";
@@ -62,7 +62,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   let child: ReturnType<typeof Bun.spawn> | undefined;
   let id: string;
   try {
-    if (isWorker(run.kind)) {
+    if (isBuild(run.kind)) {
       const full = gates({ only: ["live"] });
       if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
     }
@@ -83,7 +83,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     writeRun(folder, { ...run, job: run.job ?? id, made: Date.now() } as Run);
 
     // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
-    const factory = isWorker(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;
+    const factory = isBuild(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;
     const max = factory ? [`--property=RuntimeMaxSec=${jobSeconds() + 3600}`] : [];
     try {
       child = startUnit(["unit", folder], { unit: `aleph-${id}`, cwd, props: max, output, attach: true });

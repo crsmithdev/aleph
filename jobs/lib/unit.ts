@@ -13,7 +13,7 @@ import { gitPrelude, q } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, outcome as agentOutcome, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk, type AskReason } from "./ask.ts";
-import { tagged, askOf, isAwaiting, isBuild, isWorker, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, askOf, isAwaiting, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
@@ -208,7 +208,7 @@ export async function unit(folder: string): Promise<void> {
   writeFileSync(join(folder, "exit"), String(code));
   process.exitCode = code;
   if (isBuild(run.kind) || run.kind === "recheck") startReview(folder);
-  if ((isWorker(run.kind) || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
+  if ((isBuild(run.kind) || run.kind === "recheck") && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);

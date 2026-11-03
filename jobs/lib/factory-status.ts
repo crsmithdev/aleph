@@ -13,7 +13,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { allJobs, isOpen, lastReal, openJob, type Job } from "./job.ts";
 import { asked } from "./ask.ts";
 import { layout, readFactoryLog } from "./layout.ts";
-import { allRuns, isAwaiting, isWorker, isLive, isStarting, loadRegistry, lock, onOf, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, isAwaiting, isBuild, isLive, isStarting, loadRegistry, lock, onOf, type Entry, type Repo } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { AWAITING_CAP, DAY_CAP, LIVE_CAP } from "./settings.ts";
@@ -74,7 +74,7 @@ export const factoryRepos = sandboxRepos;
 /** `runs` is every run, when the caller has read them already. */
 export function runsToday(now = Date.now(), runs: Entry[] = allRuns()): Entry[] {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  return runs.filter((e) => (isWorker(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
+  return runs.filter((e) => (isBuild(e.run.kind) || e.run.kind === "triage" || e.run.kind === "plan") && e.run.repo && keys.has(e.run.repo) && now - Date.parse(e.run.started) < DAY);
 }
 
 /** The spec checks' spend: one line per check that reported a cost. A spec check is no run, so it has no run folder to hold its cost. */
@@ -148,7 +148,7 @@ export function hold(jobs = allJobs(), except?: string): Hold | null {
 }
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
-export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isWorker(e.run.kind) && (isLive(e.folder) || isStarting(e)));
+export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
 
 export const liveRuns = (runs?: Entry[]): number => liveEntries(runs).length;
 
@@ -424,7 +424,7 @@ const streakMark = (name: string): number | null => {
 /** How many of the goal's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
 function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   const mark = streakMark(name) ?? -Infinity;
-  const runs = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isWorker(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
+  const runs = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
     .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
   let n = 0;
   for (const e of runs.reverse()) { if (causeOf(e.run) !== "no-commit") break; n++; }
@@ -449,7 +449,7 @@ const capMarked = (name: string): boolean => existsSync(capFile(name));
 
 /** How many agent runs of the goal started in the last 60 minutes. */
 function agentStartsInHour(repoKey: string, name: string, runs: Entry[], now: number): number {
-  return runs.filter((e) => e.run.repo === repoKey && e.run.name === name && isWorker(e.run.kind) && now - Date.parse(e.run.started) < 3600_000).length;
+  return runs.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000).length;
 }
 
 /** What the Status page shows of the factory, and the gate and the baselines its Queued lane reads. */

@@ -9,7 +9,7 @@ import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { flakeNames, flakes } from "../../jobs/lib/factory-status.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { allRuns, isWorker, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
 import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
@@ -142,7 +142,7 @@ const STEP: Record<Window, number> = { hour: 60_000, day: HOUR, week: DAY, month
 const COUNT: Record<Window, number> = { hour: 60, day: 24, week: 7, month: 30 };
 
 const HOUR_MS = HOUR;
-const isAgent = (r: Run) => isWorker(r.kind) || r.kind === "recheck";
+const isAgent = (r: Run) => isBuild(r.kind) || r.kind === "recheck";
 const passedState = (st: string) => st === "passed" || st === "landed" || st === "done";
 
 /** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
@@ -359,8 +359,8 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     let runs = 0;
     for (const e of entries) {
       const r = e.run as Run;
-      // Research runs are worker runs; older worker runs have the kind "agent".
-      if (r.kind !== kind && !(key === "worker" && (r.kind === "research" || r.kind === "agent"))) continue;
+      // Older worker runs have the kind "agent".
+      if (r.kind !== kind && !(key === "worker" && r.kind === "agent")) continue;
       const running = r.condition === "running" && alive(e);
       if (running) live++;
       const a = Date.parse(r.started), b = r.ended ? Date.parse(r.ended) : running ? now : NaN;
@@ -385,7 +385,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   let up = 0, peak = 0;
   for (const [, d] of edges) { up += d; if (up > peak) peak = up; }
   for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
-  const inWindow = entries.map((e) => e.run as Run).filter((r) => (isWorker(r.kind) || r.kind === "agent") && Date.parse(r.started) >= since && Date.parse(r.started) < now);
+  const inWindow = entries.map((e) => e.run as Run).filter((r) => (isBuild(r.kind) || r.kind === "agent") && Date.parse(r.started) >= since && Date.parse(r.started) < now);
   const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
   const span = now - since, hours = roles.reduce((n, r) => n + (r.hours ?? 0), 0);
   return {
@@ -420,7 +420,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     const t0 = Date.parse(r.started), t1 = Date.parse(r.ended ?? "");
     if (!(t0 >= since.getTime()) || t0 > now.getTime() || !(t1 >= t0) || t1 - t0 > MAX_RUN) continue;
     const secs = (t1 - t0) / 1000;
-    const kind = r.kind === "recheck" || r.kind === "build" || r.kind === "research" ? "agent" : r.kind;
+    const kind = r.kind === "recheck" || r.kind === "build" ? "agent" : r.kind;
     if (kind in times) times[kind].push(secs);
     for (const c of r.checks ?? []) {
       if (!checks.has(c.name)) checks.set(c.name, []);

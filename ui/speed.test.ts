@@ -330,7 +330,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
     e("build", 1, 3, { model: "sonnet", review: { call: "land" } }), e("build", 2, 4, { model: "sonnet" }), e("agent", 3, 3.5, { model: "haiku" }),
     e("build", 7, null), e("build", 6, null), e("build", 0, 9.5), // a live run, a lost one, and a broken clock
     e("triage", 2, 2.5, { model: "claude-opus-5-5" }), e("explain", 4, 5, { model: "claude-opus-5-5" }), e("land", 1, 8), e("recheck", 1, 2),
-    e("research", 5, 6, { model: "sonnet" }),
+    e("build", 5, 6, { model: "sonnet" }),
   ];
   const a = agentStats(runs, 0, 8 * H, H, 2, (x) => x.folder === "f7");
   const r = Object.fromEntries(a.roles.map((x) => [x.key, x]));

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/git.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
-import { isWorker, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
+import { isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, sealed, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
@@ -84,13 +84,13 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
 }
 
 const DAY = 24 * 3600_000;
-const KIND = { agent: "worker", build: "worker", recheck: "worker", research: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
+const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e, i) => {
     const r = e.run;
     // A worker the reviewer sent back stays stored "stuck"; the job carries on with a later worker run, so it reads "sent back".
-    const back = isWorker(r.kind) && r.failed === "review" && r.condition === "stuck" && runs.slice(i + 1).some((n) => isWorker(n.run.kind));
+    const back = isBuild(r.kind) && r.failed === "review" && r.condition === "stuck" && runs.slice(i + 1).some((n) => isBuild(n.run.kind));
     const condition = back ? "sent back" : r.condition;
     const info: RunInfo = { id: e.id, kind: KIND[r.kind] ?? "worker", condition, started: r.started };
     if (r.ended) info.ended = r.ended;
@@ -103,7 +103,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
     if (logs.length) info.logs = logs;
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
-    if ((isWorker(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
+    if ((isBuild(r.kind) || r.kind === "recheck") && hasFile(e, "review.md")) {
       out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: "claude-opus-5-5" });
     }
   });
@@ -159,7 +159,7 @@ export const routes: Routes = {
     const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
     if (blockers.length) detail.blockers = blockers;
     annotate([detail], fit);
-    const result = latestFile(runs, "result.md", (e) => isWorker(e.run.kind))?.text;
+    const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
     const review = latestFile(runs, "review.md")?.text;
     if (result !== undefined) detail.result = result;
     if (review !== undefined) detail.review = review;

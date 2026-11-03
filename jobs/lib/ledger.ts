@@ -19,7 +19,7 @@ export interface CheckResult { name: string; ok: boolean; seconds: number; passe
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
-  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "explain" | "research" | "agent";
+  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "explain" | "agent";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   condition: State; phase?: string;
   reason?: string; question?: string; say?: string;
@@ -193,8 +193,6 @@ export const isAwaiting = (state: State): boolean => state === "awaiting";
 
 /** A build run. */
 export const isBuild = (kind: Run["kind"]): boolean => kind === "build";
-/** A worker run: a build or a research run. Research runs get a build's counts, stall checks and recovery, but never a branch or a land. */
-export const isWorker = (kind: Run["kind"]): boolean => kind === "build" || kind === "research";
 
 /** The number of the run's `on` (`<repo>-<n>`, for the run's repo). A dotted `on` gives the goal's `<n>.<m>` as a string. */
 export function onOf(run: Run): number | string | undefined {

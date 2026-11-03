@@ -212,7 +212,7 @@ function runningLane(s) {
   const issues = (s.runningIssues ?? []).map((i) => runningIssue(i, s.now)).join("");
   const rows = issues + (s.running ?? []).map((j) => {
     const run = j.run ?? { kind: "build", started: j.started };
-    const worker = run.kind === "agent" || run.kind === "build" || run.kind === "research";
+    const worker = run.kind === "agent" || run.kind === "build";
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
     return laneCard("run-row", metaRow({ id: itemId(j), chips: `<span class="badge run" title="${esc(j.phase || kind)}">${esc(kind)}</span>` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now, why: over ? "past the time box" : "" }), j.item?.title || j.name, jobHref(j));
