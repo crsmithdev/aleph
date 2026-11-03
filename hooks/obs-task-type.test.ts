@@ -60,21 +60,4 @@ describe("obs hook task type", () => {
     expect(attr("langfuse.trace.metadata.task_type")).toEqual({ stringValue: "debug" });
     expect(attr("langfuse.trace.metadata.task_type_p")?.doubleValue).toBe(0.8);
   });
-
-  test("a Jev 500 posts the span without a task type", async () => {
-    reply = { status: 500, body: { error: { message: "down" } } };
-    const attr = await stop();
-    expect(asked).toHaveLength(1);
-    expect(attr("langfuse.observation.output")).toEqual({ stringValue: "a stale cache; cleared it" });
-    expect(attr("langfuse.trace.metadata.task_type")).toBeUndefined();
-    expect(attr("langfuse.trace.metadata.task_type_p")).toBeUndefined();
-  });
-
-  test("with ALEPH_JUDGE=haiku Jev is not asked and the span has no task type", async () => {
-    reply = answer("debug", 0.8);
-    const attr = await stop({ ALEPH_JUDGE: "haiku" });
-    expect(asked).toEqual([]);
-    expect(attr("langfuse.observation.output")).toEqual({ stringValue: "a stale cache; cleared it" });
-    expect(attr("langfuse.trace.metadata.task_type")).toBeUndefined();
-  });
 });

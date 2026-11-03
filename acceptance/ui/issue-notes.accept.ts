@@ -1,6 +1,7 @@
+// Archived goal tests from ui/issue-notes.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import { isMachineNote, renderIssue } from "./views/issues.js";
+import { isMachineNote, renderIssue } from "../../ui/views/issues.js";
 
 const page = (notes: string[], fm: Record<string, string> = {}) =>
   renderIssue({ repo: "r", id: 1, title: "t", labels: [], notes, goals: [], jobs: [], commits: [], runs: [], frontmatter: fm } as any) as string;

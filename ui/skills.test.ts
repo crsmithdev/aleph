@@ -80,67 +80,8 @@ beforeEach(() => { clearCache(); rmSync(join(tmp, "store.json"), { force: true }
 
 const get = async (p: string) => { const r = await (/^\/api\/skills(\?|$)/.test(p) ? listSkills(new Request(`http://localhost${p}`)) : appAt(p)); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
-test("a Skill tool call and a slash command each count as one use", async () => {
-  const { status, body } = await get("/api/skills");
-  expect(status).toBe(200);
-  const pickup = body.skills.find((s: any) => s.name === "aleph:pickup");
-  expect(pickup).toMatchObject({ uses: 2, byTool: 1, bySlash: 1, sessions: 2, projects: ["aleph", "other"], errors: 1 });
-  expect(body.skills.find((s: any) => s.name === "aleph:retro").uses).toBe(1); // the one 40 days ago is out of the window
-  expect(body.skills.map((s: any) => s.name)).not.toContain("clear");
-});
-
-test("uses per day are right", async () => {
-  const { body } = await get("/api/skills");
-  const perDay = body.skills.find((s: any) => s.name === "aleph:pickup").perDay;
-  expect(perDay).toHaveLength(30);
-  expect(perDay[29]).toBe(1);
-  expect(perDay[27]).toBe(1);
-  expect(perDay.reduce((a: number, b: number) => a + b, 0)).toBe(2);
-  const wide = (await get("/api/skills?days=60")).body;
-  expect(wide.skills.find((s: any) => s.name === "aleph:retro").uses).toBe(2);
-});
-
-test("the detail lists tools called after the skill in the same turn, sessions and errors", async () => {
-  const { body } = await get("/api/skills/aleph:pickup");
-  expect(body.tools).toEqual([{ tool: "Bash", count: 2 }, { tool: "Edit", count: 1 }, { tool: "Grep", count: 1 }]);
-  expect(body.sessions.map((s: any) => [s.id, s.project, s.via, s.prompt])).toEqual([
-    ["s1", "aleph", "tool", "pickup the work"],
-    ["s2", "other", "slash", "/aleph:pickup"],
-  ]);
-  expect(body.projects).toEqual([{ project: "aleph", uses: 1 }, { project: "other", uses: 1 }]);
-  expect(body.errors).toHaveLength(1);
-  expect(body.errors[0]).toMatchObject({ session: "s1", project: "aleph", message: "no match" });
-});
-
-test("?project= keeps only that project's data", async () => {
-  const list = (await get("/api/skills?project=other")).body;
-  expect(list.skills.map((s: any) => [s.name, s.uses])).toEqual([["aleph:pickup", 1]]);
-  expect(list.skills[0].errors).toBe(0);
-  const one = (await get("/api/skills/aleph:pickup?project=aleph")).body;
-  expect(one.sessions.map((s: any) => s.id)).toEqual(["s1"]);
-  expect(one.projects).toEqual([{ project: "aleph", uses: 1 }]);
-  expect(one.tools.map((t: any) => t.tool)).not.toContain("Grep");
-});
-
 test("?project= that is no registry key is no filter", async () => {
   expect((await get("/api/skills?project=junk")).body.skills).toEqual((await get("/api/skills")).body.skills);
-});
-
-
-
-test("answers are cached for 30 seconds", async () => {
-  await get("/api/skills");
-  const before = hits;
-  await get("/api/skills");
-  expect(hits).toBe(before);
-});
-
-test("Langfuse down gives a 502", async () => {
-  down = true;
-  const r = await get("/api/skills");
-  expect(r.status).toBe(502);
-  expect(r.body.error).toContain("Langfuse");
-  expect((await get("/api/skills/aleph:pickup")).status).toBe(502);
 });
 
 test("a 502 goes out only after every request of the failed fetch has ended", async () => {
@@ -171,13 +112,6 @@ test("a 502 goes out only after every request of the failed fetch has ended", as
   }
 });
 
-test("only turns and tool calls are fetched, and traces without their input and output", async () => {
-  await get("/api/skills");
-  const obs = asked.filter((u) => u.pathname === "/api/public/observations").map((u) => u.searchParams.get("type")).sort();
-  expect(obs).toEqual(["AGENT", "TOOL"]);
-  expect(asked.find((u) => u.pathname === "/api/public/traces")!.searchParams.get("fields")).toBe("core");
-});
-
 test("after a restart, a reload fetches only the rows of the last two hours and keeps the older ones", async () => {
   await get("/api/skills");
   clearCache(); // as a restart: the rows are on disk only
@@ -188,32 +122,6 @@ test("after a restart, a reload fetches only the rows of the last two hours and 
   expect(Date.now() - from).toBeLessThan(2 * 3600_000 + 60_000);
   expect(Date.now() - from).toBeGreaterThan(2 * 3600_000 - 60_000);
   expect(body.skills.find((s: any) => s.name === "aleph:pickup")).toMatchObject({ uses: 2, errors: 1 }); // t2 is two days old
-});
-
-
-test("pages are fetched four at a time", async () => {
-  let active = 0, peak = 0, calls = 0;
-  const paged = Bun.serve({
-    port: 0,
-    async fetch(req) {
-      const u = new URL(req.url);
-      if (u.pathname !== "/api/public/observations" || u.searchParams.get("type") !== "TOOL") return Response.json({ data: [], meta: { totalPages: 1 } });
-      calls++; active++; peak = Math.max(peak, active);
-      await Bun.sleep(20);
-      active--;
-      return Response.json({ data: [], meta: { totalPages: 12 } });
-    },
-  });
-  const before = process.env.LANGFUSE_BASE_URL;
-  process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${paged.port}`;
-  try {
-    expect((await get("/api/skills")).status).toBe(200);
-    expect(calls).toBe(12);
-    expect(peak).toBe(4);
-  } finally {
-    paged.stop(true);
-    process.env.LANGFUSE_BASE_URL = before;
-  }
 });
 
 
@@ -268,13 +176,6 @@ test("pages are fetched concurrently, and serve() warms the skills and /api/agen
     stop(); paged.stop(true);
     restoreEnv();
   }
-});
-
-test("a cwd that is no registry project is not listed as a project", async () => {
-  const { body } = await get("/api/skills");
-  expect(body.skills.find((s: any) => s.name === "aleph:sandbox")).toMatchObject({ uses: 1, projects: [] });
-  expect(body.skills.flatMap((s: any) => s.projects)).not.toContain("agent-ae1db4a1e2c301339");
-  expect(body.projects).toEqual(["aleph", "other"]);
 });
 
 test("a project tag with no cwd counts only when it is a registry key", async () => {

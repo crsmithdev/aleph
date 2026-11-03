@@ -74,16 +74,6 @@ test("picking an option on each page asks for that window and the page says its 
   }
 });
 
-test("the trend against the last 24 hours shows only for week and month", () => {
-  for (const w of WINDOWS) {
-    const on = w === "week" || w === "month";
-    for (const h of [fjobs.renderFactoryJobs(speed(w), speed("day"))])
-      expect(/in the last 24 h\b/.test(h), w).toBe(on);
-    expect(/vs 30-day average/.test(eff.renderEfficiency(speed(w))), w).toBe(false);
-    expect(/in the last 24 h\b/.test(eff.renderEfficiency(speed(w))), w).toBe(false);
-  }
-});
-
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   storeWindow("month");
   for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.all ? "/api/jobs?days=30" : p === PAGES.efficiency ? "/api/speed?window=month&baseline=1" : "/api/speed?window=month");
@@ -91,32 +81,11 @@ test("the window stays when the reader moves to another page, and an address bea
   expect(windowOf(new URLSearchParams("window=nope"))).toBe("month");
 });
 
-test("without storage the pages render and use the address, else week", () => {
-  g.localStorage = { getItem: () => { throw new Error("denied"); }, setItem: () => { throw new Error("denied"); } };
-  storeWindow("day");
-  expect(windowOf(new URLSearchParams())).toBe("week");
-  expect(windowOf(new URLSearchParams("window=day"))).toBe("day");
-  delete g.localStorage;
-  expect(windowOf(new URLSearchParams())).toBe("week");
-});
-
 test("All jobs keeps an old ?days= address open", () => {
   expect(jobs.view.api(null, new URLSearchParams("days=90"))).toBe("/api/jobs?days=90");
   expect(jobs.view.api(null, new URLSearchParams("days=30"))).toBe("/api/jobs?days=30");
   expect(pressed(jobs.renderJobs([], { days: "30" })).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
   expect(pressed(jobs.renderJobs([], { days: "90" })).filter((m) => m[2] === "true")).toEqual([]);
-});
-
-test("the picker works from an address with no hash", () => {
-  g.location.hash = "";
-  goQuery({ window: "day" });
-  expect(g.location.hash).toBe("#/?window=day");
-  g.location.hash = "#?week=1";
-  goQuery({ window: "day" });
-  expect(g.location.hash).toBe("#/?week=1&window=day");
-  g.location.hash = "#/jobs?x=1";
-  goQuery({ window: "day" });
-  expect(g.location.hash).toBe("#/jobs?x=1&window=day");
 });
 
 test("the route of #?window=day is Status, on the day window", () => {

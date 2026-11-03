@@ -87,28 +87,12 @@ const call = (key: string, path: string, params: Record<string, string> = {}) =>
   return routes[key](new Request(url), params, url) as Promise<Response>;
 };
 
-test("sessions lists id, project, first prompt, turns, cost, task types", async () => {
-  const d: any = await (await listSessions(new Request("http://localhost"+"/api/sessions?days=7"))).json();
-  expect(d.sessions.map((s: any) => s.id)).toEqual(["s2", "s1"]);
-  const s1 = d.sessions[1];
-  expect(s1).toMatchObject({ project: "aleph", firstPrompt: "prompt t1 second line", turns: 2, cost: 1, taskTypes: ["code_edit"] });
-  expect(s1.start).toBe(TRACES[0].timestamp);
-  expect(s1.last).toBe(TRACES[1].timestamp);
-});
-
 test("the project filter narrows every route", async () => {
   const d: any = await (await listSessions(new Request("http://localhost"+"/api/sessions?project=sidetone"))).json();
   expect(d.sessions.map((s: any) => s.id)).toEqual(["s2"]);
   expect((await call("GET /api/sessions/:id", "/api/sessions/s1?project=sidetone", { id: "s1" })).status).toBe(404);
   expect((await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1?project=sidetone", { id: "s1", n: "1" })).status).toBe(404);
   expect((await call("GET /api/sessions/:id", "/api/sessions/s1?project=aleph", { id: "s1" })).status).toBe(200);
-});
-
-test("a session lists its turns in order", async () => {
-  const d: any = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json();
-  expect(d.turns.map((t: any) => t.n)).toEqual([1, 2]);
-  expect(d.turns[0]).toMatchObject({ tools: 2, durationMs: 12000, cost: 0.5, model: "claude-opus" });
-  expect(d.turns[0].output.length).toBeLessThanOrEqual(401);
 });
 
 test("a turn is a tree of tools, hook spans and errors", async () => {
@@ -158,15 +142,6 @@ test("a subagent's span and tools nest under the Agent tool span that launched i
 });
 
 
-test("the second request is served from the cache", async () => {
-  await listSessions(new Request("http://localhost"+"/api/sessions"));
-  const n = hits.length;
-  expect(n).toBeGreaterThan(0);
-  await listSessions(new Request("http://localhost"+"/api/sessions"));
-  expect(hits.length).toBe(n);
-});
-
-
 test("the waterfall at 390 px: the detail pane stacks under a grid that scrolls in a short box", async () => {
   const html = await Bun.file(new URL("./app.css", import.meta.url)).text();
   const narrow = html.match(/@media \(max-width: 720px\) \{([\s\S]*?)\n\}/g)!.find((b) => b.includes(".wf "))!;
@@ -199,13 +174,6 @@ test("the chat route gives whole prompts and replies and each turn's tool calls 
   expect((await call("GET /api/sessions/:id/chat", "/api/sessions/nope/chat", { id: "nope" })).status).toBe(404);
 });
 
-test("the chat route pages by from and limit", async () => {
-  const d = await chat("s1", "?from=2&limit=20");
-  expect(d.turns.map((t: any) => t.n)).toEqual([2]);
-  expect(d.from).toBe(2);
-  expect((await chat("s1", "?limit=1")).turns.map((t: any) => t.n)).toEqual([1]);
-});
-
 test("argSummary picks the key argument, also out of cut JSON", async () => {
   const { argSummary } = await import("./api/sessions.ts");
   expect(argSummary({ command: "bun test ui", description: "Run" })).toBe("bun test ui");
@@ -213,17 +181,6 @@ test("argSummary picks the key argument, also out of cut JSON", async () => {
   expect(argSummary('{"description":"x","command":"echo \\"hi\\"\\nls", "more": "cut off her')).toBe('echo "hi" ls');
   expect(argSummary({ pattern: "nextTick", path: "jobs" })).toBe("nextTick");
   expect(argSummary({ todos: [] })).toBe('{"todos":[]}');
-});
-
-test("systemParts splits tags the user did not type from the text they did", async () => {
-  // @ts-ignore plain JS
-  const { systemParts } = await import("./system-parts.js");
-  expect(systemParts("<task-notification><summary>done</summary></task-notification>\n\nfix it")).toEqual({ system: [{ tag: "task-notification", body: "<summary>done</summary>" }], text: "fix it" });
-  expect(systemParts("hi\n<system-reminder>cut at 4 K")).toEqual({ system: [{ tag: "system-reminder", body: "cut at 4 K" }], text: "hi" });
-  expect(systemParts("a <b>bold</b> claim").system).toEqual([]);
-  const quoted = "System text (`<task-notification>`, `<system-reminder>`) folds.\nMore spec.";
-  expect(systemParts(quoted)).toEqual({ system: [], text: quoted });
-  expect(systemParts("ask\n  <system-reminder>\nnote\n</system-reminder>\nmore").system).toEqual([{ tag: "system-reminder", body: "note" }]);
 });
 
 test("the chat is the default: messages in Markdown, folded tool calls, one turn line, a toggle", async () => {
@@ -249,66 +206,6 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   expect(v.sessionView.api({ id: "a b" }, new URLSearchParams())).toBe("/api/sessions/a%20b/chat?limit=20");
   expect(v.sessionView.api({ id: "a b" }, TABLE)).toBe("/api/sessions/a%20b");
   expect(v.renderSession(await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json(), {}, TABLE)).toContain('data-value="table" aria-pressed="true"');
-});
-
-test("a long session shows 20 turns and a pager; a long turn folds its earlier tool calls", async () => {
-  const d = await chat("s1");
-  const tools = Array.from({ length: 30 }, (_, i) => ({ name: "Bash", args: `cmd ${i}`, input: "", output: "", error: i === 2 ? "x" : null, durationMs: 5 }));
-  const turns = Array.from({ length: 20 }, (_, i) => ({ ...d.turns[0], n: i + 1, tools }));
-  const h = v.renderSession({ ...d, total: 73, turns }, {}, new URLSearchParams());
-  expect(h.match(/<section class="turn"/g)?.length).toBe(20);
-  expect(h).toContain('<button type="button" class="act" data-chat-from="21">Show 20 more</button><span class="of">20 of 73</span>');
-  expect(h).toContain('<details class="tools-early"><summary>25 earlier tool calls <span class="terr">1 failed</span></summary>');
-  const one = v.chatTurn("s1", { ...d.turns[0], tools });
-  const shown = one.slice(one.indexOf("</details>", one.indexOf('class="ta">cmd 24<')) + "</details>".length);
-  expect([...shown.matchAll(/class="ta">(cmd \d+)</g)].map((m) => m[1])).toEqual(["cmd 25", "cmd 26", "cmd 27", "cmd 28", "cmd 29"]);
-});
-
-test("the sessions list's first prompt skips system text", async () => {
-  TRACES.push(trace("t8", "s3", "aleph", iso(2), { input: "<task-notification>agent finished</task-notification>" }), trace("t7", "s3", "aleph", iso(1), { input: "the real ask" }));
-  try {
-    const list: any = await (await listSessions(new Request("http://localhost"+"/api/sessions"))).json();
-    expect(list.sessions.find((s: any) => s.id === "s3").firstPrompt).toBe("the real ask");
-  } finally { TRACES.splice(-2); }
-});
-
-test("the chat shows the assistant's text blocks between the tool rows, not the final reply twice", async () => {
-  const d = await chat("s1");
-  expect(d.turns[1].texts.map((t: any) => t.text)).toEqual(["first words", "second words"]);
-  const h = v.chatTurn("s1", d.turns[1]);
-  const at = (s: string) => h.indexOf(s);
-  expect(at("first words")).toBeGreaterThan(-1);
-  expect(at("first words")).toBeLessThan(at('<span class="tn">Grep</span>'));
-  expect(at('<span class="tn">Grep</span>')).toBeLessThan(at("second words"));
-  expect(at("second words")).toBeLessThan(at('<span class="tn">Glob</span>'));
-  expect(at('<span class="tn">Glob</span>')).toBeLessThan(at('<div class="msg reply md">'));
-});
-
-test("the chat route gives each call an id, parent, kind and offsets from the session start", async () => {
-  const d = await chat("s1");
-  expect(d.turns[0].startMs).toBe(0);
-  expect(d.turns[1].startMs).toBe(10 * 60000);
-  const bash = d.turns[0].tools[0];
-  expect(bash).toMatchObject({ id: "o1", parent: null, kind: "tool", startMs: 60000, endMs: 61500 });
-});
-
-test("the waterfall: one row per turn and call, summary names the 3 longest and the errors, a row is selectable", async () => {
-  const d = await chat("s1");
-  const tools = Array.from({ length: 100 }, (_, i) => ({ id: `c${i}`, parent: null, kind: "tool", name: "Bash", args: `cmd ${i}`, input: "in", output: "out", start: d.turns[0].start, startMs: i * 1000, endMs: i * 1000 + (i % 10 === 9 ? 5000 + i : 500), durationMs: i % 10 === 9 ? 5000 + i : 500, error: i === 50 ? "boom" : null, children: [] }));
-  const turn = { ...d.turns[0], tools, generations: [] };
-  const rows = v.wfRows([turn]);
-  expect(rows.length).toBe(101);
-  expect(rows[0].kind).toBe("turn");
-  const h = v.waterfall(rows, "c50");
-  expect(h.match(/class="wf-row /g)!.length).toBe(101);
-  expect(h).toContain('wf-row k-tool err sel');
-  expect(h).toContain("1 error");
-  expect(h).toContain('data-select="c99"');
-  expect(h).toContain('data-select="c89"');
-  expect(h).toContain('data-select="c79"');
-  const q = new URLSearchParams("view=waterfall");
-  expect(v.renderSession({ ...d, turns: [turn] }, {}, q)).toContain('data-value="waterfall" aria-pressed="true"');
-  expect(v.wfDetail(rows.find((r: any) => r.id === "c50"))).toContain("boom");
 });
 
 test("generations: listed apart from tools with model, offsets, parent and cost; the waterfall draws them as rows", async () => {

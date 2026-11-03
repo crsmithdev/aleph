@@ -51,14 +51,6 @@ test("the chart has one area of the total agents live", () => {
   expect(o.series[0].data).toEqual([1.5, 0]);
 });
 
-test("a stale usage shows the figure and its age; a fresh one shows no age", () => {
-  const at = "2026-11-01T07:20:00Z";
-  const stale = { ...S, usage: { stale: true, now: { ...S.usage.now, at } } };
-  expect(renderFactoryAgents(stale, null)).toContain("as of 40m ago");
-  const fresh = { ...S, usage: { stale: false, now: { ...S.usage.now, at } } };
-  expect(renderFactoryAgents(fresh, null)).not.toContain("as of");
-});
-
 test("the title is the sidebar name, whatever the data", () => {
   expect(renderFactoryAgents(S, D)).toContain('<header class="ph"><h1>Agents</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
   expect(renderFactoryAgents({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');

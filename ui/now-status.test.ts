@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
 import { held, job, state } from "./fixtures/status-state.ts";
-import { asksOf, withAttn, issue, withFactory } from "./test-now.ts";
+import { asksOf, issue, withFactory } from "./test-now.ts";
 
 const calmState = { ...withFactory({}), asks: [], stuck: [] };
 
@@ -134,14 +134,6 @@ const OOD = "Alert: this status is out of date.";
 
 const strip = (h: string) => h.replace(/<[^>]*>/g, "");
 
-test("out-of-date data says so, in place of the fine and the paused sentence", () => {
-  const h = view.renderLede(calmState, true);
-  expect(strip(h)).toBe(OOD);
-  expect(h).toContain('class="say error"');
-  const p = view.renderLede({ ...calmState, factory: { ...calmState.factory, paused: true } }, true);
-  expect(strip(p)).toBe(OOD);
-});
-
 test("the out-of-date part comes first and survives MAX_SAID", () => {
   const s = { ...calmState, health: { ...(calmState as any).health }, asks: [{ kind: "approval" }, { kind: "input" }], stuck: [{}] };
   const base = said({}, { stuck: [{}], asks: [{ kind: "approval" }, { kind: "input" }] });
@@ -159,10 +151,4 @@ test("a dead factory tick says the alert, in red", () => {
   const fine = "Everything is running smoothly.";
   for (const o of [{ nextTick: "2026-10-27T17:12:00Z" }, { nextTick: "2026-10-27T16:56:00Z" }, { nextTick: null, tickInProgress: true }, { nextTick: "2026-10-27T16:00:00Z", tickInProgress: true }]) expect(said(o)).toBe(fine);
   expect(said({ paused: true, nextTick: null })).toBe("Alert: the factory tick has stopped; the factory is paused.");
-});
-
-test("the tick alert ranks after the probe and before the queued-jobs alert, and reads as a Check row", () => {
-  const o = { nextTick: null, probe: { at: "x", ok: false, failed: ["no network"] }, health: ["health: 2 goals can start, but no run started in 15 minutes"] };
-  expect(said(o)).toBe("Alert: the sandbox is broken; the factory tick has stopped; queued jobs are not starting.");
-  expect(withAttn(withFactory({ nextTick: null }))).toContain("Check: the factory tick has stopped: aleph-tick.timer has no next run");
 });

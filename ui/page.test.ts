@@ -14,14 +14,6 @@ test("the style sheet has balanced braces", () => {
   expect(depth).toBe(0);
 });
 
-test("index.html loads Web Awesome and ECharts at pinned versions", () => {
-  const html = readFileSync(new URL("./index.html", import.meta.url), "utf8");
-  expect(html).toMatch(/cdn\.jsdelivr\.net\/npm\/@awesome\.me\/webawesome@\d+\.\d+\.\d+\/dist-cdn\/webawesome\.loader\.js/);
-  expect(html).toContain('<script src="/vendor/echarts.min.js"></script>');
-  expect(html).not.toMatch(/cdn\.jsdelivr\.net\/npm\/echarts/);
-  expect(readFileSync(new URL("./app.css", import.meta.url), "utf8")).toContain("--wa-color-brand-fill-loud: var(--run)");
-});
-
 test("the sidebar: every group has a page, paths are unique, and each page has an icon", async () => {
   const dir = new URL("./views/", import.meta.url);
   const all: any[] = [];

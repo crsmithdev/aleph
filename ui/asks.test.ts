@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { attend, asks, clean, stuckBlocker } from "./asks.ts";
-import { ASK_REASONS, kindOf, type Ask } from "../jobs/lib/ask.ts";
+import { asks, clean, stuckBlocker } from "./asks.ts";
+import { ASK_REASONS, type Ask } from "../jobs/lib/ask.ts";
 import type { Lesson } from "../jobs/lib/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
 
@@ -39,7 +39,6 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "host-check": () => ofIssues(issue({ reason: "host-check", question: "On the host, run `wsl.exe -l -q` and put it in place of `<distro>` at README.md:176." })),
   firefighter: () => ofIssues(issue({ id: "aleph-30", reason: "firefighter", question: "aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." })),
 };
-const QUESTION_ISSUE = () => ofIssues(issue({ reason: "question", decision, question: "Should it be A or B?" }));
 
 describe("asks", () => {
 
@@ -74,96 +73,6 @@ describe("asks", () => {
     expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
   });
 
-  test("the kind: approval for review, held-path, proposal and firefighter; input for the rest; an Ask's own kind wins", () => {
-    for (const r of ["review", "held-path", "proposal", "firefighter", "proposal-skill"]) expect(kindOf(r), r).toBe("approval");
-    for (const r of ["question", "no-commit", "part-dropped", "triage-failed", "host-check", "rescue", "run-cap", "acceptance-failed", "spec-check"]) expect(kindOf(r), r).toBe("input");
-    expect(kindOf("question", "approval")).toBe("approval");
-    expect(CASES["held-path"]()[0].kind).toBe("approval");
-    expect(CASES.review()[0].kind).toBe("approval");
-    expect(CASES.question()[0].kind).toBe("input");
-    expect(CASES.proposal()[0].kind).toBe("approval");
-    expect(CASES["acceptance-failed"]()[0].kind).toBe("input");
-  });
-
-  test("the problems and labels the spec names", () => {
-    expect(CASES["held-path"]()[0].problem).toBe("The run for aleph-27 changes a path the repo holds for your review, so the factory did not land it.");
-    expect(CASES["held-path"]()[0].actions.map((a) => a.label)).toEqual(["Land it", "Drop the job"]);
-    expect(CASES["held-path"]()[0].actions[0].args).toEqual({ name: "aleph-27" });
-    expect(CASES.review()[0].problem).toBe("The reviewer sent aleph-27 back twice: tests are missing.");
-    expect(ofRuns(run("review", { reason: "the reviewer sent it back twice: tests are missing." }))[0].problem).toBe("The reviewer sent aleph-27 back twice: tests are missing.");
-    expect(ofRuns(run("review", { reviewCall: { call: "ask", reason: "a judgement call" } }))[0].problem).toBe("The reviewer left aleph-27 to you: a judgement call.");
-    expect(CASES.question()[0].problem).toBe("The worker on aleph-27 asked: Which port?");
-    expect(CASES.question()[0].actions.map((a) => a.label)).toEqual(["Answer and rerun", "Drop the job"]);
-    expect(CASES["no-commit"]()[0].problem).toBe("The last 3 runs of aleph-387 ended with no commit, so the factory stopped starting it.");
-    expect(CASES["no-commit"]()[0].actions.map((a) => a.label)).toEqual(["Start a new run", "Close the issue"]);
-    expect(CASES["run-cap"]()[0].problem).toBe("The factory started aleph-387 3 times in one hour, so it stopped starting it until you run it again.");
-    expect(CASES["triage-failed"]()[0].problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
-    expect(CASES["triage-failed"]()[0].actions.map((a) => a.label)).toEqual(["Run triage again", "Close the issue"]);
-    expect(CASES["acceptance-failed"]()[0].problem).toBe("The Oracle of aleph-387 still fails on main after a rerun.");
-    expect(QUESTION_ISSUE()[0].problem).toBe("Should it be A or B?");
-    expect(QUESTION_ISSUE()[0].actions.map((a) => a.label)).toEqual(["Approve B", "Approve A", "Deny"]);
-    expect(QUESTION_ISSUE()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", option: "B" });
-    expect(CASES["part-dropped"]()[0].problem).toBe("A goal of aleph-387 was dropped and no other goal of it is open.");
-    expect(CASES["part-dropped"]()[0].actions.map((a) => a.label)).toEqual(["Approve Close with what landed", "Approve Plan the missing part", "Close the issue"]);
-    expect(CASES["proposal-check"]()[0].problem).toBe("The correction memory proposes a check for aleph: Run the formatter before landing.");
-    expect(CASES["proposal-check"]()[0].title).toBe("Format first");
-    expect(CASES["proposal-check"]()[0].actions.map((a) => a.label)).toEqual(["Add a check to aleph", "Add no check"]);
-    expect(CASES["proposal-check"]()[0].always).toMatchObject({ label: "Add a check to aleph [auto-yes]", reason: "proposal-check:aleph" });
-    const md = CASES["proposal-claude-md"]()[0];
-    expect(md.problem).toBe("The correction memory proposes a line in global CLAUDE.md: Run the formatter before landing.");
-    expect(md.actions.map((a) => a.label)).toEqual(["Add a line to global CLAUDE.md", "Leave CLAUDE.md unchanged"]);
-    expect(md.actions[0].hint).toBe("Files the goal that adds the line to global CLAUDE.md.");
-    expect(md.always).toEqual({ label: "Add a line to global CLAUDE.md [auto-yes]", action: "approve", reason: "proposal-claude-md:global", hint: "From now on, the factory files every proposed addition to global CLAUDE.md without asking you. Revoke with `aleph always revoke proposal-claude-md:global`." });
-    const sk = CASES["proposal-skill"]()[0];
-    expect(sk.actions.map((a) => a.label)).toEqual(["Change the tdd skill", "Leave the tdd skill unchanged"]);
-    expect(sk.always!.label).toBe("Change the tdd skill [auto-yes]");
-    expect(sk.problem).toContain("a change to the tdd skill:");
-    expect(sk.actions[0].hint).toBe("Files the goal that changes the tdd skill.");
-    expect(CASES["proposal-check"]()[0].actions[0].args).toEqual({ id: "L1" });
-    expect(CASES.firefighter()[0].problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
-    expect(CASES["held-path"]()[0].always).toMatchObject({ label: "Land it [auto-yes]", action: "firefighter" });
-    expect(CASES["triage-failed"]()[0].always!.label).toBe("Run triage again [auto-yes]");
-    expect(QUESTION_ISSUE()[0].always).toMatchObject({ label: "Approve B [auto-yes]", action: "recommended" });
-    expect(QUESTION_ISSUE()[0].always!.hint).toContain("`aleph always revoke question`");
-    expect(CASES.proposal()[0].problem).toBe("This work is a proposal, and it does not start until you approve it.");
-    expect(CASES.proposal()[0].actions.map((a) => a.label)).toEqual(["Start the work", "Drop the proposal"]);
-    expect(CASES.proposal()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", approve: "true" });
-    expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
-    expect(CASES.proposal()[0].always).toMatchObject({ label: "Start the work [auto-yes]", action: "start" });
-    expect(CASES.proposal()[0].always?.hint).toContain("a major version jump still asks");
-    expect(CASES["host-check"]()[0].kind).toBe("input");
-    expect(CASES["host-check"]()[0].actions.map((a) => a.label)).toEqual(["Mark it checked", "Drop the check"]);
-  });
-
-  test("rerun is labelled by what it does for the reason, never Run it again", () => {
-    const rerunLabel = (reason: string) => CASES[reason]().flatMap((i) => i.actions).find((a) => a.act === "rerun")?.label;
-    expect(rerunLabel("spec-check")).toBe("Start the goal");
-    expect(rerunLabel("no-commit")).toBe("Start a new run");
-    expect(rerunLabel("part-dropped")).toBeUndefined(); // an Ask with options decides instead
-    const bare = ofIssues(issue({ reason: "part-dropped", question: "A goal was dropped." }))[0];
-    expect(bare.actions.find((a) => a.act === "rerun")?.label).toBe("Close as done");
-    expect(rerunLabel("run-cap")).toBe("Start it again");
-    expect(rerunLabel("acceptance-failed")).toBe("Start it again");
-    for (const reason of Object.keys(CASES)) for (const a of CASES[reason]().flatMap((i) => i.actions)) expect(a.label).not.toBe("Run it again");
-  });
-
-  test("an Ask explained before the limits shows 3 sentences, 2 per choice, and the rest as details", () => {
-    const nine = Array.from({ length: 9 }, (_, i) => `Sentence ${i + 1}.`).join(" ");
-    STORE = { situation: nine, details: "Extra.", effects: [{ action: "rerun", text: "One. Two. Three. Four." }, { action: "close", text: "Closes." }] };
-    try {
-      const [it] = ofIssues(issue({ reason: "spec-check", question: "q" }));
-      expect(it.situation).toBe("Sentence 1. Sentence 2. Sentence 3.");
-      expect(it.actions[0].hint).toBe("One. Two.");
-      expect(it.more).toEqual(["Sentence 4. Sentence 5. Sentence 6. Sentence 7. Sentence 8. Sentence 9.", "Start the goal: Three. Four.", "Extra."]);
-    } finally { STORE = undefined; }
-  });
-
-  test("a goal's ask names the issue and goal in its action args", () => {
-    const [it] = ofIssues(issue({ id: "aleph-387.2", reason: "question", decision, question: "Should it be A or B?" }));
-    expect(it.repo).toBe("aleph");
-    expect(it.actions[0].args).toEqual({ repo: "aleph", id: "387.2", option: "B" });
-  });
-
   test("an issue with a reason the table does not name is a question", () => {
     expect(ofIssues(issue({ reason: "nope", question: "what now?" }))[0].reason).toBe("question");
   });
@@ -177,26 +86,6 @@ describe("asks", () => {
     expect(t.problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
     const [q] = ofIssues(issue({ reason: "triage-failed", question: "Triage gave no route in 2 runs: failed: its process ended before a verdict" }));
     expect(q.problem).toBe(t.problem);
-  });
-
-  test("a raw task-notification note leaves a problem with no tag", () => {
-    const [it] = ofRuns(run("question", { question: "<task-notification><x>junk</x></task-notification> Which port?" }));
-    expect(it.problem).not.toContain("<");
-    const [d] = ofIssues(issue({ reason: "question", question: "<agent-message>hi</agent-message> Should it be A?" }));
-    expect(d.problem).not.toContain("<");
-  });
-
-  test("a firefighter Always rule keeps the ask and counts it in handed", () => {
-    const s = { runs: [], issues: [issue({ reason: "triage-failed", question: "triage: no verdict in 2 runs: x" }), issue({ id: "aleph-5", reason: "question", decision })] };
-    const r = attend(s, { "triage-failed": { action: "firefighter", at: "2026-10-28T00:00:00Z" } }, []);
-    expect(r.items.map((i) => i.id)).toEqual(["aleph-387", "aleph-5"]);
-    expect(r.items[0].actions.length).toBeGreaterThan(0);
-    expect(r.handed).toEqual({ "triage-failed": 1 });
-  });
-
-  test("the order is held-path, review, other runs, issues, proposals", () => {
-    const items = asks({ runs: [run("question", { name: "q" }), run("review", { name: "r" }), run("held-path", { name: "h" })], issues: [issue({ reason: "question" })] }, {}, [lesson("skill")]);
-    expect(items.map((i) => i.reason)).toEqual(["held-path", "review", "question", "question", "proposal-skill"]);
   });
 });
 

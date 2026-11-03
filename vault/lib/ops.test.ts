@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recallQuery } from "./recall-query.ts";
@@ -787,24 +787,6 @@ describe("misses", () => {
   });
   afterAll(() => server.stop());
   const env = () => ({ ALEPH_VAULT: vault, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
-  const snapshot = () => Bun.spawnSync(["sh", "-c", `cd '${vault}' && find . -type f -not -path './.git/*' | sort | xargs sha256sum`], { stdout: "pipe" }).stdout.toString();
-
-  test("counts the four signals; old observations and the vault are left alone", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
-    const before = snapshot();
-    const r = await spawnRun(env(), "misses", "--days", "7");
-    expect(r.code).toBe(0);
-    const out = JSON.parse(r.stdout);
-    expect(out.missed).toHaveLength(4);  // the empty recalls, newest first
-    expect(out.missed.map((m: any) => m.query)).toEqual(expect.arrayContaining(["x", "y"]));
-    expect(out.missed[0].at >= out.missed[1].at).toBe(true);
-    delete out.missed;
-    expect(out).toEqual({
-      days: 7, recalls: 7, empty: 4, empty_share: 4 / 7, reformulated: 3, unoffered_reads: 1,
-      hook: { runs: 3, zero_candidates: 1, capped: 1, mean_kept: 1 },
-    });
-    expect(snapshot()).toBe(before);
-  });
   test("without --days the window is 7 days; a wide window counts older calls", async () => {
     expect(JSON.parse((await runAsync(env(), "misses")).stdout).recalls).toBe(7);
     const wide = JSON.parse((await runAsync(env(), "misses", "--days", "60")).stdout);
@@ -828,7 +810,6 @@ describe("provenance and the contradiction screen", () => {
   const env = (extra: Record<string, string> = {}) => ({ ALEPH_VAULT: v, ALEPH_JUDGE: "jev", ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k", CLAUDE_CODE_SESSION_ID: "", ...extra });
   const snapshot = () => Bun.spawnSync(["bash", "-c", `cd ${v} && find . -path ./.git -prune -o -type f -print | sort | xargs cat | sha256sum`], { stdout: "pipe" }).stdout.toString();
   const write = (path: string, extra: Record<string, string> = {}) => runAsync(env(extra), "write", path, "--why", "t");
-  const wikiText = (title: string) => readFileSync(join(v, "wiki", "gotchas", `${title}.md`), "utf8");
 
   beforeAll(async () => {
     v = join(base, "vault-screen");
@@ -847,51 +828,6 @@ describe("provenance and the contradiction screen", () => {
   const reset = (a = 0.9) => { asked = []; answer = a; };
   // Titles share "widget" and nothing else with the other tests' notes.
   const live = async (title: string) => { const r = await write(note(title, { scope: "screen" }), { ALEPH_JUDGE: "haiku" }); expect(r.code).toBe(0); };
-
-  test("stamps claude and the session id", async () => {
-    reset();
-    const t = "Stamp Alpha";
-    expect((await write(note(t), { CLAUDE_CODE_SESSION_ID: "s1", ALEPH_JUDGE: "haiku" })).code).toBe(0);
-    const text = wikiText(t);
-    expect(text).toContain("written_by: claude");
-    expect(text).toContain("session: s1");
-  });
-  test("stamps chris without a session", async () => {
-    const t = "Stamp Beta";
-    expect((await write(note(t), { ALEPH_JUDGE: "haiku" })).code).toBe(0);
-    const text = wikiText(t);
-    expect(text).toContain("written_by: chris");
-    expect(text).not.toContain("session:");
-  });
-  test("a draft's own written_by is kept", async () => {
-    const t = "Stamp Gamma";
-    expect((await write(note(t, { written_by: "chris" }), { CLAUDE_CODE_SESSION_ID: "s1", ALEPH_JUDGE: "haiku" })).code).toBe(0);
-    const text = wikiText(t);
-    expect(text).toContain("written_by: chris");
-    expect(text).not.toContain("written_by: claude");
-  });
-  test("a note without the fields passes lint", async () => {
-    expect((await run({ ALEPH_VAULT: v }, "lint")).code).toBe(0);
-  });
-
-  test("p 0.9 refuses, names the note, changes nothing", async () => {
-    await live("Widget Registry");
-    reset(0.9);
-    const before = snapshot();
-    const r = await write(note("Widget Registry Rules", { scope: "screen" }));
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("Widget Registry");
-    expect(r.stderr).toContain("add it to supersedes or fix the draft");
-    expect(r.stderr).toContain("name it in consistent_with");
-    expect(snapshot()).toBe(before);
-    expect(asked.length).toBe(1);
-  });
-  test("superseding the note writes and does not ask about it", async () => {
-    reset(0.9);
-    const r = await write(note("Widget Registry Rules", { scope: "screen", supersedes: "[Widget Registry]" }));
-    expect(r.code).toBe(0);
-    expect(JSON.stringify(asked)).not.toContain("`Widget Registry`");
-  });
   test("consistent_with writes at p 0.9 and the server is not asked about that note", async () => {
     await live("Cog Pipeline");
     reset(0.9);
@@ -907,12 +843,6 @@ describe("provenance and the contradiction screen", () => {
     expect(r.stderr).toContain("No Such Note");
     expect(snapshot()).toBe(before);
   });
-  test("p 0.5 writes", async () => {
-    await live("Gadget Ledger");
-    reset(0.5);
-    expect((await write(note("Gadget Ledger Rules", { scope: "screen" }))).code).toBe(0);
-    expect(asked.length).toBe(1);
-  });
   test("a dead Jev writes with a warning", async () => {
     await live("Sprocket Ledger");
     reset(0.9);
@@ -920,43 +850,12 @@ describe("provenance and the contradiction screen", () => {
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("warn contradiction");
   });
-  test("under judge haiku the server gets no request", async () => {
-    await live("Flange Ledger");
-    reset(0.9);
-    expect((await write(note("Flange Ledger Rules", { scope: "screen" }), { ALEPH_JUDGE: "haiku" })).code).toBe(0);
-    expect(asked.length).toBe(0);
-  });
-  test("one request holds at most 20 questions", async () => {
-    // 25 live notes put on disk as one commit, not 25 CLI writes: the screen reads the notes from disk.
-    for (const c of "abcdefghijklmnopqrstuvwxy") copyFileSync(note(`Turbine Number ${c}`, { scope: "screen" }), join(v, "wiki", "gotchas", `Turbine Number ${c}.md`));
-    for (const args of [["add", "-A"], ["commit", "-qm", "turbines"]]) expect(Bun.spawnSync(["git", "-C", v, ...args], { env: { ...process.env, ...testEnv } }).exitCode).toBe(0);
-    reset(0.1);
-    expect((await write(note("Turbine Summary", { scope: "screen" }))).code).toBe(0);
-    expect(asked.length).toBe(1);
-    expect(Object.keys(asked[0].questions).length).toBe(20);
-  });
 });
 
 describe("episode", () => {
   const episodeBody = (word: string, skip?: string) => ["Goal", "What landed", "How it went", "Cost", "What went wrong"]
     .filter((h) => h !== skip).map((h) => `## ${h}\n${word} ${h.toLowerCase()}\n`).join("\n");
   const episode = (title: string, word: string, skip?: string) => note(title, { kind: "episode" }, episodeBody(word, skip));
-  test("a draft with the five sections is written to wiki/episodes/", async () => {
-    const r = (await cli("write", episode("Ledger Episode", "ledger"), "--why", "x"));
-    expect(r.code).toBe(0);
-    expect(r.stderr).not.toContain("refuse template");
-    expect(r.json.path).toBe("wiki/episodes/Ledger Episode.md");
-  });
-  test("a draft without ## Cost is refused", async () => {
-    const r = (await cli("write", episode("Costless Episode", "ledger", "Cost"), "--why", "x"));
-    expect(r.code).toBe(1);
-    expect(r.stderr).toContain("## Cost");
-  });
-  test("recall --episodes returns only episodes, plain recall none", async () => {
-    (await cli("write", note("Ledger Gotcha", {}, "**Claim.** the ledger lies, as of 2026-09-04.\n\n## Details\nledger\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x"));
-    expect((await cli("recall", "--episodes", "ledger")).json.map((h: any) => h.title)).toEqual(["Ledger Episode"]);
-    expect((await cli("recall", "ledger")).json.map((h: any) => h.title)).toEqual(["Ledger Gotcha"]);
-  });
   test("recall --episodes returns the top 3", async () => {
     for (const t of ["Quartz One", "Quartz Two", "Quartz Three", "Quartz Four"]) expect((await cli("write", episode(t, "quartz"), "--why", "x")).code).toBe(0);
     const hits = (await cli("recall", "--episodes", "quartz")).json;

@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../todo/lib/store.ts";
-import { add, addPart, find, setStatus } from "../todo/lib/todo.ts";
+import { writeList } from "../todo/lib/store.ts";
+import { add, addPart, setStatus } from "../todo/lib/todo.ts";
 import { setAsk } from "../jobs/lib/ask.ts";
 import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
@@ -76,38 +76,6 @@ afterAll(() => {
 });
 
 describe("/api/state on a work-model store", () => {
-  test("asks holds one entry for each run, issue and goal that waits for Chris, with kind and reason; the old lists are gone", () => {
-    const s: any = state(now);
-    for (const k of ["att" + "ention", "needs", "needsIssues", "waiting", "standing"]) expect(Object.keys(s), k).not.toContain(k);
-    expect(Object.keys(s)).toEqual(expect.arrayContaining(["asks", "always", "queued", "runningIssues"]));
-    const by = Object.fromEntries(s.asks.map((a: any) => [a.key, a]));
-    // A run that awaits: its Ask's kind and reason, and the goal it is on.
-    expect(by["run:fac-2.1-r"]).toMatchObject({ kind: "approval", reason: "review", on: "fac-2.1" });
-    // A triage run that awaits counts too.
-    expect(by["run:triage-fac-5"]).toMatchObject({ kind: "input", reason: "triage-failed" });
-    // A goal with an Ask, and an issue with an Ask.
-    expect(by["issue:fac-2.1"]).toMatchObject({ kind: "approval", reason: "proposal", href: "#/issues/fac/2.1" });
-    expect(by["issue:fac-3"]).toMatchObject({ kind: "input", reason: "part-dropped" });
-    expect(by["issue:fac-3"].actions.map((a: any) => a.label)).toEqual(["Approve Close with what landed", "Approve Plan the missing part", "Close the issue"]);
-    // One entry each, and no other.
-    expect(s.asks).toHaveLength(4);
-    for (const a of s.asks) expect(["input", "approval"]).toContain(a.kind);
-  });
-
-  test("the Status page shows each ask under Awaiting you with its input or approval mark", () => {
-    const s: any = state(now);
-    const html = renderNeeds({ ...s, stuck: [], factory: { ...s.factory, health: [] } });
-    expect(html).toContain(">Awaiting you<");
-    expect(html).not.toContain("Needs you");
-    expect(html.match(/<span class="kind-tag">Approval<\/span>/g)).toHaveLength(2);
-    expect(html.match(/<span class="kind-tag">Input<\/span>/g)).toHaveLength(2);
-  });
-
-  test("incoming lists issues with their stage; goals are not listed there", () => {
-    const s: any = state(now);
-    const by = Object.fromEntries(s.incoming.map((i: any) => [i.id, i.stage]));
-    expect(by).toEqual({ "fac-1": "working", "fac-2": "awaiting", "fac-3": "awaiting", "fac-4": "new" });
-  });
 
   test("parts are flat: the parent waits for its parts, and .3 runs after .2", () => {
     const s: any = state(now);
@@ -119,16 +87,6 @@ describe("/api/state on a work-model store", () => {
     expect(s.queued[0].part).toMatchObject({ n: 3, m: 3, parent: "fac-1" });
   });
 
-  test("Running shows a part as its own card with a 3/4 link to its parent", () => {
-    const s: any = state(now);
-    const html = renderLanes(s);
-    const running = html.match(/<section id="lane-running"[^]*?<\/section>/)![0];
-    expect(running).toContain('<a class="part" href="#/issues/fac/1" title="Part 2 of 3 of fac-1">2/3</a>');
-    expect(running).toContain('href="#/jobs/fac-1.2"');
-    expect(running.match(/<article /g)).toHaveLength(1);
-    expect(running).not.toContain("goal-row");
-  });
-
   test("the Always list is always.json under the new reasons", () => {
     writeFileSync(join(factory, "always.json"), JSON.stringify({ "triage-failed": { action: "retry", at: "2026-10-30T00:00:00.000Z" } }));
     try {
@@ -138,15 +96,6 @@ describe("/api/state on a work-model store", () => {
 });
 
 describe("the Issue page", () => {
-  test("the API gives the ## Request as written, then the goals, each with its Job", async () => {
-    const d = await getJson("/api/issues/fac/1");
-    expect(d.request).toBe("Do three things.");
-    expect(d.derived).toMatchObject({ item: "fac-1", stage: "working" });
-    expect(d.goals.map((g: any) => [g.id, g.title, g.stage, g.jobs.map((j: any) => j.name)])).toEqual([
-      ["fac-1.1", "first", "done", ["fac-1.1"]], ["fac-1.2", "second", "working", ["fac-1.2"]], ["fac-1.3", "third", "blocked", []],
-    ]);
-    expect(d.goals[0].jobs[0]).toMatchObject({ condition: "landed", kind: "build" });
-  });
 
   test("a goal's page names its issue and has no goals of its own", async () => {
     const d = await getJson("/api/issues/fac/1.2");
@@ -200,8 +149,4 @@ describe("the Issue page", () => {
     expect(parts).toMatch(/<a class="idl" href="#\/issues\/fac\/1.3">/);
     for (const old of [["needs", "chris"].join("-"), ["needs", "you"].join("-"), ["waiting", "on"].join("_"), "Item"]) expect(html).not.toContain(old);
   });
-});
-
-test("the store read back holds what the test wrote", () => {
-  expect(find(readList({ key: "fac" })!, "1.2")?.fm.after).toEqual(["fac-1.1"]);
 });

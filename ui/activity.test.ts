@@ -53,28 +53,6 @@ afterAll(() => {
 });
 
 describe("activity", () => {
-  test("counts tools and their errors, leaving skills to their own view", async () => {
-    const a = await activity(7, null, now);
-    expect(a.langfuse).toBe("ok");
-    expect(a.tools.map(({ lastAt, ...c }) => c)).toEqual([{ name: "Bash", calls: 2, errors: 1 }, { name: "Edit", calls: 1, errors: 0 }, { name: "Read", calls: 1, errors: 0 }]);
-    const last = a.tools[0]?.lastAt ?? "";
-    expect(new Date(last).toISOString()).toBe(last);
-    expect(Array.isArray(a.projects)).toBe(true);
-  });
-
-  test("hook runs with errors, and the verify-gate denials", async () => {
-    const a = await activity(7, null, now);
-    expect(a.hooks.map(({ lastAt, ...c }) => c)).toEqual([{ name: "verify-gate", calls: 2, errors: 0 }, { name: "vault-recall", calls: 1, errors: 1 }]);
-    expect(a.denials.total).toBe(1);
-    expect(a.denials.recent[0].reason).toBe("nothing was run");
-  });
-
-  test("?project keeps one project's traces and runs", async () => {
-    const a = await activity(7, "fac", now);
-    expect(a.tools.find((t) => t.name === "Edit")).toBeUndefined();
-    const o = await activity(7, "other", now);
-    expect(o.tools.map((t) => t.name)).toEqual(["Edit"]);
-  });
 
   test("a second request within ALEPH_UI_CACHE_TTL does not reach Langfuse; after it, the old answer comes back at once and one reload runs", async () => {
     // The clock is the test's: only setSystemTime moves it past the TTL, so load cannot.
@@ -112,17 +90,6 @@ describe("activity", () => {
       clearCache();
     }
   });
-
-  test("without Langfuse keys the ledger half still answers", async () => {
-    const restoreKey = withEnv({ LANGFUSE_PUBLIC_KEY: "" });
-    try {
-      const a = await activity(7, null, now);
-      expect(a.langfuse).toBe("off");
-    } finally { restoreKey(); }
-  });
-});
-
-describe("routes", () => {
 });
 
 

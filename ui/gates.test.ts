@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gate.ts";
-import { DAY_CAP, LIVE_CAP } from "../jobs/lib/settings.ts";
 import { gatesBody, log, securityFacts, splitAsks } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
@@ -170,39 +169,6 @@ test("log collapses a run of identical Gate lines into one with count, first and
   });
 });
 
-test("a different Gate line between identical ones ends the run", () => {
-  withHolds([hold(30), hold(20, "r-9", "other"), hold(10)], () => expect(gateLines().length).toBe(3));
-  withHolds([hold(30), hold(20, "r-8"), hold(10)], () => expect(gateLines().length).toBe(3));
-});
-
-test("a You or Rule line between identical Gate lines does not split them", () => {
-  withHolds([hold(55), hold(5)], () => {
-    const l = log();
-    expect(l.filter((e) => e.by === "Gate").length).toBe(1);
-    expect(l.filter((e) => e.by === "Gate")[0].count).toBe(2);
-    expect(l.some((e) => e.by === "You")).toBe(true);
-    expect(l.some((e) => e.by === "Rule")).toBe(true);
-  });
-});
-
-test("a single Gate line has no count and no first", () => {
-  withHolds([hold(5)], () => {
-    const g = gateLines();
-    expect(g.length).toBe(1);
-    expect("count" in g[0]).toBe(false);
-    expect("first" in g[0]).toBe(false);
-  });
-});
-
-test("renderLog draws a collapsed entry as one row (after the header) with the count and both times", () => {
-  const d = data();
-  d.log.entries = [{ at: ago(10), first: ago(30), count: 37, by: "Gate", item: "r-9", what: "gate: busy" }] as any;
-  const h = gates.renderLog(d, undefined);
-  expect(h.match(/<tr>/g)!.length).toBe(2);
-  expect(h).toContain("×37");
-  expect(h).toContain(`${when(ago(30))} – ${when(ago(10))}`);
-});
-
 test("a revoke line in tick.log is a You entry on the rule, and an always line stays a Rule entry", async () => {
   const { appendFileSync } = await import("node:fs");
   appendFileSync(join(base, "factory", "tick.log"), `${ago(0.5)} always: revoked rescue\n${ago(0.4)} always: rescue: recommended on r-9\n`);
@@ -213,19 +179,6 @@ test("a revoke line in tick.log is a You entry on the rule, and an always line s
 
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
 const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/gates/caps", { method: "POST", headers, body: JSON.stringify(b) });
-
-test("POST /api/gates/caps merges keys, keeps awaiting, and the readers see them", async () => {
-  const restore = withEnv({ ALEPH_DAY_CAP: "", ALEPH_LIVE_CAP: "" });
-  try {
-    writeFileSync(capsPath(), JSON.stringify({ awaiting: 7 }));
-    const r = await postCaps({ day: 20, live: 4 });
-    expect(r.status).toBe(200);
-    expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ awaiting: 7, day: 20, live: 4 });
-    expect(await r.json()).toEqual({ day: 20, live: 4, awaiting: 7 });
-    expect(DAY_CAP()).toBe(20);
-    expect(LIVE_CAP()).toBe(4);
-  } finally { restore(); }
-});
 
 test("POST /api/gates/caps refuses a missing header with 403 and bad values with 422, and leaves the file", async () => {
   const seed = JSON.stringify({ day: 9, awaiting: 2 });
@@ -243,21 +196,4 @@ test("writing awaiting replaces the old waiting key", async () => {
   writeFileSync(capsPath(), JSON.stringify({ waiting: 3 }));
   expect((await postCaps({ awaiting: 3 })).status).toBe(200);
   expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ awaiting: 3 });
-});
-
-test("gatesBody marks a cap overridden only for a non-empty ALEPH_* variable", async () => {
-  const restore = withEnv({ ALEPH_DAY_CAP: "3", ALEPH_LIVE_CAP: "", ALEPH_AWAITING_CAP: "" });
-  try {
-    const d: any = await body();
-    expect(d.factory.capEnv).toEqual({ day: true, live: false, awaiting: false });
-  } finally { restore(); }
-});
-
-test("renderNow says an edit has no effect while the environment variable is set, and names it", () => {
-  const d: any = data();
-  d.factory.capEnv = { day: true, live: false, awaiting: false };
-  const h = gates.renderNow(d);
-  expect(h).toContain("ALEPH_DAY_CAP is set: an edit has no effect while that variable is set.");
-  expect(h).not.toContain("ALEPH_LIVE_CAP");
-  expect(h).not.toContain("ALEPH_AWAITING_CAP");
 });

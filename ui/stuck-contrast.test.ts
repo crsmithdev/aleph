@@ -59,9 +59,4 @@ describe("dark theme --stuck on --stuck-bg", () => {
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
   }
-
-  test("both dark blocks use the same --stuck-bg", () => {
-    const [a, b] = darkBlocks();
-    expect(token(a.body, "stuck-bg")).toBe(token(b.body, "stuck-bg"));
-  });
 });

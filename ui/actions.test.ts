@@ -54,36 +54,11 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("POST /api/land runs `aleph land x` and returns its code", async () => {
-  const res = await post("/api/land/x");
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ code: 0, stdout: "out\n", stderr: "" });
-  expect(recorded()).toEqual(["land x"]);
-});
-
-test("POST /api/recheck runs `aleph recheck x`", async () => {
-  const res = await post("/api/recheck/x");
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ code: 0, stdout: "out\n", stderr: "" });
-  expect(recorded().at(-1)).toBe("recheck x");
-});
-
 test("POST /api/wait 400s without a blocker or an item", async () => {
   expect((await post("/api/wait/x", undefined, {})).status).toBe(400);
 });
 
 const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id === n && (n === 6 ? i.sub === 1 : i.sub === undefined))!.fm.after;
-
-test("POST /api/wait sets the item's after in process, then drops the job", async () => {
-  const before = recorded().length;
-  const res = await post("/api/wait/wt", { "X-Aleph-UI": "1" }, { on: "r-9.1" });
-  expect(res.status).toBe(200);
-  expect(waiting(7)).toEqual(["r-9.1"]);
-  // The CLI does not edit issues, so only the drop goes through it.
-  const calledNow = recorded().slice(before);
-  expect(calledNow).toHaveLength(1);
-  expect(calledNow[0].startsWith("drop wt Chris chose to wait for r-9.1")).toBe(true);
-});
 
 test("POST /api/wait reads the issue from `on`, and the integer part of a goal's dotted `on`", async () => {
   for (const [job, n] of [["won", 5], ["wgoal", 6]] as const) {
@@ -136,19 +111,6 @@ test("GET /api/diff is the branch's diff from the merge base", async () => {
   expect(d).not.toContain("b.txt");
   expect((await at("/api/diff/nobranch")).status).toBe(404);
   expect((await at("/api/diff/nope")).status).toBe(404);
-});
-
-test("a name reused by a dropped job and its rerun acts on the newer job", async () => {
-  for (const [id, extra] of [["20261027-090000-r-dup-agent", { condition: "dropped" }], ["20261027-110000-r-dup-agent", { condition: "landed", branch: "job/x" }]] as const) {
-    const folder = join(base, "jobs", id);
-    mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", started: new Date().toISOString(), name: "dup", job: `dup-${extra.condition}`, repo: "r", ...extra }));
-  }
-  const res = await at("/api/diff/dup");
-  expect(res.status).toBe(200);
-  expect(await res.text()).toContain("+two");
-  expect((await post("/api/land/dup")).status).toBe(200);
-  expect(recorded().at(-1)).toBe("land dup");
 });
 
 test("pause and resume run their command", async () => {

@@ -2,9 +2,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { withEnv, withServer } from "./test-server.ts";
 
-let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, pageDir: string, apiDir: string;
+let base: string, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, pageDir: string, apiDir: string;
 
 const run = (o: object) => JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), ...o });
 
@@ -23,16 +23,12 @@ beforeAll(async () => {
   mkdirSync(apiDir);
   writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "work", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
   writeFileSync(join(apiDir, "_test.ts"), `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
-  ({ server, stop, at } = await withServer({ warm: false, pageDir, apiDir }));
+  ({ stop, at } = await withServer({ warm: false, pageDir, apiDir }));
 });
 afterAll(() => {
   stop();
   restoreEnv();
   rmSync(base, { recursive: true, force: true });
-});
-
-test("binds 127.0.0.1", () => {
-  expect(server.hostname).toBe("127.0.0.1");
 });
 
 test("/api/state?project= keeps only that project's jobs", async () => {

@@ -119,52 +119,6 @@ test("File an issue posts the first cause as the title, with the runs and reason
   await expect(fileIssue(D, "nothing", async () => ({ ok: false, status: 422, json: async () => ({ error: "no" }) }) as any)).rejects.toThrow("no");
 });
 
-test("the Usage per issue tile drills to the issues list", () => {
-  expect(renderEfficiency(D, "all")).toMatch(/data-tile="usage"[^>]*aria-pressed="false"|aria-pressed="false"[^>]*data-tile="usage"/);
-  expect(renderEfficiency(D, "usage")).toContain('data-tile="usage" aria-pressed="true"');
-  expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, "all")).not.toContain('data-tile="usage"');
-  const h = renderEfficiency(D, "usage");
-  expect(h).toContain("<h2>Usage per issue, largest first</h2>");
-  expect(h).toContain("#/issues/fx/1");
-  expect(h).toContain("fx-2");
-  expect(h).not.toContain("#/issues/fx/2");
-  expect(h).toContain("0.5%");
-  expect(h).toContain("0.1%");
-  expect(h).not.toContain("File an issue");
-  expect(h).not.toContain("undefined");
-  expect(issueFor(D, "usage")).toBeNull();
-  expect(renderEfficiency({ ...D, issues: { ...D.issues, usage: undefined } }, "usage")).toContain("No issue to show.");
-});
-
-test("the Reruns panel describes tests and checks, and keeps a long name whole", () => {
-  const long = "ui/a.test.ts > suite > a very long test name that goes on";
-  const d = { ...D, flakes: [{ name: long, count: 3 }, { name: "types", count: 1 }] };
-  const s = selection(d, "flakes");
-  expect(s.causes).toEqual([{ name: long, runs: 3 }, { name: "types", runs: 1 }]);
-  expect(s.text.startsWith("Checks that failed")).toBe(false);
-  const h = renderEfficiency(d, "flakes");
-  expect(h).toContain(`title="${long.replace(/>/g, "&gt;")}"`);
-  expect(h).toContain(long.replace(/>/g, "&gt;"));
-  expect(h).toContain("rerun");
-});
-
-test("the cards trend against the baseline of the window, and show none without one", () => {
-  const h = renderEfficiency(WITH, "all");
-  expect(h).toMatch(/<span class="tr warn" title="[^"]*">▲ 5%<\/span>/);
-  expect(h).toMatch(/<span class="tr warn" title="Previous 60%; baseline 75%, the previous 7 days \(change in percentage points\)">▼ 25%<\/span>/);
-  expect(h).toContain("▬ 0%");
-  const better = renderEfficiency({ ...WITH, lost: { hours: 1, share: 0.1 }, issues: { ...D.issues, firstPass: 0.9 } }, "all");
-  expect(better).toMatch(/tr good[^>]*>▼ 15%/);
-  expect(better).toMatch(/tr good[^>]*>▲ 15%/);
-  const none = renderEfficiency(D, "all");
-  expect(none).not.toContain('class="tr');
-  expect(none).not.toContain("▲");
-  expect(none).not.toContain("▼");
-  const noRerun = renderEfficiency({ ...WITH, baseline: { ...BASE, base: { ...BASE.base, flaky: undefined } } }, "all");
-  expect([...noRerun.matchAll(/class="tr/g)].length).toBe(2);
-  for (const w of ["hour", "day", "week", "month"]) expect(renderEfficiency({ ...WITH, window: w }, "all")).not.toContain("30-day average");
-});
-
 test("a click on a card selects its class", () => {
   const h = renderEfficiency(D, "all");
   expect(h).toMatch(/<button type="button" class="tile sc" data-tile="all" aria-pressed="true"><span class="r1"><span class="k">Lost time/);

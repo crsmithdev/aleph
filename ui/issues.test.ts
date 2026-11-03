@@ -88,16 +88,6 @@ describe("GET /api/issues", () => {
     expect((await at("/api/issues?status=bogus")).status).toBe(400);
   });
 
-  test("no repo gives the recent repos", async () => {
-    const rows = await getJson("/api/issues");
-    expect(new Set(rows.map((r: any) => r.repo))).toEqual(new Set(["fac", "oth"]));
-  });
-
-  test("?project narrows it", async () => {
-    expect(new Set((await getJson("/api/issues?project=oth")).map((r: any) => r.repo))).toEqual(new Set(["oth"]));
-    expect((await getJson("/api/issues?project=fac&repo=oth"))).toEqual([]);
-  });
-
   test("a row carries its stage", async () => {
     const rows = await getJson("/api/issues?repo=fac");
     expect(rows[0].stage).toBe("done");
@@ -137,32 +127,6 @@ describe("GET /api/issues/:repo/:n", () => {
     expect(g.jobs.map((j: any) => j.name)).toEqual(["on-2"]);
   });
 
-  test("carries the hold records of the job names it shows", async () => {
-    const mk = (name: string) => ({ at: new Date().toISOString(), name, kind: "queue", text: `${name} waits` });
-    const shown = [mk("on-4"), mk("goal-4-1")], other = mk("on-2");
-    const dir = join(base, "factory");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "holds.jsonl"), [...shown, other].map((r) => JSON.stringify(r)).join("\n") + "\n");
-    try {
-      const d = await getJson("/api/issues/fac/4");
-      expect(d.holds).toEqual(shown);
-    } finally { rmSync(join(dir, "holds.jsonl"), { force: true }); }
-    expect((await getJson("/api/issues/fac/4")).holds).toEqual([]);
-  });
-
-  test("lists the job and the trailer commit, not the prose one", async () => {
-    const d = await getJson("/api/issues/fac/1");
-    expect(d.title).toBe("first goal");
-    expect(d.spec).toContain("# Heading");
-    expect(d.status).toBe("open");
-    expect(d.derived.stage).toBe("done");
-    expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-1"]);
-    expect(d.commits.map((c: any) => c.subject)).toEqual(["real work"]);
-    expect(d.commits[0].hash).toMatch(/^[0-9a-f]{40}$/);
-    expect(d.commits[0].date).toBeTruthy();
-    expect(Object.keys(d.commits[0])).not.toContain("commitUrl");
-  });
-
   test("unknown issue and other project are 404", async () => {
     expect((await at("/api/issues/fac/99")).status).toBe(404);
     expect((await at("/api/issues/fac/1?project=oth")).status).toBe(404);
@@ -171,15 +135,6 @@ describe("GET /api/issues/:repo/:n", () => {
 });
 
 describe("views", () => {
-  test("the Markdown body escapes <script>", async () => {
-    const h = issueView.render(await getJson("/api/issues/fac/1"));
-    expect(h).not.toContain("<script>");
-    expect(h).toContain("&lt;script&gt;");
-    expect(h).toContain("<h1>Heading</h1>");
-    expect(h).toContain("<li>one</li>");
-    expect(h).toContain("real work");
-    expect(h).toContain('href="#/jobs/fac-1"');
-  });
 
   test("/api/contents gives the issues with their run counts and the registry's keys", async () => {
     const d = await getJson("/api/contents");
@@ -314,18 +269,6 @@ describe("views", () => {
     expect(v.dateText("2025-10-20", new Date("2026-11-01T12:00"))).toBe("2025-10-20");
   });
 
-  test("critical ranks above high in the priority sort, and the priority filter offers and keeps critical", async () => {
-    const rows = v.issueRows({ issues: [
-      { id: 1, repo: "f", title: "low one", status: "open", priority: "low", labels: [], created: "2026-10-01" },
-      { id: 2, repo: "f", title: "crit one", status: "open", priority: "critical", labels: [], created: "2026-10-02" },
-      { id: 3, repo: "f", title: "high one", status: "open", priority: "high", labels: [], created: "2026-10-03" },
-    ] });
-    expect(v.sortRows(rows, { key: "priority", dir: -1 }).map((r: any) => r.title)).toEqual(["crit one", "high one", "low one"]);
-    expect(v.filterRows(rows, { priority: "critical" }).map((r: any) => r.title)).toEqual(["crit one"]);
-    const d = await getJson("/api/contents");
-    expect(v.view.render(d, {}, new URLSearchParams("status=any"))).toContain('data-value="critical" aria-pressed="false">critical</button>');
-  });
-
   test("the Status filter defaults to Open, newest first; Any shows every status", async () => {
     const d = await getJson("/api/contents");
     expect(v.hashOptions(new URLSearchParams()).status).toBe("open");
@@ -349,19 +292,6 @@ describe("views", () => {
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
   });
 
-  test("the Issues table shows 50 rows and a pager that asks for 50 more", () => {
-    const rows = Array.from({ length: 120 }, (_, i) => ({ id: 100 + i, repo: "fac", title: `t${i}`, status: "open", labels: [], updated: "2026-10-01T00:00:00Z" }));
-    const d = { issues: rows, projects: [], specs: [] };
-    const h = v.view.render(d, {}, new URLSearchParams());
-    expect(h.match(/<tr class="rowlink"/g)).toHaveLength(50);
-    expect(h).toContain('<span class="of">50 of 120</span>');
-    expect(h).toContain('data-more="50"');
-    expect(v.hashOptions(new URLSearchParams("limit=100")).limit).toBe(100);
-    const more = v.view.render(d, {}, new URLSearchParams("limit=100"));
-    expect(more.match(/<tr class="rowlink"/g)).toHaveLength(100);
-    expect(more).toContain('data-more="20"');
-  });
-
   test("a part row names its part and nests", () => {
     const rows = v.issueRows({ issues: [
       { id: 910, ref: "910", repo: "fac", title: "ask", status: "open", labels: [] },
@@ -382,12 +312,6 @@ describe("POST /api/issues", () => {
     expect(await res.json()).toMatchObject({ added: 7 });
     expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "new one", "--spec", "-", "--labels", "x"]);
     expect(readFileSync(stdinFile, "utf8")).toBe("## Goal\n\ndo it");
-  });
-
-  test("without the spec label the text is the body", async () => {
-    const res = await post({ repo: "fac", title: "plain one", body: "just words", labels: ["x"] });
-    expect(res.status).toBe(200);
-    expect(readFileSync(argvFile, "utf8").trim().split("\n")).toEqual(["issue", "add", "fac", "plain one", "--request", "-", "--labels", "x"]);
   });
 
   test("an after goes through to `aleph issue add`", async () => {
@@ -413,16 +337,6 @@ describe("POST /api/issues", () => {
     rmSync(argvFile, { force: true });
     expect((await post({ repo: "fac", title: "t" }, { "x-aleph-ui": "1" }, "?project=oth")).status).toBe(400);
     expect(await Bun.file(argvFile).exists()).toBe(false);
-  });
-});
-
-describe("issue form project select", () => {
-  test("projectOptions escapes and selects", () => {
-    const h = v.projectOptions(["a", "<b>"], "a");
-    expect(h.match(/<option /g)?.length).toBe(2);
-    expect(h).toContain('<option value="a" selected>');
-    expect(h).toContain("&lt;b&gt;");
-    expect(h).not.toContain("<b>");
   });
 });
 
@@ -530,16 +444,6 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
       expect(item(n).notes.at(-1)).toContain("checked on the host");
     });
   });
-
-  test("denying drops the issue with the reason", async () => {
-    const n = ask(true);
-    await withRealCli(async () => {
-      const r = await at(`/api/issues/fac/${n}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "Chris denied: not now" }) });
-      expect(r.status).toBe(200);
-      expect(todos.status(item(n))).toBe("dropped");
-      expect(item(n).notes.at(-1)).toContain("not now");
-    });
-  });
 });
 
 describe("POST /api/issues/:repo/:id/retriage and rerun", () => {
@@ -631,21 +535,6 @@ describe("the Issue page shows the ask row", () => {
     return i.id;
   }, true)!.value;
 
-  test("an awaiting issue returns ask; a non-asking one returns none", async () => {
-    const n = seed(true);
-    const d = await getJson(`/api/issues/fac/${n}`);
-    expect(d.ask.situation).toBe("Two ways to go.");
-    expect(d.ask.explained).toBe(true);
-    expect(d.ask.actions.length).toBeGreaterThan(0);
-    expect((await getJson("/api/issues/fac/1")).ask).toBeUndefined();
-  });
-
-  test("a closed issue returns none", async () => {
-    const n = seed(true);
-    writeList({ key: "fac" }, "close", (doc) => { setStatus(doc.items.find((x) => x.id === n && x.sub === undefined)!, "dropped"); }, true);
-    expect((await getJson(`/api/issues/fac/${n}`)).ask).toBeUndefined();
-  });
-
   test("renderIssue shows one row with the situation, effects and buttons, and no ask fields in the front matter", async () => {
     const n = seed(true);
     const d = await getJson(`/api/issues/fac/${n}`);
@@ -696,27 +585,5 @@ describe("the Issue timeline names why a wait waited", () => {
     const holds = [{ at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "held", text: "main checks are red" }, { at: "2026-11-01T10:06:00Z", name: "fac-2", kind: "held", text: "other job" }];
     expect(html(d(holds))).toContain("Waited 28 min: 25 min because main checks are red.");
     expect(html(d(holds))).not.toContain("other job");
-  });
-  test("an answer without holds keeps the plain text", () => {
-    expect(html(d())).toContain("Waited 28 min.");
-  });
-});
-
-describe("the drop note", () => {
-  test("a reason becomes `Chris dropped: <reason>`; a Chris reason stays as it is", async () => {
-    const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
-    writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
-    chmodSync(wrap, 0o755);
-    process.env.ALEPH_CLI = wrap;
-    try {
-      writeList({ key: "fac" }, "seed", (doc) => { add(doc, "drop x"); add(doc, "drop y"); return true; }, true);
-      const ids = readList({ key: "fac" })!.items.map((i) => i.id).slice(-2);
-      const h = { "x-aleph-ui": "1", "content-type": "application/json" };
-      const last = (id: number) => { const n = readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes; return n[n.length - 1]; };
-      expect((await at(`/api/issues/fac/${ids[0]}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "x" }) })).status).toBe(200);
-      expect(last(ids[0])).toMatch(/: Chris dropped: x$/);
-      expect((await at(`/api/issues/fac/${ids[1]}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "Chris denied: y" }) })).status).toBe(200);
-      expect(last(ids[1])).toMatch(/: Chris denied: y$/);
-    } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
   });
 });

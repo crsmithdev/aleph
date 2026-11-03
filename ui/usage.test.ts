@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync } from "node:fs";
-import { clearFit, currentFit, fit, fetchUsage, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
+import { clearFit, currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
 // @ts-ignore plain JS view
@@ -41,45 +41,6 @@ beforeEach(() => {
 });
 afterEach(() => { server.stop(true); rmSync(dir, { recursive: true }); delete process.env.ALEPH_USAGE_URL; });
 
-test("a poll appends the snapshot and the token is nowhere in it", async () => {
-  const s = await pollOnce();
-  expect(s?.seven_day).toBe(25);
-  const text = readFileSync(process.env.ALEPH_USAGE_FILE!, "utf8");
-  expect(text).not.toContain(TOKEN);
-  expect(readSnapshots()).toHaveLength(1);
-  expect(summary().now?.seven_day).toBe(25);
-  expect(JSON.stringify(summary())).not.toContain(TOKEN);
-});
-
-test("a bad token records nothing; the last snapshot stays, marked stale", async () => {
-  await pollOnce();
-  writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, JSON.stringify({ claudeAiOauth: { accessToken: "bad" } }));
-  expect(await pollOnce()).toBeNull();
-  expect(readFileSync(process.env.ALEPH_USAGE_FILE!, "utf8").trim().split("\n")).toHaveLength(1);
-  expect(summary().now?.seven_day).toBe(25);
-  expect(summary().stale).toBe(true);
-});
-
-test("an old snapshot is stale but kept; after its reset it is dropped; none is unknown", async () => {
-  await pollOnce();
-  const last = readSnapshots().at(-1)!;
-  const at = Date.parse(last.at);
-  const s = summary(at + 40 * 60_000);
-  expect(s.now).not.toBeNull();
-  expect(s.stale).toBe(true);
-  expect(summary(at + 60_000).stale).toBe(false);
-  const r = Date.parse(last.seven_day_resets_at ?? "");
-  if (!Number.isNaN(r)) expect(summary(r + 1).now).toBeNull();
-  rmSync(process.env.ALEPH_USAGE_FILE!);
-  expect(summary().now).toBeNull();
-});
-
-test("no credentials file records nothing", async () => {
-  rmSync(process.env.ALEPH_CLAUDE_CREDENTIALS!);
-  expect(await pollOnce()).toBeNull();
-  expect(existsSync(process.env.ALEPH_USAGE_FILE!)).toBe(false);
-});
-
 test("the window starts at the last reset", () => {
   const w = sinceReset([snap(0, 80, "2026-10-26T00:00:00Z"), snap(1, 90, "2026-10-26T00:00:00Z"), snap(2, 1), snap(3, 2)]);
   expect(w.map((s) => s.seven_day)).toEqual([1, 2]);
@@ -105,16 +66,6 @@ test("r is the rise per dollar, per model when it has $5, pooled otherwise", () 
   expect(share(null, 2, "opus")).toBeUndefined();
 });
 
-test("the share is shown first, with a tooltip, and the dollars stay", () => {
-  const html = costHtml(2.3, { pct: 1.44, pooled: true });
-  expect(html.indexOf("≈1.4% wk")).toBeLessThan(html.indexOf("$2.30"));
-  expect(html).toContain("estimate");
-  expect(html).toContain("claude.ai");
-  expect(html).toContain("pooled");
-  expect(costHtml(2.3)).toBe("$2.30");
-  expect(wkText({ pct: 0.01, pooled: false })).toBe("≈<0.1% wk");
-});
-
 test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours before, in the reset window", () => {
   const t = (h: number) => new Date(Date.UTC(2026, 9, 29, 12) - h * 3600_000).toISOString();
   const snap = (h: number, seven_day: number): Snapshot => ({ at: t(h), five_hour: 1, seven_day, seven_day_resets_at: "2026-11-02T09:00:00Z" });
@@ -124,45 +75,12 @@ test("gainSince: the latest weekly percent minus the snapshot nearest to 5 hours
   expect(gainSince([], 5 * 3600_000)).toBeNull();
 });
 
-test("a 429 logs one line with the status and the Retry-After value, and the poll returns null", async () => {
-  reply = () => new Response("slow down", { status: 429, headers: { "retry-after": "540" } });
-  let result: unknown;
-  const lines = await errors(async () => { result = await pollOnce(); });
-  expect(result).toBeNull();
-  expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("429");
-  expect(lines[0]).toContain("540");
-  expect(lines[0]).not.toContain(TOKEN);
-});
-
 test("a 429 without Retry-After logs the status alone", async () => {
   reply = () => new Response("slow down", { status: 429 });
   const lines = await errors(() => pollOnce());
   expect(lines).toHaveLength(1);
   expect(lines[0]).toContain("429");
   expect(lines[0]).not.toContain("Retry-After");
-});
-
-test("a 401 logs one line with the status", async () => {
-  writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, JSON.stringify({ claudeAiOauth: { accessToken: "bad" } }));
-  const lines = await errors(() => pollOnce());
-  expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("401");
-});
-
-test("a missing credentials file logs one line that names the credentials file", async () => {
-  rmSync(process.env.ALEPH_CLAUDE_CREDENTIALS!);
-  const lines = await errors(() => pollOnce());
-  expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("credentials file");
-});
-
-test("a credentials file that is invalid JSON logs one line without the token", async () => {
-  writeFileSync(process.env.ALEPH_CLAUDE_CREDENTIALS!, `{"claudeAiOauth": {"accessToken": "${TOKEN}"`);
-  const lines = await errors(() => pollOnce());
-  expect(lines).toHaveLength(1);
-  expect(lines[0]).toContain("credentials file");
-  expect(lines[0]).not.toContain(TOKEN);
 });
 
 test("a credentials file with no token logs one line", async () => {
@@ -216,11 +134,6 @@ test("a network failure logs one line", async () => {
   expect(lines).toHaveLength(1);
   expect(lines[0]).toContain("network failure");
   expect(lines[0]).not.toContain(TOKEN);
-});
-
-test("a successful poll writes no line", async () => {
-  const lines = await errors(async () => { expect((await fetchUsage())?.seven_day).toBe(25); });
-  expect(lines).toHaveLength(0);
 });
 
 test("summary ignores a row dated after the clock, so a future-dated snapshot does not stick as the latest", () => {

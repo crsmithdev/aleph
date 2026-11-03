@@ -1,12 +1,13 @@
+// Archived goal tests from ui/state-load.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { add } from "../todo/lib/todo.ts";
-import { writeList } from "../todo/lib/store.ts";
-import { withEnv, withServer } from "./test-server.ts";
-import { stateBuilds } from "./state-load.ts";
-import { waitFor } from "../tests/wait.ts";
+import { add } from "../../todo/lib/todo.ts";
+import { writeList } from "../../todo/lib/store.ts";
+import { withEnv, withServer } from "../../ui/test-server.ts";
+import { stateBuilds } from "../../ui/state-load.ts";
+import { waitFor } from "../../tests/wait.ts";
 
 // /api/state is built in a worker (ui/state-load.ts). ALEPH_STATE_SLOW_MS makes each build sleep that long first, so the
 // assertions on the timer, the shared builds and the fresh state hold whatever the machine's speed.

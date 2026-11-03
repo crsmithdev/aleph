@@ -1,3 +1,4 @@
+// Archived goal tests from ui/asks-live.test.ts: `bun run accept` runs them, `bun run test` does not.
 /**
  * The whole path of an Ask's case text: a host-check Ask raised the way triage raises it, the explainer sweep with a fake
  * `claude`, the API, and the page in Chrome (Awaiting you on Status, and the Issue page). Two screenshots are written to `ALEPH_SHOTS_DIR`, or a folder in the system temp dir, outside the temp dir, so they outlive the test and can be committed.
@@ -6,11 +7,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../todo/lib/todo.ts";
-import { readList, writeList } from "../todo/lib/store.ts";
-import { askOf, plainAsk, setAsk } from "../jobs/lib/ask.ts";
-import { explainStep } from "../jobs/lib/explain.ts";
-import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
+import * as issues from "../../todo/lib/todo.ts";
+import { readList, writeList } from "../../todo/lib/store.ts";
+import { askOf, plainAsk, setAsk } from "../../jobs/lib/ask.ts";
+import { explainStep } from "../../jobs/lib/explain.ts";
+import { chromeUsable, startRig, type Page, type Rig } from "../../ui/test-browser.ts";
 
 /** Not under the test's temp dir: afterAll deletes that, and the screenshots are for review. `ui/shots` is tracked, so a run writes there only when asked. */
 const SHOTS = process.env.ALEPH_SHOTS_DIR ?? join(tmpdir(), "aleph-asks-live");

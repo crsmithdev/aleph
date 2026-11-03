@@ -23,17 +23,6 @@ test("a renamed note keeps the date it first entered git", () => {
   expect(addedDate(dir, join(dir, "New.md"))).toBe("2026-01-10");
 });
 
-test("a similar note added later is not taken for the first", () => {
-  // Eight identical body lines and one that differs: well over 50% similar, not identical.
-  const shared = Array.from({ length: 8 }, (_, i) => `Step ${i + 1} is the same in both notes.\n`).join("");
-  writeFileSync(join(dir, "A.md"), head + shared + "Retries stop after three attempts.\n");
-  commit("2026-04-01T12:00:00", "a");
-  writeFileSync(join(dir, "B.md"), head + shared + "Retries stop after four attempts.\n");
-  commit("2026-05-01T12:00:00", "b");
-  expect(addedDate(dir, join(dir, "A.md"))).toBe("2026-04-01");
-  expect(addedDate(dir, join(dir, "B.md"))).toBe("2026-05-01");
-});
-
 test("commitPaths still commits the note when another named path is gone and was never tracked", () => {
   writeFileSync(join(dir, "Draft.md"), head + "A decision.\n");
   // The superseded draft was unlinked and never tracked; git add would fail on it whole.

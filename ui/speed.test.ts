@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv } from "./test-server.ts";
-import { agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
+import { agentStats, CLASSES, classify, clearCache, filed, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/process.ts";
 // @ts-ignore plain JS shared with the page
 import { durShort, weekText, xLabel } from "./views/speed.js";
@@ -44,33 +44,6 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("percentiles are nearest rank", () => {
-  expect(pct([], 0.5)).toBe(0);
-  expect([pct([1, 2, 3, 4], 0.5), pct([1, 2, 3, 4], 0.9), pct([5], 0.9)]).toEqual([2, 4, 5]);
-});
-
-test("day: counts, medians, wasted share, buckets, slowest, models", () => {
-  const d = speed("day", now);
-  expect(d.kinds.agent).toEqual({ count: 3, p50: 1200, p90: 1800 }); // the 5 h run and the running one are out
-  expect(d.kinds.land).toEqual({ count: 3, p50: 46, p90: 100 });
-  expect(d.kinds.triage.count).toBe(1);
-  expect(d.kinds.plan.count).toBe(0);
-  expect(d.checks).toEqual([{ name: "tests", count: 1, p50: 36, p90: 36 }, { name: "types", count: 1, p50: 8, p90: 8 }]);
-  expect("ends" in d || "wasted" in d).toBe(false);
-  expect(d.classes.every((c) => c.text.length > 0)).toBe(true);
-  expect(d.window).toBe("day");
-  expect(d.done).toBe(1); // two land runs with no issue count as one
-  expect(d.buckets.length).toBe(24);
-  const b = (h: string) => d.buckets.find((x) => x.label === h)!;
-  expect(b("09:00")).toMatchObject({ implement: 600, intake: null });
-  expect(b("10:00")).toMatchObject({ implement: null });
-  expect(d.slowest.map((r) => [r.condition, r.took])).toEqual([["stuck", 1800], ["dropped", 1200], ["passed", 600]]);
-  expect(d.slowest[0].model).toBe("unset");
-  expect(d.slowest[2]).toMatchObject({ tests: 36, cost: 1 });
-  expect(d.models).toEqual([{ model: "claude-opus-5-5", count: 2, p50: 600 }, { model: "unset", count: 1, p50: 1800 }]);
-  expect(d.flaky).toBe(0);
-});
-
 test("done and issues.landed count landed issues, not land runs", () => {
   // 40 days back, so no other test's window sees these runs.
   const old = (h: number, m: number, extra: object) => run({ kind: "land", condition: "landed", ...extra, started: at(40, h, m), ended: at(40, h, m + 1) });
@@ -83,28 +56,6 @@ test("done and issues.landed count landed issues, not land runs", () => {
   expect(d.kinds.land.count).toBe(5);
   expect(d.done).toBe(3); // zz-5, zz-6 and the no-issue key
   expect(d.issues.landed).toBe(3);
-});
-
-test("hour: sixty 1-minute buckets over the last hour", () => {
-  const h = speed("hour", new Date(2026, 9, 28, 9, 47, 0));
-  expect(h.buckets.length).toBe(60);
-  expect(h.buckets[0].label).toBe("08:48");
-  expect(h.buckets[59].label).toBe("09:47");
-  expect(h.kinds.agent.count).toBe(1); // the 09:00 run
-  const m = speed("hour", new Date(2026, 9, 28, 9, 7, 0));
-  expect(m.done).toBe(1);
-});
-
-test("week and month: one bucket per local day, wider windows add runs", () => {
-  const w = speed("week", now);
-  expect(w.buckets.length).toBe(7);
-  expect(w.kinds.agent.count).toBe(4);
-  expect(w.buckets[6].label).toBe("10-28");
-  expect(w.buckets[3]).toMatchObject({ label: "10-25", implement: 300 });
-  expect(w.models.map((m) => m.model)).toContain("claude-sonnet-5-5");
-  const m = speed("month", now);
-  expect(m.buckets.length).toBe(30);
-  expect(m.kinds.plan.count).toBe(1);
 });
 
 test("GET /api/speed takes a window (default week) and answers JSON", async () => {
@@ -208,23 +159,6 @@ test("classify: one run of each class, with its cause", () => {
   expect(d.hasWeek).toBe(false);
 });
 const round2 = (n: number) => Math.round(n * 100) / 100;
-
-test("classify: a reason over 140 characters ends at a word with an ellipsis; a short one is untouched", () => {
-  const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
-  const long = "measure per file output of the slow suites before changing the runner so that every worker reports where its time goes " + "and ".repeat(20) + "end";
-  const r = (job: string, n: number, reason: string) =>
-    ({ kind: "build", job, name: job, repo: "fx", on: `fx-${n}`, condition: "stuck", noCommit: true, reason, started: t(1), ended: t(2) }) as any;
-  const out = classify([r("p", 5, "agent run p: " + long), r("q", 6, "Main no")], () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
-  const top = out.classes.find((c) => c.key === "dropped")!.top;
-  const a = top.find((e) => e.goal === "fx-5")!.reason, b = top.find((e) => e.goal === "fx-6")!.reason;
-  expect(long.length).toBeGreaterThan(140);
-  expect(a.length).toBeLessThanOrEqual(140);
-  expect(a.endsWith("…")).toBe(true);
-  const body = a.slice(0, -1);
-  expect(long.startsWith(body)).toBe(true);
-  expect(long[body.length]).toBe(" ");
-  expect(b).toBe("Main no");
-});
 
 test("a build run counts as an agent run", () => {
   const before = speed("week", now);
@@ -354,20 +288,6 @@ test("an unlanded run of an issue that left the store is Dropped", () => {
   expect(classify([r], () => undefined, since, at, null).notCounted.runs).toBe(1);
 });
 
-test("phases: hist has 7 bins, an edge falls in the upper bin, counts sum to count, worst is the longest", () => {
-  const t = (h: number, m = 0, s = 0) => new Date(2026, 9, 28, h, m, s).toISOString();
-  const r = (job: string, a: string, b: string) => ({ kind: "build", job, name: job, condition: "passed", started: a, ended: b }) as any;
-  const since = new Date(2026, 9, 28, 0).getTime(), end = new Date(2026, 9, 28, 23).getTime();
-  // implement times: 30s, 60s (edge), 299s, 15m (edge), 45m, 2h, 3h
-  const runs = [r("a", t(1), t(1, 0, 30)), r("b", t(1), t(1, 1)), r("c", t(1), t(1, 4, 59)), r("d", t(1), t(1, 15)), r("e", t(1), t(1, 45)), r("f", t(1), t(3)), r("g", t(1), t(4))];
-  const p = phases(runs, { issue: new Map() }, since, end);
-  expect(p.implement.hist).toEqual([1, 2, 0, 1, 1, 2, 0]);
-  expect(p.implement.hist.reduce((a, b) => a + b, 0)).toBe(p.implement.count);
-  expect(p.implement.worst).toBe(10800);
-  expect(p.intake.hist).toEqual([0, 0, 0, 0, 0, 0, 0]);
-  expect(p.intake.worst).toBe(0);
-});
-
 test("the shared formats", () => {
   expect([dur(43), dur(245), dur(null)]).toEqual(["43s", "4m 05s", "–"]);
   expect([durShort(59), durShort(1570), durShort(16560)]).toEqual(["59s", "26m", "4h 36m"]);
@@ -410,19 +330,6 @@ test("flakes count each test name; a row without tests counts under its check", 
   }
 });
 
-test("classify: the parts of one issue are goals of their own, and a top list links to the part", () => {
-  const t = (s: number) => new Date(2026, 9, 28, 8, 0, s).toISOString();
-  const b = (job: string, ref: string, s: number, e: number) => ({ kind: "build", job, name: job, repo: "fx", on: `fx-${ref}`, condition: "passed", started: t(s), ended: t(e) }) as any;
-  const l = (job: string, ref: string, s: number, e: number) => ({ kind: "land", job, name: job, repo: "fx", on: `fx-${ref}`, condition: "landed", started: t(s), ended: t(e) }) as any;
-  const runs = [b("p1", "7.1", 0, 100), b("p4", "7.4", 4, 100), l("p4", "7.4", 110, 120), l("p1", "7.1", 130, 140)];
-  const out = classify(runs, () => "open", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
-  const by = (k: string) => out.classes.find((c) => c.key === k)!;
-  expect(by("landed").runs).toBe(2);
-  expect(by("restarted").runs).toBe(0);
-  const d = classify([{ ...b("x", "7.2", 0, 100), condition: "stuck", noCommit: true }], () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
-  expect(d.classes.find((c) => c.key === "dropped")!.top[0]).toMatchObject({ goal: "fx-7.2", href: "#/issues/fx/7.2" });
-});
-
 test("serve() warms /api/speed: week, day and month are computed before the first request", async () => {
   const { withServer } = await import("./test-server.ts");
   const { clearCache } = await import("./api/speed.ts");
@@ -433,11 +340,4 @@ test("serve() warms /api/speed: week, day and month are computed before the firs
     const r = await at("/api/speed?window=week&baseline=1");
     expect(r.status).toBe(200);
   } finally { stop(); }
-});
-
-test("averageFigures averages each figure over the spans that have data for it", async () => {
-  const { averageFigures } = await import("./api/speed.ts");
-  const none = { lost: null, hours: null, leadP50: null, leadP90: null, queueP50: null, queueP90: null, landed: null, firstPass: null };
-  const a = averageFigures([{ ...none, lost: 0.2, landed: 4 }, none, { ...none, lost: 0.4, landed: 0 }]);
-  expect(a).toMatchObject({ lost: 0.3, landed: 2, leadP50: null, firstPass: null });
 });

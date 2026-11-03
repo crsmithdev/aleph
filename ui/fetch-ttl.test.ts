@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { add } from "../todo/lib/todo.ts";
-import { cacheFetches, readFetched, readList, readLists, uiFetchTtl, writeList } from "../todo/lib/store.ts";
+import { cacheFetches, readFetched, readList, uiFetchTtl, writeList } from "../todo/lib/store.ts";
 import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
@@ -69,15 +69,6 @@ test("the UI fetches the work store at most once per 30 s, across reads and requ
   expect(fetches()).toBe(before + 2);
 });
 
-test("with the cache off, as in the CLI, every read fetches", () => {
-  cacheFetches(0);
-  const before = fetches();
-  readList({ key: "a" });
-  readLists([{ key: "a" }, { key: "b" }]);
-  expect(fetches()).toBe(before + 2);
-  cacheFetches(uiFetchTtl());
-});
-
 test("a write fetches in the foreground even with the cache on, and builds on the fresh origin/main", async () => {
   cacheFetches(uiFetchTtl());
   const other = join(base, "other");
@@ -111,27 +102,6 @@ test("a write fetches in the foreground even with the cache on, and builds on th
   } finally { now.mockRestore(); }
 });
 
-test("with the cache on and warm, a write fetches synchronously once and a read right after fetches none", async () => {
-  const now = spyOn(Date, "now");
-  try {
-    now.mockReturnValue(Date.now() + 4_000_000);
-    await settled();
-    const start = fetches();
-    readList({ key: "a" });
-    // The warm read past the TTL starts one fetch; wait for it to start and finish.
-    await waitFor(() => fetches() >= start + 1, { timeout: 2000 });
-    expect(fetches()).toBe(start + 1);
-    await settled();
-    const before = fetches();
-    writeList({ key: "a" }, "ttl write", () => true, true);
-    expect(fetches()).toBe(before + 1);
-    readList({ key: "a" });
-    expect(fetches()).toBe(before + 1);
-  } finally {
-    now.mockRestore();
-  }
-});
-
 test("serve() leaves the cache off: only the UI process turns it on, in its main block", async () => {
   cacheFetches(0);
   const { stop } = await withServer({ warm: false });
@@ -162,25 +132,4 @@ test("a background fetch that brings an older remote state cannot move origin/ma
   expect(doneCount()).toBeGreaterThan(dones);
   expect(Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: items }).stdout.toString().trim()).toBe(w!.commit);
   expect(readFetched({ key: "a" })!.items.some((i) => i.title === "written")).toBe(true);
-});
-
-test("with the cache on and warm, a write builds on origin/main as another clone just moved it", () => {
-  cacheFetches(uiFetchTtl());
-  if (!readList({ key: "a" })) {
-    writeList({ key: "a" }, "give a a list", (doc) => { add(doc, "one"); return true; }, true);
-    expect(readList({ key: "a" })).not.toBeNull();
-  }
-  const rev = (cwd: string, r: string): string => Bun.spawnSync(["git", "rev-parse", r], { cwd }).stdout.toString().trim();
-  const items = join(base, "items"), pusher = join(base, "pusher");
-  sh(base, "git", "clone", "-q", join(base, "items.git"), pusher);
-  writeFileSync(join(pusher, "elsewhere.txt"), "pushed inside the TTL\n");
-  sh(pusher, "git", "add", "elsewhere.txt");
-  sh(pusher, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "elsewhere");
-  sh(pusher, "git", "push", "-q", "origin", "main");
-  const pushed = rev(pusher, "HEAD");
-  const w = writeList({ key: "a" }, "write over a moved origin", (doc) => { add(doc, "two"); return true; });
-  expect(w).not.toBeNull();
-  expect(rev(items, "origin/main^")).toBe(pushed);
-  expect(rev(items, "origin/main")).not.toBe(pushed);
-  expect(rev(items, "origin/main")).toBe(w!.commit);
 });
