@@ -73,7 +73,8 @@ function tickEntries(): LogEntry[] {
     if (!m) continue;
     const [, at, line] = m;
     let e: RegExpExecArray | null;
-    if ((e = /^always: (\S+): (\S+) on (\S+)$/.exec(line))) out.push({ at, by: "Rule", item: e[3], what: `${e[1]}: ${e[2]}` });
+    if ((e = /^always: revoked (\S+)$/.exec(line))) out.push({ at, by: "You", item: "rule", what: `${e[1]}: set to Ask me` });
+    else if ((e = /^always: (\S+): (\S+) on (\S+)$/.exec(line))) out.push({ at, by: "Rule", item: e[3], what: `${e[1]}: ${e[2]}` });
     else if ((e = /^(\S+): always: (.*)$/.exec(line))) out.push({ at, by: "Rule", item: e[1], what: e[2] });
     else if ((e = /^standing: (.*)$/.exec(line))) out.push({ at, by: "Rule", item: REF.exec(e[1])?.[0] ?? "", what: e[1] });
     else if ((e = /^firefighter[: ] ?(.*)$/.exec(line))) out.push({ at, by: "Firefighter", item: REF.exec(e[1])?.[0] ?? "", what: e[1] });
@@ -90,7 +91,7 @@ function noteEntries(): LogEntry[] {
     for (const item of doc?.items ?? []) {
       const ref = `${repo.key}-${item.sub === undefined ? item.id : `${item.id}.${item.sub}`}`;
       for (const n of item.notes) {
-        const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (Chris(?::| decided:| approved| denied).*)$/.exec(n);
+        const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (Chris(?::| decided:| approved| denied| dropped).*)$/.exec(n);
         if (m) out.push({ at: new Date(`${m[1]}T${m[2]}`).toISOString(), by: "You", item: ref, what: m[3] });
       }
     }

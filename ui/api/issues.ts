@@ -191,7 +191,9 @@ async function drop(req: Request, params: Record<string, string>): Promise<Respo
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
   if (!doc || !todos.find(doc, n)) return none;
   const body: any = await req.json().catch(() => ({}));
-  const reason = typeof body?.reason === "string" && body.reason.trim() ? body.reason.trim() : "cancelled from the Activity page";
+  const given = typeof body?.reason === "string" ? body.reason.trim() : "";
+  // The note starts with Chris, so the Gates log shows the drop as his: a Deny reason already does, any other gets "Chris dropped: ".
+  const reason = !given ? "Chris dropped it" : given.startsWith("Chris") ? given : `Chris dropped: ${given}`;
   const { stdout: out, stderr: err, code } = await runCli(["issue", "drop", repo.key, String(n), reason]);
   if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
   try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }

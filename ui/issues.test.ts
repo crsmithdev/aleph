@@ -730,3 +730,22 @@ describe("the Issue timeline names why a wait waited", () => {
     expect(html(d())).toContain("Waited 28 min.");
   });
 });
+
+describe("the drop note", () => {
+  test("a reason becomes `Chris dropped: <reason>`; a Chris reason stays as it is", async () => {
+    const real = process.env.ALEPH_CLI, wrap = join(base, "real-aleph");
+    writeFileSync(wrap, `#!/bin/sh\nexec ${process.execPath} ${join(import.meta.dir, "..", "jobs", "cli.ts")} "$@"\n`);
+    chmodSync(wrap, 0o755);
+    process.env.ALEPH_CLI = wrap;
+    try {
+      writeList({ key: "fac" }, "seed", (doc) => { add(doc, "drop x"); add(doc, "drop y"); return true; }, true);
+      const ids = readList({ key: "fac" })!.items.map((i) => i.id).slice(-2);
+      const h = { "x-aleph-ui": "1", "content-type": "application/json" };
+      const last = (id: number) => { const n = readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes; return n[n.length - 1]; };
+      expect((await at(`/api/issues/fac/${ids[0]}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "x" }) })).status).toBe(200);
+      expect(last(ids[0])).toMatch(/: Chris dropped: x$/);
+      expect((await at(`/api/issues/fac/${ids[1]}/drop`, { method: "POST", headers: h, body: JSON.stringify({ reason: "Chris denied: y" }) })).status).toBe(200);
+      expect(last(ids[1])).toMatch(/: Chris denied: y$/);
+    } finally { if (real === undefined) delete process.env.ALEPH_CLI; else process.env.ALEPH_CLI = real; }
+  });
+});

@@ -149,6 +149,14 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).not.toContain("rescue: recommended<");
 });
 
+test("a revoke line in tick.log is a You entry on the rule, and an always line stays a Rule entry", async () => {
+  const { appendFileSync } = await import("node:fs");
+  appendFileSync(join(base, "factory", "tick.log"), `${ago(0.5)} always: revoked rescue\n${ago(0.4)} always: rescue: recommended on r-9\n`);
+  const e: any[] = ((await body()) as any).log.entries;
+  expect(e.find((x) => x.what === "rescue: set to Ask me")).toMatchObject({ by: "You", item: "rule" });
+  expect(e.find((x) => x.item === "r-9")).toMatchObject({ by: "Rule", what: "rescue: recommended" });
+});
+
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
 const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/gates/caps", { method: "POST", headers, body: JSON.stringify(b) });
 

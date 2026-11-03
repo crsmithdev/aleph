@@ -324,6 +324,18 @@ test("askFromRun marks the run asked, and with a spec the run waits for a spec e
   }
 });
 
+test("revoke writes one tick.log line naming the reason; a revoke with no grant writes none", () => {
+  revoke("held-path");
+  expect(existsSync(join(dir, "tick.log"))).toBe(false);
+  grant("held-path", "land");
+  revoke("held-path");
+  const lines = readFileSync(join(dir, "tick.log"), "utf8").trim().split("\n");
+  expect(lines).toHaveLength(1);
+  expect(lines[0]).toContain("always: revoked held-path");
+  revoke("held-path");
+  expect(readFileSync(join(dir, "tick.log"), "utf8").trim().split("\n")).toHaveLength(1);
+});
+
 test("every reason has a non-empty display name", () => {
   for (const [reason, r] of Object.entries(ASK_REASONS)) expect(r.name.trim().length, reason).toBeGreaterThan(0);
   expect(ASK_REASONS["spec-check"].name).toBe("Spec check");

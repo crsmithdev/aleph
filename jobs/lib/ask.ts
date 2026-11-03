@@ -269,6 +269,7 @@ export function revoke(reason: string): void {
   if (!(reason in s)) return;
   delete s[reason];
   write(s);
+  factoryLog(`always: revoked ${reason}`);
 }
 
 export const logAlways = (reason: string, action: string, ref: string): void => factoryLog(`always: ${reason}: ${action} on ${ref}`);

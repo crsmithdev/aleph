@@ -218,7 +218,7 @@ export function ageText(r, now = Date.now()) {
 
 /** The request an issue row's X sends, or null for a row that is not an open issue. */
 export function dropTarget(r) {
-  return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "dropped from the Inventory page" } } : null;
+  return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "from the Inventory page" } } : null;
 }
 
 /** One issue row, a part indented under its parent, and the X. */
