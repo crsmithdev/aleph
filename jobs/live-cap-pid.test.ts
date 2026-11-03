@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { liveRuns } from "./lib/factory-status.ts";
-import { STARTING_MS, writeRun, type Run } from "./lib/ledger.ts";
+import { writeRun, type Run } from "./lib/ledger.ts";
+import { STARTING_MS } from "./lib/process.ts";
 
 let base: string;
 beforeEach(() => { base = mkdtempSync(join(tmpdir(), "aleph-livecap-")); process.env.ALEPH_JOBS_DIR = base; });

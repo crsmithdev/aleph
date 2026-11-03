@@ -7,6 +7,7 @@ import { availableParallelism, homedir } from "node:os";
 import { join } from "node:path";
 import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
+import { isLive } from "./process.ts";
 import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
 import { checkSlots, reposFile } from "./settings.ts";
 
@@ -210,32 +211,6 @@ export const askOf = (run: Run): Ask | undefined => run.ask;
 /** The run's review: `review` of its state.json, else its folder's call.md. */
 export function reviewOf(e: Entry): Review | undefined {
   return e.run.review ?? readCall(e.folder);
-}
-
-function cmdline(pid: number): string | null {
-  try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " "); } catch { return null; }
-}
-
-/** Sidetone's rule (spec 14.10.4): `pid`, no `exit`, and that process names the folder. */
-export function isLive(folder: string): boolean {
-  if (!existsSync(join(folder, "pid")) || existsSync(join(folder, "exit"))) return false;
-  const pid = Number(readFileSync(join(folder, "pid"), "utf8").trim());
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  return cmdline(pid)?.includes(folder) ?? false;
-}
-
-/**
- * A run that was started and has not written `pid` yet: its unit is still coming up, or `dispatch` gave up waiting
- * for it. It counts against the live cap for STARTING_MS after it was made, so a later start cannot slip past the gate.
- */
-export const STARTING_MS = 120_000;
-export function isStarting(e: Entry): boolean {
-  return e.run.condition === "running" && !existsSync(join(e.folder, "pid")) && !existsSync(join(e.folder, "exit")) && Date.now() - (e.run.made ?? 0) < STARTING_MS;
-}
-
-/** `pid`, no `exit`, and the process is gone: the run died without an end. */
-export function isLost(folder: string): boolean {
-  return existsSync(join(folder, "pid")) && !existsSync(join(folder, "exit")) && !isLive(folder);
 }
 
 function pidAlive(pid: number): boolean {

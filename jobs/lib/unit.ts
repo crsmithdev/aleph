@@ -15,6 +15,7 @@ import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, verdict as reviewVerdict } from "./gate.ts";
 import { needsOf, plainAsk, type AskReason } from "./ask.ts";
 import { tagged, askOf, isAwaiting, isAgentRun, isBuild, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, jobById, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
@@ -165,7 +166,7 @@ export async function unit(folder: string): Promise<void> {
     }
     process.exit(143);
   });
-  writeFileSync(join(folder, "pid"), String(process.pid));
+  markStarted(folder);
   const id = basename(folder);
   let run = readRun(folder)!;
   const repo = run.repo ? loadRegistry()[run.repo] : undefined;
@@ -206,7 +207,7 @@ export async function unit(folder: string): Promise<void> {
   let ended = updateRun(folder, { ...outcome, phase: undefined, ended: new Date().toISOString() });
   const next = nextStep(ended, !!repo?.autoland);
   if (next) ended = updateRun(folder, { next });
-  writeFileSync(join(folder, "exit"), String(code));
+  markEnded(folder, code);
   process.exitCode = code;
   if (isAgentRun(run.kind)) startReview(folder);
   if (isAgentRun(run.kind) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);

@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv } from "./test-server.ts";
-import { activeEnd, agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
+import { agentStats, CLASSES, classify, clearCache, filed, pct, phases, routes, speed } from "./api/speed.ts";
+import { activeEnd } from "../jobs/lib/process.ts";
 // @ts-ignore plain JS shared with the page
 import { durShort, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page

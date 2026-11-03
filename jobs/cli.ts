@@ -8,7 +8,8 @@
  */
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { allRuns, isLive, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
+import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
+import { isLive } from "./lib/process.ts";
 import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
 import { reviewBack, unit } from "./lib/unit.ts";
 import { onMain } from "./lib/status.ts";

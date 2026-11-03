@@ -5,10 +5,11 @@
  * argv. The factory and the unit call them in-process. Starting the run's unit
  * is the launcher's (launch.ts). See docs/specs/2026-09-24-agent-jobs.md.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
-import { askOf, CALL_FILE, isAwaiting, isAgentRun, isBuild, isLive, isStarting, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, CALL_FILE, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "./process.ts";
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
 import { keepDiff } from "./jobdiff.ts";
@@ -93,9 +94,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     }
     // Wait for `pid`, but not for a unit that cannot write it: one that has exited, or whose folder is gone.
     const wait = pidWaitMs();
-    const deadline = Date.now() + wait;
-    while (!existsSync(join(folder, "pid")) && Date.now() < deadline && existsSync(folder) && child?.exitCode == null) await Bun.sleep(25);
-    if (!existsSync(join(folder, "pid"))) {
+    if (!(await waitForPid(folder, wait, () => child?.exitCode != null))) {
       const why = !existsSync(folder) ? "its folder is gone" : child?.exitCode != null ? `the unit exited ${child.exitCode}` : `no pid in ${wait / 1000} s`;
       console.error(`warn: ${id} wrote no pid: ${why}`);
     }
@@ -150,8 +149,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     const open = openJob(name);
     const last = open?.at(-1);
     if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
-    // A run `dispatch` made that has not written its `pid` yet is starting, and counts as running too.
-    if (last && (isLive(last.folder) || isStarting(last))) refuse(`${name} is running as ${last.id}`);
+    if (last && isRunning(last)) refuse(`${name} is running as ${last.id}`);
     const first = open?.[0];
     const item = on ?? (open && issueOf(open));
     const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;
@@ -304,12 +302,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     if (runs.some((e) => e.run.kind === "land" && isLive(e.folder))) refuse("landing");
     const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
     const live = runs.filter((e) => isLive(e.folder));
-    for (const e of live) {
-      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}`], { stdout: "ignore", stderr: "ignore" });
-      if (isLive(e.folder)) process.kill(Number(readFileSync(join(e.folder, "pid"), "utf8")), "SIGTERM");
-      const deadline = Date.now() + 35_000;
-      while (isLive(e.folder) && Date.now() < deadline) await Bun.sleep(50);
-    }
+    for (const e of live) await stop(e);
     // A held run's review is its own unit: stop it too, and take its scratch clone.
     for (const e of runs) {
       Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`], { stdout: "ignore", stderr: "ignore" });
@@ -318,7 +311,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {
-      if (!existsSync(join(e.folder, "exit"))) writeFileSync(join(e.folder, "exit"), "143");
+      markEnded(e.folder, 143);
       // The drop replaces the sentence, so a run that has only the sentence gets its cause now.
       updateRun(e.folder, { cause: causeOf(e.run), checkName: failedCheckOf(e.run), fate: a.fate, condition: "dropped", reason, ask: undefined, phase: undefined, told: true, ended: new Date().toISOString() });
     }

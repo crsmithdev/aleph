@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readRun, STARTING_MS, writeRun, type Run } from "./ledger.ts";
+import { readRun, writeRun, type Run } from "./ledger.ts";
+import { STARTING_MS } from "./process.ts";
 import { checked, drop, land, recheck, refusal, startJob, startPlain } from "./transitions.ts";
 import { Refusal } from "./refusal.ts";
 

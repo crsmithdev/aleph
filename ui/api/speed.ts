@@ -5,11 +5,11 @@
  * month the last 7 and 30 local days (today included) in daily ones. A percentile is the nearest rank.
  * The phases also read when each issue file first came into the work store's git history.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { flakeNames, flakes } from "../../jobs/lib/factory-status.ts";
 import { git } from "../../jobs/lib/git.ts";
-import { allRuns, isAgentRun, isBuild, isLive, isStarting, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
+import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
+import { activeEnd, isLive, isStarting } from "../../jobs/lib/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
@@ -313,25 +313,6 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     if (created != null && landed >= created && inWindow(landed)) lead.push({ at: landed, secs: (landed - created) / 1000 });
   }
   return { intake, queue, implement, land, lead };
-}
-
-/**
- * The run with `ended` pulled back to its last worker activity: the newest file in its folder (state.json and `exit` aside),
- * and no later than the `exit` file. `ended` is stamped when something notices the run stopped, which can be hours after a
- * killed worker. A run with no such file keeps its `ended`; the end never goes before `started`.
- */
-export function activeEnd(e: Entry): Run {
-  const r = e.run as Run, a = Date.parse(r.started), b = Date.parse(r.ended ?? "");
-  if (!(b >= a)) return r;
-  let end = b;
-  try {
-    let last = -Infinity;
-    for (const f of readdirSync(e.folder)) if (f !== "state.json" && f !== "exit") last = Math.max(last, statSync(join(e.folder, f)).mtimeMs);
-    if (last > -Infinity) end = Math.min(end, last);
-    if (existsSync(join(e.folder, "exit"))) end = Math.min(end, statSync(join(e.folder, "exit")).mtimeMs);
-  } catch { return r; }
-  end = Math.max(a, end);
-  return end === b ? r : { ...r, ended: new Date(end).toISOString() };
 }
 
 /** Each phase's count, p50 and p90 over `phaseTimes`. */

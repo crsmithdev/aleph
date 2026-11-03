@@ -9,7 +9,7 @@
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
  * the goal; a land lands again. None of them uses up a rerun.
  */
-import { readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
@@ -22,7 +22,8 @@ import { fetchOrigin, git } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isAgentRun, isLive, isStarting, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
+import { allRuns, askOf as runAskOf, isAwaiting, isAgentRun, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
+import { isLive, isStarting, markEnded } from "./process.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
@@ -286,7 +287,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     const step = killedStep(stuck, isAgentRun(r.kind) && hasWork(stuck));
     // The real recheck takes only a stuck or failed run, so the killed run ends failed first, as a killed land does.
     if (r.kind === "land" || step.action === "recheck") {
-      writeFileSync(join(last.folder, "exit"), "143");
+      markEnded(last.folder, 143);
       updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
     }
     return take(step);

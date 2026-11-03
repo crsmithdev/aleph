@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlink
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeRun, type Run } from "./lib/ledger.ts";
+import { unitAlive } from "./lib/process.ts";
+export { unitAlive };
 import { config as storeConfig } from "../todo/lib/store.ts";
 import { parseItem, renderItem, setStatus, type Status } from "../todo/lib/todo.ts";
 
@@ -46,19 +48,6 @@ done
 export const starting = (startLog: string): boolean => {
   const dir = join(startLog, ".."), name = startLog.slice(dir.length + 1) + ".busy.";
   return readdirSync(dir).some((f) => f.startsWith(name));
-};
-
-/**
- * A run's unit process is alive. Unlike `isLive`, this ignores `exit`: the unit writes `exit` and then awaits its
- * run-end dispatch, which may still start goals or hold the dispatch locks.
- */
-export const unitAlive = (folder: string): boolean => {
-  try {
-    const pid = Number(readFileSync(join(folder, "pid"), "utf8").trim());
-    return Number.isInteger(pid) && pid > 0 && readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " ").includes(folder);
-  } catch {
-    return false;
-  }
 };
 
 /** An `aleph dispatch` or `aleph triage` of this test file's factory is running, e.g. a detached one from a transition. */
