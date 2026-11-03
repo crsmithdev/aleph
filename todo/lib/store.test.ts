@@ -113,6 +113,12 @@ describe("the writes", () => {
     expect(commits()).toBe(before);
   });
 
+  test("a Filing's kind is stored, and a Filing with no kind is a task", () => {
+    const r = repo();
+    const ids = store.file(r, "file", [{ title: "Check it", kind: "check" }, { title: "Do it" }]);
+    expect(ids.map((id) => item(r, id).fm.kind)).toEqual(["check", "task"]);
+  });
+
   test("closeAndFile starts a list the store has none for, and names an item it lacks", () => {
     const r = { key: `st${++n}` };
     expect(store.closeAndFile(r, "landed", 4, "x", [{ title: "Check", labels: ["check"] }])).toEqual({ todo: "no issue 4", ids: [1] });

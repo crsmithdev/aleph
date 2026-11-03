@@ -71,7 +71,7 @@ test("add allocates the next id and list shows it", async () => {
 });
 
 test("a title that YAML would misread is quoted in the file and comes back exactly", async () => {
-  const title = '`/play` says "done" \\ then: drops it';
+  const title = '`/play` says "done" \\ then # drops it';
   expect((await code(() => add(title))).code).toBe(0);
   expect(remoteItem(4)).toContain(`title: ${JSON.stringify(title)}\n`);
   expect(show(4).title).toBe(title);
@@ -156,4 +156,14 @@ test("lint refuses an after ref that is not <repo>-<n>[.<k>]", () => {
   expect(r.code).toBe(1);
   expect(r.err).toContain("after: proj-x");
   expect(r.err).not.toContain("proj-1.2");
+});
+
+test("add and edit refuse a title over 60 characters, with a final period or with ': ', and write no commit", async () => {
+  const head = () => sh(fx.base, "git", "--git-dir", fx.remote, "rev-parse", "main");
+  const before = head();
+  for (const t of ["x".repeat(61), "Fix it.", "Check foo: bar"]) {
+    expect((await code(() => add(t))).code).toBe(1);
+    expect((await code(() => verbs.edit(proj(), 3, { title: t }))).code).toBe(1);
+  }
+  expect(head()).toBe(before);
 });

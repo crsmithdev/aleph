@@ -51,7 +51,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate"];
+const VALUED = ["--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate"];
 const FATES: Fate[] = ["duplicate", "already-met", "by-hand"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
@@ -176,6 +176,7 @@ async function todoCmd(): Promise<void> {
   const afterArg = flag("after");
   const fields: verbs.Fields = {
     title: flag("title"),
+    kind: flag("kind"),
     request: requestArg === undefined ? undefined : (requestArg === "-" ? await Bun.stdin.text() : requestArg).trim(),
     spec: specArg === undefined ? undefined : (specArg === "-" ? await Bun.stdin.text() : specArg).trim(),
     priority: flag("priority"),
@@ -184,9 +185,9 @@ async function todoCmd(): Promise<void> {
     status: stat,
     ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ...");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal]");
   const registry = loadRegistry();
-  if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label }, json);
+  if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label, kind: flag("kind") }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
   verbs.checkFields(fields);
   const id = /^\d+\.\d+$/.test(args[0] ?? "") ? args[0] : Number(args[0]);
@@ -205,7 +206,7 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "list": {
-      const rows = verbs.list(repo, { status: stat, label });
+      const rows = verbs.list(repo, { status: stat, label, kind: flag("kind") });
       if (json) { out(rows.map(verbs.brief)); return; }
       if (!rows.length) { console.log("no issues"); return; }
       printRows(rows, repo.key);
@@ -282,7 +283,7 @@ async function todoCmd(): Promise<void> {
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ...");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal]");
   }
 }
 
@@ -292,7 +293,7 @@ function listRecent(): { repo: Repo; doc: issues.Doc | null }[] {
 }
 
 /** `aleph issue list` and `aleph issue lint` with no repo: each recent repo. */
-function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { status?: string; label?: string }, json: boolean): void {
+function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { status?: string; label?: string; kind?: string }, json: boolean): void {
   const repos = Object.values(registry);
   if (sub === "lint") {
     const results = verbs.lintRecent(repos);

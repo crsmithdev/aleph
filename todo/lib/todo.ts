@@ -152,15 +152,37 @@ const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged
 /** The four priorities, in rank order. */
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 
-export function add(doc: Doc, title: string, o: { priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; now?: Date } = {}): Issue {
+export const KINDS = ["task", "bug", "check", "flake", "proposal"] as const;
+export type Kind = (typeof KINDS)[number];
+
+/** Matches `: ` anywhere in a title. */
+export const PREFIX = /: /;
+export const TITLE_RULE = "an imperative of at most 60 characters that says what changes, not how, with no final period and no `<words>: ` prefix";
+
+/** Null, or the one problem a title has: a length over 60, a final `.`, or a `<words>: ` prefix. A part's leading `[Group] ` is not tested for the prefix. */
+export function titleProblem(title: string, o: { part?: boolean } = {}): string | null {
+  if (title.length > 60) return `the title is ${title.length} characters; the limit is 60 (${TITLE_RULE})`;
+  if (title.endsWith(".")) return `the title ends with a period (${TITLE_RULE})`;
+  const body = o.part ? title.replace(/^\[[^\]]*\] /, "") : title;
+  if (PREFIX.test(body)) return `the title has a ': ' prefix (${TITLE_RULE})`;
+  return null;
+}
+
+/** Null for a kind the store knows, else the message that names the five. */
+export const kindProblem = (kind: string): string | null => ((KINDS as readonly string[]).includes(kind) ? null : `unknown kind "${kind}": use ${KINDS.join(", ")}`);
+
+export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; now?: Date } = {}): Issue {
   const day = today(o.now);
+  const kind = o.kind ?? "task";
+  const bad = kindProblem(kind);
+  if (bad) throw new Error(bad);
   const given = o.labels ?? [];
   const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("deps") ? "deps" : given.includes("memory") ? "memory" : "chris");
   const areas = given.filter((l) => !(SOURCES as readonly string[]).includes(l) && !NOT_AREAS.includes(l));
   const item: Issue = {
     id: nextId(doc),
     title,
-    fm: { id: String(nextId(doc)), created: day, updated: day, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}) },
+    fm: { id: String(nextId(doc)), created: day, updated: day, kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}) },
     request: o.request ?? "",
     spec: o.spec ?? "",
     notes: [],
@@ -177,7 +199,7 @@ export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string
     id: issue.id,
     sub,
     title: o.title,
-    fm: { id: `${issue.id}.${sub}`, created: day, updated: day, priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
+    fm: { id: `${issue.id}.${sub}`, created: day, updated: day, kind: (issue.fm.kind as string) ?? "task", priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
     request: "",
     spec: o.spec,
     notes: [],
@@ -196,7 +218,8 @@ export function note(item: Issue, text: string, now = new Date()): string {
 }
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
-export function edit(item: Issue, change: { title?: string; request?: string; spec?: string; priority?: string; labels?: string[]; areas?: string[] }, now = new Date()): void {
+export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; labels?: string[]; areas?: string[] }, now = new Date()): void {
+  if (change.kind !== undefined) item.fm.kind = change.kind;
   if (change.title !== undefined) item.title = change.title;
   if (change.request !== undefined) item.request = change.request;
   if (change.spec !== undefined) item.spec = change.spec;
@@ -234,7 +257,7 @@ export interface Finding {
 }
 
 /** Fields of the old store shape: a file with one was not rewritten. */
-const RETIRED = ["status", "kind", "goals", "issue", "labels", "waiting_on", "due", "route", "created_date", "updated_date"];
+const RETIRED = ["status", "goals", "issue", "labels", "waiting_on", "due", "route", "created_date", "updated_date"];
 
 export function lint(doc: Doc): Finding[] {
   const findings: Finding[] = [];

@@ -18,6 +18,7 @@ import { triage } from "./triage.ts";
 /** The fields `add` and `edit` take. `labels` are the issue's areas. `spec` makes an issue buildable, and `after` is what it waits for. */
 export interface Fields {
   title?: string;
+  kind?: string;
   request?: string;
   spec?: string;
   priority?: string;
@@ -32,6 +33,7 @@ export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ?
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
   if (f.priority !== undefined && !(issues.PRIORITIES as readonly string[]).includes(f.priority)) refuse(`--priority takes ${issues.PRIORITIES.join(", ")}`);
+  if (f.kind !== undefined) { const bad = issues.kindProblem(f.kind); if (bad) refuse(`--kind: ${bad}`); }
   if (f.status !== undefined && !(issues.STATUSES as readonly string[]).includes(f.status)) refuse(`--status takes ${issues.STATUSES.join(", ")}`);
 }
 
@@ -105,6 +107,8 @@ function checkAfter(after: string[]): void {
 export async function add(repo: store.Place, title: string, fields: Fields = {}): Promise<{ result: Added; item: issues.Issue; follow: string | null }> {
   checkFields(fields);
   title = title.trim() || refuse("give the item a title");
+  const problem = issues.titleProblem(title);
+  if (problem) refuse(problem);
   const spec = fields.spec?.trim();
   if (fields.spec !== undefined && !spec) refuse("--spec - needs the spec on stdin");
   checkAfter(fields.after ?? []);
@@ -113,7 +117,7 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
     const labels = fields.labels ?? t.labels;
     // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
     const implied = labels.some((l) => ["followup", "deps", "memory"].includes(l));
-    const issue = issues.add(doc, title, { priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined });
+    const issue = issues.add(doc, title, { kind: fields.kind, priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined });
     if (fields.status === "parked") issues.setStatus(issue, "parked");
     if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
     return { issue };
@@ -124,14 +128,15 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
 }
 
 /** The items of the repo's list that pass `status` and `label`. */
-export function list(repo: store.Place, o: { status?: string; label?: string } = {}): issues.Issue[] {
+export function list(repo: store.Place, o: { status?: string; label?: string; kind?: string } = {}): issues.Issue[] {
   return filterRows(readIssues(repo), o);
 }
 
-export function filterRows(doc: issues.Doc, o: { status?: string; label?: string }): issues.Issue[] {
+export function filterRows(doc: issues.Doc, o: { status?: string; label?: string; kind?: string }): issues.Issue[] {
   if (o.status && !issues.STATUSES.includes(o.status as issues.Status)) refuse(`status must be one of ${issues.STATUSES.join(", ")}`);
   return doc.items
     .filter((i) => (o.status ? issues.status(i) === o.status : ["open", "parked"].includes(issues.status(i))))
+    .filter((i) => (o.kind ? (i.fm.kind ?? "task") === o.kind : true))
     .filter((i) => (o.label ? store.areasOf(i).includes(o.label) : true));
 }
 
@@ -178,15 +183,17 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
 export function edit(repo: store.Place, id: number | string, fields: Fields, reason = "") {
   checkFields(fields);
   const title = fields.title?.trim();
-  const { request, spec, priority, labels, source, status, after } = fields;
+  const { kind, request, spec, priority, labels, source, status, after } = fields;
   if (source !== undefined && !["chris", "worker", "deps", "memory", "agent"].includes(source)) refuse("--source takes chris, worker, deps, memory, agent");
-  if (title === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after (or --status)");
+  if (title === undefined && kind === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after (or --status, --kind)");
   if (title === "") refuse("the title cannot be empty");
+  const problem = title === undefined ? null : issues.titleProblem(title, { part: typeof id === "string" });
+  if (problem) refuse(problem);
   const kept = after?.filter((r) => r !== "none");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     for (const r of kept ?? []) if (r === `${repo.key}-${issues.refOf(i)}`) refuse("an issue cannot wait for itself");
-    issues.edit(i, { title, request, spec, priority, areas: labels });
+    issues.edit(i, { kind, title, request, spec, priority, areas: labels });
     if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
     if (status === "open" && issues.status(i) === "parked") issues.setStatus(i, "open");
@@ -243,7 +250,7 @@ export function recentLists<R extends store.Place>(repos: R[]): { repo: R; doc: 
 }
 
 /** `list` with no repo: each recent repo's rows that pass the filter. */
-export function listRecent<R extends store.Place>(repos: R[], o: { status?: string; label?: string } = {}): { repo: R; items: issues.Issue[] }[] {
+export function listRecent<R extends store.Place>(repos: R[], o: { status?: string; label?: string; kind?: string } = {}): { repo: R; items: issues.Issue[] }[] {
   return recentLists(repos).filter((r) => r.doc).map(({ repo, doc }) => ({ repo, items: filterRows(doc!, o) })).filter((r) => r.items.length);
 }
 

@@ -26,7 +26,7 @@ describe("aleph issue add --spec -", () => {
     const issue = file(`fac-${n}`);
     expect(issue).toContain("source: chris");
     expect(issue).toContain(`<!-- spec -->\n${GOAL.trim()}`);
-    expect(issue).not.toMatch(/^(labels|waiting_on|kind|goals|status):/m);
+    expect(issue).not.toMatch(/^(labels|waiting_on|goals|status):/m);
     // A triage would run as a detached `aleph triage`: wait until none is alive, then look for its run.
     await until(() => !dispatching());
     expect(triageRuns()).toEqual([]);

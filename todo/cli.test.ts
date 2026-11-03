@@ -45,6 +45,17 @@ test("a worker's push block does not stop a to-do write", () => {
   expect(remoteItem(3)).toContain("from a worker");
 });
 
+test("--kind reaches add, edit and list, and an unknown kind is refused", () => {
+  const bad = aleph("issue", "add", "proj", "Fix the lane", "--kind", "epic");
+  expect(bad.code).toBe(1);
+  for (const k of ["task", "bug", "check", "flake", "proposal"]) expect(bad.err).toContain(k);
+  expect(aleph("issue", "add", "proj", "Fix the lane height", "--kind", "bug").code).toBe(0);
+  expect(remoteItem(4)).toContain("kind: bug\n");
+  expect(aleph("issue", "edit", "proj", "3", "--kind", "check").code).toBe(0);
+  expect(remoteItem(3)).toContain("kind: check\n");
+  expect(JSON.parse(aleph("issue", "list", "proj", "--kind", "bug", "--json").out).map((r: any) => r.id)).toEqual([4]);
+});
+
 test("lint blocks on bad frontmatter and --fix repairs what it can", () => {
   seed(`# To do\n\n## 7. Broken\n---\nid: 9\nstatus: open\ncreated: 2026-09-01\n---\n\nBody.\n`);
   const bad = aleph("issue", "lint", "proj");
