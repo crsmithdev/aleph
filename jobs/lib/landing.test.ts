@@ -310,6 +310,16 @@ test("a run behind main that shares a file that is not a module runs every check
   expect(log).not.toContain("checks narrowed");
 });
 
+test("a run whose build ran only the tests its change reaches gets every check on land, also on an unchanged main", async () => {
+  const e = job("part", [["part.txt", "p\n"]]);
+  const run = { ...e.run, checkedBase: remote("rev-parse", "main"), checkedTip: sh(repo.path, "git", "rev-parse", "job/part"), checks: [{ name: "tests", ok: true, seconds: 1, files: 2 }] };
+  writeRun(e.folder, run);
+  const p = ports();
+  await land({ ...e, run }, repo, p);
+  expect(p.calls).toEqual([["part"]]);
+  expect(p.only).toEqual([undefined]);
+});
+
 test("a commit added to the branch after its checks gets the checks on land", async () => {
   const e = job("tipped", [["tipped.txt", "t\n"]]);
   const run = { ...e.run, checkedBase: remote("rev-parse", "main"), checkedTip: "0000000" };

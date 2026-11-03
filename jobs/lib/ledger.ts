@@ -14,7 +14,8 @@ import { checkSlots, reposFile } from "./settings.ts";
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. The hidden check adds its test counts. */
-export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean }
+/** `files`: the number of test files a build ran in place of the full suite. */
+export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number }
 
 /** A review's call: what the reviewer decided, or `pending` while it runs and `error` when it ended without one. A `chris` VERDICT line reads as `ask`. */
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };

@@ -11,7 +11,7 @@ import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isAgentRun, loadRegistry, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { isLive } from "./process.ts";
-import { relatedTests } from "./related.ts";
+import { relatedTests, withTests } from "./related.ts";
 import { coversAll, stopFields, type ChecksStop } from "./checks.ts";
 import { LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
@@ -221,7 +221,6 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
 }
 
 const names = (repo: Repo, from: string, to: string) => git(repo.path, "diff", "--name-only", from, to).out.split("\n").filter(Boolean);
-const quote = (f: string) => `'./${f.replaceAll("'", "'\\''")}'`;
 
 /**
  * The checks for one run whose own checks passed on an older origin/<main>, or null for all of the repo's checks.
@@ -241,7 +240,7 @@ function narrowed(ctx: Attempt, items: Pending[], base: string): { checks: Check
   const checks = repo.checks.flatMap((c): Check[] => {
     if (!c.tests) return [c];
     const mineToo = tests.filter((f) => c.tests!.some((g) => new Bun.Glob(g).match(f)));
-    return mineToo.length ? [{ ...c, run: `${c.run} ${mineToo.map(quote).join(" ")}` }] : [];
+    return mineToo.length ? [{ ...c, run: withTests(c.run, mineToo) }] : [];
   });
   const line = !both.length ? `checks narrowed: main's new commits share no file with the run since ${run.checkedBase}`
     : `checks narrowed: ${both.length} file${both.length > 1 ? "s" : ""} changed on both sides, ${tests.length} related test file${tests.length === 1 ? "" : "s"}`;
@@ -254,7 +253,9 @@ async function check(ctx: Attempt, items: Pending[], base: string): Promise<Chec
   const first = items[0].m.run;
   const changed = git(repo.path, "diff", "--name-only", base, items.at(-1)!.commit).out.split("\n").filter(Boolean);
   const cover = (tip: string) => { if (coversAll(repo, changed)) ctx.covered.add(tip); };
-  if (items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
+  // A build that ran only the tests its change reaches leaves the full suite to the land: no skip and no narrowing.
+  const whole = !first.checks?.some((c) => c.files !== undefined);
+  if (whole && items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
     log(`checks skipped: main unchanged since ${base0}`);
     // The run's own checks passed on this base; a failed call that covered it earlier does not decide its verdict.
     checksOf.set(items[0].m, first.checks);
@@ -263,7 +264,7 @@ async function check(ctx: Attempt, items: Pending[], base: string): Promise<Chec
   }
   const tip = items.at(-1)!.commit;
   // A narrowed run does not cover the tip: the next baseline runs every check on it.
-  const narrow = narrowed(ctx, items, base);
+  const narrow = whole ? narrowed(ctx, items, base) : null;
   if (narrow) {
     log(narrow.line);
     if (!narrow.checks.length) { checksOf.set(items[0].m, first.checks); return null; }

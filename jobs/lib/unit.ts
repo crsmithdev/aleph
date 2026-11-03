@@ -26,6 +26,7 @@ import { HIDDEN_UNREADABLE, checksInSandbox, keepGate, lastLines, newTests, runO
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
+import { buildChecks } from "./related.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, nextBrief } from "./continuation.ts";
 import { startReview } from "./review.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
@@ -458,7 +459,15 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
     checks: async () => {
       const hidden = hiddenOf(repo, run);
       if (!hidden) return { stop: { cause: "infra", reason: HIDDEN_UNREADABLE } };
-      const stop = await checksInSandbox({ folder, repo, changed: o.changed, phase, record: recorder(folder), onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip, hidden);
+      // A build runs only the tests its change reaches; the land runs the full suite.
+      const build = buildChecks(repo, tip, o.changed);
+      const rec = recorder(folder);
+      const record = (c: CheckResult) => rec(build.tests.has(c.name) ? { ...c, files: build.tests.get(c.name)!.length } : c);
+      for (const [name, files] of build.tests) {
+        appendFileSync(runFile(folder, "checks.log"), `## ${name}: ${files.length} test file${files.length === 1 ? "" : "s"} that the change reaches\n${files.join("\n")}\n\n`);
+        if (!files.length) record({ name, ok: true, seconds: 0 });
+      }
+      const stop = await checksInSandbox({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase, record, onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip, hidden);
       return { stop, failed: readRun(folder)?.checks?.findLast((c) => !c.ok)?.name };
     },
     repeatedHidden: () => repeatedHidden(folder, o.earlier ?? []),
