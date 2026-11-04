@@ -29,7 +29,7 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui` and `--sum
 
 ## Principles
 
-1. **One token set, two themes.** Colours are CSS custom properties on `:root` (`ui/app.css:2`), re-set for dark in two identical blocks, the `prefers-color-scheme` one at `ui/app.css:86` and the `data-theme="dark"` one at `ui/app.css:118`. Light is a lavender match for Palenight; dark is Palenight (Mild Contrast).
+1. **One token set, two themes.** Colours are CSS custom properties on `:root` (`ui/app.css:3`), re-set for dark in two identical blocks, the `prefers-color-scheme` one at `ui/app.css:87` and the `data-theme="dark"` one at `ui/app.css:119`. Light is a lavender match for Palenight; dark is Palenight (Mild Contrast).
 2. **Shared helpers build the parts.** Views call `ui/lib.js` for a page head, card, table, badge, chip, filter bar, pager, tile and bar list, and the CSS for them is in `ui/app.css`.
 3. **Meaning is a tone.** A state is `run`, `done`, `need`, `stuck` or `quiet`, mapped by `tone()` in `ui/lib.js:282`, and the same tone colours a badge, a chart series and a tile.
 4. **Numbers are tabular.** `font-variant-numeric: tabular-nums` has 12 literal uses, and number columns are right-aligned.
@@ -37,7 +37,7 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui` and `--sum
 
 ## Tokens
 
-All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), dark by media query, and dark by `data-theme`. That is the 85 colour `token-def` rows. Light and dark values are in `ui/app.css:2-56`, `ui/app.css:86-115` and `ui/app.css:118-146`.
+All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), dark by media query, and dark by `data-theme`. That is the 85 colour `token-def` rows. Light and dark values are in `ui/app.css:3-56`, `ui/app.css:87-115` and `ui/app.css:119-146`.
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
@@ -56,13 +56,13 @@ All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), 
 | `--focus` | #7E57C2 | #C792EA | focus ring |
 | `--good`, `--hot` | #437018, #C2521F | #C3E88D, #F78C6C | a trend that improves; the largest cause |
 | `--raised` | #ECEAF6 | #32374D | a selected tile |
-| `--approve`, `--decide`, `--unstick`, `--hand` | see `ui/app.css:29-32` | see `ui/app.css:111-114` | the four Ask cards, each with `-bg` and `-ring` |
-| `--seg-landed`, `-fixed`, `-nothing`, `-restarted`, `-dropped` | `ui/app.css:34` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
+| `--approve`, `--decide`, `--unstick`, `--hand` | see `ui/app.css:30-32` | see `ui/app.css:112-114` | the four Ask cards, each with `-bg` and `-ring` |
+| `--seg-landed`, `-fixed`, `-nothing`, `-restarted`, `-dropped` | `ui/app.css:35` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #1BAF7A, #EDA100, #E87BA4 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #C792EA, #89DDFF | extra chart series |
 | `--lift` | `0 1px 3px` and `0 2px 8px` shadows | heavier black shadows | the top Status card; 1 `token-use` |
 
-Type, size and effect tokens (`ui/app.css:46-55`):
+Type, size and effect tokens (`ui/app.css:47-55`):
 
 | Token | Value | Role | Uses |
 |---|---|---|---|
@@ -84,20 +84,20 @@ Type, size and effect tokens (`ui/app.css:46-55`):
 
 Weights have no token: 400 text, 500 ids and numbers, 600 headings and table headers (see Deviations). `font-weight` literals: 600 has 27, 500 has 5 and 400 has 4.
 
-Breakpoints are not tokens, because custom properties do not work in `@media`. The queries are `(max-width: 720px)` 11 times, `(max-width: 1020px)` 2, `(max-width: 1100px)` 1 and `(min-width: 721px)` 1.
+Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 10 times, `(max-width: 1100px)` 3 and `(min-width: 721px)` 1.
 
 Spacing has no tokens. The most common literals are `gap: 8px` (22), `gap: 6px` (16), `gap: 4px` (10), `gap: 10px` (10) and `margin-top: 4px` (9); `margin: 0 0 8px` has 8, `gap: 12px` 7, `gap: 2px` 7 and `padding: 10px 12px` 6. The scale in use is 2, 4, 6, 8, 10, 12, 16 px.
 
-Radii: the five `--r-*` tokens; one literal is left, `6px` on the login page (`ui/auth.ts:54`). Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` has 4 literal uses (1, 2, 2, 50). Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:413`).
+Radii: the five `--r-*` tokens; one literal is left, `6px` on the login page (`ui/auth.ts:54`). Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` has 4 literal uses (1, 2, 2, 50). Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:414`).
 
 Rules taken from the audit of 2026-11-04 (`docs/findings/2026-11-04-ui-design-audit.md`). Each pattern has 3 or more uses and no token yet. Until its token lands, use the value given here.
 
 | Rule | Value | Uses | Token to come |
 |---|---|---|---|
 | Spacing | a step of 2, 4, 6, 8, 10, 12 or 16 px for `gap`, `padding` and `margin` | 337 rows | spacing tokens (fixes item 12) |
-| Dimmed control | `opacity: .6` | 3 (`ui/app.css:321`, `343`, `963`) | `--dim` |
-| Display type tracking | `letter-spacing: -0.01em` on the brand mark, page title and display text | 4 (`ui/app.css:164`, `190`, `191`, `479`) | none; a rule |
-| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:563`) and `.08em` (`ui/app.css:721`) | 2 | none; pick one when a third key comes |
+| Dimmed control | `opacity: .6` | 3 (`ui/app.css:322`, `343`, `963`) | `--dim` |
+| Display type tracking | `letter-spacing: -0.01em` on the brand mark, page title and display text | 4 (`ui/app.css:165`, `190`, `191`, `479`) | none; a rule |
+| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:564`) and `.08em` (`ui/app.css:722`) | 2 | none; pick one when a third key comes |
 | Control height | 28px | 9 (`min-height` 6, `height` 3) | `--ctl-h` |
 | Bar and meter height | 10px | 8 | `--bar-h` |
 
@@ -126,9 +126,9 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:480`) with `heads()` or `sortHead()` (`ui/lib.js:496`), styled by `table.tbl` (`ui/app.css:437`). Six tables are written by hand with `<table class="tbl">` and not through `dataTable()`: `ui/views/issues.js:241`, `ui/views/issues.js:617`, `ui/views/jobs.js:240`, `ui/views/memory.js:46`, `ui/views/session.js:23` and `ui/views/session.js:259`.
+The one table is `dataTable()` (`ui/lib.js:480`) with `heads()` or `sortHead()` (`ui/lib.js:496`), styled by `table.tbl` (`ui/app.css:438`). Six tables are written by hand with `<table class="tbl">` and not through `dataTable()`: `ui/views/issues.js:241`, `ui/views/issues.js:617`, `ui/views/jobs.js:240`, `ui/views/memory.js:46`, `ui/views/session.js:23` and `ui/views/session.js:259`.
 
-Rules, as the code states them (`ui/lib.js:289`, `ui/app.css:437`):
+Rules, as the code states them (`ui/lib.js:289`, `ui/app.css:438`):
 
 - **Column order:** id or name, title, state badge, project, labels, numbers, time last.
 - **Spare width:** the widest text column is `td.wide`; it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
@@ -175,19 +175,19 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 
 ## Interaction
 
-- **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:161`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:495`, `ui/app.css:670`, `ui/app.css:995`).
+- **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:162`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:496`, `ui/app.css:671`, `ui/app.css:996`).
 - **Hover:** a link or button darkens its border to `--ink-2` (`.act`, `.cmd`, cards) or its text to `--ink` (crumbs, `a.idl`, sort buttons); a table row and a nav item take `--sunk`; a tile takes a `--run` border.
 - **Pressed:** a selector (tile, segmented button, bar row) sets `aria-pressed="true"`, drawn with `--raised`, `--rule-2` or `--sunk`.
-- **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:321`).
+- **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:322`).
 - **Active:** `.cmd:active` moves 1px down.
 - **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`); the open state of each is kept across a redraw by `recordState()` and `restoreState()` (`ui/lib.js:229`, `ui/lib.js:242`).
-- **Motion:** `.15s ease-out` on borders and backgrounds; the one animation (`pulse`) stops under `prefers-reduced-motion` (`ui/app.css:413`).
+- **Motion:** `.15s ease-out` on borders and backgrounds; the one animation (`pulse`) stops under `prefers-reduced-motion` (`ui/app.css:414`).
 
 ## Content
 
 - **Markdown:** `md()` (`ui/lib.js:110`) renders into `.md`; headings are `600 var(--fs-lg)` in the sans face.
-- **Code:** `pre` and `code` use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:712`) or scroll (`.md pre`, `ui/app.css:588`).
-- **Diffs:** `.diff-panel` on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`ui/app.css:323`).
+- **Code:** `pre` and `code` use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:713`) or scroll (`.md pre`, `ui/app.css:589`).
+- **Diffs:** `.diff-panel` on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`ui/app.css:324`).
 - **Command box:** `cmd()` (`ui/lib.js:84`) renders `.cmd`, a mono button that copies on click with a `.cp` control; `primary` inverts it.
 - **Not determined:** the wrap rule of every long-text view was not traced.
 
@@ -204,10 +204,10 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 
 ## Layout and responsive
 
-- **Shell:** a sidebar (`#nav`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:19`); the sidebar collapses to 48px on desktop (`ui/app.css:573`) and its state is kept in `localStorage`.
-- **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:188`, `ui/app.css:531`).
+- **Shell:** a sidebar (`#nav`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:19`); the sidebar collapses to 48px on desktop (`ui/app.css:574`) and its state is kept in `localStorage`.
+- **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:189`, `ui/app.css:532`).
 - **Skeleton:** `pageHead()` (`ui/lib.js:289`) with the serif title and a muted count, then `card()` sections with a `sectionHead()`; Status has its own `.shead`. A detail page starts with `crumb()` (`ui/lib.js:331`).
-- **Grid:** `.tiles` is an auto-fit grid of 150px minimum; `.lanes` is 3 columns, 2 at 1020px and below, 1 at 720px and below.
+- **Grid:** `.tiles` is an auto-fit grid of 150px minimum; `.lanes` is 3 columns, 2 at 1100px and below, 1 at 720px and below.
 - **Phone:** at 720px and below, 11 rules change the layout; tables scroll inside `.tscroll`. What each table does at a phone width was not seen in a browser.
 
 ## Accessibility

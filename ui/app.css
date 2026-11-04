@@ -1,3 +1,4 @@
+/* Breakpoints (custom properties do not work in @media): 720px (phone) and 1100px (wide). */
 /* Light is a lavender match for Palenight; dark is Chris's VS Code theme, Palenight (Mild Contrast). */
 :root {
   color-scheme: light dark;
@@ -531,11 +532,11 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 .sh.sub h2 { font-size: var(--fs-md); }
 
 /* ---------- narrow ---------- */
-@media (max-width: 1020px) {
+@media (max-width: 1100px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
   .rail { position: static; }
 }
-@media (max-width: 1020px) { .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 720px) {
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .shead .say { flex-basis: 100%; order: 3; }
