@@ -16,7 +16,7 @@ function scorecard(s, a, key, w) {
   return usageTile(s, on("usage"), small("live, not the window")) +
     tile({ k: "Runs today", v: String(f.runsToday), body: small(`${money(f.costToday)} recorded cost`) + small("live, not the window"), ...on("runs") }) +
     tile({ k: "Worker slots", vHtml: `${f.liveRuns ?? 0} <em>of ${f.liveCap}</em>`, body: small("live, in use now"), ...on("slots") }) +
-    tile({ k: "Agents live", v: a ? mean(a.mean) : "–", body: a ? small(`mean, all roles, peak ${a.peak}, ${lastPeriod(w)}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"), ...on("live") });
+    tile({ k: "Agents live", v: a ? mean(a.mean) : "–", body: a ? small(`mean, all roles, peak ${a.peak}, ${lastPeriod(w)}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : loadingLine("the agents"), ...on("live") });
 }
 
 function roles(a) {
