@@ -35,8 +35,7 @@ export const DETAILS = {
 };
 
 const fixed = (v) => (v == null ? "–" : Number(v).toFixed(1));
-const stamp = (at) => new Date(at).toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" });
-const stepOption = (d, name, vals) => lineOption(d.agents.points.map((p) => xLabel(p.at, d.window)), name, vals, { step: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(stamp(d.agents.points[q.dataIndex].at))}<br>${esc(fixed(q.value))} ${esc(name.toLowerCase())}`; } });
+const stepOption = (d, name, vals) => lineOption(d.agents.points.map((p) => xLabel(p.at, d.window)), name, vals, { step: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(when(d.agents.points[q.dataIndex].at))}<br>${esc(fixed(q.value))} ${esc(name.toLowerCase())}`; } });
 
 /** The chart option: one area of total agents live. */
 export const liveOption = (d) => stepOption(d, "Live", totals(d.agents));

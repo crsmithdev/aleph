@@ -166,14 +166,6 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 const STATUS_TONE = { awaiting: "need", stuck: "stuck", working: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
 const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
 
-/** "11/02 10:36": the date of a card, in the reader's time; "–" for none. */
-export function stamp(ts) {
-  const d = new Date(ts);
-  if (!ts || Number.isNaN(d.getTime())) return "–";
-  const p = (n) => String(n).padStart(2, "0");
-  return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
 /** "4m", "1h05m", "2d4h": the time from `since` to `to`, in the least room; "–" when the work was never picked up. */
 export function span(since, to) {
   const ms = Date.parse(to) - Date.parse(since);
@@ -188,7 +180,7 @@ const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Part 
 
 /** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, then why it waits (it gives up space first; its tooltip holds the whole text). `chips` is HTML. */
 function metaRow({ id, chips, part, at, since, now, end, why }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(stamp(at))}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${why ? `<span class="why" title="${esc(why)}">${esc(why)}</span>` : ""}</div>`;
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${why ? `<span class="why" title="${esc(why)}">${esc(why)}</span>` : ""}</div>`;
 }
 
 /** The title of a card: at most 2 lines, an ellipsis after that. */

@@ -133,3 +133,10 @@ test("idLink and pageHead", () => {
   expect(pageHead("Jobs")).toBe('<header class="ph"><h1>Jobs</h1></header>');
   expect(pageHead("Jobs", { count: 0 })).toContain('<span class="count">0</span>');
 });
+
+test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a bad date", () => {
+  const now = new Date(2026, 10, 4);
+  expect(when(new Date(2026, 9, 28, 14, 5), now)).toBe("10/28 14:05");
+  expect(when(new Date(2025, 11, 3, 14, 5), now)).toBe("2025-12-03");
+  expect(when("x")).toBe("");
+});

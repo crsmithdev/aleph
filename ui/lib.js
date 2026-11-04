@@ -287,13 +287,19 @@ export const pageHead = (title, { count, aside = "" } = {}) =>
   `<header class="ph"><h1>${esc(title)}</h1>${count != null && count !== "" ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<div class="aside">${aside}</div>` : ""}</header>`;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** A table's time, on one line: "Oct 28 08:45" for this year, "2025-12-03" for another; "" for a bad date. */
+/** A table's time, on one line: "10/28 08:45" for this year, "2025-12-03" for another; "" for a bad date. */
 export function when(ts, now = new Date()) {
   const d = new Date(ts);
   if (ts == null || ts === "" || Number.isNaN(d.getTime())) return "";
   return d.getFullYear() === now.getFullYear()
-    ? `${MONTHS[d.getMonth()]} ${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    ? `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
     : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** A chart axis's short time of day: "4a", "1:36p". */
+export function hourLabel(ts) {
+  const d = new Date(ts), m = d.getMinutes();
+  return `${d.getHours() % 12 || 12}${m ? `:${pad(m)}` : ""}${d.getHours() < 12 ? "a" : "p"}`;
 }
 
 /** A day, for a chart's axis or a date with no time: "Oct 28" for this year, "2025-12-03" for another; "" for a bad date. */

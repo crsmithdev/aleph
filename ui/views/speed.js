@@ -1,5 +1,5 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { barRow, day, dur, esc, small, tile, when } from "../lib.js";
+import { barRow, day, dur, hourLabel, esc, small, tile, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
@@ -23,8 +23,7 @@ export const lastPeriod = (d) => `last ${period(d)}`;
 export function xLabel(at, window) {
   const d = new Date(at);
   if (window === "week" || window === "month") return day(d);
-  const m = d.getMinutes();
-  return `${d.getHours() % 12 || 12}${m ? `:${String(m).padStart(2, "0")}` : ""}${d.getHours() < 12 ? "a" : "p"}`;
+  return hourLabel(d);
 }
 
 const got = new Map();
