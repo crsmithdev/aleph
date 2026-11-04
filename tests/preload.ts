@@ -30,6 +30,10 @@ const vars: Record<string, string> = {
   ALEPH_RULE_CMD: "false",
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
+// A factory worker's shell carries its job's variables. A test reads them as a worker, so they are cleared here;
+// a test that sets one of them itself still gets the value it sets.
+delete process.env.ALEPH_JOB_ID;
+delete process.env.ALEPH_JOB_RUN;
 // No check, worker or land in a test waits for the host's load: the admission's own tests give a fake load.
 process.env.ALEPH_LOAD_LIMIT = "Infinity";
 
