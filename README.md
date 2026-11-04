@@ -54,6 +54,7 @@ Invoke a skill as `/aleph:<name>`. Claude can also start one by itself, except t
 | `tdd` | Red, then green, with tests only at agreed seams |
 | `diagnosing-bugs` | Reproduce, minimise, rank hypotheses, then fix |
 | `codebase-design` | Vocabulary for deep modules: module, interface, seam, adapter |
+| `code-change` | The smallest diff that meets the goal, each line traced to it, each step proved by a run |
 | `domain-modeling` | Builds the glossary (`GLOSSARY.md`) and records ADRs |
 | `improve-codebase-architecture` † | Finds deepening candidates, reports them as HTML, grills the one you pick |
 | `tidy` | Removes junk and dead code behind a green build, and checks a repo is ready to show |
@@ -146,4 +147,4 @@ CI runs the type check and the suite on every push. The suite does not prove tha
 
 ## Credits
 
-`tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `codebase-design`, `domain-modeling`, `grill-with-docs` and `improve-codebase-architecture` are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, `skills/LICENSE-mattpocock`). `docs-writing` is adapted from [mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT, `skills/LICENSE-mblode`). `humanizer` is [blader/humanizer](https://github.com/blader/humanizer) 3.1.0 at `8c307f3`, unmodified (MIT, `skills/LICENSE-humanizer`).
+`tdd`, `diagnosing-bugs`, `retro`, `writing-for-agents`, `codebase-design`, `domain-modeling`, `grill-with-docs` and `improve-codebase-architecture` are adapted from [mattpocock/skills](https://github.com/mattpocock/skills) (MIT, `skills/LICENSE-mattpocock`). `docs-writing` is adapted from [mblode/agent-skills](https://github.com/mblode/agent-skills) (MIT, `skills/LICENSE-mblode`). `code-change` is adapted from [multica-ai/andrej-karpathy-skills](https://github.com/multica-ai/andrej-karpathy-skills) (MIT per its skill frontmatter; the repo has no license file) and `codebase-design`. `humanizer` is [blader/humanizer](https://github.com/blader/humanizer) 3.1.0 at `8c307f3`, unmodified (MIT, `skills/LICENSE-humanizer`).
