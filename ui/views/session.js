@@ -25,6 +25,7 @@ function turnTable(d) {
 
 export const CHAT_PAGE = 20;
 const CLIP_LINES = 20, CLIP_CHARS = 1600, TOOLS_SHOWN = 5, TOOLS_FOLD = 12;
+const INDENT_STEP = 14;
 
 /** Long text shows its first lines under a fade, and a "Show all" button the mount wires. */
 const clip = (text, html) => {
@@ -143,7 +144,7 @@ function wfRow(r, max, sel) {
   const width = Math.max(0.2, ((r.endMs - r.startMs) / max) * 100);
   const label = r.kind === "turn" ? `<span class="tn">${esc(r.name)}</span>${r.args ? `<span class="ta">${esc(r.args)}</span>` : ""}` : `<span class="tn">${esc(r.name)}</span>${r.args ? `<code class="ta">${esc(r.args)}</code>` : ""}`;
   return `<div class="wf-row k-${r.kind}${r.error ? " err" : ""}${r.id === sel ? " sel" : ""}" role="row" tabindex="0" data-id="${esc(r.id)}" aria-selected="${r.id === sel}">` +
-    `<div class="wf-l" style="padding-left:${r.depth * 14}px" title="${esc(r.name + " " + (r.args ?? ""))}">${label}</div>` +
+    `<div class="wf-l" style="padding-left:${r.depth * INDENT_STEP}px" title="${esc(r.name + " " + (r.args ?? ""))}">${label}</div>` +
     `<div class="wf-r"><span class="wf-bar" style="left:${left.toFixed(3)}%;width:${width.toFixed(3)}%"></span><span class="wf-d">${esc(dur(r.durationMs))}</span></div></div>`;
 }
 
@@ -243,7 +244,7 @@ function obsRows(o, depth) {
   ].filter(Boolean).join("; ");
   const fold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
   return `<tr><td>${tag(o.kind, o.error ? "stuck" : "quiet")}</td>` +
-    `<td style="padding-left:${depth * 16}px"><strong>${esc(o.name)}</strong>${fold("Input", o.input)}${fold("Output", o.output)}</td>` +
+    `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${fold("Input", o.input)}${fold("Output", o.output)}</td>` +
     `<td>${detail}</td><td class="num">${esc(dur(o.durationMs))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }
 
