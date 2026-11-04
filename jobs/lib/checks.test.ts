@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addedLines, keepGate, mutants, newCases, runChecks, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { addedLines, keepGate, mutants, newCases, runChecks, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import { checkSlot } from "./ledger.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
@@ -104,6 +104,53 @@ test("a check with `when` runs only when a changed file matches", async () => {
   const r = { key: "r", checks: [{ name: "android", run: "x", when: ["android/**"] }, { name: "all", run: "y" }] } as unknown as Repo;
   expect((await run(r, [{ code: 0 }], ["ui/a.ts"])).calls).toEqual(["all"]);
   expect((await run(r, [{ code: 0 }, { code: 0 }], ["android/b.kt"])).calls).toEqual(["android", "all"]);
+});
+
+describe("the test record of a `bun test` check", () => {
+  /** Runs one check `cmd` with the real shell in a folder that holds `files`. */
+  async function real(cmd: string, files: Record<string, string>) {
+    const cwd = join(base, "repo");
+    mkdirSync(cwd, { recursive: true });
+    for (const [name, text] of Object.entries(files)) writeFileSync(join(cwd, name), text);
+    const results: CheckResult[] = [];
+    const r = { key: "r", checks: [{ name: "unit tests", run: cmd }] } as unknown as Repo;
+    const exec: CheckExec = (check, out, limit) => shell(check.run, { cwd, env: process.env, out, limit });
+    const failed = await runChecks({ folder: base, repo: r, changed: [], phase: () => {}, record: (c) => results.push(c) }, exec);
+    return { failed, results };
+  }
+  const suite = `import { describe, expect, test } from "bun:test";
+test("passes", () => expect(1).toBe(1));
+test.skip("skipped", () => {});
+describe("outer", () => { describe("inner", () => { test("fails <&>", () => { expect(1).toBe(2); }); }); });
+`;
+
+  test("records the counts and each failed test with its describe names and its failure", async () => {
+    const { failed, results } = await real("bun test", { "a.test.ts": suite });
+    expect(failed).toMatchObject({ checkName: "unit tests", reason: "unit tests failed" });
+    const tests = results[0].tests!;
+    expect({ ...tests, failures: [] }).toEqual({ ran: 2, passed: 1, failed: 1, skipped: 1, failures: [] });
+    expect(tests.failures).toMatchObject([{ file: "a.test.ts", name: "outer > inner > fails <&>" }]);
+    expect(tests.failures[0].message).toContain("Expected: 2");
+    expect(tests.failures[0].message.split("\n").length).toBeLessThanOrEqual(20);
+  });
+
+  test("a check that runs 0 tests fails", async () => {
+    const { failed, results } = await real("bun test", { "a.test.ts": "export {};\n" });
+    expect(failed).toMatchObject({ cause: "check", checkName: "unit tests", reason: "ran 0 tests: check unit tests" });
+    expect(results).toMatchObject([{ ok: false, tests: { ran: 0, passed: 0, failed: 0, skipped: 0, failures: [] } }]);
+  });
+
+  test("a check that does not run `bun test` has no record", async () => {
+    const { failed, results } = await real("true", {});
+    expect(failed).toBeNull();
+    expect(results[0].tests).toBeUndefined();
+  });
+});
+
+test("withJunit: the reporter flags go after `bun test` or `bun run test`, and other commands stay as they are", () => {
+  expect(withJunit("bun run test './a.test.ts'", "/r/junit-tests.xml")).toBe("bun run test --reporter=junit --reporter-outfile='/r/junit-tests.xml' './a.test.ts'");
+  expect(withJunit("bun test app", "/r/j.xml")).toBe("bun test --reporter=junit --reporter-outfile='/r/j.xml' app");
+  expect(withJunit("bunx tsc", "/r/j.xml")).toBe("bunx tsc");
 });
 
 test("flake rows from parallel processes all survive", async () => {

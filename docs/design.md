@@ -180,7 +180,7 @@ Columns of the main tables:
 | Denials | Reason, When | `ui/views/sessions.js:108` |
 | Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `ui/views/efficiency.js:52`, `ui/views/efficiency.js:71` |
 | Agents by role | Role, one number column per measure, Models | `ui/views/factory-agents.js:25` |
-| Job checks | Check, Result, Time (num), Log | `ui/views/jobs.js:240` |
+| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `ui/views/jobs.js:240` |
 | Commits | Commit, Subject, Part, Date | `ui/views/issues.js:617` |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Row actions sit in the last column in the Issues table (`act`) and are absent elsewhere. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` over the table.

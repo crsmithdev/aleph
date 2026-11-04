@@ -15,11 +15,11 @@ import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, parseReview, REVIEW_SCHEMA, securityChange, testFindings } from "./gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
 import { awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
-import { tagged, isAgentRun, onOf, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, isAgentRun, onOf, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
-import { atCommit, changedSources, checkEnv as checksEnv, checksAt, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, stopFields, type CheckExec, type CheckTask } from "./checks.ts";
+import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
@@ -468,24 +468,37 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
   const start = performance.now();
   let any = false, rerun = false;
+  // The `bun test` commands' records, summed.
+  let tests: TestRecord | undefined;
   const result = (ok: boolean) => {
     if (!any) return;
     const checks = readRun(folder)?.checks ?? [];
-    updateRun(folder, { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}) }] });
+    updateRun(folder, { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(tests ? { tests } : {}) }] });
+  };
+  const report = junitFile(folder, "oracle");
+  const once = (command: string) => {
+    rmSync(report, { force: true });
+    return runner(repo, tip, withJunit(command, report));
   };
   for (const command of oracleCommands(readFileSync(specFile, "utf8"))) {
     if (done.has(command)) continue;
     phase();
-    let r = await runner(repo, tip, command);
+    let r = await once(command);
     if (r.infra) continue;
     let second = false;
-    if (r.code !== 0) { second = true; r = await runner(repo, tip, command); if (r.infra) continue; }
+    if (r.code !== 0) { second = true; r = await once(command); if (r.infra) continue; }
     any = true;
     // As for a check: `rerun` is a command that failed and then passed.
     rerun ||= second && r.code === 0;
+    const rec = runsBunTest(command) ? testRecord(report) : undefined;
+    if (rec) tests = !tests ? rec : {
+      ran: tests.ran + rec.ran, passed: tests.passed + rec.passed, failed: tests.failed + rec.failed, skipped: tests.skipped + rec.skipped,
+      failures: [...tests.failures, ...rec.failures].slice(0, 20),
+    };
     const out = `## oracle: exit ${r.code}${second ? " (second run)" : ""}\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`;
     appendFileSync(runFile(folder, "checks.log"), out);
     if (r.code !== 0) { result(false); return `oracle failed: ${command}`; }
+    if (rec?.ran === 0) { result(false); return `oracle ran 0 tests: ${command}`; }
   }
   result(true);
   return null;

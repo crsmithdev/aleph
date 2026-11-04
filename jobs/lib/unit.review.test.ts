@@ -48,23 +48,35 @@ const verdict = (runner: Runner) => {
   return workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, ports);
 };
 
-test("an Oracle failure is the Verify result: phase verify, one oracle result beside the checks, and the next brief has its log", async () => {
+/** A fake `bun test` run: it writes `cases` (`<testcase>` elements of x.test.ts) as the JUnit report the command names. */
+const report = (command: string, cases: string) =>
+  writeFileSync(command.match(/--reporter-outfile='([^']+)'/)![1], `<testsuites><testsuite name="x.test.ts" file="x.test.ts">${cases}</testsuite></testsuites>`);
+const PASS = `<testcase name="ok" file="x.test.ts" />`;
+const FAIL = `<testcase name="bad" file="x.test.ts"><failure type="Error">Error: ORACLE-BOOM&#10;  at x.test.ts:1</failure></testcase>`;
+
+test("an Oracle failure is the Verify result: phase verify, one oracle result with its test record beside the checks, and the next brief has its failed tests", async () => {
   const phases: (string | undefined)[] = [];
-  const r = await verdict(async () => { phases.push(readRun(folder)!.phase); return { code: 1, output: "ORACLE-BOOM" }; });
+  const r = await verdict(async (_r, _s, command) => { phases.push(readRun(folder)!.phase); report(command, PASS + FAIL); return { code: 1, output: "ORACLE-LOG" }; });
   expect(phases).toEqual(["verify", "verify"]);
   expect(r.outcome).toMatchObject({ condition: "stuck", cause: "check", checkName: "oracle", failed: "oracle", round: 0 });
-  expect(readRun(folder)!.checks).toEqual([{ name: "test", ok: true, seconds: 1 }, { name: "oracle", ok: false, seconds: expect.any(Number) }]);
-  expect(readFileSync(join(folder, "checks.log"), "utf8")).toContain("## oracle: exit 1 (second run)\n$ bun test x.test.ts\nORACLE-BOOM");
-  const note = nextBrief(folder, { ...run, ...r.outcome } as Run).note;
-  expect(note).toContain("The check `oracle` failed on this branch.");
-  expect(note).toContain("ORACLE-BOOM");
+  const tests = { ran: 2, passed: 1, failed: 1, skipped: 0, failures: [{ file: "x.test.ts", name: "bad", message: "Error: ORACLE-BOOM\n  at x.test.ts:1" }] };
+  expect(readRun(folder)!.checks).toEqual([{ name: "test", ok: true, seconds: 1 }, { name: "oracle", ok: false, seconds: expect.any(Number), tests }]);
+  expect(readFileSync(join(folder, "checks.log"), "utf8")).toContain("## oracle: exit 1 (second run)\n$ bun test x.test.ts\nORACLE-LOG");
+  const note = nextBrief(folder, { ...readRun(folder)!, ...r.outcome } as Run).note;
+  expect(note).toContain("The check `oracle` failed on this branch. Its failed tests:\n\n- x.test.ts > bad\n    Error: ORACLE-BOOM");
+  expect(note).not.toContain("ORACLE-LOG");
 });
 
 test("an Oracle that fails once and then passes is one passing oracle result with rerun", async () => {
   let n = 0;
-  const r = await verdict(async () => ({ code: n++ === 0 ? 1 : 0, output: "" }));
+  const r = await verdict(async (_r, _s, command) => { report(command, PASS); return { code: n++ === 0 ? 1 : 0, output: "" }; });
   expect(r.outcome.condition).toBe("passed");
-  expect(readRun(folder)!.checks!.at(-1)).toEqual({ name: "oracle", ok: true, seconds: expect.any(Number), rerun: true });
+  expect(readRun(folder)!.checks!.at(-1)).toEqual({ name: "oracle", ok: true, seconds: expect.any(Number), rerun: true, tests: { ran: 1, passed: 1, failed: 0, skipped: 0, failures: [] } });
+});
+
+test("an Oracle `bun test` that runs 0 tests fails", async () => {
+  const r = await verdict(async () => ({ code: 0, output: "" }));
+  expect(r.outcome).toMatchObject({ condition: "stuck", checkName: "oracle", reason: "oracle ran 0 tests: bun test x.test.ts" });
 });
 
 test("a checks failure is the Verify result too: the next brief names the check and quotes its section of checks.log", () => {

@@ -7,7 +7,7 @@ import { judgeChoice } from "../hooks/lib/jev.ts";
 import { factorySnapshot, goalFacts, mainRed } from "../jobs/lib/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/monitor-table.ts";
 import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
-import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
+import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
@@ -49,7 +49,7 @@ export interface Job {
   reviewCall?: { call: string; reason?: string };
   /** A landed job whose manual check is still open. */
   check?: "open";
-  checks?: { name: string; ok: boolean; seconds: number }[];
+  checks?: CheckResult[];
   /** Lands: the trailers of the land commit. Needs-you: the trailers the land will write. */
   trailers?: { key: string; value: string }[];
   /** A triage run: its verdict as `goal`, `close`, `done` or `ask`; none while it runs or when it gave no verdict. */

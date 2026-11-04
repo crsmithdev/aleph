@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, chip, tag, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, loadingLine, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
+import { blockersHtml, bytes, chip, tag, costHtml, count, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, loadingLine, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -223,8 +223,15 @@ export function renderJob(j) {
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
   const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(j.name)}" data-file="checks.log">checks.log</button>` : "";
+  // A check that ran `bun test` has a record of its tests: the counts, and its failed tests with their failure.
+  const counts = (t) => ["ran", "passed", "failed", "skipped"].map((k) => `<td class="num">${t ? esc(count(t[k])) : "–"}</td>`).join("");
+  const failures = (j.checks ?? []).filter((c) => c.tests?.failed).map((c) => {
+    const more = c.tests.failed - c.tests.failures.length;
+    return c.tests.failures.map((f) => `<p><code>${esc(f.file)}</code> ${esc(f.name)} <span class="quiet">${esc(c.name)}</span></p><pre class="trailers">${esc(f.message)}</pre>`).join("") +
+      (more > 0 ? `<p class="quiet">${esc(plural(more, "more failed test"))} of ${esc(c.name)} not recorded.</p>` : "");
+  }).join("");
   const checks = j.checks?.length
-    ? `<div class="dp-logs" data-logs>${dataTable('<th>Check</th><th>Result</th><th class="num">Time</th><th>Log</th>', j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td><td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join(""))}<div class="logbody" hidden></div></div>`
+    ? `<div class="dp-logs" data-logs>${dataTable('<th>Check</th><th>Result</th><th class="num">Ran</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Time</th><th>Log</th>', j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join(""))}${failures}<div class="logbody" hidden></div></div>`
     : "";
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = verdictOf(j.review), c = change(j.stat);
   return `<div class="page dp-page">${crumb(p ? p.href : "#/jobs", back)}` +

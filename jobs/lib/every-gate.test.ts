@@ -50,7 +50,13 @@ function landSetup(file = "a.txt", held: string[] = []): string {
   writeFileSync(join(folder, "state.json"), JSON.stringify(base_run));
   return git(path, "rev-parse", "main").out;
 }
-const held = (base: string, review: () => Promise<{ reason: string | null }>, runner: Runner = async () => ({ code: 0, output: "" })) =>
+/** A runner that passes and writes, for a `bun test` command, a JUnit report of one passed test. */
+const passes: Runner = async (_repo, _sha, command) => {
+  const file = command.match(/--reporter-outfile='([^']+)'/)?.[1];
+  if (file) writeFileSync(file, `<testsuites><testsuite name="x.test.ts" file="x.test.ts"><testcase name="ok" file="x.test.ts" /></testsuite></testsuites>`);
+  return { code: 0, output: "" };
+};
+const held = (base: string, review: () => Promise<{ reason: string | null }>, runner: Runner = passes) =>
   workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, { ...branchPorts(folder, base_run, repo, base, "work", { changed: [], runner, review: review as never }), checks: async () => ({ stop: null }) });
 const cleanup = () => { if (root) rmSync(root, { recursive: true, force: true }); root = ""; };
 

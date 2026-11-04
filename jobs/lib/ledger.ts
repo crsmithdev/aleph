@@ -15,7 +15,14 @@ export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "do
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. A run from before 4 Nov 2026 may have a hidden check with its test counts. */
 /** `files`: the number of test files a build ran in place of the full suite. */
-export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number }
+/** `tests`: the record of a check that ran `bun test`, from its JUnit report. */
+export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number; tests?: TestRecord }
+
+/** A failed test: its file, its name with its `describe` names (`a > b`), and the first 20 lines of its failure. */
+export interface FailedTest { file: string; name: string; message: string }
+
+/** The tests of one check: the counts, and the failed tests, at most 20. `ran` is the tests that passed or failed. */
+export interface TestRecord { ran: number; passed: number; failed: number; skipped: number; failures: FailedTest[] }
 
 /**
  * The second review's call: what it decided, or `pending` while it ran and `error` when it ended without one. A `chris`

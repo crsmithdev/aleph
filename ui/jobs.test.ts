@@ -241,6 +241,14 @@ describe("render", () => {
     expect(h).not.toContain("<it>");
     expect(h).toContain('<pre class="diff" id="diff" data-job="fac-9"><p class="quiet" role="status">Loading the diff…</p></pre>');
   });
+  test("the Checks panel shows each check's test counts and each failed test with its failure", () => {
+    const tests = { ran: 1203, passed: 1180, failed: 23, skipped: 4, failures: [{ file: "a.test.ts", name: "s > <one>", message: "Error: boom\n  at a.test.ts:3" }] };
+    const h = v.renderJob({ ...job, checks: [{ name: "tests", ok: false, seconds: 61, tests }, { name: "types", ok: true, seconds: 9 }] });
+    expect(h).toContain('<td class="num">1,203</td><td class="num">1,180</td><td class="num">23</td><td class="num">4</td><td class="num">1m 01s</td>');
+    expect(h).toContain('<td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">–</td><td class="num">9s</td>');
+    expect(h).toContain('<p><code>a.test.ts</code> s &gt; &lt;one&gt; <span class="quiet">tests</span></p><pre class="trailers">Error: boom\n  at a.test.ts:3</pre>');
+    expect(h).toContain("22 more failed tests of tests not recorded.");
+  });
   test("the Review tag is the last capital VERDICT line, not an earlier quote or a lowercase verdict", () => {
     const h = (review: string) => v.renderJob({ ...job, review });
     expect(h("The old call said VERDICT: hold x.\nAfter the fix:\nVERDICT: pass\n")).toContain('class="badge done">pass<');

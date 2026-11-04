@@ -41,15 +41,23 @@ describe("next step after a build or recheck", () => {
     expect(nextStep(run({ condition: "stuck" }), true)).toBeUndefined();
   });
 
-  test("a check fail under the fix-round cap goes back to the worker with the check's log as its note", () => {
-    const ended = run({ condition: "stuck", cause: "check", checkName: "tests", reason: "tests failed", failed: "tests", round: 1 });
+  test("a check fail with no test record goes back to the worker with the check's log as its note", () => {
+    const ended = run({ condition: "stuck", cause: "check", checkName: "types", reason: "types failed", failed: "types", round: 1 });
     expect(nextStep(ended, false)).toBe("worker");
-    const f = folder("check-fail", { "checks.log": "## lint: exit 0\nok\n## tests: exit 1\n$ bun test\n(fail) a > b\n" });
+    const f = folder("check-fail", { "checks.log": "## lint: exit 0\nok\n## types: exit 1\n$ tsc\nerror TS2322\n" });
     const { note, merge } = nextBrief(f, ended);
-    expect(note).toContain("The check `tests` failed on this branch");
-    expect(note).toContain("(fail) a > b");
+    expect(note).toContain("The check `types` failed on this branch. The last 80 lines of its log:");
+    expect(note).toContain("error TS2322");
     expect(note).not.toContain("lint");
     expect(merge).toBe(false);
+  });
+
+  test("a check fail with failed tests in its record goes back with those tests, not the log", () => {
+    const failures = [{ file: "a.test.ts", name: "s > one", message: "Error: boom\n  at a.test.ts:3" }];
+    const tests = { ran: 3, passed: 2, failed: 1, skipped: 0, failures };
+    const ended = run({ condition: "stuck", cause: "check", checkName: "tests", failed: "tests", round: 1, checks: [{ name: "tests", ok: false, seconds: 1, tests }] });
+    const { note } = nextBrief(folder("check-fail-rec", { "checks.log": "## tests: exit 1\nlog line\n" }), ended);
+    expect(note).toBe("The check `tests` failed on this branch. Its failed tests:\n\n- a.test.ts > s > one\n    Error: boom\n      at a.test.ts:3\n\nFix the cause, run the tests, and commit.");
   });
 
   test("a stuck run with no fix round left starts nothing", () => {
@@ -63,19 +71,21 @@ describe("next step after a build or recheck", () => {
   });
 
   test("the same failing tests of a check on two runs in a row ask instead of a third round", () => {
-    const log = (first: string, second: string) => ({ "checks.log": `## tests: exit 1, run again\n${first}\n\n## tests: exit 1 (second run)\n${second}\n\n` });
-    folder("fail-prev", log("(fail) suite > other", "boom\n(fail) suite > one [3.00ms]\n"));
-    const now = folder("fail-now", log("", "boom again\n(fail) suite > one\n"));
-    const same = repeatedFailure(now, "tests", [entry("fail-prev", { failed: "tests" })]);
-    expect(same?.names).toEqual(["suite > one"]);
+    const checks = (...names: string[]) => [{ name: "tests", ok: false, seconds: 1, tests: {
+      ran: 2, passed: 2 - names.length, failed: names.length, skipped: 0, failures: names.map((name) => ({ file: "s.test.ts", name, message: `boom ${name}` })),
+    } }];
+    const state = (...names: string[]) => ({ "state.json": JSON.stringify(run({ failed: "tests", checks: checks(...names) })) });
+    const prev = entry("fail-prev", { failed: "tests", checks: checks("suite > one") });
+    const now = folder("fail-now", state("suite > one"));
+    const same = repeatedFailure(now, "tests", [prev]);
+    expect(same?.names).toEqual(["s.test.ts > suite > one"]);
     expect(same?.question).toContain("The check `tests` failed the same way on two runs in a row");
-    expect(same?.question).toContain("boom again");
+    expect(same?.question).toContain("boom suite > one");
     expect(repeatedFailure(now, "tests", [entry("fail-prev", { failed: "lint" })])).toBeNull();
-    const other = folder("fail-other", log("", "(fail) suite > two\n"));
-    expect(repeatedFailure(other, "tests", [entry("fail-prev", { failed: "tests" })])).toBeNull();
-    const none = folder("fail-none", log("", "error: tsc\n"));
-    folder("fail-none-prev", log("", "error: tsc\n"));
-    expect(repeatedFailure(none, "tests", [entry("fail-none-prev", { failed: "tests" })])).toBeNull();
+    const other = folder("fail-other", state("suite > two"));
+    expect(repeatedFailure(other, "tests", [prev])).toBeNull();
+    const none = folder("fail-none", state());
+    expect(repeatedFailure(none, "tests", [entry("fail-none-prev", { failed: "tests", checks: checks() })])).toBeNull();
   });
 
   test("the fix rounds are the job's other build runs that were sent back", () => {

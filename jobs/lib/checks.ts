@@ -7,7 +7,7 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { recordFlake } from "./factory-status.ts";
-import { checkSlot, type Check, type CheckResult, type Repo } from "./ledger.ts";
+import { checkSlot, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "./ledger.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
 import { q } from "./agent-call.ts";
@@ -48,6 +48,22 @@ const chosen = (t: CheckTask): Check[] => t.repo.checks.filter((c) => !c.when ||
 /** Whether the checks chosen for a diff are all of the repo's checks: none dropped for a `when` no changed file matches. */
 export const coversAll = (repo: Repo, changed: string[]): boolean => chosen({ repo, changed } as CheckTask).length === repo.checks.length;
 
+/** A command that runs `bun test`, directly or as the package's `test` script. */
+const BUN_TEST = /^bun (?:run )?test\b/;
+
+/** The JUnit report of the check `name` in the run folder. */
+export const junitFile = (folder: string, name: string): string => join(folder, `junit-${name.replace(/[^\w.-]/g, "-")}.xml`);
+
+/** `cmd` with bun's JUnit reporter writing to `file`, when it runs `bun test`; else `cmd`. `bun run` passes the flags to the script. */
+export const withJunit = (cmd: string, file: string): string => cmd.replace(BUN_TEST, (m) => `${m} --reporter=junit --reporter-outfile=${q(file)}`);
+
+/** Whether `cmd` runs `bun test`, so it writes a JUnit report under withJunit. */
+export const runsBunTest = (cmd: string): boolean => BUN_TEST.test(cmd);
+
+/** The record of the JUnit report `file`. Bun writes no report when it ran no test, so a missing report ran 0 tests. */
+export const testRecord = (file: string): TestRecord =>
+  existsSync(file) ? junitRecord(readFileSync(file, "utf8")) : { ran: 0, passed: 0, failed: 0, skipped: 0, failures: [] };
+
 /** The one loop. A check that fails, not by timeout, runs once more on the same tree; a pass then is a flake. The first failure ends the loop. Returns why. */
 async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<ChecksStop | null> {
   const log = (text: string) => appendFileSync(runFile(t.folder, "checks.log"), text);
@@ -55,31 +71,42 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
     t.phase(`check ${check.name}`);
     const out = join(t.folder, "check.out");
     writeFileSync(out, "");
+    // A `bun test` check writes a JUnit report; each run starts without one, as bun writes none when no test ran.
+    const report = junitFile(t.folder, check.name);
+    const tests = runsBunTest(check.run);
+    const run = tests ? { ...check, run: withJunit(check.run, report) } : check;
+    const once = (limit: number) => {
+      rmSync(report, { force: true });
+      return exec(run, out, limit);
+    };
     // The wait for a slot is outside the time limit and outside the check's seconds.
     const { r, first, seconds } = await withSlot(async () => {
       const limit = checkSeconds();
       const t0 = Date.now();
-      let r = await exec(check, out, limit);
+      let r = await once(limit);
       let first: string | undefined;
       if (r.code !== 0 && !r.timedOut) {
         first = readFileSync(out, "utf8");
         log(`## ${check.name}: exit ${r.code}, run again\n${tail(out, 100)}\n\n`);
         writeFileSync(out, "");
-        r = await exec(check, out, limit);
+        r = await once(limit);
       }
       return { r, first, seconds: Math.round((Date.now() - t0) / 1000) };
     });
-    const ok = r.code === 0 && !r.timedOut;
+    const record = tests && !r.timedOut ? testRecord(report) : undefined;
+    const none = record?.ran === 0;
+    const ok = r.code === 0 && !r.timedOut && !none;
     const rerun = first !== undefined && ok;
     if (rerun) {
       const tests = failedTests(first!);
       const row = { repo: t.repo.key, check: check.name, run: basename(t.folder), at: new Date().toISOString(), ...(tests.length ? { tests } : {}) };
       if (!await recordFlake(row)) log(`## ${check.name}: flake not recorded, lock busy\n\n`);
     }
-    t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}) });
+    t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}), ...(record ? { tests: record } : {}) });
     log(`## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
     if (r.timedOut) return { cause: "check", checkName: check.name, reason: `timed out: check ${check.name}`, timedOut: true };
     if (r.code !== 0) return { cause: "check", checkName: check.name, reason: `${check.name} failed` };
+    if (none) return { cause: "check", checkName: check.name, reason: `ran 0 tests: check ${check.name}` };
   }
   return null;
 }
@@ -231,6 +258,43 @@ export const junitPassed = (xml: string): { file: string; name: string }[] =>
 /** The cases in bun's junit report that ran, passed or failed, as `file > name`. */
 const junitRan = (xml: string): Set<string> =>
   new Set([...xml.matchAll(/<testcase name="([^"]*)"[^>]*?file="([^"]*)"/g)].map((m) => `${unxml(m[2])} > ${unxml(m[1])}`));
+
+/** The record of bun's JUnit report `xml`. A `testsuite` inside a file's `testsuite` is a `describe`. */
+export function junitRecord(xml: string): TestRecord {
+  const rec: TestRecord = { ran: 0, passed: 0, failed: 0, skipped: 0, failures: [] };
+  const attr = (attrs: string, key: string) => unxml(attrs.match(new RegExp(`\\b${key}="([^"]*)"`))?.[1] ?? "");
+  const suites: string[] = [];
+  let open: FailedTest & { failed: boolean; skipped: boolean } | null = null;
+  const close = (c: NonNullable<typeof open>) => {
+    if (c.skipped) return void rec.skipped++;
+    rec.ran++;
+    if (!c.failed) return void rec.passed++;
+    rec.failed++;
+    if (rec.failures.length < 20) rec.failures.push({ file: c.file, name: c.name, message: c.message });
+  };
+  for (const m of xml.matchAll(/<(\/?)(testsuite|testcase|failure|skipped)\b([^>]*?)(\/?)>/g)) {
+    const [tag, end, kind, attrs, empty] = m;
+    if (kind === "testsuite") {
+      if (end) suites.pop();
+      else if (!empty) suites.push(attr(attrs, "name"));
+    } else if (kind === "testcase") {
+      if (end) {
+        if (open) close(open);
+        open = null;
+      } else {
+        const c = { file: attr(attrs, "file"), name: [...suites.slice(1), attr(attrs, "name")].join(" > "), message: "", failed: false, skipped: false };
+        if (empty) close(c);
+        else open = c;
+      }
+    } else if (open && !end && kind === "skipped") open.skipped = true;
+    else if (open && !end && kind === "failure") {
+      open.failed = true;
+      const body = empty ? attr(attrs, "message") : unxml(xml.slice(m.index + tag.length, xml.indexOf("</failure>", m.index)));
+      open.message = body.trimEnd().split("\n").slice(0, 20).join("\n");
+    }
+  }
+  return rec;
+}
 
 /** Where the keep-gate's command writes its junit report, in the clone. */
 const REPORT = ".keep-gate.xml";

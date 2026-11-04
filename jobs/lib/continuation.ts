@@ -18,7 +18,7 @@ import { factoryDir } from "./factory-status.ts";
 import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
-import { askOf, isAgentRun, isBuild, lastTagged, onOf, runsDir, TAG_FORMAT, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { askOf, isAgentRun, isBuild, lastTagged, onOf, readRun, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import { jobSpec, runFile } from "./run-files.ts";
 
@@ -204,7 +204,7 @@ export function nextBrief(folder: string, run: Run): { note: string; merge: bool
   const note = run.failed === "review"
     ? `The reviewer sent this branch back: ${run.reason}\n\nFix what it names, run the tests, and commit.`
     : run.failed
-    ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
+    ? `The check \`${run.failed}\` failed on this branch. ${failedTests(run, run.failed).length ? `Its failed tests:\n\n${quoteFailures(failedTests(run, run.failed))}` : `The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}`}\n\nFix the cause, run the tests, and commit.`
     : bounceNote(run);
   return { note, merge: !run.failed && isMergeBounce(run) };
 }
@@ -220,21 +220,12 @@ function checkSection(folder: string, name: string): string {
 /** The last 80 lines of the named check's section of the run's checks.log. */
 const checkLog = (folder: string, name: string): string => checkSection(folder, name).split("\n").slice(-80).join("\n");
 
-/** The failing tests of the named check's section of a run's checks.log, each with the lines of its failure that precede its `(fail)` line. */
-function checkFailures(folder: string, check: string): { name: string; failure: string }[] {
-  const lines = checkSection(folder, check).split("\n");
-  const seen = new Map<string, string>();
-  let block: string[] = [];
-  for (const line of lines) {
-    const m = line.match(/^\(fail\) (.*?)(?: \[[\d.]+m?s\])?$/);
-    if (m) {
-      if (!seen.has(m[1])) seen.set(m[1], block.slice(-10).join("\n").slice(-600));
-      block = [];
-    } else if (/^\(pass\)/.test(line)) block = [];
-    else if (line.trim()) block.push(line.trimEnd());
-  }
-  return [...seen].map(([name, failure]) => ({ name, failure }));
-}
+/** The failed tests in the run's record of the named check: empty when the check ran no `bun test` or no test failed. */
+const failedTests = (run: Run | null, check: string): FailedTest[] => run?.checks?.findLast((c) => c.name === check)?.tests?.failures ?? [];
+
+/** Each failed test as `- file > name` and its failure, indented. */
+const quoteFailures = (failures: FailedTest[]): string =>
+  failures.map((f) => `- ${f.file} > ${f.name}${f.message ? `\n${f.message.split("\n").map((l) => (l ? `    ${l}` : "")).join("\n")}` : ""}`).join("\n");
 
 // ---------------------------------------------------------------------------
 // Fix rounds: the runs before, and the failures they share. The rule itself is in worker-verdict.ts.
@@ -245,17 +236,18 @@ export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) =
 /**
  * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test
  * names. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
- * and Chris tells a wrong test from a wrong branch. Null when the failures differ, the check names no
- * failing test, or there is no run before.
+ * and Chris tells a wrong test from a wrong branch. Null when the failures differ, the check's record names no
+ * failed test, or there is no run before.
  */
 export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
   const prev = earlier.at(-1);
   if (!prev || prev.run.failed !== check) return null;
-  const now = checkFailures(folder, check);
-  const before = checkFailures(join(runsDir(), prev.id), check).map((f) => f.name).sort();
-  const names = now.map((f) => f.name).sort();
+  const now = failedTests(readRun(folder), check);
+  const key = (f: FailedTest) => `${f.file} > ${f.name}`;
+  const before = failedTests(prev.run, check).map(key).sort();
+  const names = now.map(key).sort();
   if (!names.length || names.join("\n") !== before.join("\n")) return null;
-  const quoted = now.slice(0, 5).map((f) => `- ${f.name}${f.failure ? `\n${f.failure.split("\n").map((l) => `    ${l}`).join("\n")}` : ""}`).join("\n");
+  const quoted = quoteFailures(now.slice(0, 5));
   return {
     names,
     question: `The check \`${check}\` failed the same way on two runs in a row, so no third fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
