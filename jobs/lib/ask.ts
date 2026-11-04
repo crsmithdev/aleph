@@ -142,16 +142,6 @@ const clean = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g,
 export const encodeOption = (o: { label: string; line: string; after?: string }): string =>
   o.label + SEP + o.line + (o.after ? `${WAITS}${o.after}` : "");
 
-/** An option from its stored line. */
-export function decodeOption(s: string): { label: string; line: string; after?: string } {
-  const w = s.lastIndexOf(WAITS);
-  const after = w >= 0 && REF.test(s.slice(w + WAITS.length)) ? s.slice(w + WAITS.length) : undefined;
-  const rest = after ? s.slice(0, w) : s;
-  const at = rest.indexOf(SEP);
-  const o = at < 0 ? { label: rest, line: "" } : { label: rest.slice(0, at), line: rest.slice(at + SEP.length) };
-  return after ? { ...o, after } : o;
-}
-
 /**
  * An Ask from loose input (a verdict's JSON), or null when it has no usable question, 2–4 options, or a
  * `recommended` that is not an option's label. `kind` and `reason` default to a plain question.
