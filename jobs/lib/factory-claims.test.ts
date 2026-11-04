@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -8,7 +8,6 @@ import { factoryDir } from "./factory-status.ts";
 import { readRun, writeRun, allJobs, allRuns, lock } from "./ledger.ts";
 import { ctx, goal, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
 import { askOf } from "./ask.ts";
-import { waitFor } from "../../tests/wait.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -123,7 +122,7 @@ test("a land that failed with a merge conflict is dropped and the goal reruns; t
 
 test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an always: Rerun note", async () => {
   mkdirSync(join(ctx.base, "factory"), { recursive: true });
-  writeFileSync(join(ctx.base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: new Date().toISOString() } }));
+  writeFileSync(join(ctx.base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: "2026-11-04T12:00:00.000Z" } }));
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
@@ -144,7 +143,10 @@ test("a rescue that finds the lock taken waits, then acts once on the state it f
   const b = dispatch(f);
   // B waits on the lock: lock() makes its own `<name>.new.<pid>.<uuid>` directory before it tries the name.
   const waiting = () => readdirSync(join(ctx.base, "run", "aleph")).some((n) => n.startsWith(`rescue-fac-${name}.new.`));
-  expect(await waitFor(waiting)).toBe(true);
+  await new Promise<void>((r) => {
+    const w = watch(join(ctx.base, "run", "aleph"), () => { if (waiting()) { w.close(); r(); } });
+    if (waiting()) { w.close(); r(); }
+  });
   expect(f.calls).toEqual([]);
   writeRun(folder, { ...readRun(folder)!, condition: "failed", reason: "time box" });
   release();

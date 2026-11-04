@@ -75,7 +75,7 @@ test("a run with a pid, no exit and no process is lost", () => {
   expect(lostCheck().ok).toBe(true);
   const f = join(dir, "jobs", "20261030-000000-x");
   mkdirSync(f);
-  writeRun(f, { kind: "plain", job: "x", name: "x", condition: "running", told: false, started: new Date().toISOString() });
+  writeRun(f, { kind: "plain", job: "x", name: "x", condition: "running", told: false, started: "2026-10-30T00:00:00Z" });
   writeFileSync(join(f, "pid"), "999999\n");
   expect(lostCheck()).toMatchObject({ ok: false });
 });

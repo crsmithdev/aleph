@@ -1,12 +1,17 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 
+// The test's clock: the server reads it, and the runs start at it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
+
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, pageDir: string, apiDir: string;
 
-const run = (o: object) => JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), ...o });
+const run = (o: object) => JSON.stringify({ kind: "build", condition: "running", started: new Date(NOW).toISOString(), ...o });
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-server-"));

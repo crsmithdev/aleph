@@ -23,15 +23,14 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-/** Opens the stream, runs `act` and returns whether a `change` event came within `ms`. */
-async function changeAfter(act: () => void, ms: number): Promise<boolean> {
+/** Opens the stream, runs `act` and waits for a `change` event: true when one comes, false when the stream ends first. */
+async function changeAfter(act: () => void): Promise<boolean> {
   const ctl = new AbortController();
   const res = await fetch(`http://127.0.0.1:${server.port}/api/events`, { signal: ctl.signal });
   expect(res.headers.get("content-type")).toBe("text/event-stream");
   const reader = res.body!.getReader();
   await reader.read(); // the first ping: the watchers are on
   act();
-  const timeout = setTimeout(() => ctl.abort(), ms);
   try {
     for (;;) {
       const { value, done } = await reader.read();
@@ -39,22 +38,22 @@ async function changeAfter(act: () => void, ms: number): Promise<boolean> {
       if (new TextDecoder().decode(value).includes("event: change")) return true;
     }
   } catch { return false; }
-  finally { clearTimeout(timeout); ctl.abort(); }
+  finally { ctl.abort(); }
 }
 
 test("a run's state.json sends a change, also in a run folder made after the stream opened", async () => {
-  expect(await changeAfter(() => writeFileSync(join(runs, "old", "state.json"), "{}"), 5000)).toBe(true);
-  expect(await changeAfter(() => { mkdirSync(join(runs, "new")); writeFileSync(join(runs, "new", "state.json"), "{}"); }, 5000)).toBe(true);
+  expect(await changeAfter(() => writeFileSync(join(runs, "old", "state.json"), "{}"))).toBe(true);
+  expect(await changeAfter(() => { mkdirSync(join(runs, "new")); writeFileSync(join(runs, "new", "state.json"), "{}"); })).toBe(true);
 });
 
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
-  expect(await changeAfter(() => writeFileSync(join(factory, "paused"), ""), 5000)).toBe(true);
-  expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"), 5000)).toBe(true);
+  expect(await changeAfter(() => writeFileSync(join(factory, "paused"), ""))).toBe(true);
+  expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"))).toBe(true);
 });
 
 test("a state.json moved into place sends a change, as the ledger writes it", async () => {
   const tmp = join(runs, "old", ".state.json.1");
-  expect(await changeAfter(() => { writeFileSync(tmp, "{}"); renameSync(tmp, join(runs, "old", "state.json")); }, 5000)).toBe(true);
+  expect(await changeAfter(() => { writeFileSync(tmp, "{}"); renameSync(tmp, join(runs, "old", "state.json")); })).toBe(true);
 });
 
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.

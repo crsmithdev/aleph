@@ -137,7 +137,7 @@ test("an approved claude-md proposal files a spec with Goal, Edit surface and Or
 describe("standing proposals", () => {
   const grant = (action: string, key = "proposal-check:fac") => {
     mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ [key]: { action, at: new Date().toISOString() } }));
+    writeFileSync(join(base, "factory", "always.json"), JSON.stringify({ [key]: { action, at: new Date(NOW).toISOString() } }));
     writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
   };
 

@@ -5,7 +5,10 @@ import * as issues from "../../todo/lib/todo.ts";
 import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 import { clearAsk } from "./ask.ts";
 
-beforeEach(setup);
+// The test's clock: the run cap's hour, the streak and the notes read it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+const ago = (ms: number) => new Date(NOW - ms).toISOString();
+beforeEach(() => { setSystemTime(NOW); setup(); });
 afterEach(() => { setSystemTime(); teardown(); });
 
 test("no commit, the item on main by its Item trailer: the open item is closed with a note naming the commit", async () => {
@@ -24,7 +27,7 @@ test("no commit, the item on main by its Item trailer: the open item is closed w
 
 test("a fourth no-commit run in a row is not dispatched; the item gets an Ask", async () => {
   const id = goal();
-  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "no commit, run X ended with no commit: dropped as a duplicate", noCommit: true, started: new Date(Date.now() - (4 - i) * 60_000).toISOString() });
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "no commit, run X ended with no commit: dropped as a duplicate", noCommit: true, started: ago((4 - i) * 60_000) });
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([]);
@@ -36,8 +39,8 @@ test("a fourth no-commit run in a row is not dispatched; the item gets an Ask", 
   expect(f.specs).toEqual([]);
 });
 
-const noCommitRuns = (id: number, n: number, ago: number) => {
-  for (let i = 0; i < n; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: new Date(Date.now() - (ago - i) * 1000).toISOString() });
+const noCommitRuns = (id: number, n: number, back: number) => {
+  for (let i = 0; i < n; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: ago((back - i) * 1000) });
 };
 const unlabel = (id: number) => change(id, (item) => clearAsk(item));
 const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
@@ -50,12 +53,11 @@ test("answering the Ask restarts the no-commit streak; three more no-commit runs
   expect((await dispatch(f)).started).toEqual([]);
   expect(ask(id)).not.toBeNull();
   // The clock is the test's: each step moves it a second, so the Ask's answer comes after the runs before it.
-  const t0 = Date.now();
-  setSystemTime(new Date(t0 + 1000));
+  setSystemTime(NOW + 1000);
   await unlabel(id);
   expect((await dispatch(f)).started).toEqual([`fac-${id}`]);
   // the started run is not a no-commit run; three more finish after the mark
-  setSystemTime(new Date(t0 + 2000));
+  setSystemTime(NOW + 2000);
   noCommitRuns(id, 3, 0);
   const g = fakes();
   expect((await dispatch(g)).started).toEqual([]);
@@ -79,7 +81,7 @@ test("while the Ask stays on the item, dispatches start nothing and write one no
 const RUN_CAP_NOTE = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it";
 test("a fourth start in an hour is skipped with one Ask note, and the goal is not started", async () => {
   const id = goal();
-  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
+  for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: ago((i + 1) * 60_000) });
   const f = fakes();
   const out = await dispatch(f);
   expect(out.started).toEqual([]);

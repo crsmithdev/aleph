@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,13 +6,18 @@ import { mkdirSync } from "node:fs";
 import { clearFit, currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
+
+// The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
 // @ts-ignore plain JS view
 
 let dir: string, server: ReturnType<typeof Bun.serve>;
 /** What the test server answers; a test swaps it to make the endpoint fail. */
 let reply: (req: Request) => Response;
-/** A reset in the future of the real clock: a poll takes the time of the real clock, and a past reset drops its snapshot. */
-const nextWeek = () => new Date(Date.now() + 7 * 24 * 3600_000).toISOString();
+/** A reset in the future of the test clock: a poll takes the time of the clock, and a past reset drops its snapshot. */
+const nextWeek = () => new Date(NOW + 7 * 24 * 3600_000).toISOString();
 const OK = (req: Request) => {
   if (req.headers.get("authorization") !== `Bearer ${TOKEN}` || req.headers.get("anthropic-beta") !== "oauth-2025-04-20") return new Response("no", { status: 401 });
   return Response.json({ five_hour: { utilization: 0, resets_at: "2026-10-28T20:00:00Z" }, seven_day: { utilization: 25, resets_at: nextWeek() } });
@@ -121,7 +126,7 @@ for (const [name, body] of [["null", { five_hour: null }], ["missing", {}], ["no
 
 test("readSnapshots keeps a null or missing five_hour as null and a number as is", () => {
   const f = process.env.ALEPH_USAGE_FILE!;
-  const row = (m: number, extra: object) => JSON.stringify({ at: new Date(Date.now() - 900 * H + m * 60_000).toISOString(), seven_day: 3, seven_day_resets_at: null, ...extra });
+  const row = (m: number, extra: object) => JSON.stringify({ at: new Date(NOW - 900 * H + m * 60_000).toISOString(), seven_day: 3, seven_day_resets_at: null, ...extra });
   require("node:fs").appendFileSync(f, [row(1, { five_hour: null }), row(2, {}), row(3, { five_hour: 12 })].join("\n") + "\n");
   expect(readSnapshots().slice(-3).map((s) => s.five_hour)).toEqual([null, null, 12]);
 });
@@ -164,9 +169,9 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
   const keep = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
   try {
-    const t0 = Date.now() - 12 * H;
+    const t0 = NOW - 12 * H;
     const at = (h: number) => new Date(t0 + h * H).toISOString();
-    const reset = new Date(Date.now() + 5 * 24 * H).toISOString();
+    const reset = new Date(NOW + 5 * 24 * H).toISOString();
     const good = [0, 4, 8, 12].map((h, i) => ({ at: at(h), five_hour: 0, seven_day: 10 + 4 * i, seven_day_resets_at: reset }));
     const spendsAt = [2, 6, 10];
     spendsAt.forEach((h, i) => {
@@ -183,7 +188,7 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
     const baseDirect = fit(good, sp);
     expect(baseDirect).not.toBeNull();
 
-    const future = { at: new Date(Date.now() + 30 * H).toISOString(), five_hour: 0, seven_day: 1, seven_day_resets_at: new Date(Date.now() + 12 * 24 * H).toISOString() };
+    const future = { at: new Date(NOW + 30 * H).toISOString(), five_hour: 0, seven_day: 1, seven_day_resets_at: new Date(NOW + 12 * 24 * H).toISOString() };
     write([...good, future]);
     clearFit();
     expect(await currentFit()).toEqual(base);

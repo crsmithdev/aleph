@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
@@ -15,9 +15,14 @@ import * as v from "./views/memory.js";
 // @ts-ignore
 import { view as noteView } from "./views/memory-note.js";
 
+// The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
+
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const at = (p: string) => fetch(`http://127.0.0.1:${server.port}${p}`);
-const today = new Date().toISOString().slice(0, 10);
+const today = new Date(NOW).toISOString().slice(0, 10);
 
 function note(dir: string, title: string, kind: string, scope: string, body: string) {
   writeFileSync(join(base, "vault", "wiki", dir, `${title}.md`),
@@ -115,11 +120,11 @@ test("warm() fills the misses cache, so the first request runs vault misses zero
   }
 });
 
-/** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. While the file `gate` exists, the stub waits before it fails. */
+/** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. */
 async function failing(name: string, ttl: string) {
-  const bin = join(base, name), log = join(base, `${name}-calls`), gate = join(base, `${name}-gate`);
+  const bin = join(base, name), log = join(base, `${name}-calls`);
   mkdirSync(bin);
-  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\nwhile [ -e ${gate} ]; do sleep 0.05; done\nexit 1\n`);
+  writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\nexit 1\n`);
   chmodSync(join(bin, "bun"), 0o755);
   let requests = 0;
   const lf = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => { requests++; return new Response("boom", { status: 500 }); } });
@@ -133,7 +138,7 @@ async function failing(name: string, ttl: string) {
     for (const [k, val] of Object.entries(saveEnv)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
     clearCache();
   };
-  return { calls, requests: () => requests, gate, done };
+  return { calls, requests: () => requests, done };
 }
 
 test("failed loads are kept for the TTL: no second spawn, no second Langfuse request", async () => {

@@ -10,6 +10,11 @@ import { readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 import { askOf, setAsk } from "./ask.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
 
+// The test's clock: the triage counts and the fixtures read it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
+
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
 // The factory dir for the whole file: nothing here may read or write ~/.aleph/factory.
@@ -104,7 +109,7 @@ test("a malformed verdict leaves the item unchanged and is skipped", async () =>
 const factory = () => process.env.ALEPH_FACTORY_DIR!;
 const grant = (reason: string, action: string) => {
   mkdirSync(factory(), { recursive: true });
-  writeFileSync(join(factory(), "always.json"), JSON.stringify({ [reason]: { action, at: new Date().toISOString() } }));
+  writeFileSync(join(factory(), "always.json"), JSON.stringify({ [reason]: { action, at: new Date(NOW).toISOString() } }));
 };
 const tickLog = () => readFileSync(join(factory(), "tick.log"), "utf8");
 
@@ -132,13 +137,13 @@ describe("standing permissions", () => {
     try {
       await run();
       // The wall clock steps back, as the WSL2 clock does every half minute, and then comes forward again.
-      setSystemTime(new Date(Date.now() - 60_000));
+      setSystemTime(NOW - 60_000);
       await run();
-      setSystemTime();
+      setSystemTime(NOW);
       const t3 = await run();
       expect(t3.skipped[0]).toContain("malformed verdict");
     } finally {
-      setSystemTime();
+      setSystemTime(NOW);
     }
   });
 
@@ -179,7 +184,7 @@ test("a triage that exits non-zero counts toward the limit", async () => {
 function earlierTriage(fields: Record<string, unknown>): void {
   const folder = join(base, "jobs", `${stamp()}-earlier-${Math.random().toString(36).slice(2)}-triage`);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name: "earlier", repo: repo.key, on: `${repo.key}-1`, condition: "done", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now(), ...fields });
+  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name: "earlier", repo: repo.key, on: `${repo.key}-1`, condition: "done", phase: "triage", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW, ...fields });
 }
 
 test("a triage run with the cause no-answer and a free reason counts toward the Ask", async () => {
@@ -194,7 +199,7 @@ test("a triage run with the cause no-answer and a free reason counts toward the 
 function lostRun(name: string): string {
   const folder = join(base, "jobs", `${stamp()}-${name}-triage`);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "triage", told: true, shown: true, started: new Date().toISOString(), made: Date.now() });
+  writeRun(folder, { kind: "triage", job: folder.split("/").at(-1)!, name, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "triage", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
   return folder;
 }
 

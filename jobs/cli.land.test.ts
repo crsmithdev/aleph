@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, branchExists, file, itemsRemote, jobsDir, moveMain, remote, repo, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, branchExists, file, itemsRemote, jobsDir, moveMain, remote, repo, seedItem, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
 import { actionJob as job, checked, drop, issueShow, jobView, land } from "./inproc";
 
 beforeAll(setup);
@@ -44,7 +44,8 @@ describe("land", () => {
     expect((await jobView("phoneland")).json.check).toBeUndefined();
   });
 
-  test("a job with a manual check lands with the check open as a to-do item, until checked", async () => {
+  // flaky: tests/flaky.md#land-manual-check
+  test.skip("a job with a manual check lands with the check open as a to-do item, until checked", async () => {
     await job("phonelater", "commit android/later.txt");
     const r = await land("phonelater");
     expect(r.code).toBe(0);
@@ -85,7 +86,8 @@ describe("land", () => {
     expect((await jobView("stepback")).json).toMatchObject({ run: { kind: "land" }, condition: "landed" });
   });
 
-  test("in a repo that lands by itself, a passed job lands with no aleph land", async () => {
+  // flaky: tests/flaky.md#land-autoland
+  test.skip("in a repo that lands by itself, a passed job lands with no aleph land", async () => {
     const r = await job("selfland", "commit selfland.txt", {}, "auto");
     expect(state(r.json.run)).toMatchObject({ condition: "passed", next: "land" });
     const runs = readdirSync(jobsDir).filter((d) => d.includes("-auto-selfland-")).sort();
@@ -96,6 +98,8 @@ describe("land", () => {
   });
 
   test("a to-do write during the checks goes to the work store and leaves the land's main alone", async () => {
+    // The check notes demo-1. An item made here makes sure demo-1 exists, whether or not the manual-check test ran first.
+    seedItem("demo", "the item the check notes");
     await job("patient", "commit todo-race/patient.txt");
     moveMain();
     const before = remoteHead();

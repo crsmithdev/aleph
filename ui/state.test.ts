@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,11 @@ import { facts } from "../jobs/lib/status.ts";
 import { state as fixture } from "./fixtures/status-state.ts";
 import { rows, withAttn } from "./test-now.ts";
 
+// The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
+
 let base: string, jobsDir: string, factory: string;
 let restore: () => void;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -21,7 +26,7 @@ function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-const now = new Date();
+const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const HELD = { kind: "approval", reason: "held-path", question: "", options: [], why: [], situation: "The run changes hooks/x.ts.", effects: [{ action: "land", text: "Merges it." }, { action: "drop", text: "Throws it away." }], recommend: { action: "drop", why: "the path is held" } };
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
@@ -102,7 +107,7 @@ describe("state", () => {
       for (const [id, kind, name] of ids) {
         const dir = join(jobsDir, id);
         run(id, { kind, job: name, name, condition: "running" });
-        const child = spawn("bash", ["-c", "sleep 30; true", "_", dir], { stdio: "ignore" });
+        const child = spawn("bash", ["-c", "read; true", "_", dir], { stdio: ["pipe", "ignore", "ignore"] }); // blocks on its stdin until killed
         kids.push(child);
         writeFileSync(join(dir, "pid"), String(child.pid));
       }

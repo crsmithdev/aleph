@@ -1,7 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { addOld, base, sh, worktree, setup, teardown } from "../cli.helpers";
+import { addOld, sh, worktree, setup, teardown } from "../cli.helpers";
 import { actionJob, drop, issueClose } from "../inproc.ts";
 import { reportText } from "./flow.testkit.ts";
 
@@ -19,11 +17,6 @@ describe("fate from git", () => {
 });
 
 describe("prospective memory", () => {
-  // A fresh probe, so the tick does not run one.
-  beforeAll(() => {
-    mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
-  });
   // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `after` on an old-shape item now. The tick below does the dispatching.
   const addGoal = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
 

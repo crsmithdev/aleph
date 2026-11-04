@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
-import { waitFor } from "../../tests/wait.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, goal, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.helpers.ts";
@@ -95,12 +94,11 @@ test("a killed run that wrote no pid yet is killed too", async () => {
 test("a run from before this boot whose pid's process names its folder is live and stays", async () => {
   const id = goal();
   const r = killedRun(`fac-${id}`, "build", {});
-  // The sleep comes first: bash execs a last command, and its cmdline would lose the folder.
-  const p = Bun.spawn(["bash", "-c", `sleep 20; : ${r.folder}`], { stdout: "ignore", stderr: "ignore" });
+  // bash runs only builtins, so it execs nothing that would lose the folder, and blocks on its stdin until killed.
+  const p = Bun.spawn(["bash", "-c", `echo up; read; : ${r.folder}`], { stdin: "pipe", stdout: "pipe", stderr: "ignore" });
   try {
-    // Until the child execs bash, its cmdline is this process's; under load the dispatch could read that first.
-    const named = () => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(r.folder); } catch { return false; } };
-    await waitFor(named, { timeout: 5000, every: 10 });
+    // Until the child execs bash, its cmdline is this process's; once bash has said up, it is bash's.
+    await p.stdout.getReader().read();
     writeFileSync(join(r.folder, "pid"), String(p.pid));
     const f = fakes();
     await dispatch(f);

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +22,11 @@ const sh = (cwd: string, ...args: string[]) => {
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
   return p.stdout.toString().trim();
 };
-const now = new Date();
+// The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
+const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const run = (id: string, extra: Record<string, unknown>) => {
   mkdirSync(join(runsDir, id), { recursive: true });

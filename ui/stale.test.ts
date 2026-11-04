@@ -1,9 +1,9 @@
 import { expect, test, afterEach, beforeEach, setSystemTime } from "bun:test";
 import { staleAsync, staleSync } from "./stale.ts";
 
-// The clock is the test's: only this moves it, so a loaded machine cannot pass a TTL. The real wait lets a background reload finish.
+// The clock is the test's: only this moves it, so a loaded machine cannot pass a TTL. A zero-delay task lets a background reload finish.
 let clock = 0;
-const pass = async (ms: number) => { clock += ms; setSystemTime(new Date(clock)); await new Promise((r) => setTimeout(r, 1)); };
+const pass = async (ms: number) => { clock += ms; setSystemTime(new Date(clock)); await new Promise((r) => setTimeout(r, 0)); };
 beforeEach(() => { clock = Date.UTC(2026, 10, 1); setSystemTime(new Date(clock)); });
 afterEach(() => setSystemTime());
 

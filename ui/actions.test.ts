@@ -1,10 +1,15 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
 import { add, addPart } from "../todo/lib/todo.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
+
+// The test's clock: the server reads it, and the runs start at it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
 
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, calls: string;
 const post = (p: string, headers: Record<string, string> = { "X-Aleph-UI": "1" }, body?: object) =>
@@ -31,7 +36,7 @@ beforeAll(async () => {
   for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "stuck" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
     const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", condition: "awaiting", started: new Date().toISOString(), name, job: name, repo: "r", ...extra }));
+    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", condition: "awaiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", ...extra }));
   }
   // The work store, with issue 7 of `r` for the Wait button to set `after` on.
   const itemsRemote = join(base, "items.git"), items = join(base, "items");

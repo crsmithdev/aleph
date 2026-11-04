@@ -1,8 +1,17 @@
-import { expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { afterEach, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addWorktree, fetchOrigin, git } from "./lib/git.ts";
+import { addWorktree, fetchOrigin, git, lockRetry } from "./lib/git.ts";
+
+const pause = lockRetry.pause;
+afterEach(() => { lockRetry.pause = pause; });
+/** The pause before the next try frees `lock`, so the step met it at least once and then got past it. */
+function freeOnPause(lock: string): () => number {
+  let pauses = 0;
+  lockRetry.pause = () => { pauses++; rmSync(lock); };
+  return () => pauses;
+}
 
 function setup() {
   const d = mkdtempSync(join(tmpdir(), "fetch-"));
@@ -20,8 +29,9 @@ function setup() {
 test("fetchOrigin waits out a ref lock that goes away", () => {
   const { clone, other, lock } = setup();
   writeFileSync(lock, "");
-  Bun.spawn(["sh", "-c", `sleep 0.2; rm ${lock}`], { stdio: ["ignore", "ignore", "ignore"] });
+  const pauses = freeOnPause(lock);
   expect(fetchOrigin(clone).ok).toBe(true);
+  expect(pauses()).toBe(1);
   expect(git(clone, "rev-parse", "origin/main").out).toBe(git(other, "rev-parse", "HEAD").out);
 });
 
@@ -29,10 +39,11 @@ test("addWorktree waits out a config lock that goes away", () => {
   const { clone } = setup();
   const cfg = join(clone, ".git/config.lock");
   writeFileSync(cfg, "");
-  Bun.spawn(["sh", "-c", `sleep 0.2; rm ${cfg}`], { stdio: ["ignore", "ignore", "ignore"] });
+  const pauses = freeOnPause(cfg);
   const wt = join(clone, "..", "wt");
   const r = addWorktree(clone, wt, "job", "origin/main");
   expect(r.ok).toBe(true);
+  expect(pauses()).toBe(1);
   expect(git(clone, "rev-parse", "--verify", "job").ok).toBe(true);
   expect(git(wt, "rev-parse", "--abbrev-ref", "HEAD").out).toBe("job");
 });

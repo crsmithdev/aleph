@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -47,11 +47,16 @@ async function refused(f: () => unknown): Promise<string> {
 const runs = () => (existsSync(join(base, "jobs")) ? readdirSync(join(base, "jobs")) : []);
 
 describe("startJob", () => {
+  // The test's clock: the starting rule and the made stamp read it.
+  const NOW = Date.parse("2026-11-03T00:00:00Z");
+  beforeEach(() => setSystemTime(NOW));
+  afterEach(() => setSystemTime());
+
   test("refuses a start while the last run is starting: made, running, no pid and no exit", async () => {
     const job = "20261103-000001-fac-x-agent";
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: new Date().toISOString(), made: Date.now() } as Run);
+    writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW } as Run);
     expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).toBe(`x is running as ${job}`);
     expect(runs()).toEqual([job]);
   });
@@ -60,7 +65,7 @@ describe("startJob", () => {
     const job = "20261103-000002-fac-x-agent";
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: new Date().toISOString(), made: Date.now() - STARTING_MS - 1000 } as Run);
+    writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW - STARTING_MS - 1000 } as Run);
     expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).not.toContain("is running as");
   });
 
@@ -68,8 +73,8 @@ describe("startJob", () => {
     const job = "20261103-000003-fac-y-agent";
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
-    const ahead = Date.now() + 700;
-    writeRun(folder, { kind: "build", job, name: "y", repo: "fac", branch: "factory/y", condition: "failed", phase: "starting", told: false, started: new Date().toISOString(), made: ahead } as Run);
+    const ahead = NOW + 700;
+    writeRun(folder, { kind: "build", job, name: "y", repo: "fac", branch: "factory/y", condition: "failed", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: ahead } as Run);
     await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }));
     const second = allRuns().find((e) => e.id !== job);
     expect(second?.run.made).toBeGreaterThan(ahead);

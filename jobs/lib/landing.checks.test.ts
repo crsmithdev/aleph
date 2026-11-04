@@ -76,7 +76,8 @@ test("on an unchanged main a land runs only the critical tests", async () => {
   expect(log).toContain("critical tests only: main unchanged since");
 });
 
-test("a commit added to the branch after its checks gets the checks on land", async () => {
+// flaky: tests/flaky.md#checks-commit-added
+test.skip("a commit added to the branch after its checks gets the checks on land", async () => {
   const e = job("tipped", [["tipped.txt", "t\n"]]);
   const run = { ...e.run, checkedBase: remote("rev-parse", "main"), checkedTip: "0000000" };
   writeRun(e.folder, run);

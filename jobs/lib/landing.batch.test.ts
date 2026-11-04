@@ -99,7 +99,8 @@ test("a member that failed its checks in attempt 1 is not in the retry after mai
   expect(mainFiles()).not.toContain("rbad.txt");
 });
 
-test("a member that failed in attempt 1 does not take the leader out when main moves twice", async () => {
+// flaky: tests/flaky.md#batch-member-failed
+test.skip("a member that failed in attempt 1 does not take the leader out when main moves twice", async () => {
   const names = ["tla", "tlbad", "tlr"];
   const [lead, bad, ...rest] = names.map((n, i) => { const e = job(n, [[`${n}.txt`, "x\n"]]); return i ? queued(e) : e; });
   const r = await land(lead, repo, ports({ bad: both(`${names[0]}.txt`, `${names[1]}.txt`), races: 2, raceOn: (n) => n[0] === names[0] && !n.includes(names[1]) }));

@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { activity, clearCache } from "./api/activity.ts";
 import { withEnv } from "./test-server.ts";
-import { waitFor } from "../tests/wait.ts";
 
 let obsHits = 0;
+/** Resolves at the next observations request that reaches the fake Langfuse. */
+let nextHit = () => {};
 /** While a test holds this promise unresolved, the fake Langfuse does not answer observations. */
 let hold: Promise<void> = Promise.resolve();
 let base: string, fake: ReturnType<typeof Bun.serve>;
 let restore: () => void;
 
-const real = new Date();
-const now = new Date(real.getFullYear(), real.getMonth(), real.getDate(), 23, 0, 0);
+const now = new Date(2026, 10, 4, 23, 0, 0);
 const at = (daysAgo: number, hour = 10) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour).toISOString();
 const gen = (day: number, model: string, cost: number, trace: string) => ({ id: `g${Math.random()}`, traceId: trace, type: "GENERATION", name: model, model, startTime: at(day), calculatedTotalCost: cost });
 const tool = (day: number, name: string, trace: string, level = "DEFAULT") => ({ id: `t${Math.random()}`, traceId: trace, type: "TOOL", name, level, startTime: at(day), metadata: { tool: name } });
@@ -34,7 +34,7 @@ beforeAll(() => {
     async fetch(req) {
       const url = new URL(req.url);
       if (!req.headers.get("authorization")?.startsWith("Basic ")) return new Response("no", { status: 401 });
-      if (url.pathname === "/api/public/observations") obsHits++;
+      if (url.pathname === "/api/public/observations") { obsHits++; nextHit(); }
       if (url.pathname === "/api/public/observations") await hold;
       if (url.pathname === "/api/public/observations") return Response.json({ data: observations, meta: { totalPages: 1 } });
       if (url.pathname === "/api/public/traces") return Response.json({ data: traces, meta: { totalPages: 1 } });
@@ -60,8 +60,8 @@ describe("activity", () => {
     let release = () => {};
     clearCache();
     try {
-      const t0 = Date.now();
-      setSystemTime(new Date(t0));
+      const t0 = now.getTime();
+      setSystemTime(t0);
       obsHits = 0;
       const a = await activity(7, null, now);
       const b = await activity(7, null, now);
@@ -71,13 +71,15 @@ describe("activity", () => {
       setSystemTime(new Date(t0 + 301_000));
       // The fake Langfuse holds the reload, so both stale requests below come while it is in flight.
       hold = new Promise((r) => { release = r; });
+      const reloading = new Promise<void>((r) => { nextHit = r; });
       const c = await activity(7, null, now);
       expect(c.cachedAt).toBe(a.cachedAt);
       await activity(7, null, now);
-      expect(await waitFor(() => obsHits >= 2)).toBe(true);
+      await reloading;
       release();
+      // The reload ends a few tasks after the fake answers; each turn yields one task and reads again.
       let d = c;
-      await waitFor(async () => (d = await activity(7, null, now)).cachedAt !== a.cachedAt);
+      while ((d = await activity(7, null, now)).cachedAt === a.cachedAt) await new Promise((r) => setTimeout(r, 0));
       expect(obsHits).toBe(2);
       expect(d.cachedAt).toBe(new Date(t0 + 301_000).toISOString());
       await activity(7, "fac", now);

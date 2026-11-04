@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { waitFor } from "../../tests/wait.ts";
 import { writeRun, type Entry, type Run } from "./ledger.ts";
 import { isRunning, markEnded, markStarted, processState, STARTING_MS, stop, unitAlive } from "./process.ts";
 
+const NOW = Date.parse("2026-11-03T00:00:00Z");
 let base: string;
 const kids: { kill: (s?: NodeJS.Signals) => void }[] = [];
 beforeEach(() => {
@@ -14,6 +14,7 @@ beforeEach(() => {
   mkdirSync(join(base, "runs"));
 });
 afterEach(() => {
+  setSystemTime();
   for (const k of kids.splice(0)) k.kill("SIGKILL");
   delete process.env.ALEPH_JOBS_DIR;
   rmSync(base, { recursive: true, force: true });
@@ -22,25 +23,30 @@ afterEach(() => {
 function entry(id: string, extra: Partial<Run> = {}): Entry {
   const folder = join(base, "runs", id);
   mkdirSync(folder);
-  const run = { kind: "build", job: id, name: "x", repo: "demo", condition: "running", told: true, started: "2026-11-03T00:00:00Z", made: Date.now(), ...extra } as Run;
+  const run = { kind: "build", job: id, name: "x", repo: "demo", condition: "running", told: true, started: "2026-11-03T00:00:00Z", made: NOW, ...extra } as Run;
   writeRun(folder, run);
   return { id, folder, run };
 }
 
-/** A process whose command line names the folder, as a unit's does; it returns once the child has exec'd bash. */
-async function liveIn(folder: string): Promise<number> {
-  const p = Bun.spawn(["bash", "-c", `sleep 30; : ${folder}`]);
+/**
+ * A bash whose command line names the folder, as a unit's does. It runs `script` (builtins only, so bash execs
+ * nothing that would lose the folder) and then blocks on its stdin until killed. It returns once bash has said
+ * `up`, so its command line is bash's.
+ */
+async function liveIn(folder: string, script = ""): Promise<number> {
+  const p = Bun.spawn(["bash", "-c", `${script} echo up; read; : ${folder}`], { stdin: "pipe", stdout: "pipe" });
   kids.push(p);
-  const named = () => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(folder); } catch { return false; } };
-  await waitFor(named, { timeout: 5000, every: 10 });
+  await p.stdout.getReader().read();
   markStarted(folder, p.pid);
   return p.pid;
 }
 
+// Only this test fixes the clock: stop() times its grace with the real one.
 test("each state of a run's process", async () => {
+  setSystemTime(NOW);
   const starting = entry("a");
   expect(processState(starting)).toBe("starting");
-  expect(processState(entry("b", { made: Date.now() - STARTING_MS - 1000 }))).toBe("none");
+  expect(processState(entry("b", { made: NOW - STARTING_MS - 1000 }))).toBe("none");
   expect(processState(entry("c", { condition: "done" }))).toBe("none");
   const lost = entry("d");
   markStarted(lost.folder, 999_999_999);
@@ -71,11 +77,7 @@ test("stop ends a live run's process", async () => {
 
 test("stop kills a process that ignores SIGTERM once the grace time is over, and returns only when it is gone", async () => {
   const e = entry("a");
-  const p = Bun.spawn(["bash", "-c", `trap '' TERM; while :; do sleep 0.1; done; : ${e.folder}`]);
-  kids.push(p);
-  const named = () => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(e.folder); } catch { return false; } };
-  await waitFor(named, { timeout: 5000, every: 10 });
-  markStarted(e.folder, p.pid);
+  await liveIn(e.folder, "trap '' TERM;");
   expect(await stop(e, 300)).toBe(true);
   expect(processState(e)).toBe("lost");
 });

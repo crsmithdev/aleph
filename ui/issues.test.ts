@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,11 @@ import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import * as v from "./views/issues.js";
 // @ts-ignore
 import { view as issueView } from "./views/issue.js";
+
+// The test's clock: the server reads it, and the runs start at it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
 
 /** An item stored as a goal: `kind: goal` on a plain number. */
 const seedGoal = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
@@ -30,7 +35,7 @@ const post = (body: object, headers: Record<string, string> = { "x-aleph-ui": "1
 function run(id: string, extra: Record<string, unknown>) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", told: true, started: new Date().toISOString(), ...extra }));
+  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", told: true, started: new Date(NOW).toISOString(), ...extra }));
 }
 
 beforeAll(async () => {

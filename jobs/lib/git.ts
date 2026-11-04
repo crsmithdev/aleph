@@ -52,11 +52,14 @@ export function jobCommit(cwd: string, main: string, job: string): string {
   return git(cwd, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${job}$`).out;
 }
 
+/** The pause between two tries of a step that met a held git lock. A test replaces it to free the lock. */
+export const lockRetry = { pause: (): void => Bun.sleepSync(100 + Math.random() * 200) };
+
 /** `git fetch -q origin <refs>`, tried again (up to 5 times) when another process holds the ref lock. Returns the last result. */
 export function fetchOrigin(cwd: string, ...refs: string[]): { ok: boolean; out: string } {
   let r = git(cwd, "fetch", "-q", "origin", ...refs);
   for (let i = 1; i < 5 && !r.ok && r.out.includes("cannot lock ref"); i++) {
-    Bun.sleepSync(100 + Math.random() * 200);
+    lockRetry.pause();
     r = git(cwd, "fetch", "-q", "origin", ...refs);
   }
   return r;
@@ -70,7 +73,7 @@ export function addWorktree(repo: string, wt: string, branch: string, base: stri
   const locked = (r: { ok: boolean; out: string }) => !r.ok && r.out.includes("could not lock config file");
   let r = { ok: false, out: "" };
   for (let i = 0; i < 5; i++) {
-    if (i) Bun.sleepSync(100 + Math.random() * 200);
+    if (i) lockRetry.pause();
     git(repo, "worktree", "remove", "--force", wt);
     git(repo, "worktree", "prune");
     const del = git(repo, "branch", "-D", branch);

@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { clearCache } from "./langfuse.ts";
 import { clearFit } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
@@ -12,7 +12,11 @@ import * as v from "./views/session.js";
 
 const trace = (id: string, session: string, name: string, at: string, extra: object = {}) =>
   ({ id, sessionId: session, name, timestamp: at, input: `prompt ${id}\nsecond line`, output: "x".repeat(600), totalCost: 0.5, latency: 12, metadata: { cwd: `/w/${name}`, task_type: "code_edit" }, ...extra });
-const now = Date.now();
+// The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
+const now = NOW;
 const iso = (m: number) => new Date(now - m * 60000).toISOString();
 const TRACES = [
   trace("t1", "s1", "aleph", iso(30)), trace("t2", "s1", "aleph", iso(20)),

@@ -1,18 +1,19 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { liveRuns } from "./lib/factory-status.ts";
 import { writeRun, type Run } from "./lib/ledger.ts";
 
+const NOW = Date.parse("2026-10-30T00:00:00Z");
 let base: string;
-beforeEach(() => { base = mkdtempSync(join(tmpdir(), "aleph-livecap-")); process.env.ALEPH_JOBS_DIR = base; });
-afterEach(() => { delete process.env.ALEPH_JOBS_DIR; rmSync(base, { recursive: true, force: true }); });
+beforeEach(() => { setSystemTime(NOW); base = mkdtempSync(join(tmpdir(), "aleph-livecap-")); process.env.ALEPH_JOBS_DIR = base; });
+afterEach(() => { setSystemTime(); delete process.env.ALEPH_JOBS_DIR; rmSync(base, { recursive: true, force: true }); });
 
 function run(id: string, extra: Partial<Run>, files: string[] = []): void {
   const folder = join(base, id);
   mkdirSync(folder);
-  writeRun(folder, { kind: "build", job: id, name: id, repo: "demo", condition: "running", told: true, started: "2026-10-30T00:00:00Z", made: Date.now(), ...extra } as Run);
+  writeRun(folder, { kind: "build", job: id, name: id, repo: "demo", condition: "running", told: true, started: "2026-10-30T00:00:00Z", made: NOW, ...extra } as Run);
   for (const f of files) writeFileSync(join(folder, f), "999999");
 }
 

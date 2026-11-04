@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,8 +12,13 @@ import { when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
 
+// The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
+
 let base: string, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, calls: string;
-const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+const ago = (min: number) => new Date(NOW - min * 60_000).toISOString();
 const post = (p: string) => at(p, { method: "POST", headers: { "X-Aleph-UI": "1" } });
 
 beforeAll(async () => {
@@ -54,7 +59,7 @@ afterAll(() => {
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
 const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", why: "w", kind }) as any;
-const stub = { now: new Date().toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
+const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
@@ -106,7 +111,7 @@ test("splitAsks keeps every Ask and puts host checks in the chores", () => {
 });
 
 const data = () => ({
-  now: new Date().toISOString(),
+  now: new Date(NOW).toISOString(),
   factory: { paused: false, liveRuns: 5, liveCap: 5, capEnv: { live: false } },
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
@@ -172,8 +177,8 @@ test("log collapses a run of identical Gate lines into one with count, first and
     const g = gateLines();
     expect(g.length).toBe(1);
     expect(g[0].count).toBe(3);
-    expect(Date.parse(g[0].first!)).toBeCloseTo(Date.now() - 30 * 60_000, -4);
-    expect(Date.parse(g[0].at)).toBeCloseTo(Date.now() - 10 * 60_000, -4);
+    expect(Date.parse(g[0].first!)).toBeCloseTo(NOW - 30 * 60_000, -4);
+    expect(Date.parse(g[0].at)).toBeCloseTo(NOW - 10 * 60_000, -4);
   });
 });
 

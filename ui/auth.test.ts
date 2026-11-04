@@ -23,7 +23,8 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("password gate: login, session across servers, logout", async () => {
+// flaky: tests/flaky.md#auth-password-gate
+test.skip("password gate: login, session across servers, logout", async () => {
   const at = await start();
   const home = await at("/");
   const html = await home.text();

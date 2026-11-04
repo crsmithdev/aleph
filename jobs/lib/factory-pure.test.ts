@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -8,11 +8,12 @@ import { spentToday, runsToday, health, writeBaseline } from "./factory-status.t
 import { lock, readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
-import { waitFor } from "../../tests/wait.ts";
 import { vault as newVault } from "../../tests/git-fixture.ts";
 
 beforeEach(setup);
-afterEach(teardown);
+afterEach(() => { setSystemTime(); teardown(); });
+// The clock of the tests that set it: the day's spend, the runs of today and the starting rule read it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
 
 
 /** A temp vault under ALEPH_VAULT for one test; the old value is restored by `done`. */
@@ -68,7 +69,8 @@ test("the day's spend counts every kind that records a cost", () => {
 });
 
 test("an explain run has no repo; its cost counts in the day's spend, not in runsToday, and an old one adds nothing", () => {
-  const old = new Date(Date.now() - 25 * 3600_000).toISOString();
+  setSystemTime(NOW);
+  const old = new Date(NOW - 25 * 3600_000).toISOString();
   mk("fac-6", "explain", "done", { cost: 3, repo: undefined, on: "fac-6" });
   mk("fac-7", "explain", "done", { cost: 5, repo: undefined, on: "20261028-000001-fac-fac-1-build", started: old });
   expect(spentToday()).toBe(3);
@@ -140,7 +142,10 @@ await writeBaseline("b", () => ({ repo: "b", commit: "2", ok: true }));`], { env
   const here = writeBaseline("a", () => ({ repo: "a", commit: "1", ok: true }));
   // Both writers wait on the lock: lock() makes a `<name>.new.<pid>.<uuid>` directory for each before it tries the name.
   const waiters = () => readdirSync(join(ctx.base, "run", "aleph")).filter((n) => n.startsWith("baseline-file.new.")).length;
-  expect(await waitFor(() => waiters() === 2)).toBe(true);
+  await new Promise<void>((r) => {
+    const w = watch(join(ctx.base, "run", "aleph"), () => { if (waiters() === 2) { w.close(); r(); } });
+    if (waiters() === 2) { w.close(); r(); }
+  });
   expect(existsSync(file)).toBe(false);
   expect(child.exitCode).toBeNull();
   release();
@@ -154,7 +159,8 @@ test("a blocked goal does not stall; a live agent run leaves a ready goal out", 
   const after = goal();
   await change(after, (item) => { item.fm.after = [`fac-${blocker}`]; });
   expect(stalled()).toEqual([`goal:fac-${blocker}`]);
-  mk("fac-other", "build", "running", { made: Date.now() });
+  setSystemTime(NOW);
+  mk("fac-other", "build", "running", { made: NOW });
   expect(stalled()).toEqual([]);
 });
 

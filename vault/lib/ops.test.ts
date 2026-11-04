@@ -1,9 +1,14 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { recallQuery } from "./recall-query.ts";
 import { Exit, run as vaultOp } from "./ops.ts";
+
+// The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
+const NOW = Date.parse("2026-11-04T12:00:00Z");
+beforeAll(() => setSystemTime(NOW));
+afterAll(() => setSystemTime());
 
 // Each op runs in-process through `run`, as vault/cli.ts runs it. A test marked as the CLI test of its op spawns
 // vault/cli.ts instead, for the op's wiring.
@@ -64,7 +69,7 @@ const gitStatus = () => Bun.spawnSync(["git", "-C", vault, "status", "--porcelai
 function note(title: string, over: Record<string, string> = {}, body?: string): string {
   // Today, not a fixed date: the default note must read as freshly written, and a
   // pinned date silently crosses its decay window and fails tests months later.
-  const fm = { kind: "gotcha", scope: "aleph", confidence: "measured", updated: new Date().toISOString().slice(0, 10), supersedes: "[]", sources: "[trace:abc123]", ...over };
+  const fm = { kind: "gotcha", scope: "aleph", confidence: "measured", updated: new Date(NOW).toISOString().slice(0, 10), supersedes: "[]", sources: "[trace:abc123]", ...over };
   const text = `---\n${Object.entries(fm).map(([k, v]) => `${k}: ${v}`).join("\n")}\n---\n` + (body ?? `**Claim.** ${title} does a thing, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\n- trace abc123\n\n## Related\n[[Home]]\n`);
   const path = join(drafts, `${title}.md`);
   writeFileSync(path, text);
@@ -649,7 +654,7 @@ describe("decay", () => {
     // decision/measured window of 270. Relative to today, because a fixed date
     // crosses the wider window as the calendar moves and the test then fails on
     // a day nobody changed anything (2026-01-01 aged out on 2026-09-29).
-    const day = new Date(Date.now() - 100 * 86400_000).toISOString().slice(0, 10);
+    const day = new Date(NOW - 100 * 86400_000).toISOString().slice(0, 10);
     // gotcha 60 days x inferred 0.5 = a 30-day window.
     (await cli("write", note("Rots Fast", { confidence: "inferred", updated: day }), "--why", "x"));
     // decision 180 days x measured 1.5 = 270 days, so the same date is fresh.
@@ -762,7 +767,7 @@ describe("compile", () => {
 
 describe("misses", () => {
   let server: ReturnType<typeof Bun.serve>;
-  const ago = (d: number) => new Date(Date.now() - d * 86400_000).toISOString();
+  const ago = (d: number) => new Date(NOW - d * 86400_000).toISOString();
   const bash = (traceId: string, cmd: string, output: string, d = 1) => ({ traceId, name: "Bash", type: "SPAN", input: JSON.stringify({ command: cmd }), output, startTime: ago(d) });
   const read = (traceId: string, file_path: string) => ({ traceId, name: "Read", input: { file_path }, output: "x", startTime: ago(1) });
   const hook = (traceId: string, m: any, output?: string) => ({ traceId, name: "vault-recall", metadata: m, output, startTime: ago(1) });
