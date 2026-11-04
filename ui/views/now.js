@@ -358,7 +358,7 @@ export function renderAsOf(s) {
 
 /** The Pause or Resume button of the page head. */
 export function renderControls(s) {
-  return s.factory.paused ? ctl("resume", "Resume", true) : ctl("pause", "Pause");
+  return s.factory.paused ? ctl("resume", "Resume") : ctl("pause", "Pause");
 }
-const ctl = (verb, label, primary = false) =>
-  `<button class="act${primary ? " primary" : ""}" type="button" data-act="${verb}" data-label="${esc(label)}">${esc(label)}</button>`;
+const ctl = (verb, label) =>
+  `<button class="act" type="button" data-act="${verb}" data-label="${esc(label)}">${esc(label)}</button>`;

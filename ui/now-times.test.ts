@@ -24,6 +24,9 @@ test("the Pause or Resume button sits in the page head beside the time; no Contr
   const off = view.renderControls({ ...state, factory: { ...state.factory, paused: true } });
   expect(off).toContain('data-act="resume"');
   expect(off).not.toContain('data-act="pause"');
+  expect(on).toContain('class="act"');
+  expect(off).toContain('class="act"');
+  expect(off).not.toContain("primary");
   const page = view.view.render(state);
   expect(page).not.toContain('id="controls"');
   expect(page.indexOf('data-act="pause"')).toBeGreaterThan(page.indexOf('class="shead'));

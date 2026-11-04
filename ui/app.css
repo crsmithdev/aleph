@@ -179,7 +179,9 @@ main { min-width: 0; }
 .shead a:hover { border-bottom-color: currentColor; }
 .shead .aside { flex: none; margin-left: auto; }
 .shead .fbar { flex-wrap: nowrap; gap: 8px; }
-.shead .fbar .act { min-height: 28px; box-sizing: border-box; padding: 0 12px; font: var(--fs-sm) var(--sans); border-radius: var(--r-ctl); }
+.shead .fbar .act { min-height: 28px; box-sizing: border-box; padding: 0 12px; font: var(--fs-sm) var(--sans); border-radius: var(--r-ctl); border: 1px solid var(--rule); background: none; color: var(--muted); }
+.shead .fbar .act:hover { color: var(--ink); border-color: var(--rule); }
+.shead .fbar .act.ask { background: var(--need-bg); color: var(--need); border-color: var(--need); }
 .shead .say.error, .shead .say.error a { color: var(--stuck); }
 .shead .say.warning, .shead .say.warning a { color: var(--need); }
 .rows { display: grid; gap: 8px; }
