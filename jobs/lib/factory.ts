@@ -122,6 +122,12 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = redOf(repo);
+    // An open goal whose work is on main is done: the store closes it, so no dispatch lists it again.
+    if (done(name)) {
+      const bad = note(repo, ref, `its work is on origin/${repo.main}: ${itemOnMain(repo, ref) ?? "no commit"}`, { done: true });
+      if (bad) factoryLog(`${name}: not closed: ${bad}`);
+      continue;
+    }
     // The cheap facts first: the pause was asked above.
     const first = goalDecision({ name, item: listed, done, red });
     if (first.kind !== "ready") { skip(name, first.kind, first.why); continue; }

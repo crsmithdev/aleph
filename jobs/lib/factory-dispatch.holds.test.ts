@@ -6,7 +6,7 @@ import * as store from "../../todo/lib/store.ts";
 import { join } from "node:path";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import { readHolds } from "./factory-status.ts";
-import { ctx, goal, setup, sh, teardown } from "./factory.helpers.ts";
+import { ctx, goal, notes, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -39,6 +39,18 @@ test("a red main holds goals after main moves, until a suite run on the new comm
   expect(await suiteStep(async () => null)).toEqual({ fac: "green" });
   const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
   expect(out.started).toEqual([`fac-${id}`]);
+});
+
+test("an open goal whose work is on main closes as done, and no later dispatch lists it", async () => {
+  const id = goal();
+  sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${id}`);
+  sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
+  const first = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  expect(first.skipped.filter((l) => l.startsWith(`fac-${id}:`))).toEqual([]);
+  expect(store.readList({ key: "fac" })!.items.find((i) => i.id === id)!.fm.closed_as).toBe("done");
+  expect(notes(id)).toMatch(/its work is on origin\/main: [0-9a-f]{7}$/m);
+  const second = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  expect(second.skipped.filter((l) => l.startsWith(`fac-${id}:`))).toEqual([]);
 });
 
 test("a main that no suite run has checked, or whose checks gave no verdict, does not hold a goal", async () => {
