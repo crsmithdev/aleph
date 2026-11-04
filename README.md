@@ -57,6 +57,7 @@ Invoke a skill as `/aleph:<name>`. Claude can also start one by itself, except t
 | `code-change` | The smallest diff that meets the goal, each line traced to it, each step proved by a run |
 | `code-review` | Judge a finished branch against its goal: verdict per requirement, test-cheating catalog, a bar for findings |
 | `spec-review` | Check a spec before a builder starts: guesses, conflicts, unobservable clauses, each with a rewrite |
+| `design-language` | Extract a UI's design language into `docs/design.md`, or audit the UI against it; ships an inventory script |
 | `domain-modeling` | Builds the glossary (`GLOSSARY.md`) and records ADRs |
 | `improve-codebase-architecture` † | Finds deepening candidates, reports them as HTML, grills the one you pick |
 | `tidy` | Removes junk and dead code behind a green build, and checks a repo is ready to show |
