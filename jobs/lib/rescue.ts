@@ -11,12 +11,12 @@
  * restart explains it) is marked failed and gets the same action, once per goal; a second lost run of the goal sets the Ask.
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
-import { readFileSync, rmSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import * as issues from "../../todo/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { endRun } from "./agent-run.ts";
-import { always, asked, askFromRun, clearAsk, logAlways, needsOf, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
 import { sealedVerdict, type Sealed } from "./acceptance.ts";
@@ -24,14 +24,12 @@ import { fetchOrigin, git } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, isAgentRun, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
+import { allRuns, isAgentRun, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
 import { isLive, isLost, isStarting, markEnded } from "./process.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
-import { startReview } from "./review.ts";
 import { onMain } from "./status.ts";
 import { rescueWaitMs } from "./settings.ts";
-import { runFile } from "./run-files.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
 /** The sealed-scenario check of an item against origin/<main>. */
@@ -42,8 +40,6 @@ export interface Rescue {
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
   /** Start a recheck of the job. */
   recheck: (name: string) => Promise<string | null>;
-  /** Start a review of the run's folder (startReview, when absent). */
-  review?: (folder: string) => boolean;
 }
 
 /** Land the job again: returns the refusal, or null. */
@@ -101,26 +97,6 @@ const stuckJobs = (jobs: Job[]): Job[] => {
 };
 
 /**
- * The folders of runs a host restart left with a review that cannot be alive: `awaiting` for a held-path or review
- * ask, call.md still `PENDING` and written before this boot. Sandbox repos only, as `killed`.
- */
-const killedReviews = (): string[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const booted = bootedAt();
-  const out: string[] = [];
-  for (const j of allJobs()) {
-    const last = lastReal(j);
-    const r = last.run;
-    if (!isOpen(j) || !r.repo || !keys.has(r.repo) || !isAwaiting(r.condition) || !["held", "review"].includes(needsOf(runAskOf(r)) ?? "")) continue;
-    const call = runFile(last.folder, "call.md");
-    try {
-      if (readFileSync(call, "utf8").trim() === "PENDING" && statSync(call).mtimeMs < booted) out.push(last.folder);
-    } catch { /* no call.md */ }
-  }
-  return out;
-};
-
-/**
  * End each facts run that a host restart killed: `running`, started before this boot. A facts run writes no pid, so its
  * process cannot be checked, and a run from before the boot has no reviewer left. It ends `done` with the reason, and
  * stays unshown so the news reports it. It is not run again: its facts are lost, and the job has a facts run, so the
@@ -136,19 +112,6 @@ export const endKilledFacts = (): void => {
     factoryLog(`${r.name}: a host restart killed its facts run; its facts are lost`);
   }
 };
-
-/** Start again each review that a host restart killed: the stale call.md goes, and the new start writes a new PENDING. */
-function restartReviews(act: Rescue): void {
-  for (const folder of killedReviews()) {
-    try {
-      rmSync(runFile(folder, "call.md"), { force: true });
-      factoryLog(`${folder}: a host restart killed its review; starting it again`);
-      (act.review ?? startReview)(folder);
-    } catch (e: any) {
-      factoryLog(`review restart of ${folder} failed: ${e?.message ?? e}`);
-    }
-  }
-}
 
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
 
@@ -200,9 +163,8 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
   return out;
 }
 
-/** Take the safe default action for each killed, lost, stuck or failed job and each killed review, one job at a time under its lock. */
+/** Take the safe default action for each killed, lost, stuck or failed job, one job at a time under its lock. */
 export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain, sealed: SealedCheck = sealedVerdict): Promise<void> {
-  restartReviews(act);
   await releaseEdited(act);
   const pending = (jobs: Job[]) => [...killed(jobs), ...lost(jobs), ...stuckJobs(jobs)];
   for (const first of pending(allJobs())) {

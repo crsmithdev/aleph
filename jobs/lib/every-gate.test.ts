@@ -6,8 +6,8 @@ import { join } from "node:path";
 import type { Runner } from "./checks.ts";
 import { setup, teardown } from "./factory.helpers.ts";
 import { git } from "./git.ts";
-import { readRun, writeRun, type Repo, type Run } from "./ledger.ts";
-import { branchPorts, reviewBack } from "./unit.ts";
+import type { Repo, Run } from "./ledger.ts";
+import { branchPorts } from "./unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";
 import { fixture } from "../../tests/git-fixture.ts";
 
@@ -75,25 +75,5 @@ test("gate held path: a branch that changes a path in repo.held is awaiting, and
     const b = landSetup("jobs/lib/sandbox.ts");
     const r = await held(b, async () => ({ reason: null }));
     expect(r.outcome).toMatchObject({ condition: "awaiting", reason: "held path jobs/lib/sandbox.ts" });
-  } finally { cleanup(); }
-});
-
-test("gate browser step: reviewBack on a held run leaves it awaiting when call.md says chris, and passes it when call.md says land", async () => {
-  try {
-    landSetup();
-    const heldRun = (call: string): string => {
-      const f = join(root, `held-${call.split(" ")[1]}`);
-      mkdirSync(f);
-      writeRun(f, { ...base_run, condition: "awaiting", told: true, started: new Date().toISOString(), reason: "held path held/x.txt", ask: { kind: "approval", reason: "held-path", question: "Land?", options: [], why: [] } } as Run);
-      writeFileSync(join(f, "review.md"), "VERDICT: pass\n");
-      writeFileSync(join(f, "call.md"), `browser/report.md looked at\n${call}\n`);
-      return f;
-    };
-    const chris = heldRun("VERDICT: chris decide the held path");
-    await reviewBack(chris);
-    expect(readRun(chris)!.condition).toBe("awaiting");
-    const ok = heldRun("VERDICT: land");
-    await reviewBack(ok);
-    expect(readRun(ok)!.condition).toBe("passed");
   } finally { cleanup(); }
 });

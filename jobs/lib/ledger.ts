@@ -17,7 +17,10 @@ export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "do
 /** `files`: the number of test files a build ran in place of the full suite. */
 export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number }
 
-/** A review's call: what the reviewer decided, or `pending` while it runs and `error` when it ended without one. A `chris` VERDICT line reads as `ask`. */
+/**
+ * The second review's call: what it decided, or `pending` while it ran and `error` when it ended without one. A `chris`
+ * VERDICT line reads as `ask`. The second review went in v6 phase 6 (3 Nov 2026); only runs from before it have one.
+ */
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
@@ -47,7 +50,7 @@ export interface Run {
   on?: string;
   /** New shape: what the run waits on. */
   ask?: Ask;
-  /** New shape: the run's review. */
+  /** A run from before v6 phase 6: its second review's call. */
   review?: Review;
   /** An agent run started with --land: it lands when it passes. */
   land?: boolean;
@@ -210,7 +213,7 @@ export function onOf(run: Run): number | string | undefined {
 /** The run's ask. Undefined when the run asks nothing. */
 export const askOf = (run: Run): Ask | undefined => run.ask;
 
-/** The run's review: `review` of its state.json, else its folder's call.md. */
+/** The second review of a run from before v6 phase 6: `review` of its state.json, else its folder's call.md. */
 export function reviewOf(e: Entry): Review | undefined {
   return e.run.review ?? readCall(e.folder);
 }
@@ -333,7 +336,7 @@ export function parseVerdict(result: string): Review | null {
   return m ? { call: m[1] === "chris" ? "ask" : "back", reason: m[2] } : null;
 }
 
-/** The file in a run folder where the reviewer writes: the run's call. */
+/** The file in a run folder where the second review wrote its call. Runs from before v6 phase 6 keep it. */
 export const CALL_FILE = "call.md";
 
 /**

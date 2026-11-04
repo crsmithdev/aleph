@@ -74,7 +74,7 @@ The worker is `claude -p` under `srt` (`~/.aleph/tools/bin/srt`), in `~/.aleph/s
 - the network only to `api.anthropic.com` and `registry.npmjs.org`;
 - the token in `~/.aleph/secrets/worker-token`, and nothing else of yours.
 
-A second `srt` call bundles the branch, and aleph fetches it into the repo as `factory/<name>`. A third runs the repo's setup and checks on a fresh clone. The ledger of runs is `~/.aleph/runs`.
+A second `srt` call bundles the branch, and aleph fetches it into the repo as `factory/<name>`. The ledger of runs is `~/.aleph/runs`.
 
 The worker ends its result with tagged lines:
 
@@ -84,6 +84,17 @@ The worker ends its result with tagged lines:
 | `FLAKE: <test file> > <test name>: <what>` | A note on the repo's flake tracker |
 | `DEFAULT: <choice> -> <what it chose>` | A line in the report |
 | `FACT: <claim> [source: <ref>]` | A vault note, after a facts run checks it against its source |
+
+### Verify
+
+Verify is one station, with the run phase `verify`. In order, it runs:
+
+1. the repo's setup and checks on a fresh clone of the branch, under `srt`, then the hidden check;
+2. the doc-claims check of the worker's final message against its transcript;
+3. the keep-gate on the branch's new tests;
+4. the Oracle commands of the spec that the checks did not run.
+
+Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log` (the hidden check to `hidden.log`). The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A sandbox fault skips the Oracle and is not a failure.
 
 ### When a run is stuck
 
@@ -101,14 +112,14 @@ When a hidden check fails twice in a row with the same failing tests, no further
 
 ### Review
 
-When the checks pass, a fresh reviewer (`claude-opus-5-5`, under `srt`, in a clone of the branch) reads the goal and the diff. It ends with a call: `land`, `back` or `ask`.
+When Verify passes, a fresh reviewer (`claude-opus-5-5`, under `srt`, in a clone of the branch) reads the goal and the diff. It ends with a verdict: `pass` or `hold <reason>`. There is one review: no second review follows it.
 
-- `back` starts a fix round, like a failed check. The run record shows the round as `stuck` with `next: worker` until the next round starts.
-- `ask`, no call, an error or the time box (`ALEPH_REVIEW_TIMEOUT`, 10 minutes) asks you, with the reason `review`.
+- `hold` starts a fix round, like a failed check. The run record shows the round as `stuck` with `next: worker` until the next round starts. After the last round, the run asks you, with the reason `review`.
+- No verdict, an error or the time box (`ALEPH_REVIEW_TIMEOUT`, 10 minutes) runs the reviewer once more. A second miss asks you, with the reason `review`.
 - A diff over `ALEPH_REVIEW_DIFF_MAX` (200000) characters goes in as the `git diff --stat` plus the diff cut at that length.
-- A reviewer with no verdict runs once more.
+- A merge run, which only merges `origin/main` into the branch after a land conflict, gets a review of its merge commit only: the merge commit's diff against its first parent.
 
-A change that deletes or renames a test, changes a `test`, `it`, `describe` or `expect` line, or adds `.skip`, `.only` or `.todo` does not stop the run. The reviewer gets each one as a finding, and holds only when the goal does not call for it.
+A change that deletes or renames a test, changes a `test`, `it`, `describe` or `expect` line, or adds `.skip`, `.only` or `.todo` does not stop the run. The reviewer gets each one as a finding, and holds only when the goal does not call for it. The reviewer also gets the list of changed files that the spec's Edit surface does not name, and holds only when the goal does not need the change.
 
 ### Hidden checks and sealed scenarios
 
@@ -119,7 +130,7 @@ An issue can have checks the worker never sees:
 
 ### Held paths
 
-A diff that changes a path in the repo's `held` list, other than a test, waits for you. `aleph land <name>` lands it and `aleph drop <name>` drops it.
+A diff that changes a path in the repo's `held` list or a security path (`SECURITY_PATHS` in `jobs/lib/gate.ts`), other than a test, runs Verify and the reviewer like any other. When the reviewer passes it, the run waits with a `held-path` Ask instead of landing. `aleph land <name>` lands it and `aleph drop <name>` drops it.
 
 ### The land
 

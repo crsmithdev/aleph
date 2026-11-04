@@ -110,7 +110,7 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
   return {
     ...(process.env as Record<string, string>), CLAUDECODE: "", ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_JOB_FOREGROUND: "1",
-    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, ALEPH_REVIEW_CMD: join(base, "fake-review"), XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
+    ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_SANDBOX_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
     // The "pass" sandbox runs the probe's script with no sandbox, so its denied checks would list ~/.claude and ~/.aleph.
     ALEPH_PROBE_FAKE: "pass",
@@ -327,16 +327,6 @@ export function setup(): void {
   fake = join(base, "fake-worker");
   reviewer = join(base, "fake-reviewer");
   writeFileSync(reviewer, REVIEWER, { mode: 0o755 });
-  // The verdict follows a REVIEW:back or REVIEW:land mark in the goal; otherwise Chris is asked.
-  writeFileSync(join(base, "fake-review"), `#!/bin/bash
-p=$(cat)
-case "$p" in
-  *REVIEW:back*) v="VERDICT: back fix the held path" ;;
-  *REVIEW:land*) v="VERDICT: land" ;;
-  *) v="VERDICT: chris decide the held path" ;;
-esac
-echo '{"type":"result","is_error":false,"result":"Checked.\\n'"$v"'"}'
-`, { mode: 0o755 });
   writeFileSync(fake, FAKE, { mode: 0o755 });
   // The tests' stand-in for srt: the clean environment, and FAKE_LOG for the fake worker.
   writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i FAKE_LOG="$FAKE_LOG" "$@"\n`, { mode: 0o755 });

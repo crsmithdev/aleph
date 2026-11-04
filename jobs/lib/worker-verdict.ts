@@ -1,14 +1,15 @@
 /**
- * The worker verdict: the policy for a branch after its worker, and for the second review after it.
- * The steps go in this order: the checks (the hidden check last), the doc claims, the keep-gate, a
- * security path, the Oracle, the reviewer (a reviewer with no verdict runs once more), and then the
- * held rule. A failure of a check, the keep-gate, the Oracle or the reviewer goes back to the worker as a fix round while rounds
- * are left. The ports run each step; unit.ts gives the git and sandbox ones. This module does no IO.
+ * The worker verdict: the policy for a branch after its worker. Two stations run on it. Verify: the checks
+ * (the hidden check last), the doc claims, the keep-gate and the Oracle. Then the reviewer (a reviewer with
+ * no verdict runs once more). A reviewer's pass on a diff that changes a security path or a held path waits
+ * for Chris with a held-path Ask. A failure of a check, the keep-gate, the Oracle or the reviewer goes back to
+ * the worker as a fix round while rounds are left. The ports run each step; unit.ts gives the git and sandbox
+ * ones. This module does no IO.
  */
-import { needsOf, plainAsk, type AskReason } from "./ask.ts";
+import { plainAsk, type AskReason } from "./ask.ts";
 import { stopFields, type ChecksStop } from "./checks.ts";
 import { verdict as reviewVerdict } from "./gate.ts";
-import { askOf, isAgentRun, isAwaiting, isBuild, type Review, type Run } from "./ledger.ts";
+import type { Run } from "./ledger.ts";
 
 /** The fields of the run that a verdict sets. */
 export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
@@ -82,18 +83,19 @@ const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`
 
 /**
  * What follows a reviewer hold: a fix round (`round`) while fewer than `cap` rounds are done; else the run
- * waits for Chris with `reason`, which says how often the reviewer sent it back (`back`) when it did.
+ * waits for Chris with `reason`, which says how often the reviewer sent it back when it did.
  */
-function reviewHold(earlier: Run[] | undefined, reason: string, cap: number): { round: number } | { reason: string; back: number } {
+function reviewHold(earlier: Run[] | undefined, reason: string, cap: number): { round: number } | { reason: string } {
   if (earlier && earlier.length < cap) return { round: earlier.length };
   const back = earlier?.filter((r) => r.failed === "review").length ?? 0;
-  return { reason: back ? `the reviewer sent it back ${times(back)}: ${reason.replace(/^reviewer:\s*/, "")}` : reason, back };
+  return { reason: back ? `the reviewer sent it back ${times(back)}: ${reason.replace(/^reviewer:\s*/, "")}` : reason };
 }
 
 /** The verdict on a branch that its worker or a recheck left. */
 export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict> {
   const { earlier, rounds } = b;
   const facts = { ...b.facts };
+  // Verify: the checks, the doc claims, the keep-gate and the Oracle.
   const { stop, failed } = await p.checks();
   if (stop) {
     const check = backCheck(stop, failed);
@@ -108,16 +110,11 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   const kept = await p.keepGate();
   if (kept) return stopped({ cause: "check", checkName: "keep-gate", reason: kept }, { ...facts, ...checkBack(earlier, "keep-gate", kept, rounds) });
   Object.assign(facts, b.checked);
-
-  // A security path waits for Chris with no reviewer.
-  const stat = p.stat();
-  const held = (rule: string): Verdict => ({ outcome: { ...awaiting("held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 });
-  const security = p.security();
-  if (security) return held(`held path ${security}`);
-  const rule = p.heldRule();
   const bad = await p.oracle();
   if (bad) return stopped({ cause: "check", checkName: "oracle", reason: bad }, { ...facts, ...checkBack(earlier, "oracle", bad, rounds) });
 
+  // The reviewer.
+  const stat = p.stat();
   const call = async () => {
     const rv = await p.review();
     if (rv.cost !== undefined) facts.cost = (facts.cost ?? 0) + rv.cost;
@@ -126,40 +123,20 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   let rv = await call();
   // A second miss is the reviewer's, not the worker's: it goes to Chris whatever fix rounds are left, since a fix round cannot cure it.
   if (rv.none) rv = await call();
-  // A held run that the reviewer passes waits for the second review (see afterReview).
-  if (!rv.reason) return rule ? held(rule) : { outcome: { condition: "passed", ...facts }, code: 0 };
+  if (!rv.reason) {
+    // A reviewed diff that changes a security path or a held path waits for Chris.
+    const security = p.security();
+    const rule = security ? `held path ${security}` : p.heldRule();
+    if (rule) return { outcome: { ...awaiting("held-path", rule, [stat]), reason: rule, stat, ...facts }, code: 0 };
+    return { outcome: { condition: "passed", ...facts }, code: 0 };
+  }
   if (rv.none) return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
   const hold = reviewHold(earlier, rv.reason, rounds);
   if ("round" in hold) return { outcome: { condition: "stuck", cause: "reviewer", reason: rv.reason, stat, ...facts, failed: "review", round: hold.round }, code: 1 };
   return { outcome: { ...awaiting("review", hold.reason, [stat]), cause: "reviewer", reason: hold.reason, stat, ...facts }, code: 0 };
 }
 
-/**
- * Why the reviews do not let the run land, or null: the reviewer gave a verdict (`review` is its review.md)
- * and the second review's `call` says land.
- */
-export function landBlock(review: string | undefined, call: Review | undefined): string | null {
-  if (!reviewVerdict(review ?? "")) return "the reviewer has no verdict yet";
-  if (!call || call.call === "pending" || call.call === "error") return "review has no verdict yet";
-  if (call.call !== "land") return `review says ${call.call}${call.reason ? ` (${call.reason})` : ""}`;
-  return null;
-}
-
-/** What the second review does to a run. */
-export type AfterReview = { pass: true } | { round: number; reason: string } | { reason: string };
-
-/**
- * What the second review's `call` does to a run that waits for Chris. A run held for a held path that the
- * reviewer passed and the second review lets land has passed both reviews: it passes. A build run the second
- * review sends back is a fix round while rounds are left; after the last it stays with Chris, its reason saying
- * how often it went back. Null: the run stays as it is. A security path has no reviewer's verdict, so it never passes here.
- */
-export function afterReview(run: Run, review: string | undefined, call: Review | undefined, earlier: () => Run[], cap: number): AfterReview | null {
-  if (!isAgentRun(run.kind) || !isAwaiting(run.condition)) return null;
-  if (needsOf(askOf(run)) === "held" && reviewVerdict(review ?? "")?.pass && !landBlock(review, call)) return { pass: true };
-  if (!isBuild(run.kind) || call?.call !== "back") return null;
-  const reason = call.reason ?? "no reason given";
-  const hold = reviewHold(earlier(), reason, cap);
-  if ("round" in hold) return { round: hold.round, reason };
-  return hold.back ? { reason: hold.reason } : null;
+/** Why the reviewer does not let a held run land, or null: it has given a verdict (`review` is its review.md). */
+export function landBlock(review: string | undefined): string | null {
+  return reviewVerdict(review ?? "") ? null : "the reviewer has no verdict yet";
 }

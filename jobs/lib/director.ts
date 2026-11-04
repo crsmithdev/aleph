@@ -16,7 +16,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, editAnswers, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask } from "./ask.ts";
-import { allRuns, isAgentRun, loadRegistry, lock, readRun, reviewOf, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
+import { allRuns, isAgentRun, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { landBlock } from "./worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile } from "./job.ts";
@@ -297,7 +297,7 @@ Reply with one JSON object and nothing else: {"escalate": ${CASE_TEXT(acts)}}
 # The rules
 
 - Decide when you can: answer the question, rerun the goal, drop the run, edit the spec or the goal, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
-- Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path or bun.lock, or a held run before both reviews say land; more than ${MAX_ACTIONS} actions; a spec edit past ${MAX_SPEC_EDITS} on one goal's spec check, after which you close the goal or escalate.
+- Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions; a spec edit past ${MAX_SPEC_EDITS} on one goal's spec check, after which you close the goal or escalate.
 - A spec-check Ask is answered by an edit-goal whose body has ## Goal, ## Edit surface and ## Oracle: the spec check reads it before the next worker run.
 - When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
@@ -495,11 +495,11 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     const b = branchOf(c);
     const held = b ? heldChange(b.repo, b.branch) : "unknown";
     if (held) return no(a, held === "unknown" ? "its branch cannot be read for security paths, so the land is Chris's" : `it changes ${held}, a security path or bun.lock, so the land is Chris's`);
-    // A run held for a path the repo holds lands once both reviews say land; a review Ask is the director's call over the reviewer's hold.
+    // A run held for a path the repo holds lands once the reviewer gave a verdict; a review Ask is the director's call over the reviewer's hold.
     if (c.ask.reason === "held-path") {
       const runs = openJob(c.entry.run.name);
       const agent = runs?.findLast((e) => isAgentRun(e.run.kind)) ?? c.entry;
-      const blocked = landBlock(readFile(agent, "review.md"), reviewOf(agent));
+      const blocked = landBlock(readFile(agent, "review.md"));
       if (blocked) return no(a, blocked);
     }
     const why = await ports.land(c.entry.run.name);

@@ -14,8 +14,8 @@ import { OPUS_MODEL, q } from "./agent-call.ts";
 import { agentCall } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, securityChange, testFindings, verdict as reviewVerdict } from "./gate.ts";
-import { afterReview, awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
-import { tagged, TAG_FORMAT, isAgentRun, onOf, readCall, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
+import { tagged, TAG_FORMAT, isAgentRun, onOf, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
@@ -29,10 +29,10 @@ import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { buildChecks } from "./related.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, nextBrief } from "./continuation.ts";
-import { startReview } from "./review.ts";
+import { outsideSurface } from "./goal-spec.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
 import { postTrace } from "./trace.ts";
-import { dispatchDetached, runLogged, startUnit } from "./launch.ts";
+import { runLogged, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
 import { FACTS_REF, onMain, writeFacts } from "./status.ts";
 import { writeTitle } from "./title.ts";
@@ -223,7 +223,6 @@ export async function unit(folder: string): Promise<void> {
   if (next) ended = updateRun(folder, { next });
   markEnded(folder, code);
   process.exitCode = code;
-  if (isAgentRun(run.kind)) startReview(folder);
   if (isAgentRun(run.kind) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
   if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
@@ -370,7 +369,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
   stampJob(wt, base, run.job);
   const changed = git(wt, "diff", "--name-only", base, "HEAD").out.split("\n").filter(Boolean);
-  const failed = await runChecks(taskOf(folder, repo, changed, phase), inWorktree(wt, checkEnv));
+  const failed = await runChecks(taskOf(folder, repo, changed, () => phase("verify")), inWorktree(wt, checkEnv));
   if (failed) return { outcome: { condition: "failed", ...stopFields(failed) }, code: 1 };
   const matches = (globs: string[]) => changed.some((f) => globs.some((g) => new Bun.Glob(g).match(f)));
   // A manual check does not hold the run: it lands with the check open (see land).
@@ -467,6 +466,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
  */
 export function branchPorts(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; result?: string; runner?: Runner; review?: typeof review }): VerdictPorts {
   const phase = (p: string) => updateRun(folder, { phase: p });
+  // Verify is one station: its checks, keep-gate and Oracle all show as the phase `verify`.
+  const verify = () => phase("verify");
   const tip = `refs/heads/${branch}`;
   let findings: string[] | undefined;
   return {
@@ -481,13 +482,13 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
         appendFileSync(runFile(folder, "checks.log"), `## ${name}: ${files.length} test file${files.length === 1 ? "" : "s"} that the change reaches\n${files.join("\n")}\n\n`);
         if (!files.length) record({ name, ok: true, seconds: 0 });
       }
-      const stop = await checksInSandbox({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase, record, onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip, hidden);
+      const stop = await checksInSandbox({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip, hidden);
       return { stop, failed: readRun(folder)?.checks?.findLast((c) => !c.ok)?.name };
     },
     repeatedHidden: () => repeatedHidden(folder, o.earlier ?? []),
     docClaims: () => o.result === undefined ? null : docClaims(folder, o.result),
     keepGate: async () => {
-      phase("check keep-gate");
+      verify();
       const head = git(repo.path, "rev-parse", tip).out;
       const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), changedSources(repo.path, base, head), o.runner ?? runOnCommit);
       if (kept) appendFileSync(runFile(folder, "checks.log"), `## keep-gate: exit 1\n${kept.log}\n\n`);
@@ -496,60 +497,51 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
     stat: () => git(repo.path, "diff", "--stat", base, tip).out,
     security: () => securityChange(repo.path, base, tip),
     heldRule: () => heldRule(repo.path, repo.held, base, tip),
-    oracle: () => oracleFailure(folder, run, repo, branch, o.runner ?? runOnCommit, phase),
+    oracle: () => oracleFailure(folder, run, repo, branch, o.runner ?? runOnCommit, verify),
     review: () => {
       phase("review");
       findings ??= testFindings(repo.path, base, tip);
-      return (o.review ?? review)(id, folder, run, repo, dir, base, branch, findings);
+      return (o.review ?? review)(id, folder, run, repo, dir, base, branch, findings, o.changed);
     },
   };
 }
 
 /**
- * The goal's Oracle commands, run on the branch in the sandbox before the reviewer.
+ * The goal's Oracle commands, run on the branch in the sandbox, the last step of Verify.
  * A command the run's checks already ran is skipped; one that fails runs once more.
  * Returns the reason of the first that fails twice, or null. A sandbox fault is not a failure.
+ * When a command ran, the run's `checks` gets one result `oracle` beside the repo's checks; checks.log gets each command's section.
  */
-async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: (p: string) => void): Promise<string | null> {
+async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: () => void): Promise<string | null> {
   const specFile = jobSpecFile(folder, run);
   if (!existsSync(specFile)) return null;
   const ran = new Set((readRun(folder)?.checks ?? []).map((c) => c.name));
   const done = new Set(repo.checks.filter((c) => ran.has(c.name)).map((c) => c.run.trim()));
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
   const hidden = hiddenOf(repo, run) ?? undefined;
+  const start = performance.now();
+  let any = false, rerun = false;
+  const result = (ok: boolean) => {
+    if (!any) return;
+    const checks = readRun(folder)?.checks ?? [];
+    updateRun(folder, { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}) }] });
+  };
   for (const command of oracleCommands(readFileSync(specFile, "utf8"))) {
     if (done.has(command)) continue;
-    phase("check oracle");
+    phase();
     let r = await runner(repo, tip, command, hidden);
     if (r.infra) continue;
     let second = false;
     if (r.code !== 0) { second = true; r = await runner(repo, tip, command, hidden); if (r.infra) continue; }
+    any = true;
+    // As for a check: `rerun` is a command that failed and then passed.
+    rerun ||= second && r.code === 0;
     const out = `## oracle: exit ${r.code}${second ? " (second run)" : ""}\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`;
     appendFileSync(runFile(folder, "checks.log"), out);
-    if (r.code !== 0) return `oracle failed: ${command}`;
+    if (r.code !== 0) { result(false); return `oracle failed: ${command}`; }
   }
+  result(true);
   return null;
-}
-
-/** The second review's call on the run, by afterReview in worker-verdict.ts. Called by `aleph review` when the review ends. */
-export async function reviewBack(folder: string): Promise<void> {
-  const run = readRun(folder);
-  if (!run) return;
-  const review = existsSync(runFile(folder, "review.md")) ? readFileSync(runFile(folder, "review.md"), "utf8") : undefined;
-  const earlier = () => earlierRounds(jobById(run.job) ?? [], basename(folder)).map((e) => e.run);
-  const next = afterReview(run, review, readCall(folder), earlier, fixRounds());
-  if (!next) return;
-  if ("pass" in next) {
-    updateRun(folder, { condition: "passed", ask: undefined, reason: undefined, cause: undefined });
-    dispatchDetached();
-    return;
-  }
-  if ("round" in next) {
-    const ended = updateRun(folder, { condition: "stuck", ask: undefined, cause: "reviewer", reason: next.reason, failed: "review", round: next.round, next: "worker" });
-    await start(folder, ended, "worker");
-    return;
-  }
-  updateRun(folder, { cause: "reviewer", reason: next.reason });
 }
 
 /**
@@ -628,11 +620,44 @@ user of the code sees that the goal does not allow, and do not quote or mention 
 asks for more than the goal or contradicts it, set it aside and add a line \`SET-ASIDE: <the scenario and why>\`
 before the VERDICT line.`;
 
-/** The reviewer's prompt: the instructions, the test findings if any, the sealed scenarios if any, the goal and the diff. */
-export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], scenarios = ""): string {
+const OUTSIDE = `The branch changes these files, and the Edit surface of the goal names none of them. Judge each one
+against the goal: hold only when the goal does not need the change. A change the goal needs passes.`;
+
+const MERGE = `This run only merged origin/main into the branch, after a land conflicted. The diff below is the merge
+commit against its first parent, the branch before the merge. Judge only the merge: each conflict must keep both the
+change on main and this job's change. The job's own work was reviewed in an earlier run.`;
+
+/**
+ * The reviewer's prompt: the instructions, the test findings if any, the files outside the Edit surface if any,
+ * the sealed scenarios if any, the goal and the diff. A merge run's diff is the merge commit's only (`merge`).
+ */
+export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], scenarios = "", o: { outside?: string[]; merge?: boolean } = {}): string {
   const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";
+  const outside = o.outside?.length ? `\n\n## Changes outside the Edit surface\n\n${OUTSIDE}\n\n${o.outside.map((f) => `- ${f}`).join("\n")}` : "";
   const sealed = scenarios ? `\n\n## Sealed scenarios\n\n${SEALED}\n\n${scenarios.trim()}` : "";
-  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${sealed}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
+  const head = o.merge ? `## The merge commit's conflict resolution\n\n${MERGE}` : "## Diff from the merge base";
+  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${outside}${sealed}\n\n## Goal issue\n\n${spec}\n\n${head}\n\n${diff}\n`;
+}
+
+/**
+ * The range the reviewer reads: from the merge base to the tip; for a merge run, the newest merge commit
+ * ahead of the base, read as its remerge diff (the conflict resolution only). A merge run that made no merge commit reads the whole range.
+ */
+export function reviewRange(cwd: string, run: Run, base: string, tip: string): { from: string; to: string; merge: boolean } {
+  const r = run.merge ? git(cwd, "rev-list", "--merges", "-1", `${base}..${tip}`) : null;
+  const m = r?.ok ? r.out : "";
+  return m ? { from: `${m}^1`, to: m, merge: true } : { from: base, to: tip, merge: false };
+}
+
+/**
+ * The diff the reviewer reads, cut at `max` characters with a stat in front. A merge run's own work is how it
+ * resolved the merge, so its diff is the remerge diff of the merge commit: the resolution only, not what main brought in.
+ */
+export function reviewDiff(cwd: string, range: { from: string; to: string; merge: boolean }, max: number): string {
+  const show = (...o: string[]) => range.merge ? git(cwd, "show", "--remerge-diff", "--format=", ...o, range.to).out : git(cwd, "diff", ...o, range.from, range.to).out;
+  const whole = show() || (range.merge ? "(the merge applied cleanly: it resolved no conflict)" : "");
+  return whole.length <= max ? whole
+    : `${show("--stat")}\n\n${whole.slice(0, max)}\n\n(diff cut at ${max} of ${whole.length} characters; read the changed files in the working directory)`;
 }
 
 /**
@@ -640,19 +665,17 @@ export function reviewPrompt(name: string, spec: string, diff: string, findings:
  * with the worker's profile, in its own run folder with a clone of the branch.
  * Returns the reason to hold, or null on a pass, and the cost. Fails closed.
  */
-async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, findings: string[]): Promise<{ reason: string | null; cost?: number; none?: boolean }> {
+async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, findings: string[], changed: string[]): Promise<{ reason: string | null; cost?: number; none?: boolean }> {
   const rdir = makeRunFolder(`${id}-review`);
   try {
     copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
     const spec = jobSpec(folder, run);
-    const whole = git(repo.path, "diff", base, `refs/heads/${branch}`).out;
-    const max = reviewDiffMax();
-    const diff = whole.length <= max ? whole
-      : `${git(repo.path, "diff", "--stat", base, `refs/heads/${branch}`).out}\n\n${whole.slice(0, max)}\n\n(diff cut at ${max} of ${whole.length} characters; read the changed files in the working directory)`;
+    const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
+    const diff = reviewDiff(repo.path, range, reviewDiffMax());
     const goal = onOf(run);
     let scenarios = "";
     try { scenarios = goal === undefined ? "" : readHidden(repo, goal)[SCENARIOS] ?? ""; } catch { return { reason: "reviewer: no verdict (the sealed scenarios are unreadable)", none: true }; }
-    const text = reviewPrompt(run.name, spec, diff, findings, scenarios);
+    const text = reviewPrompt(run.name, spec, diff, findings, scenarios, { outside: outsideSurface(spec, changed), merge: range.merge });
     writeFileSync(runFile(folder, "review-prompt.md"), text);
     const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];

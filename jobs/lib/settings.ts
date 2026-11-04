@@ -2,7 +2,7 @@
  * The factory's own settings: caps, time limits, rounds, switches and the agent commands. Each setting
  * has one name, one default and one parser here. The four directory variables ALEPH_ISSUES,
  * ALEPH_JOBS_DIR, ALEPH_SANDBOX_DIR and ALEPH_FACTORY_DIR are read in layout.ts. The security paths
- * (sandbox.ts, review.ts, review-browser.ts, probe.ts) read their own variables, and a command that
+ * (sandbox.ts, review-browser.ts, probe.ts) read their own variables, and a command that
  * only one call site uses stays at that call site.
  *
  * Each function reads at each call: a test changes the environment in-process, and launch.ts hands

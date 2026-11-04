@@ -96,7 +96,7 @@ export interface Table {
 
 /** The metrics the design names that no recorded data gives; the table says so. */
 export const LEFT_OUT = [
-  "cost of the scenario and browser reviewers: a build run records only its worker's cost",
+  "cost of the scenario reviewer: a build run records only its worker's cost",
   "spec checks with no usable result, and their time: spec-checks.jsonl keeps only the cost",
   "time in each state of an item after its start (awaiting, answered): no record keeps those changes with their times",
   "usage per agent: usage.jsonl is the account's quota, not per run",

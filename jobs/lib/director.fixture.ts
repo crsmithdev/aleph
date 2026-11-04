@@ -83,9 +83,9 @@ export function run(o: Partial<Run> & { name: string }, files: Record<string, st
   return folder;
 }
 
-/** A held run of issue 1 on branch `b`, with both reviews' files. */
-export const held = (b: string, review = "Looks right.\nVERDICT: land\n") =>
-  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "", options: [], why: [] }, branch: b, reason: "held path x" }, { "review.md": "Fine.\nVERDICT: pass\n", "call.md": review });
+/** A held run of issue 1 on branch `b`, with the reviewer's review.md. */
+export const held = (b: string, review = "Fine.\nVERDICT: pass\n") =>
+  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "", options: [], why: [] }, branch: b, reason: "held path x" }, { "review.md": review });
 
 export let landed: string[] = [];
 export let dropped: { name: string; reason: string; fate?: string }[] = [];

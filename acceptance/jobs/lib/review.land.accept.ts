@@ -1,13 +1,12 @@
 // Archived goal tests from jobs/lib/review.land.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { waitFor } from "../../../tests/wait.ts";
-import { base, fakeLog, file, jobsDir, until, remote, sh, state, setup, teardown } from "../../../jobs/cli.helpers";
+import { base, jobsDir, remote, sh, state, setup, teardown } from "../../../jobs/cli.helpers";
 import { actionJob, drop, issueClose, issueList, issueShow, jobView, land } from "../../../jobs/inproc.ts";
 import { reportText, statusLine } from "../../../jobs/lib/flow.testkit.ts";
 
-// The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own, and so is its review.
+// The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 // `aleph report --hook` keeps its CLI test in jobs/cli.reviewer-land.test.ts.
 beforeAll(setup);
 afterAll(teardown);
@@ -22,35 +21,16 @@ describe("a factory run", () => {
     expect(s).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/x.txt" });
     expect(s.stat).toContain("held/x.txt");
     const run = r.json.run;
-    await waitFor(() => file(run, "call.md").includes("VERDICT"), { timeout: 10_000, every: 100 });
-    expect(file(run, "call.md")).toContain("VERDICT: chris decide the held path");
-    // `aleph review` records the call on state.json once the reviewer has ended (criterion 17): `chris` reads as `ask`.
-    await until(() => state(run).review !== undefined);
-    expect(state(run).review).toEqual({ call: "ask", reason: "decide the held path" });
-    expect((await jobView("fheld")).json.review).toEqual({ call: "ask", reason: "decide the held path" });
+    // No second review: no call.md, and no review call on the run or the job.
+    expect(existsSync(join(jobsDir, run, "call.md"))).toBe(false);
+    expect(state(run).review).toBeUndefined();
+    expect((await jobView("fheld")).json.review).toBeUndefined();
     expect(state(run)).toMatchObject({ condition: "awaiting", ask: { kind: "approval", reason: "held-path" } });
     expect(state(run).needs).toBeUndefined();
     const l = await land("fheld");
     expect(state(l.json.run)).toMatchObject({ condition: "landed", held: true });
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
   });
-
-  test("a review back goes to the worker as a fix round; after the last round the run needs Chris", async () => {
-    const r = await fjob("fback", "commit held/back.txt REVIEW:back");
-    // A run's folder exists a moment before its state.json.
-    const runs = () => readdirSync(jobsDir).filter((d) => d.includes("-fac-fback-") && existsSync(join(jobsDir, d, "state.json"))).sort().map((d) => ({ id: d, ...state(d) }));
-    // The last run's reason is written after its review ends, so it is what to wait for.
-    await until(() => runs().length === 3 && /^the reviewer sent it back/.test(runs()[2].reason ?? ""));
-    const rs = runs();
-    expect(rs.map((x) => x.condition)).toEqual(["stuck", "stuck", "awaiting"]);
-    expect(rs[0]).toMatchObject({ reason: "fix the held path", failed: "review", next: "worker", round: 0 });
-    expect(rs[1]).toMatchObject({ failed: "review", round: 1 });
-    expect(rs[2]).toMatchObject({ ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "the reviewer sent it back twice: fix the held path" });
-    expect(rs[2].next).toBeUndefined();
-    expect(readFileSync(join(fakeLog, "prompt"), "utf8")).toContain("The reviewer sent this branch back: fix the held path");
-    expect(r.json.run).toBe(rs[0].id);
-    await drop("fback");
-  }, 60_000);
 
   test("DEFAULT lines and the cost reach the report once; FOLLOWUP lines file a worker issue", async () => {
     const r = await fjob("fdefault", "defaults");

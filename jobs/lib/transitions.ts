@@ -5,10 +5,10 @@
  * argv. The factory and the unit call them in-process. Starting the run's unit
  * is the launcher's (launch.ts). See docs/specs/2026-09-24-agent-jobs.md.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
-import { askOf, CALL_FILE, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { askOf, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "./process.ts";
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
@@ -304,11 +304,6 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
     const live = runs.filter((e) => isLive(e.folder));
     for (const e of live) await stop(e);
-    // A held run's review is its own unit: stop it too, and take its scratch clone.
-    for (const e of runs) {
-      Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}-review`], { stdout: "ignore", stderr: "ignore" });
-      if (existsSync(join(e.folder, CALL_FILE))) rmSync(runFile(e.folder, "review"), { recursive: true, force: true });
-    }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {

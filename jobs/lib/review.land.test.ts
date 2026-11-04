@@ -1,11 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { waitFor } from "../../tests/wait.ts";
-import { base, fakeLog, file, until, remote, repo, sh, state, setup, teardown } from "../cli.helpers";
+import { base, fakeLog, jobsDir, remote, repo, sh, state, setup, teardown } from "../cli.helpers";
 import { actionJob, drop, issueAdd, issueShow, job, jobView, land } from "../inproc.ts";
 
-// The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own, and so is its review.
+// The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 // `aleph report --hook` keeps its CLI test in jobs/cli.reviewer-land.test.ts.
 beforeAll(setup);
 afterAll(teardown);
@@ -40,12 +39,10 @@ describe("a factory run", () => {
     expect(s).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/x.txt" });
     expect(s.stat).toContain("held/x.txt");
     const run = r.json.run;
-    await waitFor(() => file(run, "call.md").includes("VERDICT"), { timeout: 10_000, every: 100 });
-    expect(file(run, "call.md")).toContain("VERDICT: chris decide the held path");
-    // `aleph review` records the call on state.json once the reviewer has ended (criterion 17): `chris` reads as `ask`.
-    await until(() => state(run).review !== undefined);
-    expect(state(run).review).toEqual({ call: "ask", reason: "decide the held path" });
-    expect((await jobView("fheld")).json.review).toEqual({ call: "ask", reason: "decide the held path" });
+    // No second review: no call.md, and no review call on the run or the job.
+    expect(existsSync(join(jobsDir, run, "call.md"))).toBe(false);
+    expect(state(run).review).toBeUndefined();
+    expect((await jobView("fheld")).json.review).toBeUndefined();
     expect(state(run)).toMatchObject({ condition: "awaiting", ask: { kind: "approval", reason: "held-path" } });
     expect(state(run).needs).toBeUndefined();
     const l = await land("fheld");
@@ -53,23 +50,19 @@ describe("a factory run", () => {
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain("Held-by: Chris");
   });
 
-  test("a held run that passes both reviews passes by itself and lands with no Held-by", async () => {
-    const r = await job("fac", "fboth", "Goal: fboth REVIEW:land\nACTION: commit held/both.txt\n");
-    const run = r.json.run;
-    await until(() => state(run).condition === "passed");
-    expect(state(run).ask).toBeUndefined();
-    expect(state(run).review).toEqual({ call: "land" });
-    const l = await land("fboth");
-    expect(state(l.json.run).condition).toBe("landed");
-    expect(state(l.json.run).held).toBeUndefined();
-    expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).not.toContain("Held-by");
+  test("a held run that the reviewer passes does not pass by itself: it waits with its held-path Ask", async () => {
+    const r = await job("fac", "fboth", "Goal: fboth REVIEW:pass\nACTION: commit held/both.txt\n", { land: true });
+    const s = state(r.json.run);
+    expect(s).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ reason: "held-path" }), reason: "held path held/both.txt" });
+    expect(s.next).toBeUndefined();
+    expect(existsSync(join(jobsDir, r.json.run, "call.md"))).toBe(false);
+    await drop("fboth");
   });
 
-  test("a security path stays with Chris when the review says land", async () => {
-    const r = await job("fac", "fsec", "Goal: fsec REVIEW:land\nACTION: commit jobs/lib/gate.ts\n");
-    const run = r.json.run;
-    await until(() => state(run).review !== undefined);
-    expect(state(run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ reason: "held-path" }), review: { call: "land" }, reason: "held path jobs/lib/gate.ts" });
+  test("a security path the reviewer passes waits with a held-path Ask", async () => {
+    const r = await job("fac", "fsec", "Goal: fsec REVIEW:pass\nACTION: commit jobs/lib/gate.ts\n");
+    expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ reason: "held-path" }), reason: "held path jobs/lib/gate.ts" });
+    expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).toContain("Goal: fsec REVIEW:pass");
     await drop("fsec");
   });
 });

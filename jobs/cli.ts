@@ -11,7 +11,7 @@ import { basename, join, resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
 import { isLive } from "./lib/process.ts";
 import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
-import { reviewBack, unit } from "./lib/unit.ts";
+import { unit } from "./lib/unit.ts";
 import { onMain } from "./lib/status.ts";
 import { removeBranch } from "./lib/landing.ts";
 import { fetchOrigin, git } from "./lib/git.ts";
@@ -36,7 +36,6 @@ import { probe } from "./lib/probe.ts";
 import { smokeStep } from "./lib/smoke.ts";
 import { runNightly } from "./lib/nightly-accept.ts";
 import * as doctor from "./lib/doctor.ts";
-import { recordReview, runReview } from "./lib/review.ts";
 import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
 import { jobId } from "./lib/settings.ts";
@@ -464,13 +463,6 @@ try {
     case "run": await plain(); break;
     case "jobs": jobs(); break;
     case "recheck": await started(await recheck(positional[0], { command })); break;
-    case "review": {
-      const folder = resolve(positional[0] ?? refuse("usage: aleph review <run-folder>"));
-      try { await runReview(folder); } catch (e: any) { refuse(e.message); }
-      recordReview(folder);
-      await reviewBack(folder);
-      break;
-    }
     case "drop": {
       const quiet = rest.includes("--quiet");
       const given = flag("fate");

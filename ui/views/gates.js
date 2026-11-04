@@ -133,7 +133,7 @@ export function renderHeld(d) {
   const rows = repos.length
     ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${chips(r.held)}</div></div>`).join("")
     : `<p class="quiet">No repo names held paths.</p>`;
-  return `<section class="card" aria-label="Held paths">${sectionHead("Held paths")}<p class="quiet">The security paths wait for Chris before the review. A repo's held paths wait for Chris after its review passes. A test is never held.</p>` +
+  return `<section class="card" aria-label="Held paths">${sectionHead("Held paths")}<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
     `<div class="held-repo"><b>Every repo</b> <div class="held">${chips(d.held)}</div></div>${rows}</section>`;
 }
 

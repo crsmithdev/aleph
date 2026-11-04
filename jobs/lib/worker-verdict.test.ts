@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ChecksStop } from "./checks.ts";
 import type { Run } from "./ledger.ts";
-import { afterReview, landBlock, workerVerdict, type Branch, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
+import { landBlock, workerVerdict, type Branch, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
 
 const run = (r: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "fac-1", condition: "stuck", ...r } as Run);
 const checked = { checkedBase: "b0", checkedTip: "t1" };
@@ -72,7 +72,7 @@ describe("checks", () => {
     expect(calls).toEqual(["checks", "docClaims"]);
   });
 
-  test("a keep-gate failure goes back as the check keep-gate, before a security path, the Oracle and the reviewer", async () => {
+  test("a keep-gate failure goes back as the check keep-gate, before the Oracle and the reviewer", async () => {
     const reason = "keep-gate: 1 new test passes on the base commit: a.test.ts > adds";
     const { p, calls } = ports({ kept: reason, security: "jobs/lib/sandbox.ts" });
     expect((await workerVerdict(branch(), p)).outcome).toEqual({ condition: "stuck", cause: "check", checkName: "keep-gate", reason, failed: "keep-gate", round: 0 });
@@ -90,15 +90,20 @@ describe("after the checks", () => {
   test("a pass states the checked base and tip and the reviewer's costs", async () => {
     const { p, calls } = ports({ reviews: [{ reason: null, cost: 0.5 }] });
     expect(await workerVerdict(branch({ facts: { cost: 1 } }), p)).toEqual({ outcome: { condition: "passed", cost: 1.5, ...checked }, code: 0 });
-    expect(calls).toEqual(["checks", "docClaims", "keepGate", "security", "oracle", "review"]);
+    expect(calls).toEqual(["checks", "docClaims", "keepGate", "oracle", "review", "security"]);
   });
 
-  test("a security path waits for Chris with no Oracle and no reviewer", async () => {
+  test("a security path runs Verify and the reviewer, then waits for Chris with a held-path Ask", async () => {
     const { p, calls } = ports({ security: "jobs/lib/sandbox.ts" });
     const v = await workerVerdict(branch(), p);
     expect(v).toMatchObject({ code: 0, outcome: { condition: "awaiting", reason: "held path jobs/lib/sandbox.ts", stat: " a.ts | 1 +", ask: { reason: "held-path" }, ...checked } });
-    expect(calls).not.toContain("oracle");
-    expect(calls).not.toContain("review");
+    expect(calls).toEqual(["checks", "docClaims", "keepGate", "oracle", "review", "security"]);
+  });
+
+  test("a security path the reviewer holds is a fix round, not an Ask", async () => {
+    const v = await workerVerdict(branch(), ports({ security: "jobs/lib/sandbox.ts", reviews: [{ reason: "reviewer: no test" }] }).p);
+    expect(v.outcome).toMatchObject({ condition: "stuck", failed: "review", round: 0 });
+    expect(v.outcome.ask).toBeUndefined();
   });
 
   test("an Oracle failure goes back as the check oracle, with no reviewer", async () => {
@@ -107,9 +112,9 @@ describe("after the checks", () => {
     expect(calls).not.toContain("review");
   });
 
-  test("a held rule waits for Chris after the reviewer passes", async () => {
+  test("a held rule waits for Chris after the reviewer passes, with one held-path Ask and no next step", async () => {
     const v = await workerVerdict(branch(), ports({ rule: "held path held/x.txt" }).p);
-    expect(v.outcome).toMatchObject({ condition: "awaiting", reason: "held path held/x.txt", ask: { reason: "held-path" } });
+    expect(v).toEqual({ code: 0, outcome: { condition: "awaiting", reason: "held path held/x.txt", stat: " a.ts | 1 +", ...checked, ask: expect.objectContaining({ reason: "held-path", why: [" a.ts | 1 +"] }) } });
   });
 });
 
@@ -136,30 +141,11 @@ describe("the reviewer", () => {
   });
 });
 
-describe("the second review", () => {
-  test("landBlock: a run lands when the reviewer gave a verdict and the second review says land", () => {
-    expect(landBlock(undefined, { call: "land" })).toBe("the reviewer has no verdict yet");
-    expect(landBlock("VERDICT: hold x", undefined)).toBe("review has no verdict yet");
-    expect(landBlock("VERDICT: pass", { call: "pending" })).toBe("review has no verdict yet");
-    expect(landBlock("VERDICT: pass", { call: "ask", reason: "why" })).toBe("review says ask (why)");
-    expect(landBlock("VERDICT: hold x", { call: "land" })).toBeNull();
-  });
-
-  const held = run({ condition: "awaiting", ask: { kind: "approval", reason: "held-path", question: "Land?", options: [], why: [] } as never });
-  const review = run({ condition: "awaiting", ask: { kind: "input", reason: "review", question: "x", options: [], why: [] } as never });
-  const none = () => { throw new Error("earlier read"); };
-
-  test("afterReview: a held run that the reviewer passed and the second review lets land passes", () => {
-    expect(afterReview(held, "VERDICT: pass", { call: "land" }, none, 2)).toEqual({ pass: true });
-    expect(afterReview(held, "VERDICT: hold x", { call: "land" }, none, 2)).toBeNull();
-    expect(afterReview(held, "VERDICT: pass", { call: "ask" }, none, 2)).toBeNull();
-    expect(afterReview({ ...held, condition: "passed" }, "VERDICT: pass", { call: "land" }, none, 2)).toBeNull();
-  });
-
-  test("afterReview: a build run sent back is a fix round while rounds are left, then a reason that counts them", () => {
-    expect(afterReview(review, "VERDICT: pass", { call: "back", reason: "no test" }, () => [], 2)).toEqual({ round: 0, reason: "no test" });
-    expect(afterReview(review, "VERDICT: pass", { call: "back" }, () => [run({ failed: "review" }), run({ failed: "tests" })], 2)).toEqual({ reason: "the reviewer sent it back once: no reason given" });
-    expect(afterReview(review, "VERDICT: pass", { call: "back", reason: "x" }, () => two, 2)).toBeNull();
-    expect(afterReview({ ...review, kind: "recheck" }, "VERDICT: pass", { call: "back", reason: "x" }, () => [], 2)).toBeNull();
+describe("landBlock", () => {
+  test("a held run may land once the reviewer gave a verdict; no second review is read", () => {
+    expect(landBlock(undefined)).toBe("the reviewer has no verdict yet");
+    expect(landBlock("Looks fine.")).toBe("the reviewer has no verdict yet");
+    expect(landBlock("VERDICT: pass")).toBeNull();
+    expect(landBlock("VERDICT: hold x")).toBeNull();
   });
 });

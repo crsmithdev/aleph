@@ -10,9 +10,8 @@ afterAll(teardown);
 describe("a factory run", () => {
   const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
   describe("the reviewer", () => {
-    // These runs never meet review: a background review would rewrite the awaiting reason the assertions read.
     const rjob = (name: string, mark: string, action = `commit ${name}.txt`, extra: Record<string, string> = {}) =>
-      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], { ALEPH_REVIEW_CMD: "/bin/false", ...extra });
+      aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name} ${mark}\nACTION: ${action}\n`)], extra);
 
     test("a pass lands; the prompt holds the item and the diff; the cost adds up", async () => {
       const r = await rjob("rpass", "REVIEW:pass");

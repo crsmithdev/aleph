@@ -49,7 +49,7 @@ test("a security path is found by name, also when a rename takes it away; its te
   expect(on(() => put("jobs/lib/sandbox.ts", "// changed\n"))).toBe("jobs/lib/sandbox.ts");
   expect(on(() => git("mv", "jobs/lib/sandbox.ts", "jobs/lib/box.ts"))).toBe("jobs/lib/sandbox.ts");
   expect(on(() => put("hooks/any.ts", "x\n"))).toBe("hooks/any.ts");
-  expect(on(() => put("jobs/lib/review.ts", "x\n"))).toBe("jobs/lib/review.ts");
+  expect(on(() => put("jobs/lib/review-browser.ts", "x\n"))).toBe("jobs/lib/review-browser.ts");
   expect(on(() => put("package.json", "{}\n"))).toBe("package.json");
   expect(on(() => put("identity/CLAUDE.md", "x\n"))).toBe("identity/CLAUDE.md");
   expect(on(() => put("jobs/lib/sandbox.test.ts", "x\n"))).toBeNull();

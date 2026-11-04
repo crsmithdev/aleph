@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, env, file, jobsDir, remote, sh, specFile, state, setup, teardown } from "../../jobs/cli.helpers";
+import { aleph, base, env, jobsDir, remote, sh, specFile, state, setup, teardown } from "../../jobs/cli.helpers";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -15,8 +15,6 @@ describe("a factory run", () => {
   test("a held run landed with the firefighter as lander gets Held-by: firefighter, not Chris", async () => {
     const r = await fjob("fheldff", "commit held/y.txt");
     expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }) });
-    const run = r.json.run;
-    for (let i = 0; i < 100 && !file(run, "call.md").includes("VERDICT"); i++) await Bun.sleep(100);
     const code = `import { land } from "${join((import.meta.dir + "/../../jobs"), "lib/transitions.ts")}"; const s = await land("fheldff", { lander: "firefighter" }, { output: "ignore" }); await s.child?.exited;`;
     const p = Bun.spawn(["bun", "-e", code], { cwd: base, env: env(), stdout: "pipe", stderr: "pipe" });
     expect(await p.exited).toBe(0);

@@ -189,26 +189,15 @@ test("a facts run whose process died with no restart ends: nothing holds its loc
   expect(readRun(fr.folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before its verdicts" });
 });
 
-// A review that a host restart killed: the run is awaiting a held-path ask, call.md says PENDING.
-const heldRun = (id: number, call: string, mtime: Date) => {
-  const r = mk(`fac-${id}`, "build", "awaiting", { ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": call });
-  utimesSync(join(r.folder, "call.md"), mtime, mtime);
-  return r;
-};
-const reviewDispatch = (starts: string[]) => {
+// A run held before v6 phase 6, whose second review a host restart killed: call.md says PENDING from before the boot.
+test("an old held run with a PENDING call.md from before the boot is left alone: no review starts and the run keeps its Ask", async () => {
+  const r = mk(`fac-${goal()}`, "build", "awaiting", { ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": "PENDING\n" });
+  utimesSync(join(r.folder, "call.md"), new Date(BEFORE_BOOT), new Date(BEFORE_BOOT));
   const f = fakes();
-  // Like startReview: the start writes a new PENDING.
-  f.rescue.review = (folder) => { starts.push(folder); writeFileSync(join(folder, "call.md"), "PENDING\n"); return true; };
-  return dispatch(f);
-};
-
-test("a held run whose PENDING call.md is older than the boot gets one new review start", async () => {
-  const r = heldRun(goal(), "PENDING\n", new Date(BEFORE_BOOT));
-  const starts: string[] = [];
-  await reviewDispatch(starts);
-  expect(starts).toEqual([r.folder]);
-  await reviewDispatch(starts);
-  expect(starts).toEqual([r.folder]);
+  await dispatch(f);
+  expect(f.calls).toEqual([]);
+  expect(readRun(r.folder)).toMatchObject({ condition: "awaiting", ask: { reason: "held-path" } });
+  expect(readFileSync(join(r.folder, "call.md"), "utf8")).toBe("PENDING\n");
 });
 
 test("a paused factory leaves a killed run alone", async () => {

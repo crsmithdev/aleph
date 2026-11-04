@@ -23,7 +23,7 @@ const FULL = (goal: string) => `## Goal\n${goal}\n## Edit surface\na.ts\n## Orac
 
 // Lands of held runs.
 
-test("a held run off the security paths whose reviews both say land is landed by the director", async () => {
+test("a held run off the security paths that the reviewer passed is landed by the director", async () => {
   fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "ui/views/x.js");
   held(`b${n}`);
@@ -78,14 +78,14 @@ test("the same run with a diff in jobs/lib/sandbox.ts is not landed: it is on th
   expect(readRun(folder)!.condition).toBe("awaiting");
 });
 
-test("a land before the review has a verdict is refused, and the Ask goes to Chris", async () => {
+test("a land before the reviewer has a verdict is refused, and the Ask goes to Chris", async () => {
   fresh([{ title: "held", goal: true }]);
   branch(`b${n}`, "ui/views/y.js");
-  held(`b${n}`, "PENDING\n");
+  held(`b${n}`, "Still reading.\n");
   reply([{ do: "land" }]);
   const [d] = await direct();
   expect(landed).toEqual([]);
-  expect(d.refused).toEqual([expect.stringContaining("review has no verdict yet")]);
+  expect(d.refused).toEqual([expect.stringContaining("the reviewer has no verdict yet")]);
   expect(d.outcome).toBe("escalated");
 });
 

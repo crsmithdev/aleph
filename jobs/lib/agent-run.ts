@@ -3,7 +3,7 @@
  * the folder, the spawn, the time box, the cost, the ending, and the cleanup after a dead process.
  * `ALEPH_<ROLE>_CMD` replaces `claude`, which is how a test gives a fake, and
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
- * `agentCall` is the other kind: a sandboxed `claude` call (the worker and the two reviewers) under srt.
+ * `agentCall` is the other kind: a sandboxed `claude` call (the worker and the reviewer) under srt.
  */
 import { NO_SKILLS } from "./role-skill.ts";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -119,8 +119,8 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
   }
 }
 
-/** The three sandboxed `claude` calls. */
-export type AgentRole = "worker" | "scenario reviewer" | "browser reviewer";
+/** The two sandboxed `claude` calls. */
+export type AgentRole = "worker" | "scenario reviewer";
 
 /** A git bundle the script fetches `refs` from before the setup lines, which run with stdout on stderr. */
 export interface AgentBundle { bundle: string; refs: string[]; setup: string[] }

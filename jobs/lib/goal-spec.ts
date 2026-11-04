@@ -1,6 +1,6 @@
 /**
  * A goal's spec: the Markdown sections a goal issue must have, the paths of its Edit surface, and
- * its version. The spec check, the planner, the director, the rescue and the busy-file wait all
+ * its version. The spec check, the planner, the director, the rescue, the reviewer and the busy-file wait all
  * read a spec through this module.
  */
 import { createHash } from "node:crypto";
@@ -19,6 +19,16 @@ export const missingSections = (body: string): string[] => REQUIRED.filter((name
 export function surfacePaths(body: string): string[] {
   const words = section(body, "Edit surface").split(/[^\w./@-]+/).map((w) => w.replace(/\.+$/, ""));
   return [...new Set(words.filter(Boolean))];
+}
+
+/**
+ * The files of `files` that the Edit surface of `body` does not name: not a named path, and not under a named folder.
+ * A spec with no Edit surface has nothing to judge against, so none.
+ */
+export function outsideSurface(body: string, files: string[]): string[] {
+  const surface = surfacePaths(body);
+  if (!surface.length) return [];
+  return files.filter((f) => !surface.some((p) => f === p || f.startsWith(p.endsWith("/") ? p : `${p}/`)));
 }
 
 const hash = (text: string): string => createHash("sha256").update(text).digest("hex").slice(0, 12);

@@ -11,9 +11,9 @@ export type RunFile =
   | "state.json" | "pid" | "exit"
   | "spec.md" | "command.txt" | "prompt.md" | "review-prompt.md" | "call-prompt.md"
   | "output.log" | "stderr.log" | "setup.log" | "next.log" | "dispatch.log" | "trace.log" | "checks.log" | "hidden.log" | "land.log"
-  | "result.md" | "review.md" | "call.md" | "review.log" | "review.err" | "call.err" | "review.pid"
+  | "result.md" | "review.md" | "call.md" | "review.log" | "review.err"
   | "asked" | "asked-spec" | "rescued" | "paused-next" | "batch.json"
-  | "gh" | "review";
+  | "gh";
 
 /** The path of `file` in the run folder `folder`. */
 export const runFile = (folder: string, file: RunFile): string => join(folder, file);

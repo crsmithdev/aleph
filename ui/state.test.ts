@@ -9,6 +9,8 @@ import { withEnv } from "./test-server.ts";
 import { loadRegistry } from "../jobs/lib/ledger.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/status.ts";
+import { state as fixture } from "./fixtures/status-state.ts";
+import { rows, withAttn } from "./test-now.ts";
 
 let base: string, jobsDir: string, factory: string;
 let restore: () => void;
@@ -183,6 +185,21 @@ describe("a planner run", () => {
 });
 
 describe("a goal that acceptance failed twice", () => {
+  test("a held run from before v6 phase 6 still reads: its old phase, and its second review's call.md as the Ask's review", () => {
+    run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "awaiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle" },
+      { "review.md": "Fine.\nVERDICT: pass\n", "call.md": "Merged and checked.\nVERDICT: land\n", "call-prompt.md": "old recipe\n" });
+    try {
+      const a = runAsks(state(now)).find((x) => x.id === "fac-60");
+      expect(a).toBeDefined();
+      expect(a!.details).toEqual({ note: "held path held/x.ts", stat: " held/x.ts | 1 +", review: { call: "land" } });
+      // The Now card renders it.
+      const card = rows(withAttn({ ...fixture, stuck: [], factory: { ...fixture.factory, health: [] }, asks: [a!] }))[0];
+      expect(card).toContain("Reviewer: land");
+    } finally {
+      rmSync(join(jobsDir, "20261027-000060-a"), { recursive: true });
+    }
+  });
+
   test("lists under Needs you, and not under Queued or Done, though a trailer commit on main names it", () => {
     const repo = join(base, "repo");
     const headBefore = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });

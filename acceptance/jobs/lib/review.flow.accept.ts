@@ -11,9 +11,8 @@ afterAll(teardown);
 
 describe("a factory run", () => {
   describe("the reviewer", () => {
-    // These runs never meet review: a background review would rewrite the awaiting reason the assertions read.
     const rjob = (name: string, mark: string, action = `commit ${name}.txt`, extra: Record<string, string> = {}) =>
-      job("fac", name, `Goal: ${name} ${mark}\nACTION: ${action}\n`, {}, { ALEPH_REVIEW_CMD: "/bin/false", ...extra });
+      job("fac", name, `Goal: ${name} ${mark}\nACTION: ${action}\n`, {}, extra);
     const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").split("\n").length - 1 : 0;
 
     test("a diff over ALEPH_REVIEW_DIFF_MAX is cut: the stat, the head of the diff, a line that says so", async () => {
