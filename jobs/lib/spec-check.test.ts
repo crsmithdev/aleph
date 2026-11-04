@@ -5,7 +5,7 @@ import { readHidden, reader, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { change, ctx, notes, setup, teardown } from "./factory.helpers.ts";
 import { specVersion } from "./goal-spec.ts";
-import { checkSpec, specVerdict } from "./spec-check.ts";
+import { checkSpec, specCheckPrompt, specVerdict } from "./spec-check.ts";
 import { seal } from "./author.ts";
 import { setAside } from "./acceptance.ts";
 
@@ -56,6 +56,14 @@ function stub(text: string, code = 0): string {
 /** The spec version of item `id` now. */
 const version = (id: number) => specVersion(reader().item("fac", id)!);
 const count = (calls: string) => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").length : 0);
+
+test("the prompt carries the spec-review method, with and without sealed scenarios", () => {
+  const item = { title: "T", spec: SPEC } as any;
+  for (const p of [specCheckPrompt(item), specCheckPrompt(item, "1. A is seen.\n")]) {
+    for (const s of ["Not observable", "Out of reach", "A name is not evidence", "When <trigger or input>", "Read the spec as the builder"]) expect(p).toContain(s);
+  }
+  expect(specCheckPrompt(item, "1. A is seen.\n")).toContain("SET-ASIDE: scenario <n>: <why>");
+});
 
 test("specVerdict reads the last capital VERDICT line as lastTagged does: **VERDICT:** pass is pass", () => {
   expect(specVerdict("VERDICT: hold a\n**VERDICT:** pass\nverdict: hold b")).toEqual({ pass: true });

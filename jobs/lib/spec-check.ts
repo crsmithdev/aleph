@@ -33,6 +33,33 @@ export function specCheckPrompt(item: issues.Issue, scenarios = ""): string {
   const part = (name: string) => section(item.spec, name) || "(none)";
   return `Check one spec before a builder starts on it. The code of the codebase is your working directory; read it with your tools.
 
+Read the spec as the builder who will build it alone: nobody answers questions, so each place where the builder must guess, and a wrong guess changes the result, is a problem. A choice the spec leaves to the builder on purpose, and a choice any good builder would make the same way, is not.
+
+## Method
+1. Split the spec into clauses. One clause is one requirement: each sentence of the Goal and each Oracle item. Number every clause.
+2. Check each clause against the code. For each file, function, command or behaviour the clause names, open it. Record each named thing as found, with \`file:line\`, or as absent, with the searches you ran.
+3. Run the passes below over every clause.
+4. Filter the problems. Keep a problem only when a wrong guess on it would change what the builder builds or what the check observes. Name that change.
+
+## Passes
+- **Vague.** A word with no measure ("fast", "robust", "clean", "handles errors", "works well"), or a placeholder (\`TODO\`, \`???\`, \`<...>\`).
+- **Under-specified.** A verb with no object or outcome ("improve the parser"), or a case the clause implies and does not settle: an empty input, an error path, a second caller.
+- **Conflict.** Two clauses that cannot both be true in this codebase, or one clause the current code makes false in a way the spec does not ask to change.
+- **One name, one thing.** The same concept under two names, or one name for two concepts.
+- **Wrong about the code.** A clause that names a file, function, flag or behaviour that does not exist or does not behave as the clause says.
+- **Out of reach.** An Oracle clause whose code lies outside the Edit surface.
+- **Not observable.** An Oracle clause that no check can see. A check counts when it runs normally and an assertion observes the changed output, state or error. These do not count: a read of the source text, "does not throw", a snapshot alone, a mock or log call, and a manual look.
+
+## Evidence
+- **A name is not evidence.** A function named like the behaviour may not do it: read it before you say the code agrees with a clause.
+- **An absence must be earned.** Search for synonyms and callers, not only the spec's words, and record each search with its hit count.
+- **Quote the clause exactly.** A paraphrase replaces the clause with your reading of it.
+
+## Problems and rewrites
+Each problem quotes its clause exactly and proposes replacement text. Write an Oracle rewrite as an observable rule in this form:
+\`When <trigger or input>, <the subject> <does the observable thing>.\`
+When no problem passes the filter, the spec passes.
+
 # Spec: ${item.title}
 
 ## Goal
@@ -49,13 +76,13 @@ A separate author wrote these from the Goal alone; an evaluator checks each one 
 
 ${scenarios.trim()}
 ` : ""}
-Answer ${scenarios ? "four" : "three"} questions:
+Apply the method to every clause. Answer ${scenarios ? "four" : "three"} questions, each from the passes above:
 1. Can every clause of the Goal and the Oracle be true at the same time in this codebase? Name each pair that cannot.
 2. Does the Edit surface hold the code that each Oracle clause needs to change? Name each clause whose code is outside it.
 3. Does the Oracle ask for something that no check or reviewer can observe? Name each such clause.
 ${scenarios ? `4. Does each sealed scenario follow from the Goal, and can it be true together with the Oracle? For each one that does not, write one line \`SET-ASIDE: scenario <n>: <why>\`. A set-aside scenario is removed; it is not a problem of the spec, so do not hold for it.
 ` : ""}
-End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. A hold is for problems in the Goal, the Edit surface and the Oracle only. Each problem must quote the clause and propose a change to the spec. ${TAG_FORMAT}`;
+Write each problem as its quoted clause, then its rewrite. End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. A hold is for problems in the Goal, the Edit surface and the Oracle only. Each problem must quote the clause and propose a change to the spec. ${TAG_FORMAT}`;
 }
 
 /** The last `VERDICT:` line of a reply, or null when it has none. */
