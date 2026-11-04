@@ -19,9 +19,9 @@ describe("the spec check before a goal starts", () => {
   const SPEC = "## Goal\nEnd state one.\n\n## Edit surface\n- a.ts\n\n## Oracle\nORACLE-TEXT\n";
   const specGoal = () => writeList({ key: "fac" }, "add a goal", (doc) => issues.add(doc, "checked goal", { spec: SPEC }).id, true)!.value;
   // A fake spec check: one line per call in spec.calls, the input in spec.in, the reply with a cost of 0.5.
-  const fakeSpec = (reply: string) => {
+  const fakeSpec = (reply: object | string) => {
     const f = join(ctx.base, "spec.sh");
-    writeFileSync(f, `#!/bin/sh\ncat >> ${ctx.base}/spec.in\necho call >> ${ctx.base}/spec.calls\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: reply, total_cost_usd: 0.5 })}\nEOF\n`);
+    writeFileSync(f, `#!/bin/sh\ncat >> ${ctx.base}/spec.in\necho call >> ${ctx.base}/spec.calls\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, ...(typeof reply === "string" ? { result: reply } : { result: "", structured_output: reply }), total_cost_usd: 0.5 })}\nEOF\n`);
     chmodSync(f, 0o755);
     process.env.ALEPH_SPECCHECK_CMD = f;
   };
@@ -39,7 +39,7 @@ describe("the spec check before a goal starts", () => {
   afterEach(() => { if (saved === undefined) delete process.env.ALEPH_SPECCHECK_CMD; else process.env.ALEPH_SPECCHECK_CMD = saved; });
 
   test("with no verdict, the dispatch starts one detached check and not the goal; a second dispatch while the lock is held starts none", async () => {
-    fakeSpec("VERDICT: pass");
+    fakeSpec({ verdict: "pass", blocks: [], notes: [] });
     const id = specGoal();
     const name = `fac-${id}`;
     const a = await run();
@@ -61,7 +61,7 @@ describe("the spec check before a goal starts", () => {
   }, 30_000);
 
   test("a hold sets the Ask and the hold record, counts in the day's spend and not in its runs, and the goal is not started", async () => {
-    fakeSpec("looked.\nVERDICT: hold the Oracle names needHead, which is outside the Edit surface");
+    fakeSpec({ verdict: "hold", blocks: ["the Oracle names needHead, which is outside the Edit surface"], notes: [] });
     const id = specGoal();
     const name = `fac-${id}`;
     const r = await runSpecCheck(repo(), id);

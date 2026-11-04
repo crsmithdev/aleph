@@ -17,7 +17,8 @@ import { git } from "./git.ts";
 import { withMainClone } from "./main-clone.ts";
 import { TRIAGE_CAP, TRIAGE_TRIES } from "./settings.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
-import { addParts, checkParts, fitTitles, PART_RULES, type Part } from "./plan.ts";
+import { addParts, checkParts, fitTitles, PART_RULES, PARTS_SCHEMA, type Part } from "./plan.ts";
+import { NO_OUTPUT } from "./structured.ts";
 
 /** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */
 export const TRIAGE_MODEL = OPUS_MODEL;
@@ -43,13 +44,48 @@ const REF = /^[a-z0-9-]+-\d+(\.\d+)?$/;
 const withoutRequest = (body: string): string =>
   body.replace(/^## Request[ \t]*\n[\s\S]*?(?=^## |(?![\s\S]))/m, "").trim();
 
-/** The route in the command's output (the whole output, or its outermost braces), or why there is none. */
-export function parseRoute(output: string): Route | string {
-  let raw: any;
-  for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
-    try { raw = JSON.parse(s); break; } catch {}
-  }
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
+const str = { type: "string", minLength: 1 };
+const refs = { type: "array", items: { type: "string", pattern: REF.source } };
+const route = (name: string, fields: Record<string, object>, optional: string[] = []) => ({
+  type: "object", additionalProperties: false,
+  required: ["route", ...Object.keys(fields).filter((k) => !optional.includes(k))],
+  properties: { route: { const: name }, ...fields },
+});
+
+/**
+ * The JSON schema of triage's reply: one route under `verdict`. The API refuses a `oneOf` at the top
+ * level, so the union sits one level down.
+ */
+export const TRIAGE_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["verdict"],
+  properties: {
+    verdict: {
+      oneOf: [
+        route("build", { spec: str, after: refs }, ["after"]),
+        route("plan", { spec: str, after: refs, parts: { ...PARTS_SCHEMA, minItems: 2 } }, ["after"]),
+        route("close", { reason: str }),
+        route("done", { commit: { type: "string", pattern: "^[0-9a-f]{7,40}$" }, reason: str }),
+        route("ask", {
+          question: str,
+          options: {
+            type: "array", minItems: 2, maxItems: 4,
+            items: { type: "object", additionalProperties: false, required: ["label", "line"], properties: { label: str, line: str, after: { type: "string", pattern: REF.source } } },
+          },
+          recommended: str,
+          why: { type: "array", minItems: 2, maxItems: 4, items: str },
+        }),
+        route("live", { note: str }),
+        route("flake", { note: str }),
+      ],
+    },
+  },
+};
+
+/** The route in triage's structured output, or why there is none. */
+export function parseRoute(reply: any): Route | string {
+  if (reply === undefined) return NO_OUTPUT;
+  const raw = reply?.verdict;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no verdict object";
   const field = (key: string) => text(raw[key]);
   switch (raw.route) {
     case "build":
@@ -126,22 +162,22 @@ ${openIssues(repo, item)}
 
 ${mainSince(repo, item)}
 
-Reply with one JSON object and nothing else, with one of these routes:
+Reply with one of these routes as the "verdict":
 
-- {"route": "build", "spec": "<spec>", "after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]}: the issue is work one factory run can do alone. The issue keeps its own title and text; "spec" is written on it. "spec" is in this format, with these three sections:
+- "build": the issue is work one factory run can do alone. The issue keeps its own title and text; "spec" is written on it. "spec" is in this format, with these three sections:
   ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
 
-  The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the issues that must be done before this one starts; set it only when the work needs the other issue's change, not just because the two issues touch the same file or table; leave it out when none.
-- {"route": "plan", "spec": "<spec>", "after": [...], "parts": [{"title": "<title>", "body": "<part spec>", "after": [<optional numbers of earlier parts, from 1>]}]}: the issue is too large for one run. "spec" and "after" are as for "build", and "spec" is the whole goal. "parts" splits it into 2 to 6 parts: each is work one factory run can do alone, in one run of under an hour, and together they do the whole goal. Each "body" is a spec in the format above, with all three sections non-empty. When the parts fail the check, the issue builds from "spec" as one run. Return "plan" only when one run cannot do the work: a small change that touches files in several folders is still one "build".
+  The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the issues (\`<repo>-<n>\` or \`<repo>-<n>.<k>\`) that must be done before this one starts; set it only when the work needs the other issue's change, not just because the two issues touch the same file or table; leave it out when none.
+- "plan": the issue is too large for one run. "spec" and "after" are as for "build", and "spec" is the whole goal. "parts" splits it into 2 to 6 parts: each is work one factory run can do alone, in one run of under an hour, and together they do the whole goal. Each part has a "title", a "body" and an "after" list of the numbers of earlier parts, from 1. Each "body" is a spec in the format above, with all three sections non-empty. When the parts fail the check, the issue builds from "spec" as one run. Return "plan" only when one run cannot do the work: a small change that touches files in several folders is still one "build".
 
   ${PART_RULES.replace(/\n\n/g, "\n\n  ")}
-- {"route": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
-- {"route": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work; no worker runs.
-- {"route": "ask", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "after": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
-- {"route": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
-- {"route": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "build" for it: Chris picks from the tracker which flakes to fix, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "build".
+- "close", with a "reason": it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
+- "done", with the "commit" sha and a "reason" that says what the commit holds: main already holds the work; no worker runs.
+- "ask": it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. The "question" is one plain sentence. Each option has a short "label", a "line" that says in one line what it does, and an "after" (\`<repo>-<n>\`) only when choosing it means waiting for that issue first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
+- "live", with a "note" of what to check: it is a check against a live system the sandbox cannot reach.
+- "flake", with a "note" in the form \`<test file> > <test name>: <what was seen>\`: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "build" for it: Chris picks from the tracker which flakes to fix, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "build".
 
 The spec stays close to the request. The request is the ground truth: the Goal says what it asks, in its words where they fit. A tentative word in the request ("perhaps", "maybe", "could") leaves that choice to the worker: say so, or leave it out; never make it a requirement. Write no claim about current code that you did not read: name what you read and leave the rest to the worker. The Oracle names test files and commands that exist and the behaviour to observe; it does not say how to build it (no markup, CSS or thresholds the request did not give).
 
@@ -257,13 +293,13 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
   if (!release) { skipped.push(`${name}: another triage is running`); return; }
   try {
     // `shown`: the tick's own line reports a triage, so the report has no line for the run.
-    const run = openRun({ role: "triage", who: "triage", model: TRIAGE_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"], name: `triage-${name}`, command: `triage ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
+    const run = openRun({ role: "triage", who: "triage", model: TRIAGE_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"], schema: TRIAGE_SCHEMA, name: `triage-${name}`, command: `triage ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
     // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
     const end = (reason: string, route?: Applied) => run.end(reason, route ? { route } : {});
     const noAnswer = (reason: string) => run.end(reason, { cause: "no-answer" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.
-      const v = parseRoute(await withMainClone(repo, "triage-", (dir) => run.ask(prompt(repo, item), dir)));
+      const v = parseRoute(await withMainClone(repo, "triage-", (dir) => run.askData(prompt(repo, item), dir)));
       if (typeof v === "string") {
         const reason = `malformed verdict: ${v}`;
         noAnswer(reason);

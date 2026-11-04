@@ -55,9 +55,11 @@ export const choice = (reason = "question"): Ask => ({ kind: "input", reason, qu
 export const plain = (question = "which module?"): Ask => ({ kind: "input", reason: "question", question, options: [], why: [] });
 export const asked = (id: number) => askOf(item(id));
 export const item = (id: number) => issues.find(readList({ key })!, id)!;
-export const reply = (actions: object[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ actions }));
-/** The fake's whole reply, such as `{ escalate: {...} }` for the director. */
-export const replyWith = (o: object | string) => writeFileSync(join(base, "reply.json"), typeof o === "string" ? o : JSON.stringify(o));
+/** A stream-json result event whose structured output is `o`. */
+const result = (o: object) => JSON.stringify({ type: "result", is_error: false, result: "", structured_output: o });
+export const reply = (actions: object[]) => writeFileSync(join(base, "reply.json"), result({ actions }));
+/** The fake's whole reply: an object, such as `{ escalate: {...} }`, as structured output; a string as plain text. */
+export const replyWith = (o: object | string) => writeFileSync(join(base, "reply.json"), typeof o === "string" ? o : result(o));
 export const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
 export const log = () => readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8");
 

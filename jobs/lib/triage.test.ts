@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { isSorted, readList, writeList } from "../../todo/lib/store.ts";
 
-import { parseRoute, prompt, triageOpen } from "./triage.ts";
+import { parseRoute, prompt, TRIAGE_SCHEMA, triageOpen } from "./triage.ts";
 import { readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 import { askOf, setAsk } from "./ask.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
@@ -24,20 +24,21 @@ function sh(cwd: string, ...args: string[]): void {
 // The fake triage command: the verdict is named by a `VERDICT:<word>` line in the issue's body.
 const FAKE = `#!/bin/bash
 prompt=$(cat)
+out() { echo "{\\"type\\":\\"result\\",\\"is_error\\":false,\\"result\\":\\"\\",\\"structured_output\\":{\\"verdict\\":$1}}"; }
 echo "$PWD $*" >> "$FAKE_LOG"
 case $prompt in
-  *VERDICT:goal*) echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
-  *VERDICT:parts*) echo '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","after":["tri-9"],"parts":[{"title":"[Big] Do the first half","body":"## Goal\\nHalf one.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"},{"title":"[Big] Do the second half of the work and then merge it all into","body":"## Goal\\nHalf two.\\n## Edit surface\\ny.ts\\n## Oracle\\nbun test x.test.ts","after":[1]}]}' ;;
-  *VERDICT:waits*) echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test","after":["'$FAKE_KEY'-1","'$FAKE_KEY'-2"]}' ;;
-  *VERDICT:badparts*) echo '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","parts":[{"title":"only","body":"## Goal\\nx\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"}]}' ;;
-  *VERDICT:close*) echo 'Looked at it. {"route":"close","reason":"duplicate of tri-1"}' ;;
-  *VERDICT:chris*) echo '{"route":"ask","question":"Which plan, A or B?"}' ;;
-  *VERDICT:structured*) echo '{"route":"ask","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
-  *VERDICT:build*) echo '{"route":"ask","question":"Ship it?","options":[{"label":"A","line":"ship"},{"label":"B","line":"wait"}],"recommended":"A","kind":"build"}' ;;
-  *VERDICT:live*) echo '{"route":"live","note":"check the prod dashboard"}' ;;
-  *VERDICT:flake*) echo '{"route":"flake","note":"a.test.ts > does x: timed out under load"}' ;;
+  *VERDICT:goal*) out '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
+  *VERDICT:parts*) out '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","after":["tri-9"],"parts":[{"title":"[Big] Do the first half","body":"## Goal\\nHalf one.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"},{"title":"[Big] Do the second half of the work and then merge it all into","body":"## Goal\\nHalf two.\\n## Edit surface\\ny.ts\\n## Oracle\\nbun test x.test.ts","after":[1]}]}' ;;
+  *VERDICT:waits*) out '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test","after":["'$FAKE_KEY'-1","'$FAKE_KEY'-2"]}' ;;
+  *VERDICT:badparts*) out '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","parts":[{"title":"only","body":"## Goal\\nx\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"}]}' ;;
+  *VERDICT:close*) out '{"route":"close","reason":"duplicate of tri-1"}' ;;
+  *VERDICT:chris*) out '{"route":"ask","question":"Which plan, A or B?"}' ;;
+  *VERDICT:structured*) out '{"route":"ask","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
+  *VERDICT:build*) out '{"route":"ask","question":"Ship it?","options":[{"label":"A","line":"ship"},{"label":"B","line":"wait"}],"recommended":"A","kind":"build"}' ;;
+  *VERDICT:live*) out '{"route":"live","note":"check the prod dashboard"}' ;;
+  *VERDICT:flake*) out '{"route":"flake","note":"a.test.ts > does x: timed out under load"}' ;;
   *VERDICT:fail*) exit 3 ;;
-  *VERDICT:bad*) echo '{"route":"maybe"}' ;;
+  *VERDICT:bad*) out '{"route":"maybe"}' ;;
   *) echo 'no json here' ;;
 esac
 `;
@@ -96,7 +97,7 @@ test("a malformed verdict leaves the item unchanged and is skipped", async () =>
   const before = [item(1), item(2)].map((i) => issues.renderItem(repo.key, i));
   const t = await run();
   expect(t.triaged).toEqual({});
-  expect(t.skipped).toEqual([expect.stringContaining(`${repo.key}-1: triage gave a malformed verdict`), expect.stringContaining(`${repo.key}-2: triage gave a malformed verdict: no JSON`)]);
+  expect(t.skipped).toEqual([expect.stringContaining(`${repo.key}-1: triage gave a malformed verdict`), expect.stringContaining(`${repo.key}-2: triage gave a malformed verdict: no structured output`)]);
   expect([item(1), item(2)].map((i) => issues.renderItem(repo.key, i))).toEqual(before);
 });
 
@@ -228,7 +229,7 @@ test("the prompt keeps how-to-build questions away from Chris and asks him in pl
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
   expect(p).toContain("Never ask Chris about how to build it");
   expect(p).toContain("no file paths, function names, line numbers or code");
-  expect(p).toContain('"after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]');
+  expect(p).toContain("(`<repo>-<n>` or `<repo>-<n>.<k>`)");
 });
 
 test("the prompt sets after only when the work needs the other issue's change", () => {
@@ -259,8 +260,9 @@ prompt=$(cat)
 echo "$PWD" >> "$FAKE_LOG"
 file=$(echo "$prompt" | grep -m1 '^# Issue' | grep -o '[a-z]*\.ts')
 sha=$(echo "$prompt" | sed -n '/^# Commits on main/,/^Reply/p' | grep -F "$file" | head -1 | cut -d' ' -f1)
-if [ -n "$sha" ] && [ -f "$file" ]; then echo "{\\"route\\":\\"done\\",\\"commit\\":\\"$sha\\",\\"reason\\":\\"widget.ts exists\\"}"
-else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
+out() { echo "{\\"type\\":\\"result\\",\\"is_error\\":false,\\"result\\":\\"\\",\\"structured_output\\":{\\"verdict\\":$1}}"; }
+if [ -n "$sha" ] && [ -f "$file" ]; then out "{\\"route\\":\\"done\\",\\"commit\\":\\"$sha\\",\\"reason\\":\\"widget.ts exists\\"}"
+else out '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
 `;
   let fixture: string;
   let saved: string | undefined;
@@ -317,11 +319,11 @@ else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n
   });
 
   test("a done verdict naming a commit that is not on main is not applied", async () => {
-    expect(parseRoute('{"route":"done","commit":"nothex","reason":"x"}')).toBe("done without a commit");
-    expect(parseRoute('{"route":"done","commit":"abc1234","reason":"x"}')).toEqual({ route: "done", commit: "abc1234", reason: "x" });
+    expect(parseRoute({ verdict: { route: "done", commit: "nothex", reason: "x" } })).toBe("done without a commit");
+    expect(parseRoute({ verdict: { route: "done", commit: "abc1234", reason: "x" } })).toEqual({ route: "done", commit: "abc1234", reason: "x" });
     reset([{ title: "Add widget.ts" }]);
     process.env.ALEPH_TRIAGE_CMD = join(base, "bogus");
-    writeFileSync(join(base, "bogus"), `#!/bin/bash\necho '{"route":"done","commit":"deadbeef1","reason":"x"}'\n`);
+    writeFileSync(join(base, "bogus"), `#!/bin/bash\necho '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":{"route":"done","commit":"deadbeef1","reason":"x"}}}'\n`);
     chmodSync(join(base, "bogus"), 0o755);
     try {
       const t = await run();
@@ -361,7 +363,10 @@ test("a plan route whose parts fail the check builds from its spec as one run", 
 
 test("the prompt asks for the parts on a plan route and keeps a small change in several folders a build", () => {
   const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
-  expect(p).toContain('"parts": [{"title": "<title>", "body": "<part spec>"');
+  expect(p).toContain('Each part has a "title", a "body" and an "after" list');
+  const plan = TRIAGE_SCHEMA.properties.verdict.oneOf.find((r) => r.properties.route.const === "plan")!.properties as any;
+  expect(plan.parts.minItems).toBe(2);
+  expect(plan.parts.items.properties.title.maxLength).toBe(60);
   expect(p).toContain("a small change that touches files in several folders is still one \"build\"");
   expect(p).toContain("do not chain parts in a line by habit");
 });

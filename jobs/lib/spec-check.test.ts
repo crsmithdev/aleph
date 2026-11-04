@@ -5,7 +5,7 @@ import { readHidden, reader, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { change, ctx, notes, setup, teardown } from "./factory.helpers.ts";
 import { specVersion } from "./goal-spec.ts";
-import { checkSpec, passNotes, specCheckPrompt, specVerdict } from "./spec-check.ts";
+import { checkSpec, parseSpecCheck, passNotes, specCheckPrompt } from "./spec-check.ts";
 import { seal } from "./author.ts";
 import { setAside } from "./acceptance.ts";
 
@@ -31,10 +31,12 @@ function author(text: string): string {
   process.env.ALEPH_AUTHOR_CMD = bin;
   return input;
 }
-/** A stub spec check that appends each prompt to `spec.in` and replies `text`. */
-function specStub(text: string): string {
+/** The spec check's structured output. */
+const verdict = (v: "pass" | "hold", o: { blocks?: string[]; notes?: string[]; set_aside?: { scenario: number; why: string }[] } = {}) => ({ verdict: v, blocks: [], notes: [], ...o });
+/** A stub spec check that appends each prompt to `spec.in` and replies with `out` as its structured output. */
+function specStub(out: object): string {
   const bin = join(ctx.base, "spec.sh"), input = join(ctx.base, "spec.in");
-  const line = JSON.stringify({ type: "result", subtype: "success", result: text, total_cost_usd: 0.5 });
+  const line = JSON.stringify({ type: "result", subtype: "success", result: "", structured_output: out, total_cost_usd: 0.5 });
   writeFileSync(bin, `#!/bin/sh\ncat >> ${input}\necho =====CALL >> ${input}\nprintf '%s\n' '${line.replaceAll("'", "")}'\n`);
   chmodSync(bin, 0o755);
   process.env.ALEPH_SPECCHECK_CMD = bin;
@@ -44,7 +46,7 @@ const callsIn = (f: string) => (existsSync(f) ? readFileSync(f, "utf8").split("=
 const sealed = (id: number) => readHidden({ key: "fac" }, `fac-${id}`)["scenarios.md"];
 const SCENES = "1. FIRST-SCENE is seen.\n2. SECOND-SCENE is seen.\n3. THIRD-SCENE is seen.\n";
 
-/** A stub agent that records each call in `calls` and prints a stream-json result line. */
+/** A stub agent that records each call in `calls` and prints a stream-json result line with `text` and no structured output. */
 function stub(text: string, code = 0): string {
   const bin = join(ctx.base, "stub.sh"), calls = join(ctx.base, "calls");
   const line = JSON.stringify({ type: "result", subtype: "success", result: text, total_cost_usd: 0.25 });
@@ -62,38 +64,41 @@ test("the prompt carries the spec-review method, with and without sealed scenari
   for (const p of [specCheckPrompt(item), specCheckPrompt(item, "1. A is seen.\n")]) {
     for (const s of ["Not observable", "Out of reach", "Bare bun test path", "A name is not evidence", "When <trigger or input>", "Read the spec as the builder"]) expect(p).toContain(s);
   }
-  expect(specCheckPrompt(item, "1. A is seen.\n")).toContain("SET-ASIDE: scenario <n>: <why>");
+  expect(specCheckPrompt(item, "1. A is seen.\n")).toContain('Put each one that does not in "set_aside"');
 });
 
 test("the prompt holds only on a block, carries the request, and with held it cannot hold", () => {
   const item = { title: "T", spec: SPEC, request: "REQUESTTEXT" } as any;
   const p = specCheckPrompt(item);
-  for (const s of ["## Request", "REQUESTTEXT", "## Block or note", "`VERDICT: pass <notes>`", "`VERDICT: hold <blocks>`", "It never asks the builder to add a committed test"]) expect(p).toContain(s);
+  for (const s of ["## Request", "REQUESTTEXT", "## Block or note", 'The verdict is "hold" when one problem or more blocks the goal', 'Each block goes in "blocks"', "It never asks the builder to add a committed test"]) expect(p).toContain(s);
   const h = specCheckPrompt(item, "", true);
   expect(h).toContain("Do not hold it again");
-  expect(h).not.toContain("VERDICT: hold");
+  expect(h).toContain('The verdict is "pass", and every problem goes in "notes".');
+  expect(h).not.toContain('"hold"');
   expect(specCheckPrompt({ ...item, request: "" })).not.toContain("## Request");
 });
 
-test("specVerdict reads a pass with notes", () => {
-  expect(specVerdict("VERDICT: pass \"a\"; say b")).toEqual({ pass: true, notes: "\"a\"; say b" });
-  expect(specVerdict("VERDICT: pass")).toEqual({ pass: true });
+test("parseSpecCheck reads the verdict, each problem on one line, and the set-aside scenarios; a missing or odd reply is a reason", () => {
+  expect(parseSpecCheck(verdict("pass", { notes: ["\"a\"\n  say b"] }))).toEqual({ pass: true, blocks: [], notes: ["\"a\" say b"], asides: new Map() });
+  expect(parseSpecCheck(verdict("hold", { blocks: ["x"], set_aside: [{ scenario: 2, why: "no" }] }))).toEqual({ pass: false, blocks: ["x"], notes: [], asides: new Map([[2, "no"]]) });
+  expect(parseSpecCheck(undefined)).toBe("no structured output");
+  expect(parseSpecCheck({ verdict: "maybe" })).toBe('unknown verdict "maybe"');
 });
 
 test("a pass with notes records them for the worker; a plain pass has none", async () => {
-  specStub("VERDICT: pass \"GOALTEXT\" is vague; say which page");
+  specStub(verdict("pass", { notes: ["\"GOALTEXT\" is vague; say which page", "\"SURFACE\" names no file"] }));
   const id = add();
   expect((await checkSpec(repo(), id)).verdict).toBe("pass");
-  expect(notes(id)).toContain(`spec check: ${version(id)} pass: "GOALTEXT" is vague; say which page`);
-  expect(passNotes(reader().item("fac", id)!)).toBe(`"GOALTEXT" is vague; say which page`);
-  specStub("VERDICT: pass");
+  expect(notes(id)).toContain(`spec check: ${version(id)} pass: "GOALTEXT" is vague; say which page | "SURFACE" names no file`);
+  expect(passNotes(reader().item("fac", id)!)).toBe(`"GOALTEXT" is vague; say which page | "SURFACE" names no file`);
+  specStub(verdict("pass"));
   const id2 = add("## Goal\nOther\n");
   await checkSpec(repo(), id2);
   expect(passNotes(reader().item("fac", id2)!)).toBe("");
 });
 
 test("a goal is held at most once: after an edit, a second hold passes with its problems as notes", async () => {
-  const input = specStub("VERDICT: hold \"ORACLETEXT\" names no command; name one");
+  const input = specStub(verdict("hold", { blocks: ["\"ORACLETEXT\" names no command; name one"] }));
   const id = add();
   expect((await checkSpec(repo(), id)).verdict).toBe("hold");
   change(id, (item) => { item.spec = SPEC.replace("ORACLETEXT", "ORACLE TWO"); });
@@ -104,10 +109,6 @@ test("a goal is held at most once: after an edit, a second hold passes with its 
   expect(prompts[1]).toContain("Do not hold it again");
 });
 
-test("specVerdict reads the last capital VERDICT line as lastTagged does: **VERDICT:** pass is pass", () => {
-  expect(specVerdict("VERDICT: hold a\n**VERDICT:** pass\nverdict: hold b")).toEqual({ pass: true });
-});
-
 test("a failed call or a reply with no verdict is an error that is not tried again", async () => {
   const calls = stub("", 1);
   const id = add();
@@ -115,7 +116,8 @@ test("a failed call or a reply with no verdict is an error that is not tried aga
   expect(notes(id)).toContain(`spec check: ${version(id)} error: `);
   expect((await checkSpec(repo(), id)).verdict).toBe("skip");
   expect(count(calls)).toBe(1);
-  const calls2 = stub("rambling");
+  // A reply with text and no structured output: VERDICT lines are not read.
+  const calls2 = stub("rambling\nVERDICT: pass");
   const id2 = add("## Goal\nOther\n");
   expect((await checkSpec(repo(), id2)).verdict).toBe("error");
   expect(count(calls2)).toBe(2);
@@ -123,7 +125,7 @@ test("a failed call or a reply with no verdict is an error that is not tried aga
 
 test("the spec check seals first, gives the scenarios to the check, and counts both costs", async () => {
   const asked = author(SCENES);
-  const spec = specStub("VERDICT: pass");
+  const spec = specStub(verdict("pass"));
   const id = add();
   const c = await checkSpec(authorRepo(), id);
   expect(c).toMatchObject({ verdict: "pass", cost: 0.75 });
@@ -133,12 +135,12 @@ test("the spec check seals first, gives the scenarios to the check, and counts b
   const p = readFileSync(spec, "utf8");
   expect(p).toContain("## Sealed scenarios");
   expect(p).toContain("2. SECOND-SCENE is seen.");
-  expect(p).toContain("SET-ASIDE: scenario <n>: <why>");
+  expect(p).toContain('"set_aside"');
 });
 
 test("a repo without author seals nothing and asks three questions", async () => {
   const asked = author(SCENES);
-  const spec = specStub("VERDICT: pass");
+  const spec = specStub(verdict("pass"));
   const id = add();
   expect((await checkSpec(repo(), id)).verdict).toBe("pass");
   expect(callsIn(asked)).toBe(0);
@@ -148,7 +150,7 @@ test("a repo without author seals nothing and asks three questions", async () =>
 
 test("the same spec version is not sealed again; a new version re-seals and overwrites the scenarios", async () => {
   const asked = author(SCENES);
-  specStub("VERDICT: pass");
+  specStub(verdict("pass"));
   const id = add();
   await checkSpec(authorRepo(), id);
   const first = version(id);
@@ -165,7 +167,7 @@ test("the same spec version is not sealed again; a new version re-seals and over
 
 test("a new version whose author writes none empties the old scenarios", async () => {
   author(SCENES);
-  specStub("VERDICT: pass");
+  specStub(verdict("pass"));
   const id = add();
   await checkSpec(authorRepo(), id);
   change(id, (item) => { item.spec = SPEC.replace("GOALTEXT", "GOALTEXT TWO"); });
@@ -177,7 +179,7 @@ test("a new version whose author writes none empties the old scenarios", async (
 
 test("a SET-ASIDE line removes that scenario, keeps the others' numbers, and notes it; the goal is not held", async () => {
   author(SCENES);
-  specStub("Checked.\nSET-ASIDE: scenario 2: it asks for more than the Goal\nSET-ASIDE: scenario 9: not a scenario\nVERDICT: pass");
+  specStub(verdict("pass", { set_aside: [{ scenario: 2, why: "it asks for more than the Goal" }, { scenario: 9, why: "not a scenario" }] }));
   const id = add();
   expect((await checkSpec(authorRepo(), id)).verdict).toBe("pass");
   expect(sealed(id)).toBe("1. FIRST-SCENE is seen.\n3. THIRD-SCENE is seen.\n");
@@ -189,7 +191,7 @@ test("a SET-ASIDE line removes that scenario, keeps the others' numbers, and not
 
 test("when every scenario is set aside, the goal has none", async () => {
   author("1. A.\n2. B.\n");
-  specStub("SET-ASIDE: scenario 1: no\nSET-ASIDE: scenario 2: no\nVERDICT: pass");
+  specStub(verdict("pass", { set_aside: [{ scenario: 1, why: "no" }, { scenario: 2, why: "no" }] }));
   const id = add();
   await checkSpec(authorRepo(), id);
   expect(sealed(id)).toBe("");

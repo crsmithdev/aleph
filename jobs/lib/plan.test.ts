@@ -18,7 +18,9 @@ function sh(cwd: string, ...args: string[]): void {
 
 const part = (title: string, oracle = "`bun test jobs/lib/x.test.ts`") =>
   ({ title, body: `## Goal\nDo ${title}.\n## Edit surface\njobs/lib/x.ts\n## Oracle\n${oracle}\n## Time box\n30 minutes` });
-const reply = (parts: object[]) => JSON.stringify({ parts });
+// The planner's stdout: a stream-json result event whose structured output holds the parts.
+const reply = (parts: object[]) => JSON.stringify({ type: "result", is_error: false, result: "", structured_output: { parts } });
+const data = (stdout: string) => JSON.parse(stdout).structured_output;
 const THREE = reply([part("one"), { ...part("two"), after: [1] }, { ...part("three"), after: [1, 2] }]);
 const ONE = reply([part("only")]);
 const NO_ORACLE = reply([part("one"), { title: "two", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Time box\n1 hour" }]);
@@ -28,10 +30,7 @@ const fake = (base: string) => `#!/bin/bash
 prompt=$(cat)
 echo "$*" >> "${join(base, "calls")}"
 case $prompt in
-  *PLAN:three*) cat <<'J'
-Here is the plan. ${THREE}
-J
-  ;;
+  *PLAN:three*) echo '${THREE}' ;;
   *PLAN:slow*) for _ in $(seq 600); do { [ -e "${join(base, "release")}" ] || [ ! -d "${base}" ]; } && break; sleep 0.05; done; echo '${THREE}' ;;
   *PLAN:seen*) if [ -f seen.ts ]; then echo '${THREE}'; else echo 'no seen.ts'; fi ;;
   *PLAN:one*) echo '${ONE}' ;;
@@ -139,14 +138,14 @@ test("a plan run with the cause no-answer and a free reason counts as a try", as
 });
 
 test("the check: sections, the oracle, the waits and the count", async () => {
-  expect(parsePlan(THREE)).toHaveLength(3);
-  expect(parsePlan(ONE)).toBe("1 parts, not 2 to 6");
-  expect(parsePlan(NO_ORACLE)).toBe("part 2 has no Oracle");
-  expect(parsePlan(reply([part("a"), { ...part("b"), after: [2] }]))).toBe("part 2 has an after that is not an earlier part");
-  expect(parsePlan(reply([part("a"), part("b", "it works")]))).toBe("part 2's Oracle names no command or test file");
-  expect(parsePlan(reply([part("a"), part("b", "`aleph check tests`")]))).toBe("part 2's Oracle names no command or test file");
+  expect(parsePlan(data(THREE))).toHaveLength(3);
+  expect(parsePlan(data(ONE))).toBe("1 parts, not 2 to 6");
+  expect(parsePlan(data(NO_ORACLE))).toBe("part 2 has no Oracle");
+  expect(parsePlan(data(reply([part("a"), { ...part("b"), after: [2] }])))).toBe("part 2 has an after that is not an earlier part");
+  expect(parsePlan(data(reply([part("a"), part("b", "it works")])))).toBe("part 2's Oracle names no command or test file");
+  expect(parsePlan(data(reply([part("a"), part("b", "`aleph check tests`")])))).toBe("part 2's Oracle names no command or test file");
   // A title that breaks the rule passes the check; with no title writer, fitTitles cuts it and keeps the group. A part with no Time box passes.
-  const kept = parsePlan(reply([part("a"), { ...part("b"), title: "Check foo: bar." }, { ...part("c"), title: `[Group] ${"a ".repeat(30)}` }, { title: "d", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Oracle\n`bun test`" }])) as Part[];
+  const kept = parsePlan(data(reply([part("a"), { ...part("b"), title: "Check foo: bar." }, { ...part("c"), title: `[Group] ${"a ".repeat(30)}` }, { title: "d", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Oracle\n`bun test`" }]))) as Part[];
   expect(kept.map((c) => c.title)).toEqual(["a", "Check foo: bar.", `[Group] ${"a ".repeat(30).trim()}`, "d"]);
   expect((await fitTitles(kept)).map((c) => c.title)).toEqual(["a", "bar", `[Group] ${"a ".repeat(25)}a`, "d"]);
   expect(realOracle("the new ui/plan.test.ts passes")).toBe(true);

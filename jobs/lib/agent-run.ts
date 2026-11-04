@@ -14,6 +14,7 @@ import { sandboxed, stallReason, type Step } from "./sandbox.ts";
 import { allRuns, lock, readRun, runsDir, nextStamp, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
 import { roleCmd, roleSeconds } from "./settings.ts";
 import { runFile } from "./run-files.ts";
+import { schemaFlags, structuredOf } from "./structured.ts";
 
 export interface Call {
   role: string;
@@ -24,28 +25,30 @@ export interface Call {
   /** The arguments after the model: the role's tools and what they may do. */
   flags: string[];
   cwd?: string;
+  /** The JSON schema of the reply: the call then gives the reply's `structured_output` as `data`. */
+  schema?: object;
 }
 
-async function spawn(c: Call, input: string): Promise<{ output: string; text: string; cost?: number; failure?: string }> {
+async function spawn(c: Call, input: string): Promise<{ output: string; text: string; data?: unknown; cost?: number; failure?: string }> {
   const role = c.role.toUpperCase();
-  const argv = [roleCmd(role), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags];
+  const argv = [roleCmd(role), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags, ...(c.schema ? schemaFlags(c.schema) : [])];
   const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
   let timedOut = false;
   const timer = setTimeout(() => { timedOut = true; p.kill(); }, roleSeconds(role, c.seconds) * 1000);
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     const failure = timedOut ? `${c.who} timed out` : code !== 0 ? `${c.who} exited ${code}` : undefined;
-    return { output: out + err, ...replyOf(out), failure };
+    return { output: out + err, ...replyOf(out), data: structuredOf(out), failure };
   } finally {
     clearTimeout(timer);
   }
 }
 
 /** One call with no run of its own. It throws on a time-out or a non-zero exit. */
-export async function callAgent(c: Call, input: string): Promise<{ text: string; cost?: number }> {
+export async function callAgent(c: Call, input: string): Promise<{ text: string; data?: unknown; cost?: number }> {
   const r = await spawn(c, input);
   if (r.failure) throw new Error(r.failure);
-  return { text: r.text, cost: r.cost };
+  return { text: r.text, data: r.data, cost: r.cost };
 }
 
 /** The ledger's line for a role's run. `job` defaults to the folder's own name. */
@@ -67,6 +70,8 @@ export interface AgentRun {
    * `cwd` replaces the opening's working directory for this call.
    */
   ask(input: string, cwd?: string): Promise<string>;
+  /** As `ask`, for an opening with a `schema`: the reply's structured output, or undefined when it has none. */
+  askData(input: string, cwd?: string): Promise<unknown>;
   /** The run is `done`: a role's run has no land or drop, whatever its reply was. */
   end(reason: string, fields?: Partial<Run>): void;
 }
@@ -85,16 +90,18 @@ export function openRun(o: Opening): AgentRun {
   }
   writeRun(folder, { kind: o.role, job: o.job ?? folder.split("/").at(-1)!, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now() });
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
+  const call = async (input: string, cwd?: string) => {
+    writeFileSync(runFile(folder, "prompt.md"), input);
+    const r = await spawn(cwd === undefined ? o : { ...o, cwd }, input);
+    writeFileSync(runFile(folder, "output.log"), r.output);
+    if (r.cost !== undefined) updateRun(folder, { cost: r.cost });
+    if (r.failure) throw new Error(r.failure);
+    return r;
+  };
   return {
     folder,
-    async ask(input, cwd) {
-      writeFileSync(runFile(folder, "prompt.md"), input);
-      const r = await spawn(cwd === undefined ? o : { ...o, cwd }, input);
-      writeFileSync(runFile(folder, "output.log"), r.output);
-      if (r.cost !== undefined) updateRun(folder, { cost: r.cost });
-      if (r.failure) throw new Error(r.failure);
-      return r.text;
-    },
+    ask: async (input, cwd) => (await call(input, cwd)).text,
+    askData: async (input, cwd) => (await call(input, cwd)).data,
     end: (reason, fields = {}) => endRun(folder, reason, fields),
   };
 }

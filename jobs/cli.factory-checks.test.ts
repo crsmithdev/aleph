@@ -11,9 +11,9 @@ afterAll(teardown);
 
 const reg = () => { const r = JSON.parse(readFileSync(join(base, "repos.json"), "utf8")); r.fac.author = true; const f = join(base, "repos-author.json"); writeFileSync(f, JSON.stringify(r)); return f; };
 // A fake spec check: it records its input in specs-<name>.in, one block per call, and prints the reply.
-const fakeSpec = (name: string, reply: string, code = 0) => {
+const fakeSpec = (name: string, reply: object | string, code = 0) => {
   const f = join(base, `spec-${name}.sh`);
-  writeFileSync(f, `#!/bin/sh\ncat >> ${base}/spec-${name}.in\necho '=====CALL' >> ${base}/spec-${name}.in\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: reply, total_cost_usd: 0.5 })}\nEOF\nexit ${code}\n`);
+  writeFileSync(f, `#!/bin/sh\ncat >> ${base}/spec-${name}.in\necho '=====CALL' >> ${base}/spec-${name}.in\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, ...(typeof reply === "string" ? { result: reply } : { result: "", structured_output: reply }), total_cost_usd: 0.5 })}\nEOF\nexit ${code}\n`);
   chmodSync(f, 0o755);
   return f;
 };
@@ -22,7 +22,7 @@ const goalWith = (title: string) => seedItem("fac", title, { kind: "goal", issue
 
 test("aleph spec-check: a hold asks and is noted, and the same version is not checked again", async () => {
   const id = goalWith("held goal");
-  const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: fakeSpec("c", "looked.\nVERDICT: hold the Oracle names needHead, which is outside the Edit surface") };
+  const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: fakeSpec("c", { verdict: "hold", blocks: ["the Oracle names needHead, which is outside the Edit surface"], notes: [] }) };
   const r = await aleph(["spec-check", `fac-${id}`], env);
   expect(r.json).toMatchObject({ verdict: "hold", problems: expect.stringContaining("needHead"), cost: 0.5 });
   const shown = (await issueShow("fac", id)).json;

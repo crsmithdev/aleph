@@ -22,6 +22,7 @@ import { withMainClone } from "./main-clone.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
+import { NO_OUTPUT } from "./structured.ts";
 
 export const PLAN_MODEL = OPUS_MODEL;
 /** Planner replies that fail the check, for one goal, before it runs as one worker run. */
@@ -70,13 +71,26 @@ export function realOracle(text: string): boolean {
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
-/** The parts in the planner's output (the whole output, or its outermost braces), or why they fail the check. */
-export function parsePlan(output: string, least = 2): Part[] | string {
-  let raw: any;
-  for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
-    try { raw = JSON.parse(s); break; } catch {}
-  }
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
+/** The JSON schema of a `parts` list, the planner's and triage's: 1 to 6 parts, each title at most 60 characters. */
+export const PARTS_SCHEMA = {
+  type: "array", minItems: 1, maxItems: 6,
+  items: {
+    type: "object", additionalProperties: false, required: ["title", "body", "after"],
+    properties: {
+      title: { type: "string", minLength: 1, maxLength: 60 },
+      body: { type: "string", description: "The part's spec: ## Goal, ## Edit surface and ## Oracle, all non-empty." },
+      after: { type: "array", items: { type: "integer", minimum: 1 }, description: "The numbers of earlier parts that must land first, from 1." },
+    },
+  },
+};
+
+/** The JSON schema of the planner's reply. */
+export const PLAN_SCHEMA = { type: "object", additionalProperties: false, required: ["parts"], properties: { parts: PARTS_SCHEMA } };
+
+/** The parts in the planner's structured output, or why they fail the check. */
+export function parsePlan(raw: any, least = 2): Part[] | string {
+  if (raw === undefined) return NO_OUTPUT;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "not an object";
   return checkParts(raw.parts, least);
 }
 
@@ -154,9 +168,7 @@ export function prompt(repo: Repo, item: issues.Issue, episodes: Episode[] = [],
 
 ${[item.request, item.spec].map((t) => t.trim()).filter(Boolean).join("\n\n") || "(no text)"}
 ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${parts.length ? `\n# Its parts so far\n\n${parts.map((p) => `- ${repo.key}-${issues.refOf(p)} (${issues.status(p)}): ${p.title}`).join("\n")}\n` : ""}${episodes.length ? `\n# How similar goals went\n\n${episodes.map(episodeText).join("\n")}` : ""}
-${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 more parts." : "Split it into 2 to 6 parts."} Each part is work one factory run can do alone, in one run of under an hour, and the parts together do the whole goal. Reply with one JSON object and nothing else:
-
-{"parts": [{"title": "<title>", "body": "<part goal body>", "after": [<optional numbers of earlier parts, from 1>]}]}
+${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 more parts." : "Split it into 2 to 6 parts."} Each part is work one factory run can do alone, in one run of under an hour, and the parts together do the whole goal. Reply with the parts, each with a title, a body and an "after" list (empty when none).
 
 Each body is in the goal format, with all three sections non-empty:
   ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
@@ -298,12 +310,12 @@ async function plan(repo: Repo, id: number): Promise<Planned> {
     while (badPlans(repo, id) - earlier < PLAN_TRIES) {
       const on = `${repo.key}-${issues.refOf(item)}`;
       // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
-      const run = openRun({ role: "plan", who: "the planner", model: PLAN_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], name: `plan-${on}`, command: `plan ${on}: ${item.title}`, shown: true, repo: repo.key, on });
+      const run = openRun({ role: "plan", who: "the planner", model: PLAN_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: PLAN_SCHEMA, name: `plan-${on}`, command: `plan ${on}: ${item.title}`, shown: true, repo: repo.key, on });
       const end = (reason: string) => run.end(reason);
       const noAnswer = (reason: string) => run.end(reason, { cause: "no-answer" });
       try {
         const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
-        const plan = parsePlan(await withMainClone(repo, "plan-", (dir) => run.ask(input, dir)), parts.length ? 1 : 2);
+        const plan = parsePlan(await withMainClone(repo, "plan-", (dir) => run.askData(input, dir)), parts.length ? 1 : 2);
         if (typeof plan === "string") { why = `malformed plan: ${plan}`; noAnswer(why); continue; }
         const refs = fileParts(repo, id, await fitTitles(plan));
         if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }

@@ -19,6 +19,7 @@ import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, editAnswers, limitTex
 import { allRuns, isAgentRun, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { missingVerdict } from "./worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
+import { NO_OUTPUT } from "./structured.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile } from "./job.ts";
 import { isLive, isStarting } from "./process.ts";
 import { git } from "./git.ts";
@@ -261,7 +262,7 @@ ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes
 ${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of checks.log", tail(run.folder, "checks.log"))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
 }
 
-const CASE_TEXT = (acts: string[]): string => `{"headline": "<a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade>", "situation": "<plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk>", "effects": [{"action": "<one of: ${acts.join(", ")}>", "text": "<1 or 2 short sentences: what happens in this case if Chris takes it>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null, "details": "<optional: risks, gaps and technical facts>"}`;
+const CASE_TEXT = (acts: string[]): string => `The case text is "escalate": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if Chris takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;
 
 /** The past decisions the prompt shows: the last RECORD_LINES, each with its outcome. */
 const pastLines = (rec: Decision[]): string =>
@@ -289,7 +290,7 @@ ${pastLines(rec)}
 
 ${reply}
 
-Reply with one JSON object and nothing else: {"escalate": ${CASE_TEXT(acts)}}
+Reply with the case text only. ${CASE_TEXT(acts)}
 `;
   }
   const onRun = c.at === "run";
@@ -312,18 +313,20 @@ ${pastLines(rec)}
 
 ${reply}
 
-Reply with one JSON object and nothing else: {"actions": [ ... ]} to decide, or {"escalate": ${CASE_TEXT(acts)}} to send it to Chris. Each action applies to this Ask's ${onRun ? "run and its item" : "item"} and is one of
-${onRun ? `- {"do": "land"}: land the run's branch
-- {"do": "drop", "reason": "<why; the next run reads it>", "after": ["<repo>-<n>.<k>", "optional"], "fate": "optional: already-met | duplicate | by-hand"}
-- {"do": "answer", "note": "<your answer to the worker's question; the job reruns with it>"}
-` : `- {"do": "answer", "note": "<the decision>", "option": "<optional: an option's label>", "after": ["<optional <repo>-<n>.<k>>"]}
-- {"do": "rerun", "note": "<optional: why>"}
-- {"do": "drop", "reason": "<why>", "after": ["optional"], "fate": "optional"}: drop the item's open job
-`}- {"do": "close", "note": "<why the goal is already met on main>"}: mark the item done
-- {"do": "drop-issue", "reason": "<why nothing more runs for it>"}
-- {"do": "edit-goal", "body": "<optional: the new spec>", "after": ["optional: the open goals it waits for"]}
-- {"do": "add", "title": "<the fix job's title>", "body": "<its spec>"}
-- {"do": "note", "text": "<a note on the item>"}
+Reply with "actions" to decide, or with "escalate" to send it to Chris. ${CASE_TEXT(acts)}
+
+Each action applies to this Ask's ${onRun ? "run and its item" : "item"}. Its "do" is one of these; an "after" lists issues as \`<repo>-<n>\` or \`<repo>-<n>.<k>\`:
+${onRun ? `- land: land the run's branch
+- drop: a "reason" the next run reads, an optional "after", and an optional "fate"
+- answer: a "note" that answers the worker's question; the job reruns with it
+` : `- answer: a "note" with the decision, an optional "option" (an option's label) and an optional "after"
+- rerun: an optional "note" that says why
+- drop: drop the item's open job, with a "reason", an optional "after" and an optional "fate"
+`}- close: mark the item done, with a "note" that says why the goal is already met on main
+- drop-issue: a "reason" that says why nothing more runs for it
+- edit-goal: an optional "body" with the new spec, and an optional "after" of the open goals it waits for
+- add: the fix job's "title" and its spec as "body"
+- note: a "text" to note on the item
 `;
 }
 
@@ -339,6 +342,45 @@ export type Action =
   | { do: "edit-goal"; body?: string; after?: string[] }
   | { do: "add"; title: string; body: string }
   | { do: "note"; text: string };
+
+const nonEmpty = { type: "string", minLength: 1 };
+const refList = { type: "array", items: { type: "string", pattern: "^[a-z0-9-]+-\\d+(\\.\\d+)?$" } };
+const shape = (name: string, fields: Record<string, object> = {}, required: string[] = []) => ({
+  type: "object", additionalProperties: false, required: ["do", ...required], properties: { do: { const: name }, ...fields },
+});
+
+/** The JSON schema of the director's reply: `actions` to decide, or `escalate` with the case text. */
+export const DIRECTOR_SCHEMA = {
+  type: "object", additionalProperties: false,
+  properties: {
+    actions: {
+      type: "array",
+      items: {
+        oneOf: [
+          shape("land"),
+          shape("drop", { reason: nonEmpty, after: refList, fate: { enum: ["already-met", "duplicate", "by-hand"] } }, ["reason"]),
+          shape("answer", { note: nonEmpty, option: nonEmpty, after: refList }, ["note"]),
+          shape("rerun", { note: nonEmpty }),
+          shape("close", { note: nonEmpty }, ["note"]),
+          shape("drop-issue", { reason: nonEmpty }, ["reason"]),
+          shape("edit-goal", { body: nonEmpty, after: refList }),
+          shape("add", { title: nonEmpty, body: nonEmpty }, ["title", "body"]),
+          shape("note", { text: nonEmpty }, ["text"]),
+        ],
+      },
+    },
+    escalate: {
+      type: "object", additionalProperties: false, required: ["situation", "effects", "recommend"],
+      properties: {
+        headline: { type: "string" },
+        situation: nonEmpty,
+        effects: { type: "array", items: { type: "object", additionalProperties: false, required: ["action", "text"], properties: { action: nonEmpty, text: nonEmpty } } },
+        recommend: { anyOf: [{ type: "object", additionalProperties: false, required: ["action", "why"], properties: { action: nonEmpty, why: nonEmpty } }, { type: "null" }] },
+        details: { type: "string" },
+      },
+    },
+  },
+};
 
 const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
 /** The issue ids (`<repo>-<n>` or `<repo>-<n>.<k>`) in a string, a comma list or an array; any other value is ignored. */
@@ -373,16 +415,9 @@ export const describe = (a: Action): string =>
   : a.do === "rerun" ? `rerun${a.note ? `: ${a.note}` : ""}` : a.do === "close" ? `close: ${a.note}` : a.do === "drop-issue" ? `drop-issue: ${a.reason}`
   : a.do === "edit-goal" ? `edit-goal${a.body !== undefined ? " (spec)" : ""}${a.after ? ` (after ${a.after.join(", ")})` : ""}` : a.do === "add" ? `add: ${a.title}` : `note: ${a.text}`;
 
-const jsonOf = (output: string): any => {
-  for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
-    try { return JSON.parse(s); } catch {}
-  }
-  return null;
-};
-
 /** The case text in a raw object, or why it does not do. Text over a limit moves to `details` by whole sentences. */
 export function parseCaseText(raw: any, actions: string[]): Text | string {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "not an object";
   const moved: string[] = [];
   const keep = (t: string, limit: { words: number }): string => {
     const { kept, rest } = limitText(t, limit);
@@ -409,10 +444,10 @@ export function parseCaseText(raw: any, actions: string[]): Text | string {
 
 export type Reply = { actions: (Action | string)[] } | { escalate: Text | string };
 
-/** The reply: the actions, each parsed or why not, or the case text; a string when it is neither. */
-export function parseReply(output: string, actions: string[]): Reply | string {
-  const raw = jsonOf(output);
-  if (!raw || typeof raw !== "object") return "no JSON object";
+/** The reply in the run's structured output: the actions, each parsed or why not, or the case text; a string when it is neither. */
+export function parseReply(raw: any, actions: string[]): Reply | string {
+  if (raw === undefined) return NO_OUTPUT;
+  if (!raw || typeof raw !== "object") return "not an object";
   if (raw.escalate !== undefined && raw.escalate !== null) return { escalate: parseCaseText(raw.escalate, actions) };
   if (!Array.isArray(raw.actions)) return "no actions list and no escalate";
   return { actions: raw.actions.map(parseAction) };
@@ -633,13 +668,13 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
     const dirs = ["--add-dir", join(vaultDir(), "wiki", "decisions")];
     const run = openRun({
       role: "director", who: "the director", model: DIRECTOR_MODEL, seconds: SECONDS,
-      flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(","), ...dirs],
+      flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(","), ...dirs], schema: DIRECTOR_SCHEMA,
       cwd, name: `director-${c.on}`, command: `director ${c.on}: ${reasonName(c)}: ${questionOf(c)}`, shown: true, on: c.on,
     });
     updateRun(run.folder, { question: questionOf(c) });
     const at = { ...base, run: run.folder.split("/").at(-1)! };
     let reply: Reply | string;
-    try { reply = parseReply(await run.ask(prompt(c, listed, rec)), actionsOf(c)); } catch (e: any) {
+    try { reply = parseReply(await run.askData(prompt(c, listed, rec)), actionsOf(c)); } catch (e: any) {
       run.end(`failed: ${e?.message ?? e}`);
       return escalate(c, at, undefined, `its run failed: ${e?.message ?? e}`);
     }

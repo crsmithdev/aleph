@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./unit.ts";
-import { heldRule, securityChange, testFindings, outcome, replyOf } from "./gate.ts";
+import { heldRule, securityChange, testFindings, outcome, parseReview, replyOf, verdict } from "./gate.ts";
 import { tagged } from "./ledger.ts";
 
 let dir: string;
@@ -97,4 +97,15 @@ test("replyOf reads the text and the cost of a result event; other stdout is the
   expect(replyOf('{"type":"result","is_error":true,"total_cost_usd":0.1,"result":""}')).toEqual({ text: "", cost: 0.1 });
   expect(replyOf('Looked at it. {"route":"close"}\n')).toEqual({ text: 'Looked at it. {"route":"close"}\n' });
   expect(replyOf('{"route":"close"}\n')).toEqual({ text: '{"route":"close"}\n' });
+});
+
+test("parseReview names the failed clauses as the reason and writes a review.md that verdict reads", () => {
+  const hold = parseReview({ verdict: "hold", summary: "Two fail.", failures: [{ clause: "flag test", observed: "none" }, { clause: "scenario 2", observed: "exit 1" }], set_aside: ["scenario 3: more than the goal"] });
+  expect(hold).toMatchObject({ pass: false, reason: "flag test; scenario 2", asides: ["scenario 3: more than the goal"] });
+  const text = (hold as { text: string }).text;
+  expect(text).toBe("Two fail.\n\nCHECK: fail flag test: none\nCHECK: fail scenario 2: exit 1\nSET-ASIDE: scenario 3: more than the goal\nVERDICT: hold flag test; scenario 2\n");
+  expect(verdict(text)).toEqual({ pass: false, reason: "flag test; scenario 2" });
+  expect(verdict((parseReview({ verdict: "pass", summary: "9 of 9 passed.", failures: [] }) as { text: string }).text)).toEqual({ pass: true });
+  expect(parseReview(undefined)).toBe("no structured output");
+  expect(parseReview({ verdict: "maybe" })).toBe('unknown verdict "maybe"');
 });

@@ -165,20 +165,21 @@ export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, 
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 export const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
 
-// The reviewer: it keeps its prompt, then answers as the prompt's item asks (VERDICT in the goal), else passes.
+// The reviewer: it keeps its prompt, then answers as the prompt's item asks (REVIEW: in the goal) with structured output, else passes.
+// REVIEW:none gives text with no structured output.
 export const REVIEWER = `#!/bin/bash
 prompt=$(cat)
 printf '%s' "$prompt" > "$FAKE_LOG/review-prompt"
 echo x >> "$FAKE_LOG/review-calls"
 case $prompt in
-  *REVIEW:holdonce*) if [ -e "$FAKE_LOG/holdonce" ]; then echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}'; else touch "$FAKE_LOG/holdonce"; echo '{"type":"result","is_error":false,"result":"Looked.\\nVERDICT: hold the flag has no test"}'; fi ;;
-  *REVIEW:noneonce*) if [ -e "$FAKE_LOG/noneonce" ]; then echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}'; else touch "$FAKE_LOG/noneonce"; echo '{"type":"result","is_error":true,"result":"API Error: 529"}'; fi ;;
-  *REVIEW:setaside*) echo '{"type":"result","is_error":false,"result":"SET-ASIDE: scenario 2 asks for more than the goal\\nVERDICT: pass"}' ;;
-  *REVIEW:hold*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looked.\\nVERDICT: hold tests do not cover the new flag"}' ;;
+  *REVIEW:holdonce*) if [ -e "$FAKE_LOG/holdonce" ]; then echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}'; else touch "$FAKE_LOG/holdonce"; echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"hold","summary":"Looked.","failures":[{"clause":"the flag has no test","observed":"seen"}]}}'; fi ;;
+  *REVIEW:noneonce*) if [ -e "$FAKE_LOG/noneonce" ]; then echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}'; else touch "$FAKE_LOG/noneonce"; echo '{"type":"result","is_error":true,"result":"API Error: 529"}'; fi ;;
+  *REVIEW:setaside*) echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[],"set_aside":["scenario 2 asks for more than the goal"]}}' ;;
+  *REVIEW:hold*) echo '{"type":"result","is_error":false,"result":"","total_cost_usd":0.02,"structured_output":{"verdict":"hold","summary":"Looked.","failures":[{"clause":"tests do not cover the new flag","observed":"seen"}]}}' ;;
   *REVIEW:none*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looks fine to me."}' ;;
   *REVIEW:error*) echo '{"type":"result","is_error":true,"result":"API Error: 529"}' ;;
-  *REVIEW:pass*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Fine.\\nVERDICT: pass"}' ;;
-  *) echo '{"type":"result","is_error":false,"result":"Fine.\\nVERDICT: pass"}' ;;
+  *REVIEW:pass*) echo '{"type":"result","is_error":false,"result":"","total_cost_usd":0.02,"structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}' ;;
+  *) echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}' ;;
 esac
 `;
 

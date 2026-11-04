@@ -19,7 +19,8 @@ import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
 import { withMainClone } from "./main-clone.ts";
 import { isVersion, specVersion } from "./goal-spec.ts";
-import { lastTagged, lock, tagged, TAG_FORMAT, type Repo } from "./ledger.ts";
+import { lock, type Repo } from "./ledger.ts";
+import { NO_OUTPUT } from "./structured.ts";
 import { SCENARIOS, scenarioCount, seal, withoutScenarios } from "./author.ts";
 import { askChris, plainAsk } from "./ask.ts";
 import { factoryDir, issueJob, recordHold, recordSpecCost } from "./factory-status.ts";
@@ -98,30 +99,46 @@ Apply the method to every clause. Answer ${scenarios ? "four" : "three"} questio
 1. Can every clause of the Goal and the Oracle be true at the same time in this codebase? Name each pair that cannot.
 2. Does the Edit surface hold the code that each Oracle clause needs to change? Name each clause whose code is outside it.
 3. Does the Oracle ask for something that no check or reviewer can observe? Name each such clause.
-${scenarios ? `4. Does each sealed scenario follow from the Goal, and can it be true together with the Oracle? For each one that does not, write one line \`SET-ASIDE: scenario <n>: <why>\`. A set-aside scenario is removed; it is not a problem of the spec, so do not hold for it.
+${scenarios ? `4. Does each sealed scenario follow from the Goal, and can it be true together with the Oracle? Put each one that does not in "set_aside", with its number and why. A set-aside scenario is removed; it is not a problem of the spec, so do not hold for it.
 ` : ""}${held ? "\nThis goal was held once already and its spec was edited. Do not hold it again: write every problem as a note.\n" : ""}
-Write each problem as its quoted clause, then its rewrite. End the reply with one last line: \`VERDICT: pass\` when there is no problem; \`VERDICT: pass <notes>\` when there are notes only${held ? "" : "; \`VERDICT: hold <blocks>\` when one problem or more blocks the goal"}. The verdict line is the only part of the reply that the factory keeps, so write each problem on it in full: its quoted clause and its rewrite, separated by \`; \`. Never name a problem there by a number or a label.${held ? "" : " A hold line carries the blocks only; the notes are lost."} ${TAG_FORMAT}`;
+Write each problem as its quoted clause, then its rewrite. ${held ? `The verdict is "pass", and every problem goes in "notes".` : `The verdict is "hold" when one problem or more blocks the goal, else "pass". Each block goes in "blocks" and each other problem in "notes".`} The lists are the only part of the reply that the factory keeps, so write each problem there in full: its quoted clause and its rewrite. Never name a problem there by a number or a label.`;
 }
 
-/** The last `VERDICT:` line of a reply, or null when it has none. */
-export function specVerdict(reply: string): { pass: true; notes?: string } | { pass: false; problems: string } | null {
-  const rest = lastTagged(reply, "VERDICT");
-  if (rest === undefined) return null;
-  const pass = rest.match(/^pass\b[:\s]*(.*)$/i);
-  if (pass) return pass[1].trim() ? { pass: true, notes: pass[1].trim() } : { pass: true };
-  const hold = rest.match(/^hold\b[:\s]*(.*)$/i);
-  return hold ? { pass: false, problems: hold[1].trim() } : null;
-}
+const problems = { type: "array", items: { type: "string", minLength: 1 }, description: "Each problem in full: its quoted clause and its rewrite." };
 
-/** The scenario numbers and reasons of the `SET-ASIDE: scenario <n>: <why>` lines of a reply. */
-export function specAsides(reply: string): Map<number, string> {
-  const out = new Map<number, string>();
-  for (const line of tagged(reply, "SET-ASIDE")) {
-    const m = line.match(/^scenario\s+(\d+)\b[:\s]*(.*)$/i);
-    if (m && !out.has(Number(m[1]))) out.set(Number(m[1]), m[2].trim());
+/** The JSON schema of the spec check's reply. */
+export const SPEC_CHECK_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["verdict", "blocks", "notes"],
+  properties: {
+    verdict: { enum: ["pass", "hold"] },
+    blocks: problems,
+    notes: problems,
+    set_aside: {
+      type: "array", description: "The sealed scenarios that do not follow from the Goal or cannot hold with the Oracle.",
+      items: { type: "object", additionalProperties: false, required: ["scenario", "why"], properties: { scenario: { type: "integer", minimum: 1 }, why: { type: "string", minLength: 1 } } },
+    },
+  },
+};
+
+export type SpecReply = { pass: boolean; blocks: string[]; notes: string[]; asides: Map<number, string> };
+
+const oneLine = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
+const lines = (v: unknown): string[] => (Array.isArray(v) ? v.map(oneLine).filter(Boolean) : []);
+
+/** The spec check's structured output, each problem on one line, or why it does not do. */
+export function parseSpecCheck(raw: any): SpecReply | string {
+  if (raw === undefined) return NO_OUTPUT;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "not an object";
+  if (raw.verdict !== "pass" && raw.verdict !== "hold") return `unknown verdict ${JSON.stringify(raw.verdict)}`;
+  const asides = new Map<number, string>();
+  for (const a of Array.isArray(raw.set_aside) ? raw.set_aside : []) {
+    if (Number.isInteger(a?.scenario) && !asides.has(a.scenario)) asides.set(a.scenario, oneLine(a.why));
   }
-  return out;
+  return { pass: raw.verdict === "pass", blocks: lines(raw.blocks), notes: lines(raw.notes), asides };
 }
+
+/** Problems as the one line a note keeps. */
+export const joinProblems = (list: string[]): string => list.join(" | ");
 
 export async function checkSpec(repo: Repo, id: number | string): Promise<{ verdict: "pass" | "hold" | "skip" | "error"; problems?: string; cost?: number }> {
   const item = reader().item(repo.key, id);
@@ -137,21 +154,26 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
     if (repo.author) try { scenarios = readHidden(repo, `${repo.key}-${ref}`)[SCENARIOS] ?? ""; } catch {}
     if (!scenarioCount(scenarios)) scenarios = "";
     const held = heldBefore(item);
-    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: dir }, specCheckPrompt(item, scenarios, held)));
+    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: SPEC_CHECK_SCHEMA, cwd: dir }, specCheckPrompt(item, scenarios, held)));
     cost = sealCost === undefined && reply.cost === undefined ? undefined : (sealCost ?? 0) + (reply.cost ?? 0);
-    const v = specVerdict(reply.text);
-    if (!v) { say("error: the reply has no verdict line"); return { verdict: "error", cost }; }
+    const v = parseSpecCheck(reply.data);
+    if (typeof v === "string") { say(`error: the reply has no verdict: ${v}`); return { verdict: "error", cost }; }
     // A set-aside scenario leaves the sealed file; the others keep their numbers, so acceptance and the reviewer agree on them.
-    const asides = [...specAsides(reply.text)].filter(([n]) => scenarios && new RegExp(`^\\s*${n}[.)]\\s+\\S`, "m").test(scenarios));
+    const asides = [...v.asides].filter(([n]) => scenarios && new RegExp(`^\\s*${n}[.)]\\s+\\S`, "m").test(scenarios));
     if (asides.length) {
       writeHidden(repo, `${repo.key}-${ref}`, { [SCENARIOS]: withoutScenarios(scenarios, new Set(asides.map(([n]) => n))) });
       for (const [n, why] of asides) note(repo, ref, `sealed checks: ${version} the spec check set aside: scenario ${n}: ${why}`);
     }
     // A goal is held at most once: a second hold passes, and its problems go to the worker as notes.
-    const notes = v.pass ? v.notes : held ? v.problems : undefined;
-    if (v.pass || held) { say(notes ? `pass: ${notes}` : "pass"); return { verdict: "pass", cost }; }
-    say(`hold: ${v.problems}`);
-    return { verdict: "hold", problems: v.problems, cost };
+    // A pass with blocks keeps them as notes too.
+    if (v.pass || held) {
+      const notes = joinProblems([...v.blocks, ...v.notes]);
+      say(notes ? `pass: ${notes}` : "pass");
+      return { verdict: "pass", cost };
+    }
+    const problems = joinProblems(v.blocks);
+    say(`hold: ${problems}`);
+    return { verdict: "hold", problems, cost };
   } catch (e: any) {
     say(`error: ${String(e?.message ?? e).replace(/\s+/g, " ").slice(0, 200)}`);
     return { verdict: "error", cost };

@@ -19,20 +19,20 @@ describe("a factory run's checks", () => {
 
     describe("a fresh author", () => {
       const reg = () => { const r = JSON.parse(readFileSync(join(base, "repos.json"), "utf8")); r.fac.author = true; const f = join(base, "repos-author.json"); writeFileSync(f, JSON.stringify(r)); return f; };
-      const fakeAuthor = (name: string, reply: string) => {
+      const fakeAuthor = (name: string, reply: object | string) => {
         const f = join(base, `author-${name}.sh`);
         writeFileSync(f, `#!/bin/sh\ncat > ${base}/author-${name}.in\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: reply, total_cost_usd: 0.25 })}\nEOF\n`);
         chmodSync(f, 0o755);
         return f;
       };
       // A fake spec check: it records its input in specs-<name>.in, one block per call, and prints the reply.
-      const fakeSpec = (name: string, reply: string, code = 0) => {
+      const fakeSpec = (name: string, reply: object | string, code = 0) => {
         const f = join(base, `spec-${name}.sh`);
-        writeFileSync(f, `#!/bin/sh\ncat >> ${base}/spec-${name}.in\necho '=====CALL' >> ${base}/spec-${name}.in\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, result: reply, total_cost_usd: 0.5 })}\nEOF\nexit ${code}\n`);
+        writeFileSync(f, `#!/bin/sh\ncat >> ${base}/spec-${name}.in\necho '=====CALL' >> ${base}/spec-${name}.in\ncat <<'EOF'\n${JSON.stringify({ type: "result", subtype: "success", is_error: false, ...(typeof reply === "string" ? { result: reply } : { result: "", structured_output: reply }), total_cost_usd: 0.5 })}\nEOF\nexit ${code}\n`);
         chmodSync(f, 0o755);
         return f;
       };
-      const PASS = () => fakeSpec("default", "VERDICT: pass");
+      const PASS = () => fakeSpec("default", { verdict: "pass", blocks: [], notes: [] });
       const goalWith = (title: string) => seedItem("fac", title, { kind: "goal", issue: "fac-1", after: [] }, "## Goal\nEnd state one.\n\n## Oracle\nORACLE-TEXT\n");
       const notes = (id: number) => issueNotes("fac", id);
       const SCENES = "1. SECRET-SCENARIO one is seen.\n2. Another is seen.\n";

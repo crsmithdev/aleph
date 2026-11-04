@@ -13,9 +13,10 @@ import { file as fileIssues, note, noteFlake, readHidden, reader } from "../../t
 import { OPUS_MODEL, q } from "./agent-call.ts";
 import { agentCall } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
-import { heldRule, securityChange, testFindings, verdict as reviewVerdict } from "./gate.ts";
+import { heldRule, parseReview, REVIEW_SCHEMA, securityChange, testFindings } from "./gate.ts";
+import { schemaFlags, structuredOf } from "./structured.ts";
 import { awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
-import { tagged, TAG_FORMAT, isAgentRun, onOf, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
+import { tagged, isAgentRun, onOf, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
@@ -600,13 +601,11 @@ The Oracle is a check stored on the issue, so the goal does not need a new commi
 needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting
 behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new
 command wiring. Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
-Write the verdict first, in one sentence. Then write one line for each failure only, each with its reason:
-\`CHECK: fail <clause>: <what was observed>\`. Do not write a CHECK line for a pass: give the passes as a count, such as \`7 of 9 passed\`. A sealed scenario is marked by its number only
-(\`CHECK: fail scenario 2: <what was observed>\`); do not quote its text. Say each thing once. ${TAG_FORMAT}
-The text outside the CHECK lines is at most 80 words, and the VERDICT line does not repeat the CHECK lines. The
-number of CHECK lines has no cap. End with one line: \`VERDICT: pass\` when nothing failed, or
-\`VERDICT: hold <the failed clauses, each named by a few words without its reason>\`, separated by \`; \`, and
-not only the first one.`;
+The "summary" is the verdict in one sentence and the passes as a count, such as \`7 of 9 passed\`, in at most 80 words.
+Each failure goes in "failures": its clause, named by a few words without its reason, and what was observed. Do not
+list a pass. A sealed scenario is named by its number only (\`scenario 2\`); do not quote its text. Say each thing
+once. The list of failures has no cap: list every failure, not only the first. The verdict is "pass" when nothing
+failed, else "hold".`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
 when the goal does not call for the change, or the change weakens a check the
@@ -617,8 +616,7 @@ tests or scripts outside the repo's tracked files and run them. The diff and the
 evidence, because the worker wrote them. Be sceptical: do not talk yourself out of a defect you found.
 Hold when the branch fails a scenario that the goal requires. The hold reason goes to the worker: say what a
 user of the code sees that the goal does not allow, and do not quote or mention the scenarios. If a scenario
-asks for more than the goal or contradicts it, set it aside and add a line \`SET-ASIDE: <the scenario and why>\`
-before the VERDICT line.`;
+asks for more than the goal or contradicts it, set it aside: put the scenario and why in "set_aside".`;
 
 const OUTSIDE = `The branch changes these files, and the Edit surface of the goal names none of them. Judge each one
 against the goal: hold only when the goal does not need the change. A change the goal needs passes.`;
@@ -678,7 +676,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const text = reviewPrompt(run.name, spec, diff, findings, scenarios, { outside: outsideSurface(spec, changed), merge: range.merge });
     writeFileSync(runFile(folder, "review-prompt.md"), text);
     const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
+      "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL, ...schemaFlags(REVIEW_SCHEMA)];
     const bundle = {
       bundle: "../out/out.bundle", refs: [`+refs/heads/${branch}:refs/heads/${branch}`],
       setup: [
@@ -696,13 +694,13 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     });
     child = null;
     const o = w.outcome;
-    writeFileSync(runFile(folder, "review.md"), o.result);
+    const v = parseReview(structuredOf(existsSync(log) ? readFileSync(log, "utf8") : ""));
+    writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? o.result : v.text);
     const cost = o.cost;
     const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
     if (w.cause) return none(w.cause.reason);
-    const v = reviewVerdict(o.result);
-    if (!v) return none("no VERDICT line");
-    for (const aside of tagged(o.result, "SET-ASIDE")) note(repo, goal!, `sealed checks: the reviewer set aside: ${aside}`);
+    if (typeof v === "string") return none(v);
+    for (const aside of v.asides) note(repo, goal!, `sealed checks: the reviewer set aside: ${aside}`);
     return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
   } finally {
     removeRunFolder(rdir);
