@@ -236,7 +236,7 @@ export function renderJob(j) {
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
   const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(j.name)}" data-file="checks.log">checks.log</button>` : "";
   const checks = j.checks?.length
-    ? `<div class="dp-logs" data-logs><div class="tscroll"><table class="tbl"><thead><tr><th>Check</th><th>Result</th><th class="num">Time</th><th>Log</th></tr></thead><tbody>${j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td><td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join("")}</tbody></table></div><div class="logbody" hidden></div></div>`
+    ? `<div class="dp-logs" data-logs>${dataTable('<th>Check</th><th>Result</th><th class="num">Time</th><th>Log</th>', j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td><td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join(""))}<div class="logbody" hidden></div></div>`
     : "";
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = verdictOf(j.review), c = change(j.stat);
   return `<div class="page dp-page">${crumb(p ? p.href : "#/jobs", back)}` +

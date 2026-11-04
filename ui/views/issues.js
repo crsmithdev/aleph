@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { barList, barRow, blockersHtml, barsOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, blockersHtml, barsOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -238,7 +238,7 @@ export function renderTable(rows, o = {}) {
   const shown = all.slice(0, o.limit ?? PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
   const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : `<th>${esc(label)}</th>`)).join("");
-  return `<div class="tscroll"><table class="tbl"><thead><tr>${head}</tr></thead><tbody>${shown.map(renderRow).join("")}</tbody></table></div>${pager(shown.length, all.length, PAGE)}`;
+  return `${dataTable(head, shown.map(renderRow).join(""))}${pager(shown.length, all.length, PAGE)}`;
 }
 
 // ---- The tiles and charts ----
@@ -614,10 +614,10 @@ export function renderIssue(d) {
   const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + fold_ : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
-    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Commit</th><th>Subject</th>${parts ? "<th>Part</th>" : ""}<th>Date</th></tr></thead><tbody>${d.commits.map((c) => {
+    ? dataTable(`<th>Commit</th><th>Subject</th>${parts ? "<th>Part</th>" : ""}<th>Date</th>`, d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
       return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}<td class="time">${esc(when(c.date))}</td></tr>`;
-    }).join("")}</tbody></table></div>`
+    }).join(""))
     : empty("No commit on main names this issue in its trailers.");
   const segments = issueSegments(d);
   return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askRow(d.ask) : "") +

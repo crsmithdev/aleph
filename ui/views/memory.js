@@ -43,7 +43,7 @@ export function renderHealth(m) {
 
 export function renderWrites(m) {
   return (m.writes.length
-    ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Write</th><th>When</th></tr></thead><tbody>${m.writes.map((w) => `<tr><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td></tr>`).join("")}</tbody></table></div>`
+    ? dataTable("<th>Write</th><th>When</th>", m.writes.map((w) => `<tr><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td></tr>`).join(""))
     : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
 }
 
