@@ -14,6 +14,7 @@ import { endLost, openRun } from "./agent-run.ts";
 
 import { factoryDir, gates } from "./factory-status.ts";
 import { git } from "./git.ts";
+import { withMainClone } from "./main-clone.ts";
 import { TRIAGE_CAP, TRIAGE_TRIES } from "./settings.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
 
@@ -80,10 +81,10 @@ function openIssues(repo: Repo, item: issues.Issue): string {
   return others.map((o) => `${repo.key}-${o.id}: ${o.title.replace(/\s+/g, " ").trim()}`).join("\n") || "(none)";
 }
 
-/** The ref of the repo's main: origin/main when it has one, else main. */
+/** The ref of the repo's main, `origin/<main>`, when the repo has it; triage fetches it before each run. */
 function mainRef(repo: Repo): string | null {
-  for (const ref of ["origin/main", "main"]) if (git(repo.path, "rev-parse", "--verify", "-q", `${ref}^{commit}`).ok) return ref;
-  return null;
+  const ref = `origin/${repo.main}`;
+  return git(repo.path, "rev-parse", "--verify", "-q", `${ref}^{commit}`).ok ? ref : null;
 }
 
 /** The commits on main since the day the item was created, one line each: what a goal may already be done by. */
@@ -239,12 +240,13 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
   if (!release) { skipped.push(`${name}: another triage is running`); return; }
   try {
     // `shown`: the tick's own line reports a triage, so the report has no line for the run.
-    const run = openRun({ role: "triage", who: "triage", model: TRIAGE_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"], cwd: repo.path, name: `triage-${name}`, command: `triage ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
+    const run = openRun({ role: "triage", who: "triage", model: TRIAGE_MODEL, seconds: 600, flags: ["--tools", "Read", "Grep", "Glob"], name: `triage-${name}`, command: `triage ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
     // A triage that gives no verdict is still done: it is not a job to land or drop, and the item is unchanged.
     const end = (reason: string, route?: Applied) => run.end(reason, route ? { route } : {});
     const noAnswer = (reason: string) => run.end(reason, { cause: "no-answer" });
     try {
-      const v = parseRoute(await run.ask(prompt(repo, item)));
+      // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.
+      const v = parseRoute(await withMainClone(repo, "triage-", (dir) => run.ask(prompt(repo, item), dir)));
       if (typeof v === "string") {
         const reason = `malformed verdict: ${v}`;
         noAnswer(reason);

@@ -5,7 +5,7 @@
  * work store with the issue's `goals`, in one commit. Each run is a job in the
  * ledger, kind `plan`, `on` the issue. See docs/specs/2026-10-26-seed-factory.md, "Planner".
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -17,6 +17,7 @@ import { askPartDropped } from "./ask.ts";
 import { allRuns, lock, type Repo } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";
+import { withMainClone } from "./main-clone.ts";
 import { jobsNamed } from "./job.ts";
 import type { Tier } from "./route.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
@@ -260,12 +261,12 @@ async function plan(repo: Repo, id: number): Promise<Planned> {
     while (badPlans(repo, id) - earlier < PLAN_TRIES) {
       const on = `${repo.key}-${issues.refOf(item)}`;
       // `shown`: the dispatch's line reports a plan, so the report has no line for the run.
-      const run = openRun({ role: "plan", who: "the planner", model: PLAN_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: existsSync(repo.path) ? repo.path : undefined, name: `plan-${on}`, command: `plan ${on}: ${item.title}`, shown: true, repo: repo.key, on });
+      const run = openRun({ role: "plan", who: "the planner", model: PLAN_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], name: `plan-${on}`, command: `plan ${on}: ${item.title}`, shown: true, repo: repo.key, on });
       const end = (reason: string) => run.end(reason);
       const noAnswer = (reason: string) => run.end(reason, { cause: "no-answer" });
       try {
         const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
-        const plan = parsePlan(await run.ask(input), parts.length ? 1 : 2);
+        const plan = parsePlan(await withMainClone(repo, "plan-", (dir) => run.ask(input, dir)), parts.length ? 1 : 2);
         if (typeof plan === "string") { why = `malformed plan: ${plan}`; noAnswer(why); continue; }
         const refs = fileChildren(repo, id, plan);
         if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }

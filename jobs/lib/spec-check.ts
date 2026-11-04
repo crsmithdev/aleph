@@ -6,14 +6,13 @@
  * The dispatch never runs it inline: it reads the recorded verdict (`recordedVerdict`) and, when there is
  * none, starts `aleph spec-check` detached (`runSpecCheck`), which ends by starting a dispatch.
  */
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { note, reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
-import { git } from "./git.ts";
+import { withMainClone } from "./main-clone.ts";
 import { isVersion, specVersion } from "./goal-spec.ts";
 import { lastTagged, lock, TAG_FORMAT, type Repo } from "./ledger.ts";
 import { askChris, plainAsk } from "./ask.ts";
@@ -63,18 +62,9 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
   if (recordedVerdict(item)) return { verdict: "skip" };
   const version = specVersion(item);
   const say = (text: string) => { note(repo, issues.refOf(item), `${NOTE} ${version} ${text}`); };
-  let clone: string | undefined;
   let cost: number | undefined;
   try {
-    clone = mkdtempSync(join(tmpdir(), "spec-check-"));
-    const c = git(tmpdir(), "clone", "-q", "--shared", "--no-checkout", repo.path, clone);
-    if (!c.ok) throw new Error(`clone failed: ${c.out}`);
-    // The clone's own origin is `repo.path`, so take that repo's remote-tracking main, not its local one.
-    const f = git(clone, "fetch", "-q", repo.path, `+refs/remotes/origin/${repo.main}:refs/remotes/origin/${repo.main}`);
-    if (!f.ok) throw new Error(`fetch failed: ${f.out}`);
-    const o = git(clone, "checkout", "-q", "--detach", `origin/${repo.main}`);
-    if (!o.ok) throw new Error(`checkout failed: ${o.out}`);
-    const reply = await callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: clone }, specCheckPrompt(item));
+    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: dir }, specCheckPrompt(item)));
     cost = reply.cost;
     const v = specVerdict(reply.text);
     if (!v) { say("error: the reply has no verdict line"); return { verdict: "error", cost }; }
@@ -84,8 +74,6 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
   } catch (e: any) {
     say(`error: ${String(e?.message ?? e).replace(/\s+/g, " ").slice(0, 200)}`);
     return { verdict: "error", cost };
-  } finally {
-    if (clone) rmSync(clone, { recursive: true, force: true });
   }
 }
 

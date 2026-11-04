@@ -10,13 +10,13 @@ import { countsLine, parseRoute, prompt, triageIssue, triageOpen, TRIAGE_MODEL }
 import { saveProbe } from "../../../jobs/lib/factory-status.ts";
 import { lock, readRun, stamp, writeRun, type Repo } from "../../../jobs/lib/ledger.ts";
 import { askOf, clearAsk, setAsk } from "../../../jobs/lib/ask.ts";
-import { storeRepos } from "../../../tests/git-fixture.ts";
+import { factoryRepos } from "../../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
 // The factory dir for the whole file: nothing here may read or write ~/.aleph/factory.
 let factoryHome: string;
-const repo = { key: "tri", path: "" } as Repo;
+const repo = { key: "tri", path: "", main: "main" } as Repo;
 
 function sh(cwd: string, ...args: string[]): void {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -65,10 +65,11 @@ const run = (done: (r: string) => boolean = () => false) => triageOpen([repo], d
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-triage-"));
   factoryHome = join(base, "factory");
-  storeRepos(base);
+  // `repo` with its origin `repo.git`, and the store.
+  factoryRepos(base);
   writeFileSync(join(base, "fake"), FAKE);
   chmodSync(join(base, "fake"), 0o755);
-  repo.path = base;
+  repo.path = join(base, "repo");
   Object.assign(process.env, gitEnv, {
     ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_TRIAGE_CMD: join(base, "fake"),
     FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome, ALEPH_DISPATCH: "off",
@@ -319,21 +320,22 @@ else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n
   let saved: string | undefined;
   beforeAll(() => {
     fixture = join(base, "fixture");
-    mkdirSync(fixture);
-    sh(fixture, "git", "init", "-q", "-b", "main");
+    sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "fixture.git"));
+    sh(base, "git", "clone", "-q", join(base, "fixture.git"), fixture);
     writeFileSync(join(fixture, "README"), "x\n");
     sh(fixture, "git", "add", "-A");
     sh(fixture, "git", "commit", "-q", "-m", "start");
     writeFileSync(join(fixture, "widget.ts"), "export const widget = 1;\n");
     sh(fixture, "git", "add", "-A");
     sh(fixture, "git", "commit", "-q", "-m", "Add widget.ts");
+    sh(fixture, "git", "push", "-q", "origin", "main");
     writeFileSync(join(base, "smart"), SMART);
     chmodSync(join(base, "smart"), 0o755);
     saved = process.env.ALEPH_TRIAGE_CMD;
     process.env.ALEPH_TRIAGE_CMD = join(base, "smart");
     repo.path = fixture;
   });
-  afterAll(() => { repo.path = base; process.env.ALEPH_TRIAGE_CMD = saved; });
+  afterAll(() => { repo.path = join(base, "repo"); process.env.ALEPH_TRIAGE_CMD = saved; });
 
   test("the prompt lists the commits on main since the item was created", () => {
     reset([{ title: "Add widget.ts" }]);
@@ -419,7 +421,7 @@ describe("aleph triage", () => {
     writeFileSync(join(home, "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
   });
   const aleph = async (args: string[]) => {
-    writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: base } }));
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ [repo.key]: { path: join(base, "repo") } }));
     const p = Bun.spawn(["bun", CLI, ...args], {
       cwd: base, stdout: "pipe", stderr: "pipe",
       env: { ...process.env, ALEPH_REPOS: join(base, "repos.json"), ALEPH_TRIAGE_CMD: join(base, "fake"), ALEPH_FACTORY_DIR: home, ALEPH_DISPATCH: "off" },

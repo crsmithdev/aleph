@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
@@ -8,13 +8,13 @@ import { isSorted, readList, writeList } from "../../todo/lib/store.ts";
 import { parseRoute, prompt, triageOpen } from "./triage.ts";
 import { readRun, stamp, writeRun, type Repo } from "./ledger.ts";
 import { askOf, setAsk } from "./ask.ts";
-import { storeRepos } from "../../tests/git-fixture.ts";
+import { factoryRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 let base: string;
 // The factory dir for the whole file: nothing here may read or write ~/.aleph/factory.
 let factoryHome: string;
-const repo = { key: "tri", path: "" } as Repo;
+const repo = { key: "tri", path: "", main: "main" } as Repo;
 
 function sh(cwd: string, ...args: string[]): void {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -61,10 +61,11 @@ const run = (done: (r: string) => boolean = () => false) => triageOpen([repo], d
 beforeAll(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-triage-"));
   factoryHome = join(base, "factory");
-  storeRepos(base);
+  // `repo` with its origin `repo.git`, and the store.
+  factoryRepos(base);
   writeFileSync(join(base, "fake"), FAKE);
   chmodSync(join(base, "fake"), 0o755);
-  repo.path = base;
+  repo.path = join(base, "repo");
   Object.assign(process.env, gitEnv, {
     ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_TRIAGE_CMD: join(base, "fake"),
     FAKE_LOG: join(base, "calls"), ALEPH_LIVE_CAP: "10", ALEPH_FACTORY_DIR: factoryHome, ALEPH_DISPATCH: "off",
@@ -212,34 +213,35 @@ test("the prompt keeps how-to-build questions away from Chris and asks him in pl
 });
 
 describe("a goal whose work is already on main", () => {
-  // The fake reads the commit list in the prompt: a line naming the file the issue asks for gives "done", else "build".
+  // The fake reads the commit list in the prompt: a line naming the file the issue asks for, with the file in its working directory, gives "done", else "build".
   const SMART = `#!/bin/bash
 prompt=$(cat)
 echo "$PWD" >> "$FAKE_LOG"
 file=$(echo "$prompt" | grep -m1 '^# Issue' | grep -o '[a-z]*\.ts')
 sha=$(echo "$prompt" | sed -n '/^# Commits on main/,/^Reply/p' | grep -F "$file" | head -1 | cut -d' ' -f1)
-if [ -n "$sha" ]; then echo "{\\"route\\":\\"done\\",\\"commit\\":\\"$sha\\",\\"reason\\":\\"widget.ts exists\\"}"
+if [ -n "$sha" ] && [ -f "$file" ]; then echo "{\\"route\\":\\"done\\",\\"commit\\":\\"$sha\\",\\"reason\\":\\"widget.ts exists\\"}"
 else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}'; fi
 `;
   let fixture: string;
   let saved: string | undefined;
   beforeAll(() => {
     fixture = join(base, "fixture");
-    mkdirSync(fixture);
-    sh(fixture, "git", "init", "-q", "-b", "main");
+    sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "fixture.git"));
+    sh(base, "git", "clone", "-q", join(base, "fixture.git"), fixture);
     writeFileSync(join(fixture, "README"), "x\n");
     sh(fixture, "git", "add", "-A");
     sh(fixture, "git", "commit", "-q", "-m", "start");
     writeFileSync(join(fixture, "widget.ts"), "export const widget = 1;\n");
     sh(fixture, "git", "add", "-A");
     sh(fixture, "git", "commit", "-q", "-m", "Add widget.ts");
+    sh(fixture, "git", "push", "-q", "origin", "main");
     writeFileSync(join(base, "smart"), SMART);
     chmodSync(join(base, "smart"), 0o755);
     saved = process.env.ALEPH_TRIAGE_CMD;
     process.env.ALEPH_TRIAGE_CMD = join(base, "smart");
     repo.path = fixture;
   });
-  afterAll(() => { repo.path = base; process.env.ALEPH_TRIAGE_CMD = saved; });
+  afterAll(() => { repo.path = join(base, "repo"); process.env.ALEPH_TRIAGE_CMD = saved; });
 
   test("triage closes it as done with the commit in the note, and starts no worker", async () => {
     reset([{ title: "Add widget.ts", body: "Create widget.ts exporting widget." }]);
@@ -251,6 +253,27 @@ else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n
     const sha = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: fixture }).stdout.toString().trim();
     expect(item(1).notes.join("\n")).toContain(`triage: already on main in ${sha}`);
     expect(runOf(1)!.route).toBe("done");
+  });
+
+  test("triage reads a clone at origin/main: it sees a commit the checkout does not have, and the clone is gone after", async () => {
+    const other = join(base, "fixture-other");
+    sh(base, "git", "clone", "-q", join(base, "fixture.git"), other);
+    writeFileSync(join(other, "gadget.ts"), "export const gadget = 1;\n");
+    sh(other, "git", "add", "-A");
+    sh(other, "git", "commit", "-q", "-m", "Add gadget.ts");
+    sh(other, "git", "push", "-q", "origin", "main");
+    const sha = Bun.spawnSync(["git", "rev-parse", "--short=12", "HEAD"], { cwd: other }).stdout.toString().trim();
+    const head = () => Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: fixture }).stdout.toString();
+    const before = head();
+    reset([{ title: "Add gadget.ts", body: "Create gadget.ts exporting gadget." }]);
+    const t = await run();
+    expect(t.triaged).toEqual({ done: 1 });
+    expect(item(1).notes.join("\n")).toContain(`triage: already on main in ${sha}`);
+    const pwd = readFileSync(join(base, "calls"), "utf8").trim().split("\n").at(-1)!;
+    expect(pwd).not.toBe(fixture);
+    expect(existsSync(pwd)).toBe(false);
+    expect(existsSync(join(fixture, "gadget.ts"))).toBe(false);
+    expect(head()).toBe(before);
   });
 
   test("a done verdict naming a commit that is not on main is not applied", async () => {

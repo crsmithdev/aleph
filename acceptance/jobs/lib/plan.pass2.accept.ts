@@ -254,7 +254,7 @@ describe("the planner prompt's similar episodes", () => {
     mkdirSync(empty);
     process.env.ALEPH_VAULT = empty;
     const id = bigGoal();
-    expect(await runPlan({ key: "fac", path: join(base, "repo") } as any, id)).toEqual({ planned: expect.any(Array) });
+    expect(await runPlan({ key: "fac", path: join(base, "repo"), main: "main" } as any, id)).toEqual({ planned: expect.any(Array) });
     expect(lastPrompt()).not.toContain("# How similar goals went");
   });
 

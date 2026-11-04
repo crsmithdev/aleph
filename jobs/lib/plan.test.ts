@@ -33,6 +33,7 @@ Here is the plan. ${THREE}
 J
   ;;
   *PLAN:slow*) for _ in $(seq 600); do { [ -e "${join(base, "release")}" ] || [ ! -d "${base}" ]; } && break; sleep 0.05; done; echo '${THREE}' ;;
+  *PLAN:seen*) if [ -f seen.ts ]; then echo '${THREE}'; else echo 'no seen.ts'; fi ;;
   *PLAN:one*) echo '${ONE}' ;;
   *PLAN:nooracle*) echo '${NO_ORACLE}' ;;
   *PLAN:badthengood*) if [ -e "${join(base, "once")}" ]; then echo '${THREE}'; else touch "${join(base, "once")}"; echo '${ONE}'; fi ;;
@@ -173,7 +174,7 @@ describe("the planner prompt's similar episodes", () => {
     writeFileSync(join(vault, "wiki/episodes/fac-7 Add a report line.md"),
       `---\nkind: episode\nscope: fac\nconfidence: high\nupdated: 2026-10-01\nsupersedes: []\nsources: []\n---\n# fac-7 Add a report line\n\n${page}`);
     const id = bigGoal();
-    expect(await runPlan({ key: "fac", path: join(base, "repo") } as any, id)).toEqual({ planned: expect.any(Array) });
+    expect(await runPlan({ key: "fac", path: join(base, "repo"), main: "main" } as any, id)).toEqual({ planned: expect.any(Array) });
     const p = lastPrompt();
     expect(p).toContain("# How similar goals went");
     expect(p).toContain("fac-7 Add a report line");
@@ -212,4 +213,19 @@ test("aleph plan on an issue filed with --spec - files parts .1 to .3 in one com
   expect(planRuns()).toEqual([expect.objectContaining({ kind: "plan", on: `fac-${n}`, condition: "done", reason: "planned" })]);
   const state = JSON.parse(readFileSync(join(base, "jobs", readdirSync(join(base, "jobs")).find((d) => d.endsWith("-plan"))!, "state.json"), "utf8"));
   expect(state).toMatchObject({ on: `fac-${n}`, kind: "plan" });
+});
+
+test("the planner reads a clone at origin/main: it sees a commit the checkout does not have, and the clone is gone after", async () => {
+  const other = join(base, "other");
+  sh(base, "git", "clone", "-q", join(base, "repo.git"), other);
+  writeFileSync(join(other, "seen.ts"), "export const seen = 1;\n");
+  sh(other, "git", "add", "-A");
+  sh(other, "git", "commit", "-q", "-m", "Add seen.ts");
+  sh(other, "git", "push", "-q", "origin", "main");
+  const head = () => Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: join(base, "repo") }).stdout.toString();
+  const before = head();
+  const id = addGoal("seen");
+  expect(await runPlan({ key: "fac", path: join(base, "repo"), main: "main" } as any, id)).toEqual({ planned: expect.any(Array) });
+  expect(existsSync(join(base, "repo", "seen.ts"))).toBe(false);
+  expect(head()).toBe(before);
 });

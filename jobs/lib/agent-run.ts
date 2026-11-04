@@ -61,8 +61,11 @@ export interface Opening extends Call {
 
 export interface AgentRun {
   folder: string;
-  /** The reply's text. It writes prompt.md and output.log and records the cost, and then throws on a time-out or a non-zero exit. */
-  ask(input: string): Promise<string>;
+  /**
+   * The reply's text. It writes prompt.md and output.log and records the cost, and then throws on a time-out or a non-zero exit.
+   * `cwd` replaces the opening's working directory for this call.
+   */
+  ask(input: string, cwd?: string): Promise<string>;
   /** The run is `done`: a role's run has no land or drop, whatever its reply was. */
   end(reason: string, fields?: Partial<Run>): void;
 }
@@ -79,9 +82,9 @@ export function openRun(o: Opening): AgentRun {
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
   return {
     folder,
-    async ask(input) {
+    async ask(input, cwd) {
       writeFileSync(runFile(folder, "prompt.md"), input);
-      const r = await spawn(o, input);
+      const r = await spawn(cwd === undefined ? o : { ...o, cwd }, input);
       writeFileSync(runFile(folder, "output.log"), r.output);
       if (r.cost !== undefined) updateRun(folder, { cost: r.cost });
       if (r.failure) throw new Error(r.failure);
