@@ -410,29 +410,67 @@ describe("obs hook waits for the transcript", () => {
 });
 
 describe("vault-context hook", () => {
-  let vault: string;
+  let vault: string, base: string, repo: string, worktree: string;
+  const note = (title: string, scope: string) => {
+    mkdirSync(join(vault, "wiki", "decisions"), { recursive: true });
+    writeFileSync(join(vault, "wiki", "decisions", `${title}.md`), `---\nkind: decision\nscope: ${scope}\n---\n**Claim.** x.\n`);
+  };
   beforeAll(() => {
-    vault = mkdtempSync(join(tmpdir(), "aleph-vaultctx-"));
-    writeFileSync(join(vault, "Home.md"), "# Home\n\n- [[A Note]] — hook\n\nHealth: 1 notes, 0 dangling, 0 orphans, lint 2026-09-04\n");
+    base = mkdtempSync(join(tmpdir(), "aleph-vaultctx-"));
+    vault = join(base, "vault");
+    mkdirSync(vault);
+    note("Ours", "aleph"); note("Theirs", "cloudchamber"); note("Everyone", "global");
+    writeFileSync(join(vault, "Home.md"), "# Home\n\n## Decisions\n- [[Ours]] — here\n- [[Theirs]] — elsewhere\n- [[Everyone]] — all\n\nHealth: 3 notes, 0 dangling, 0 orphans, lint 2026-09-04\n");
     writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
+    repo = join(base, "aleph");
+    const git = (...args: string[]) => Bun.spawnSync(["git", ...args], { stdout: "ignore", stderr: "ignore" });
+    git("init", "-q", repo);
+    git("-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init");
+    worktree = join(repo, ".worktrees", "w");
+    git("-C", repo, "worktree", "add", "-q", worktree);
   });
-  afterAll(() => rmSync(vault, { recursive: true, force: true }));
-  async function start(dir: string) {
+  afterAll(() => rmSync(base, { recursive: true, force: true }));
+  async function start(dir: string, cwd = repo) {
     const proc = Bun.spawn(["bun", join(HOOKS, "vault-context.ts")], {
-      stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "SessionStart", source: "startup" })),
+      stdin: new TextEncoder().encode(JSON.stringify({ hook_event_name: "SessionStart", source: "startup", cwd })),
       env: { ...process.env, ALEPH_VAULT: dir }, stdout: "pipe",
     });
     await proc.exited;
     return (await new Response(proc.stdout).text()).trim();
   }
-  test("injects Home then MEMORY whole", async () => {
+  const context = async (dir: string, cwd?: string): Promise<string> => JSON.parse(await start(dir, cwd)).hookSpecificOutput.additionalContext;
+  test("injects MEMORY whole, then the Home lines of the session's repo and global", async () => {
     const out = JSON.parse(await start(vault));
     const ctx: string = out.hookSpecificOutput.additionalContext;
     expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
-    expect(ctx.indexOf("# Home")).toBeLessThan(ctx.indexOf("# Memory"));
-    expect(ctx).toContain("- [[A Note]] — hook");
-    expect(ctx).toContain("Health: 1 notes");
+    expect(ctx.indexOf("# Memory")).toBeLessThan(ctx.indexOf("# Home"));
     expect(ctx).toContain("- Chris, Pacific");
+    expect(ctx).toContain("- [[Ours]] — here");
+    expect(ctx).toContain("- [[Everyone]] — all");
+    expect(ctx).not.toContain("Theirs");
+    expect(ctx).toContain("Health: 3 notes");
+  });
+  test("a worktree takes the scope of its main checkout", async () => {
+    const ctx = await context(vault, worktree);
+    expect(ctx).toContain("- [[Ours]] — here");
+    expect(ctx).not.toContain("Theirs");
+  });
+  test("an over-budget Home is cut at whole lines to 6,000 bytes, with a pointer to the rest", async () => {
+    const big = join(base, "big");
+    mkdirSync(join(big, "wiki", "decisions"), { recursive: true });
+    const lines = Array.from({ length: 200 }, (_, i) => {
+      writeFileSync(join(big, "wiki", "decisions", `Note ${i}.md`), "---\nkind: decision\nscope: aleph\n---\n");
+      return `- [[Note ${i}]] — ${"x".repeat(80)}`;
+    });
+    writeFileSync(join(big, "Home.md"), `# Home\n\n${lines.join("\n")}\n`);
+    writeFileSync(join(big, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
+    const ctx = await context(big);
+    expect(Buffer.byteLength(ctx)).toBeLessThanOrEqual(6000);
+    expect(ctx).toContain("- Chris, Pacific");
+    const kept = ctx.split("\n").filter((l) => l.startsWith("- [[Note "));
+    expect(kept.length).toBeGreaterThan(10);
+    for (const l of kept) expect(lines).toContain(l);
+    expect(ctx).toContain(`${200 - kept.length} more Home lines: vault recall --scope aleph`);
   });
   test("no vault, no output", async () => {
     expect(await start(join(vault, "missing"))).toBe("");

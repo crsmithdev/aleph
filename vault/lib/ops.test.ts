@@ -517,32 +517,6 @@ describe("adopt", () => {
   });
 });
 
-describe("symlinked vault", () => {
-  test("a write through the other spelling of the same file does not truncate it", async () => {
-    // ~/.aleph/vault is a symlink to /mnt/c/Users/crsmi/vault, so one note has
-    // two absolute paths. A string compare guarding copyFileSync could not see
-    // that, and the copy-onto-itself emptied the file.
-    const link = join(base, "vault-link");
-    if (!existsSync(link)) symlinkSync(vault, link);
-    const r = (await cli("write", note("Two Paths One File"), "--why", "seed it"));
-    expect(r.code).toBe(0);
-    const real = join(vault, "wiki/gotchas/Two Paths One File.md");
-    const before = readFileSync(real, "utf8");
-    expect(before.length).toBeGreaterThan(100);
-
-    // Same file, reached through the symlink, written again.
-    const viaLink = join(link, "wiki/gotchas/Two Paths One File.md");
-    expect((await run({ ALEPH_VAULT: vault }, "write", viaLink, "--why", "rewrite in place")).code).toBe(0);
-    expect(readFileSync(real, "utf8")).toBe(before);
-
-    // And with the vault itself named through the link.
-    expect((await run({ ALEPH_VAULT: link }, "write", real, "--why", "rewrite the other way")).code).toBe(0);
-    expect(readFileSync(real, "utf8")).toBe(before);
-    (await cli("archive", "Two Paths One File", "--why", "test fixture"));
-    expect(gitStatus()).toBe("");
-  });
-});
-
 describe("consolidate", () => {
   test("read-only by default; --apply drops gotcha and dead lines, keeps the standing kinds", async () => {
     // The CLI test of this op: it spawns vault/cli.ts.

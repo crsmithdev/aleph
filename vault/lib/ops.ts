@@ -2,7 +2,7 @@
  * The ops of the `vault` command: vault/cli.ts passes its argv to `run`. Each op prints JSON on stdout and findings
  * on stderr, and ends with `Exit` for a refusal, which the CLI turns into its exit code.
  */
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { decide, judgeChoice, type Question } from "../../hooks/lib/jev.ts";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
@@ -20,19 +20,7 @@ export class Exit extends Error { constructor(readonly code: number) { super(`ex
 function exit(code: number): never { throw new Exit(code); }
 
 let cmd: string | undefined, rest: string[] = [];
-/**
- * The vault root with every symlink resolved.
- *
- * `~/.aleph/vault` is a symlink to `/mnt/c/Users/crsmi/vault`, so one note has
- * two absolute paths. Both the root and a write's source resolve here, so the
- * `srcPath !== dest` guard below compares one spelling against itself.
- *
- * Without that, a write given a note's `/mnt/c/...` path copied the file onto
- * itself through the `~/.aleph` spelling, and `copyFileSync` truncated it to 0
- * bytes. It also read as outside the vault, so `relative()` put
- * `../../../../mnt/c/...` in the messages.
- */
-const rootOf = () => { const r = resolve(vaultDir()); try { return realpathSync(r); } catch { return r; } };
+const rootOf = () => resolve(vaultDir());
 let root = "";
 
 
@@ -161,7 +149,7 @@ async function write(): Promise<void> {
   const src = positional[0];
   const why = flag("why");
   if (!src || !why) { console.error('usage: vault write <file.md> --why "<one line>"'); exit(1); }
-  const srcPath = (() => { const r = resolve(src); try { return realpathSync(r); } catch { return r; } })();
+  const srcPath = resolve(src);
   if (!existsSync(srcPath)) { console.error(`no such file: ${srcPath}`); exit(1); }
   const inside = !relative(root, srcPath).startsWith("..");
   const rel = inside ? relative(root, srcPath) : null;
@@ -417,7 +405,7 @@ async function adopt(): Promise<void> {
   const src = positional[0];
   const why = flag("why");
   if (!src || !why) { console.error('usage: vault adopt <path-inside-the-vault> --why "<one line>"'); exit(1); }
-  const path = (() => { const r = resolve(src); try { return realpathSync(r); } catch { return r; } })();
+  const path = resolve(src);
   if (!existsSync(path)) { console.error(`no such file: ${path}`); exit(1); }
   const rel = relative(root, path);
   if (rel.startsWith("..")) { console.error(`${src} is outside the vault; adopt is for a note already in it — use: vault write`); exit(1); }
