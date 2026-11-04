@@ -83,7 +83,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
   "run-cap": (c) => `The factory started ${c.id} 3 times in one hour, so it stopped starting it until you run it again.`,
   "triage-failed": (c) => `Triage of ${c.id} failed twice: ${failure(c.issue?.question ?? "")}, so no one has decided what to do with this issue.`,
-  "acceptance-failed": (c) => `The Oracle of ${c.id} still fails on main after a rerun.`,
+  "acceptance-failed": (c) => `${c.id} is the acceptance follow-up of a goal, and it also failed acceptance on main.`,
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
   proposal: () => "This work is a proposal, and it does not start until you approve it.",
   "host-check": (c) => `A factory sandbox cannot run this check, so it must run on the host: ${noteOf(c) || "the check"}.`,

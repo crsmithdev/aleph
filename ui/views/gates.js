@@ -30,7 +30,7 @@ export const REASONS = {
   "spec-check": ["Spec checks", "The spec check found a spec that cannot be met as written."],
   rescue: ["Rescue of a stuck run", "A stuck run with more than one way out."],
   "run-cap": ["Run cap", "A goal started 3 times in one hour."],
-  "acceptance-failed": ["Failed acceptance", "The Oracle still fails on main after a rerun."],
+  "acceptance-failed": ["Failed acceptance", "The acceptance follow-up of a goal also failed acceptance."],
   "proposal-check": ["Proposed checks", "The correction memory proposes a check for a repo."],
   "proposal-claude-md": ["Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."],
   "proposal-skill": ["Proposed skill changes", "The correction memory proposes a change to a skill."],

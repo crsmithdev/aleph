@@ -69,7 +69,7 @@ describe("asks", () => {
     expect(CASES["run-cap"]()[0].problem).toBe("The factory started aleph-387 3 times in one hour, so it stopped starting it until you run it again.");
     expect(CASES["triage-failed"]()[0].problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
     expect(CASES["triage-failed"]()[0].actions.map((a) => a.label)).toEqual(["Run triage again", "Close the issue"]);
-    expect(CASES["acceptance-failed"]()[0].problem).toBe("The Oracle of aleph-387 still fails on main after a rerun.");
+    expect(CASES["acceptance-failed"]()[0].problem).toBe("aleph-387 is the acceptance follow-up of a goal, and it also failed acceptance on main.");
     expect(QUESTION_ISSUE()[0].problem).toBe("Should it be A or B?");
     expect(QUESTION_ISSUE()[0].actions.map((a) => a.label)).toEqual(["Approve B", "Approve A", "Deny"]);
     expect(QUESTION_ISSUE()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", option: "B" });

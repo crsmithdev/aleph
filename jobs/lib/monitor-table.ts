@@ -54,7 +54,10 @@ export interface StageRow {
   minutes: number | null;
 }
 
-/** What became of each acceptance failure: a later land that the next acceptance passed is a real fix. */
+/**
+ * What became of each acceptance failure. A failure that filed a follow-up is fixed when the follow-up landed and its
+ * acceptance passed. An older failure is fixed when a later land on its goal and the next acceptance passed.
+ */
 export interface Acceptance { failures: number; fixed: number; notFixed: number; pending: number; closed: number; open: number }
 
 export interface HoldRow { kind: string; records: number; goals: number; hours: number }
@@ -175,7 +178,7 @@ function stageRows(src: Sources, from: number, to: number): StageRow[] {
   });
 }
 
-type Event = { at: number; kind: "fail" | "land" | "pass" };
+type Event = { at: number; kind: "fail" | "land" | "pass"; followup?: string };
 
 /** Each item's notes, from the store now and from its history, and whether it is open now; an item the store no longer has is closed. */
 export type Notes = Map<string, { lines: Set<string>; open: boolean }>;
@@ -198,7 +201,10 @@ function events(lines: Iterable<string>): Event[] {
   for (const line of lines) {
     const n = noteOf(line);
     if (!n) continue;
-    if (/^acceptance: fail (again )?at /.test(n.text)) out.push({ at: n.at, kind: "fail" });
+    if (/^acceptance: fail (again )?at /.test(n.text)) {
+      const f = /; follow-up (\S+)$/.exec(n.text);
+      out.push({ at: n.at, kind: "fail", ...(f ? { followup: f[1] } : {}) });
+    }
     else if (/^acceptance: pass at /.test(n.text)) out.push({ at: n.at, kind: "pass" });
     else if (/^job \S+ landed$/.test(n.text)) out.push({ at: n.at, kind: "land" });
   }
@@ -206,9 +212,11 @@ function events(lines: Iterable<string>): Event[] {
 }
 
 /**
- * Each acceptance failure noted in [from, to): fixed when a land follows it and the next acceptance after that land
- * passed; not fixed when that acceptance failed; pending when none ran yet. A failure with no land after it is closed
- * (the item is done or dropped) or open.
+ * Each acceptance failure noted in [from, to). A failure that filed a follow-up (v6 phase 3B on) is judged on the
+ * follow-up: fixed when it landed and its next acceptance passed; not fixed when that acceptance failed; pending when
+ * none ran yet; closed or open by the follow-up's status when it has no land. An older failure is judged on its own
+ * item: fixed when a land follows it and the next acceptance after that land passed; not fixed when that acceptance
+ * failed; pending when none ran yet. With no land after it, it is closed (the item is done or dropped) or open.
  */
 export function acceptanceOf(notes: Notes, from: number, to: number): Acceptance {
   const a: Acceptance = { failures: 0, fixed: 0, notFixed: 0, pending: 0, closed: 0, open: 0 };
@@ -217,11 +225,19 @@ export function acceptanceOf(notes: Notes, from: number, to: number): Acceptance
     ev.forEach((e, i) => {
       if (e.kind !== "fail" || e.at < from || e.at >= to) return;
       a.failures++;
-      const rest = ev.slice(i + 1);
-      const next = rest.findIndex((x) => x.kind !== "land");
-      const land = rest.slice(0, next < 0 ? rest.length : next).some((x) => x.kind === "land");
-      if (!land) { open ? a.open++ : a.closed++; return; }
-      const after = rest[next];
+      let land: boolean, after: Event | undefined, still: boolean;
+      if (e.followup) {
+        // A follow-up the notes do not have is no longer in the store: it is closed.
+        const f = notes.get(e.followup) ?? { lines: [], open: false };
+        const fe = events(f.lines), k = fe.findIndex((x) => x.kind === "land");
+        land = k >= 0; after = fe.slice(k + 1).find((x) => x.kind !== "land"); still = f.open;
+      } else {
+        const rest = ev.slice(i + 1);
+        const next = rest.findIndex((x) => x.kind !== "land");
+        land = rest.slice(0, next < 0 ? rest.length : next).some((x) => x.kind === "land");
+        after = rest[next]; still = open;
+      }
+      if (!land) { still ? a.open++ : a.closed++; return; }
       if (!after) a.pending++;
       else if (after.kind === "pass") a.fixed++;
       else a.notFixed++;

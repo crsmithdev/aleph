@@ -47,6 +47,32 @@ describe("acceptance: the share of failures that led to a real fix", () => {
     expect(acceptanceOf(notesOf({ items: [], storeLog }), -Infinity, Infinity)).toMatchObject({ failures: 1, fixed: 1 });
   });
 
+  test("a failure that filed a follow-up is judged on the follow-up; a failure with no follow-up part keeps the old rule", () => {
+    const filed = (m: number) => note(DAY, 9, `acceptance: fail at abc1234: scenarios 1 failed; follow-up q-${m}`);
+    const goals = [
+      // The follow-up landed and its acceptance passed: fixed.
+      { name: "q-1", item: item("done", [filed(11)]) },
+      { name: "q-11", item: item("done", [note(DAY, 10, "job q-11 landed"), note(DAY, 11, "acceptance: pass at def5678")]) },
+      // The follow-up landed and its acceptance failed: not fixed, and the follow-up's own failure is open.
+      { name: "q-2", item: item("done", [filed(12)]) },
+      { name: "q-12", item: item("open", [note(DAY, 10, "job q-12 landed"), note(DAY, 11, "acceptance: fail again at def5678: x")]) },
+      // The follow-up landed and no acceptance ran yet: pending.
+      { name: "q-3", item: item("done", [filed(13)]) },
+      { name: "q-13", item: item("done", [note(DAY, 10, "job q-13 landed")]) },
+      // The follow-up has not landed: open, though the goal is done.
+      { name: "q-4", item: item("done", [filed(14)]) },
+      { name: "q-14", item: item("open", []) },
+      // An old-format failure: a land on the goal and the next acceptance passed.
+      { name: "q-5", item: item("done", [fail(9), note(DAY, 10, "job q-5 landed"), pass(11)]) },
+    ];
+    const one = (k: number) => acceptanceOf(notesOf({ items: goals.slice(2 * k, 2 * k + 2), storeLog: [] }), -Infinity, Infinity);
+    expect(one(0)).toEqual({ failures: 1, fixed: 1, notFixed: 0, pending: 0, closed: 0, open: 0 });
+    expect(one(1)).toEqual({ failures: 2, fixed: 0, notFixed: 1, pending: 0, closed: 0, open: 1 });
+    expect(one(2)).toEqual({ failures: 1, fixed: 0, notFixed: 0, pending: 1, closed: 0, open: 0 });
+    expect(one(3)).toEqual({ failures: 1, fixed: 0, notFixed: 0, pending: 0, closed: 0, open: 1 });
+    expect(one(4)).toEqual({ failures: 1, fixed: 1, notFixed: 0, pending: 0, closed: 0, open: 0 });
+  });
+
   test("only failures noted inside the window count", () => {
     expect(acceptanceOf(notesOf({ items, storeLog: [] }), Date.parse(at(DAY, 10)), Infinity).failures).toBe(1);
   });
