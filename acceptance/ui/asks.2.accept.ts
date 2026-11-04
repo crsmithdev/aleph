@@ -71,10 +71,10 @@ describe("asks", () => {
     expect(CASES["triage-failed"]()[0].actions.map((a) => a.label)).toEqual(["Run triage again", "Close the issue"]);
     expect(CASES["acceptance-failed"]()[0].problem).toBe("aleph-387 is the acceptance follow-up of a goal, and it also failed acceptance on main.");
     expect(QUESTION_ISSUE()[0].problem).toBe("Should it be A or B?");
-    expect(QUESTION_ISSUE()[0].actions.map((a) => a.label)).toEqual(["Approve B", "Approve A", "Deny"]);
+    expect(QUESTION_ISSUE()[0].actions.map((a) => a.label)).toEqual(["B", "A", "Deny"]);
     expect(QUESTION_ISSUE()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", option: "B" });
     expect(CASES["part-dropped"]()[0].problem).toBe("A goal of aleph-387 was dropped and no other goal of it is open.");
-    expect(CASES["part-dropped"]()[0].actions.map((a) => a.label)).toEqual(["Approve Close with what landed", "Approve Plan the missing part", "Close the issue"]);
+    expect(CASES["part-dropped"]()[0].actions.map((a) => a.label)).toEqual(["Close with what landed", "Plan the missing part", "Close the issue"]);
     expect(CASES["proposal-check"]()[0].problem).toBe("The correction memory proposes a check for aleph: Run the formatter before landing.");
     expect(CASES["proposal-check"]()[0].title).toBe("Format first");
     expect(CASES["proposal-check"]()[0].actions.map((a) => a.label)).toEqual(["Add a check to aleph", "Add no check"]);
@@ -92,7 +92,7 @@ describe("asks", () => {
     expect(CASES["proposal-check"]()[0].actions[0].args).toEqual({ id: "L1" });
     expect(CASES["held-path"]()[0].always).toBeUndefined();
     expect(CASES["triage-failed"]()[0].always!.label).toBe("Run triage again [auto-yes]");
-    expect(QUESTION_ISSUE()[0].always).toMatchObject({ label: "Approve B [auto-yes]", action: "recommended" });
+    expect(QUESTION_ISSUE()[0].always).toMatchObject({ label: "B [auto-yes]", action: "recommended" });
     expect(QUESTION_ISSUE()[0].always!.hint).toContain("`aleph always revoke question`");
     expect(CASES.proposal()[0].problem).toBe("This work is a proposal, and it does not start until you approve it.");
     expect(CASES.proposal()[0].actions.map((a) => a.label)).toEqual(["Start the work", "Drop the proposal"]);
@@ -115,14 +115,15 @@ describe("asks", () => {
     for (const reason of Object.keys(CASES)) for (const a of CASES[reason]().flatMap((i) => i.actions)) expect(a.label).not.toBe("Run it again");
   });
 
-  test("an Ask explained before the limits shows 3 sentences, 2 per choice, and the rest as details", () => {
-    const nine = Array.from({ length: 9 }, (_, i) => `Sentence ${i + 1}.`).join(" ");
-    STORE = { situation: nine, details: "Extra.", effects: [{ action: "rerun", text: "One. Two. Three. Four." }, { action: "close", text: "Closes." }] };
+  test("an Ask explained before the limits shows 100 words, 50 per choice, and the rest as details", () => {
+    const ten = (k: string) => `${k} ${"w ".repeat(8)}end.`;
+    const many = (k: string, n: number) => Array.from({ length: n }, (_, i) => ten(`${k}${i + 1}`)).join(" ");
+    STORE = { situation: many("S", 12), details: "Extra.", effects: [{ action: "rerun", text: many("E", 7) }, { action: "close", text: "Closes." }] };
     try {
       const [it] = ofIssues(issue({ reason: "spec-check", question: "q" }));
-      expect(it.situation).toBe("Sentence 1. Sentence 2. Sentence 3.");
-      expect(it.actions[0].hint).toBe("One. Two.");
-      expect(it.more).toEqual(["Sentence 4. Sentence 5. Sentence 6. Sentence 7. Sentence 8. Sentence 9.", "Start the goal: Three. Four.", "Extra."]);
+      expect(it.situation).toBe(many("S", 10));
+      expect(it.actions[0].hint).toBe(many("E", 5));
+      expect(it.more).toEqual([`${ten("S11")} ${ten("S12")}`, `Start the goal: ${ten("E6")} ${ten("E7")}`, "Extra."]);
     } finally { STORE = undefined; }
   });
 

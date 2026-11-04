@@ -5,7 +5,8 @@
  *
  * A run keeps its Ask whole in `ask` of its state.json. An issue or goal keeps it as flat fields next to its prose note:
  * `ask` (`input` or `approval`), `reason`, `question`, `options` (each `label :: line`, with `:: after <goal id>`
- * when choosing it means waiting for that goal), `recommended` (an option label) and `why` (short context lines).
+ * when choosing it means waiting for that goal), `recommended` (an option label) and `why` (short context lines), and
+ * the director's case text: `headline`, `situation`, `details`, `effects` and `recommend`.
  * The work store's front matter is flat, so the values are kept free of quotes, backslashes and line breaks.
  *
  * A run that set an Ask on its issue has the file `asked` (the question) in its folder, and `asked-spec` (the spec's
@@ -29,6 +30,8 @@ export interface Ask {
   options: { label: string; line: string; after?: string }[];
   recommended?: string;
   why: string[];
+  /** A short noun phrase for the card's title, after the kind: "the TypeScript 5.9 to 7.0 upgrade". */
+  headline?: string;
   /** Plain sentences on what this item is about and why it waits for Chris. */
   situation?: string;
   /** What the case text left out, or what the director put apart: shown under Details. */
@@ -77,22 +80,25 @@ const REASONS = {
   "proposal-skill": proposal,
 } satisfies Record<string, Reason>;
 
-/** The limits on the text a card shows: the case text, and each choice's text. */
-export const LIMITS = { situation: { sentences: 3, chars: 600 }, choice: { sentences: 2, chars: 220 } } as const;
+/** The limits on the text a card shows, in words: the title phrase, the case text, and each choice's text. */
+export const LIMITS = { headline: 12, situation: { words: 100 }, choice: { words: 50 } } as const;
 
 /** The sentences of a text, in order. A full stop inside a word or a path is not an end. */
 export const sentencesOf = (text: string): string[] => text.trim().split(/(?<=[.!?]["')\]]?)\s+/).filter(Boolean);
 
+/** The count of words in a text. */
+export const wordsOf = (text: string): number => text.trim().split(/\s+/).filter(Boolean).length;
+
 /**
  * The text within a limit and the rest. Whole sentences only: the first sentence stays whole even when it is over the
- * character limit, and later sentences stay while the count and the characters fit.
+ * word limit, and later sentences stay while the words fit.
  */
-export function limitText(text: string, limit: { sentences: number; chars: number }): { kept: string; rest: string } {
+export function limitText(text: string, limit: { words: number }): { kept: string; rest: string } {
   const all = sentencesOf(text);
   let n = 0, len = 0;
   for (const s of all) {
-    const next = len + (n ? 1 : 0) + s.length;
-    if (n >= limit.sentences || (n > 0 && next > limit.chars)) break;
+    const next = len + wordsOf(s);
+    if (n > 0 && next > limit.words) break;
     n++; len = next;
   }
   return { kept: all.slice(0, n).join(" "), rest: all.slice(n).join(" ") };
@@ -182,6 +188,7 @@ export function askOf(item: issues.Issue): Ask | null {
   const kind = item.fm.ask;
   if (kind !== "input" && kind !== "approval") return null;
   const why = item.fm.why;
+  const headline = text(item.fm.headline);
   const situation = text(item.fm.situation);
   const details = text(item.fm.details);
   const effects = lines(item.fm.effects).map(splitPair);
@@ -190,6 +197,7 @@ export function askOf(item: issues.Issue): Ask | null {
     kind, reason: text(item.fm.reason) || "question", question: text(item.fm.question), options: lines(item.fm.options).map(decodeOption),
     ...(text(item.fm.recommended) ? { recommended: text(item.fm.recommended) } : {}),
     why: typeof why === "string" ? why.split(",").map((s) => s.trim()).filter(Boolean) : lines(why),
+    ...(headline ? { headline } : {}),
     ...(situation ? { situation } : {}),
     ...(details ? { details } : {}),
     ...(effects.length ? { effects: effects.map((e) => ({ action: e.action, text: e.text })) } : {}),
@@ -199,7 +207,7 @@ export function askOf(item: issues.Issue): Ask | null {
 
 /**
  * Put `ask` on the item: `ask`, `reason`, `question`, `options`, `recommended` and `why`, and the case text when the ask
- * has it: `situation` (one string), `effects` (lines `action :: text`) and `recommend` (`action :: why`), as `askOf` reads them.
+ * has it: `headline` and `situation` (one string each), `effects` (lines `action :: text`) and `recommend` (`action :: why`), as `askOf` reads them.
  */
 export function setAsk(item: issues.Issue, ask: Ask): void {
   clearAsk(item);
@@ -209,6 +217,8 @@ export function setAsk(item: issues.Issue, ask: Ask): void {
   if (ask.options.length) item.fm.options = ask.options.map((o) => encodeOption(o));
   if (ask.recommended) item.fm.recommended = ask.recommended;
   item.fm.why = ask.why;
+  const headline = flat(ask.headline);
+  if (headline) item.fm.headline = headline;
   const situation = flat(ask.situation);
   if (situation) item.fm.situation = situation;
   const details = flat(ask.details);
@@ -220,7 +230,7 @@ export function setAsk(item: issues.Issue, ask: Ask): void {
 
 /** Take the item's Ask off. */
 export function clearAsk(item: issues.Issue): void {
-  for (const k of ["ask", "reason", "question", "options", "recommended", "why", "situation", "details", "effects", "recommend"]) delete item.fm[k];
+  for (const k of ["ask", "reason", "question", "options", "recommended", "why", "headline", "situation", "details", "effects", "recommend"]) delete item.fm[k];
 }
 
 /** The prose note of an ask, for the CLI and the history. */

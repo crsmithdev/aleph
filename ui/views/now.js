@@ -245,7 +245,7 @@ export function renderLanes(s) {
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */
 export function renderNeeds(s) {
-  const asks = (s.asks ?? []).map((i) => askRow(i, s.now, true)).concat(errorLines(s).map(errorRow));
+  const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
   if (!asks.length && !s.stuck.length) return "";
   const group = (id, t, n, html, wrap) => (n ? `<div class="grp" id="${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${wrap(html)}</div>` : "");
   return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Awaiting you</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
@@ -304,7 +304,7 @@ function actionButton(a) {
   return `<button class="act${a.primary ? " primary" : ""}" type="button" data-act="${esc(a.act)}"${args} data-label="${esc(a.label)}">${esc(a.label)}</button>`;
 }
 
-/** The one folded Details of an ask row: the raw note, the options, the signals, the stat and the review note. */
+/** The Technical details of an ask card: what the limits moved out, the raw note, the options, the signals, the stat and the review note. Closed until opened. */
 function askDetails(i) {
   const d = i.details ?? {};
   const isRun = i.key?.startsWith("run:");
@@ -316,7 +316,7 @@ function askDetails(i) {
     (d.review ? `<p class="quiet q">Reviewer: ${esc(d.review.call)}${d.review.reason ? `: ${esc(d.review.reason)}` : ""}</p>` : "") +
     (d.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(d.stat)}</pre></div></div>` : "") +
     (isRun ? `<div class="actions">${act("diff", i.id, "Diff")}</div><div class="diff-panel" data-diff-for="${esc(i.id)}"${openDiffs.has(i.id) ? `>${diffHtml(openDiffs.get(i.id))}` : " hidden>"}</div>` : "");
-  return body ? more(i.key ?? i.id, body) : "";
+  return body ? `<details class="more" data-keep="more:${esc(i.key ?? i.id)}"><summary>Technical details</summary><div class="body">${body}</div></details>` : "";
 }
 
 const KIND_TAG = { approval: "Approval", input: "Input", stuck: "Stuck", error: "Error" };
@@ -330,8 +330,20 @@ const needHead = (kind, id, href, title, problem, repo = "", para = `<p class="p
 const choice = (button, hint, input = "", recommended = false) =>
   `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ' <span class="badge run">Recommended</span>' : ""}${input}</div>${button}</div>`;
 
-/** An Awaiting-you card from a server `asks` entry: the head, then the choices in order: positive, positive [auto-yes], negative. Details last. */
-export function askRow(i, now = new Date().toISOString(), folded = false) {
+/** The four kinds of Ask card and their labels. An item without a `card` reads as Approve for an approval, else Decide. */
+export const CARD_LABEL = { approve: "Approve", decide: "Decide", unstick: "Unstick", hand: "By hand" };
+const cardOf = (i) => (CARD_LABEL[i.card] ? i.card : i.kind === "approval" ? "approve" : "decide");
+
+/** One choice of an Ask card: the button, then what it does and the recommended mark, shown when the card is open. */
+const askChoice = (a, input) =>
+  `<div class="choice${a.recommended ? " rec" : ""}">${actionButton(a)}<div class="choice-text"><span class="effect">${code(a.hint)}</span>${a.recommended ? '<span class="rec-note">Recommended</span>' : ""}${input}</div></div>`;
+
+/**
+ * An Ask card from a server `asks` entry. Compact: the meta row, the title (the kind, then the headline, and the tag
+ * that names the stop) and the buttons. A click on the title opens it: the description, what each button does with
+ * the recommended one marked, and Technical details, closed until opened. Choices in order: positive, positive [auto-yes], negative.
+ */
+export function askRow(i, now = new Date().toISOString()) {
   const acts = i.actions ?? [];
   const inputFor = (a) => {
     if (a.act === "deny") {
@@ -340,11 +352,17 @@ export function askRow(i, now = new Date().toISOString(), folded = false) {
     }
     return a.act === "answer" ? `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}">` : "";
   };
-  const choices = acts.map((a) => choice(actionButton(a), a.hint, inputFor(a), !!a.recommended));
-  if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
-  return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
-    needHead(i.kind, i.id, i.href, i.name ? `${i.name}: ${i.title}` : i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}</p>`, i.priority, { at: i.at, since: i.since, now, part: i.part }) +
-    (folded ? choiceFold : (_k, body) => body)(i.key ?? i.id, `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i)) + `</article>`;
+  const choices = acts.map((a) => askChoice(a, inputFor(a)));
+  if (i.always) choices.splice(acts.length ? 1 : 0, 0, `<div class="choice"><button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button><div class="choice-text"><span class="effect">${code(i.always.hint)}</span></div></div>`);
+  const card = cardOf(i), key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
+  const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;
+  const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
+  const head = `<summary class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(CARD_LABEL[card])}:</b> <span class="ask-title">${esc(localId(i.headline || i.title, i.repo))}</span></span>${i.tag ? `<span class="ask-tag">${esc(i.tag)}</span>` : ""}</summary>`;
+  const desc = `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}</p>`;
+  return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-card="${card}" data-reason="${esc(i.reason)}">${meta}` +
+    `<div class="ask-box"><details class="ask-fold" data-keep="ask:${esc(key)}">${head}${desc}</details>` +
+    (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") +
+    askDetails(i) + `</div></article>`;
 }
 
 /** An error line as a card: the head alone, because the page has no action that fixes it. */

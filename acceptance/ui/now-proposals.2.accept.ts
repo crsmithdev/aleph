@@ -16,8 +16,8 @@ test("rows are ordered held, then asking, then proposal, then error; the group i
   expect(h).toContain(">4<");
 });
 
-test("a held job card has the kind mark in its meta row and no agent line", () => {
+test("a held job card opens its title with the kind and has no agent line", () => {
   const h = withAttn({ ...state, stuck: [], asks: asksOf([{ ...held, agent: true, reviewCall: { call: "back", reason: "x" } }]) });
-  expect(rows(h)[0]).toContain('<span class="kind-tag">');
+  expect(rows(h)[0]).toContain('<b class="ask-kind">Approve:</b>');
   expect(rows(h)[0]).not.toContain("Agent working");
 });

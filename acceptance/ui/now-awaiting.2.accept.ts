@@ -110,7 +110,7 @@ test("an asking issue with fields shows the question, the options, the recommend
   expect(row.indexOf("<details")).toBeLessThan(row.indexOf('<p class="dq">'));
   expect(row).toContain('href="#/issues/aleph/152"');
   const buttons = [...row.matchAll(/<button class="act( primary)?"[^>]*data-act="(\w+)"[^>]*data-label="([^"]*)"/g)].map((m) => [m[2], m[3], !!m[1]]);
-  expect(buttons).toEqual([["decide", "Approve Sonnet", true], ["decide", "Approve Haiku", false], ["deny", "Deny", false]]);
+  expect(buttons).toEqual([["decide", "Sonnet", true], ["decide", "Haiku", false], ["deny", "Deny", false]]);
   expect(row).toContain('data-option="Sonnet"');
 });
 
@@ -151,7 +151,8 @@ for (const reason of Object.keys(ASK_REASONS)) {
     const buttons = [...row.split('<details class="more"')[0].matchAll(/<button class="act( primary)?" [^>]*data-label="([^"]*)"/g)].map((m) => m[2]);
     expect(buttons).toEqual(items[0].actions.map((a) => a.label));
     expect(row).toContain(`data-kind="${items[0].kind}"`);
-    expect(row).toContain('<span class="kind-tag">');
+    expect(row).toContain(`<b class="ask-kind">${{ approve: "Approve", decide: "Decide", unstick: "Unstick", hand: "By hand" }[items[0].card!]}:</b>`);
+    expect(row).toContain(`<span class="ask-tag">${items[0].tag!.replaceAll("'", "&#39;")}</span>`);
     const always = items[0].always;
     expect(row.match(/<div class="choice">/g)?.length).toBe(buttons.length + (always ? 1 : 0));
     expect(row.match(/<span class="effect">/g)?.length).toBe(buttons.length + (always ? 1 : 0));
@@ -208,29 +209,27 @@ test("an ask card and a stuck card for a critical item show the priority badge",
   expect(view.renderNeeds(stuck)).toContain(badge);
 });
 
-test("an ask card and a stuck card keep their choices in a closed fold, and the head and the problem outside it", () => {
+test("an ask card keeps its description in a closed fold under the title, and its buttons outside it", () => {
   const h = withAttn({ ...state, asks: sentAsks([held]) });
-  for (const row of rows(h)) {
-    if (!row.includes("choices")) continue;
-    const open = row.indexOf('<details class="cfold"');
-    expect(open).toBeGreaterThan(-1);
-    expect(row.slice(0, open + 30)).not.toMatch(/<details class="cfold"[^>]* open/);
-    expect(row.indexOf('class="choices"') > open || row.indexOf("choices") > open).toBe(true);
-    expect(row.indexOf('class="kind-tag"')).toBeLessThan(open);
-    expect(row.search(/class="(problem|situation)"/)).toBeLessThan(open);
-    expect(row.indexOf("<button")).toBeGreaterThan(open);
-  }
+  const row = h.match(/<article class="job-card small issue-row held-path"[^]*?<\/article>/)![0];
+  const fold = row.match(/<details class="ask-fold"[^>]*>[^]*?<\/details>/)![0];
+  expect(fold).not.toMatch(/<details class="ask-fold"[^>]* open/);
+  expect(fold).toContain('<summary class="ask-head">');
+  expect(fold).toContain('class="situation"');
+  expect(fold).not.toContain("<button");
+  expect(row.indexOf("<button")).toBeGreaterThan(row.indexOf(fold) + fold.length);
 });
 
-test("a spec-check card's title line starts with its kind; an old 9-sentence situation shows 3 and the rest sits in the closed Details fold", () => {
-  const nine = Array.from({ length: 9 }, (_, i) => `Sentence ${i + 1}.`).join(" ");
-  const ask = { kind: "input", reason: "spec-check", question: "q", options: [], why: [], situation: nine };
+test("a spec-check card's title line starts with its kind; an old long situation shows 100 words and the rest sits in the closed Details fold", () => {
+  const ten = (k: string) => `${k} ${"w ".repeat(8)}end.`;
+  const many = Array.from({ length: 12 }, (_, i) => ten(`S${i + 1}`)).join(" ");
+  const ask = { kind: "input", reason: "spec-check", question: "q", options: [], why: [], situation: many };
   const h = withAttn({ ...state, asks: sentAsks([], [{ ...issue(5), title: "Fix it", reason: "spec-check", question: "spec check: x hold: y", ask }]) });
   const row = h.match(/<article class="job-card small issue-row spec-check"[^]*?<\/article>/)![0];
-  expect(row).toContain('<span class="t">Spec check: Fix it</span>');
-  expect(problem(row)).toBe("Sentence 1. Sentence 2. Sentence 3.");
+  expect(row).toContain('<span class="t"><b class="ask-kind">Decide:</b> <span class="ask-title">Fix it</span></span>');
+  expect(problem(row)).toBe(Array.from({ length: 10 }, (_, i) => ten(`S${i + 1}`)).join(" "));
   const fold = row.match(/<details class="more"[^]*?<\/details>/)![0];
   expect(fold).not.toContain(" open");
-  expect(fold).toContain("Sentence 4. Sentence 5. Sentence 6. Sentence 7. Sentence 8. Sentence 9.");
-  expect(row.slice(0, row.indexOf("<details"))).not.toContain("Sentence 4.");
+  expect(fold).toContain(`${ten("S11")} ${ten("S12")}`);
+  expect(row.slice(0, row.indexOf('<details class="more"'))).not.toContain("S11 ");
 });

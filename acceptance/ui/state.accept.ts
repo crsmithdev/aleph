@@ -102,7 +102,8 @@ describe("state", () => {
     const j = state(now).asks[0];
     expect(j.situation).toBe("The run changes hooks/x.ts.");
     expect(j.escalated).toBe(true);
-    expect(j.actions.map((a) => [a.act, a.hint, a.recommended])).toEqual([["land", "Merges it.", false], ["drop", "Throws it away. The path is held.", true]]);
+    expect(j.actions.map((a) => [a.act, a.hint, a.recommended])).toEqual([["land", "Merges it.", false], ["drop", "Throws it away.", true]]);
+    expect(j.more).toContain("Recommended, Drop the job: The path is held.");
   });
 
   test("asks lists the held run with its kind and reason, and always shows a rule; a rule hands no Ask to anyone", () => {
@@ -339,6 +340,7 @@ describe("an awaiting issue with the three flat fields", () => {
     const a = state(now).asks.find((x) => x.id === `fac-${goalId}`)!;
     expect(a.escalated).toBe(true);
     expect(a.situation).toBe("Three runs ended with no commit.");
-    expect(a.actions.map((x) => [x.act, x.hint, x.recommended])).toEqual([["rerun", "Starts the goal again. The goal is clear.", true], ["close", "Closes the goal.", false]]);
+    expect(a.actions.map((x) => [x.act, x.hint, x.recommended])).toEqual([["rerun", "Starts the goal again.", true], ["close", "Closes the goal.", false]]);
+    expect(a.more).toContain("Recommended, Start a new run: The goal is clear.");
   });
 });

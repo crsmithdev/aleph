@@ -11,7 +11,9 @@ import type { Job, NewIssue } from "./state.ts";
 
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string>; /** The Ask's recommend names this action. */ recommended: boolean }
 export interface AskItem {
-  key: string; reason: string; /** The reason's display name, the kind on the card's title line. */ name?: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
+  key: string; reason: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
+  /** The card's kind (it sets the color and opens the title), the title after the kind, and the tag that names the stop. The page reads an item without them by its `kind` and `title`. */
+  card?: Card; headline?: string; tag?: string;
   /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string;
   /** True once the director escalated the Ask: `situation` and the hints are its case text. Until then the row offers no action. */ escalated: boolean;
   actions: Action[]; /** What the limits moved out of the card's text, and the director's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
@@ -47,12 +49,33 @@ export function clean(text: unknown): string {
 const sentence = (s: string) => (/[.?!]$/.test(s) ? s : `${s}.`);
 
 type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
+
+/** The four kinds of card. Approve: finished work that waits for an OK. Decide: a choice only Chris can make. Unstick: work that stopped and needs a direction. By hand: a step only Chris can do on his machine. */
+export type Card = "approve" | "decide" | "unstick" | "hand";
+/** Each reason's kind of card and the tag that names its stop, as in the approved mock of 3 Nov. */
+const CARDS: Record<string, { card: Card; tag: (c: Ctx) => string }> = {
+  "held-path": { card: "approve", tag: (c) => (/\b(bun\.lock|package\.json)\b/.test(c.run?.reason ?? "") ? "Package change" : "Security change") },
+  review: { card: "approve", tag: () => "Review stuck" },
+  proposal: { card: "approve", tag: () => "Proposal" },
+  "proposal-check": { card: "approve", tag: () => "Memory: check" },
+  "proposal-claude-md": { card: "approve", tag: () => "Memory: instructions" },
+  "proposal-skill": { card: "approve", tag: () => "Memory: skill" },
+  question: { card: "decide", tag: (c) => (c.run ? "Builder's question" : "Your choice") },
+  "spec-check": { card: "decide", tag: () => "Spec problem" },
+  "part-dropped": { card: "decide", tag: () => "Part dropped" },
+  "no-commit": { card: "unstick", tag: () => "No change" },
+  "run-cap": { card: "unstick", tag: () => "Looping" },
+  "triage-failed": { card: "unstick", tag: () => "Can't sort" },
+  "acceptance-failed": { card: "unstick", tag: () => "Failed final check" },
+  rescue: { card: "unstick", tag: () => "Stalled" },
+  "host-check": { card: "hand", tag: () => "Manual check" },
+};
 /** The text a row shows: the Ask of its run or issue, else the stored text of its lesson. */
-const askIn = (c: Ctx): Pick<Ask, "situation" | "details" | "effects" | "recommend"> | undefined => {
+const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend"> | undefined => {
   const ask = c.run?.ask ?? c.issue?.ask;
   if (ask) return ask;
   const l = c.lesson;
-  return l?.situation ? { situation: l.situation, details: l.details, effects: l.effects, recommend: l.recommend } : undefined;
+  return l?.situation ? { headline: l.headline, situation: l.situation, details: l.details, effects: l.effects, recommend: l.recommend } : undefined;
 };
 /** The first sentence of the note behind a check, cleaned. */
 const noteOf = (c: Ctx): string => {
@@ -150,7 +173,7 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
       case "decide": {
         const d = c.issue?.decision;
         if (d) return [...d.options].sort((x, y) => +(y.label === d.recommended) - +(x.label === d.recommended))
-          .map((o) => a("decide", `Approve ${o.label}`, o.line || "Records this choice on the issue and lets the factory act on it.", { ...issue, option: o.label }));
+          .map((o) => a("decide", o.label, o.line || "Records this choice on the issue and lets the factory act on it.", { ...issue, option: o.label }));
         if (proseDecision(c.issue?.question).recommendation) return [a("decide", "Approve recommendation", "Records the recommended choice on the issue, and the factory acts on it.", { ...issue, recommendation: "true" })];
         return [a("decide", "Approve it", "Records your approval on the issue, and the factory starts it.", { ...issue, approve: "true" })];
       }
@@ -183,8 +206,9 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
     const rec = ask.recommend && acts.find((x) => is(x, ask.recommend!.action));
     if (rec && ask.recommend) {
       rec.recommended = true;
+      // The why goes under Technical details, so the choice's text keeps to its limit.
       const why = ask.recommend.why.trim().replace(/^./, (ch) => ch.toUpperCase());
-      if (why) rec.hint = `${rec.hint} ${sentence(why)}`.trim();
+      if (why) more.push(`Recommended, ${rec.label}: ${sentence(why)}`);
     }
   }
   return acts;
@@ -239,8 +263,10 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const r = ASK_REASONS[reason];
   const problem = PROBLEM[reason](c);
   const stored = said?.kept;
+  const card = CARDS[reason];
+  const headline = (escalated && askIn(c)?.headline?.trim()) || title;
   return {
-    key, reason, name: r.name, kind: kindOf(reason, kind), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
+    key, reason, kind: kindOf(reason, kind), card: card.card, headline, tag: card.tag(c), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
     ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };

@@ -76,7 +76,7 @@ describe("asks", () => {
     expect(it.always).toBeUndefined();
   });
 
-  test("a card carries the reason's name, and every reason has one", () => {
-    for (const [reason, r] of Object.entries(ASK_REASONS)) { expect(r.name.length).toBeGreaterThan(0); expect(CASES[reason]()[0].name).toBe(r.name); }
+  test("a card carries its kind and the tag of its stop, and every reason has both", () => {
+    for (const reason of Object.keys(ASK_REASONS)) { const it = CASES[reason]()[0]; expect(["approve", "decide", "unstick", "hand"]).toContain(it.card!); expect(it.tag!.length).toBeGreaterThan(0); }
   });
 });

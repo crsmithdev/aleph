@@ -25,6 +25,11 @@
   --good: #437018;        /* a trend that improves */
   --hot: #C2521F;         /* the largest cause, the slowest bins */
   --raised: #ECEAF6;      /* a selected tile */
+  /* The four kinds of Ask card: the color, the head's background, and the ring around the card. */
+  --approve: #2D5BC4; --approve-bg: #EAF0FB; --approve-ring: #C9D6F3;
+  --decide: #6D3FB0; --decide-bg: #F1EBFA; --decide-ring: #DCCDF2;
+  --unstick: #B42F3A; --unstick-bg: #FBEBEC; --unstick-ring: #F0CDD0;
+  --hand: #8A5A00; --hand-bg: #F7F0E2; --hand-ring: #EBDCBC;
   /* Outcomes in the Efficiency bar: dark enough for white text in both themes. */
   --seg-landed: #3B4A36; --seg-fixed: #5C7052; --seg-nothing: #9A6347; --seg-restarted: #BC5252; --seg-dropped: #8A4F7A;
   --display: 'Merriweather', Georgia, serif;
@@ -103,6 +108,10 @@
     --good: #C3E88D;
     --hot: #F78C6C;
     --raised: #32374D;
+    --approve: #82AAFF; --approve-bg: #2F3854; --approve-ring: #46557F;
+    --decide: #C792EA; --decide-bg: #3A3150; --decide-ring: #5B4A7A;
+    --unstick: #F07178; --unstick-bg: #3D2C39; --unstick-ring: #65404D;
+    --hand: #FFCB6B; --hand-bg: #433D36; --hand-ring: #6B5B3E;
   }
 }
 :root[data-theme="dark"] {
@@ -130,6 +139,10 @@
     --good: #C3E88D;
     --hot: #F78C6C;
     --raised: #32374D;
+    --approve: #82AAFF; --approve-bg: #2F3854; --approve-ring: #46557F;
+    --decide: #C792EA; --decide-bg: #3A3150; --decide-ring: #5B4A7A;
+    --unstick: #F07178; --unstick-bg: #3D2C39; --unstick-ring: #65404D;
+    --hand: #FFCB6B; --hand-bg: #433D36; --hand-ring: #6B5B3E;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -964,3 +977,45 @@ ul.logs .step { margin: 6px 0; }
 .capform input { width: 5em; font: inherit; font-family: var(--mono); padding: 2px 6px; }
 .capform .cap-env { flex-basis: 100%; }
 .capform .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Ask cards: four kinds; compact shows the title and the buttons, open adds the description, what each button does, and Technical details. */
+.issue-row[data-card] { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 0; border: 0; border-radius: 0; background: none; }
+.issue-row[data-card="approve"] { --k: var(--approve); --k-bg: var(--approve-bg); --k-ring: var(--approve-ring); }
+.issue-row[data-card="decide"] { --k: var(--decide); --k-bg: var(--decide-bg); --k-ring: var(--decide-ring); }
+.issue-row[data-card="unstick"] { --k: var(--unstick); --k-bg: var(--unstick-bg); --k-ring: var(--unstick-ring); }
+.issue-row[data-card="hand"] { --k: var(--hand); --k-bg: var(--hand-bg); --k-ring: var(--hand-ring); }
+.issue-row[data-card] > .ih { flex: none; }
+.ask-box { background: var(--surface); border: 1px solid var(--k-ring); border-radius: var(--r-card); overflow: hidden; box-shadow: var(--lift); }
+.ask-fold { margin: 0; padding: 0; border: 0; }
+.ask-fold > summary::before, .ask-fold[open] > summary::before { content: none; }
+.ask-head { cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--k-bg); font-size: 17px; line-height: 1.35; color: var(--ink); }
+.ask-head:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.ask-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--k); }
+.ask-head .t { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.ask-kind { font-weight: 600; color: var(--k); }
+.ask-title { font-weight: 500; }
+.ask-tag { flex: none; font-size: var(--fs-xs); color: var(--ink-2); background: var(--surface); border: 1px solid var(--k-ring); border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+.issue-row[data-card] .situation { margin: 0; padding: 14px 18px 0; font-size: var(--fs-lg); line-height: 1.55; max-width: 820px; }
+.issue-row[data-card] .choices { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px 16px; margin: 0; }
+.issue-row[data-card] .choice { display: contents; }
+.issue-row[data-card] .choice-text { display: none; }
+.issue-row[data-card] .choice-text:has(input.reason:not([hidden])) { display: flex; flex: 1 1 100%; }
+.issue-row[data-card] .act { font: 500 var(--fs-md) var(--sans); padding: 8px 16px; min-height: 40px; border-radius: 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); }
+.issue-row[data-card] .act:hover { border-color: var(--ink-2); }
+.issue-row[data-card] .choice.rec > .act { background: var(--k); color: var(--surface); border-color: var(--k); }
+.issue-row[data-card] .act.ask { background: var(--need-bg); color: var(--need); border-color: var(--need); }
+.issue-row[data-card] .act.always { border-color: var(--k); color: var(--k); }
+.issue-row[data-card] .choices > .act-msg:empty { display: none; }
+.ask-box > details.more { margin: 0 18px 16px; padding-top: 10px; border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); }
+.ask-box > details.more > summary { cursor: pointer; color: var(--muted); }
+.ask-box > details.more .body { margin-top: 8px; color: var(--ink-2); }
+.ask-box > details.more .body .q { font: var(--fs-xs)/1.5 var(--mono); }
+.issue-row[data-card]:not(:has(.ask-fold[open])) .ask-box > details.more { display: none; }
+/* Open: one row per button, the button on the left and what it does on the right. */
+.issue-row[data-card]:has(.ask-fold[open]) .choices { flex-direction: column; align-items: stretch; gap: 10px; }
+.issue-row[data-card]:has(.ask-fold[open]) .choice { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 14px; align-items: start; }
+.issue-row[data-card]:has(.ask-fold[open]) .choice > .act { text-align: left; white-space: normal; padding: 8px 14px; }
+.issue-row[data-card]:has(.ask-fold[open]) .choice-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding-top: 2px; }
+.issue-row[data-card] .choice-text .effect { font-size: var(--fs-md); line-height: 1.5; color: var(--ink-2); }
+.issue-row[data-card] .rec-note { font: var(--fs-xs) var(--sans); font-weight: 600; color: var(--k); }
+@media (max-width: 720px) { .issue-row[data-card]:has(.ask-fold[open]) .choice { grid-template-columns: minmax(0, 1fr); gap: 4px; } }

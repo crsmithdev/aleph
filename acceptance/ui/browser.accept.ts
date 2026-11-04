@@ -7,14 +7,16 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 60_000);
   afterAll(() => rig?.stop());
 
-  test("ask rows: the button sits right of its text at 1280 px and under it at 720 px; deny reveals its input as Confirm", async () => {
+  test("ask cards: compact shows the buttons alone; open, the button sits left of its text at 1280 px and over it at 720 px; deny reveals its input as Confirm", async () => {
     await page.go("#/");
-    await page.until('document.querySelector("#view .choice .act")');
-    await page.ev('document.querySelectorAll("#view details.cfold").forEach((d) => { d.open = true; })');
+    await page.until('document.querySelector("#view .issue-row[data-card] .choice .act")');
     await page.width(1280);
-    const geo = `(() => { const c = document.querySelector("#view .choice"); const t = c.querySelector(".choice-text").getBoundingClientRect(), b = c.querySelector(".act").getBoundingClientRect(); return { right: b.right > t.right - 1 && b.left >= t.right - 1, rowTop: b.top < t.bottom && b.bottom > t.top, under: b.top >= t.bottom - 1 }; })()`;
+    const card = 'document.querySelector("#view .issue-row[data-card] .choice .act").closest(".issue-row")';
+    expect(await page.ev(`(() => { const c = ${card}; return [c.querySelector(".ask-fold").open, c.querySelector(".choice-text").getClientRects().length, c.querySelector(".act").getClientRects().length > 0]; })()`)).toEqual([false, 0, true]);
+    await page.ev(`${card}.querySelector(".ask-fold > summary").click()`);
+    const geo = `(() => { const c = ${card}.querySelector(".choice"); const t = c.querySelector(".choice-text").getBoundingClientRect(), b = c.querySelector(".act").getBoundingClientRect(); return { left: b.right <= t.left + 1, rowTop: b.top < t.bottom && b.bottom > t.top, under: t.top >= b.bottom - 1 }; })()`;
     const g = await page.ev<any>(geo);
-    expect(g.right && g.rowTop).toBe(true);
+    expect(g.left && g.rowTop).toBe(true);
     await page.width(720);
     expect((await page.ev<any>(geo)).under).toBe(true);
     await page.width(1280);

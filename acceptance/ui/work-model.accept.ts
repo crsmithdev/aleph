@@ -91,7 +91,7 @@ describe("/api/state on a work-model store", () => {
     // The director escalated it with its case text, so it has its buttons; the proposal is still with the director and has none.
     expect(by["issue:fac-3"]).toMatchObject({ kind: "input", reason: "part-dropped", escalated: true });
     expect(by["issue:fac-2.1"]).toMatchObject({ escalated: false, actions: [] });
-    expect(by["issue:fac-3"].actions.map((a: any) => a.label)).toEqual(["Approve Close with what landed", "Approve Plan the missing part", "Close the issue"]);
+    expect(by["issue:fac-3"].actions.map((a: any) => a.label)).toEqual(["Close with what landed", "Plan the missing part", "Close the issue"]);
     // One entry each, and no other.
     expect(s.asks).toHaveLength(4);
     for (const a of s.asks) expect(["input", "approval"]).toContain(a.kind);
@@ -102,8 +102,11 @@ describe("/api/state on a work-model store", () => {
     const html = renderNeeds({ ...s, stuck: [], factory: { ...s.factory, health: [] } });
     expect(html).toContain(">Awaiting you<");
     expect(html).not.toContain("Needs you");
-    expect(html.match(/<span class="kind-tag">Approval<\/span>/g)).toHaveLength(2);
-    expect(html.match(/<span class="kind-tag">Input<\/span>/g)).toHaveLength(2);
+    expect(html.match(/<article [^>]*data-kind="approval"/g)).toHaveLength(2);
+    expect(html.match(/<article [^>]*data-kind="input"/g)).toHaveLength(2);
+    expect(html.match(/data-card="approve"/g)).toHaveLength(2);
+    expect(html).toContain('data-card="unstick"');
+    expect(html).toContain('data-card="decide"');
   });
 
   test("incoming lists issues with their stage; goals are not listed there", () => {

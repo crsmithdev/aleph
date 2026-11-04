@@ -62,10 +62,8 @@ describe("asks", () => {
         expect(it.escalated).toBe(true);
         expect(it.actions.map((a) => a.act)).toEqual(bare.actions.map((a) => a.act));
         expect(it.actions.filter((a) => a.recommended).length).toBe(1);
-        for (const a of it.actions) {
-          if (a.recommended) expect(a.hint).toBe(`Effect of ${key(a)}. It is safest.`);
-          else expect(a.hint).toBe(`Effect of ${key(a)}.`);
-        }
+        for (const a of it.actions) expect(a.hint).toBe(`Effect of ${key(a)}.`);
+        expect(it.more).toContain(`Recommended, ${it.actions.find((a) => a.recommended)!.label}: It is safest.`);
         expect(it.always?.hint).toBe(bare.always?.hint);
       } finally { STORE = undefined; }
     });

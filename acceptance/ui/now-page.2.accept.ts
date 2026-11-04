@@ -71,14 +71,15 @@ test("a critical item shows the priority badge in Queued, Running and Latest don
   expect(lanes.match(/<section id="lane-done"[^]*?<\/section>/)![0]).toContain(badge);
 });
 
-test("an ask and a stuck card start their meta row with the id, then the kind mark, the priority, the date and the duration, and keep the choices below the face", () => {
+test("an ask card starts its meta row with the id, then the priority, the date and the duration, and keeps the title and the choices below it", () => {
   const row = view.askRow({ key: "issue:aleph-7", reason: "question", kind: "input", id: "aleph-7", href: "#/issues/aleph/7", title: "Which?", problem: "p", situation: "s", escalated: true, repo: "aleph", priority: "high",
     at: "2026-10-27T10:05:00", since: "2026-10-27T09:00:00", part: { n: 1, m: 2, parent: "aleph-6", href: "#/issues/aleph/6" },
     actions: [{ act: "answer", label: "Answer", hint: "h", primary: true, args: {}, recommended: false }], details: {} } as any, "2026-10-27T11:05:00");
   const head = row.match(/<div class="ih">[^]*?<\/div>/)![0];
-  const order = ["idl", "kind-tag", "badge need\">high", 'class="part"', "num date\">10/27 10:05", "num dur\">2h05m"].map((x) => head.indexOf(x));
+  const order = ["idl", "badge need\">high", 'class="part"', "num date\">10/27 10:05", "num dur\">2h05m"].map((x) => head.indexOf(x));
   expect(order.every((i) => i >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((a, b) => a - b));
+  expect(head).not.toContain("kind-tag");
   expect(row.indexOf('class="t"')).toBeGreaterThan(row.indexOf("</div>"));
   expect(row.indexOf('class="actions choices"')).toBeGreaterThan(row.indexOf('class="t"'));
 });

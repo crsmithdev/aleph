@@ -174,10 +174,11 @@ test("the prompt names the card's actions, the item's notes and the run's result
 test("the prompt states the case-text limits, asks for details, and shows the past decisions", () => {
   fresh([{ title: "q", ask: plainAsk("host-check", "check it") }]);
   const p = prompt(pendingCases([repo()])[0], "a host check is Chris's while host access is off", [{ at: "2026-11-01T10:00:00.000Z", ref: "x-9", on: "x-9", reason: "run-cap", question: "q", outcome: "decided", applied: ["rerun"], refused: [] }]);
-  expect(p).toContain("at most 3 sentences and 600 characters");
-  expect(p).toContain("only risks and gaps");
+  expect(p).toContain('"situation" at most 100 words');
+  expect(p).toContain("only risks, gaps and the technical facts");
   expect(p).toContain("not a second summary");
-  expect(p).toContain("at most 2 sentences and 220 characters");
+  expect(p).toContain('each effect "text" at most 50 words');
+  expect(p).toContain('"headline" is at most 12 words');
   expect(p).toContain('"details"');
   expect(p).toContain("x-9 (run-cap): decided; did rerun");
   expect(p).toContain("Take no action");
@@ -189,21 +190,30 @@ test("parseCaseText wants a situation and an effect per action", () => {
   expect(parseCaseText({ situation: "s", effects: [{ action: "a", text: "t" }, { action: "z", text: "u" }], recommend: null }, ["a"])).toEqual({ situation: "s", effects: [{ action: "a", text: "t" }] });
 });
 
-test("parseCaseText keeps 3 sentences of the situation and 2 of an effect, and moves the rest to details whole", () => {
-  const sit = Array.from({ length: 8 }, (_, i) => `S${i + 1}.`).join(" ");
-  const t = parseCaseText({ situation: sit, effects: [{ action: "a", text: "E1. E2. E3. E4." }], details: "Own." }, ["a"]) as any;
-  expect(t.situation).toBe("S1. S2. S3.");
-  expect(t.effects[0].text).toBe("E1. E2.");
-  expect(t.details).toBe("S4. S5. S6. S7. S8. E3. E4. Own.");
+test("parseCaseText keeps 100 words of the situation and 50 of an effect, and moves the rest to details whole", () => {
+  const ten = (k: string) => `${k} ${"w ".repeat(8)}end.`;
+  const sit = Array.from({ length: 12 }, (_, i) => ten(`S${i + 1}`)).join(" ");
+  const eff = Array.from({ length: 6 }, (_, i) => ten(`E${i + 1}`)).join(" ");
+  const t = parseCaseText({ situation: sit, effects: [{ action: "a", text: eff }], details: "Own." }, ["a"]) as any;
+  expect(t.situation).toBe(Array.from({ length: 10 }, (_, i) => ten(`S${i + 1}`)).join(" "));
+  expect(t.effects[0].text).toBe(Array.from({ length: 5 }, (_, i) => ten(`E${i + 1}`)).join(" "));
+  expect(t.details).toBe(`${ten("S11")} ${ten("S12")} ${ten("E6")} Own.`);
 });
 
-test("parseCaseText never cuts a sentence: the character limit moves whole sentences, and a long first sentence stays", () => {
-  const long = "x".repeat(300) + ".";
-  const t = parseCaseText({ situation: `Short. ${"y".repeat(595)}.`, effects: [{ action: "a", text: long + " Next." }] }, ["a"]) as any;
+test("parseCaseText never cuts a sentence: the word limit moves whole sentences, and a long first sentence stays", () => {
+  const long = `${"x ".repeat(60)}end.`;
+  const t = parseCaseText({ situation: `Short. ${"y ".repeat(100)}end.`, effects: [{ action: "a", text: long + " Next." }] }, ["a"]) as any;
   expect(t.situation).toBe("Short.");
   expect(t.effects[0].text).toBe(long);
-  expect(t.details).toBe(`${"y".repeat(595)}. Next.`);
+  expect(t.details).toBe(`${"y ".repeat(100)}end. Next.`);
   expect((parseCaseText({ situation: "A. B.", effects: [{ action: "a", text: "C." }] }, ["a"]) as any).details).toBeUndefined();
+});
+
+test("parseCaseText keeps a headline of at most 12 words, without its full stop, and drops a longer one", () => {
+  const base = { situation: "S.", effects: [{ action: "a", text: "E." }] };
+  expect((parseCaseText({ ...base, headline: "the TypeScript 5.9 to 7.0 upgrade." }, ["a"]) as any).headline).toBe("the TypeScript 5.9 to 7.0 upgrade");
+  expect((parseCaseText({ ...base, headline: "w ".repeat(13) }, ["a"]) as any).headline).toBeUndefined();
+  expect((parseCaseText(base, ["a"]) as any).headline).toBeUndefined();
 });
 
 test("an escalation whose case text lacks an effect gets the fallback text, naming what was wrong", async () => {

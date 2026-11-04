@@ -30,7 +30,7 @@ export type Kind = "check" | "claude-md" | "skill";
 export type Lesson = {
   id: string; sentence: string; state: "open" | "proposed" | "approved" | "declined"; signals: Signal[]; count: number;
   kind?: Kind; title?: string; target?: string; issue?: string; declinedAt?: string;
-} & Partial<Pick<Ask, "situation" | "details" | "effects" | "recommend">>;
+} & Partial<Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend">>;
 export interface Store { minedAt: string; lessons: Lesson[] }
 
 const file = () => join(factoryDir(), "corrections.json");
@@ -363,10 +363,11 @@ export function decline(id: string, now = Date.now()): string {
 }
 
 /** Stores the case text of a proposal, only while it is still proposed and still says `sentence`; true when it wrote. */
-export function explainLesson(id: string, sentence: string, text: Pick<Lesson, "situation" | "details" | "effects" | "recommend">): boolean {
+export function explainLesson(id: string, sentence: string, text: Pick<Lesson, "headline" | "situation" | "details" | "effects" | "recommend">): boolean {
   const store = readStore();
   const l = pending(store, id, "explained");
   if (typeof l === "string" || l.sentence !== sentence) return false;
+  if (text.headline) l.headline = text.headline;
   l.situation = text.situation;
   l.details = text.details;
   l.effects = text.effects;

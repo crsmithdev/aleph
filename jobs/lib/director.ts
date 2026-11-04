@@ -15,7 +15,7 @@ import { basename, dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
-import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, editAnswers, limitText, may, reasonOf, setAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, editAnswers, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask } from "./ask.ts";
 import { allRuns, isAgentRun, loadRegistry, lock, readRun, reviewOf, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { landBlock } from "./worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -68,7 +68,7 @@ export type Case =
   | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue }
   | { at: "lesson"; on: string; repo?: Repo; lesson: Lesson };
 
-export type Text = Pick<Ask, "situation" | "details" | "effects" | "recommend">;
+export type Text = Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend">;
 
 /** An item's number as the store and the ledger give it: a whole `n` as a number, a part as `"<n>.<k>"`. */
 const idOf = (i: issues.Issue): number | string => (i.sub === undefined ? i.id : issues.refOf(i));
@@ -261,7 +261,7 @@ ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes
 ${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of checks.log", tail(run.folder, "checks.log"))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
 }
 
-const CASE_TEXT = (acts: string[]): string => `{"situation": "<1 to 3 plain sentences naming the files, what they are for, and what the run did>", "effects": [{"action": "<one of: ${acts.join(", ")}>", "text": "<at most 2 short sentences: what happens in this case if Chris takes it>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null, "details": "<optional: only risks and gaps>"}`;
+const CASE_TEXT = (acts: string[]): string => `{"headline": "<a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade>", "situation": "<plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk>", "effects": [{"action": "<one of: ${acts.join(", ")}>", "text": "<1 or 2 short sentences: what happens in this case if Chris takes it>"}], "recommend": {"action": "<an action>", "why": "<one sentence>"} | null, "details": "<optional: risks, gaps and technical facts>"}`;
 
 /** The past decisions the prompt shows: the last RECORD_LINES, each with its outcome. */
 const pastLines = (rec: Decision[]): string =>
@@ -276,7 +276,7 @@ What informs your judgement: Chris's decisions in the vault (${decisions}: read 
 ${section(`The tail of Chris's needs-you log (${needsYouLog()})`, tail(dirname(needsYouLog()), basename(needsYouLog())) ?? "(none)")}`;
   const reply = `# Your reply
 
-Text over a limit moves to "details" by sentence: "situation" is at most ${LIMITS.situation.sentences} sentences and ${LIMITS.situation.chars} characters; each effect "text" at most ${LIMITS.choice.sentences} sentences and ${LIMITS.choice.chars} characters. "details" holds only risks and gaps, not a second summary. Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. State only what you read; where you did not read something, say "I did not check X". "recommend" is null when you cannot tell.`;
+Text over a limit moves to "details" by sentence: "headline" is at most ${LIMITS.headline} words, "situation" at most ${LIMITS.situation.words} words, and each effect "text" at most ${LIMITS.choice.words} words. Write for Chris in short plain sentences, with no file paths in "headline", "situation" or the effects: paths go in "details". "details" holds only risks, gaps and the technical facts (paths, commits, rules), not a second summary. Give one effect for each of these actions, with exactly this "action": ${acts.join(", ")}. State only what you read; where you did not read something, say "I did not check X". "recommend" is null when you cannot tell.`;
   if (escalated) {
     return `${head}
 This Ask is on the escalation list: ${escalated}. Chris decides it. Take no action. Write the case text he reads on its card, with your recommendation.
@@ -384,7 +384,7 @@ const jsonOf = (output: string): any => {
 export function parseCaseText(raw: any, actions: string[]): Text | string {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
   const moved: string[] = [];
-  const keep = (t: string, limit: { sentences: number; chars: number }): string => {
+  const keep = (t: string, limit: { words: number }): string => {
     const { kept, rest } = limitText(t, limit);
     if (rest) moved.push(rest);
     return kept;
@@ -402,7 +402,9 @@ export function parseCaseText(raw: any, actions: string[]): Text | string {
   const rec = raw.recommend && typeof raw.recommend === "object" ? { action: str(raw.recommend.action), why: str(raw.recommend.why) } : null;
   const recommend = rec && rec.action && actions.includes(rec.action) ? rec : undefined;
   const details = [...moved, str(raw.details)].filter(Boolean).join(" ");
-  return { situation, ...(details ? { details } : {}), effects: actions.map((a) => effects.find((e) => e.action === a)!), ...(recommend ? { recommend } : {}) };
+  const h = str(raw.headline).replace(/[.!?]+$/, "");
+  const headline = h && wordsOf(h) <= LIMITS.headline ? h : "";
+  return { ...(headline ? { headline } : {}), situation, ...(details ? { details } : {}), effects: actions.map((a) => effects.find((e) => e.action === a)!), ...(recommend ? { recommend } : {}) };
 }
 
 export type Reply = { actions: (Action | string)[] } | { escalate: Text | string };
