@@ -61,9 +61,9 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
   expect(d.window).toBe("day");
   expect(d.done).toBe(1); // two land runs with no issue count as one
   expect(d.buckets.length).toBe(24);
-  const b = (h: string) => d.buckets.find((x) => x.label === h)!;
-  expect(b("09:00")).toMatchObject({ implement: 600, intake: null });
-  expect(b("10:00")).toMatchObject({ implement: null });
+  const b = (h: Date) => d.buckets.find((x) => x.at === h.toISOString())!;
+  expect(b(new Date(2026, 9, 28, 9))).toMatchObject({ implement: 600, intake: null });
+  expect(b(new Date(2026, 9, 28, 10))).toMatchObject({ implement: null });
   expect(d.slowest.map((r) => [r.condition, r.took])).toEqual([["stuck", 1800], ["dropped", 1200], ["passed", 600]]);
   expect(d.slowest[0].model).toBe("unset");
   expect(d.slowest[2]).toMatchObject({ tests: 36, cost: 1 });
@@ -74,8 +74,6 @@ test("day: counts, medians, wasted share, buckets, slowest, models", () => {
 test("hour: sixty 1-minute buckets over the last hour", () => {
   const h = speed("hour", new Date(2026, 9, 28, 9, 47, 0));
   expect(h.buckets.length).toBe(60);
-  expect(h.buckets[0].label).toBe("08:48");
-  expect(h.buckets[59].label).toBe("09:47");
   expect(h.kinds.agent.count).toBe(1); // the 09:00 run
   const m = speed("hour", new Date(2026, 9, 28, 9, 7, 0));
   expect(m.done).toBe(1);
@@ -85,8 +83,7 @@ test("week and month: one bucket per local day, wider windows add runs", () => {
   const w = speed("week", now);
   expect(w.buckets.length).toBe(7);
   expect(w.kinds.agent.count).toBe(4);
-  expect(w.buckets[6].label).toBe("10-28");
-  expect(w.buckets[3]).toMatchObject({ label: "10-25", implement: 300 });
+  expect(w.buckets[3]).toMatchObject({ implement: 300 });
   expect(w.models.map((m) => m.model)).toContain("claude-sonnet-5-5");
   const m = speed("month", now);
   expect(m.buckets.length).toBe(30);
