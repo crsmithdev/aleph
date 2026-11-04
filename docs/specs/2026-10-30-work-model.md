@@ -10,7 +10,7 @@ Two failures come from this. Triage rewrites the body of an issue into the goal 
 
 One name for each thing, the same in the code, on disk, in the CLI and in the UI:
 
-- An **Issue** is what Chris (or a worker, the deps check or the correction memory) asks for, kept as written.
+- An **Issue** is what Chris (or a worker or the correction memory) asks for, kept as written.
 - Triage or the planner makes one or more **Goals** from it. A goal is numbered under its issue: `aleph-577.1`. A Goal never has parts. An Issue never has build runs.
 - A **Run** is one attempt on a goal (build, land, recheck, facts) or on an issue (triage, plan). The runs of one goal are its **Job**.
 - When something waits for Chris, it is **awaiting** input or approval, and an **Ask** holds the question and its options.

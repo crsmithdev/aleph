@@ -212,7 +212,6 @@ function alwaysFor(reason: string, action: string, first: string | undefined): A
   const label = `${first ?? action} [auto-yes]`;
   const revoke = `Revoke with \`aleph always revoke ${reason}\`.`;
   if (action === "recommended") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking you. ${revoke}` };
-  if (reason === "proposal" && action === "start") return { label, action, hint: `Does this one now. From now on, a dependency update within the same major version starts without asking you; a major version jump still asks. ${revoke}` };
   return { label, action, hint: `Does this one now. From now on, the factory does this without asking you. ${revoke}` };
 }
 

@@ -21,7 +21,7 @@ export const view = {
 export const REASONS = {
   "held-path": ["Lands on held paths", "A run that changes a held path, after its checks and review pass."],
   review: ["Reviewer holds", "The reviewer held the run and no fix rounds are left."],
-  proposal: ["Proposals", "Work that is a proposal, such as a dependency update, before it starts."],
+  proposal: ["Proposals", "Work that is a proposal, before it starts."],
   question: ["Questions", "A run or a triage stopped on a choice that the spec leaves open."],
   "no-commit": ["Runs with no commit", "The last 3 runs of a goal ended with nothing committed."],
   "part-dropped": ["Dropped parts", "A part of an issue was dropped and no other part is open."],

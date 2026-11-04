@@ -98,7 +98,7 @@ test("ASK_REASONS names every reason with actions and an always", () => {
   }
   expect(ASK_REASONS.question.always).toBe("recommended");
   expect(ASK_REASONS["triage-failed"].always).toBe("retry");
-  expect(ASK_REASONS.proposal.always).toBe("start");
+  expect(ASK_REASONS.proposal.always).toBe("");
   expect(ASK_REASONS["host-check"].always).toBe("");
   // No reason hands its Ask to the firefighter: the director takes every Ask first.
   for (const r of Object.values(ASK_REASONS)) expect(r.always).not.toBe("firefighter");

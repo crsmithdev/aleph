@@ -118,8 +118,6 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_DAY_CAP: "100",
     // No test reaches the live router: its tier for a seed varies, and `opus` sends the seed to a planner.
     ALEPH_JUDGE: "haiku",
-    // The nightly sweep finds nothing unless a test gives it a table; no test reaches the registry.
-    ALEPH_OUTDATED_CMD: "true",
     // The live cap's test starts six runs against a cap of five.
     ALEPH_LIVE_CAP: "5",
     // A run's end and `aleph issue` dispatch in production; the dispatch tests turn it on.

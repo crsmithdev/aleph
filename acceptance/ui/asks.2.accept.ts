@@ -98,8 +98,7 @@ describe("asks", () => {
     expect(CASES.proposal()[0].actions.map((a) => a.label)).toEqual(["Start the work", "Drop the proposal"]);
     expect(CASES.proposal()[0].actions[0].args).toEqual({ repo: "aleph", id: "387", approve: "true" });
     expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
-    expect(CASES.proposal()[0].always).toMatchObject({ label: "Start the work [auto-yes]", action: "start" });
-    expect(CASES.proposal()[0].always?.hint).toContain("a major version jump still asks");
+    expect(CASES.proposal()[0].always).toBeUndefined();
     expect(CASES["host-check"]()[0].kind).toBe("input");
     expect(CASES["host-check"]()[0].actions.map((a) => a.label)).toEqual(["Mark it checked", "Drop the check"]);
   });

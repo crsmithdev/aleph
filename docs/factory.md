@@ -155,10 +155,6 @@ Whatever would wait for you is an Ask, of kind `input` or `approval`, with a rea
 
 A check that fails in a run, a land or the baseline runs once more on the same tree (not after a time-out, and not the hidden check). If it passes, it counts as passed, and the flake goes to `~/.aleph/factory/flaky.json`. Two flakes of one check in 7 days raise a health line in `aleph report`.
 
-## Dependency updates
-
-With the nightly probe, the tick runs `bun outdated` in a fresh clone of each factory repo's `origin/main`, inside the sandbox. It files one issue per package that has a newer version, with `source: deps` and an Ask of kind `approval`. Nothing starts until you approve it. `~/.aleph/factory/deps.json` stops it from proposing the same version twice.
-
 ## Settings
 
 Each cap is read from its variable first, then from `~/.aleph/factory/caps.json` (`{ "day": 999, "live": 5, "awaiting": 5 }`), then the default.
@@ -181,4 +177,4 @@ Each cap is read from its variable first, then from `~/.aleph/factory/caps.json`
 | `ALEPH_WORKER_CMD` | `claude` | The worker command |
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 
-For each agent role (`TRIAGE`, `PLAN`, `AUTHOR`, `FACTS`, `FIREFIGHTER`, `DIRECTOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. `ALEPH_OUTDATED_CMD` replaces `bun outdated`. Tests use these to put in a fake.
+For each agent role (`TRIAGE`, `PLAN`, `AUTHOR`, `FACTS`, `FIREFIGHTER`, `DIRECTOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.

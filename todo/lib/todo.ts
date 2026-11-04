@@ -177,7 +177,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   const bad = kindProblem(kind) ?? titleProblem(title);
   if (bad) throw new Error(bad);
   const given = o.labels ?? [];
-  const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("deps") ? "deps" : given.includes("memory") ? "memory" : "chris");
+  const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("memory") ? "memory" : "chris");
   const areas = given.filter((l) => !(SOURCES as readonly string[]).includes(l) && !NOT_AREAS.includes(l));
   const item: Issue = {
     id: nextId(doc),

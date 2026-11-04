@@ -60,7 +60,7 @@ const proposal: Reason = { kind: "approval", name: "Lesson", actions: ["approve"
 const REASONS = {
   "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "held" },
   "review": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "review" },
-  "proposal": { kind: "approval", name: "Proposal", actions: ["start", "deny"], always: "start" },
+  "proposal": { kind: "approval", name: "Proposal", actions: ["start", "deny"], always: "" },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
   "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question" },
   "no-commit": { kind: "input", name: "No commit", actions: ["rerun", "close"], always: "" },

@@ -112,7 +112,6 @@ export const roleCmd = (role: string): string => process.env[`ALEPH_${role}_CMD`
 export const roleSeconds = (role: string, dflt: number): number => Number(process.env[`ALEPH_${role}_TIMEOUT`] ?? dflt);
 export const windowsTimeCmd = (): string | undefined => process.env.ALEPH_WINDOWS_TIME_CMD;
 export const ruleCmd = () => process.env.ALEPH_RULE_CMD ?? "claude";
-export const outdatedCmd = () => process.env.ALEPH_OUTDATED_CMD ?? "bun outdated";
 export const doctorClockMs = () => Number(process.env.ALEPH_DOCTOR_CLOCK_MS ?? 15_000);
 export const homeUrl = () => process.env.ALEPH_HOME_URL ?? "http://aleph.home/";
 export const systemctlBin = () => process.env.ALEPH_SYSTEMCTL ?? "systemctl";

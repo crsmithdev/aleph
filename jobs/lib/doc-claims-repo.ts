@@ -64,7 +64,6 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_UI_PORT: plain("ALEPH_UI_PORT", s.uiPort),
   ALEPH_WORKER_CMD: plain("ALEPH_WORKER_CMD", s.workerCmd),
   ALEPH_REVIEWER_CMD: () => bare("ALEPH_REVIEWER_CMD", () => s.reviewerCmd() === "worker-sentinel" ? "the worker command" : s.reviewerCmd(), { ALEPH_WORKER_CMD: "worker-sentinel" }),
-  ALEPH_OUTDATED_CMD: plain("ALEPH_OUTDATED_CMD", s.outdatedCmd),
   ALEPH_JEV_PASS_BELOW: plain("ALEPH_JEV_PASS_BELOW", JEV_PASS_BELOW),
 };
 

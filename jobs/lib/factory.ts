@@ -8,7 +8,6 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { startProposals, takeFresh } from "./deps.ts";
 import { askChris, askOf, needsOf, plainAsk } from "./ask.ts";
 import { factoryLog } from "./layout.ts";
 import { itemOnMain, readRecord, repoStages } from "./status.ts";
@@ -131,8 +130,6 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     factoryLog(held.why);
     return { started: [], skipped: [held.why], held: held.why };
   }
-  const startedProposals = startProposals(sandboxRepos());
-  if (startedProposals.length) factoryLog(`standing: proposal: started ${startedProposals.join(", ")}`);
   const landed: string[] = [];
   if (land) {
     // All at once: the lands queue on the repo's lock, and the first takes the rest into one batch.
@@ -592,8 +589,6 @@ export function report(now = Date.now()): string {
   lines.push(...unshown());
   const eps = newEpisodes();
   if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
-  const proposed = takeFresh();
-  if (proposed.length) lines.push(["proposed updates (relabel one `goal` to start it):", ...proposed.map((d) => `  ${d}`)].join("\n"));
   const lessons = proposals();
   if (lessons.length) lines.push(["proposed lessons (Yes or No on Status):", ...lessons.map((l) => `  ${l.id} ${l.kind}: ${l.sentence} (${l.count} signals)`)].join("\n"));
   return lines.join("\n");

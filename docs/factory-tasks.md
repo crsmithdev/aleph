@@ -15,7 +15,6 @@ This table states what starts each factory task, what it does and what stops two
 | Firefighter | Tick; a new event in the snapshot (stuck, failed, lost, looping runs, red main) | Read-only run; code checks and applies its actions | The action taken | Its `tell` lines | `firefighter.json` keeps the event keys it saw |
 | Corrections | Tick; once a day from 03:00 local | Groups signals into lessons and proposes a check, a rule or a skill | A proposal | Approve or decline | Signal ids already in a lesson are skipped |
 | Episodes | Tick; a finished goal | Writes its episode page | Nothing | None | `episodes-seen` |
-| Dependency sweep | Tick; after the probe passes | `bun outdated` in a fresh clone | An issue with an approval Ask | Approve or decline | `deps.json` records `<repo>:<package>@<version>` |
 
 ## Ticket sources
 
@@ -23,7 +22,6 @@ This table states what starts each factory task, what it does and what stops two
 |---|---|---|
 | Worker `FOLLOWUP:` line | An issue with source `worker` | `sameTopic` against open issues; a match is a note. Triage has its own duplicate check after that |
 | Worker `FLAKE:` line, acceptance | A note on the flake tracker, no issue | One open tracker per repo |
-| Dependency sweep | One issue per package and version | `deps.json` |
 | Corrections | A proposal per lesson | Lesson state |
 
 ## Known gaps

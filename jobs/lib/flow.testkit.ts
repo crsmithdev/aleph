@@ -9,7 +9,6 @@ import { base } from "../cli.helpers";
 import { asCli, call, issueShow, status, type Result } from "../inproc.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ciStep } from "./ci.ts";
-import { sweep } from "./deps.ts";
 import { behind, correctionsStep, episodeStep, directorStep, firefighterStep, probeDue, report, runDispatch, stallStep, triageStep } from "./factory.ts";
 import { factoryDir, factoryRepos, health, hold, paused, setPaused } from "./factory-status.ts";
 import { fetchOrigin } from "./git.ts";
@@ -56,10 +55,6 @@ export const tick = (extra: Record<string, string> = {}): Promise<any> => asCli(
       mkdirSync(factoryDir(), { recursive: true });
       const p = await probe(repo, join(factoryDir(), "probe.log"));
       factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
-      if (p.ok) {
-        const proposed = await sweep(Object.values(loadRegistry()).filter((r) => r.sandbox), factoryLog);
-        if (proposed.length) factoryLog(`proposed ${proposed.join("; ")}`);
-      }
     }
   }
   await correctionsStep();

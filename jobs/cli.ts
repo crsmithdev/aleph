@@ -35,7 +35,6 @@ import { probe } from "./lib/probe.ts";
 import { smokeStep } from "./lib/smoke.ts";
 import { runNightly } from "./lib/nightly-accept.ts";
 import * as doctor from "./lib/doctor.ts";
-import { sweep } from "./lib/deps.ts";
 import { recordReview, runReview } from "./lib/review.ts";
 import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
@@ -337,9 +336,9 @@ async function dispatchCmd(): Promise<void> {
 }
 
 /**
- * `aleph tick`, from the timer: the nightly probe when due, and the dependency sweep only after a
- * passing probe, then a dispatch as the fallback for what no run's end and no issue write has
- * started. A failed probe starts no run and no sweep. Last, the monitor's daily report, which runs while paused.
+ * `aleph tick`, from the timer: the nightly probe when due, then a dispatch as the fallback for what
+ * no run's end and no issue write has started. A failed probe starts no run. Last, the monitor's
+ * daily report, which runs while paused.
  */
 async function tickCmd(): Promise<void> {
   if (!paused() && probeDue()) {
@@ -348,10 +347,6 @@ async function tickCmd(): Promise<void> {
       mkdirSync(factoryDir(), { recursive: true });
       const p = await probe(repo, join(factoryDir(), "probe.log"));
       factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
-      if (p.ok) {
-        const proposed = await sweep(Object.values(loadRegistry()).filter((r) => r.sandbox), factoryLog);
-        if (proposed.length) factoryLog(`proposed ${proposed.join("; ")}`);
-      }
     }
   }
   await correctionsStep();

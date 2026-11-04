@@ -283,7 +283,7 @@ Dispatch at once:
 
 Only the tick starts:
 - A due date that arrives: an item with `due` after today starts nothing until a tick on or after that date.
-- The nightly sandbox probe, and the dependency sweep that follows a passing probe.
+- The nightly sandbox probe.
 - The baseline of a main that moved without a land (a push by hand): nothing in the factory sees it until the tick's dispatch checks the new commit.
 - The tick's triage of open issues that nothing triaged at once (a gated or failed triage), and a `waiting_on` whose target became done by a push by hand.
 - The fallback dispatch for anything the above missed.

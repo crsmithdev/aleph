@@ -116,7 +116,7 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
   const w = write(repo, "todo: add an item", (doc) => {
     const labels = fields.labels ?? t.labels;
     // Claude Code sets CLAUDECODE in its shells; a label that implies a source still wins over it.
-    const implied = labels.some((l) => ["followup", "deps", "memory"].includes(l));
+    const implied = labels.some((l) => ["followup", "memory"].includes(l));
     const issue = issues.add(doc, title, { kind: fields.kind, priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined });
     if (fields.status === "parked") issues.setStatus(issue, "parked");
     if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
