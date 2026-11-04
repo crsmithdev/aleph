@@ -11,15 +11,15 @@ import * as issues from "../../todo/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { git } from "./git.ts";
-import { allJobs, isOpen, lastReal, openJob, type Job } from "./job.ts";
-import { asked } from "./ask.ts";
+import { isOpen, lastReal, openJob, type Job } from "./job.ts";
+import type { Bound, Gate } from "./goal-decision.ts";
 import { layout, readFactoryLog } from "./layout.ts";
 import { allRuns, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo } from "./ledger.ts";
 import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { nightlyLine } from "./nightly-accept.ts";
-import { AWAITING_CAP, DAY_CAP, LIVE_CAP, suiteBudgetSeconds } from "./settings.ts";
+import { LIVE_CAP, suiteBudgetSeconds } from "./settings.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -29,7 +29,15 @@ export const probeFile = () => join(factoryDir(), "probe.json");
 
 export const holdsFile = () => join(factoryDir(), "holds.jsonl");
 
+/** One record of why a goal waits: `kind` is the gate that bound, or `started`. Records from before v6 name older kinds. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string }
+
+/** The hold record kinds from before the 7 gates that did not stop a start: the goal was done, or its job was open. */
+const OLD_NOT_HELD = new Set(["open", "start", "done"]);
+
+/** Whether a record stopped a goal that could have started: not `started`, not a done goal, not a goal whose job is open. */
+export const stopsStart = (r: HoldRecord): boolean =>
+  r.kind !== "started" && !OLD_NOT_HELD.has(r.kind) && !(r.kind === "not-ready" && /^(its job is |the item is already done$)/.test(r.text));
 
 /** Every record of the holds file, oldest first; a line that does not parse is skipped. */
 export function allHolds(): HoldRecord[] {
@@ -50,7 +58,7 @@ export function readHolds(names: string[]): HoldRecord[] {
 }
 
 /** Appends one record of why a goal waits (or, with kind `started`, that it no longer does), unless it repeats the name's last record. */
-export function recordHold(name: string, kind: string, text: string): void {
+export function recordHold(name: string, kind: Gate | "started", text: string): void {
   const last = readHolds([name]).at(-1);
   if (last && last.kind === kind && last.text === text) return;
   mkdirSync(factoryDir(), { recursive: true });
@@ -105,49 +113,11 @@ function specSpent(now: number): number {
   return sum;
 }
 
-/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and director runs (and the explain runs from before the director), which the day cap does not count, and the spec checks. A director run has no repo (its `on` is an item ref, a run folder or a lesson id), so it is not filtered by one, as a firefighter run is not. */
+/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and director runs (and the explain runs from before the director), which `runsToday` does not count, and the spec checks. A director run has no repo (its `on` is an item ref, a run folder or a lesson id), so it is not filtered by one, as a firefighter run is not. */
 export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "director" || e.run.kind === "explain" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
   return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0) + specSpent(now);
-}
-
-/** Open jobs in factory repos whose last run awaits Chris (a stuck run needs no answer). */
-export function waiting(jobs = allJobs()): number {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  return jobs.filter((j) => isOpen(j) && j.at(-1)!.run.repo && keys.has(j.at(-1)!.run.repo!) && isAwaiting(j.at(-1)!.run.condition)).length;
-}
-
-export interface Hold { name: string; condition: string; reason?: string; line: string }
-
-/** Whether an open job holds the factory: its last real run is stuck or failed, with no next run pending and no Ask on its run. */
-function holds(j: Job, keys: Set<string>, except?: string): boolean {
-  const last = lastReal(j);
-  const r = last.run;
-  return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.condition === "stuck" || r.condition === "failed") && r.job !== except
-    && !r.next && !isLive(last.folder) && !asked(last);
-}
-
-/** The open jobs that hold the factory, in the order given: hold's filter, which rescueStuck uses too. */
-export const holders = (jobs: Job[], except?: string): Job[] => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  return jobs.filter((j) => holds(j, keys, except));
-};
-
-/**
- * The factory's own hold: on while any open job in a factory repo is `stuck` or
- * `failed`. No run starts or lands by itself until it clears. `except` is a job
- * that does not count (the run asking is that job's own). Separate from the pause.
- * A run with a next run pending (`next` set, or its unit still live) does not count:
- * a conflicted land goes back to its worker by itself, and the hold waits for that.
- * A run the factory set an Ask on does not count: Chris answers it when he can.
- */
-export function hold(jobs = allJobs(), except?: string): Hold | null {
-  const bad = holders(jobs, except).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started));
-  if (!bad.length) return null;
-  const r = lastReal(bad[0]).run;
-  const more = bad.length > 1 ? ` and ${bad.length - 1} more` : "";
-  return { name: r.name, condition: r.condition, reason: r.reason, line: `Held: ${r.name}${more} ${bad.length > 1 ? "are" : "is"} ${r.condition}${r.reason ? ` (${r.reason})` : ""}. No run starts or lands until ${bad.length > 1 ? "they are" : "it is"} cleared.` };
 }
 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
@@ -155,46 +125,41 @@ export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((
 
 export const liveRuns = (runs?: Entry[]): number => liveEntries(runs).length;
 
-/** The gates, in the order `gates` checks them. */
-export const GATES = ["pause", "hold", "probe", "live", "day", "awaiting"] as const;
+/** The gates of the whole factory, in the order of GATES: the others are each goal's own. */
+export const FACTORY_GATES = ["pause", "probe", "live-cap"] as const satisfies readonly Gate[];
 
-export type Gate = (typeof GATES)[number];
+export type FactoryGate = (typeof FACTORY_GATES)[number];
+
+/** The probe gate: binds while the last sandbox probe failed. One file read. */
+export function probeGate(): Bound | null {
+  const p = lastProbe();
+  if (!p || p.ok) return null;
+  const why = `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`;
+  return { why, text: why };
+}
+
+/** Each factory gate that binds now, or null: the pause, a failed probe, the live cap. `jobs`, when given, hold every run. */
+export function factoryGates(jobs?: Job[]): Record<FactoryGate, Bound | null> {
+  const live = liveRuns(jobs?.flat());
+  return {
+    pause: paused() ? { why: "paused", text: "The factory is paused" } : null,
+    probe: probeGate(),
+    "live-cap": live >= LIVE_CAP() ? { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)` } : null,
+  };
+}
 
 /**
- * The first reason no run may start (or land), or null. The one place the
- * gates are checked, in the order of GATES: the pause, the hold, a failed
- * probe, the live cap, the day cap, the runs waiting for Chris. `only` limits
- * it to some of them (a caller whose other gates are met elsewhere or do not
- * apply); `jobs` and `except` are hold's and the waiting count's.
+ * The first factory gate that binds, in the order of FACTORY_GATES, or null. `only` limits it to some of them (a caller
+ * whose other gates do not apply); `jobs` are factoryGates'.
  */
-export function gates(opts: { only?: readonly Gate[]; jobs?: Job[]; except?: string } = {}): { gate: Gate; why: string; text: string } | null {
-  const on = (g: Gate) => !opts.only || opts.only.includes(g);
+export function gates(opts: { only?: readonly FactoryGate[]; jobs?: Job[] } = {}): ({ gate: FactoryGate } & Bound) | null {
+  const on = (g: FactoryGate) => !opts.only || opts.only.includes(g);
+  // Each gate is read only when asked: the pause is one stat, and the dispatch asks it first.
   if (on("pause") && paused()) return { gate: "pause", why: "paused", text: "The factory is paused" };
-  if (on("hold")) {
-    const h = hold(opts.jobs, opts.except);
-    if (h) return { gate: "hold", why: h.line, text: h.line };
-  }
-  if (on("probe")) {
-    const p = lastProbe();
-    if (p && !p.ok) {
-      const why = `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`;
-      return { gate: "probe", why, text: why };
-    }
-  }
-  // The jobs, when given, hold every run: the live and day gates count from them and read no run again.
-  const runs = opts.jobs?.flat();
-  if (on("live")) {
-    const live = liveRuns(runs);
-    if (live >= LIVE_CAP()) return { gate: "live", why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)` };
-  }
-  if (on("day")) {
-    const today = runsToday(Date.now(), runs).length;
-    if (today >= DAY_CAP()) return { gate: "day", why: `cap of ${DAY_CAP()} runs in 24 hours`, text: `Day cap reached (${today} of ${DAY_CAP()} runs in 24 hours)` };
-  }
-  if (on("awaiting")) {
-    const waits = waiting(opts.jobs);
-    if (waits >= AWAITING_CAP()) return { gate: "awaiting", why: `${waits} runs wait for Chris`, text: `${waits} runs wait for Chris (cap ${AWAITING_CAP()})` };
-  }
+  const rest = FACTORY_GATES.filter((g) => g !== "pause" && on(g));
+  if (!rest.length) return null;
+  const all = factoryGates(opts.jobs);
+  for (const g of rest) if (all[g]) return { gate: g, ...all[g]! };
   return null;
 }
 
@@ -343,7 +308,7 @@ export function suiteLines(runs: Entry[] = allRuns()): string[] {
 }
 
 /**
- * The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, a slow
+ * The factory's health lines: stalled work, a failed probe, a red main or CI, a slow
  * full suite and a failed nightly acceptance run. The flake counts are the monitor's (monitor-table.ts). `jobs` is the
  * caller's, when it has read them already.
  */
@@ -355,8 +320,6 @@ export function health(now = Date.now(), o: { jobs?: Job[] } = {}): string[] {
   if (smoke) lines.push(smoke);
   const nightly = nightlyLine();
   if (nightly) lines.push(nightly);
-  const w = waiting(o.jobs);
-  if (w >= AWAITING_CAP()) lines.push(`health: ${w} runs wait for Chris; no new run starts`);
   const p = lastProbe();
   if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
   for (const r of redMains()) lines.push(`health: ${r.line}`);
@@ -471,17 +434,14 @@ export function factorySnapshot(now: number, jobs: Job[]) {
   const runs = jobs.flat();
   return {
     paused: paused(),
-    dayCap: DAY_CAP(),
     liveCap: LIVE_CAP(),
     liveRuns: liveRuns(runs),
-    awaitingCap: AWAITING_CAP(),
     runsToday: runsToday(now, runs).length,
     costToday: spentToday(now, runs),
     probe: lastProbe(),
     health: health(now, { jobs }),
-    hold: hold(jobs)?.line ?? null,
     firefighter: firefighterLines(now),
-    gated: gates({ jobs }),
+    gated: factoryGates(jobs),
     baselines: baselines(),
   };
 }

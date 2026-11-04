@@ -23,12 +23,10 @@ test("each error line says its alert, in red", () => {
     [{ health: [ciRed] }, "GitHub CI is broken"],
     [{ health: [mainRed] }, "the build is failing on main"],
     [{ probe: { at: "x", ok: false, failed: ["no network"] } }, "the sandbox is broken"],
-    [{ hold: "Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared." }, "jobs are unhealthy"],
     [{ health: ["health: 2 passed runs did not land in 15 minutes"] }, "lands are stuck"],
     [{ health: ["health: the land run of aleph-5 is live for over 30 minutes"] }, "lands are stuck"],
     [{ health: ["health: 2 goals can start, but no run started in 15 minutes"] }, "queued jobs are not starting"],
     [{ health: ["health: 1 new issue did not move to jobs in 15 minutes"] }, "new issues are not becoming jobs"],
-    [{ health: ["health: 4 runs wait for Chris; no new run starts"] }, "new runs wait for your answers"],
     [{ health: ["health: something new broke."] }, "something new broke"],
   ];
   for (const [o, text] of cases) {
@@ -49,7 +47,7 @@ test("two repos with the same trouble say it once", () => {
 
 test("the sentence says at most three parts, the most serious first", () => {
   const stuck = [job({ name: "aleph-1", condition: "stuck" })];
-  expect(said({ health: ["health: 4 runs wait for Chris; no new run starts", mainRed, ciRed] }, { stuck })).toBe("Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy.");
+  expect(said({ health: ["health: something new broke.", mainRed, ciRed] }, { stuck })).toBe("Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy.");
 });
 
 test("what asks for you follows the fine sentence, in the warning colour", () => {
@@ -59,14 +57,14 @@ test("what asks for you follows the fine sentence, in the warning colour", () =>
   expect(raw(asks("approval"))).toBe('<span class="say warning">Everything is running smoothly; <a href="#awaiting">your attention is needed</a>.</span>');
   expect(raw(asks("input", "input"))).toBe(raw(asks("approval")));
   expect(raw(asks("input", "approval"))).toBe(raw(asks("approval")));
-  expect(raw({}, { runsToday: 12 })).toContain("Everything is running smoothly; the day cap is reached.");
+  expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is running smoothly.</span>');
   expect(raw(asks("approval"), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">the build is failing on main</a>; <a href="#awaiting">your attention is needed</a>.');
 });
 
 test("a paused factory does not say it runs smoothly", () => {
   expect(said({ paused: true })).toBe("The factory is paused.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, paused: true } })).toContain('class="say warning"');
-  expect(said({ paused: true, runsToday: 12 })).toBe("The factory is paused; the day cap is reached.");
+  expect(said({ paused: true, runsToday: 12 })).toBe("The factory is paused.");
   expect(said({ paused: true, health: [mainRed] })).toBe("Alert: the build is failing on main; the factory is paused.");
 });
 
@@ -75,8 +73,8 @@ const weekAt = (seven_day: number) => ({ usage: { now: { seven_day } } });
 test("an alert keeps its red sentence and holds the weekly usage part; three alerts cut it", () => {
   expect(said({ health: [mainRed] }, weekAt(90))).toBe("Alert: the build is failing on main; weekly usage is at 90%.");
   expect(view.renderLede({ ...calmState, ...weekAt(90), factory: { ...calmState.factory, health: [mainRed] } })).toContain('class="say error"');
-  const three = { health: [ciRed, mainRed, "health: 4 runs wait for Chris; no new run starts"] };
-  expect(said(three, weekAt(90))).toBe("Alert: GitHub CI is broken; the build is failing on main; new runs wait for your answers.");
+  const three = { health: [ciRed, mainRed, "health: something new broke."] };
+  expect(said(three, weekAt(90))).toBe("Alert: GitHub CI is broken; the build is failing on main; something new broke.");
 });
 
 test("a full suite over its budget is a warning part, not an alert and not a card", () => {
@@ -106,7 +104,7 @@ test("the most flaked line stays in the report and off the status sentence and t
 });
 
 test("the status line says your attention is needed when the Issues section has an item", () => {
-  const calm = { ...state, asks: [], stuck: [], issues: [], factory: { ...state.factory, health: [], hold: undefined, paused: false } };
+  const calm = { ...state, asks: [], stuck: [], issues: [], factory: { ...state.factory, health: [], paused: false } };
   for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { kind: "input", reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {
     const h = view.renderLede({ ...calm, ...o });
     expect(h).toContain("your attention is needed");

@@ -43,9 +43,7 @@ const plain = (name: string, fn: () => string | number) => () => bare(name, fn);
 
 /** Each setting a doc may give a default for, read from the code with its variable unset. */
 export const DEFAULTS: Truth["defaults"] = {
-  ALEPH_DAY_CAP: capped("ALEPH_DAY_CAP", s.DAY_CAP),
   ALEPH_LIVE_CAP: capped("ALEPH_LIVE_CAP", s.LIVE_CAP),
-  ALEPH_AWAITING_CAP: capped("ALEPH_AWAITING_CAP", s.AWAITING_CAP),
   ALEPH_DIRECTOR_CAP: plain("ALEPH_DIRECTOR_CAP", s.DIRECTOR_CAP),
   ALEPH_ACCEPTANCE_FAIL_CAP: plain("ALEPH_ACCEPTANCE_FAIL_CAP", s.acceptanceFailCap),
   ALEPH_TRIAGE_CAP: plain("ALEPH_TRIAGE_CAP", s.TRIAGE_CAP),

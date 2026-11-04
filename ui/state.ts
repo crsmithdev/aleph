@@ -88,14 +88,12 @@ export interface IncomingItem { id: string; title: string; href: string; created
 export interface State {
   now: string;
   factory: {
-    paused: boolean; judge: "jev" | "haiku"; dayCap: number; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; awaitingCap: number; runsToday: number; costToday: number;
+    paused: boolean; judge: "jev" | "haiku"; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; runsToday: number; costToday: number;
     nextTick: string | null;
     /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
     tickInProgress: boolean;
     probe: { at: string; ok: boolean; failed: string[] } | null;
     health: string[];
-    /** The factory's own hold (a stuck or failed run), or null. */
-    hold: string | null;
     /** The firefighter's factory log lines of the last 24 hours, newest last. */
     firefighter: { at: string; line: string }[];
     /** The monitor's newest daily report: the first metric, the reader's findings in rank order, and the table. Null before the first report. */
@@ -478,9 +476,9 @@ export function state(now = new Date()): State {
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
       const red = redOf(repo);
       // The stage already says when a planner run is going, so the lane does not take the plan lock.
-      const w = goalDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, gate: gated });
+      const w = goalDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
-        ...(w.kind === "waits_on" ? { waits: w.ids.map(blocker) } : {}),
+        ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}),
       };
     }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q),
   };

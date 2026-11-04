@@ -1,46 +1,62 @@
 import { expect, test } from "bun:test";
-import { goalDecision, refDone, type GoalFacts } from "./goal-decision.ts";
+import { GATES, goalDecision, refDone, type GoalFacts } from "./goal-decision.ts";
 
 const item = (fm: Record<string, unknown> = {}) => ({ fm, notes: [] }) as unknown as GoalFacts["item"];
 const facts = (f: Partial<GoalFacts> = {}): GoalFacts => ({ name: "fac-9", item: item(), done: () => false, ...f });
 const kind = (f: Partial<GoalFacts>) => goalDecision(facts(f)).kind;
-const gate = { gate: "live", why: "12 agent runs are live", text: "Waiting for a slot (12 of 12 running)" } as const;
+const live = { why: "12 agent runs are live", text: "Waiting for a slot (12 of 12 running)" };
 
 test("a goal with no fact against it is ready, and a fact not read stops nothing", () => {
   expect(goalDecision(facts())).toEqual({ kind: "ready", why: "ready", text: "Starts at the next dispatch" });
 });
 
-test("waits_on names only the open refs, in both lines", () => {
+test("Not ready names only the open after refs, in both lines", () => {
   const d = goalDecision(facts({ item: item({ after: ["fac-1", "fac-2", "fac-3"] }), done: (r) => r === "fac-1" }));
-  expect(d).toEqual({ kind: "waits_on", ids: ["fac-2", "fac-3"], why: "blocked: after fac-2,fac-3", text: "Waits on fac-2, fac-3" });
+  expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "blocked: after fac-2,fac-3", text: "Waits on fac-2, fac-3" });
 });
 
-test("the first fact in the dispatch's order decides", () => {
-  const all: Partial<GoalFacts> = { red: "main is red", done: (r) => r === "fac-9", item: item({ after: ["fac-1"] }), open: "running", planning: true, gate, busy: "waits for fac-1: both change the busy file a.ts", noCommits: 3, startsInHour: 3 };
-  const order = ["red", "done", "waits_on", "open", "planning", "gate", "busy", "no-commit", "run-cap"];
-  const clear: Partial<GoalFacts>[] = [{ red: null }, { done: (r) => r !== "fac-9" && r !== "fac-1" }, { done: () => false, item: item() }, { open: null }, { planning: false }, { gate: null }, { busy: null }, { noCommits: 0 }, { startsInHour: 0 }];
+test("the 7 gates bind in the order of GATES, Loop guard last", () => {
+  expect([...GATES]).toEqual(["pause", "baseline", "probe", "not-ready", "live-cap", "busy-file", "loop-guard"]);
+  const all: Partial<GoalFacts> = { pause: { why: "paused", text: "The factory is paused" }, red: "main is red", probe: { why: "probe failed", text: "probe failed" }, open: "running", "live-cap": live, busy: "waits for fac-1: both change the busy file a.ts", noCommits: 3 };
+  const clear: Partial<GoalFacts>[] = [{ pause: null }, { red: null }, { probe: null }, { open: null }, { "live-cap": null }, { busy: null }, { noCommits: 0 }];
   let f = all;
-  for (const [i, k] of order.entries()) {
-    expect(kind(f)).toBe(k as any);
+  for (const [i, k] of GATES.entries()) {
+    expect(kind(f)).toBe(k);
     f = { ...f, ...clear[i] };
   }
   expect(kind(f)).toBe("ready");
 });
 
-test("the Queued lane reads the stops it once left out", () => {
-  expect(goalDecision(facts({ busy: "waits for fac-1: both change the busy file a.ts" })).text).toBe("Waits for fac-1: both change the busy file a.ts");
-  expect(goalDecision(facts({ noCommits: 3 }))).toMatchObject({ why: "3 runs in a row with no commit", text: "The last 3 runs ended with no commit; the next dispatch asks you" });
-  expect(goalDecision(facts({ startsInHour: 4 }))).toMatchObject({ kind: "run-cap", starts: 4, why: "4 runs in the last hour" });
+test("Baseline binds on each line the dispatch gives for a main that is not green: red, running and unchecked", () => {
+  for (const red of ["main is red at abc1234: tests", "main baseline running", "main is unchecked: fetch failed"]) {
+    expect(goalDecision(facts({ red }))).toEqual({ kind: "baseline", why: red, text: red });
+  }
+  expect(kind({ red: null })).toBe("ready");
 });
 
-test("no-commit and run-cap start at their limits; an answered run cap skips the hour count", () => {
+test("Not ready covers a done goal, an after ref, an open job, a planner and a spec check, in that order", () => {
+  const all: Partial<GoalFacts> = { done: (r) => r === "fac-9", item: item({ after: ["fac-1"] }), open: "running", planning: true, checking: true };
+  expect(goalDecision(facts(all)).why).toBe("the item is already done");
+  expect(goalDecision(facts({ ...all, done: () => false })).why).toBe("blocked: after fac-1");
+  expect(goalDecision(facts({ ...all, done: () => false, item: item() })).why).toBe("its job is running");
+  expect(goalDecision(facts({ ...all, done: () => false, item: item(), open: null })).why).toBe("planning");
+  expect(goalDecision(facts({ checking: true }))).toMatchObject({ kind: "not-ready", why: "spec check running" });
+});
+
+test("the Queued lane reads the stops it once left out", () => {
+  expect(goalDecision(facts({ busy: "waits for fac-1: both change the busy file a.ts" })).text).toBe("Waits for fac-1: both change the busy file a.ts");
+  expect(goalDecision(facts({ noCommits: 3 }))).toMatchObject({ kind: "loop-guard", ask: "no-commit", why: "3 runs in a row with no commit" });
+  expect(goalDecision(facts({ startsInHour: 4 }))).toMatchObject({ kind: "loop-guard", ask: "run-cap", starts: 4, why: "4 runs in the last hour" });
+});
+
+test("Loop guard binds at its limits; an answered run cap skips the hour count", () => {
   expect(kind({ noCommits: 2 })).toBe("ready");
   expect(kind({ startsInHour: 2 })).toBe("ready");
   expect(kind({ startsInHour: 3, capHeld: true })).toBe("ready");
 });
 
-test("a gate gives the dispatch its why and Chris its text", () => {
-  expect(goalDecision(facts({ gate }))).toEqual({ kind: "gate", gate: "live", why: gate.why, text: gate.text });
+test("a factory gate gives the dispatch its why and Chris its text", () => {
+  expect(goalDecision(facts({ "live-cap": live }))).toEqual({ kind: "live-cap", ...live });
 });
 
 test("refDone: an item absent from a read list is done; a list not read blocks", () => {

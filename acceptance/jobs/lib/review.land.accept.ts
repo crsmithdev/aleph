@@ -66,7 +66,7 @@ describe("a factory run", () => {
     expect(rep).toContain("cost $0.25 at the API price");
     expect(rep).toContain("fac/fheld awaiting (held): held path held/x.txt");
     expect(rep).toContain("aleph land fheld");
-    expect(rep).toMatch(/runs in the last 24 hours: \d+ of 100, \$\d+\.\d{2} at the API price/);
+    expect(rep).toMatch(/runs in the last 24 hours: \d+, \$\d+\.\d{2} at the API price/);
     expect(state(r.json.run)).toMatchObject({ shown: true, told: true });
     expect(await reportText()).not.toContain("fdefault");
     await drop("fdefault");

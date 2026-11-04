@@ -10,7 +10,7 @@ import { asCli, call, issueShow, status, type Result } from "../inproc.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ciStep } from "./ci.ts";
 import { behind, correctionsStep, episodeStep, directorStep, firefighterStep, probeDue, report, runDispatch, stallStep, triageStep } from "./factory.ts";
-import { factoryDir, factoryRepos, health, hold, paused, setPaused } from "./factory-status.ts";
+import { factoryDir, factoryRepos, health, paused, setPaused } from "./factory-status.ts";
 import { fetchOrigin } from "./git.ts";
 import { factoryLog } from "./layout.ts";
 import { loadRegistry } from "./ledger.ts";
@@ -39,8 +39,6 @@ export const reportText = (): Promise<string> => asCli({}, () => {
     fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
   }
-  const h = hold();
-  if (h) lines.push(h.line);
   lines.push(...health(), ...flakeLines());
   const m = reportLine();
   if (m) lines.push(m);

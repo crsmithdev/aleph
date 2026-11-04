@@ -86,10 +86,10 @@ function recorder(folder: string): (c: CheckResult) => void {
 /**
  * Passed runs of the repo waiting to land that have no land run yet: start
  * `aleph land` for them, so they queue on the lock and join this batch. Not
- * while the factory is paused or held, as the dispatch would not land them.
+ * while the factory is paused, as the dispatch would not land them.
  */
 async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
-  if (gates({ only: ["pause", "hold"], except: run.job })) return;
+  if (gates({ only: ["pause"] })) return;
   const jobs = allJobs();
   const names = waitingToLand(jobs).filter((n) => {
     const last = openJob(n, null, jobs)?.at(-1)!.run;
@@ -274,12 +274,6 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   const there = dropped ? null : onMain(repo, { item: onOf(run), fetch: onOf(run) !== undefined })?.commit;
   if (dropped || there) {
     appendFileSync(runFile(folder, "next.log"), dropped ? `dropped: no ${next} started\n` : `item landed as ${there}: no ${next} started\n`);
-    updateRun(folder, { next: undefined });
-    return;
-  }
-  const h = next === "land" ? gates({ only: ["hold"], except: run.job }) : null;
-  if (h) {
-    appendFileSync(runFile(folder, "next.log"), `held: ${h.why}\n`);
     updateRun(folder, { next: undefined });
     return;
   }

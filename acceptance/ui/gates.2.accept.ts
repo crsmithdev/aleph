@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../../jobs/lib/ask.ts";
 import { SECURITY_PATHS } from "../../jobs/lib/gate.ts";
-import { DAY_CAP, LIVE_CAP } from "../../jobs/lib/settings.ts";
+import { LIVE_CAP } from "../../jobs/lib/settings.ts";
 import { gatesBody, log, securityFacts } from "../../ui/api/gates.ts";
 import type { AskItem } from "../../ui/asks.ts";
 import { withEnv, withServer } from "../../ui/test-server.ts";
@@ -52,7 +52,7 @@ afterAll(() => {
 
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
-const stub = { now: new Date().toISOString(), asks: [] as AskItem[], factory: { paused: false, hold: null, probe: null, liveRuns: 0, liveCap: 5, runsToday: 0, dayCap: 12, awaitingCap: 5 } as any };
+const stub = { now: new Date().toISOString(), asks: [] as AskItem[], factory: { paused: false, probe: null, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 
 const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
@@ -60,9 +60,10 @@ const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, 
 
 const data = () => ({
   now: new Date().toISOString(),
-  factory: { paused: false, hold: null, probe: { at: ago(10), ok: true, failed: [] }, liveRuns: 5, liveCap: 5, runsToday: 3, dayCap: 12, awaiting: 1, awaitingCap: 5 },
-  gated: { gate: "live", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
-  main: { repos: 1, red: [], commits: ["r abc1234"] },
+  factory: { paused: false, probe: { at: ago(10), ok: true, failed: [] }, liveRuns: 5, liveCap: 5, capEnv: { live: false } },
+  gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
+  baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
+  goalGates: { baseline: 0, "not-ready": 0, "busy-file": 0, "loop-guard": 0 },
   asks: [askItem("run-cap", "r-1")],
   chores: [askItem("host-check", "r-2")],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
@@ -117,32 +118,30 @@ test("renderLog draws a collapsed entry as one row (after the header) with the c
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
 const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/gates/caps", { method: "POST", headers, body: JSON.stringify(b) });
 
-test("POST /api/gates/caps merges keys, keeps awaiting, and the readers see them", async () => {
-  const restore = withEnv({ ALEPH_DAY_CAP: "", ALEPH_LIVE_CAP: "" });
+test("POST /api/gates/caps merges the live cap into the file, keeps the other keys, and the reader sees it", async () => {
+  const restore = withEnv({ ALEPH_LIVE_CAP: "" });
   try {
     writeFileSync(capsPath(), JSON.stringify({ awaiting: 7 }));
-    const r = await postCaps({ day: 20, live: 4 });
+    const r = await postCaps({ live: 4 });
     expect(r.status).toBe(200);
-    expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ awaiting: 7, day: 20, live: 4 });
-    expect(await r.json()).toEqual({ day: 20, live: 4, awaiting: 7 });
-    expect(DAY_CAP()).toBe(20);
+    expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ awaiting: 7, live: 4 });
+    expect(await r.json()).toEqual({ live: 4 });
     expect(LIVE_CAP()).toBe(4);
   } finally { restore(); }
 });
 
-test("gatesBody marks a cap overridden only for a non-empty ALEPH_* variable", async () => {
-  const restore = withEnv({ ALEPH_DAY_CAP: "3", ALEPH_LIVE_CAP: "", ALEPH_AWAITING_CAP: "" });
-  try {
-    const d: any = await body();
-    expect(d.factory.capEnv).toEqual({ day: true, live: false, awaiting: false });
-  } finally { restore(); }
+test("gatesBody marks the live cap overridden only for a non-empty ALEPH_LIVE_CAP", async () => {
+  let restore = withEnv({ ALEPH_LIVE_CAP: "3" });
+  try { expect(((await body()) as any).factory.capEnv).toEqual({ live: true }); } finally { restore(); }
+  restore = withEnv({ ALEPH_LIVE_CAP: "" });
+  try { expect(((await body()) as any).factory.capEnv).toEqual({ live: false }); } finally { restore(); }
 });
 
 test("renderNow says an edit has no effect while the environment variable is set, and names it", () => {
   const d: any = data();
-  d.factory.capEnv = { day: true, live: false, awaiting: false };
+  d.factory.capEnv = { live: true };
   const h = gates.renderNow(d);
-  expect(h).toContain("ALEPH_DAY_CAP is set: an edit has no effect while that variable is set.");
-  expect(h).not.toContain("ALEPH_LIVE_CAP");
+  expect(h).toContain("ALEPH_LIVE_CAP is set: an edit has no effect while that variable is set.");
+  expect(h).not.toContain("ALEPH_DAY_CAP");
   expect(h).not.toContain("ALEPH_AWAITING_CAP");
 });

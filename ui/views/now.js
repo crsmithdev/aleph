@@ -114,15 +114,15 @@ const ALERTS = [
   [/main is red/, "the build is failing on main"],
   [/sandbox probe/, "the sandbox is broken"],
   [/the factory tick has stopped/, "the factory tick has stopped"],
-  [/^Held: /, JOBS_UNHEALTHY],
+  // No line says this one: a stuck job adds it. It is here for its rank.
+  [/(?!)/, JOBS_UNHEALTHY],
   [/did not land|land run of/, "lands are stuck"],
   [/can start, but no run started/, "queued jobs are not starting"],
   [/did not move to jobs/, "new issues are not becoming jobs"],
-  [/runs? wait for Chris/, "new runs wait for your answers"],
 ];
 const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
 
-/** The status sentence: "Alert: " and what is wrong, or the fine sentence, then what asks for you, the day cap and a weekly usage of WEEKLY_WARN or more and the warning health lines; at most MAX_SAID parts, each a link but the day cap, usage and warning parts, which are plain text. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
+/** The status sentence: "Alert: " and what is wrong, or the fine sentence, then what asks for you and a weekly usage of WEEKLY_WARN or more and the warning health lines; at most MAX_SAID parts, each a link but the usage and warning parts, which are plain text. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 export function renderLede(s, stale = false) {
   const f = s.factory;
   const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
@@ -133,7 +133,6 @@ export function renderLede(s, stale = false) {
   if (asks.length) said.push(["your attention is needed", "#awaiting"]);
   const alert = alerts.size > 0;
   if (f.paused && alert) said.push(["the factory is paused", ""]);
-  if (f.dayCap > 0 && f.runsToday >= f.dayCap) said.push(["the day cap is reached", ""]);
   const week = s.usage?.now?.seven_day;
   if (week >= WEEKLY_WARN) said.push([`weekly usage is at ${Math.round(week)}%`, ""]);
   for (const l of f.health || []) if (WARN_HEALTH.test(l)) said.push([l.replace(/^health:\s*/, ""), ""]);
@@ -256,7 +255,7 @@ export function renderNeeds(s) {
 /** How long past due a next tick may be before the tick counts as dead: covers an old state and a late timer. */
 const TICK_GRACE_MS = 5 * 60_000;
 
-/** Lines of the factory's own trouble that are errors: health (a red main among them), the hold, a failed probe; each once. The hold is left out when its stuck run has a row of its own. */
+/** Lines of the factory's own trouble that are errors: health (a red main among them), a failed probe, a stopped tick; each once. */
 function errorLines(s) {
   const f = s.factory;
   const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l) && !WARN_HEALTH.test(l));
@@ -265,7 +264,6 @@ function errorLines(s) {
     if (f.nextTick === null) out.push("the factory tick has stopped: aleph-tick.timer has no next run");
     else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`the factory tick has stopped: aleph-tick.timer was due at ${f.nextTick}`);
   }
-  if (f.hold && !s.stuck.some((j) => f.hold.includes(j.name))) out.push(f.hold);
   return [...new Set(out)];
 }
 

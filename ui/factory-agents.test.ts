@@ -4,7 +4,7 @@ import { liveOption, renderFactoryAgents, roleRows, totals } from "./views/facto
 // @ts-ignore plain JS shared with the page
 import { pace, weekGone } from "./views/speed.js";
 
-const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, dayCap: 999, liveRuns: 1, liveCap: 5 } };
+const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, liveRuns: 1, liveCap: 5 } };
 const agents = {
   live: 1, workers: 1, cap: 5, mean: 1.5, peak: 4,
   roles: [
@@ -34,7 +34,7 @@ test("role shares sum to 100% over the timed roles, and the reviewer row says no
 test("the tiles come from the state and the agents", () => {
   const h = renderFactoryAgents(S, D);
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Weekly usage", "Runs today", "Worker slots", "Agents live"]);
-  for (const t of ["$71.94 recorded cost", "day cap 999", "1 <em>of 5</em>", "mean, all roles, peak 4", "1 of 2 steps had no agent live"]) expect(h).toContain(t);
+  for (const t of ["$71.94 recorded cost", "1 <em>of 5</em>", "mean, all roles, peak 4", "1 of 2 steps had no agent live"]) expect(h).toContain(t);
 });
 
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {

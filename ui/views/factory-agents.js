@@ -15,7 +15,7 @@ const shareText = (v) => (v === null ? "–" : `${v < 1 ? v.toFixed(1) : Math.ro
 function scorecard(s, a, key, w) {
   const f = s.factory, live = a && totals(a), on = (k) => ({ key: k, on: key === k });
   return usageTile(s, on("usage"), small("live, not the window")) +
-    tile({ k: "Runs today", v: String(f.runsToday), body: small(`$${(f.costToday ?? 0).toFixed(2)} recorded cost`) + small(f.dayCap > 0 ? `day cap ${f.dayCap}` : "no day cap") + small("live, not the window"), ...on("runs") }) +
+    tile({ k: "Runs today", v: String(f.runsToday), body: small(`$${(f.costToday ?? 0).toFixed(2)} recorded cost`) + small("live, not the window"), ...on("runs") }) +
     tile({ k: "Worker slots", vHtml: `${f.liveRuns ?? 0} <em>of ${f.liveCap}</em>`, body: small("live, in use now"), ...on("slots") }) +
     tile({ k: "Agents live", v: a ? a.mean.toFixed(1) : "–", body: a ? small(`mean, all roles, peak ${a.peak}, ${lastPeriod(w)}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"), ...on("live") });
 }

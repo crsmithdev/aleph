@@ -6,7 +6,7 @@ import { job, state } from "./fixtures/status-state.ts";
 import { asksOf, withAttn, issue, full, rows, problem, prop } from "./test-now.ts";
 
 test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
-  const s = { ...full, asks: [], stuck: [], factory: { ...full.factory, health: [], hold: undefined, paused: false } };
+  const s = { ...full, asks: [], stuck: [], factory: { ...full.factory, health: [], paused: false } };
   expect(rows(withAttn(s)).length).toBe(0);
   expect(view.renderLede(s)).not.toContain("Awaiting");
   expect(view.renderLede(s)).not.toContain("triage");

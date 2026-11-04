@@ -5,25 +5,26 @@
  * of the goal, with a note; a time box drops the run and sends the issue to the planner to split it, with no rerun, and an Ask
  * (input, rescue) instead when the issue is a part or the planner has already split it; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
- * case hits one goal, sets an Ask (input, rescue) on the issue; such a run holds nothing. A run that a host
+ * case hits one goal, sets an Ask (input, rescue) on the issue, which goes to the director. A run that a host
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
- * the goal; a land lands again. None of them uses up a rerun.
+ * the goal; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, and no host
+ * restart explains it) is marked failed and gets the same action, once per goal; a second lost run of the goal sets the Ask.
  */
 import { readFileSync, rmSync, statSync } from "node:fs";
 import * as issues from "../../todo/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { endRun } from "./agent-run.ts";
-import { always, askFromRun, clearAsk, logAlways, needsOf, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
-import { factoryRepos as sandboxRepos, holders } from "./factory-status.ts";
+import { always, asked, askFromRun, clearAsk, logAlways, needsOf, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { factoryRepos as sandboxRepos } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
 import { sealedVerdict, type Sealed } from "./acceptance.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
-import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
+import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, isAgentRun, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
-import { isLive, isStarting, markEnded } from "./process.ts";
+import { isLive, isLost, isStarting, markEnded } from "./process.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { startReview } from "./review.ts";
@@ -70,6 +71,31 @@ const killed = (jobs: Job[]): Job[] => {
     const r = last.run;
     return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land")
       && Date.parse(r.started) < booted && !isLive(last.folder) && !isStarting(last);
+  });
+};
+
+/**
+ * The open jobs whose last run is lost: a build, recheck or land still `running`, started since this boot, whose
+ * process ended without writing `exit`. The unit writes the run's end before `exit`, so such a run will never end.
+ */
+const lost = (jobs: Job[]): Job[] => {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  const booted = bootedAt();
+  return jobs.filter((j) => {
+    const last = lastReal(j);
+    const r = last.run;
+    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.condition === "running" && (isAgentRun(r.kind) || r.kind === "land")
+      && Date.parse(r.started) >= booted && isLost(last.folder);
+  });
+};
+
+/** The open jobs whose last real run is stuck or failed, with no next run pending, its unit not live, and no Ask set on it. */
+const stuckJobs = (jobs: Job[]): Job[] => {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  return jobs.filter((j) => {
+    const last = lastReal(j);
+    const r = last.run;
+    return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.condition === "stuck" || r.condition === "failed") && !r.next && !isLive(last.folder) && !asked(last);
   });
 };
 
@@ -125,11 +151,11 @@ function restartReviews(act: Rescue): void {
 
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
 
-/** Take the safe default action for each stuck job and each killed review, one job at a time under its lock. */
+/** Take the safe default action for each killed, lost, stuck or failed job and each killed review, one job at a time under its lock. */
 export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain, sealed: SealedCheck = sealedVerdict): Promise<void> {
   restartReviews(act);
   await releaseEdited(act);
-  const pending = (jobs: Job[]) => [...killed(jobs), ...holders(jobs)];
+  const pending = (jobs: Job[]) => [...killed(jobs), ...lost(jobs), ...stuckJobs(jobs)];
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.
@@ -245,7 +271,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const fromName = name.match(/-(\d+(?:\.\d+)?)$/)?.[1];
   const issue = issueOf(runs) ?? (fromName === undefined ? undefined : fromName.includes(".") ? fromName : Number(fromName));
   const isKilled = killed([runs]).length > 0;
-  const stuck: Stuck = { last, r, repo, name, issue, reason: isKilled ? "host restart" : r.reason ?? r.condition };
+  const isLostRun = !isKilled && lost([runs]).length > 0;
+  const stuck: Stuck = { last, r, repo, name, issue, reason: isKilled ? "host restart" : isLostRun ? "lost: its process ended with no end written" : r.reason ?? r.condition };
   const { reason } = stuck;
 
   const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
@@ -295,6 +322,16 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
       updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
     }
     return take(step);
+  }
+
+  if (isLostRun) {
+    // Marked failed first, so the run is no longer lost, whatever comes next: the recheck and the Ask both want an ended run.
+    markEnded(last.folder, 143);
+    updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
+    const again = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === "lost");
+    if (again) return chris(`${name}: a second run of this goal was lost (its process ended with no end written). Drop it, or change the goal?`, choice(`${name}: a second run was lost: how should the factory go on?`, ["An earlier run of this goal was lost too, and its rerun did not clear it"]));
+    markRescued(last, "lost");
+    return take(lostStep(stuck, isAgentRun(r.kind) && hasWork(stuck)));
   }
 
   const noCommit = causeOf(r) === "no-commit";

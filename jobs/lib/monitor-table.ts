@@ -10,7 +10,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { allRuns, expand, loadRegistry, type Entry } from "./ledger.ts";
-import { allHolds, flakeNames, flakes, type Flake, type HoldRecord } from "./factory-status.ts";
+import { allHolds, flakeNames, flakes, stopsStart, type Flake, type HoldRecord } from "./factory-status.ts";
 import { layout } from "./layout.ts";
 import { git } from "./git.ts";
 import { causeOf } from "./outcome.ts";
@@ -98,9 +98,6 @@ export const LEFT_OUT = [
   "time in each state of an item after its start (awaiting, answered): no record keeps those changes with their times",
   "usage per agent: usage.jsonl is the account's quota, not per run",
 ];
-
-/** Kinds of a hold record that do not stop a start. */
-const NOT_HELD = new Set(["open", "started", "start", "done"]);
 
 /** The table's stage order; a stage with no run is left out. */
 const STAGES = ["triage", "plan", "spec-check", "build", "review", "recheck", "land", "facts", "explain", "firefighter", "director", "monitor"];
@@ -248,7 +245,7 @@ function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRo
         r.records++;
         r.goals.add(name);
         seen.add(name);
-        if (!NOT_HELD.has(h.kind)) held.add(name);
+        if (stopsStart(h)) held.add(name);
       }
       // A state lasts until the goal's next record; the last record of a goal has no known end and counts no time.
       const next = list[i + 1];

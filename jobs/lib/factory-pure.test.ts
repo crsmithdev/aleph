@@ -117,7 +117,8 @@ test("stalled lists what could move: a goal, a new issue and a passed run, each 
   expect(stalled()).toEqual([]);
   setPaused(false);
   writeRun(folder, { ...readRun(folder)!, condition: "stuck" });
-  expect(stalled()).toEqual([]); // the hold has its own line
+  // A stuck run holds only its own goal, which its open job keeps not ready; the new issue can still move.
+  expect(stalled()).toEqual([`ingest:fac-${fresh}`]);
 });
 
 test("stalled counts a red baseline only on the commit origin/main still has", async () => {

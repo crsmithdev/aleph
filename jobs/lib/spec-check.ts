@@ -129,7 +129,7 @@ export async function runSpecCheck(repo: Repo, ref: number | string): Promise<{ 
       const problems = c.problems ?? "";
       const bad = askChris(repo, ref, plainAsk("spec-check", problems), null);
       if (bad) factoryLog(`${name}: spec check held, but the Ask was not written: ${bad}`);
-      recordHold(name, "spec-check", problems);
+      recordHold(name, "not-ready", problems);
     }
     factoryLog(`${name}: spec check ${c.verdict}${c.problems ? `: ${c.problems}` : ""}`);
   } finally {

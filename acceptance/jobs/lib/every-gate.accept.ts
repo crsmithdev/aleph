@@ -24,7 +24,7 @@ beforeEach(setup);
 afterEach(teardown);
 {
 
-  test("gate open after: a goal that waits on an open goal is not started and gets a waits_on hold", async () => {
+  test("gate open after: a goal that waits on an open goal is not started and gets a not-ready hold", async () => {
     const blocker = goal();
     const waiter = goal();
     await change(waiter, (item) => { item.fm.after = [`fac-${blocker}`]; });
@@ -34,19 +34,19 @@ afterEach(teardown);
     const out = await dispatchIssues(start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
     expect(f.calls).not.toContain(`start fac-${waiter}`);
     expect(out.started).not.toContain(`fac-${waiter}`);
-    expect(readHolds([`fac-${waiter}`]).map((r) => r.kind)).toEqual(["waits_on"]);
+    expect(readHolds([`fac-${waiter}`]).map((r) => r.kind)).toEqual(["not-ready"]);
   });
 
-  test("gate red main: a goal is not started while main is red and gets a red hold", async () => {
+  test("gate red main: a goal is not started while main is red and gets a baseline hold", async () => {
     const id = goal();
     const f = fakes();
     const out = await dispatchIssues(f.start, async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }), f.land, f.rescue, undefined, undefined, undefined, () => {});
     expect(f.calls).toEqual([]);
     expect(out.started).toEqual([]);
-    expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["red"]);
+    expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["baseline"]);
   });
 
-  test("gate busy file: a goal that shares a busy file with a live goal is not started and gets a busy hold", async () => {
+  test("gate busy file: a goal that shares a busy file with a live goal is not started and gets a busy-file hold", async () => {
     const surface = "## Edit surface\n- jobs/busy.ts (the change)\n";
     const mkGoal = () => writeList({ key: "fac" }, "add a goal", (doc) => issues.add(doc, "ship it", { spec: surface }).id, true)!.value;
     for (const n of [901, 902, 903]) mk(`fac-${n}`, "land", "dropped", { conflicts: ["jobs/busy.ts"] });
@@ -56,10 +56,10 @@ afterEach(teardown);
     const f = fakes();
     await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
     expect(f.calls).not.toContain(`start fac-${second}`);
-    expect(readHolds([`fac-${second}`]).map((r) => r.kind)).toEqual(["busy"]);
+    expect(readHolds([`fac-${second}`]).map((r) => r.kind)).toEqual(["busy-file"]);
   });
 
-  test("gate live cap: with ALEPH_LIVE_CAP at 1 and one live run, a goal is not started and gets a gate hold", async () => {
+  test("gate live cap: with ALEPH_LIVE_CAP at 1 and one live run, a goal is not started and gets a live-cap hold", async () => {
     process.env.ALEPH_LIVE_CAP = "1";
     const id = goal();
     mk("fac-900", "build", "running", { made: Date.now() });
@@ -67,17 +67,17 @@ afterEach(teardown);
     const out = await dispatch(f);
     expect(f.calls).not.toContain(`start fac-${id}`);
     expect(out.started).toEqual([]);
-    expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["gate"]);
+    expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["live-cap"]);
   });
 
-  test("gate run cap: a fourth start in an hour is not started and gets a run-cap hold", async () => {
+  test("gate run cap: a fourth start in an hour is not started and gets a loop-guard hold", async () => {
     const id = goal();
     for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: new Date(Date.now() - (i + 1) * 60_000).toISOString() });
     const f = fakes();
     const out = await dispatch(f);
     expect(f.calls).not.toContain(`start fac-${id}`);
     expect(out.started).toEqual([]);
-    expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["run-cap"]);
+    expect(readHolds([`fac-${id}`]).map((r) => r.kind)).toEqual(["loop-guard"]);
   });
 
   test("gate parked: a parked goal is not started", async () => {

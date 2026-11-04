@@ -53,9 +53,10 @@ const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, 
 
 const data = () => ({
   now: new Date().toISOString(),
-  factory: { paused: false, hold: null, probe: { at: ago(10), ok: true, failed: [] }, liveRuns: 5, liveCap: 5, runsToday: 3, dayCap: 12, awaiting: 1, awaitingCap: 5 },
-  gated: { gate: "live", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
-  main: { repos: 1, red: [], commits: ["r abc1234"] },
+  factory: { paused: false, probe: { at: ago(10), ok: true, failed: [] }, liveRuns: 5, liveCap: 5, capEnv: { live: false } },
+  gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
+  baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
+  goalGates: { baseline: 0, "not-ready": 0, "busy-file": 0, "loop-guard": 0 },
   asks: [askItem("run-cap", "r-1")],
   chores: [askItem("host-check", "r-2")],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
@@ -65,10 +66,10 @@ const data = () => ({
   log: { days: 7, max: 200, entries: [{ at: ago(1), by: "Rule", item: "r-5", what: "rescue: recommended" }, { at: ago(2), by: "You", item: "rule", what: "rescue: set to recommended" }] },
 });
 
-test("renderNow draws a number input and a Save button for each of the three caps", () => {
+test("renderNow draws a number input and a Save button for the live cap only", () => {
   const h = gates.renderNow(data());
-  for (const k of ["day", "live", "awaiting"]) expect(h).toMatch(new RegExp(`<form class="capform" data-cap="${k}">[^]*?<input id="cap-${k}" name="${k}" type="number"[^]*?Save`));
+  expect(h).toMatch(/<form class="capform" data-cap="live">[^]*?<input id="cap-live" name="live" type="number"[^]*?Save/);
+  expect(h.match(/<form class="capform"/g)!.length).toBe(1);
   expect(h).toContain('value="5"');
-  expect(h).toContain('value="12"');
   expect(h).not.toContain("has no effect");
 });

@@ -24,7 +24,7 @@ import { ciStep } from "./lib/ci.ts";
 import { acceptanceStep, behind, correctionsStep, directorStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
-import { factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
+import { factoryDir, factoryRepos, health, paused } from "./lib/factory-status.ts";
 import { factoryLog } from "./lib/layout.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/monitor-table.ts";
 import { monitorStep, runMonitor, tableOf } from "./lib/monitor.ts";
@@ -351,7 +351,7 @@ async function tickCmd(): Promise<void> {
   }
   await correctionsStep();
   const d = await runDispatch();
-  const t = !d.held ? await triageStep() : { triaged: {}, skipped: [] };
+  const t = await triageStep();
   await directorStep();
   const episodes = await episodeStep();
   try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
@@ -374,8 +374,6 @@ function reportCmd(): void {
     fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
   }
-  const h = hold();
-  if (h) lines.push(h.line);
   lines.push(...health(), ...flakeLines());
   const m = reportLine();
   if (m) lines.push(m);

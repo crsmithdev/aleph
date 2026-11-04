@@ -45,7 +45,7 @@ beforeAll(() => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, checks: [] } }));
-  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_DAY_CAP: "12", ...gitEnv });
+  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting goal" ? { spec: "Do it." } : {});
     add(doc, "urgent goal", { spec: "Do it first.", priority: "critical" });
@@ -91,9 +91,8 @@ describe("state", () => {
     // Delivered is the latest lands, not only today's: fac-6 landed 30 hours ago.
     expect(s.delivered.map((j) => j.name)).toEqual(["fac-5", "fac-6"]);
     expect(s.delivered[0].commitUrl).toBe("https://github.com/chris/demo/commit/abcdef1234567");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: "", why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: "", why: "Starts at the next dispatch", kind: "ready" }]);
     expect(s.factory.runsToday).toBe(4);
-    expect(s.factory.dayCap).toBe(12);
     expect(s.factory.paused).toBe(false);
     expect(readFileSync(join(jobsDir, "20261027-000001-a", "state.json"), "utf8")).toBe(before);
     expect(JSON.parse(before).shown).toBe(false);
@@ -159,22 +158,19 @@ describe("state", () => {
     for (const id of ["20261027-000010-a", "20261027-000011-a"]) rmSync(join(jobsDir, id), { recursive: true });
   });
 
-  test("caps.json gives the caps when the environment does not, and a bad file gives the defaults", () => {
-    const keep = { d: process.env.ALEPH_DAY_CAP, l: process.env.ALEPH_LIVE_CAP, w: process.env.ALEPH_AWAITING_CAP };
-    delete process.env.ALEPH_DAY_CAP; delete process.env.ALEPH_LIVE_CAP; delete process.env.ALEPH_AWAITING_CAP;
+  test("caps.json gives the live cap when the environment does not, and a bad file gives the default", () => {
+    const keep = process.env.ALEPH_LIVE_CAP;
+    delete process.env.ALEPH_LIVE_CAP;
     const file = join(factory, "caps.json");
     try {
-      let f = state(now).factory;
-      expect([f.dayCap, f.liveCap, f.awaitingCap]).toEqual([12, 10, 5]);
+      expect(state(now).factory.liveCap).toBe(10);
       writeFileSync(file, JSON.stringify({ day: 999, live: 12 }));
-      f = state(now).factory;
-      expect([f.dayCap, f.liveCap, f.awaitingCap]).toEqual([999, 12, 5]);
+      expect(state(now).factory.liveCap).toBe(12);
       writeFileSync(file, "not json");
-      f = state(now).factory;
-      expect([f.dayCap, f.liveCap, f.awaitingCap]).toEqual([12, 10, 5]);
+      expect(state(now).factory.liveCap).toBe(10);
     } finally {
       rmSync(file, { force: true });
-      for (const [k, v] of [["ALEPH_DAY_CAP", keep.d], ["ALEPH_LIVE_CAP", keep.l], ["ALEPH_AWAITING_CAP", keep.w]] as const) if (v !== undefined) process.env[k] = v;
+      if (keep !== undefined) process.env.ALEPH_LIVE_CAP = keep;
     }
   });
 
@@ -264,22 +260,22 @@ describe("waiting entries", () => {
       add(doc, "after a closed goal", { spec: "Do it." }).fm.after = ["fac-9999"];
       return true;
     }, true);
-    // The stuck fac-3 would hold every start: set it aside, so only the reasons under test remain.
+    // Set the stuck fac-3 aside, so only the reasons under test remain.
     const stuckDir = join(jobsDir, "20261027-000002-a"), aside = join(base, "stuck-aside");
     renameSync(stuckDir, aside);
     try { await check(); } finally { renameSync(aside, stuckDir); }
     async function check() {
     const by = (s: ReturnType<typeof state>, title: string) => s.queued.find((w) => w.title === title)!;
     const s = state(now);
-    expect(by(s, "waits goal")).toMatchObject({ kind: "waits_on", why: "Waits on fac-2", stage: "blocked", waits: [{ id: "fac-2", href: "#/issues/fac/2", title: expect.any(String), state: "queued", dead: null }] });
+    expect(by(s, "waits goal")).toMatchObject({ kind: "not-ready", why: "Waits on fac-2", stage: "blocked", waits: [{ id: "fac-2", href: "#/issues/fac/2", title: expect.any(String), state: "queued", dead: null }] });
     // A goal that asks for you is awaiting: it is in asks, not Queued.
     expect(by(s, "waiting goal").why).toBe("Starts at the next dispatch");
     // A ref the read list lacks is closed work: the dispatch counts it as done, so the lane does too.
     expect(by(s, "after a closed goal")).toMatchObject({ kind: "ready" });
-    // The dispatch stops a goal on its no-commit streak, so the lane says so and not "Starts at the next dispatch".
+    // The Loop guard stops a goal on its no-commit streak, so the lane says so and not "Starts at the next dispatch".
     const streak = [1, 2, 3].map((n) => `20261027-00007${n}-a`);
     streak.forEach((id, n) => run(id, { job: `fac-2-${n}`, name: "fac-2", on: "fac-2", condition: "dropped", reason: "x", noCommit: true, started: ago(3 + n) }));
-    expect(by(state(now), "waiting goal")).toMatchObject({ kind: "no-commit", why: "The last 3 runs ended with no commit; the next dispatch asks you" });
+    expect(by(state(now), "waiting goal")).toMatchObject({ kind: "loop-guard", why: "The last 3 runs ended with no commit; the next dispatch asks the director" });
     for (const id of streak) rmSync(join(jobsDir, id), { recursive: true });
 
     const dir = join(jobsDir, "20261027-000060-a");
@@ -288,7 +284,7 @@ describe("waiting entries", () => {
     writeFileSync(join(dir, "pid"), String(child.pid));
     const restoreCap = withEnv({ ALEPH_LIVE_CAP: "1" });
     try {
-      expect(by(state(now), "waiting goal")).toMatchObject({ kind: "gate", why: "Waiting for a slot (1 of 1 running)" });
+      expect(by(state(now), "waiting goal")).toMatchObject({ kind: "live-cap", why: "Waiting for a slot (1 of 1 running)" });
     } finally {
       restoreCap();
       child.kill();

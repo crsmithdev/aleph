@@ -14,11 +14,10 @@ test("time box of a plain issue: dropped and sent to the planner, with no rerun"
   mk(`fac-${id}`, "build", "stuck", { reason: "time box" }, { "result.md": lines(25) });
   const f = fakes();
   const planned: number[] = [];
-  const out = await dispatchIssues(f.start, undefined, undefined, f.rescue, undefined, (_repo, n) => { planned.push(n); });
+  await dispatchIssues(f.start, undefined, undefined, f.rescue, undefined, (_repo, n) => { planned.push(n); });
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(f.specs).toEqual([]);
   expect(planned).toEqual([id]);
-  expect(out.held).toBeUndefined();
   expect(ask(id)).toBeNull();
   expect(notes(id)).toContain("goes to the planner to split");
 });

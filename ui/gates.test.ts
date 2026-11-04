@@ -27,6 +27,7 @@ beforeAll(async () => {
   mkdirSync(factory);
   writeFileSync(join(factory, "always.json"), JSON.stringify({ rescue: { action: "recommended", at: ago(30) }, "triage-failed": { action: "close", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } }));
   writeFileSync(join(factory, "holds.jsonl"), [
+    // An old record, from before the 7 gates, still parses.
     { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live" },
     { at: ago(4), name: "r-3", kind: "started", text: "started" },
     { at: ago(60 * 24 * 9), name: "r-4", kind: "gate", text: "too old" },
@@ -52,13 +53,16 @@ afterAll(() => {
 
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
-const stub = { now: new Date().toISOString(), asks: [] as AskItem[], factory: { paused: false, hold: null, probe: null, liveRuns: 0, liveCap: 5, runsToday: 0, dayCap: 12, awaitingCap: 5 } as any };
+const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", why: "w", kind }) as any;
+const stub = { now: new Date().toISOString(), asks: [] as AskItem[], factory: { paused: false, probe: null, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "chores", "factory", "gated", "held", "log", "main", "now", "repoHeld", "rules", "sandbox"]);
-  expect(Object.keys(d.factory).sort()).toEqual(["awaiting", "awaitingCap", "capEnv", "dayCap", "hold", "liveCap", "liveRuns", "paused", "probe", "runsToday"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "chores", "factory", "gated", "goalGates", "held", "log", "now", "repoHeld", "rules", "sandbox"]);
+  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "probe"]);
+  expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
+  expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
   const by = (k: string) => d.rules.find((r: any) => r.reason === k);
@@ -106,9 +110,10 @@ test("splitAsks keeps every Ask and puts host checks in the chores", () => {
 
 const data = () => ({
   now: new Date().toISOString(),
-  factory: { paused: false, hold: null, probe: { at: ago(10), ok: true, failed: [] }, liveRuns: 5, liveCap: 5, runsToday: 3, dayCap: 12, awaiting: 1, awaitingCap: 5 },
-  gated: { gate: "live", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
-  main: { repos: 1, red: [], commits: ["r abc1234"] },
+  factory: { paused: false, probe: { at: ago(10), ok: true, failed: [] }, liveRuns: 5, liveCap: 5, capEnv: { live: false } },
+  gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
+  baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
+  goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
   asks: [askItem("run-cap", "r-1")],
   chores: [askItem("host-check", "r-2")],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
@@ -122,7 +127,13 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   const h = gates.renderGates(data());
   const order = ["Gates now", "Waiting for you", "Host chores", "Rules", "Held paths", "Sandbox permissions", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
-  expect(h).toContain("Closed at live: Waiting for a slot (5 of 5 running).");
+  expect(h).toContain("Closed at live-cap: Waiting for a slot (5 of 5 running).");
+  // The 7 gates, in the dispatch's order; no tile for the removed hold, day cap or awaiting cap.
+  const tiles = [...h.matchAll(/<div class="gt-head"><span>([^<]*)<\/span>/g)].map((m) => m[1]);
+  expect(tiles).toEqual(["Pause", "Baseline", "Probe", "Not ready", "Live cap", "Busy file", "Loop guard"]);
+  expect(h).toContain("<b>2 held</b>");
+  expect(h).not.toContain('data-cap="day"');
+  expect(h).not.toContain('data-cap="awaiting"');
   expect(h).toContain('data-act="pause"');
   expect(h).not.toContain("Edit caps");
   for (const [reason, r] of Object.entries(ASK_REASONS)) {
@@ -182,19 +193,21 @@ const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
 const postCaps = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) => at("/api/gates/caps", { method: "POST", headers, body: JSON.stringify(b) });
 
 test("POST /api/gates/caps refuses a missing header with 403 and bad values with 422, and leaves the file", async () => {
-  const seed = JSON.stringify({ day: 9, awaiting: 2 });
+  const seed = JSON.stringify({ live: 9 });
   writeFileSync(capsPath(), seed);
-  expect((await postCaps({ day: 5 }, {})).status).toBe(403);
+  expect((await postCaps({ live: 5 }, {})).status).toBe(403);
   for (const v of [0, -1, 2.5, "x"]) {
-    const r = await postCaps({ day: v });
+    const r = await postCaps({ live: v });
     expect(r.status).toBe(422);
     expect(typeof (await r.json()).error).toBe("string");
   }
   expect(readFileSync(capsPath(), "utf8")).toBe(seed);
 });
 
-test("writing awaiting replaces the old waiting key", async () => {
-  writeFileSync(capsPath(), JSON.stringify({ waiting: 3 }));
-  expect((await postCaps({ awaiting: 3 })).status).toBe(200);
-  expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ awaiting: 3 });
+test("a cap post writes the live cap only and leaves the old day and awaiting keys alone", async () => {
+  writeFileSync(capsPath(), JSON.stringify({ day: 999, awaiting: 5 }));
+  const r = await postCaps({ live: 3, day: 7 });
+  expect(r.status).toBe(200);
+  expect(await r.json()).toEqual({ live: 3 });
+  expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ day: 999, awaiting: 5, live: 3 });
 });

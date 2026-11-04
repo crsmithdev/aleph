@@ -139,6 +139,15 @@ describe("Asks, reopens, holds and set-asides", () => {
     expect(t.today.held).toEqual({ goals: 2, seen: 3 });
   });
 
+  test("the 7 gate kinds count as the old kinds did: not-ready on an open job or a done goal holds nothing, the other gates hold", () => {
+    const rec = (name: string, kind: string, text: string) => ({ at: at(DAY, 10), name, kind, text });
+    const v6 = measure({ ...empty, holds: [
+      rec("g-1", "not-ready", "its job is running"), rec("g-2", "not-ready", "the item is already done"),
+      rec("g-3", "not-ready", "blocked: after g-1"), rec("g-4", "baseline", "main baseline running"), rec("g-5", "red", "an old record"),
+    ] }, DAY, Date.parse(at(DAY, 23)));
+    expect(v6.today.held).toEqual({ goals: 3, seen: 5 });
+  });
+
   test("the set-aside share is of the goals whose build was reviewed that day", () => {
     expect(t.today.setAside).toEqual({ goals: 1, notes: 2, reviewed: 2 });
   });

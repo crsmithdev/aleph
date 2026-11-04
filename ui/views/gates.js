@@ -54,7 +54,7 @@ const gtile = (name, value, note, t, extra = "") =>
   `<div class="gtile"><div class="gt-head"><span>${esc(name)}</span><span class="gdot ${t}" role="img" aria-label="${t === "ok" ? "open" : t === "warn" ? "near its limit" : "closed"}"></span></div><b>${esc(value)}</b><small>${esc(note)}</small>${extra}</div>`;
 
 /** The environment variable that overrides each cap in caps.json. */
-const CAP_ENV = { day: "ALEPH_DAY_CAP", live: "ALEPH_LIVE_CAP", awaiting: "ALEPH_AWAITING_CAP" };
+const CAP_ENV = { live: "ALEPH_LIVE_CAP" };
 /** A number input and a Save button for one cap; a note when its environment variable overrides caps.json. */
 function capForm(f, key, label, value) {
   const env = CAP_ENV[key], over = !!f.capEnv?.[key];
@@ -64,19 +64,23 @@ function capForm(f, key, label, value) {
     (over ? `<small class="cap-env">${esc(env)} is set: an edit has no effect while that variable is set.</small>` : "") + `</form>`;
 }
 
-/** The gates, in the order the factory checks them, with the pause control. */
+/** A per-goal gate's tile: how many queued goals it holds now. */
+const goalTile = (name, n, note) => gtile(name, n ? `${n} held` : "none", note, tone(false, n > 0));
+
+/** The 7 gates, in the order the dispatch asks them, with the pause control. */
 export function renderNow(d) {
-  const f = d.factory, p = f.probe, m = d.main;
+  const f = d.factory, p = f.probe, base = d.baseline ?? [], g = d.goalGates ?? {};
+  const red = base.filter((b) => b.state === "red"), held = g.baseline ? `; ${g.baseline} held` : "";
   const tilesHtml = [
     gtile("Pause", f.paused ? "paused" : "running", f.paused ? "no run starts or lands" : "not paused", tone(f.paused)),
-    gtile("Hold", f.hold ? "held" : "none", f.hold ?? "no stuck or failed run holds work", tone(!!f.hold)),
+    gtile("Baseline", red.length ? "red" : base.length ? "green" : "none", ((red.length ? red : base).map((b) => b.line).join(", ") || "no baseline yet") + held, tone(red.length > 0, !!g.baseline)),
     gtile("Probe", !p ? "none" : p.ok ? "ok" : "failed", !p ? "no sandbox probe yet" : p.ok ? `sandbox probe ${when(p.at)}` : (p.failed ?? []).join("; "), tone(p && !p.ok, !p)),
-    gtile("Main CI", m.red.length ? "red" : m.repos ? "green" : "none", m.red.length ? m.red[0] : m.commits.join(", ") || "no baseline yet", tone(m.red.length > 0, !m.repos)),
-    gtile("Live runs", `${f.liveRuns} / ${f.liveCap}`, `cap ${f.liveCap} at once`, tone(f.liveRuns >= f.liveCap), capForm(f, "live", "Live runs cap", f.liveCap)),
-    gtile("Asks open", `${f.awaiting} / ${f.awaitingCap}`, `new runs stop at ${f.awaitingCap}`, tone(f.awaiting >= f.awaitingCap, f.awaiting > 0), capForm(f, "awaiting", "Asks open cap", f.awaitingCap)),
-    gtile("Runs today", `${f.runsToday} / ${f.dayCap}`, "day cap, 24 hours", tone(f.runsToday >= f.dayCap), capForm(f, "day", "Runs today cap", f.dayCap)),
+    goalTile("Not ready", g["not-ready"], "done, waits on an issue, has an open job, or its planner or spec check runs"),
+    gtile("Live cap", `${f.liveRuns} / ${f.liveCap}`, `cap ${f.liveCap} at once`, tone(f.liveRuns >= f.liveCap), capForm(f, "live", "Live cap", f.liveCap)),
+    goalTile("Busy file", g["busy-file"], "an open job changes the same busy file"),
+    goalTile("Loop guard", g["loop-guard"], "3 runs with no commit, or 3 starts in an hour: an Ask"),
   ].join("");
-  const line = d.gated ? `Closed at ${d.gated.gate}: ${d.gated.text}.` : "Every run passes these in order. All open.";
+  const line = d.gated ? `Closed at ${d.gated.gate}: ${d.gated.text}.` : "Every goal passes these in order. All open.";
   const ctl = f.paused
     ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
     : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;

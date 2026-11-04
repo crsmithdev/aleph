@@ -17,7 +17,7 @@ test("a weekly usage of 90% or more is said after the other parts, in the warnin
   expect(view.renderLede({ ...calmState, ...weekAt(89.6) })).toContain('class="say fine"');
   expect(said({}, { usage: undefined })).toBe("Everything is running smoothly.");
   expect(said({}, weekAt(93.4))).toContain("weekly usage is at 93%");
-  expect(said({ runsToday: 12, dayCap: 12 }, weekAt(95))).toBe("Everything is running smoothly; the day cap is reached; weekly usage is at 95%.");
+  expect(said({ runsToday: 12 }, weekAt(95))).toBe("Everything is running smoothly; weekly usage is at 95%.");
 });
 
 test("a paused factory with weekly usage at 90% says so", () => {

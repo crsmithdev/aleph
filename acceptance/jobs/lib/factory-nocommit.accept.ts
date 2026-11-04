@@ -1,11 +1,10 @@
 // Archived goal tests from jobs/lib/factory-nocommit.test.ts: `bun run accept` runs them, `bun run test` does not.
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList } from "../../../todo/lib/store.ts";
 import * as issues from "../../../todo/lib/todo.ts";
 import { health } from "../../../jobs/lib/factory-status.ts";
-import { AWAITING_CAP } from "../../../jobs/lib/settings.ts";
 import { allRuns } from "../../../jobs/lib/ledger.ts";
 import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "../../../jobs/lib/factory.helpers.ts";
 import { clearAsk, setAsk } from "../../../jobs/lib/ask.ts";
@@ -18,9 +17,8 @@ test("no commit, the item already done: the run is dropped as a duplicate, once,
   await change(id, (item) => issues.setStatus(item, "done"));
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
   const f = fakes();
-  const out = await dispatch(f);
+  await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`]);
-  expect(out.held).toBeUndefined();
   expect(notes(id)).toContain("already done: dropped as a duplicate");
   expect(allRuns()[0].run.reason).toContain("dropped as a duplicate");
   await dispatch(f);
@@ -125,34 +123,13 @@ test("a run that is three runs old, or three runs of other goals, does not hold 
   expect(ask(id)).toBeNull();
 });
 
-test("ALEPH_AWAITING_CAP=1 with one awaiting run skips the next start with the awaiting gate's line", async () => {
+test("a run that waits for an answer does not stop another goal's start", async () => {
   const waiter = goal();
   const next = goal();
   mk(`fac-${waiter}`, "build", "awaiting", { ask: { kind: "input", reason: "question", question: "q?", options: [], why: [] } });
-  process.env.ALEPH_AWAITING_CAP = "1";
-  try {
-    const f = fakes();
-    const out = await dispatch(f);
-    expect(out.started).toEqual([]);
-    expect(out.skipped).toContain(`fac-${next}: 1 runs wait for Chris`);
-    expect(f.specs).toEqual([]);
-    expect(health()).toContain("health: 1 runs wait for Chris; no new run starts");
-    // A drop of the awaiting run frees its place.
-    await f.rescue.drop(`fac-${waiter}`, "test over");
-    expect((await dispatch(f)).started).toContain(`fac-${next}`);
-  } finally {
-    delete process.env.ALEPH_AWAITING_CAP;
-  }
-});
-
-test("caps.json awaiting sets the cap, and the old waiting key still does", () => {
-  mkdirSync(join(ctx.base, "factory"), { recursive: true });
-  writeFileSync(join(ctx.base, "factory", "caps.json"), JSON.stringify({ awaiting: 2 }));
-  expect(AWAITING_CAP()).toBe(2);
-  writeFileSync(join(ctx.base, "factory", "caps.json"), JSON.stringify({ waiting: 3 }));
-  expect(AWAITING_CAP()).toBe(3);
-  rmSync(join(ctx.base, "factory", "caps.json"));
-  expect(AWAITING_CAP()).toBe(5);
+  const out = await dispatch(fakes());
+  expect(out.started).toEqual([`fac-${next}`]);
+  expect(health().some((l) => /wait for Chris/.test(l))).toBe(false);
 });
 
 test("the run cap holds with a standing Rerun: the rerun of the third run is the fourth start and gets the note", async () => {

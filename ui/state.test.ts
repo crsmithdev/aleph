@@ -43,7 +43,7 @@ beforeAll(() => {
   sh(items, "git", "commit", "-q", "--allow-empty", "-m", "start");
   sh(items, "git", "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, checks: [] } }));
-  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_DAY_CAP: "12", ...gitEnv });
+  restore = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
     for (const t of ["needs item", "waiting goal", "stuck item", "running item", "landed item", "old item"]) add(doc, t, t === "waiting goal" ? { spec: "Do it." } : {});
     add(doc, "urgent goal", { spec: "Do it first.", priority: "critical" });
@@ -177,7 +177,7 @@ describe("a planner run", () => {
     run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("plan-fac-2");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), why: "Held: fac-3 is stuck (a check failed). No run starts or lands until it is cleared.", kind: "gate" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), why: "Starts at the next dispatch", kind: "ready" }]);
     for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
   });
 });

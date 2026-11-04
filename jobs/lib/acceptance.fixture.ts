@@ -14,7 +14,7 @@ export function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_DAY_CAP", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH", "ALEPH_SANDBOX_CMD", "ALEPH_QUIET_LOAD", "ALEPH_CHECK_SLOTS"];
+const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH", "ALEPH_SANDBOX_CMD", "ALEPH_QUIET_LOAD", "ALEPH_CHECK_SLOTS"];
 export let base: string;
 let saved: Record<string, string | undefined>;
 
@@ -28,7 +28,7 @@ export function useAcceptanceFixture(): void {
     saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
     Object.assign(process.env, {
       ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_SANDBOX_DIR: join(base, "runs"),
-      ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_DAY_CAP: "100", ALEPH_LIVE_CAP: "5",
+      ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_LIVE_CAP: "5",
       SIDETONE_TELL_URL: "http://127.0.0.1:1/tell", ALEPH_DISPATCH: "off", ALEPH_QUIET_LOAD: "100000",
     });
     sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "repo.git"));

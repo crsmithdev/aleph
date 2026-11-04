@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, seedItem } from "./cli.helpers";
-import { dispatch, drop, issueClose, recheck as recheckJob } from "./inproc";
+import { dispatch, drop, issueClose } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -71,28 +71,15 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${x}`));
   }, 60_000);
 
-  test("a recheck that clears the factory hold starts the next goal", async () => {
-    // The hold is what this test is about: the safe default actions would release the run.
+  test("a stuck run holds only its own goal: the next goal starts beside it", async () => {
+    // The safe default actions would release the run; without them it stays stuck.
     process.env.ALEPH_RESCUE = "off";
     try {
-      // gate/x makes the gate check run first, before the tests check that fails on FAIL.
       const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
       await until(() => runs(s).some((r) => ["stuck", "failed"].includes(state(r).condition)));
-      const b = track(await add("held behind it", open("hold-b"), ["--labels", "goal"]));
-      await until(() => !dispatching());
-      expect(started()).toEqual([`fac-${s}`]);
-      // The recheck is a live run, so the hold no longer counts; the dispatch must not wait for its end.
-      const hold = join(base, "gate-hold");
-      writeFileSync(hold, "");
-      try {
-        // The gate check holds the recheck live until its dispatch has started the goal. A loaded dispatch that boots after the recheck ended meets the hold again.
-        const recheck = recheckJob(`fac-${s}`, on());
-        await until(() => started().includes(`fac-${b}`));
-        rmSync(hold, { force: true });
-        expect((await recheck).code).toBe(1);
-      } finally {
-        rmSync(hold, { force: true });
-      }
+      const b = track(await add("starts beside it", open("hold-b"), ["--labels", "goal"]));
+      await until(() => started().includes(`fac-${b}`));
+      expect(started()).toEqual([`fac-${s}`, `fac-${b}`]);
     } finally {
       delete process.env.ALEPH_RESCUE;
     }

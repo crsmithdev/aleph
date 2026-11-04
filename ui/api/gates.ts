@@ -7,10 +7,10 @@
  */
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/ask.ts";
-import { allHolds, baselines, factoryRepos, gates, redMains, waiting } from "../../jobs/lib/factory-status.ts";
+import { allHolds, baselines, factoryRepos, gates, redLine } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
 import { readFactoryLog } from "../../jobs/lib/layout.ts";
-import { AWAITING_CAP, CAP_KEYS, DAY_CAP, LIVE_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
+import { CAP_KEYS, LIVE_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
 import { reader } from "../../todo/lib/store.ts";
 import type { AskItem } from "../asks.ts";
 import { runCli } from "../cli.ts";
@@ -125,30 +125,35 @@ export function log(now = Date.now()): LogEntry[] {
     .filter((e) => (seen[e.by] = (seen[e.by] ?? 0) + 1) <= LOG_MAX);
 }
 
-/** Main CI: the red baselines and the red GitHub CI runs, as the health lines say them; the count of repos with a baseline. */
-function mainCi() {
-  const base = baselines();
-  return {
-    repos: Object.keys(base).length,
-    red: redMains().map((r) => r.line),
-    commits: Object.values(base).map((b) => `${b.repo} ${b.commit.slice(0, 7)}`),
-  };
-}
+/**
+ * The last baseline of each repo, red or green, as baseline.json holds it. It reads no git: whether it is still the
+ * baseline of origin/<main> is the Queued lane's to say, in `goalGates.baseline`. GitHub CI does not gate, so it is not here.
+ */
+const baselineGate = () => Object.values(baselines()).map((b) => ({ repo: b.repo, state: b.ok ? "green" : "red", line: b.ok ? `${b.repo} ${b.commit.slice(0, 7)}` : `${b.repo} ${redLine(b)}` }));
+
+/** How many queued goals each per-goal gate holds now, by the Queued lane's decision. */
+const goalGates = (queued: State["queued"]) => ({
+  baseline: queued.filter((q) => q.kind === "baseline").length,
+  "not-ready": queued.filter((q) => q.kind === "not-ready").length,
+  "busy-file": queued.filter((q) => q.kind === "busy-file").length,
+  "loop-guard": queued.filter((q) => q.kind === "loop-guard").length,
+});
 
 /** The held globs each factory repo names in the registry (`repo.held`), repos with at least one, sorted by repo key. */
 export function repoHeld(): { repo: string; held: string[] }[] {
   return factoryRepos().filter((r) => r.held.length > 0).map((r) => ({ repo: r.key, held: [...r.held] })).sort((a, b) => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0));
 }
 
-/** The page's data from the Status page's state (its factory snapshot and its asks) and the security facts. */
-export function gatesBody(state: Pick<State, "now" | "factory" | "asks">, security: { held: string[]; sandbox: unknown }) {
+/** The page's data from the Status page's state (its factory snapshot, its asks and its Queued lane) and the security facts. */
+export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[]; sandbox: unknown }) {
   const jobs = allJobs();
   const f = state.factory;
   return {
     now: state.now,
-    factory: { paused: f.paused, hold: f.hold, probe: f.probe, liveRuns: f.liveRuns, liveCap: f.liveCap, runsToday: f.runsToday, dayCap: f.dayCap, awaiting: waiting(jobs), awaitingCap: f.awaitingCap, capEnv: { day: capEnvSet("ALEPH_DAY_CAP"), live: capEnvSet("ALEPH_LIVE_CAP"), awaiting: capEnvSet("ALEPH_AWAITING_CAP") } },
+    factory: { paused: f.paused, probe: f.probe, liveRuns: f.liveRuns, liveCap: f.liveCap, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP") } },
     gated: gates({ jobs }),
-    main: mainCi(),
+    baseline: baselineGate(),
+    goalGates: goalGates(state.queued ?? []),
     ...splitAsks(state.asks),
     rules: rules(),
     ...security,
@@ -169,7 +174,7 @@ export const routes: Routes = {
     const patch: Record<string, unknown> = {};
     for (const k of CAP_KEYS) if (k in body) patch[k] = body[k];
     try { writeCaps(patch); } catch (e) { return Response.json({ error: (e as Error).message }, { status: 422 }); }
-    return Response.json({ day: DAY_CAP(), live: LIVE_CAP(), awaiting: AWAITING_CAP() });
+    return Response.json({ live: LIVE_CAP() });
   },
   "POST /api/gates/revoke/:reason": async (req, params) => {
     if (!sameSite(req)) return text("forbidden", 403);

@@ -242,7 +242,7 @@ The monitor surfaces and never fixes. `aleph monitor [--dry] [--day YYYY-MM-DD]`
 
 | Setting | Default | Basis |
 |---|---|---|
-| Runs in any 24 hours | 12 | Twelve 40-minute runs fill a night |
+| Runs in any 24 hours | none | The day cap went in v6 (3 Nov): it never bound in the hold records since 2 Nov. The Status page still counts the runs and their cost |
 | Live runs | `CAP = 5` | Existing; shared with Chris's jobs |
 | Time box | 40 min | `ALEPH_JOB_TIMEOUT`, 2400 s today |
 | Timer | 30 min | None; a guess to tune |
@@ -250,7 +250,7 @@ The monitor surfaces and never fixes. `aleph monitor [--dry] [--day YYYY-MM-DD]`
 | Test workers per suite | cores / slots (12 on 24 cores) | `ALEPH_TEST_PARALLEL`, set by the factory for checks and in the worker sandbox env. The `test` script in package.json runs `bun test --parallel=${ALEPH_TEST_PARALLEL:-$(nproc)}`, so a plain `bun run test` by Chris keeps the full core count. |
 | Run priority | `CPUWeight=20`, `--nice=10` | Every run unit (`systemd-run` for agent runs, lands, pulled lands and review2) gets both, so the shell, `aleph-ui` and Claude Code sessions win when the cores are busy. The `aleph-ui` unit and the tick keep the default weight. |
 
-Check runs and probe runs do not count against the 12. They start no `claude`.
+Check runs and probe runs do not count in the day's runs. They start no `claude`.
 
 ### Milestone 2 decisions
 
@@ -259,7 +259,7 @@ Check runs and probe runs do not count against the 12. They start no `claude`.
 
 ### Safe default actions for stuck and failed runs (28 Oct)
 
-Chris, 28 Oct: a stuck or failed run gets a default action when the action is safe, so the factory does not wait hours for a person. Every dispatch (`rescueStuck` in `jobs/lib/factory.ts`, before the hold is read) takes it, and writes the reason to the run, the issue note and the news:
+Chris, 28 Oct: a stuck or failed run gets a default action when the action is safe, so the factory does not wait hours for a person. Every dispatch (`rescueStuck` in `jobs/lib/rescue.ts`, before the gates) takes it, and writes the reason to the run, the issue note and the news:
 
 1. No commit, and the item is done or its work is on main (its `Job:` trailer): drop the run, as a duplicate. A work-on-main item is closed.
 1a. No commit, the worker's result says `Goal: Already met` (its reason after the words), and the item is open: the repo's checks run on origin/<main> (the baseline). IF they pass THEN drop the run, and the item is closed as done with a note that names the claim. IF they do not, or main cannot be checked yet, drop the run with the claim and the failing check as the goal's rerun note (once main is green, the goal reruns). An unchecked main leaves the run stuck until the next dispatch. A claim is never a question for Chris.
@@ -270,15 +270,35 @@ Chris, 28 Oct: a stuck or failed run gets a default action when the action is sa
 
 Anything else, or the second time one case hits one goal (the run folder's `rescued` file names the case), labels the issue `needs-chris` with a one-line question (also a note and a news line). The run keeps its state, with a `needs-chris` file in its folder, and **does not hold the factory**: other goals keep running, and the goal itself starts no new run until Chris drops or rechecks it. `aleph drop <name> <reason> --quiet` is the dispatch's drop (no note, no dispatch of its own). The pending rerun note is `~/.aleph/factory/rerun/<name>.md`, read once by the goal's start.
 
+A lost run (3 Nov, v6) is one the rescue takes too: a build, recheck or land still `running`, started since this boot, whose process ended without writing `exit`. The rescue marks it failed (`lost: its process ended with no end written`) and takes the step a host restart gets: a land lands again, an agent run with commits ahead of main is rechecked, any other run is dropped and the goal reruns. The case is `lost`, once per goal; a second lost run of the goal sets a `rescue` Ask, which goes to the director.
+
+### Dispatch: 7 gates and 4 steps (3 Nov, v6)
+
+Chris approved v6 on 3 Nov. A dispatch (`dispatchIssues` in `jobs/lib/factory.ts`) does nothing while the factory is paused. Otherwise its steps run first, and none of them holds a goal: the next steps a pause kept, the rescue (above), the lands, facts, acceptance and the close of parents whose parts are done. Then it asks each goal the gates of `goalDecision` (`jobs/lib/goal-decision.ts`), in the order of `GATES`:
+
+| Gate | Binds when |
+|---|---|
+| `pause` | `~/.aleph/factory/paused` exists |
+| `baseline` | The repo's baseline of `origin/<main>` failed, is still running, or is unchecked (the checks could not run or the fetch failed) |
+| `probe` | The last sandbox probe failed |
+| `not-ready` | The goal is done, an `after` ref is open, it has an open job, a planner run holds it, or its spec check runs or held it |
+| `live-cap` | `ALEPH_LIVE_CAP` build runs are live or starting |
+| `busy-file` | An Edit-surface file had 3 land conflicts in 7 days and another open job names it |
+| `loop-guard` | 3 runs in a row with no commit, or 3 starts in 60 minutes; the dispatch sets the `no-commit` or `run-cap` Ask instead of a start |
+
+The first gate that binds skips the goal, and `recordHold` writes one line to `~/.aleph/factory/holds.jsonl` whose `kind` is that gate's name; a start writes `started`. Records from before v6 keep their old kinds (`red`, `open`, `gate`, `spec-check` and others), and the monitor still reads them. A goal no gate holds goes through routing (its spec check, or the planner for a large goal) and then starts under its lock; a start the transitions refuse records `live-cap` when the live cap filled, else `not-ready`. The planner of an issue marked `plan` is held by the baseline and probe gates too. GitHub CI on main does not gate.
+
+Removed in v6: the hold (an open stuck or failed job stopped every start and land; every stuck run already gets a rescue action or an Ask), the day cap and the awaiting cap (neither bound since 2 Nov; Asks go to the director first). `caps.json` keeps only `live`; old `day` and `awaiting` keys are left in the file and read by nothing.
+
 ### What dispatches at once, and what only the tick starts (28 Oct)
 
 The tick (`aleph-tick.timer`, every 5 minutes) only starts periodic or scheduled work. Every other transition starts the next step at once, with no wait for the tick: `aleph dispatch` runs in the same process call (a run's end) or detached (each detached start is a transient systemd unit of its own: `detached()` through `startUnit` in `jobs/lib/launch.ts`, with a unique unit name, its output appended to `dispatch.log` and its working directory the factory directory, so it outlives the run unit, the tick or the UI that started it; `dispatchDetached` in `jobs/lib/launch.ts` never fails or holds the caller). `ALEPH_DISPATCH=off` turns the at-once dispatches off, for tests; the tick still dispatches.
 
 Dispatch at once:
-- A run's end, of any kind but `plain`: the unit runs `aleph dispatch`. This covers a land that lands (the goals with `waiting_on: <repo>-<n>` on that job start), a baseline that turns green after a red main whose fix landed, and a cap that frees (live cap, waiting cap) when a run ends or leaves `needs-you`.
+- A run's end, of any kind but `plain`: the unit runs `aleph dispatch`. This covers a land that lands (the goals with `waiting_on: <repo>-<n>` on that job start), a baseline that turns green after a red main whose fix landed, and a live slot that frees when a run ends.
 - `aleph issue add`, and `aleph issue edit` of an open goal: adding the `goal` label, removing `waiting_on` (`--waiting-on none`), or setting the status back to open (`--status open`). The UI's `POST /api/issues` runs `aleph issue add`, so the issue form dispatches the same way.
 - A new issue that is not a goal, and a note that answers `needs-chris`: triage (`triageDetached`), `claude -p --output-format stream-json --verbose --model claude-opus-5-5` with the tools Read, Grep and Glob, in a main clone. A main clone (`withMainClone` in `jobs/lib/main-clone.ts`) is what triage, the planner and the spec check read: before each run it fetches `origin/<main>` into the repo, clones the repo with `--shared` into a new temporary folder, checks out `origin/<main>` there, and removes the folder after the run, so the agent reads main as it is on origin and not the repo's checkout, which can be behind. A failed fetch, clone or checkout fails the run. Triage's list of the commits on main and its check that a `done` verdict names a commit on main read the fetched `origin/<main>`. A triage run that ends with a `goal` verdict dispatches, from `aleph triage` and from the tick's triage step.
-- `aleph drop` of a job (frees a live slot, a waiting slot, or the hold), `aleph recheck` (the recheck is live, so the hold no longer counts), and `aleph checked`.
+- `aleph drop` of a job (frees a live slot, and its goal's open job), `aleph recheck`, and `aleph checked`.
 - `aleph resume`.
 
 Only the tick starts:
@@ -296,21 +316,21 @@ A large goal gets a planner run: a job of kind `plan` in the ledger (`plan-<repo
 
 A goal labelled `planned` is never started. Each dispatch looks at it: while a child is open it is skipped (`planned; waiting on ...`); once all are done it is closed as done with a note naming each child's commit on main (`no commit` for one closed by hand). A planner run does not count as the factory touching the item (`jobs/lib/status.ts`), so the store's done stands for the parent.
 
-The planner runs detached: each detached start is a transient systemd unit of its own (`detached()` through `startUnit` in `jobs/lib/launch.ts`), with a unique unit name, its output appended to `dispatch.log` and its working directory the factory directory, so it outlives the run unit, the tick or the UI that started it. When a large goal is due its plan, the dispatch starts `aleph plan <repo>-<n>` through `detached()`, records nothing, and goes on to the next goal in the same pass, so a plan run of minutes holds neither the loop nor a slot. The plan process takes the lock `plan-<repo>-<n>` for the whole run, makes the `plan` job, does what is described here, and on its end calls `dispatchDetached()` so the children, or the fallback worker, start without waiting for the tick. A goal whose plan lock is held is skipped with the reason `planning`: it gets no second planner and no worker. A plan job left `running` with its lock free (the process died) is ended as failed at the next dispatch, as a stale triage is, and the goal is planned again. `aleph plan <repo>-<n>` runs one plan now under the dispatch's gates: not paused, no hold, no failed probe, a factory repo, and a goal not already `planned`.
+The planner runs detached: each detached start is a transient systemd unit of its own (`detached()` through `startUnit` in `jobs/lib/launch.ts`), with a unique unit name, its output appended to `dispatch.log` and its working directory the factory directory, so it outlives the run unit, the tick or the UI that started it. When a large goal is due its plan, the dispatch starts `aleph plan <repo>-<n>` through `detached()`, records nothing, and goes on to the next goal in the same pass, so a plan run of minutes holds neither the loop nor a slot. The plan process takes the lock `plan-<repo>-<n>` for the whole run, makes the `plan` job, does what is described here, and on its end calls `dispatchDetached()` so the children, or the fallback worker, start without waiting for the tick. A goal whose plan lock is held is skipped with the reason `planning`: it gets no second planner and no worker. A plan job left `running` with its lock free (the process died) is ended as failed at the next dispatch, as a stale triage is, and the goal is planned again. `aleph plan <repo>-<n>` runs one plan now under the factory's gates: not paused, no failed probe, a factory repo, and a goal not already `planned`.
 
-A reply that fails the check, or a planner that exits non-zero, is retried once at once. After a second failure the goal starts as one worker run, as before, with a note on the issue that says why; the ledger's two failed plan runs keep it from being planned again. Plan runs count toward the day cap, and the UI shows them like triage runs ("Planning", "Split", "No plan"); a `planned` parent is not in the Queued list.
+A reply that fails the check, or a planner that exits non-zero, is retried once at once. After a second failure the goal starts as one worker run, as before, with a note on the issue that says why; the ledger's two failed plan runs keep it from being planned again. Plan runs count in the day's runs, and the UI shows them like triage runs ("Planning", "Split", "No plan"); a `planned` parent is not in the Queued list.
 
 ### Spec check (2 Nov)
 
 The spec check runs in a process of its own, which the dispatch starts; the unit does not run it (`jobs/lib/unit.ts` has no `checkSpec` and no spec-check phase).
 
-When the dispatch starts it: `dispatchIssues` (`jobs/lib/factory.ts`) starts a goal's spec check for each goal whose repo has `author` and `sandbox` set and that is not a research goal, when the goal's current spec version has no recorded verdict. It does this through `specCheckDetached` (`jobs/lib/launch.ts`), which starts `aleph spec-check <repo>-<n>` detached and does nothing for a repo without `sandbox`. The dispatch records a `spec-check` hold on the goal with the reason `spec check running`, and skips the goal.
+When the dispatch starts it: `dispatchIssues` (`jobs/lib/factory.ts`) starts a goal's spec check for each goal whose repo has `author` and `sandbox` set and that is not a research goal, when the goal's current spec version has no recorded verdict. It does this through `specCheckDetached` (`jobs/lib/launch.ts`), which starts `aleph spec-check <repo>-<n>` detached and does nothing for a repo without `sandbox`. The dispatch records a `not-ready` hold on the goal with the reason `spec check running`, and skips the goal; while the check runs, the Not ready gate holds the goal.
 
 How it runs: `runSpecCheck` (`jobs/lib/spec-check.ts`) runs under the goal's lock `spec-check-<repo>-<n>` (`specCheckLock`). A check counts as running while that lock is held, or for 16 minutes after the dispatch starts it and before the process takes the lock (`markLaunched`, `specChecking`), so a second dispatch starts no second check. `checkSpec` makes a main clone (see triage above) and makes one read-only run of the agent with the model `claude-opus-5-5` (`SPEC_CHECK_MODEL`), the tools Read, Grep and Glob, and a time box of 900 s. It writes the note `spec check: <version> <verdict>` on the issue. When the process ends it calls `dispatchDetached()`, so a goal that passed starts at once.
 
 What each verdict does:
 - `pass`: the goal starts.
-- `hold`: the check sets a `spec-check` Ask on the issue (`askChris`) and the dispatch records the hold `spec-check` with the problems. While the Ask is open the goal is skipped (`spec check held`). The Ask goes to the director first, which rewrites the spec at most `MAX_SPEC_EDITS` (2) times per goal, then closes the goal or escalates to Chris. Once the Ask is gone, for example because the director edited the spec or Chris answered with a rerun and no edit, the goal starts, and that version is not checked again.
+- `hold`: the check sets a `spec-check` Ask on the issue (`askChris`) and records the hold `not-ready` with the problems. While the Ask is open the goal is skipped (`spec check held`). The Ask goes to the director first, which rewrites the spec at most `MAX_SPEC_EDITS` (2) times per goal, then closes the goal or escalates to Chris. Once the Ask is gone, for example because the director edited the spec or Chris answered with a rerun and no edit, the goal starts, and that version is not checked again.
 - `error` (the reply has no `VERDICT:` line, or the fetch, clone, checkout or agent run failed): the note records the error, the goal starts, and that version is not checked again.
 
 Cost: a check that reports a cost is appended to `spec-checks.jsonl` (`recordSpecCost`). `spentToday` counts it in the day's spend. `runsToday` does not count it toward the run cap.

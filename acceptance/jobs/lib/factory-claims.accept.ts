@@ -6,7 +6,6 @@ import { readList } from "../../../todo/lib/store.ts";
 import * as verbs from "../../../todo/lib/issues.ts";
 import * as issues from "../../../todo/lib/todo.ts";
 import { dispatchIssues } from "../../../jobs/lib/factory.ts";
-import { hold } from "../../../jobs/lib/factory-status.ts";
 import { readRun, allRuns, lock } from "../../../jobs/lib/ledger.ts";
 import { ctx, sh, goal, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "../../../jobs/lib/factory.helpers.ts";
 import { askOf } from "../../../jobs/lib/ask.ts";
@@ -18,10 +17,9 @@ test("no commit and the worker says the goal is already met, the checks pass on 
   const id = goal();
   claimed(`fac-${id}`, "Looked.\nGoal: Already met — timeline.ts uses itemTimes\n");
   const f = fakes();
-  const out = await withChecks(f, async () => null);
+  await withChecks(f, async () => null);
   expect(f.calls).toEqual([`drop fac-${id}`]);
   expect(f.specs).toEqual([]);
-  expect(out.held).toBeUndefined();
   expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("done");
   expect(notes(id)).toContain("says the goal is already met (timeline.ts uses itemTimes), and the checks pass on origin/main");
   expect(ask(id)).toBeNull();
@@ -76,9 +74,8 @@ test("an infrastructure failure of an agent run is rechecked once; of a land, la
   sh(join(ctx.base, "repo"), "git", "branch", `factory/fac-${id}`);
   mk(`fac-${id}`, "build", "failed", { reason: "fetch failed", branch: `factory/fac-${id}` });
   const f = fakes();
-  const out = await dispatch(f);
+  await dispatch(f);
   expect(f.calls).toEqual([`recheck fac-${id}`]);
-  expect(out.held).toBeUndefined();
   expect(notes(id)).toContain("failed for infrastructure (fetch failed)");
   expect(notes(id)).toContain("rechecked, once");
 
@@ -95,9 +92,8 @@ test("failed checks after a land merge, first time: dropped and the goal reruns 
   const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "stuck", { reason: "tests failed", job: a.job }, { "checks.log": `## tests: exit 1\n${lines(30)}` });
   const f = fakes();
-  const out = await dispatch(f);
+  await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(out.held).toBeUndefined();
   expect(f.specs[0]).toContain("checks failed after the land merged main");
   expect(f.specs[0]).toContain("line 30");
   expect(notes(id)).toContain("checks failed after the land merged main");
@@ -108,7 +104,7 @@ test("a run that is not safe gets an Ask with a question and does not hold the f
   const other = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
-  const out = await dispatch(f);
+  await dispatch(f);
   expect(ask(id)).not.toBeNull();
   expect(notes(id)).toContain("asks Chris: fac-");
   const stored = () => readList({ key: "fac" })!.items.find((i) => i.id === id)!;
@@ -117,17 +113,15 @@ test("a run that is not safe gets an Ask with a question and does not hold the f
   expect(existsSync(join(readdirSync(join(ctx.base, "jobs")).map((d) => join(ctx.base, "jobs", d))[0], "asked"))).toBe(true);
   verbs.decide({ key: "fac" }, id, "drop it");
   expect("reason" in stored().fm).toBe(false);
-  expect(out.held).toBeUndefined();
   expect(f.calls).toEqual([`start fac-${other}`]);
-  expect(hold()).toBeNull();
   expect(readRun(allRuns()[0].folder)!.condition).toBe("stuck");
 });
 
-test("without rescue actions a stuck run still holds the factory", async () => {
+test("without rescue actions a stuck run stays, and its open job keeps its goal not ready", async () => {
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "time box" });
   const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
-  expect(out.held).toContain("Held:");
+  expect(out.skipped).toContain(`fac-${id}: its job is stuck`);
 });
 
 test("two dispatches at once rescue one stuck job once", async () => {

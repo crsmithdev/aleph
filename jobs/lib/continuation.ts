@@ -320,6 +320,14 @@ export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
   return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
 }
 
+/** The step for a lost run: a host restart's step, as the goal did not cause it either. The rescue counts it once per goal. */
+export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
+  const text = `${r.kind} run ${last.id} was lost: its process ended with no end written`;
+  if (r.kind === "land") return { action: "land again", noted: `${text}: landed again, once`, told: `${text}: landing again` };
+  if (isAgentRun(r.kind) && hasWork) return { action: "recheck", noted: `${text}: rechecked once, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
+  return { action: "drop", dropReason: `${text}. Run the goal again from the start.`, noted: `${text}: dropped, and the goal reruns once`, told: `${text}: the goal reruns` };
+}
+
 /** The rerun note for failed sealed scenarios: their numbers only, never their text. */
 export const sealedNote = (failed: number[], main: string): string =>
   `The last run said the goal is already met, but sealed scenario${failed.length > 1 ? "s" : ""} ${failed.join(", ")} fail${failed.length > 1 ? "" : "s"} on origin/${main}. Make the change the goal asks for.`;

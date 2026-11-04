@@ -26,7 +26,7 @@ const speed = (window: string): any => ({
   phases: { lead: P(1), intake: P(1), queue: P(1), implement: P(1), land: P(1) }, buckets: [{ at: new Date(2026, 9, 28).toISOString(), lead: 1 }],
   checks: [], models: [], agents: { live: 0, workers: 0, cap: 5, mean: 1, peak: 2, roles: [], points: [{ at: new Date(2026, 9, 28).toISOString() }] },
 });
-const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday: 1, dayCap: 9, liveRuns: 0, liveCap: 5 } };
+const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday: 1, liveRuns: 0, liveCap: 5 } };
 
 const PAGES: Record<string, { path: string; view: any; render: (w: string) => string }> = {
   jobs: { path: "#/factory/jobs", view: fjobs.view, render: (w) => fjobs.renderFactoryJobs(speed(w), null) },

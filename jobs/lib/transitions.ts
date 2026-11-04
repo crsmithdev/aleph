@@ -65,7 +65,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   let id: string;
   try {
     if (isBuild(run.kind)) {
-      const full = gates({ only: ["live"] });
+      const full = gates({ only: ["live-cap"] });
       if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
     }
     mkdirSync(runsDir(), { recursive: true });
@@ -283,7 +283,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
   } finally {
     release!();
   }
-  // The recheck is live now, so the hold it was under no longer counts.
+  // The recheck is live now: a dispatch may start what waited on its run.
   dispatchDetached();
   return s;
 }

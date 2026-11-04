@@ -299,7 +299,7 @@ export async function triageIssue(repo: Repo, id: number, _done: (ref: string) =
   const doc = reader().list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
   if (!doc || !item || issues.status(item) !== "open" || isSorted(doc, item)) return { triaged, skipped };
-  const blocked = gates({ only: ["live", "day"] });
+  const blocked = gates({ only: ["live-cap"] });
   if (blocked) { skipped.push(`triage: ${blocked.why}`); return { triaged, skipped }; }
   await triageItem(repo, item, triaged, skipped);
   return { triaged, skipped };
@@ -327,7 +327,7 @@ export async function triageOpen(repos: Repo[], _done: (ref: string) => boolean)
   let n = 0;
   for (const { repo, item } of queue) {
     if (n >= TRIAGE_CAP()) break;
-    const blocked = gates({ only: ["live", "day"] });
+    const blocked = gates({ only: ["live-cap"] });
     if (blocked) { skipped.push(`triage: ${blocked.why}`); break; }
     n++;
     await triageItem(repo, item, triaged, skipped);

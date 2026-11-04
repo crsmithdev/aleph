@@ -6,7 +6,7 @@ export const awaitingHeld = (o: object = {}): any => job({ condition: "awaiting"
 export const held: any = awaitingHeld({ name: "aleph-27", reason: "Held path: hooks/lib/digest.ts", stat: " a.ts | 2 +-", defaults: ["Haiku tier per request"], item: { id: 27, title: "Digest head and tail" } });
 export const state: any = {
   now: "2026-10-27T17:00:00Z",
-  factory: { paused: false, dayCap: 12, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
+  factory: { paused: false, runsToday: 5, costToday: 0.25, nextTick: "2026-10-27T17:12:00Z", probe: { at: "2026-10-27T14:35:00Z", ok: true, failed: [] }, health: ["judge is down"] },
   asks: attend({ runs: [held], issues: [] }, []).items,
   stuck: [job({ name: "aleph-30", condition: "stuck", reason: "types failed" })],
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],

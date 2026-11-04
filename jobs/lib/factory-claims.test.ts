@@ -37,9 +37,8 @@ test("no commit, the item open, first time: dropped with no fate and the goal re
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
   const f = fakes();
-  const out = await dispatch(f);
+  await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(out.held).toBeUndefined();
   expect(f.specs[0]).toContain("made no commit");
   expect(f.specs[0]).toContain("line 11\n");
   expect(f.specs[0]).toContain("line 30");
@@ -109,9 +108,8 @@ test("a land that failed with a merge conflict is dropped and the goal reruns; t
   const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts", "b.ts"], job: a.job });
   const f = fakes();
-  const out = await dispatch(f);
+  await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  expect(out.held).toBeUndefined();
   expect(f.specs[0]).toContain("merge conflict in a.ts, b.ts");
   expect(notes(id)).toContain("merge conflict in a.ts, b.ts");
   expect(ask(id)).toBeNull();

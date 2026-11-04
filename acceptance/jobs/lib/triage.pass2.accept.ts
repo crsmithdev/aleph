@@ -197,12 +197,13 @@ test("ALEPH_TRIAGE_TRIES=1 asks about the item after the first malformed run", a
   expect(item(1).notes.at(-1)).toContain("no verdict in 1 runs");
 });
 
-test("a blocked day cap or live cap starts no triage", async () => {
+test("a full live cap starts no triage", async () => {
   reset([{ title: "a", body: "VERDICT:live" }]);
-  process.env.ALEPH_DAY_CAP = "0";
-  const t = await run().finally(() => { delete process.env.ALEPH_DAY_CAP; });
+  const was = process.env.ALEPH_LIVE_CAP;
+  process.env.ALEPH_LIVE_CAP = "0";
+  const t = await run().finally(() => { if (was === undefined) delete process.env.ALEPH_LIVE_CAP; else process.env.ALEPH_LIVE_CAP = was; });
   expect(t.triaged).toEqual({});
-  expect(t.skipped).toEqual(["triage: cap of 0 runs in 24 hours"]);
+  expect(t.skipped).toEqual(["triage: 0 agent runs are live"]);
   expect(calls()).toBe(0);
 });
 

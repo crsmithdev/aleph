@@ -131,19 +131,21 @@ Lands of one repo go one at a time, in the order they became ready. A land merge
 
 ## Gates
 
-A run starts only when every gate is open.
+Each dispatch first does its steps: it starts the next steps a pause kept, rescues stuck, failed, killed and lost runs, lands the passed runs, runs the facts and acceptance steps, and closes parents whose parts are done. Then it asks each queued goal 7 gates, in this order. The first gate that binds skips the goal for this dispatch, and a record in `~/.aleph/factory/holds.jsonl` names that gate. The next dispatch asks again.
 
-| Gate | Closes when | Opens when |
-|---|---|---|
-| Pause | `aleph pause` (`~/.aleph/factory/paused`) | `aleph resume` |
-| Hold | An open job in a factory repo is `stuck` or `failed` | It is landed, rechecked or dropped |
-| Probe | `aleph sandbox probe` failed | A probe passes |
-| Main is red | A check fails on `origin/main` (kept in `~/.aleph/factory/baseline.json`) | Main is green again |
-| Live cap | `ALEPH_LIVE_CAP` runs are live | A run ends |
-| Day cap | `ALEPH_DAY_CAP` runs started in the last 24 hours | The window moves on |
-| Awaiting cap | `ALEPH_AWAITING_CAP` runs wait for you | You answer one |
+| Gate | Binds when |
+|---|---|
+| Pause | `aleph pause` (`~/.aleph/factory/paused`), until `aleph resume`. A paused dispatch does nothing, not even its steps |
+| Baseline | The checks on `origin/main` failed (kept in `~/.aleph/factory/baseline.json`), still run, or could not run |
+| Probe | The last `aleph sandbox probe` failed |
+| Not ready | The goal is done, waits on an issue in its `after` list, has an open job, or has a planner or spec check running |
+| Live cap | `ALEPH_LIVE_CAP` runs are live |
+| Busy file | A file in the goal's Edit surface had 3 land conflicts in 7 days, and another open job names it |
+| Loop guard | The goal's last 3 runs made no commit, or it started 3 times in 60 minutes. The dispatch sets an Ask in place of a start |
 
-The hold stops new runs and lands, but runs already working finish and `aleph land` still works. The Status page, `aleph report` and the dispatch output say why: `Held: aleph-116 is stuck (merge conflict). No run starts or lands until it is cleared.`
+A goal that no gate holds goes to its spec check (a repo with `"author": true`) or the planner, and then starts. GitHub CI on main does not gate.
+
+A stuck or failed run holds only its own goal, through its open job. The rescue takes a safe action on it once per goal per case, or sets a `rescue` Ask. A lost run (its process ended and wrote no end) is marked failed and its goal reruns once; a second lost run of the goal sets a `rescue` Ask.
 
 `aleph recheck <name>` is the way out of a stuck run that keeps its work, for example one that a flaky test on main stuck. It merges the current `origin/main` into the branch, runs the checks, the held rule and the reviewer, and lands like any passed run.
 
@@ -157,13 +159,11 @@ A check that fails in a run, a land or the baseline runs once more on the same t
 
 ## Settings
 
-Each cap is read from its variable first, then from `~/.aleph/factory/caps.json` (`{ "day": 999, "live": 5, "awaiting": 5 }`), then the default.
+The live cap is read from its variable first, then from `~/.aleph/factory/caps.json` (`{ "live": 5 }`), then the default.
 
 | Variable | Default | Does |
 |---|---|---|
-| `ALEPH_DAY_CAP` | 12 | Runs that may start in any 24 hours |
 | `ALEPH_LIVE_CAP` | 10 | Runs live at once |
-| `ALEPH_AWAITING_CAP` | 5 | Runs waiting for you before new runs stop |
 | `ALEPH_JOB_TIMEOUT` | 1800 | Seconds in a worker's time box |
 | `ALEPH_CHECK_TIMEOUT` | 1200 | Seconds for the checks |
 | `ALEPH_REVIEW_TIMEOUT` | 600 | Seconds for a review |

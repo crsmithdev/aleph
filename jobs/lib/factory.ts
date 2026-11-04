@@ -35,12 +35,15 @@ import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached }
 import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
-import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
+import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, probeGate, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
 export { setPaused };
 
 /** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
-import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone } from "./goal-decision.ts";
-import { DAY_CAP, goalLockWaitMs, rescueOn } from "./settings.ts";
+import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from "./goal-decision.ts";
+
+/** A start refused because the live cap filled: the line `gates` gives for it. */
+const LIVE_REFUSAL = / agent runs are live/;
+import { goalLockWaitMs, rescueOn } from "./settings.ts";
 
 
 /**
@@ -103,12 +106,13 @@ type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?
 type Checks = (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
- * Start every ready goal, in order, until the live cap: an open goal item with
- * no open job, while the factory is not paused and the other gates allow. It
- * runs when a run ends, when a goal is added or edited, and from the tick as a
- * fallback. Each start holds a lock on its goal and re-reads the jobs under it,
- * so two dispatches at once start a goal once. Before the rescue of stuck runs, it starts the
- * next steps that a pause kept (`startKept`). `start` dispatches the run; it
+ * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
+ * and from the tick as a fallback. While the factory is paused it does nothing. Else its steps run first: the next
+ * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands, the facts, the
+ * acceptance run and the close of parents whose parts are done. Then each goal meets the 7 gates of goalDecision in
+ * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds goes to the
+ * routing step (its spec check, or the planner) and then starts. Each start holds a lock on its goal and re-reads
+ * the jobs under it, so two dispatches at once start a goal once. `start` dispatches the run; it
  * is `aleph job`, in-process (transitions.ts). With `rate`, a large goal's
  * first run is a planner run on its issue instead (plan.ts). It starts goals
  * only: an issue is closed as done once its goals are all done (`closeIssues`).
@@ -117,7 +121,7 @@ type Land = (name: string) => Promise<string | null>;
  * starts only once its spec version has a recorded verdict of pass or error.
  * `acceptance` starts the acceptance run detached (`aleph acceptance`); goal starts do not wait for it.
  */
-export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached, acceptance: () => void = acceptanceDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; held?: string; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached, acceptance: () => void = acceptanceDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -125,11 +129,6 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
   const kept = await startKept();
   if (kept.length) factoryLog(`started the steps the pause kept: ${kept.join(", ")}`);
   if (rescue) await rescueStuck(rescue, land, checks && ((repo) => baseline(repo, checks)));
-  const held = gates({ only: ["hold"] });
-  if (held) {
-    factoryLog(held.why);
-    return { started: [], skipped: [held.why], held: held.why };
-  }
   const landed: string[] = [];
   if (land) {
     // All at once: the lands queue on the repo's lock, and the first takes the rest into one batch.
@@ -160,8 +159,9 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       goals = openGoals();
     }
   }
+  // The planner starts an agent run, so the baseline and probe gates hold it as they hold a goal.
   const planners: { repo: Repo; item: issues.Issue }[] = [];
-  for (const repo of sandboxRepos()) {
+  for (const repo of probeGate() ? [] : sandboxRepos()) {
     if (reds.get(repo.key)) continue;
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) if (planSet(item)) planners.push({ repo, item });
   }
@@ -170,80 +170,77 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     plan(repo, item.id);
     planned.push(issueJob(repo, item.id));
   }
+  /** Records the hold and the skip line of a goal no start reached. */
+  const skip = (name: string, kind: Gate, why: string, line = why) => { recordHold(name, kind, why); skipped.push(`${name}: ${line}`); };
   for (const { repo, item: listed } of goals) {
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = reds.get(repo.key);
-    const first = goalDecision({ name, item: listed, done, red });
-    if (first.kind !== "ready") { recordHold(name, first.kind, first.why); skipped.push(`${name}: ${first.why}`); continue; }
+    // The cheap facts first: the pause was asked above, and the probe is one file.
+    const first = goalDecision({ name, item: listed, done, red, probe: probeGate() });
+    if (first.kind !== "ready") { skip(name, first.kind, first.why); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
     const release = await lock(`goal-${name}`, goalLockWaitMs());
-    if (!release) { recordHold(name, "locked", "another dispatch is starting it"); skipped.push(`${name}: another dispatch is starting it`); continue; }
+    if (!release) { skip(name, "not-ready", "another dispatch is starting it"); continue; }
     try {
       const jobs = allJobs();
       const open = openJob(name, null, jobs);
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : goal(repo, ref);
-      if (!item) { recordHold(name, "not-a-goal", "not a goal"); skipped.push(`${name}: not a goal`); continue; }
+      if (!item) { skip(name, "not-ready", "not a goal"); continue; }
       const d = goalDecision({
         ...goalFacts(repo, item, jobs), done, red,
-        // A plan job runs detached: the goal gets no second planner and no worker while it does.
-        planning: !open && await planning(repo, item.id),
         // A pass that began before a pause must not start a run after it.
-        gate: gates({ only: ["pause", "live", "day", "awaiting"], jobs }),
+        ...factoryGates(jobs),
+        // A plan job and a spec check run detached: the goal gets no second one and no worker while either does.
+        planning: !open && await planning(repo, item.id),
+        checking: !open && !!repo.author && await specChecking(name),
       });
-      if (d.kind !== "ready" && d.kind !== "no-commit" && d.kind !== "run-cap") { recordHold(name, d.kind, d.why); skipped.push(`${name}: ${d.why}`); continue; }
+      if (d.kind !== "ready" && d.kind !== "loop-guard") { skip(name, d.kind, d.why); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
       if (!latest || issues.status(latest) !== "open") {
-        const why = `the item is ${latest ? (issues.status(latest) === "parked" ? "parked" : issues.status(latest)) : "gone"}`;
-        recordHold(name, "closed", why);
-        skipped.push(`${name}: ${why}`);
+        skip(name, "not-ready", `the item is ${latest ? (issues.status(latest) === "parked" ? "parked" : issues.status(latest)) : "gone"}`);
         continue;
       }
-      if (d.kind === "no-commit") {
+      if (d.kind === "loop-guard") {
+        // The Ask goes to the director, as every Ask does.
         recordHold(name, d.kind, d.why);
-        markStreak(name);
-        const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
-        const bad = askChris(repo, ref, plainAsk("no-commit", text), text);
-        if (bad) factoryLog(`${name}: no issue note: ${bad}`);
         skipped.push(`${name}: ${d.why}`);
-        continue;
-      }
-      if (d.kind === "run-cap") {
-        recordHold(name, d.kind, d.why);
-        const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
-        const bad = askChris(repo, ref, plainAsk("run-cap", text), text);
-        if (bad) factoryLog(`${name}: no issue note: ${bad}`);
-        else markCap(name);
-        skipped.push(`${name}: ${d.why}`);
-        continue;
-      }
-      // The spec check runs in a process of its own (it clones the repo and may take 900 s); the dispatch reads its verdict.
-      // A pass or an error starts the goal. A hold sets the Ask, so the goal leaves the list until Chris answers; a hold with
-      // no Ask left is one Chris answered with a rerun and no edit, and it starts, as a checked version is not checked again.
-      if (repo.author) {
-        const running = await specChecking(name);
-        const v = running ? null : recordedVerdict(latest);
-        if (!v) {
-          if (!running) { markLaunched(name); specCheck(repo, issues.refOf(latest)); }
-          recordHold(name, "spec-check", "spec check running");
-          skipped.push(`${name}: spec check running`);
-          continue;
+        if (d.ask === "no-commit") {
+          markStreak(name);
+          const text = `the last ${NO_COMMIT_LIMIT} runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal or close the item.`;
+          const bad = askChris(repo, ref, plainAsk("no-commit", text), text);
+          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+        } else {
+          const text = `the factory started this goal ${d.starts} times in the last hour; it stops starting it until Chris reruns it.`;
+          const bad = askChris(repo, ref, plainAsk("run-cap", text), text);
+          if (bad) factoryLog(`${name}: no issue note: ${bad}`);
+          else markCap(name);
         }
-        if (v.verdict === "hold" && askOf(latest)) { recordHold(name, "spec-check", v.problems); skipped.push(`${name}: spec check held`); continue; }
+        continue;
+      }
+      // Routing: the spec check runs in a process of its own (it clones the repo and may take 900 s); the dispatch reads its
+      // verdict. With none for this spec version, the dispatch starts the check, and Not ready holds the goal while it runs.
+      // A pass or an error starts the goal. A hold sets the Ask, so the goal leaves the list until it is answered; a hold with
+      // no Ask left is one answered with a rerun and no edit, and it starts, as a checked version is not checked again.
+      if (repo.author) {
+        const v = recordedVerdict(latest);
+        if (!v) { markLaunched(name); specCheck(repo, issues.refOf(latest)); skip(name, "not-ready", "spec check running"); continue; }
+        if (v.verdict === "hold" && askOf(latest)) { skip(name, "not-ready", v.problems, "spec check held"); continue; }
       }
       const { spec, rerun } = goalBrief(item, name, jobs);
       let tier: Tier | null | undefined;
       if (rate) {
         const p = await needsPlan(repo, item, spec, rate);
-        if (paused()) { recordHold(name, "paused", "paused"); skipped.push(`${name}: paused`); continue; }
+        if (paused()) { skip(name, "pause", "paused"); continue; }
         if ("plan" in p) { plan(repo, item.id); planned.push(name); continue; }
         tier = p.tier;
       }
       const why = await start(repo, name, ref, spec, tier);
-      if (why) { recordHold(name, "start", why); skipped.push(`${name}: ${why}`); }
+      // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
+      if (why) skip(name, LIVE_REFUSAL.test(why) ? "live-cap" : "not-ready", why);
       else { recordHold(name, "started", "started"); started.push(name); clearCap(name); if (rerun) clearRerun(name); }
     } finally {
       release();
@@ -394,7 +391,7 @@ export async function correctionsStep(now = Date.now()): Promise<{ signals: numb
  * The tick's triage of open issues that are not goals (triage.ts). Only the tick runs it: a dispatch does not wait on it.
  */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
-  if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
+  if (gates({ only: ["pause", "probe"] })) return { triaged: {}, skipped: [] };
   const t = await triageOpen(sandboxRepos(), doneChecker());
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.build || t.triaged.plan) dispatchDetached();
@@ -403,7 +400,7 @@ export async function triageStep(): Promise<{ triaged: Counts; skipped: string[]
 
 /**
  * The tick's director (director.ts): one run for each new Ask, those triage just raised among them. Under the pause
- * alone, as the firefighter: a decision can clear a hold. An error is logged, never thrown.
+ * alone, as the firefighter: a decision can let a goal start. An error is logged, never thrown.
  */
 export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
   if (gates({ only: ["pause"] })) return [];
@@ -414,7 +411,7 @@ export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
 
 /**
  * The tick's firefighter (firefighter.ts): a snapshot every tick, and one run only when it holds
- * something new. Under the pause alone: the hold is what it clears. An error is logged, never thrown.
+ * something new. Under the pause alone. An error is logged, never thrown.
  */
 export async function firefighterStep(ports?: Ports): Promise<Fired | null> {
   if (gates({ only: ["pause"] })) return null;
@@ -488,18 +485,18 @@ export const probeDue = (now = Date.now()) => { const p = lastProbe(); return !p
  * planner run live. The gates that stop each step leave its work out, because each gate has its own line.
  */
 export function stalled(jobs = allJobs(), lists = reader()): string[] {
-  if (gates({ only: ["pause", "hold"], jobs })) return [];
+  if (gates({ only: ["pause"], jobs })) return [];
   const runs = jobs.flat();
   const live = (kind: string) => runs.some((e) => e.run.kind === kind && isLive(e.folder));
   const done = doneChecker(), redOf = mainRed();
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
-  if (!liveRuns(runs) && !live("plan") && !gates({ only: ["day", "awaiting"], jobs })) {
+  if (!liveRuns(runs) && !live("plan")) {
     for (const { repo, item } of openGoals(lists)) {
       const facts = goalFacts(repo, item, jobs);
       if (goalDecision({ ...facts, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
     }
   }
-  if (!live("triage") && !live("plan") && !gates({ only: ["live", "day"], jobs })) {
+  if (!live("triage") && !live("plan") && !gates({ only: ["live-cap"], jobs })) {
     for (const repo of sandboxRepos()) {
       const doc = lists.list(repo.key);
       for (const item of doc?.items ?? []) {
@@ -651,17 +648,17 @@ function runLines(now: number): string[] {
   }
   for (const e of fresh) updateRun(e.folder, { shown: true });
   const today = runsToday(now);
-  if (lines.length) lines.push(`runs in the last 24 hours: ${today.length} of ${DAY_CAP()}, ${money(spentToday(now))} at the API price${paused() ? "; the factory is paused" : ""}`);
+  if (lines.length) lines.push(`runs in the last 24 hours: ${today.length}, ${money(spentToday(now))} at the API price${paused() ? "; the factory is paused" : ""}`);
   return lines;
 }
 
 /**
  * Triage one issue at once, as `aleph issue add`, a note that answers an Ask, and a
- * worker's follow-ups do. The gates are the dispatch's: paused, the hold, a failed probe, the
- * day cap. A gated issue is left for the tick.
+ * worker's follow-ups do. The gates are the factory's: paused, a failed probe. A gated issue is
+ * left for the tick.
  */
 export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Counts; skipped: string[] }> {
-  if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
+  if (gates({ only: ["pause", "probe"] })) return { triaged: {}, skipped: [] };
   const t = await triageIssue(repo, id, doneChecker());
   factoryLog(`triaged ${repo.key}-${id}: ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.build || t.triaged.plan) dispatchDetached();
@@ -669,12 +666,12 @@ export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Coun
 }
 
 /**
- * Plan one goal at once, as `aleph plan` does, under the dispatch's gates: not paused, no hold,
- * no failed probe, a factory repo. When it ends, the children or the fallback worker start from
+ * Plan one goal at once, as `aleph plan` does, under the factory's gates: not paused, no
+ * failed probe, a factory repo. When it ends, the children or the fallback worker start from
  * a dispatch of their own.
  */
 export async function planNow(repo: Repo, id: number): Promise<{ planned: string[] } | { why: string }> {
-  const gated = gates({ only: ["pause", "hold", "probe"] });
+  const gated = gates({ only: ["pause", "probe"] });
   if (gated) return { why: gated.why };
   if (!repo.sandbox) return { why: `${repo.key} is not a factory repo` };
   const r = await runPlan(repo, id);
@@ -689,13 +686,8 @@ const landGoal = (name: string) => refusal(async () => { await (await land(name,
 const dropGoal = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
 const recheckGoal = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
 
-/** `aleph dispatch`: one dispatch of the ready goals. A failed probe starts no run. */
+/** `aleph dispatch`: one dispatch of the ready goals. A failed probe starts no goal: it is the third gate. */
 export async function runDispatch() {
-  const g = gates({ only: ["pause", "probe"] });
-  if (g?.gate === "probe") {
-    factoryLog("the last probe failed; no run started");
-    return { started: [], skipped: [g.why] };
-  }
-  // `ALEPH_RESCUE=off` leaves a stuck or failed run to hold the factory, as before the safe default actions; for tests of the hold.
+  // `ALEPH_RESCUE=off` leaves a stuck or failed run as it is: its open job keeps its goal not ready.
   return dispatchIssues(startGoal, baselineChecks, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
 }

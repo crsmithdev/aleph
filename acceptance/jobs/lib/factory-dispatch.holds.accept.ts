@@ -21,11 +21,11 @@ test("a goal that waits on an open after gets one hold record; a second dispatch
   await dispatchIssues(start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
   const recs = () => readHolds([name]);
   expect(recs()).toHaveLength(1);
-  expect(recs()[0]).toMatchObject({ name, kind: "waits_on", text: expect.stringContaining(`after fac-${blocker}`) });
+  expect(recs()[0]).toMatchObject({ name, kind: "not-ready", text: expect.stringContaining(`after fac-${blocker}`) });
   expect(Number.isNaN(Date.parse(recs()[0].at))).toBe(false);
   await dispatchIssues(start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
   expect(recs()).toHaveLength(1);
-  expect(readHolds([`fac-${blocker}`]).map((r) => r.kind)).toEqual(["start"]);
+  expect(readHolds([`fac-${blocker}`]).map((r) => r.kind)).toEqual(["not-ready"]);
   await change(blocker, (item) => issues.setStatus(item, "done"));
   mk(`fac-${blocker}`, "build", "passed", { commit: "abc" });
   await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
@@ -43,7 +43,7 @@ test("a goal that a busy file holds gets one hold record", async () => {
   await dispatchIssues(async () => null);
   const recs = readHolds([`fac-${second}`]);
   expect(recs).toHaveLength(1);
-  expect(recs[0]).toMatchObject({ kind: "busy", text: `waits for fac-${first}: both change the busy file jobs/busy.ts` });
+  expect(recs[0]).toMatchObject({ kind: "busy-file", text: `waits for fac-${first}: both change the busy file jobs/busy.ts` });
 });
 
 describe("each skip in the goal loop gets one hold record", () => {
@@ -59,7 +59,7 @@ describe("each skip in the goal loop gets one hold record", () => {
       delete process.env.ALEPH_GOAL_LOCK_WAIT_MS;
       release();
     }
-    expect(readHolds([name])).toMatchObject([{ kind: "locked", text: "another dispatch is starting it" }]);
+    expect(readHolds([name])).toMatchObject([{ kind: "not-ready", text: "another dispatch is starting it" }]);
   });
 
   test("a ref that is not a goal", async () => {
@@ -70,7 +70,7 @@ describe("each skip in the goal loop gets one hold record", () => {
       return null;
     }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
     expect(out.skipped).toEqual([`fac-${second}: not a goal`]);
-    expect(readHolds([`fac-${second}`])).toMatchObject([{ kind: "not-a-goal", text: "not a goal" }]);
+    expect(readHolds([`fac-${second}`])).toMatchObject([{ kind: "not-ready", text: "not a goal" }]);
   });
 
   test("a goal skipped because the factory paused while its rating ran", async () => {
@@ -78,6 +78,6 @@ describe("each skip in the goal loop gets one hold record", () => {
     const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, async () => { setPaused(true); return null; }, undefined, undefined, () => {});
     setPaused(false);
     expect(out.skipped).toEqual([`fac-${id}: paused`]);
-    expect(readHolds([`fac-${id}`])).toMatchObject([{ kind: "paused", text: "paused" }]);
+    expect(readHolds([`fac-${id}`])).toMatchObject([{ kind: "pause", text: "paused" }]);
   });
 });

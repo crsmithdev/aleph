@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { setPaused } from "./factory.ts";
 import { saveProbe } from "./factory-status.ts";
-import { gates, health, hold } from "./factory-status.ts";
+import { gates, health } from "./factory-status.ts";
 import { waitingToLand } from "./landing.ts";
 import type { Run } from "./ledger.ts";
 import { startKept } from "./unit.ts";
@@ -15,36 +15,27 @@ afterEach(teardown);
 const entry = (kind: string, state: string, reason?: string): any =>
   ({ id: `x-${kind}-${state}`, folder: join(ctx.base, "none", `${kind}-${state}`), run: { kind, job: "j1", name: "n1", repo: "fac", condition: state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
 
-test("gates returns the first reason, in the order pause, hold, probe, live cap, day cap, waiting", () => {
-  const stuck = [[entry("build", "stuck")]];
-  const order = () => gates({ jobs: stuck as any })?.gate;
-  Object.assign(process.env, { ALEPH_LIVE_CAP: "0", ALEPH_DAY_CAP: "0", ALEPH_AWAITING_CAP: "0" });
-  try {
-    setPaused(true);
-    saveProbe({ at: "2026-10-28T00:00:00Z", ok: false, failed: ["x"] });
-    expect(order()).toBe("pause");
-    setPaused(false);
-    expect(order()).toBe("hold");
-    expect(gates({ jobs: [] })).toMatchObject({ gate: "probe", why: "the sandbox probe at 2026-10-28T00:00:00Z failed: x" });
-    expect(health()).toContain("health: the sandbox probe at 2026-10-28T00:00:00Z failed: x");
-    saveProbe({ at: "2026-10-28T00:00:00Z", ok: true, failed: [] });
-    expect(gates({ jobs: [] })?.gate).toBe("live");
-    process.env.ALEPH_LIVE_CAP = "5";
-    expect(gates({ jobs: [] })).toMatchObject({ gate: "day", why: "cap of 0 runs in 24 hours" });
-    process.env.ALEPH_DAY_CAP = "100";
-    expect(gates({ jobs: [] })?.gate).toBe("awaiting");
-    process.env.ALEPH_AWAITING_CAP = "5";
-    expect(gates({ jobs: [] })).toBeNull();
-    // `only` leaves the others out.
-    process.env.ALEPH_DAY_CAP = "0";
-    expect(gates({ jobs: stuck as any, only: ["day"] })?.gate).toBe("day");
-  } finally {
-    delete process.env.ALEPH_AWAITING_CAP;
-  }
+test("gates returns the first factory gate, in the order pause, probe, live cap", () => {
+  const order = () => gates({ jobs: [] })?.gate;
+  process.env.ALEPH_LIVE_CAP = "0";
+  setPaused(true);
+  saveProbe({ at: "2026-10-28T00:00:00Z", ok: false, failed: ["x"] });
+  expect(order()).toBe("pause");
+  setPaused(false);
+  expect(gates({ jobs: [] })).toMatchObject({ gate: "probe", why: "the sandbox probe at 2026-10-28T00:00:00Z failed: x" });
+  expect(health()).toContain("health: the sandbox probe at 2026-10-28T00:00:00Z failed: x");
+  saveProbe({ at: "2026-10-28T00:00:00Z", ok: true, failed: [] });
+  expect(order()).toBe("live-cap");
+  process.env.ALEPH_LIVE_CAP = "5";
+  expect(gates({ jobs: [] })).toBeNull();
+  // `only` leaves the others out.
+  process.env.ALEPH_LIVE_CAP = "0";
+  expect(gates({ jobs: [], only: ["pause", "probe"] })).toBeNull();
+  expect(gates({ jobs: [], only: ["live-cap"] })?.gate).toBe("live-cap");
 });
 
-test("a land that failed 'job lock busy' does not hold the factory", () => {
-  expect(hold([[entry("build", "passed"), entry("land", "failed", "job lock busy")]])).toBeNull();
+test("a stuck or failed run stops no gate: its open job keeps only its own goal not ready", () => {
+  expect(gates({ jobs: [[entry("build", "stuck")]] as any })).toBeNull();
 });
 
 test("after a land that failed 'job lock busy' the passed agent run is waiting to land again", () => {
@@ -54,10 +45,9 @@ test("after a land that failed 'job lock busy' the passed agent run is waiting t
   expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
 });
 
-test("a next step the pause kept does not hold the factory, and the first dispatch after the resume starts it once", async () => {
+test("the first dispatch after the resume starts a next step the pause kept, once", async () => {
   const kept = mk("kept-1", "build", "failed", { failed: "test", next: "worker" }, { "paused-next": "worker\n" });
   mk("history-2", "build", "failed", { failed: "test", next: "worker" });
-  expect(hold()).toBeNull();
   const go: string[] = [];
   const step = async (_folder: string, run: Run, next: NonNullable<Run["next"]>) => { go.push(`${run.name} ${next}`); };
   expect(await startKept(step)).toEqual(["kept-1"]);
