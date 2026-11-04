@@ -19,7 +19,9 @@ export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0)
 export const count = (n) => Number(n).toLocaleString("en-US");
 
 /** `≈1.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */
-export const wkText = (wk) => (wk ? `\u2248${wk.pct < 0.05 ? "<0.1" : wk.pct.toFixed(1)}% wk` : "");
+/** A percent (0 to 100) as text: whole from 1%, one decimal from 0.05 to 1%, "<0.1%" above 0 and below 0.05, "–" for none. */
+export const pct = (v) => (v == null || Number.isNaN(v) ? "–" : v > 0 && v < 0.05 ? "<0.1%" : `${v < 1 ? v.toFixed(1) : Math.round(v)}%`);
+export const wkText = (wk) => (wk ? `\u2248${pct(wk.pct)} wk` : "");
 const WK_TIP = "An estimate of the share of the weekly plan limit: the cost times the rise in weekly % per dollar aleph saw spent since the last reset. Spend outside aleph (claude.ai chat) is not in the dollars, so it reads high.";
 /** The cost cell content (HTML): the weekly share first, with its tooltip, then the dollars. */
 export const costHtml = (cost, wk) => {

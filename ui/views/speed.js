@@ -1,13 +1,13 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { barRow, day, dur, hourLabel, esc, small, tile, when } from "../lib.js";
+import { barRow, day, dur, hourLabel, esc, pct, small, tile, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
 export const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 export const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)} h`;
-export const pctText = (w) => `${Math.round((w || 0) * 100)}%`;
+export const pctText = (w) => pct((w || 0) * 100);
 /** A percent of the weekly limit: one decimal, but a small nonzero value shows "<0.1%" rather than "0.0%". */
-export const weekText = (v) => (v > 0 && v < 0.05 ? "<0.1%" : `${v.toFixed(1)}%`);
+export const weekText = (v) => pct(v);
 
 /** The period an answer covers, in words. */
 export const period = (d) => PERIODS[d?.window] ?? PERIODS.week;
@@ -95,10 +95,10 @@ export function usageTile(s, link = {}, extra = "") {
   const cur = s.usage?.now;
   if (!cur) return tile({ k: "Weekly usage", v: "–", body: small("usage unknown") + extra, ...link });
   const p = pace(s);
-  const label = p ? `${Math.round(p.used)}% used, ${p.gone.toFixed(1)}% of the week gone` : `${Math.round(cur.seven_day)}% used`;
+  const label = p ? `${pct(p.used)} used, ${pct(p.gone)} of the week gone` : `${pct(cur.seven_day)} used`;
   const bar = `<div class="usebar" role="img" aria-label="${esc(label)}"><div style="width:${Math.min(100, cur.seven_day)}%"></div>${p ? `<i style="left:${p.gone}%"></i>` : ""}</div>`;
-  const notes = (p ? small(`${p.word} pace: ${p.gone.toFixed(1)}% of the week gone`) : "") + (cur.seven_day_resets_at ? small(`resets ${when(cur.seven_day_resets_at, new Date(s.now))}`) : "") + (usageAge(s) ? small(usageAge(s)) : "");
-  return tile({ k: "Weekly usage", v: `${Math.round(cur.seven_day)}%`, body: bar + notes + extra, ...link });
+  const notes = (p ? small(`${p.word} pace: ${pct(p.gone)} of the week gone`) : "") + (cur.seven_day_resets_at ? small(`resets ${when(cur.seven_day_resets_at, new Date(s.now))}`) : "") + (usageAge(s) ? small(usageAge(s)) : "");
+  return tile({ k: "Weekly usage", v: pct(cur.seven_day), body: bar + notes + extra, ...link });
 }
 
 /** A time on a Status card: "45s", "20m", "1h35m". */
@@ -110,7 +110,7 @@ export function cardDur(s) {
   if (m < 60) return `${m}m`;
   return `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, "0") + "m" : ""}`;
 }
-export const cardPct = (v) => (v === null || v === undefined ? "–" : `${Math.round(v * 100)}%`);
+export const cardPct = (v) => (v == null ? "–" : pct(v * 100));
 export const cardHours = (h) => (h === null || h === undefined ? "–" : `${h.toFixed(1)}h`);
 
 /**

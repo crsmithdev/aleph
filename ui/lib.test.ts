@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -139,4 +139,9 @@ test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a ba
   expect(when(new Date(2026, 9, 28, 14, 5), now)).toBe("10/28 14:05");
   expect(when(new Date(2025, 11, 3, 14, 5), now)).toBe("2025-12-03");
   expect(when("x")).toBe("");
+});
+
+test("pct shows whole percents, one decimal under 1%, <0.1% under 0.05 and – for none", () => {
+  expect([null, undefined, NaN].map(pct)).toEqual(["–", "–", "–"]);
+  expect([0.02, 0.5, 30, 2.5].map(pct)).toEqual(["<0.1%", "0.5%", "30%", "3%"]);
 });

@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, onTile, pageHead, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, onTile, pageHead, pct, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
 import { hours, lastPeriod, loadSpeed, usable, usageTile, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
@@ -10,7 +10,6 @@ export function roleRows(a) {
   const all = a.roles.reduce((n, r) => n + (r.hours ?? 0), 0);
   return a.roles.map((r) => ({ ...r, share: r.hours === null || !all ? null : (r.hours / all) * 100 }));
 }
-const shareText = (v) => (v === null ? "–" : `${v < 1 ? v.toFixed(1) : Math.round(v)}%`);
 
 function scorecard(s, a, key, w) {
   const f = s.factory, live = a && totals(a), on = (k) => ({ key: k, on: key === k });
@@ -22,7 +21,7 @@ function scorecard(s, a, key, w) {
 
 function roles(a) {
   const num = ["Runs", "Hours", "Share of hours", "p50"];
-  const rows = roleRows(a).map((r) => `<tr><td>${esc(r.name)}</td><td class="num">${r.runs}</td><td class="num">${r.hours === null ? "not timed" : esc(hours(r.hours))}</td><td class="num">${esc(shareText(r.share))}</td><td class="num">${esc(dur(r.p50))}</td><td class="wide">${esc(r.models.join(", ")) || "–"}</td></tr>`).join("");
+  const rows = roleRows(a).map((r) => `<tr><td>${esc(r.name)}</td><td class="num">${r.runs}</td><td class="num">${r.hours === null ? "not timed" : esc(hours(r.hours))}</td><td class="num">${esc(pct(r.share))}</td><td class="num">${esc(dur(r.p50))}</td><td class="wide">${esc(r.models.join(", ")) || "–"}</td></tr>`).join("");
   return dataTable(heads(["Role", ...num, "Models"], num), rows);
 }
 
