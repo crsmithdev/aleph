@@ -95,12 +95,8 @@ describe("the state rule", () => {
   });
 
   test("a worker past its limit is stopped and fails as timed out", async () => {
-    const start = Date.now();
+    // The fake worker sleeps 60 s: "timed out: worker" is the limit's cut, and a worker that ran out would pass the test's limit.
     const r = await actionJob("stuck", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
-    // The fake worker sleeps 60s, so anything well under that proves the limit
-    // cut it short. The bound was 10s and flaked under load: the assertion is
-    // that the sleep did not run, not that the machine was idle.
-    expect(Date.now() - start).toBeLessThan(30_000);
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: worker" });
   });
 

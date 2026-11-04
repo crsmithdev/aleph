@@ -25,6 +25,11 @@ describe("every transition dispatches at once", () => {
     await aleph(["dispatch"], on(env));
     return id;
   };
+  /** A dispatch has looked at every goal and ended: the detached ones first, then one in the foreground. What it did not start, it decided not to. */
+  const decided = async (extra: Record<string, string> = {}) => {
+    await until(() => !dispatching());
+    expect((await aleph(["dispatch"], on(extra))).code).toBe(0);
+  };
   const gates = new Set<string>();
   const open = (name: string) => { gates.add(name); return `hold ${gate(name)}`; };
   const ids: number[] = [];
@@ -52,7 +57,6 @@ describe("every transition dispatches at once", () => {
     }
     // A detached dispatch from this test may still hold a lock that the next test's dispatch meets.
     await until(() => !dispatching());
-    await Bun.sleep(300);
     rmSync(startLog, { force: true });
   }, 120_000);
 
@@ -60,7 +64,7 @@ describe("every transition dispatches at once", () => {
     const a = track(await add("holds the slot", open("slot-a"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
     await until(() => started().includes(`fac-${a}`));
     const b = track(await add("needs the slot", open("slot-b"), ["--labels", "goal"], { ALEPH_LIVE_CAP: "1" }));
-    await Bun.sleep(1500);
+    await decided({ ALEPH_LIVE_CAP: "1" });
     expect(started()).toEqual([`fac-${a}`]);
     // Drop the issue first: an open goal whose run is dropped starts again, and would keep the slot.
     await aleph(["issue", "drop", "fac", String(a), "slot test"]);
@@ -73,7 +77,7 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${a}`));
     await until(() => settled(a) && runs(a).some((r) => state(r).condition === "passed"));
     const b = track(await seed("waits on the first", open("land"), { kind: "goal", after: [`fac-${a}`] }));
-    await Bun.sleep(1000);
+    await decided();
     expect(started()).not.toContain(`fac-${b}`);
     const l = await aleph(["land", `fac-${a}`], on());
     expect(l.code).toBe(0);
@@ -83,7 +87,7 @@ describe("every transition dispatches at once", () => {
   test("a resume starts the goals that waited for it", async () => {
     await aleph(["pause"]);
     const x = track(await add("added while paused", open("resume"), ["--labels", "goal"]));
-    await Bun.sleep(1000);
+    await decided();
     expect(started()).toEqual([]);
     await aleph(["resume"], on());
     await until(() => started().includes(`fac-${x}`));

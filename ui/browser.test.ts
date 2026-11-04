@@ -100,7 +100,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("a timed refresh re-renders, except over an armed button", async () => {
     // Refresh every 200 ms: the shell reads the global setInterval when the route starts.
     // Each fetch waits 300 ms, so a refresh is in flight when the button is armed: its answer must not render over it.
-    await page.ev("(() => { const real = window.setInterval; window.setInterval = (f, ms) => real(f, Math.min(ms, 200)); const rf = window.fetch; window.fetch = (...a) => new Promise((r) => setTimeout(r, 300)).then(() => rf(...a)); })()");
+    await page.ev("(() => { const real = window.setInterval; window.setInterval = (f, ms) => real(f, Math.min(ms, 200)); const rf = window.fetch; window.fetch = (...a) => new Promise((r) => setTimeout(r, 300)).then(() => rf(...a)).finally(() => { window.fetched = (window.fetched ?? 0) + 1; }); })()");
     await page.go("#/issues");
     await page.go("#/");
     const mark = 'document.querySelector("#view > *").dataset.mark = "1"';
@@ -116,7 +116,9 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('document.querySelector("#view details[data-keep]").open')).toBe(true);
     await page.ev(`${buttons}.click()`);
     await page.ev(mark);
-    await Bun.sleep(1000);
+    // Two refreshes answered while the button is armed: neither rendered over it.
+    const n = await page.ev("window.fetched ?? 0");
+    await page.until(`(window.fetched ?? 0) >= ${n} + 2`);
     expect(await page.ev('[!!document.querySelector("#view button.act.ask"), document.querySelector("#view > *").dataset.mark]')).toEqual([true, "1"]);
     await page.reload(); // Takes the patched timer away.
   }, 30_000);

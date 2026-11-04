@@ -8,7 +8,7 @@ import { aleph, base, fakeLog, repo, setup, specFile, state, teardown } from "..
 beforeAll(() => {
   setup();
   const regs = JSON.parse(readFileSync(join(base, "repos.json"), "utf8"));
-  const check = (log: string) => ({ name: "slot", run: `echo "$(date +%s%N) start" >> ${log}; sleep 2; echo "$(date +%s%N) end" >> ${log}; echo "$ALEPH_TEST_PARALLEL" > ${log}.env` });
+  const check = (log: string) => ({ name: "slot", run: `echo "$ALEPH_TEST_PARALLEL" > ${log}.env` });
   regs.slotfac = { path: repo, sandbox: true, autoland: false, checks: [check(join(base, "slotfac.log"))] };
   writeFileSync(join(base, "repos.json"), JSON.stringify(regs));
 });

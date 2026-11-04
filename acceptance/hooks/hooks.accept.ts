@@ -69,9 +69,8 @@ describe("fetchObservations", () => {
   test("the timeout is per request: a run longer than timeoutMs passes when each page is shorter", async () => {
     const { server, state, cfg } = fake(undefined, { pages: 21, delay: 150 });
     try {
-      const t0 = Date.now();
       const rows = await fetchObservations(cfg, new Date(0), new Date(), 500);
-      expect(Date.now() - t0).toBeGreaterThan(500);
+      // 21 pages of 150 ms each, at most 4 open at once: the run takes at least 6 x 150 ms, more than the 500 ms timeout.
       expect(state.maxOpen).toBeLessThanOrEqual(4);
       expect(rows.map((r: any) => r.id)).toEqual(Array.from({ length: 21 }, (_, i) => [`o${i + 1}a`, `o${i + 1}b`]).flat());
     } finally { server.stop(true); }

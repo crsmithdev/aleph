@@ -1,7 +1,7 @@
 // The firefighter as code: one critical issue per failing commit, from a red baseline, a red CI or a failed probe,
 // and a rescue Ask on a land live past 30 minutes. No agent run starts.
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
@@ -9,6 +9,7 @@ import { readList, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "./ask.ts";
 import { ciStep, type GhRun } from "./ci.ts";
 import { saveProbe } from "./factory-status.ts";
+import { waitFor } from "../../tests/wait.ts";
 import { firefight, LOG_CHARS, type Ports } from "./firefighter.ts";
 import { loadRegistry } from "./ledger.ts";
 import { base, calls, fresh, key, run, useDirectorFixture } from "./director.fixture.ts";
@@ -103,7 +104,9 @@ test("a land live past 30 minutes sets one rescue Ask; a land live for 10 minute
     return p;
   });
   try {
-    await Bun.sleep(100);
+    // Live means the pid's cmdline holds the folder: wait until bash has it.
+    const live = (p: { pid: number }, folder: string) => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(folder); } catch { return false; } };
+    expect(await waitFor(() => procs.every((p, i) => live(p, [slow, quick][i])))).toBe(true);
     const one = await firefight(ports());
     expect(one!.asked).toEqual([`${key}-1`]);
     expect((await firefight(ports()))!.asked).toEqual([]);

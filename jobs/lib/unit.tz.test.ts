@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "./ledger.ts";
 import { checksInSandbox, runOnCommit } from "./checks.ts";
 import { checkSlot } from "./ledger.ts";
 import { fixture } from "../../tests/git-fixture.ts";
+import { waitFor } from "../../tests/wait.ts";
 
 // The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -55,15 +56,14 @@ test("checksInSandbox hands each step's process to onSpawn, so a drop can kill a
   sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
   const repo = { key: "r", path, setup: [], checks: [{ name: "slow", run: "sleep 60" }] } as unknown as Repo;
   const spawned: ReturnType<typeof Bun.spawn>[] = [];
-  const started = Date.now();
   const why = await checksInSandbox({
     folder: base, repo, changed: [], phase: () => {},
     onSpawn: (p) => { spawned.push(p); if (spawned.length > 1) setTimeout(() => p.kill("SIGKILL"), 200); },
   }, dir, "out/in.bundle", "refs/heads/main");
   // The setup step, the check, and the check's rerun after the failure.
   expect(spawned).toHaveLength(3);
+  // The rerun was killed: a check of `sleep 60` that ran out would pass the test's 20 s limit.
   expect(why).toMatchObject({ cause: "check", checkName: "slow", reason: "slow failed" });
-  expect(Date.now() - started).toBeLessThan(15_000);
 }, 20_000);
 
 /** A repo with one commit and a bundle of it in a fresh sandbox folder. */
@@ -139,8 +139,12 @@ test("runOnCommit waits for a check slot, and frees it after a run and after an 
   const free = await checkSlot();
   let done = false;
   const p = runOnCommit(repo, sha, "echo boom; exit 3").then((r) => { done = true; return r; });
-  await Bun.sleep(1500);
+  // The bundle is written just before the slot wait; the setup step, which writes setup.log, comes after it.
+  const runs = join(base, "runs");
+  const folder = () => (existsSync(runs) ? readdirSync(runs).find((d) => d.startsWith("accept-")) : undefined);
+  expect(await waitFor(() => { const f = folder(); return !!f && existsSync(join(runs, f, "out", "accept.bundle")); })).toBe(true);
   expect(done).toBe(false);
+  expect(existsSync(join(runs, folder()!, "checklog", "setup.log"))).toBe(false);
   free();
   expect((await p).code).toBe(3);
   (await checkSlot())();

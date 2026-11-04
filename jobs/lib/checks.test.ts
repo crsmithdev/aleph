@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addedLines, cloneAndSetup, keepGate, mutants, newCases, runChecks, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
+import { checkSlot } from "./ledger.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS", "ALEPH_CHECK_TIMEOUT"];
@@ -74,6 +75,24 @@ test("a second run that times out is a timeout", async () => {
   const r = await run(repo("a"), [{ code: 1 }, { code: 124, timedOut: true }]);
   expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "timed out: check a", timedOut: true }, results: [{ ok: false }] });
   expect(flakes()).toEqual([]);
+});
+
+test("a check waits for a free slot, and its time limit starts only once it holds one", async () => {
+  Object.assign(process.env, { ALEPH_CHECK_SLOTS: "1", ALEPH_CHECK_TIMEOUT: "7" });
+  const free = await checkSlot();
+  let freed = false;
+  const calls: { freed: boolean; limit: number }[] = [];
+  const exec: CheckExec = async (_check, out, limit) => { calls.push({ freed, limit }); writeFileSync(out, ""); return { code: 0, timedOut: false }; };
+  let reached!: () => void;
+  const atCheck = new Promise<void>((r) => { reached = r; });
+  const done = runChecks({ folder: base, repo: repo("a"), changed: [], phase: () => reached() }, exec);
+  await atCheck;
+  // exec, which applies the limit from its own start, is not called while the test holds the only slot.
+  expect(calls).toEqual([]);
+  freed = true;
+  free();
+  expect(await done).toBeNull();
+  expect(calls).toEqual([{ freed: true, limit: 7 }]);
 });
 
 test("exit code 124 without the clock is an ordinary failure", async () => {

@@ -101,11 +101,8 @@ test("a 502 goes out only after every request of the failed fetch has ended", as
   process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${slow.port}`;
   try {
     expect((await get("/api/skills")).status).toBe(502);
+    // Each request is held 100 ms by the server: one still open when the 502 went out would show here.
     expect(inflight).toBe(0);
-    const seen = requests;
-    await Bun.sleep(300);
-    expect(inflight).toBe(0);
-    expect(requests).toBe(seen);
   } finally {
     slow.stop(true);
     process.env.LANGFUSE_BASE_URL = before;

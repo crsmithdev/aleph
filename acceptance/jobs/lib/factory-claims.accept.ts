@@ -9,6 +9,7 @@ import { dispatchIssues } from "../../../jobs/lib/factory.ts";
 import { readRun, allRuns, lock } from "../../../jobs/lib/ledger.ts";
 import { ctx, sh, goal, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "../../../jobs/lib/factory.helpers.ts";
 import { askOf } from "../../../jobs/lib/ask.ts";
+import { waitFor } from "../../../tests/wait.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -129,7 +130,10 @@ test("two dispatches at once rescue one stuck job once", async () => {
   const name = `fac-${id}`;
   mk(name, "build", "stuck", { reason: "time box" });
   const f = fakes();
-  const slow = { ...f.rescue, drop: async (n: string, r: string) => { await Bun.sleep(300); return f.rescue.drop(n, r); } };
+  // The drop waits until the other dispatch is waiting for the job's rescue lock: a waiter leaves a `rescue-<repo>-<name>.new.*` directory.
+  const locks = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
+  const waiting = () => existsSync(locks) && readdirSync(locks).some((d) => d.startsWith(`rescue-fac-${name}.new.`));
+  const slow = { ...f.rescue, drop: async (n: string, r: string) => { expect(await waitFor(waiting)).toBe(true); return f.rescue.drop(n, r); } };
   await Promise.all([dispatchIssues(f.start, async () => null, f.land, slow, undefined, undefined, undefined, () => {}), dispatchIssues(f.start, async () => null, f.land, slow, undefined, undefined, undefined, () => {})]);
   expect(f.calls.filter((c) => c.startsWith("drop"))).toEqual([`drop ${name}`]);
 });

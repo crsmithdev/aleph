@@ -68,10 +68,10 @@ describe("obs hook", () => {
   });
   afterAll(() => { server.stop(); rmSync(spool, { recursive: true, force: true }); });
 
-  async function fire(payload: Record<string, unknown>) {
+  async function fire(payload: Record<string, unknown>, extra: Record<string, string> = {}) {
     const proc = Bun.spawn(["bun", join(HOOKS, "obs.ts")], {
       stdin: new TextEncoder().encode(JSON.stringify({ session_id: session, cwd: "/tmp/proj", ...payload })),
-      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool, ALEPH_ENV: "test" },
+      env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool, ALEPH_ENV: "test", ...extra },
       stdout: "pipe", stderr: "pipe",
     });
     const code = await proc.exited;
@@ -112,11 +112,13 @@ describe("obs hook", () => {
   });
 
   test("tools nest under the turn in its trace with real duration; Stop completes the same turn span", async () => {
-    const pre = await fire({ hook_event_name: "PreToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" } });
+    // Each hook reads the clock once; ALEPH_NOW puts the two reads 250 ms apart.
+    const t0 = Date.now();
+    const at = (ms: number) => ({ ALEPH_NOW: new Date(t0 + ms).toISOString() });
+    const pre = await fire({ hook_event_name: "PreToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" } }, at(0));
     expect(pre.code).toBe(0);
     const before = posted.length;
-    await Bun.sleep(120);
-    await fire({ hook_event_name: "PostToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" }, tool_response: "a\nb" });
+    await fire({ hook_event_name: "PostToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" }, tool_response: "a\nb" }, at(250));
     expect(posted.length).toBe(before + 1);
     const tool = lastSpans()[0];
     expect(tool.name).toBe("Bash");
@@ -127,7 +129,7 @@ describe("obs hook", () => {
     expect(attr(tool, "langfuse.environment")).toEqual({ stringValue: "test" });
     expect(attr(tool, "langfuse.trace.name")).toEqual({ stringValue: "proj" });
     const durationMs = Number(BigInt(tool.endTimeUnixNano) - BigInt(tool.startTimeUnixNano)) / 1e6;
-    expect(durationMs).toBeGreaterThan(100);
+    expect(durationMs).toBe(250);
 
     await fire({ hook_event_name: "PostToolUseFailure", prompt_id: "p1", tool_name: "Skill", tool_use_id: "t2", tool_input: { skill: "aleph:interview" }, tool_error: "boom" });
     const failed = lastSpans()[0];
@@ -135,7 +137,8 @@ describe("obs hook", () => {
     expect(failed.status).toEqual({ code: 2, message: "boom" });
     expect(attr(failed, "langfuse.observation.level")).toEqual({ stringValue: "ERROR" });
 
-    await fire({ hook_event_name: "Stop", prompt_id: "p1", last_assistant_message: "done", cwd: "/tmp/proj/.worktrees/x" });
+    // The turn started in an earlier test, before t0, so it is longer than 250 ms.
+    await fire({ hook_event_name: "Stop", prompt_id: "p1", last_assistant_message: "done", cwd: "/tmp/proj/.worktrees/x" }, at(250));
     const turn = lastSpans()[0];
     expect(turn.name).toBe("turn");
     expect(turn.traceId).toBe(turnTraceIdFor("p1"));
@@ -145,7 +148,7 @@ describe("obs hook", () => {
     expect(attr(turn, "langfuse.observation.output")).toEqual({ stringValue: "done" });
     expect(attr(turn, "langfuse.trace.output")).toEqual({ stringValue: "done" });
     expect(attr(turn, "langfuse.trace.name")).toEqual({ stringValue: "proj" }); // a worktree cwd does not rename the trace
-    expect(BigInt(turn.endTimeUnixNano) - BigInt(turn.startTimeUnixNano)).toBeGreaterThan(BigInt(100_000_000));
+    expect(BigInt(turn.endTimeUnixNano) - BigInt(turn.startTimeUnixNano)).toBeGreaterThanOrEqual(BigInt(250_000_000));
   });
 
   test("StopFailure completes the turn as an error carrying the API message", async () => {
