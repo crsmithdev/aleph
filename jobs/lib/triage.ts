@@ -17,13 +17,15 @@ import { git } from "./git.ts";
 import { withMainClone } from "./main-clone.ts";
 import { TRIAGE_CAP, TRIAGE_TRIES } from "./settings.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
+import { addParts, checkChildren, CHILD_RULES, fitTitles, type Child } from "./plan.ts";
 
 /** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */
 export const TRIAGE_MODEL = OPUS_MODEL;
 
 export type Route =
   | { route: "build"; spec: string; after: string[] }
-  | { route: "plan"; spec: string; after: string[] }
+  /** `children` are the parts triage wrote, or why they fail the planner's check: then the issue builds from `spec` as one run. */
+  | { route: "plan"; spec: string; after: string[]; children: Child[] | string }
   | { route: "close"; reason: string }
   | { route: "done"; commit: string; reason: string }
   | { route: "ask"; ask: Ask }
@@ -55,7 +57,7 @@ export function parseRoute(output: string): Route | string {
       const body = field("spec") && withoutRequest(field("spec")!);
       if (!body) return `${raw.route} without a spec`;
       const after = (Array.isArray(raw.after) ? raw.after : typeof raw.after === "string" ? raw.after.split(",") : []).map((x: unknown) => String(x).trim()).filter((x: string) => REF.test(x));
-      return raw.route === "build" ? { route: "build", spec: body, after } : { route: "plan", spec: body, after };
+      return raw.route === "build" ? { route: "build", spec: body, after } : { route: "plan", spec: body, after, children: checkChildren(raw.children) };
     }
     case "close": { const reason = field("reason"); return reason ? { route: "close", reason } : "close without a reason"; }
     case "ask": {
@@ -132,7 +134,9 @@ Reply with one JSON object and nothing else, with one of these routes:
   ## Oracle (the checks that tell it is done)
 
   The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the issues that must be done before this one starts; leave it out when none.
-- {"route": "plan", "spec": "<spec>", "after": [...]}: the issue is too large for one run. The fields are as for "build". A planner splits it into parts, and if it cannot, the issue builds from "spec".
+- {"route": "plan", "spec": "<spec>", "after": [...], "children": [{"title": "<title>", "body": "<child spec>", "waits_on": [<optional numbers of earlier children, from 1>]}]}: the issue is too large for one run. "spec" and "after" are as for "build", and "spec" is the whole goal. "children" splits it into 2 to 6 parts: each is work one factory run can do alone, in one run of under an hour, and together they do the whole goal. Each "body" is a spec in the format above, with all three sections non-empty. When the children fail the check, the issue builds from "spec" as one run. Return "plan" only when one run cannot do the work: a small change that touches files in several folders is still one "build".
+
+  ${CHILD_RULES.replace(/\n\n/g, "\n\n  ")}
 - {"route": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
 - {"route": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work; no worker runs.
 - {"route": "ask", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "after": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
@@ -163,14 +167,16 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
     if (typeof noted === "string") throw new Error(`flake not noted: ${noted}`);
     tracker = noted.id;
   }
-  const applied: Applied = v.route === "live" ? "ask" : v.route === "flake" ? "close" : v.route;
+  // A plan whose children fail the check builds from its spec as one run.
+  const applied: Applied = v.route === "live" ? "ask" : v.route === "flake" ? "close" : v.route === "plan" && typeof v.children === "string" ? "build" : v.route;
   let standing = false;
-  const ok = sort(repo, id, `triage ${ref}: ${applied}`, (item) => {
+  const ok = sort(repo, id, `triage ${ref}: ${applied}`, (item, doc) => {
     if (v.route === "build" || v.route === "plan") {
       item.spec = v.spec;
       if (v.after.length) item.fm.after = v.after;
-      if (v.route === "plan") item.fm.plan = "true";
       issues.note(item, `triage: ${v.route}${v.after.length ? `, after ${v.after.join(", ")}` : ""}`);
+      if (v.route === "plan" && typeof v.children === "string") issues.note(item, `triage: its parts fail the check (${v.children}); it builds from its spec as one run`);
+      else if (v.route === "plan") addParts(repo, doc, item, v.children as Child[], "triage", v.after);
     } else if (v.route === "done") {
       issues.setStatus(item, "done", undefined, v.reason);
       issues.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
@@ -263,6 +269,7 @@ async function triageItem(repo: Repo, item: issues.Issue, triaged: Counts, skipp
         }
         v.commit = sha.slice(0, 12);
       }
+      if (v.route === "plan" && typeof v.children !== "string") v.children = await fitTitles(v.children);
       const applied = apply(repo, item.id, v);
       if (applied) {
         triaged[applied] = (triaged[applied] ?? 0) + 1;

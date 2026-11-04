@@ -27,6 +27,8 @@ prompt=$(cat)
 echo "$PWD $*" >> "$FAKE_LOG"
 case $prompt in
   *VERDICT:goal*) echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
+  *VERDICT:parts*) echo '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","after":["tri-9"],"children":[{"title":"[Big] Do the first half","body":"## Goal\\nHalf one.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"},{"title":"[Big] Do the second half of the work and then merge it all into","body":"## Goal\\nHalf two.\\n## Edit surface\\ny.ts\\n## Oracle\\nbun test x.test.ts","waits_on":[1]}]}' ;;
+  *VERDICT:badparts*) echo '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","children":[{"title":"only","body":"## Goal\\nx\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"}]}' ;;
   *VERDICT:close*) echo 'Looked at it. {"route":"close","reason":"duplicate of tri-1"}' ;;
   *VERDICT:chris*) echo '{"route":"ask","question":"Which plan, A or B?"}' ;;
   *VERDICT:structured*) echo '{"route":"ask","question":"A or B?","options":[{"label":"A","line":"do a"},{"label":"B","line":"do b"}],"recommended":"B","why":["one","two"]}' ;;
@@ -289,6 +291,41 @@ else echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n
       expect(issues.status(item(1))).toBe("open");
     } finally { process.env.ALEPH_TRIAGE_CMD = join(base, "smart"); }
   });
+});
+
+test("a plan route files triage's parts with no planner run; each part waits on what the issue waits on", async () => {
+  reset([{ title: "a", body: "VERDICT:parts" }]);
+  const t = await run();
+  expect(t.triaged).toEqual({ plan: 1 });
+  expect(runOf(1)!.route).toBe("plan");
+  const doc = readList(repo)!;
+  const parts = doc.items.filter((i) => i.id === 1 && i.sub !== undefined);
+  expect(parts.map((p) => p.title)).toEqual(["[Big] Do the first half", "[Big] Do the second half of the work and then merge it all"]);
+  expect(parts.map((p) => p.fm.after)).toEqual([["tri-9"], ["tri-9", `${repo.key}-1.1`]]);
+  expect(parts[1].spec).toContain("Half two.");
+  expect(item(1).spec).toBe("");
+  expect(item(1).fm.plan).toBeUndefined();
+  expect(item(1).notes.at(-1)).toContain(`triage: split into ${repo.key}-1.1`);
+  expect(calls()).toBe(1);
+  expect(readdirSync(join(base, "jobs")).some((d) => d.endsWith("-plan"))).toBe(false);
+});
+
+test("a plan route whose parts fail the check builds from its spec as one run", async () => {
+  reset([{ title: "a", body: "VERDICT:badparts" }]);
+  const t = await run();
+  expect(t.triaged).toEqual({ build: 1 });
+  expect(runOf(1)!.route).toBe("build");
+  expect(item(1).spec).toContain("All of it.");
+  expect(item(1).fm.plan).toBeUndefined();
+  expect(readList(repo)!.items.filter((i) => i.sub !== undefined)).toEqual([]);
+  expect(item(1).notes.at(-1)).toContain("triage: its parts fail the check (1 children, not 2 to 6); it builds from its spec as one run");
+});
+
+test("the prompt asks for the parts on a plan route and keeps a small change in several folders a build", () => {
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(p).toContain('"children": [{"title": "<title>", "body": "<child spec>"');
+  expect(p).toContain("a small change that touches files in several folders is still one \"build\"");
+  expect(p).toContain("do not chain children in a line by habit");
 });
 
 describe("the issue keeps its text; the goal gets the four sections", () => {

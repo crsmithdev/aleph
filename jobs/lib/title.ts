@@ -34,23 +34,36 @@ export async function writeLine(system: string, input: string, max: number): Pro
   }
 }
 
-const SYSTEM = `You turn one piece of text into an issue title. Reply with exactly one title: ${TITLE_RULE}. No quotes, no preamble.`;
+const system = (room: number) => `You turn one piece of text into an issue title. Reply with exactly one title: ${TITLE_RULE}.${room < TITLE ? ` It must fit in ${room} characters.` : ""} No quotes, no preamble.`;
 
-/** The source with each leading `<words>: ` removed, cut to 60 characters at a word boundary, with no final period. */
-export function cutTitle(source: string): string {
+/** A part's leading `[Group] `, or "". */
+const GROUP = /^\[[^\]]*\] /;
+
+/** The source with each leading `<words>: ` removed, cut to `max` characters at a word boundary, with no final period. */
+export function cutTitle(source: string, max = TITLE): string {
   let t = source.trim();
   for (let m = /^[^:]*: /.exec(t); m; m = /^[^:]*: /.exec(t)) t = t.slice(m[0].length).trim();
   t = t.replace(/: /g, " ");
-  if (t.length > TITLE) {
-    const head = t.slice(0, TITLE + 1);
+  if (t.length > max) {
+    const head = t.slice(0, max + 1);
     const i = head.lastIndexOf(" ");
-    t = (i > 0 ? head.slice(0, i) : head.slice(0, TITLE)).trim();
+    t = (i > 0 ? head.slice(0, i) : head.slice(0, max)).trim();
   }
   return t.replace(/[.\s]+$/, "");
 }
 
+/** `group` and the model's title for `rest` in the room `group` leaves, when `titleProblem` accepts it, else `group` and `cutTitle(rest)`. */
+async function fit(group: string, rest: string): Promise<string> {
+  const room = TITLE - group.length;
+  const t = (await writeLine(system(room), rest, 200)).trim().replace(/\.$/, "");
+  return t && !titleProblem(group + t, { part: group !== "" }) ? group + t : group + cutTitle(rest, room);
+}
+
 /** The model's title for `source`, less a final period, when `titleProblem` accepts it, else `cutTitle(source)`. It never throws. */
-export async function writeTitle(source: string): Promise<string> {
-  const t = (await writeLine(SYSTEM, source, 200)).trim().replace(/\.$/, "");
-  return t && !titleProblem(t) ? t : cutTitle(source);
+export const writeTitle = (source: string): Promise<string> => fit("", source);
+
+/** As `writeTitle`, for a part: a leading `[Group] ` of the source stays at the front, and the model writes only the rest. */
+export function writePartTitle(source: string): Promise<string> {
+  const group = GROUP.exec(source.trim())?.[0] ?? "";
+  return fit(group, source.trim().slice(group.length));
 }

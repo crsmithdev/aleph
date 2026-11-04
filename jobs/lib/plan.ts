@@ -1,9 +1,10 @@
 /**
- * The planner: before a large goal's first worker run, one read-only
- * `claude -p` run on the planner tier splits the issue into 2 to 6 goals
- * `<repo>-<n>.1 .. .k`, each with its own oracle. The goals are filed in the
- * work store with the issue's `goals`, in one commit. Each run is a job in the
- * ledger, kind `plan`, `on` the issue. See docs/specs/2026-10-26-seed-factory.md, "Planner".
+ * The planner: before the first worker run of a large goal that did not go through
+ * triage, one read-only `claude -p` run on the planner tier splits the issue into 2 to 6
+ * parts `<repo>-<n>.1 .. .k`, each with its own oracle. The parts are filed in the
+ * work store in one commit. Each run is a job in the ledger, kind `plan`, `on` the
+ * issue. Triage writes the parts of the issues it routes `plan` itself, with the same
+ * check (`checkChildren`) and filing (`addParts`). See docs/specs/2026-10-26-seed-factory.md, "Planner".
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -11,7 +12,7 @@ import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { missingSections, surfacePaths } from "./goal-spec.ts";
-import { cutTitle } from "./title.ts";
+import { writePartTitle } from "./title.ts";
 import { note, partsOf, readList, writeList } from "../../todo/lib/store.ts";
 import { askPartDropped } from "./ask.ts";
 import { allRuns, lock, type Repo } from "./ledger.ts";
@@ -29,18 +30,30 @@ export const PLAN_TRIES = 2;
 export type Rate = (spec: string) => Promise<Tier | null>;
 export interface Child { title: string; spec: string; waits: number[] }
 
-/** The top-level folders the paths of a goal's Edit surface name. A file at the repo's root names none. */
+/** Top-level folders that hold only docs or tests: an Edit surface that also names one of them is not wider for it. */
+const SIDE_FOLDERS = new Set(["docs", "acceptance", "tests", "test", "__tests__"]);
+/** A test file, which sits beside the code it tests. */
+const TEST_FILE = /\.(test|spec|accept)\.[a-z]+$|(^|\/)test_[\w-]+\.py$|_test\.(go|py)$/;
+
+/**
+ * The top-level folders the paths of a goal's Edit surface name. A file at the repo's root names none,
+ * and neither does a docs or test folder (SIDE_FOLDERS) or a test file.
+ */
 export function topFolders(body: string): string[] {
   const found = new Set<string>();
   for (const path of surfacePaths(body)) {
     const top = path.split("/");
-    if (top.length > 1 && top[0] !== "" && top[0] !== "." && top[0] !== "..") found.add(top[0]);
+    if (top.length < 2 || top[0] === "" || top[0] === "." || top[0] === ".." || SIDE_FOLDERS.has(top[0]) || TEST_FILE.test(path)) continue;
+    found.add(top[0]);
   }
   return [...found].sort();
 }
 
 /** A goal is large when the router rates it `opus` or its Edit surface spans more than one top-level folder. */
 export const isLarge = (tier: Tier | null, body: string): boolean => tier === "opus" || topFolders(body).length > 1;
+
+/** Whether triage routed the issue `build` or `plan`: then triage has judged its size, and the large-goal rating does not plan it. */
+export const triaged = (item: issues.Issue): boolean => item.notes.some((n) => /: triage: (build|plan)\b/.test(n));
 
 const COMMANDS = new Set(["bun", "bunx", "npm", "npx", "pnpm", "yarn", "node", "deno", "make", "pytest", "python", "python3", "cargo", "go", "bash", "sh", "git", "tsc", "jest", "vitest", "ruby", "rake", "mvn", "gradle"]);
 
@@ -64,14 +77,21 @@ export function parsePlan(output: string, least = 2): Child[] | string {
     try { raw = JSON.parse(s); break; } catch {}
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
-  const list = raw.children;
+  return checkChildren(raw.children, least);
+}
+
+/**
+ * The check of a `children` list, from the planner or from triage: `least` to 6 children, each with a title,
+ * a body with the goal's sections and a real Oracle, and waits on earlier children only. The children, or why they fail.
+ * A title that breaks the title rule is kept: `fitTitles` rewrites it before the parts are filed.
+ */
+export function checkChildren(list: unknown, least = 2): Child[] | string {
   if (!Array.isArray(list)) return "no children list";
   if (list.length < least || list.length > 6) return `${list.length} children, not ${least} to 6`;
   const children: Child[] = [];
   for (const [i, c] of list.entries()) {
     const n = i + 1;
-    // A title that breaks the rule is cut to fit, not a reason to discard the plan.
-    const title = cutTitle(text(c?.title) ?? ""), body = text(c?.body);
+    const title = text(c?.title)?.replace(/\s+/g, " "), body = text(c?.body);
     if (!title) return `child ${n} has no title`;
     if (!body) return `child ${n} has no body`;
     const missing = missingSections(body);
@@ -83,6 +103,15 @@ export function parsePlan(output: string, least = 2): Child[] | string {
   }
   return children;
 }
+
+/** The children, each title that breaks the title rule rewritten by the title writer, its `[Group] ` kept. */
+export const fitTitles = (children: Child[]): Promise<Child[]> =>
+  Promise.all(children.map(async (c) => (issues.titleProblem(c.title, { part: true }) ? { ...c, title: await writePartTitle(c.title) } : c)));
+
+/** The rules for the children's titles and waits, in the planner's prompt and in triage's. */
+export const CHILD_RULES = `Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each child's Goal says only what that child does, not the work of another child: the checks of each child are written from its own Goal.
+
+"waits_on" lists the earlier children (by their place in the list, the first is 1) that must land first. A child waits only when it changes a file an earlier child changes, or uses what an earlier child adds. Children that wait on nothing run at once, side by side, so give a wait for each of those two reasons and for no other: do not chain children in a line by habit. Split the work so that most children can run side by side.`;
 
 export interface Episode { title: string; body: string }
 
@@ -129,14 +158,14 @@ ${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 mo
 
 {"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
 
-Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each body is in the goal format, with all three sections non-empty:
+Each body is in the goal format, with all three sections non-empty:
   ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
 
 The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. There is no \`aleph check\` command: never name one. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`.
 
-"waits_on" lists the earlier children (by their place in the list, the first is 1) that must land first, because they change the same files or this child builds on them. Children that wait on nothing run at once, side by side, so give a wait whenever two children share a file.
+${CHILD_RULES}
 `;
 }
 
@@ -153,20 +182,28 @@ function planRefusal(repo: Repo, doc: issues.Doc, issue: issues.Issue): string |
   return null;
 }
 
+/**
+ * Add the parts `<repo>-<id>.k` to the issue in a write, which clears its `plan` and its spec. Each part waits on the
+ * earlier parts it names and on `after`, what the issue itself waits on. The note names `who` split it. The parts' refs.
+ */
+export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, children: Child[], who: string, after: string[] = []): string[] {
+  const refs: string[] = [];
+  for (const c of children) {
+    const part = issues.addPart(doc, issue, { title: c.title, spec: c.spec, after: [...after, ...c.waits.map((w) => refs[w - 1])] });
+    refs.push(`${repo.key}-${issues.refOf(part)}`);
+  }
+  delete issue.fm.plan;
+  issue.spec = "";
+  issues.note(issue, `${who}: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are done`);
+  return refs;
+}
+
 /** File the parts `<repo>-<id>.k` as one commit, which clears `plan` and the issue's spec. The parts' ids, or null when the issue is no longer one to plan. */
 export function fileChildren(repo: Repo, id: number | string, children: Child[]): string[] | null {
   const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} parts`, (doc) => {
     const issue = issues.find(doc, id);
     if (!issue || planRefusal(repo, doc, issue)) return null;
-    const refs: string[] = [];
-    for (const c of children) {
-      const part = issues.addPart(doc, issue, { title: c.title, spec: c.spec, after: c.waits.map((w) => refs[w - 1]) });
-      refs.push(`${repo.key}-${issues.refOf(part)}`);
-    }
-    delete issue.fm.plan;
-    issue.spec = "";
-    issues.note(issue, `planner: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are done`);
-    return refs;
+    return addParts(repo, doc, issue, children, "planner");
   });
   return w?.value ?? null;
 }
@@ -197,13 +234,13 @@ export type Plan = { plan: true } | { tier: Tier | null };
 
 /**
  * The decision before an issue's worker run, for a caller that holds its lock: a
- * top-level issue that has had no run, that is large, and that has had fewer than
+ * top-level issue that triage did not route, that has had no run, that is large, and that has had fewer than
  * PLAN_TRIES failed planner runs, and whose spec has a `## Goal`, is planned; any other gets a worker run at the rated tier.
  */
 export async function needsPlan(repo: Repo, item: issues.Issue, spec: string, rate: Rate): Promise<Plan> {
   const tier = await rate(spec);
-  // Parts are one level: a part is never planned.
-  if (item.sub !== undefined || noGoal(item) || jobsNamed(`${repo.key}-${issues.refOf(item)}`).length || !isLarge(tier, item.spec)) return { tier };
+  // Parts are one level: a part is never planned. Triage's `build` is one run, and its `plan` wrote the parts or failed to.
+  if (item.sub !== undefined || noGoal(item) || triaged(item) || jobsNamed(`${repo.key}-${issues.refOf(item)}`).length || !isLarge(tier, item.spec)) return { tier };
   return badPlans(repo, item.id) >= PLAN_TRIES ? { tier } : { plan: true };
 }
 
@@ -268,7 +305,7 @@ async function plan(repo: Repo, id: number): Promise<Planned> {
         const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
         const plan = parsePlan(await withMainClone(repo, "plan-", (dir) => run.ask(input, dir)), parts.length ? 1 : 2);
         if (typeof plan === "string") { why = `malformed plan: ${plan}`; noAnswer(why); continue; }
-        const refs = fileChildren(repo, id, plan);
+        const refs = fileChildren(repo, id, await fitTitles(plan));
         if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }
         end("planned");
         return { planned: refs };

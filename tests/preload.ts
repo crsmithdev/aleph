@@ -27,6 +27,8 @@ const vars: Record<string, string> = {
   ALEPH_WORKER_TOKEN: join(dir, "worker-token"),
   // No test reaches the live model through the monitor's reader: `false` fails, and a test that wants a reply gives a fake.
   ALEPH_MONITOR_CMD: "false",
+  // Nor through the title writer: `false` fails, so a title that breaks the rule is cut.
+  ALEPH_RULE_CMD: "false",
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
 

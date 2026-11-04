@@ -6,7 +6,7 @@ import { readList, writeList, partsOf } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
-import { isLarge, parsePlan, realOracle, runPlan, topFolders, type Child } from "./plan.ts";
+import { fitTitles, isLarge, parsePlan, prompt, realOracle, runPlan, topFolders, type Child } from "./plan.ts";
 import type { Tier } from "./route.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
 
@@ -138,20 +138,68 @@ test("a plan run with the cause no-answer and a free reason counts as a try", as
   expect(item(id).notes.at(-1)).toContain("planner: no plan passed the check in 2 runs");
 });
 
-test("the check: sections, the oracle, the waits and the count", () => {
+test("the check: sections, the oracle, the waits and the count", async () => {
   expect(parsePlan(THREE)).toHaveLength(3);
   expect(parsePlan(ONE)).toBe("1 children, not 2 to 6");
   expect(parsePlan(NO_ORACLE)).toBe("child 2 has no Oracle");
   expect(parsePlan(reply([child("a"), { ...child("b"), waits_on: [2] }]))).toBe("child 2 waits on something that is not an earlier child");
   expect(parsePlan(reply([child("a"), child("b", "it works")]))).toBe("child 2's Oracle names no command or test file");
   expect(parsePlan(reply([child("a"), child("b", "`aleph check tests`")]))).toBe("child 2's Oracle names no command or test file");
-  // A title that breaks the rule is cut to fit; a child with no Time box passes.
-  const cut = parsePlan(reply([child("a"), { ...child("b"), title: "Check foo: bar." }, { ...child("c"), title: `[Group] ${"a ".repeat(30)}` }, { title: "d", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Oracle\n`bun test`" }])) as Child[];
-  expect(cut.map((c) => c.title)).toEqual(["a", "bar", `[Group] ${"a ".repeat(25)}a`, "d"]);
+  // A title that breaks the rule passes the check; with no title writer, fitTitles cuts it and keeps the group. A child with no Time box passes.
+  const kept = parsePlan(reply([child("a"), { ...child("b"), title: "Check foo: bar." }, { ...child("c"), title: `[Group] ${"a ".repeat(30)}` }, { title: "d", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Oracle\n`bun test`" }])) as Child[];
+  expect(kept.map((c) => c.title)).toEqual(["a", "Check foo: bar.", `[Group] ${"a ".repeat(30).trim()}`, "d"]);
+  expect((await fitTitles(kept)).map((c) => c.title)).toEqual(["a", "bar", `[Group] ${"a ".repeat(25)}a`, "d"]);
   expect(realOracle("the new ui/plan.test.ts passes")).toBe(true);
   expect(topFolders("## Edit surface\n- `jobs/lib/plan.ts` (new)\n- ui/views/now.js\n- README.md\n## Oracle\nx/y")).toEqual(["jobs", "ui"]);
   expect(isLarge("sonnet", "## Edit surface\njobs/a.ts and jobs/b.ts")).toBe(false);
   expect(isLarge("opus", "")).toBe(true);
+  // Docs, acceptance and test files do not widen the Edit surface.
+  expect(isLarge("sonnet", "## Edit surface\n- ui/views/status.js\n- docs/specs/x.md\n- acceptance/ui/status.accept.ts\n- jobs/lib/a.test.ts\n- tests/fixture.ts")).toBe(false);
+  expect(isLarge("sonnet", "## Edit surface\n- ui/views/status.js\n- jobs/lib/a.ts")).toBe(true);
+});
+
+test("a part title that breaks the rule goes to the title writer, and the group stays at the front", async () => {
+  const cmd = join(base, "title");
+  const saved = process.env.ALEPH_RULE_CMD;
+  writeFileSync(cmd, `#!/bin/sh\necho "$*" >> "${join(base, "title-calls")}"\nprintf '%s' '{"result":"Merge the title and status line"}'\n`, { mode: 0o755 });
+  process.env.ALEPH_RULE_CMD = cmd;
+  try {
+    const long = "[Status head] Merge the Status title and status line into one head row";
+    const got = await fitTitles([{ title: long, spec: "s", waits: [] }, { title: "[Status head] Fine", spec: "s", waits: [] }]);
+    expect(got.map((c) => c.title)).toEqual(["[Status head] Merge the title and status line", "[Status head] Fine"]);
+    // One call, for the long title only, and the group is not in what the writer reads.
+    const calls = readFileSync(join(base, "title-calls"), "utf8").trim().split("\n");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEndWith("Merge the Status title and status line into one head row");
+    expect(calls[0]).toContain("It must fit in 46 characters");
+  } finally {
+    if (saved === undefined) delete process.env.ALEPH_RULE_CMD; else process.env.ALEPH_RULE_CMD = saved;
+  }
+});
+
+test("the prompt pushes against serial chains and keeps each Goal to its own child", () => {
+  const p = prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any);
+  expect(p).toContain("do not chain children in a line by habit");
+  expect(p).toContain("Each child's Goal says only what that child does");
+});
+
+test("a goal triage routed build starts one worker run, though its Edit surface spans two folders", async () => {
+  const id = addGoal("three", "jobs/lib/a.ts ui/views/b.js");
+  writeList({ key: "fac" }, "triage", (doc) => { issues.note(issues.find(doc, id)!, "triage: build"); return true; });
+  const { starts, out } = await dispatch("sonnet");
+  expect(starts).toEqual([[`fac-${id}`, "sonnet"]]);
+  expect(out.planned).toBeUndefined();
+  expect(planCalls()).toEqual([]);
+});
+
+test("a goal whose second folder is docs/ starts one worker run; one with a second code folder is planned", async () => {
+  const small = addGoal("three", "jobs/lib/a.ts docs/specs/x.md");
+  const { starts } = await dispatch("sonnet");
+  expect(starts).toEqual([[`fac-${small}`, "sonnet"]]);
+  expect(planCalls()).toEqual([]);
+  const big = addGoal("three", "jobs/lib/a.ts ui/views/b.js");
+  const second = await dispatch("sonnet");
+  expect(second.out.planned).toEqual([expect.stringContaining(`fac-${big} into`)]);
 });
 
 describe("the planner prompt's similar episodes", () => {

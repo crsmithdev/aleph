@@ -8,7 +8,7 @@ import { labels as itemLabels, readList, writeList, partsOf } from "../../../tod
 import * as issues from "../../../todo/lib/todo.ts";
 import { dispatchIssues, planNow } from "../../../jobs/lib/factory.ts";
 import { readRun, writeRun } from "../../../jobs/lib/ledger.ts";
-import { parsePlan, prompt, runPlan } from "../../../jobs/lib/plan.ts";
+import { fitTitles, parsePlan, prompt, runPlan } from "../../../jobs/lib/plan.ts";
 import type { Tier } from "../../../jobs/lib/route.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 
@@ -266,9 +266,10 @@ describe("the planner prompt's similar episodes", () => {
   });
 });
 
-test("a child title over 60 characters is cut to 60, and the prompt asks for a short one", () => {
+test("a child title over 60 characters is cut to 60 when the title writer fails, and the prompt asks for a short one", async () => {
   const long = child(`${"word ".repeat(12)}end`);
-  const got = parsePlan(reply([child("one"), long]));
+  const parsed = parsePlan(reply([child("one"), long]));
+  const got = Array.isArray(parsed) ? await fitTitles(parsed) : parsed;
   expect(Array.isArray(got) && got[1].title.length <= 60 && got[1].title.startsWith("word word")).toBe(true);
   expect(prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any)).toContain("at most 60 characters");
 });
