@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ciState, ciStep, redCi, type GhRun } from "./ci.ts";
+import { ciState, ciStep, redCi, type Gh, type GhRun } from "./ci.ts";
 import { health } from "./factory-status.ts";
 import { reds } from "./firefighter.ts";
 import type { Repo } from "./ledger.ts";
@@ -44,21 +44,24 @@ test("ciState: green when the latest finished run passed; red counts the failed 
   expect(ciState("fac", [run("failure", "c4", "2026-10-29T04:00:00Z")])).toMatchObject({ runs: 1, older: true });
 });
 
+/** A fake `gh` whose `run list` gives `runs`, or fails when they are null. */
+const listing = (runs: GhRun[] | null): Gh => () => (runs ? { ok: true, out: JSON.stringify(runs) } : { ok: false, out: "gh failed" });
+
 test("a red CI is a health line and one firefighter red at its latest failed head; a repo gh cannot read keeps its last state", () => {
   let runs: GhRun[] | null = [run("failure", "c4", "2026-10-29T04:00:00Z"), run("failure", "c3", "2026-10-29T03:00:00Z"), run("success", "c2", "2026-10-29T02:00:00Z")];
-  expect(ciStep([repo], () => runs).map((c) => c.sinceSha)).toEqual(["c3"]);
+  expect(ciStep([repo], listing(runs)).map((c) => c.sinceSha)).toEqual(["c3"]);
   expect(health()).toContain("health: fac CI on main has failed 2 runs in a row since 2026-10-29 03:00 UTC (c3): https://ci/c4");
-  const ci = () => reds({ ciLog: () => "" }).filter((r) => r.source === "ci").map((r) => r.commit);
+  const ci = () => reds({ gh: () => ({ ok: true, out: "" }) }).filter((r) => r.source === "ci").map((r) => r.commit);
   expect(ci()).toEqual(["c4"]);
   // A third failed run is a new failing head.
   runs = [run("failure", "c5", "2026-10-29T05:00:00Z"), ...runs];
-  ciStep([repo], () => runs);
+  ciStep([repo], listing(runs));
   expect(ci()).toEqual(["c5"]);
-  ciStep([repo], () => null);
+  ciStep([repo], listing(null));
   expect(redCi().map((c) => c.runs)).toEqual([3]);
-  ciStep([repo], () => [run("failure", "c9", "2026-10-29T09:00:00Z")]);
+  ciStep([repo], listing([run("failure", "c9", "2026-10-29T09:00:00Z")]));
   expect(health()).toContain("health: fac CI on main has failed at least 1 run in a row since before 2026-10-29 09:00 UTC (c9): https://ci/c9");
-  ciStep([repo], () => [run("success", "c6", "2026-10-29T06:00:00Z")]);
+  ciStep([repo], listing([run("success", "c6", "2026-10-29T06:00:00Z")]));
   expect(redCi()).toEqual([]);
   expect(health().some((l) => l.includes("CI on main"))).toBe(false);
 });

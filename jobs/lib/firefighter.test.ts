@@ -8,9 +8,10 @@ import * as store from "../../todo/lib/store.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "./ask.ts";
 import { ciStep, type GhRun } from "./ci.ts";
-import { firefight, LOG_CHARS, type Ports } from "./firefighter.ts";
+import { ciFailure, firefight, LOG_CHARS, type Ports } from "./firefighter.ts";
+import * as record from "./record.ts";
 import { loadRegistry } from "./ledger.ts";
-import { base, calls, fresh, key, run, useDirectorFixture } from "./director.fixture.ts";
+import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "./director.fixture.ts";
 
 useDirectorFixture();
 
@@ -21,7 +22,8 @@ const baselineRed = (commit: string) => write("baseline.json", JSON.stringify({ 
 const longLog = (what: string) => Array.from({ length: 500 }, (_, i) => `${what} line ${i}`).join("\n");
 const reds = () => readList({ key })!.items.filter((i) => store.areasOf(i).includes("red-main"));
 let ciCalls = 0;
-const ports = (): Ports => ({ ciLog: () => { ciCalls++; return longLog("ci"); } });
+const ports = (): Ports => ({ gh: () => { ciCalls++; return { ok: true, out: longLog("ci") }; } });
+const listing = (runs: GhRun[]) => () => ({ ok: true, out: JSON.stringify(runs) });
 const agentRuns = () => (existsSync(process.env.ALEPH_JOBS_DIR!) ? readdirSync(process.env.ALEPH_JOBS_DIR!).filter((d) => d.endsWith("-firefighter")) : []);
 
 test("a red baseline files exactly one critical issue for its commit across two ticks, with the log's tail", async () => {
@@ -46,9 +48,9 @@ test("a red CI on main, read through ciStep, files exactly one issue; the same c
   ciCalls = 0;
   const repo = loadRegistry()[key];
   const failed: GhRun[] = [{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }];
-  ciStep([repo], () => failed);
+  ciStep([repo], listing(failed));
   await firefight(ports());
-  ciStep([repo], () => failed);
+  ciStep([repo], listing(failed));
   await firefight(ports());
   baselineRed(B);
   await firefight(ports());
@@ -105,4 +107,78 @@ test("a land live past 30 minutes sets one rescue Ask; a land live for 10 minute
     for (const p of procs) p.kill();
     delete process.env.ALEPH_FIREFIGHTER_CMD;
   }
+});
+
+// The shape of `gh run view --log-failed` on 2026-11-04 (run 41907198470): job, step, then a stamped line or an
+// annotation's continuation.
+const P = "test\tRun bun run test:all\t";
+const CI_LOG = [
+  `${P}2026-11-04T20:30:21.5200000Z runner cores: 4`,
+  `${P}2026-11-04T20:30:21.5346387Z bun test v1.4.4 (38afee6c8) 2x PARALLEL`,
+  `${P}2026-11-04T20:30:21.8791958Z (pass) obs hook > scores the previous turn [71.02ms]`,
+  `${P}2026-11-04T20:30:44.7100874Z error: expect(received).toEqual(expected)`,
+  `${P}2026-11-04T20:30:44.7131692Z ##[error]- []`,
+  `${P}+ [`,
+  `${P}+   "docs/factory.md:171: says ALEPH_LIVE_CAP defaults to 4, the code has 1",`,
+  `${P}+ ]`,
+  `${P}2026-11-04T20:30:44.7141611Z (fail) the docs on this tree match the code > every default [35.17ms]`,
+  `${P}2026-11-04T20:31:12.9604249Z (fail) the docs on this tree match the code > every default [35.17ms]`,
+  `${P}2026-11-04T20:31:12.9605185Z  1011 pass`,
+  `${P}2026-11-04T20:31:12.9619497Z ##[error]Process completed with exit code 1.`,
+].join("\n");
+
+test("a CI issue quotes the run URL, the failing tests, their failure lines and the runner's cores, and its job record keeps the failure", async () => {
+  fresh([]);
+  const repo = loadRegistry()[key];
+  const url = "https://github.com/x/y/actions/runs/41907198470";
+  ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-04T20:30:11Z" }]));
+  const asked: string[][] = [];
+  await firefight({ gh: (_, args) => { asked.push(args); return { ok: true, out: CI_LOG }; } });
+  expect(asked).toEqual([["run", "view", "41907198470", "--log-failed"]]);
+  const failure = ciFailure(CI_LOG, 24);
+  expect(failure).toBe([
+    "Failing tests:\n(fail) the docs on this tree match the code > every default [35.17ms]",
+    "Failure lines:\n- []\n+ [\n+   \"docs/factory.md:171: says ALEPH_LIVE_CAP defaults to 4, the code has 1\",\n+ ]",
+    "Runner: 4 cores; this host: 24. To run as the runner does, pin the run to its cores: `taskset -c 0-3 <the test command>`.",
+  ].join("\n\n"));
+  const [it] = reds();
+  expect(it.request).toContain(url);
+  expect(it.request).toContain("(fail) the docs on this tree match the code > every default");
+  expect(it.request).toContain("ALEPH_LIVE_CAP defaults to 4, the code has 1");
+  expect(it.request).toContain("Runner: 4 cores");
+  expect(it.request).not.toContain("(pass)");
+  expect(record.read(`${key}-${it.id}`)!.ci).toMatchObject({ url, commit: B, failure: expect.stringContaining("(fail) the docs") });
+});
+
+test("a landed CI issue closes on a green CI at or after the land, waits on one before it, and goes back open on a red one", async () => {
+  fresh([]);
+  const repo = loadRegistry()[key];
+  const commit = (m: string) => { sh(repoPath(), "git", "commit", "-q", "--allow-empty", "-m", m); return sh(repoPath(), "git", "rev-parse", "HEAD"); };
+  const before = commit("before"), landed = commit("the fix"), after = commit("later");
+  let runId = 100;
+  const ci = (conclusion: string, sha: string) => ciStep([repo], listing([{ conclusion, status: "completed", headSha: sha, url: `https://github.com/x/y/actions/runs/${++runId}`, createdAt: "2026-11-04T21:00:00Z" }]));
+  const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }) };
+  ci("failure", before);
+  await firefight(gh);
+  const [it] = reds();
+  const ref = `${key}-${it.id}`;
+  record.update(ref, (r) => { r.ci = { ...r.ci!, landed }; });
+  // Green, but on a commit before the land: the land is not tested yet.
+  ci("success", before);
+  await firefight(gh);
+  expect(issues.status(reds()[0])).toBe("open");
+  // Red after the land: back open, the land's trailer no longer counts, and the note and the record quote the failure.
+  ci("failure", after);
+  await firefight(gh);
+  expect(issues.status(reds()[0])).toBe("open");
+  expect(reds()[0].fm.since).toBe(landed);
+  expect(reds()[0].notes.at(-1)).toContain("still red");
+  expect(reds()[0].notes.at(-1)).toContain("(fail) the docs on this tree match the code");
+  expect(record.read(ref)!.ci).toEqual({ url: "https://github.com/x/y/actions/runs/103", commit: after, failure: ciFailure(CI_LOG) });
+  // Landed again; green at the land itself: done.
+  record.update(ref, (r) => { r.ci = { ...r.ci!, landed: after }; });
+  ci("success", after);
+  await firefight(gh);
+  expect(issues.status(reds()[0])).toBe("done");
+  expect(reds()[0].notes.at(-1)).toContain(`green at ${after.slice(0, 7)}`);
 });

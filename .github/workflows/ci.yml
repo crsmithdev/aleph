@@ -12,4 +12,5 @@ jobs:
       - run: git config --global user.name ci && git config --global user.email ci@localhost
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
-      - run: bun run test:all
+      # The firefighter quotes this line in a CI issue: a failure that depends on the core count can then be reproduced.
+      - run: echo "runner cores: $(nproc)" && bun run test:all

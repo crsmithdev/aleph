@@ -28,6 +28,8 @@ import { causeOf, type Fate } from "./outcome.ts";
 import type { Baseline } from "./factory.ts";
 import { onMain } from "./status.ts";
 import { rescueWaitMs } from "./settings.ts";
+import { ciLine, redCi } from "./ci.ts";
+import { read as readRecord } from "./record.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
 
@@ -339,10 +341,13 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     // the goal with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
     const main: Baseline = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
     if (main.state === "unchecked" || main.state === "running") { factoryLog(`${name}: the claim waits: ${main.line}`); return; }
-    const red = main.state === "red" ? main.line : null;
+    // An issue a red CI started is met only when GitHub CI on main is green too: the checks here may pass where CI fails.
+    const ci = r.on ? readRecord(r.on)?.ci : undefined;
+    const ciRed = ci ? redCi().find((c) => c.repo === repo.key) : undefined;
+    const red = main.state === "red" ? main.line : ciRed ? ciLine(ciRed) : null;
     markRescued(last, key);
     if (red && earlier) return chris(`${name} says the goal is already met again (${claim}), but ${red}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
-    return take(claimStep(stuck, claim, red));
+    return take(claimStep(stuck, claim, red, ciRed && ci?.failure));
   }
   if (key === "duplicate") {
     markRescued(last, key);

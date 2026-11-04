@@ -36,6 +36,11 @@ export interface JobRecord {
   runs: RunRecord[];
   /** Oldest first. */
   events: JobEvent[];
+  /**
+   * The red GitHub CI on main the issue was filed for (firefighter.ts): its run, its commit and the failure the briefs
+   * quote. `landed` is the commit the job landed as: the issue closes when a CI run at or after it is green.
+   */
+  ci?: { url: string; commit: string; failure: string; landed?: string };
 }
 
 /** The folder of the records: `ALEPH_RECORDS_DIR`, else beside a ledger the environment names, else ~/.aleph/jobs. */

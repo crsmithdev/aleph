@@ -6,7 +6,7 @@
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { closeAndFile } from "../../todo/lib/store.ts";
+import { closeAndFile, note } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isAgentRun, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
@@ -21,6 +21,7 @@ import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
 import { runFile } from "./run-files.ts";
 import { writeTitle } from "./title.ts";
+import * as record from "./record.ts";
 
 /** What the repo's checks said about one commit. `why` is null when they pass; `log` is their part of checks.log. */
 export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
@@ -66,12 +67,17 @@ export function waitingToLand(jobs = allJobs()): string[] {
 /**
  * After the push: the job's issue done in the work store, and a new `check` issue for
  * an open manual check, titled `title`. Returns what happened to each, for the land log.
+ * An issue a red CI started (`ci` in its job record) stays open: its record keeps `commit`, the land, and the
+ * firefighter closes it when a CI run at or after the land is green (`settleCi`).
  */
-function closeItems(repo: Repo, run: Run, title = ""): { todo?: string; checkItem?: number } {
+function closeItems(repo: Repo, run: Run, title = "", commit?: string): { todo?: string; checkItem?: number } {
   const open = run.check === "open";
   const on = onOf(run);
   if (on === undefined && !open) return {};
-  const w = closeAndFile(repo, `todo: job ${run.name} landed`, on, `job ${run.name} landed`, open ? [{ title, kind: "check", request: `The manual check of run ${run.name}: ${run.say}` }] : []);
+  const ci = on !== undefined && run.on && commit ? record.read(run.on)?.ci : undefined;
+  if (ci) record.update(run.on!, (r) => { r.ci = { ...ci, landed: commit }; });
+  const w = closeAndFile(repo, `todo: job ${run.name} landed`, ci ? undefined : on, `job ${run.name} landed`, open ? [{ title, kind: "check", request: `The manual check of run ${run.name}: ${run.say}` }] : []);
+  if (ci) return { todo: note(repo, on!, `job ${run.name} landed as ${commit!.slice(0, 7)}; the issue is done when GitHub CI on main is green at or after it`) ?? "open until GitHub CI on main is green at or after the land", checkItem: w.ids[0] };
   return { todo: w.todo, checkItem: w.ids[0] };
 }
 
@@ -333,7 +339,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
           m.log(`already on main as ${pushed}`);
           finish(m, { outcome: { condition: "landed", commit: pushed }, code: 0, after: () => {
             // The land that pushed may have died before it closed the item.
-            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m));
+            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m), pushed);
             if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
             if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
             removeBranch(repo, m.run);
@@ -345,7 +351,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         const there = hit?.commit;
         if (there) {
           m.log(`item landed as ${there}`);
-          finish(m, { outcome: { condition: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }); removeBranch(repo, m.run); } });
+          finish(m, { outcome: { condition: "done", reason: `item landed as ${there}` }, code: 0, after: () => { closeItems(repo, { ...m.run, check: undefined }, "", there); removeBranch(repo, m.run); } });
           continue;
         }
         const tip = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${m.run.branch}`);
@@ -362,7 +368,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         phase("land");
         if (step("push", "push", "-q", "origin", `${result.tip}:refs/heads/${main}`).ok) {
           for (const { m, commit } of ok) {
-            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m));
+            const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m), commit);
             if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);
             if (checkItem !== undefined) m.log(`todo ${checkItem} holds the manual check`);
             removeBranch(repo, m.run);

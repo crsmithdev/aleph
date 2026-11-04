@@ -316,13 +316,13 @@ export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
   return { action: "drop", dropReason: `${text}. Run the goal again from the start.`, noted: `${text}: dropped, and the goal reruns once`, told: `${text}: the goal reruns` };
 }
 
-/** The step for a worker's claim that the goal is met, by `red`, the red line of main. */
-export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null): Step {
+/** The step for a worker's claim that the goal is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
+export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
   const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
   if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "already-met" };
   return {
     action: "drop",
-    rerun: `The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.`,
+    rerun: `The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.${failure ? ` The failure happens on GitHub CI: a pass on this host does not show the goal met. The CI failure:\n\n\`\`\`\n${failure}\n\`\`\`` : ""}`,
     noted: `${said}, but ${red}; dropped, and the goal reruns once`,
   };
 }

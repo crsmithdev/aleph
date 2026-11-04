@@ -6,17 +6,22 @@
  * repo has an open red-main issue, a new failing commit is one note on that issue, not a second issue. It also sets a
  * rescue Ask on each land live past 30 minutes (`askSlowLands`, rescue.ts). Stuck, failed and lost runs are the
  * rescue's (rescue.ts), and a goal that loops is the loop guard's (goal-decision.ts); their Asks are the director's.
+ * A CI issue's request quotes the failure (`ciFailure`), and its job record keeps it (`ci`), so a claim that the goal is
+ * already met reruns while CI on main is red (rescue.ts). Its land leaves it open; `settleCi` closes it when a CI run at
+ * or after the land is green, and sends it back when one is red.
  * Older ledgers hold runs of kind `firefighter`, from when this was an agent.
  */
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import { loadRegistry, type Repo } from "./ledger.ts";
-import { redCi, ciLine } from "./ci.ts";
+import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";
+import { git } from "./git.ts";
 import { factoryLog } from "./layout.ts";
+import * as record from "./record.ts";
 import { askSlowLands } from "./rescue.ts";
 import { runFile } from "./run-files.ts";
 
@@ -30,21 +35,19 @@ export type Source = "baseline" | "ci";
 const SOURCE_NAME: Record<Source, string> = { baseline: "the baseline checks", ci: "GitHub CI on main" };
 
 /** One failure the firefighter files: the repo, the failing commit, what failed, and its log, read only when it is filed. */
-export interface Red { repo: string; commit: string; source: Source; line: string; log: () => string }
+export interface Red { repo: string; commit: string; source: Source; line: string; log: () => string; url?: string }
 
 /** How the firefighter reads what is outside the factory directory. Tests replace it. */
-export interface Ports {
-  /** The failed jobs' log of the GitHub CI run at `url`. */
-  ciLog: (repo: Repo, url: string) => string;
-}
+export interface Ports { gh: Gh }
+export const defaultPorts: Ports = { gh };
 
-const ghLog = (repo: Repo, url: string): string => {
+/** The failed jobs' log of the GitHub CI run at `url`. */
+const ciLog = (ports: Ports, repo: Repo, url: string): string => {
   const id = /\/runs\/(\d+)/.exec(url)?.[1];
   if (!id) return `(no run id in ${url})`;
-  const r = spawnSync("gh", ["run", "view", id, "--log-failed"], { cwd: repo.path, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
-  return r.status === 0 ? r.stdout : `(gh run view ${id} --log-failed failed: ${(r.stderr || r.error?.message || `exit ${r.status}`).trim()})`;
+  const r = ports.gh(repo, ["run", "view", id, "--log-failed"]);
+  return r.ok ? r.out : `(gh run view ${id} --log-failed failed: ${r.out})`;
 };
-export const defaultPorts: Ports = { ciLog: ghLog };
 
 const read = (path: string): string => { try { return readFileSync(path, "utf8"); } catch { return ""; } };
 
@@ -52,6 +55,34 @@ const read = (path: string): string => { try { return readFileSync(path, "utf8")
 export function tail(text: string): string {
   const t = text.trimEnd().split("\n").slice(-LOG_LINES).join("\n");
   return t.length > LOG_CHARS ? `…${t.slice(t.length - LOG_CHARS + 1)}` : t;
+}
+
+const STAMP = /^\uFEFF?\d{4}-\d\d-\d\dT[\d:.]+Z ?/;
+
+/**
+ * The failure in a `gh run view --log-failed` log, short: the failing tests (`(fail)` lines), the error annotations
+ * (`##[error]` and the lines that continue one), and the runner's core count (the `runner cores: <n>` line the CI
+ * workflow prints) beside this host's. A log with neither tests nor annotations gives its tail.
+ */
+export function ciFailure(log: string, hostCores = availableParallelism()): string {
+  const fails = new Set<string>(), errors: string[] = [];
+  let cores: number | undefined, inError = false;
+  for (const raw of log.split("\n")) {
+    const l = raw.replace(/^[^\t]*\t[^\t]*\t/, "");
+    const stamped = STAMP.test(l), text = l.replace(STAMP, "").trimEnd();
+    if (stamped) inError = false;
+    const c = /^runner cores: (\d+)$/.exec(text);
+    if (c) cores = Number(c[1]);
+    if (text.startsWith("(fail) ")) fails.add(text);
+    else if (text.startsWith("##[error]") && !text.startsWith("##[error]Process completed")) { errors.push(text.slice(9)); inError = true; }
+    else if (inError && !stamped) errors.push(text);
+  }
+  const parts = [
+    fails.size ? `Failing tests:\n${[...fails].join("\n")}` : "",
+    errors.length ? `Failure lines:\n${errors.join("\n").trim()}` : "",
+    cores === undefined ? "" : `Runner: ${cores} cores; this host: ${hostCores}.${cores < hostCores ? ` To run as the runner does, pin the run to its cores: \`taskset -c 0-${cores - 1} <the test command>\`.` : ""}`,
+  ].filter(Boolean);
+  return fails.size || errors.length ? tail(parts.join("\n\n")) : tail(log);
 }
 
 /** The last non-empty lines of a log as one line of at most NOTE_CHARS. */
@@ -71,7 +102,7 @@ export function reds(ports: Ports = defaultPorts): Red[] {
   }
   for (const c of redCi()) {
     if (!keys.has(c.repo) || !c.sha) continue;
-    out.push({ repo: c.repo, commit: c.sha, source: "ci", line: ciLine(c), log: () => ports.ciLog(reg[c.repo], c.url) });
+    out.push({ repo: c.repo, commit: c.sha, source: "ci", line: ciLine(c), log: () => ciLog(ports, reg[c.repo], c.url), url: c.url });
   }
   return out;
 }
@@ -95,8 +126,9 @@ export function fileRed(r: Red): Filed | null {
   if ((store.reader().list(r.repo)?.items ?? []).some((i) => holds(i, r.commit))) return null;
   const repo = loadRegistry()[r.repo];
   if (!repo) return null;
-  const log = tail(r.log());
-  const request = `${mark(r.commit)}\nFailed: ${SOURCE_NAME[r.source]}\n${r.line}\n\nThe last ${LOG_LINES} lines of the log, at most ${LOG_CHARS} characters:\n\n\`\`\`\n${log || "(no log)"}\n\`\`\`\n`;
+  const log = r.source === "ci" ? ciFailure(r.log()) : tail(r.log());
+  const what = r.source === "ci" ? `The failure, from \`gh run view --log-failed\` of ${r.url}` : `The last ${LOG_LINES} lines of the log, at most ${LOG_CHARS} characters`;
+  const request = `${mark(r.commit)}\nFailed: ${SOURCE_NAME[r.source]}\n${r.line}\n\n${what}:\n\n\`\`\`\n${log || "(no log)"}\n\`\`\`\n`;
   const w = store.writeList(repo, `firefighter: ${SOURCE_NAME[r.source]} red at ${r.commit.slice(0, 7)}`, (doc): Filed | null => {
     if (doc.items.some((i) => holds(i, r.commit))) return null;
     const open = doc.items.filter((i) => issues.status(i) === "open" && isRedMain(i)).at(-1);
@@ -107,7 +139,44 @@ export function fileRed(r: Red): Filed | null {
     }
     return { ...at, filed: issues.add(doc, titleOf(r), { kind: "bug", priority: "critical", labels: ["red-main"], source: "agent", request }).id };
   }, true);
-  return w?.value ?? null;
+  const f = w?.value ?? null;
+  if (f && "filed" in f && r.source === "ci") record.update(`${r.repo}-${f.filed}`, (x) => { x.ci = { url: r.url!, commit: r.commit, failure: log }; });
+  return f;
+}
+
+/**
+ * The CI watch of a landed CI issue (`ci.landed` in its job record), from the CI state the tick saved: a green run at or
+ * after the land closes the issue; a red one sends it back, open with `since` at the land so the land's trailer no
+ * longer counts it done, with the failure in a note and the record. A run before the land, or a commit this clone does
+ * not have yet, waits. Returns the lines of what it did.
+ */
+export function settleCi(ports: Ports = defaultPorts): string[] {
+  const reg = loadRegistry();
+  const out: string[] = [];
+  for (const { key } of factoryRepos()) {
+    const c = ciOf(key), repo = reg[key];
+    if (!c || !repo) continue;
+    for (const i of store.reader().list(key)?.items ?? []) {
+      const ref = `${key}-${issues.refOf(i)}`;
+      const ci = issues.status(i) === "open" && isRedMain(i) ? record.read(ref)?.ci : undefined;
+      if (!ci?.landed || !git(repo.path, "merge-base", "--is-ancestor", ci.landed, c.sha).ok) continue;
+      if (c.ok) {
+        const why = store.close(repo, issues.refOf(i), `firefighter: GitHub CI on main is green at ${c.sha.slice(0, 7)} (${c.url}), at or after the land ${ci.landed.slice(0, 7)}: done`);
+        out.push(why ? `${ref} not closed: ${why}` : `${ref} done: CI green at ${c.sha.slice(0, 7)}`);
+        continue;
+      }
+      const failure = ciFailure(ciLog(ports, repo, c.url));
+      store.writeList(repo, `firefighter: ${ref} red on CI after its land`, (doc) => {
+        const item = issues.find(doc, issues.refOf(i));
+        if (!item) return null;
+        store.reopen(doc, item, ci.landed!);
+        return issues.note(item, `firefighter: GitHub CI on main is still red at ${c.sha.slice(0, 7)} (${c.url}), after the land ${ci.landed!.slice(0, 7)}: the goal runs again. The failure:\n\n\`\`\`\n${failure}\n\`\`\``);
+      });
+      record.update(ref, (x) => { x.ci = { url: c.url, commit: c.sha, failure }; });
+      out.push(`${ref} sent back: CI red at ${c.sha.slice(0, 7)} after its land`);
+    }
+  }
+  return out;
 }
 
 export interface Fired { filed: Filed[]; asked: string[] }
@@ -129,6 +198,7 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
       factoryLog(`firefighter: ${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}`);
     }
   }
+  try { for (const l of settleCi(ports)) factoryLog(`firefighter: ${l}`); } catch (e: any) { factoryLog(`firefighter: CI watch: failed: ${e?.message ?? e}`); }
   let asked: string[] = [];
   try { asked = await askSlowLands(now); } catch (e: any) { factoryLog(`firefighter: slow lands: failed: ${e?.message ?? e}`); }
   return { filed, asked };

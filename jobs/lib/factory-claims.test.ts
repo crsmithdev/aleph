@@ -9,6 +9,9 @@ import { readRun, writeRun, allJobs, allRuns, lock } from "./ledger.ts";
 import { ctx, goal, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
 import { askOf } from "./ask.ts";
 import { markRescued } from "./continuation.ts";
+import { ciStep } from "./ci.ts";
+import { loadRegistry } from "./ledger.ts";
+import * as record from "./record.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -32,6 +35,22 @@ for (const red of [false, true]) {
     }
   });
 }
+
+test("aleph-1206: the local checks pass but GitHub CI on main is red, so the claim on a CI issue does not close it, and the rerun quotes the CI failure", async () => {
+  const id = goal(["red-main"]);
+  const failure = "Failing tests:\n(fail) the docs on this tree match the code > every default\n\nRunner: 4 cores; this host: 24.";
+  record.update(`fac-${id}`, (r) => { r.ci = { url: "https://github.com/x/y/actions/runs/7", commit: "c1", failure }; });
+  const red = [{ conclusion: "failure", status: "completed", headSha: "c1", url: "https://github.com/x/y/actions/runs/7", createdAt: "2026-11-04T20:20:05Z" }];
+  ciStep([loadRegistry().fac], () => ({ ok: true, out: JSON.stringify(red) }));
+  claimed(`fac-${id}`, "Goal: Already met — jobs/lib/doc-claims.test.ts passes 6 of 6 on main\n");
+  const f = fakes();
+  await withChecks(f, async () => null);
+  expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
+  expect(issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+  expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
+  expect(f.specs[0]).toContain("GitHub CI");
+  expect(f.specs[0]).toContain(failure);
+});
 
 test("no commit, the item open, first time: dropped with no fate and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = goal();

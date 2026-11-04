@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { land } from "./landing.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
+import * as record from "./record.ts";
 import { both, dir, given, job, landLog, mainFiles, ports, pushes, queued, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
 
 useLandingFixture();
@@ -21,6 +22,23 @@ test("the check issue filed after a land takes the priority of the landed issue"
   const doc = store.readList(repo)!;
   expect(issues.status(issues.find(doc, 1)!)).toBe("done");
   expect(issues.find(doc, 2)!.fm.priority).toBe("critical");
+});
+
+test("a land of an issue a red CI started leaves it open and keeps the land's commit in its job record", async () => {
+  sh(dir, "git", "init", "-q", "--bare", "-b", "main", "items.git");
+  sh(dir, "git", "clone", "-q", "items.git", "items");
+  sh(join(dir, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
+  sh(join(dir, "items"), "git", "push", "-q", "origin", "main");
+  process.env.ALEPH_ISSUES = join(dir, "items");
+  store.writeList(repo, "start", (doc) => { issues.add(doc, "fix the red CI", { labels: ["red-main"] }); return true; }, true);
+  record.update("demo-1", (r) => { r.ci = { url: "https://github.com/x/y/actions/runs/7", commit: "c1", failure: "(fail) a test" }; });
+  const a = job("t1", [["t1.txt", "1\n"]], { on: "demo-1" });
+  const r = await land(a, repo, ports());
+  expect(r).toMatchObject({ code: 0, outcome: { condition: "landed" } });
+  const item = issues.find(store.readList(repo)!, 1)!;
+  expect(issues.status(item)).toBe("open");
+  expect(item.notes.at(-1)).toContain("done when GitHub CI on main is green at or after it");
+  expect(record.read("demo-1")!.ci!.landed).toBe((r.outcome as { commit: string }).commit);
 });
 
 test("a batch of three: one check call, one push, three commits, each with its own Job and Issue trailers", async () => {

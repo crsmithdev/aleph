@@ -14,16 +14,22 @@ import { layout } from "./layout.ts";
 export interface Ci { repo: string; ok: boolean; sha: string; url: string; since?: string; sinceSha?: string; runs?: number; older?: boolean }
 /** One run as `gh run list --json` gives it. */
 export interface GhRun { conclusion: string; status: string; headSha: string; url: string; createdAt: string }
-/** The runs of `repo`'s main, the latest first, or null when `gh` cannot read them. */
-export type Runs = (repo: Repo) => GhRun[] | null;
+/** A `gh` call in `repo`: its stdout when it exits 0, else its error. Every `gh` call of the CI watch goes through one; tests replace it. */
+export type Gh = (repo: Repo, args: string[]) => { ok: boolean; out: string };
 
 const dir = () => layout().factory;
 const file = () => join(dir(), "ci.json");
 
-const ghRuns: Runs = (repo) => {
-  const r = spawnSync("gh", ["run", "list", "--branch", repo.main, "--limit", "100", "--json", "conclusion,status,headSha,url,createdAt"], { cwd: repo.path, encoding: "utf8", timeout: 30_000 });
-  if (r.status !== 0) return null;
-  try { return JSON.parse(r.stdout); } catch { return null; }
+export const gh: Gh = (repo, args) => {
+  const r = spawnSync("gh", args, { cwd: repo.path, encoding: "utf8", timeout: 60_000, maxBuffer: 64 * 1024 * 1024 });
+  return r.status === 0 ? { ok: true, out: r.stdout } : { ok: false, out: (r.stderr || r.error?.message || `exit ${r.status}`).trim() };
+};
+
+/** The runs of `repo`'s main, the latest first, or null when `gh` cannot read them. */
+const ghRuns = (repo: Repo, call: Gh): GhRun[] | null => {
+  const r = call(repo, ["run", "list", "--branch", repo.main, "--limit", "100", "--json", "conclusion,status,headSha,url,createdAt"]);
+  if (!r.ok) return null;
+  try { return JSON.parse(r.out); } catch { return null; }
 };
 
 /** The CI state from `runs`, the latest first: only finished runs that passed or failed count. Null when there are none. */
@@ -43,10 +49,10 @@ const saved = (): Record<string, Ci> => {
 };
 
 /** Reads each repo's CI and saves it; a repo `gh` cannot read keeps what it had. Returns the red ones. */
-export function ciStep(repos: Repo[], runs: Runs = ghRuns): Ci[] {
+export function ciStep(repos: Repo[], call: Gh = gh): Ci[] {
   const all = saved();
   for (const repo of repos) {
-    const list = runs(repo);
+    const list = ghRuns(repo, call);
     const c = list && ciState(repo.key, list);
     if (c) all[repo.key] = c;
   }
@@ -54,6 +60,9 @@ export function ciStep(repos: Repo[], runs: Runs = ghRuns): Ci[] {
   writeFileSync(file(), JSON.stringify(all, null, 2) + "\n");
   return redCi();
 }
+
+/** The repo's CI on main as the last read saved it, or undefined. */
+export const ciOf = (repo: string): Ci | undefined => saved()[repo];
 
 /** The repos whose CI on main is red now. */
 export const redCi = (): Ci[] => Object.values(saved()).filter((c) => !c.ok);
