@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addNote, allJobs, batch, checkedBy, lookMinutes, goal, hasFile, latestFile, latestJob, notes, readFile, tailOf } from "./job.ts";
 import { isOpen, writeRun, type Run } from "./ledger.ts";
-import { asked, markAsked } from "./ask.ts";
+import { asked, markAsked, waitsForSpecEdit } from "./ask.ts";
 import { markRescued, rescued } from "./continuation.ts";
 
 let base: string;
@@ -60,7 +60,7 @@ describe("run-folder files", () => {
     expect(asked(first)).toBe(false);
     markAsked(first, "drop it?");
     expect(asked(first)).toBe(true);
-    expect(readFileSync(join(first.folder, "asked"), "utf8")).toBe("drop it?\n");
+    expect(waitsForSpecEdit(first)).toBeNull();
     expect(rescued(first)).toBe("");
     markRescued(first, "infra");
     expect(rescued(first)).toBe("infra");

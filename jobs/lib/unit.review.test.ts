@@ -7,7 +7,7 @@ import type { Runner } from "./checks.ts";
 import { nextBrief } from "./continuation.ts";
 import { git } from "./git.ts";
 import { outsideSurface } from "./goal-spec.ts";
-import { readRun, type Repo, type Run } from "./ledger.ts";
+import { readRun, type Repo, type Run, writeRun } from "./ledger.ts";
 import { branchPorts, reviewDiff, reviewPrompt, reviewRange } from "./unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";
 
@@ -37,7 +37,7 @@ beforeEach(() => {
   folder = join(root, "j1-run");
   mkdirSync(folder);
   writeFileSync(join(root, "j1", "spec.md"), "## Oracle\n- `bun test x.test.ts` passes.\n");
-  writeFileSync(join(folder, "state.json"), JSON.stringify(run));
+  writeRun(join(folder), run as any);
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
@@ -45,7 +45,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 const verdict = (runner: Runner) => {
   const base = git(repo.path, "rev-parse", "main").out;
   const ports = { ...branchPorts(folder, run, repo, base, "work", { changed: ["job.txt"], runner, review: async () => ({ reason: null }) }), checks: async () => ({ stop: null }) };
-  return workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, ports);
+  return workerVerdict({ earlier: [], done: 0, rounds: 2, facts: {}, checked: {} }, ports);
 };
 
 /** A fake `bun test` run: it writes `cases` (`<testcase>` elements of x.test.ts) as the JUnit report the command names. */

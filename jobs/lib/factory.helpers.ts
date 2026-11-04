@@ -65,7 +65,7 @@ export function mk(name: string, kind: Run["kind"], state: Run["condition"], ext
 }
 export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";
 export const notes = (id: number) => readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes.join("\n");
-export const ask = (id: number) => askOf(readList({ key: "fac" })!.items.find((i) => i.id === id)!);
+export const ask = (id: number) => askOf(`fac-${id}`);
 
 /** Fake actions that log their calls: a drop marks the run dropped, a recheck starts a passed recheck run. */
 export function fakes() {

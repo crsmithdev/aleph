@@ -34,6 +34,8 @@ for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
 // a test that sets one of them itself still gets the value it sets.
 delete process.env.ALEPH_JOB_ID;
 delete process.env.ALEPH_JOB_RUN;
+// The job records follow the test ledger (`<ALEPH_JOBS_DIR>/.records`), never a folder the shell names.
+delete process.env.ALEPH_RECORDS_DIR;
 // No check, worker or land in a test waits for the host's load: the admission's own tests give a fake load.
 process.env.ALEPH_LOAD_LIMIT = "Infinity";
 

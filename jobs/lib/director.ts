@@ -8,14 +8,15 @@
  * Code, not the model, holds the escalation list: those Asks get the director's case text and recommendation, and no
  * action. An Ask the director did not decide goes to Chris when its run ends: a failed run, a bad reply, or actions that
  * leave the Ask open all write case text. Each outcome is a `director:` line in tick.log (the Gates page log) and a
- * line in director.jsonl in the factory dir, the record that later runs read.
+ * `director` event in the job record of its item, the record that later runs read.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import * as jobRecord from "./record.ts";
 import { basename, dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
-import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask } from "./ask.ts";
+import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "./ask.ts";
 import { allRuns, isAgentRun, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { missingVerdict } from "./worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -28,7 +29,6 @@ import { missingSections } from "./goal-spec.ts";
 import { onMain, itemOnMain } from "./status.ts";
 import { writeRerun } from "./continuation.ts";
 import { explainLesson, proposals, type Lesson } from "./corrections.ts";
-import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { DIRECTOR_CAP, needsYouLog, vaultDir } from "./settings.ts";
 import { FABLE_MODEL } from "./agent-call.ts";
@@ -73,8 +73,8 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
   const out: Case[] = [];
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
-      if (issues.status(item) !== "open" || !store.awaitsChris(item)) continue;
-      const ask = askOf(item);
+      const ask = askOf(refIn(repo.key, item));
+      if (issues.status(item) !== "open" || !ask) continue;
       if (empty(ask)) out.push({ at: "item", on: `${repo.key}-${issues.refOf(item)}`, repo, item, ask });
     }
   }
@@ -122,18 +122,14 @@ export interface Decision {
   why?: string;
   applied: string[]; refused: string[]; run?: string;
 }
-const recordFile = () => join(factoryDir(), "director.jsonl");
-
-/** The director's decisions, oldest first. A bad line is skipped. */
+/** The director's decisions, oldest first: the `director` events of the job records. */
 export function readRecord(): Decision[] {
-  let text = "";
-  try { text = readFileSync(recordFile(), "utf8"); } catch { return []; }
-  return text.split("\n").filter(Boolean).flatMap((l) => { try { return [JSON.parse(l) as Decision]; } catch { return []; } });
+  return jobRecord.all().flatMap((r) => r.events.filter((e) => e.kind === "director").map((e) => e.data as Decision))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
 function record(d: Decision): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  appendFileSync(recordFile(), JSON.stringify(d) + "\n");
+  jobRecord.addEvent(d.on || d.ref, { at: d.at, kind: "director", what: `${d.reason}: ${d.outcome}`, data: d });
   const what = d.outcome === "decided"
     ? `decided: ${d.applied.join("; ") || "no action"}${d.refused.length ? `; refused ${d.refused.join("; ")}` : ""}`
     : `escalated: ${d.why ?? "undecided"}${d.refused.length ? `; refused ${d.refused.join("; ")}` : ""}`;
@@ -452,7 +448,7 @@ export function stillOpen(c: Case): boolean {
   if (c.at === "lesson") return proposals().some((l) => l.id === c.lesson.id && l.state === "proposed" && !l.situation?.trim());
   if (c.at === "item") {
     const item = store.reader().item(c.repo.key, idOf(c.item));
-    return !!item && issues.status(item) === "open" && store.awaitsChris(item) && sameAsk(askOf(item), c.ask);
+    return !!item && issues.status(item) === "open" && sameAsk(askOf(c.on), c.ask);
   }
   const now = readRun(c.entry.folder);
   return !!now && now.condition === "awaiting" && sameAsk(now.ask, c.ask);
@@ -461,14 +457,11 @@ export function stillOpen(c: Case): boolean {
 /** Write the text on the Ask, when the Ask is still the same one. Whether it was written. */
 export function writeCaseText(c: Case, t: Text): boolean {
   if (c.at === "item") {
-    const ref = issues.refOf(c.item);
-    const w = store.writeList(c.repo, `director ${c.on}`, (doc) => {
-      const item = issues.find(doc, ref);
-      if (!item || issues.status(item) !== "open" || !store.awaitsChris(item) || !sameAsk(askOf(item), c.ask)) return null;
-      setAsk(item, { ...askOf(item)!, ...t });
-      return true;
-    });
-    return w?.value === true;
+    const item = store.reader().item(c.repo.key, issues.refOf(c.item));
+    const now = askOf(c.on);
+    if (!item || issues.status(item) !== "open" || !now || !sameAsk(now, c.ask)) return false;
+    setAsk(c.on, { ...now, ...t });
+    return true;
   }
   if (c.at === "lesson") return explainLesson(c.lesson.id, c.lesson.sentence, t);
   const now = readRun(c.entry.folder);
@@ -578,7 +571,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     return why ? no(a, why) : done(a);
   }
   if (a.do === "answer" || a.do === "rerun") {
-    const ask = askOf(item);
+    const ask = askOf(refIn(repo.key, item));
     const waiting = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === n && waitsForSpecEdit(lastReal(j)));
     const refused = may("director", "answer", ask, waiting ? { waiting: waiting[0].run.name } : {});
     if (refused) return no(a, refused);

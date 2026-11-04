@@ -9,8 +9,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { awaitsChris, isSorted, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../todo/lib/store.ts";
-import { always, askNote, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
+import { isSorted, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../todo/lib/store.ts";
+import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -344,7 +344,7 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
       // An open item with an Ask (a proposal too) waits for Chris: an after-link to it would stall this issue on his answer.
       const waits = v.after.filter((r) => {
         const o = r.startsWith(`${repo.key}-`) ? issues.find(doc, r.slice(repo.key.length + 1)) : undefined;
-        return o !== undefined && issues.status(o) === "open" && awaitsChris(o);
+        return o !== undefined && issues.status(o) === "open" && awaitsChris(refIn(repo.key, o));
       });
       const after = v.after.filter((r) => !waits.includes(r));
       if (after.length) item.fm.after = after;
@@ -364,10 +364,10 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
       issues.note(item, `always: took the recommendation ${o.label}: ${o.line}${o.after ? ` (after ${o.after})` : ""}`);
       standing = true;
     } else {
-      setAsk(item, v.ask);
       issues.note(item, `intake: for Chris: ${askNote(v.ask)}`);
     }
   });
+  if (ok && v.route === "ask" && !standing) setAsk(ref, v.ask);
   if (ok && standing) logAlways("question", "recommended", ref);
   return ok ? v.route : null;
 }
@@ -376,9 +376,9 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
 function askFailed(repo: Repo, id: number, why: string): string | null {
   const ref = `${repo.key}-${id}`;
   const written = sort(repo, id, `intake ${ref}: failed`, (item) => {
-    setAsk(item, plainAsk("intake-failed", `Intake failed: ${why}`));
     issues.note(item, `intake: failed: ${why}`);
   });
+  if (written) setAsk(ref, plainAsk("intake-failed", `Intake failed: ${why}`));
   return written ? `${ref}: intake failed; asked Chris` : null;
 }
 

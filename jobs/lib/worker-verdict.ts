@@ -44,8 +44,10 @@ export interface NoVerdict { noVerdict: string }
 
 /** The branch facts the policy reads besides the ports. */
 export interface Branch {
-  /** The job's runs that were sent back before this one. Absent for a recheck, which has no fix rounds. */
+  /** The job's runs that were sent back before this one, for what they failed. */
   earlier?: Run[];
+  /** The job's fix rounds so far: `rounds` of its job record. Absent for a recheck, which has no fix rounds. */
+  done?: number;
   /** The most fix rounds a job gets. */
   rounds: number;
   /** What the run states already, such as its cost. */
@@ -73,9 +75,8 @@ function backCheck(stop: ChecksStop, check: string | undefined): string | null {
  * What a failed check adds to the stuck run: `failed` and `round`, which send it back, while fewer than `cap`
  * rounds are done; after that, a reason that counts the rounds. A run with no fix rounds (a recheck) gets nothing.
  */
-function checkBack(earlier: Run[] | undefined, check: string, reason: string, cap: number): Pick<Run, "failed" | "round"> | Pick<Run, "reason"> | Record<string, never> {
-  if (!earlier) return {};
-  const done = earlier.length;
+function checkBack(done: number | undefined, check: string, reason: string, cap: number): Pick<Run, "failed" | "round"> | Pick<Run, "reason"> | Record<string, never> {
+  if (done === undefined) return {};
   if (done < cap) return { failed: check, round: done };
   return cap > 0 ? { reason: `${reason} after ${done} fix rounds` } : {};
 }
@@ -87,36 +88,36 @@ const times = (n: number) => n === 1 ? "once" : n === 2 ? "twice" : `${n} times`
  * What follows a reviewer hold: a fix round (`round`) while fewer than `cap` rounds are done; else the run
  * waits for Chris with `reason`, which says how often the reviewer sent it back when it did.
  */
-function reviewHold(earlier: Run[] | undefined, reason: string, cap: number): { round: number } | { reason: string } {
-  if (earlier && earlier.length < cap) return { round: earlier.length };
+function reviewHold(done: number | undefined, earlier: Run[] | undefined, reason: string, cap: number): { round: number } | { reason: string } {
+  if (done !== undefined && done < cap) return { round: done };
   const back = earlier?.filter((r) => r.failed === "review").length ?? 0;
   return { reason: back ? `the reviewer sent it back ${times(back)}: ${reason.replace(/^reviewer:\s*/, "")}` : reason };
 }
 
 /** The verdict on a branch that its worker or a recheck left. */
 export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict> {
-  const { earlier, rounds } = b;
+  const { earlier, done, rounds } = b;
   const facts = { ...b.facts };
   // Verify: the checks, the doc claims, the keep-gate and the Oracle.
   const { stop, failed } = await p.checks();
   if (stop) {
     const check = backCheck(stop, failed);
     if (!check) return stopped(stop, facts);
-    const same = earlier && earlier.length < rounds ? p.repeatedFailure(check) : null;
+    const same = done !== undefined && done < rounds ? p.repeatedFailure(check) : null;
     if (same) return { outcome: { ...awaiting("question", same.question), question: same.question, ...stopFields(stop), ...facts }, code: 0 };
-    return stopped(stop, { ...facts, ...checkBack(earlier, check, stop.reason, rounds) });
+    return stopped(stop, { ...facts, ...checkBack(done, check, stop.reason, rounds) });
   }
   // After the checks, so a doc-claims failure leaves their runs and results as they were.
   const claims = p.docClaims();
-  if (claims) return stopped({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(earlier, "doc-claims", claims, rounds) });
+  if (claims) return stopped({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(done, "doc-claims", claims, rounds) });
   // A step with no verdict is stuck as `infra`: not a fix round; the rescue checks the branch again once, then asks.
   const kept = await p.keepGate();
   if (typeof kept === "object" && kept) return stopped({ cause: "infra", checkName: "keep-gate", reason: kept.noVerdict }, facts);
-  if (kept) return stopped({ cause: "check", checkName: "keep-gate", reason: kept }, { ...facts, ...checkBack(earlier, "keep-gate", kept, rounds) });
+  if (kept) return stopped({ cause: "check", checkName: "keep-gate", reason: kept }, { ...facts, ...checkBack(done, "keep-gate", kept, rounds) });
   Object.assign(facts, b.checked);
   const bad = await p.oracle();
   if (typeof bad === "object" && bad) return stopped({ cause: "infra", checkName: "oracle", reason: bad.noVerdict }, facts);
-  if (bad) return stopped({ cause: "check", checkName: "oracle", reason: bad }, { ...facts, ...checkBack(earlier, "oracle", bad, rounds) });
+  if (bad) return stopped({ cause: "check", checkName: "oracle", reason: bad }, { ...facts, ...checkBack(done, "oracle", bad, rounds) });
 
   // The reviewer.
   const stat = p.stat();
@@ -136,7 +137,7 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
     return { outcome: { condition: "passed", ...facts }, code: 0 };
   }
   if (rv.none) return { outcome: { ...awaiting("review", rv.reason, [stat]), cause: "reviewer", reason: rv.reason, stat, ...facts }, code: 0 };
-  const hold = reviewHold(earlier, rv.reason, rounds);
+  const hold = reviewHold(done, earlier, rv.reason, rounds);
   if ("round" in hold) return { outcome: { condition: "stuck", cause: "reviewer", reason: rv.reason, stat, ...facts, failed: "review", round: hold.round }, code: 1 };
   return { outcome: { ...awaiting("review", hold.reason, [stat]), cause: "reviewer", reason: hold.reason, stat, ...facts }, code: 0 };
 }

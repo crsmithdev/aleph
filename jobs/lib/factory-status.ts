@@ -4,8 +4,8 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
@@ -13,6 +13,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "./job.ts";
 import type { Bound, Gate } from "./goal-decision.ts";
 import { layout, readFactoryLog } from "./layout.ts";
+import * as record from "./record.ts";
 import { allRuns, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo } from "./ledger.ts";
 import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
@@ -22,8 +23,6 @@ import { LIVE_CAP, suiteBudgetSeconds } from "./settings.ts";
 export const factoryDir = () => layout().factory;
 
 const pauseFile = () => join(factoryDir(), "paused");
-
-export const holdsFile = () => join(factoryDir(), "holds.jsonl");
 
 /** One record of why a goal waits: `kind` is the gate that bound, or `started`. Records from before v6 name older kinds. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string }
@@ -35,30 +34,34 @@ const OLD_NOT_HELD = new Set(["open", "start", "done"]);
 export const stopsStart = (r: HoldRecord): boolean =>
   r.kind !== "started" && !OLD_NOT_HELD.has(r.kind) && !(r.kind === "not-ready" && /^(its job is |the item is already done$)/.test(r.text));
 
-/** Every record of the holds file, oldest first; a line that does not parse is skipped. */
+/** The hold records of a job record: its `hold` and `started` events. */
+const holdsOf = (r: record.JobRecord): HoldRecord[] =>
+  r.events.filter((e) => e.kind === "hold" || e.kind === "started")
+    .map((e) => ({ at: e.at, name: r.issue, kind: e.kind === "started" ? "started" : (e.data as { gate: string }).gate, text: e.what }));
+
+/** Every hold record of every job, oldest first. */
 export function allHolds(): HoldRecord[] {
-  let raw: string;
-  try { raw = readFileSync(holdsFile(), "utf8"); } catch { return []; }
-  const out: HoldRecord[] = [];
-  for (const line of raw.split("\n")) {
-    if (!line.trim()) continue;
-    try { out.push(JSON.parse(line) as HoldRecord); } catch { /* skip */ }
-  }
-  return out;
+  return record.all().flatMap(holdsOf).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-/** The records of the given goals, oldest first. */
+/** The hold records of the given goals, oldest first. */
 export function readHolds(names: string[]): HoldRecord[] {
-  const set = new Set(names);
-  return allHolds().filter((r) => set.has(r.name));
+  return [...new Set(names)].flatMap((n) => { const r = record.read(n); return r ? holdsOf(r) : []; })
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-/** Appends one record of why a goal waits (or, with kind `started`, that it no longer does), unless it repeats the name's last record. */
+/**
+ * Records why a goal waits (or, with kind `started`, that it no longer does) in its job record: an event, unless it
+ * repeats the last one, and `wait`, which a record that stops a start sets and any other clears.
+ */
 export function recordHold(name: string, kind: Gate | "started", text: string): void {
-  const last = readHolds([name]).at(-1);
-  if (last && last.kind === kind && last.text === text) return;
-  mkdirSync(factoryDir(), { recursive: true });
-  appendFileSync(holdsFile(), JSON.stringify({ at: new Date().toISOString(), name, kind, text }) + "\n");
+  const at = new Date().toISOString();
+  record.update(name, (r) => {
+    const last = holdsOf(r).at(-1);
+    if (last && last.kind === kind && last.text === text) return;
+    r.events.push(kind === "started" ? { at, kind: "started", what: text } : { at, kind: "hold", what: text, data: { gate: kind } });
+    r.wait = stopsStart({ at, name, kind, text }) ? { kind, reason: text, since: at } : null;
+  });
 }
 
 const DAY = 24 * 3600_000;
@@ -327,18 +330,15 @@ export function goalFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Dat
   };
 }
 
-const streakFile = (name: string) => join(factoryDir(), "streak", `${name}.txt`);
-/** Marks now as when the streak set an Ask on the goal's item. */
+/** Marks now as when the streak set an Ask on the goal's item: a `streak` event in its job record. */
 export function markStreak(name: string): void {
-  mkdirSync(dirname(streakFile(name)), { recursive: true });
-  writeFileSync(streakFile(name), new Date().toISOString() + "\n");
+  record.addEvent(name, { kind: "streak", what: "the no-commit streak set an Ask" });
 }
 
 /** When the streak last set an Ask on the goal's item (ms), or null. Runs before it no longer count. */
 const streakMark = (name: string): number | null => {
-  if (!existsSync(streakFile(name))) return null;
-  const t = Date.parse(readFileSync(streakFile(name), "utf8").trim());
-  return Number.isNaN(t) ? null : t;
+  const e = record.lastEvent(name, "streak");
+  return e ? Date.parse(e.at) : null;
 };
 
 /** How many of the goal's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
@@ -351,21 +351,19 @@ function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   return n;
 }
 
-const capFile = (name: string) => join(factoryDir(), "cap", `${name}.txt`);
-
-/** Marks that the cap's Ask was set for the goal. */
+/** Marks that the cap's Ask was set for the goal: a `cap` event in its job record. */
 export function markCap(name: string): void {
-  mkdirSync(dirname(capFile(name)), { recursive: true });
-  writeFileSync(capFile(name), new Date().toISOString() + "\n");
+  record.addEvent(name, { kind: "cap", what: "the run cap set an Ask" });
 }
 
 /** Clears the cap mark: a start has followed the Ask. */
 export function clearCap(name: string): void {
-  rmSync(capFile(name), { force: true });
+  if (capMarked(name)) record.addEvent(name, { kind: "cap-cleared", what: "a start followed the Ask" });
 }
 
-/** Whether the cap's Ask was set for the goal and no start has followed. */
-const capMarked = (name: string): boolean => existsSync(capFile(name));
+/** Whether the cap's Ask was set for the goal and no start has followed: its newest `cap` event has no `cap-cleared` after it. */
+const capMarked = (name: string): boolean =>
+  record.read(name)?.events.findLast((e) => e.kind === "cap" || e.kind === "cap-cleared")?.kind === "cap";
 
 /** How many agent runs of the goal started in the last 60 minutes. */
 function agentStartsInHour(repoKey: string, name: string, runs: Entry[], now: number): number {

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { readList, writeList } from "../todo/lib/store.ts";
 import { add, addPart } from "../todo/lib/todo.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { writeRun } from "../jobs/lib/ledger.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -33,11 +34,6 @@ beforeAll(async () => {
   writeFileSync(join(repo, "b.txt"), "main moved\n");
   sh(repo, "add", "."); sh(repo, "commit", "-qm", "main moves on");
   writeFileSync(join(base, "repos.json"), JSON.stringify({ r: { path: repo } }));
-  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "stuck" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
-    const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
-    mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", condition: "awaiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", ...extra }));
-  }
   // The work store, with issue 7 of `r` for the Wait button to set `after` on.
   const itemsRemote = join(base, "items.git"), items = join(base, "items");
   sh(base, "init", "-q", "--bare", "-b", "main", itemsRemote);
@@ -50,6 +46,11 @@ beforeAll(async () => {
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\nif [ "$3" = "no-such-reason" ]; then echo "no such reason" >&2; exit 1; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
   restoreEnv = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake });
+  for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "stuck" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
+    const folder = join(base, "jobs", `20261027-100000-r-${name}-agent`);
+    mkdirSync(folder, { recursive: true });
+    writeRun(join(folder), { kind: "build", condition: "awaiting", started: new Date(NOW).toISOString(), name, job: name, repo: "r", ...extra } as any);
+  }
   ({ server, stop, at } = await withServer({ warm: false }));
   writeList({ key: "r" }, "seed", (doc) => { for (let i = 1; i <= 9; i++) { add(doc, `issue ${i}`, i === 7 ? { spec: "Do it." } : {}); } for (const n of [6, 9]) addPart(doc, doc.items.find((x) => x.id === n && x.sub === undefined)!, { title: `goal ${n}`, spec: "x" }); return true; }, true);
 });

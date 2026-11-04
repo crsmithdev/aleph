@@ -2,10 +2,11 @@
  * `GET /api/events`: a server-sent stream. It sends a `change` event when a file that `/api/state` reads changes, and the
  * page then loads the view again. The event has no data. The watchers run only while a client is connected.
  */
-import { existsSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
+import { existsSync, mkdirSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
 import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/factory-status.ts";
 import { layout } from "../../jobs/lib/layout.ts";
+import { recordsDir } from "../../jobs/lib/record.ts";
 import type { Routes } from "../server.ts";
 
 /** Changes this close together send one event. */
@@ -38,14 +39,15 @@ function follow(dir: string, options: WatchOptions, counts: (file: string) => bo
   watchers.push(w);
 }
 
-/** A run's folder also holds its worker's whole file tree, so only the two files the page reads count. */
-export const countsInLedger = (file: string): boolean => /^[^/]+\/(state\.json|call\.md)$/.test(file);
+/** A job record counts; its temporary file does not, as the rename that puts it in place does. */
+export const countsInRecords = (file: string): boolean => file.endsWith(".json");
 /** The logs change on every line of output and the page does not show them. */
 export const countsInFactory = (file: string): boolean => !file.endsWith(".log");
 
 function start(): void {
-  const { store, ledger } = layout();
-  follow(ledger, { recursive: true }, countsInLedger);
+  const { store } = layout();
+  mkdirSync(recordsDir(), { recursive: true });
+  follow(recordsDir(), {}, countsInRecords);
   follow(factoryDir(), {}, countsInFactory);
   // Each issue write moves this ref; the page reads the issues from it.
   follow(join(store, ".git", "refs", "remotes", "origin"), {}, (file) => file === "main");

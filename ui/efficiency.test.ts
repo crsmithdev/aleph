@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { speed } from "./api/speed.ts";
@@ -8,6 +8,7 @@ import { withEnv } from "./test-server.ts";
 import { onTile } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import { fileIssue, issueFor, renderEfficiency, selection } from "./views/efficiency.js";
+import { writeRun } from "../jobs/lib/ledger.ts";
 // @ts-ignore plain JS shared with the page
 
 let base: string;
@@ -18,7 +19,7 @@ function run(job: string, r: Record<string, unknown>) {
   const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
   mkdirSync(dir, { recursive: true });
   // Each job is its own issue: g1 is fx-1.
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ job, name: `${job}-${n}`, told: true, repo: "fx", on: `fx-${job.slice(1)}`, ...r }));
+  writeRun(join(dir), { job, name: `${job}-${n}`, told: true, repo: "fx", on: `fx-${job.slice(1)}`, ...r } as any);
 }
 const at = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
 const span = (h: number, s: number) => ({ started: at(h), ended: new Date(Date.parse(at(h)) + s * 1000).toISOString() });

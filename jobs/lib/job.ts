@@ -11,6 +11,7 @@ import { tagged, allJobs, askOf, isBuild, isOpen, onOf, reviewOf, type CheckResu
 import { isLost } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { runFile, type RunFile } from "./run-files.ts";
+import * as record from "./record.ts";
 
 export { allJobs, isOpen };
 
@@ -43,6 +44,12 @@ export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(
 
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
 export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.condition === "failed" && causeOf(e.run) === "lock-busy")) ?? j.at(-1)!;
+
+/** The job's next step: record.ts `next` over the job's runs, with the Ask, wait and events of its record. */
+export function stepOf(j: Job): record.Step {
+  const key = record.keyOf(lastReal(j).run);
+  return record.next({ ...(record.read(key) ?? record.empty(key)), runs: j.map((e) => ({ ...e.run, id: e.id })) });
+}
 
 /** The job's state: that of the run that counts. */
 export const stateOf = (j: Job): State => lastReal(j).run.condition;

@@ -4,13 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
 import { add, addPart, setStatus } from "../todo/lib/todo.ts";
-import { setAsk } from "../jobs/lib/ask.ts";
+import { setAsk, refIn } from "../jobs/lib/ask.ts";
 import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import { renderLanes, renderNeeds } from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
 import { renderIssue } from "./views/issues.js";
+import { writeRun } from "../jobs/lib/ledger.ts";
 
 // /api/state on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).
@@ -30,7 +31,7 @@ const now = new Date(NOW);
 const ago = (h: number) => new Date(now.getTime() - h * 3600_000).toISOString();
 const run = (id: string, extra: Record<string, unknown>) => {
   mkdirSync(join(runsDir, id), { recursive: true });
-  writeFileSync(join(runsDir, id, "state.json"), JSON.stringify({ repo: "fac", told: true, started: ago(2), ...extra }));
+  writeRun(join(runsDir, id), { repo: "fac", told: true, started: ago(2), ...extra } as any);
 };
 
 beforeAll(async () => {
@@ -61,9 +62,9 @@ beforeAll(async () => {
     // fac-2: one goal that waits for approval; fac-3: an issue that awaits input; fac-4: a new issue.
     const two = add(doc, "Needs a go-ahead", { request: "Ask first.\n" });
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
-    setAsk(g, { kind: "approval", reason: "proposal", question: "Update left-pad?", options: [], why: [] });
+    setAsk(refIn(doc.repo!, g), { kind: "approval", reason: "proposal", question: "Update left-pad?", options: [], why: [] });
     const three = add(doc, "A part was dropped", { request: "Plan it.\n" });
-    setAsk(three, { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
+    setAsk(refIn(doc.repo!, three), { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);

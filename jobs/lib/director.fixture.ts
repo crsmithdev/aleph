@@ -43,7 +43,7 @@ export function fresh(items: { title: string; body?: string; goal?: boolean; not
     for (const i of items) {
       const it = issues.add(doc, i.title, { ...(i.goal ? { spec: i.body ?? "Ship the thing." } : { request: i.body }), ...(i.source ? { source: i.source } : {}) });
       for (const note of i.notes ?? []) issues.note(it, note);
-      if (i.ask) setAsk(it, i.ask);
+      if (i.ask) setAsk(`${key}-${it.id}`, i.ask);
     }
     return true;
   }, true);
@@ -52,7 +52,7 @@ export function fresh(items: { title: string; body?: string; goal?: boolean; not
 export const choice = (reason = "question"): Ask => ({ kind: "input", reason, question: "Which page?", options: [{ label: "A", line: "page A" }, { label: "B", line: "page B" }], recommended: "A", why: [] });
 /** A plain question with no options: a how-to-build one. */
 export const plain = (question = "which module?"): Ask => ({ kind: "input", reason: "question", question, options: [], why: [] });
-export const asked = (id: number) => askOf(item(id));
+export const asked = (id: number) => askOf(`${key}-${id}`);
 export const item = (id: number) => issues.find(readList({ key })!, id)!;
 /** A stream-json result event whose structured output is `o`. */
 const result = (o: object) => JSON.stringify({ type: "result", is_error: false, result: "", structured_output: o });

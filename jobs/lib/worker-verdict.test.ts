@@ -23,7 +23,11 @@ function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: 
   };
   return { p, calls };
 }
-const branch = (b: Partial<Branch> = {}): Branch => ({ earlier: [], rounds: 2, facts: {}, checked, ...b });
+/** The branch facts; `done`, the record's fix rounds, follows the runs sent back unless the test gives it. */
+const branch = (b: Partial<Branch> = {}): Branch => {
+  const earlier = "earlier" in b ? b.earlier : [];
+  return { earlier, done: earlier?.length, rounds: 2, facts: {}, checked, ...b };
+};
 const two = [run({ failed: "tests" }), run({ failed: "tests" })];
 
 describe("checks", () => {

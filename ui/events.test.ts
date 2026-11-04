@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, renameSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { countsInFactory, countsInLedger } from "./api/events.ts";
+import { countsInFactory, countsInRecords } from "./api/events.ts";
+import { putRun } from "../jobs/lib/record.ts";
+import type { Run } from "../jobs/lib/ledger.ts";
 
 let base: string, runs: string, factory: string, ref: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void;
@@ -41,9 +43,12 @@ async function changeAfter(act: () => void): Promise<boolean> {
   finally { ctl.abort(); }
 }
 
-test("a run's state.json sends a change, also in a run folder made after the stream opened", async () => {
-  expect(await changeAfter(() => writeFileSync(join(runs, "old", "state.json"), "{}"))).toBe(true);
-  expect(await changeAfter(() => { mkdirSync(join(runs, "new")); writeFileSync(join(runs, "new", "state.json"), "{}"); })).toBe(true);
+const run = (on: string): Run => ({ kind: "build", job: on, name: on, on, condition: "running", told: false, started: "2026-11-04T10:00:00Z" });
+
+test("a run's write to its job record sends a change, also to a record made after the stream opened", async () => {
+  putRun("old", run("r-1"));
+  expect(await changeAfter(() => putRun("old", { ...run("r-1"), phase: "worker" }))).toBe(true);
+  expect(await changeAfter(() => putRun("new", run("r-2")))).toBe(true);
 });
 
 test("a change in the factory folder or to the store's origin/main sends a change", async () => {
@@ -51,15 +56,10 @@ test("a change in the factory folder or to the store's origin/main sends a chang
   expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"))).toBe(true);
 });
 
-test("a state.json moved into place sends a change, as the ledger writes it", async () => {
-  const tmp = join(runs, "old", ".state.json.1");
-  expect(await changeAfter(() => { writeFileSync(tmp, "{}"); renameSync(tmp, join(runs, "old", "state.json")); })).toBe(true);
-});
-
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.
-test("a file in a worker's tree, a temp state file and a log count as no change", () => {
-  for (const f of ["old/work/x.ts", "old/work/jobs/a/state.json", "old/.state.json.1", "old/output.log"]) expect(countsInLedger(f)).toBe(false);
-  for (const f of ["old/state.json", "new/call.md"]) expect(countsInLedger(f)).toBe(true);
+test("a temporary record file and a log count as no change", () => {
+  expect(countsInRecords("r-1.json.123.tmp")).toBe(false);
+  expect(countsInRecords("r-1.json")).toBe(true);
   expect(countsInFactory("tick.log")).toBe(false);
   expect(countsInFactory("paused")).toBe(true);
 });

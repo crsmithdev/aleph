@@ -51,7 +51,7 @@ export interface Ctx {
 }
 
 export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Subject {
-  const a = askOf(item);
+  const a = askOf(`${key}-${issues.refOf(item)}`);
   return {
     id: `${key}-${issues.refOf(item)}`, status: issues.status(item),
     after: store.afterOf(item), parts: store.partsOf(doc, item).map((p) => `${key}-${issues.refOf(p)}`),

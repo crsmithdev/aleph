@@ -12,7 +12,7 @@ export type RunFile =
   | "spec.md" | "command.txt" | "prompt.md" | "review-prompt.md" | "call-prompt.md"
   | "output.log" | "stderr.log" | "setup.log" | "next.log" | "dispatch.log" | "trace.log" | "checks.log" | "land.log"
   | "result.md" | "review.md" | "call.md" | "review.log" | "review.err"
-  | "asked" | "asked-spec" | "rescued" | "paused-next" | "batch.json"
+  | "paused-next" | "batch.json"
   | "gh";
 
 /** The path of `file` in the run folder `folder`. */

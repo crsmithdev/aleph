@@ -6,6 +6,7 @@ import { mkdirSync } from "node:fs";
 import { clearFit, currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
+import { writeRun } from "../jobs/lib/ledger.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -176,7 +177,7 @@ test("a snapshot dated after the clock does not skew currentFit() or fit()", asy
     const spendsAt = [2, 6, 10];
     spendsAt.forEach((h, i) => {
       mkdirSync(join(jobs, `r${i}`), { recursive: true });
-      writeFileSync(join(jobs, `r${i}`, "state.json"), JSON.stringify({ job: "j", model: "opus", cost: 6, started: at(h), ended: at(h) }));
+      writeRun(join(jobs, `r${i}`), { job: "j", model: "opus", cost: 6, started: at(h), ended: at(h) } as any);
     });
     const write = (rows: object[]) => writeFileSync(process.env.ALEPH_USAGE_FILE!, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
     const sp = spendsAt.map((h) => ({ at: t0 + h * H, model: "opus", cost: 6 }));

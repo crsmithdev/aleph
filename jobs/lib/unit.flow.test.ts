@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { base, branchExists, fakeLog, file, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../cli.helpers";
 import { actionJob, drop, job, jobView } from "../inproc.ts";
 import { dropAs, run } from "./flow.testkit.ts";
+import { writeRun } from "./ledger.ts";
 
 // The runs start in-process, as `aleph job` and `aleph run` start them; each run's unit is a process of its own.
 // The CLI tests of `job`, `jobs`, `drop` and `run` are in jobs/cli.basic.test.ts.
@@ -130,7 +131,7 @@ describe("news", () => {
   test("a run whose process died shows as lost", async () => {
     const folder = join(jobsDir, "20200101-000000-demo-ghost-agent");
     mkdirSync(folder);
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", condition: "running", told: false, started: "2020-01-01T00:00:00Z" }));
+    writeRun(join(folder), { kind: "build", job: "20200101-000000-demo-ghost-agent", name: "ghost", repo: "demo", condition: "running", told: false, started: "2020-01-01T00:00:00Z" } as any);
     writeFileSync(join(folder, "pid"), "999999");
     expect((await jobView("ghost")).json).toMatchObject({ condition: "running", lost: true });
     expect((await drop("ghost")).code).toBe(0);

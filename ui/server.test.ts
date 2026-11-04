@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
+import { writeRun } from "../jobs/lib/ledger.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -16,12 +17,12 @@ const run = (o: object) => JSON.stringify({ kind: "build", condition: "running",
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-server-"));
   writeFileSync(join(base, "repos.json"), JSON.stringify({ aleph: { path: join(base, "aleph") }, other: { path: join(base, "other") } }));
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
   for (const [repo, name] of [["aleph", "aleph-1"], ["other", "other-2"]]) {
     const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), run({ name, job: name, repo }));
+    writeRun(folder, JSON.parse(run({ name, job: name, repo })));
   }
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory") });
   // A view added the way a view goal adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
   for (const f of ["index.html", "app.css", "lib.js", "system-parts.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });

@@ -3,8 +3,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, decideAsk, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, clearAsk, decideAsk, refIn, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "./goal-spec.ts";
+import * as record from "./record.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
 const ask: Ask = { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
@@ -17,11 +18,12 @@ test("askChris with a null text sets the Ask and adds no note", () => {
   } finally { rmSync(dir, { recursive: true, force: true }); if (old !== undefined) process.env.ALEPH_HOME = old; }
 });
 
-test("setAsk writes the flat fields and askOf reads them back", () => {
-  const i = item();
-  setAsk(i, ask);
-  expect(i.fm).toMatchObject({ ask: "approval", reason: "held-path", question: "A or B?", options: ["A :: do a :: after fac-2.1", "B :: do b"], recommended: "B", why: ["w"] });
-  expect(askOf(i)).toEqual(ask);
+test("setAsk keeps the Ask whole in the issue's job record, and askOf reads it back", () => {
+  setAsk("fac-11", ask);
+  expect(askOf("fac-11")).toEqual(ask);
+  expect(record.read("fac-11")).toMatchObject({ ask });
+  clearAsk("fac-11");
+  expect(askOf("fac-11")).toBeNull();
 });
 
 const cased: Ask = {
@@ -35,15 +37,19 @@ const cased: Ask = {
   recommend: { action: "decide:B", why: "B keeps the path small" },
 };
 
-test("setAsk writes situation, effects and recommend flat and askOf reads them back", () => {
-  const i = item();
-  setAsk(i, cased);
-  expect(i.fm).toMatchObject({
-    situation: "The path is held. Chris decides where it goes.",
-    effects: ["decide:A :: lands the path on A", "decide:B :: lands the path on B", "drop :: drops the path"],
-    recommend: "decide:B :: B keeps the path small",
-  });
-  expect(askOf(i)).toEqual(cased);
+test("setAsk keeps situation, effects and recommend, and askOf reads them back", () => {
+  setAsk("fac-12", cased);
+  expect(askOf("fac-12")).toEqual(cased);
+});
+
+test("a run's Ask is the run's: the issue has none, and clearing the issue's Ask leaves it", () => {
+  record.putRun("r1", { kind: "build", job: "r1", name: "fac-13", on: "fac-13", condition: "awaiting", ask, told: true, started: "2026-11-04T10:00:00Z" });
+  expect(record.getRun("r1")?.ask).toEqual(ask);
+  expect(askOf("fac-13")).toBeNull();
+  clearAsk("fac-13");
+  expect(record.getRun("r1")?.ask).toEqual(ask);
+  record.patchRun("r1", { condition: "dropped", ask: undefined });
+  expect(record.read("fac-13")?.ask).toBeNull();
 });
 
 test("normalizeAsk takes after, 2 to 4 options and a recommended label that is one of them", () => {
@@ -84,10 +90,6 @@ test("actionsOn picks by context for a question and a dropped part", () => {
   expect(actionsOn("review", { run: true, decision: false })).toEqual(["land", "drop"]);
 });
 
-test("askOf needs the ask field and gives no options for a plain question", () => {
-  expect(askOf(item({ question: "q", options: ["A :: a"] }))).toBeNull();
-  expect(askOf(item({ ask: "input", question: "q" }))).toEqual({ kind: "input", reason: "question", question: "q", options: [], why: [] });
-});
 
 let dir = "";
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "always-")); process.env.ALEPH_FACTORY_DIR = dir; });
@@ -154,18 +156,16 @@ test("may: Chris takes the actions the card offers, on a run and on an issue", (
   expect(may("chris", "answer", undefined, { run: true })).toBe("it has no Ask");
 });
 
-test("decideAsk clears the Ask; on part-dropped the plan option sets plan and any other answer closes the issue", () => {
+test("decideAsk leaves a plain Ask's issue open; on part-dropped the plan option sets plan and any other answer closes the issue", () => {
   const i = item({ status: "To Do" });
-  setAsk(i, plain);
-  decideAsk(i, "Chris: use b.ts");
-  expect(askOf(i)).toBeNull();
+  decideAsk(plain, i, "Chris: use b.ts");
   expect(issues.status(i)).toBe("open");
   for (const [said, plan, status] of [[`Chris chose ${PLAN_REST}`, "true", "open"], ["Chris chose Close with what landed", undefined, "done"]] as const) {
-    const p = item({ status: "To Do" });
-    askPartDropped(p, "A part was dropped. What now?");
-    expect(askOf(p)?.reason).toBe("part-dropped");
-    decideAsk(p, said);
-    expect(askOf(p)).toBeNull();
+    const p = { ...item({ status: "To Do" }), id: status === "done" ? 21 : 22 };
+    askPartDropped("fac", p, "A part was dropped. What now?");
+    const a = askOf(refIn("fac", p));
+    expect(a?.reason).toBe("part-dropped");
+    decideAsk(a, p, said);
     expect(p.fm.plan as string | undefined).toBe(plan);
     expect(issues.status(p)).toBe(status);
   }
@@ -179,14 +179,14 @@ test("askIfPartDropped asks on the parent once its last open part is dropped", (
   doc.items = [parent, a, b];
   issues.setStatus(a, "dropped");
   askIfPartDropped(doc, a, "too big");
-  expect(askOf(parent)).toBeNull();
+  expect(askOf(refIn("fac", parent))).toBeNull();
   issues.setStatus(b, "dropped");
   askIfPartDropped(doc, b, "too big");
-  expect(askOf(parent)).toMatchObject({ reason: "part-dropped", question: `Part fac-${parent.id}.2 was dropped: too big. What now?` });
+  expect(askOf(refIn("fac", parent))).toMatchObject({ reason: "part-dropped", question: `Part fac-${parent.id}.2 was dropped: too big. What now?` });
 });
 
 test("askFromRun marks the run asked, and with a spec the run waits for a spec edit", () => {
-  const e = { id: "r1", folder: mkdtempSync(join(tmpdir(), "run-")), run: {} as any };
+  const e = { id: "r1", folder: mkdtempSync(join(tmpdir(), "run-")), run: { job: "r1" } as any };
   try {
     expect(asked(e)).toBe(false);
     expect(askFromRun(e, { key: "fac" }, undefined, plain, "Which module?")).toBe("no issue");
@@ -194,7 +194,7 @@ test("askFromRun marks the run asked, and with a spec the run waits for a spec e
     expect(waitsForSpecEdit(e)).toBeNull();
     const spec = item();
     askFromRun(e, { key: "fac" }, undefined, plain, "Which spec?", spec);
-    expect(waitsForSpecEdit(e)).toEqual({ version: `${specVersion(spec)}\n`, question: "Which spec?" });
+    expect(waitsForSpecEdit(e)).toEqual({ version: specVersion(spec), question: "Which spec?" });
   } finally {
     rmSync(e.folder, { recursive: true, force: true });
   }

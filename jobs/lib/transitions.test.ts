@@ -44,7 +44,7 @@ async function refused(f: () => unknown): Promise<string> {
 }
 
 /** No transition that refuses leaves a run folder behind. */
-const runs = () => (existsSync(join(base, "jobs")) ? readdirSync(join(base, "jobs")) : []);
+const runs = () => (existsSync(join(base, "jobs")) ? readdirSync(join(base, "jobs")).filter((d) => !d.startsWith(".")) : []);
 
 describe("startJob", () => {
   // The test's clock: the starting rule and the made stamp read it.

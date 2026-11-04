@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, jobsDir, state, setup, teardown } from "./cli.helpers";
 import { actionJob as job } from "./inproc";
+import { updateRun } from "./lib/ledger.ts";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -14,11 +15,10 @@ describe("an item that is already on main", () => {
   test("drop keeps the fact that a no-commit run ended with no commit", async () => {
     await job("nocom", "commit nocom.txt");
     const [agent] = runsOf("nocom");
-    const f = join(jobsDir, agent.id, "state.json");
-    writeFileSync(f, JSON.stringify({ ...JSON.parse(readFileSync(f, "utf8")), condition: "stuck", reason: "no commit" }));
+    updateRun(join(jobsDir, agent.id), { condition: "stuck", reason: "no commit" });
     const r = await aleph(["drop", "nocom", "dropped as a duplicate", "--quiet"]);
     expect(r.code).toBe(0);
-    const after = JSON.parse(readFileSync(f, "utf8"));
+    const after = state(agent.id);
     expect(after.reason).toBe("dropped as a duplicate");
     expect(after.cause).toBe("no-commit");
   }, 60_000);

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
-import { askChris, askOf, setAsk } from "../../jobs/lib/ask.ts";
+import { askChris, askOf, setAsk, refIn } from "../../jobs/lib/ask.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -102,7 +102,7 @@ describe("the writes", () => {
     expect(store.note(r, 1, "asked", { label: "ui" })).toBeNull();
     expect(store.note(r, 1, "asked again", { label: "ui" })).toBeNull();
     expect(store.labels(item(r, 1))).toEqual(["ui"]);
-    expect(askOf(item(r, 1))?.question).toBe("A or B?");
+    expect(askOf(`${r.key}-1`)?.question).toBe("A or B?");
   });
 
   test("note says why when there is no such item or no list, and writes nothing", () => {
@@ -136,7 +136,7 @@ describe("the writes", () => {
 
   test("sort changes an open, unsorted item only", () => {
     const r = repo([{ title: "new" }, { title: "live" }, { title: "closed" }]);
-    store.writeList(r, "ask", (doc) => { setAsk(issues.find(doc, 2)!, { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
+    store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, 2)!), { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, 3, "x");
     const before = commits();
     expect(store.sort(r, 2, "intake", () => { })).toBe(false);

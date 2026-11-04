@@ -66,7 +66,7 @@ export interface NewIssue { id: string; title: string; priority?: string; status
   decision?: Ask;
   /** The whole Ask: kind, reason and the stored case text. */
   ask?: Ask;
-  /** The Ask's reason (`fm.reason`). */
+  /** The Ask's reason. */
   reason?: string;
   /** The Ask's kind: `input` or `approval`. */
   askKind?: "input" | "approval";
@@ -404,7 +404,7 @@ export function state(now = new Date()): State {
       }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       if (top) openIssues++;
-      const ask = askOf(item);
+      const ask = askOf(id);
       if (st === "awaiting" && ask) {
         const c = card();
         const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();

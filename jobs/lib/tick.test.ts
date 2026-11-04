@@ -5,9 +5,9 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import { writeList } from "../../todo/lib/store.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
-import { plainAsk, setAsk } from "./ask.ts";
+import { plainAsk, setAsk, askOf } from "./ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { setPaused, writeBaseline } from "./factory-status.ts";
 import { git } from "./git.ts";
@@ -57,7 +57,7 @@ function seed(items: { body: string; ask?: boolean }[]): void {
   writeList({ key }, "seed", (doc) => {
     for (const i of items) {
       const it = issues.add(doc, `issue ${i.body}`, { request: i.body });
-      if (i.ask) setAsk(it, plainAsk("question", "which module?"));
+      if (i.ask) setAsk(`${key}-${it.id}`, plainAsk("question", "which module?"));
     }
     return true;
   }, true);
@@ -75,7 +75,7 @@ test("an intake that sets an Ask starts the director at once, with no tick", asy
   seed([{ body: "VERDICT:ask" }]);
   const s = recorder();
   await intakeNow(repo(), 1, s);
-  expect(issues.find(readList({ key })!, 1)!.fm.ask).toBe("input");
+  expect(askOf(`${key}-1`)?.kind).toBe("input");
   expect(s.directors).toBe(1);
   expect(s.taken).toEqual([]);
 });
@@ -89,7 +89,7 @@ test("an intake with no reply starts its retry at once; after the tries it sets 
     expect(s.taken).toEqual([`${key}-1`]);
     expect(s.directors).toBe(0);
     await intakeNow(repo(), 1, s);
-    expect(issues.find(readList({ key })!, 1)!.fm.reason).toBe("intake-failed");
+    expect(askOf(`${key}-1`)?.reason).toBe("intake-failed");
     expect(s.taken).toEqual([`${key}-1`]);
     expect(s.directors).toBe(1);
   } finally {
@@ -120,7 +120,7 @@ test("a dispatch after a write that set an Ask starts the director; an Ask with 
   const s = recorder();
   await runDispatch(s);
   expect(s.directors).toBe(1);
-  writeList({ key }, "case text", (doc) => { issues.find(doc, 1)!.fm.situation = "The case."; return true; });
+  setAsk(`${key}-1`, { ...askOf(`${key}-1`)!, situation: "The case." });
   await runDispatch(s);
   expect(s.directors).toBe(1);
 });

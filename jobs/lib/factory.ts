@@ -8,7 +8,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { askChris, askOf, needsOf, plainAsk } from "./ask.ts";
+import { askChris, askOf, needsOf, plainAsk, refIn } from "./ask.ts";
 import { factoryLog } from "./layout.ts";
 import { itemOnMain, repoStages } from "./status.ts";
 import { countsLine, intakeIssue, type Counts } from "./intake.ts";
@@ -112,7 +112,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) if (planSet(item)) planners.push({ repo, item });
   }
   for (const { repo, item } of byPriority(planners)) {
-    if (issues.status(item) !== "open" || askOf(item) || pendingWaits(afterOf(item), done).length) continue;
+    if (issues.status(item) !== "open" || askOf(refIn(repo.key, item)) || pendingWaits(afterOf(item), done).length) continue;
     intake(repo, item.id);
     planned.push(issueJob(repo, item.id));
   }
@@ -180,7 +180,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
 /** Whether every part is done or dropped, at least one is done, and the parent is neither asking nor to plan: then it closes. */
 const finished = (doc: issues.Doc, item: issues.Issue, repo: Repo, done: (ref: string) => boolean): boolean => {
   const parts = partsOf(doc, item);
-  if (issues.status(item) !== "open" || !parts.length || askOf(item) || planSet(item)) return false;
+  if (issues.status(item) !== "open" || !parts.length || askOf(refIn(repo.key, item)) || planSet(item)) return false;
   const isDone = (p: issues.Issue) => issues.status(p) !== "dropped" && done(`${repo.key}-${issues.refOf(p)}`);
   return parts.some(isDone) && parts.every((p) => issues.status(p) === "dropped" || isDone(p));
 };
@@ -394,7 +394,7 @@ export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()
       const doc = lists.list(repo.key);
       for (const item of doc?.items ?? []) {
         if (issues.status(item) !== "open") continue;
-        const toPlan = planSet(item) && !askOf(item) && !pendingWaits(afterOf(item), done).length && !redOf(repo);
+        const toPlan = planSet(item) && !askOf(refIn(repo.key, item)) && !pendingWaits(afterOf(item), done).length && !redOf(repo);
         if (toPlan || (!planSet(item) && !isSorted(doc!, item, repo))) out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
       }
     }
@@ -535,7 +535,7 @@ export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Pro
   const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "no-answer");
   const doc = reader({ fetch: false }).list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
-  if (failed && item && issues.status(item) === "open" && !askOf(item) && !isSorted(doc!, item, repo)) {
+  if (failed && item && issues.status(item) === "open" && !askOf(refIn(repo.key, item)) && !isSorted(doc!, item, repo)) {
     factoryLog(`intake ${name}: no reply; intake again now`);
     p.intake(repo, id);
   }

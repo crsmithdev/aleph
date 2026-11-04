@@ -26,8 +26,8 @@ async function code<T>(f: () => T | Promise<T>): Promise<{ code: number; value?:
   try { return { code: 0, value: await f() }; } catch (e) { if (!(e instanceof Refusal)) throw e; return { code: 1 }; }
 }
 const add = async (title: string, fields: verbs.Fields = {}) => { verbs.checkFields(fields); return verbs.add(proj(), title, fields); };
-const list = (o: { status?: string; label?: string } = {}) => verbs.list(proj(), o).map(verbs.brief);
-const show = (id: number) => { const i = verbs.show(proj(), id); return { ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes }; };
+const list = (o: { status?: string; label?: string } = {}) => verbs.list(proj(), o).map(verbs.brief(proj().key));
+const show = (id: number) => { const i = verbs.show(proj(), id); return { ...verbs.brief(proj().key)(i), request: i.request, spec: i.spec, notes: i.notes }; };
 /** The lines `aleph issue lint` prints on stderr, and its exit code. */
 function lint(): { code: number; err: string } {
   try {

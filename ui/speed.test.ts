@@ -9,6 +9,7 @@ import { activeEnd } from "../jobs/lib/process.ts";
 import { durShort, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { dur } from "./lib.js";
+import { writeRun } from "../jobs/lib/ledger.ts";
 
 let base: string;
 let restore: () => void;
@@ -18,7 +19,7 @@ let n = 0;
 function run(r: Record<string, unknown>) {
   const dir = join(base, "jobs", `r${String(++n).padStart(3, "0")}`);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ job: `j${n}`, name: `j${n}`, told: true, ...r }));
+  writeRun(join(dir), { job: `j${n}`, name: `j${n}`, told: true, ...r } as any);
 }
 const secs = (daysAgo: number, h: number, s: number) => ({ started: at(daysAgo, h), ended: new Date(Date.parse(at(daysAgo, h)) + s * 1000).toISOString() });
 

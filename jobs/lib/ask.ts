@@ -3,25 +3,21 @@
  * what each one offers, sets an Ask on an issue, says which actor (Chris or the director) may take which action on it,
  * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches Chris when the director escalates it. Callers do not read the Ask fields or test reason names for these rules.
  *
- * A run keeps its Ask whole in `ask` of its state.json. An issue or goal keeps it as flat fields next to its prose note:
- * `ask` (`input` or `approval`), `reason`, `question`, `options` (each `label :: line`, with `:: after <goal id>`
- * when choosing it means waiting for that goal), `recommended` (an option label) and `why` (short context lines), and
- * the director's case text: `headline`, `situation`, `details`, `effects` and `recommend`.
- * The work store's front matter is flat, so the values are kept free of quotes, backslashes and line breaks.
- *
- * A run that set an Ask on its issue has the file `asked` (the question) in its folder, and `asked-spec` (the spec's
- * version) when it asked about the spec.
+ * The Ask of an issue and of its runs is one: `ask` of the issue's job record (record.ts). While a run awaits Chris
+ * the record names that run in `askRun`, and the run reads it as its own `ask`; else the Ask is on the issue.
+ * The issue store keeps no Ask. A run that set an Ask on its issue has an `asked` event in the record, with the
+ * spec's version when it asked about the spec.
  *
  * `always.json` in the factory dir maps a reason to `{ action, at }`.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryLog, layout } from "./layout.ts";
 import { specVersion } from "./goal-spec.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { awaitsChris, parentOf, partsOf, writeList, type Place } from "../../todo/lib/store.ts";
+import { parentOf, partsOf, writeList, type Place } from "../../todo/lib/store.ts";
 import type { Entry } from "./ledger.ts";
-import { runFile, type RunFile } from "./run-files.ts";
+import * as record from "./record.ts";
 
 export interface Ask {
   kind: "input" | "approval";
@@ -141,7 +137,6 @@ const REF = /^[\w.-]+-\d+(\.\d+)?$/;
 const WAITS = " :: after ";
 const clean = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").trim() : "");
 /** A flat value: cleaned, and with no `::` left, since `::` separates the parts of an effect and a recommendation. */
-const flat = (v: unknown): string => clean(v).replace(/:{2,}/g, ":");
 
 /** One option as the line stored in `options`. */
 export const encodeOption = (o: { label: string; line: string; after?: string }): string =>
@@ -177,64 +172,22 @@ export function normalizeAsk(raw: any, defaults: { kind?: Ask["kind"]; reason?: 
   return { kind, reason: clean(raw.reason) || defaults.reason || "question", question, options, ...(recommended ? { recommended } : {}), why };
 }
 
-const text = (v: unknown): string => (typeof v === "string" ? v : "");
-const lines = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : []);
 
-/** A stored `action :: text` line, split at its first `::`. */
-function splitPair(s: string): { action: string; text: string } {
-  const at = s.indexOf("::");
-  return at < 0 ? { action: s.trim(), text: "" } : { action: s.slice(0, at).trim(), text: s.slice(at + 2).trim() };
-}
 
-/** The ask in an item's fields, or null when the item has no `ask`. A reason it does not state reads as `question`. */
-export function askOf(item: issues.Issue): Ask | null {
-  const kind = item.fm.ask;
-  if (kind !== "input" && kind !== "approval") return null;
-  const why = item.fm.why;
-  const headline = text(item.fm.headline);
-  const situation = text(item.fm.situation);
-  const details = text(item.fm.details);
-  const effects = lines(item.fm.effects).map(splitPair);
-  const recommend = text(item.fm.recommend) ? splitPair(text(item.fm.recommend)) : null;
-  return {
-    kind, reason: text(item.fm.reason) || "question", question: text(item.fm.question), options: lines(item.fm.options).map(decodeOption),
-    ...(text(item.fm.recommended) ? { recommended: text(item.fm.recommended) } : {}),
-    why: typeof why === "string" ? why.split(",").map((s) => s.trim()).filter(Boolean) : lines(why),
-    ...(headline ? { headline } : {}),
-    ...(situation ? { situation } : {}),
-    ...(details ? { details } : {}),
-    ...(effects.length ? { effects: effects.map((e) => ({ action: e.action, text: e.text })) } : {}),
-    ...(recommend ? { recommend: { action: recommend.action, why: recommend.text } } : {}),
-  };
-}
+/** The ref of an item in repo `key`: `<key>-<n>`, the key of its job record. */
+export const refIn = (key: string, item: issues.Issue): string => `${key}-${issues.refOf(item)}`;
 
-/**
- * Put `ask` on the item: `ask`, `reason`, `question`, `options`, `recommended` and `why`, and the case text when the ask
- * has it: `headline` and `situation` (one string each), `effects` (lines `action :: text`) and `recommend` (`action :: why`), as `askOf` reads them.
- */
-export function setAsk(item: issues.Issue, ask: Ask): void {
-  clearAsk(item);
-  item.fm.ask = ask.kind;
-  item.fm.reason = ask.reason;
-  item.fm.question = ask.question;
-  if (ask.options.length) item.fm.options = ask.options.map((o) => encodeOption(o));
-  if (ask.recommended) item.fm.recommended = ask.recommended;
-  item.fm.why = ask.why;
-  const headline = flat(ask.headline);
-  if (headline) item.fm.headline = headline;
-  const situation = flat(ask.situation);
-  if (situation) item.fm.situation = situation;
-  const details = flat(ask.details);
-  if (details) item.fm.details = details;
-  const effects = (ask.effects ?? []).filter((e) => flat(e.action)).map((e) => `${flat(e.action)}${SEP}${flat(e.text)}`);
-  if (effects.length) item.fm.effects = effects;
-  if (ask.recommend && flat(ask.recommend.action)) item.fm.recommend = `${flat(ask.recommend.action)}${SEP}${flat(ask.recommend.why)}`;
-}
+/** The Ask on the issue `ref`, or null. A run's Ask is the run's, not the issue's. */
+export const askOf = (ref: string): Ask | null => record.issueAsk(record.read(ref));
 
-/** Take the item's Ask off. */
-export function clearAsk(item: issues.Issue): void {
-  for (const k of ["ask", "reason", "question", "options", "recommended", "why", "headline", "situation", "details", "effects", "recommend"]) delete item.fm[k];
-}
+/** The issue `ref` waits for Chris: it has an Ask. */
+export const awaitsChris = (ref: string): boolean => askOf(ref) !== null;
+
+/** Put `ask` on the issue `ref`. */
+export const setAsk = (ref: string, ask: Ask): void => record.setIssueAsk(ref, ask);
+
+/** Take the issue's Ask off. */
+export const clearAsk = (ref: string): void => record.setIssueAsk(ref, null);
 
 /** The prose note of an ask, for the CLI and the history. */
 export const askNote = (a: Ask): string =>
@@ -295,13 +248,16 @@ export const logAlways = (reason: string, action: string, ref: string): void => 
 export function askChris(place: Place, id: number | string, ask: Ask, said: string | null): string | null {
   const text = said === null ? "" : `asks Chris: ${said}`;
   try {
-    const w = writeList(place, `todo: item ${id}: ${text}`, (doc) => {
+    let found = false;
+    writeList(place, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
       if (!item) return null;
-      setAsk(item, ask);
-      return said === null ? item : issues.note(item, text);
+      found = true;
+      return said === null ? null : issues.note(item, text);
     });
-    return w ? null : `no issue ${id}`;
+    if (!found) return `no issue ${id}`;
+    setAsk(`${place.key}-${id}`, ask);
+    return null;
   } catch (e: any) {
     return e?.message ?? String(e);
   }
@@ -313,24 +269,24 @@ export function askChris(place: Place, id: number | string, ask: Ask, said: stri
  * Returns why the issue got no Ask, or null.
  */
 export function askFromRun(e: Entry, place: Place, issue: number | string | undefined, ask: Ask, said: string, spec?: issues.Issue): string | null {
-  if (spec) writeFileSync(runFile(e.folder, "asked-spec"), specVersion(spec) + "\n");
-  markAsked(e, said);
+  markAsked(e, said, spec ? specVersion(spec) : undefined);
   return issue === undefined ? "no issue" : askChris(place, issue, ask, said);
 }
 
-/** The factory set an Ask on the run's issue: the run no longer holds the factory. */
-export const asked = (e: Entry): boolean => existsSync(runFile(e.folder, "asked"));
-export const markAsked = (e: Entry, question: string): void => writeFileSync(runFile(e.folder, "asked"), question + "\n");
+/** The `asked` event of the run in its job record: the factory set an Ask on the run's issue. */
+const askedEvent = (e: Entry) => record.read(record.keyOf(e.run))?.events.findLast((x) => x.kind === "asked" && x.run === e.id);
 
-const readRunFile = (e: Entry, name: RunFile): string | undefined => {
-  try { return readFileSync(runFile(e.folder, name), "utf8"); } catch { return undefined; }
-};
+/** The factory set an Ask on the run's issue: the run no longer holds the factory. */
+export const asked = (e: Entry): boolean => askedEvent(e) !== undefined;
+/** Record that the run asked `question`; `spec` is the spec version when it asked about the spec. */
+export const markAsked = (e: Entry, question: string, spec?: string): void =>
+  void record.addEvent(record.keyOf(e.run), { kind: "asked", run: e.id, what: question, ...(spec ? { data: { spec } } : {}) });
 
 /** A run that asked about its issue's spec and waits for a spec edit: the spec version it asked about and its question; else null. */
 export function waitsForSpecEdit(e: Entry): { version: string; question: string } | null {
-  const version = readRunFile(e, "asked-spec");
-  if (version === undefined || !asked(e)) return null;
-  return { version, question: (readRunFile(e, "asked") ?? "").trim() };
+  const a = askedEvent(e);
+  const version = (a?.data as { spec?: string } | undefined)?.spec;
+  return a && version !== undefined ? { version, question: a.what } : null;
 }
 
 export const PLAN_REST = "Plan the missing part";
@@ -342,14 +298,14 @@ export const PLAN_REST = "Plan the missing part";
 export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: string): void {
   if (issues.status(part) !== "dropped") return;
   const issue = parentOf(doc, part);
-  if (!issue || issues.status(issue) !== "open" || awaitsChris(issue)) return;
+  if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsChris(refIn(doc.repo, issue))) return;
   if (partsOf(doc, issue).some((g) => g !== part && issues.status(g) === "open")) return;
-  askPartDropped(issue, `Part ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
+  askPartDropped(doc.repo, issue, `Part ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
 }
 
 /** Put the part-dropped Ask on a parent. */
-export function askPartDropped(issue: issues.Issue, question: string): void {
-  setAsk(issue, {
+export function askPartDropped(key: string, issue: issues.Issue, question: string): void {
+  setAsk(refIn(key, issue), {
     kind: "input",
     reason: "part-dropped",
     question,
@@ -388,12 +344,10 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
 
 
 /**
- * A decision clears the item's Ask; called in the write that notes the decision `said`. On the part-dropped Ask, the
- * plan option sets `plan`, and any other answer closes the issue.
+ * What a decision on `ask` does to the item, in the write that notes the decision `said`: on the part-dropped Ask, the
+ * plan option sets `plan`, and any other answer closes the issue. The caller clears the Ask after that write.
  */
-export function decideAsk(item: issues.Issue, said: string): void {
-  const ask = askOf(item);
-  clearAsk(item);
+export function decideAsk(ask: Ask | null, item: issues.Issue, said: string): void {
   if (ask?.reason !== "part-dropped") return;
   const planRest = ask.options.find((o) => o.label === PLAN_REST);
   if (planRest && (said.includes(planRest.label) || said.includes(planRest.line))) item.fm.plan = "true";

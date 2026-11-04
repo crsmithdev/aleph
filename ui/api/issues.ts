@@ -11,12 +11,12 @@ import { allJobs, lastReal } from "../../jobs/lib/job.ts";
 import { loadRegistry, onOf, type Repo } from "../../jobs/lib/ledger.ts";
 import { git } from "../../jobs/lib/git.ts";
 import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/status.ts";
-import { askOf } from "../../jobs/lib/ask.ts";
+import { askOf, awaitsChris, refIn } from "../../jobs/lib/ask.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
 import * as issues from "../../todo/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, areasOf, awaitsChris, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
+import { afterOf, areasOf, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
@@ -141,7 +141,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const blockers = jobProjector().blockers(repo.key, ref);
 
   // The Ask row of an issue that awaits Chris: the item `attend` builds, from the NewIssue as the state builds it.
-  const stored = askOf(item);
+  const stored = askOf(`${repo.key}-${ref}`);
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "awaiting") === "awaiting") {
     const id = `${repo.key}-${ref}`;
@@ -214,9 +214,9 @@ async function decide(req: Request, params: Record<string, string>): Promise<Res
   try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
   const item = doc && todos.find(doc, n);
   if (!item) return Response.json({ error: "no such issue" }, { status: 404 });
-  if (todos.status(item) !== "open" || !awaitsChris(item)) return Response.json({ error: "this issue is not waiting for a decision" }, { status: 409 });
+  const d = askOf(refIn(repo.key, item));
+  if (todos.status(item) !== "open" || !d) return Response.json({ error: "this issue is not waiting for a decision" }, { status: 409 });
   const body: any = await req.json().catch(() => ({}));
-  const d = askOf(item);
   let note: string;
   let after: string[] | undefined;
   if (d?.options.length) {
@@ -308,7 +308,7 @@ function answer(verb: "note" | "decide" | "done", text: string) {
     try { doc = readList(repo); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
     const item = doc && todos.find(doc, n);
     if (!item) return none;
-    if (todos.status(item) !== "open" || !awaitsChris(item)) return Response.json({ error: "this issue is not waiting for you" }, { status: 409 });
+    if (todos.status(item) !== "open" || !awaitsChris(refIn(repo.key, item))) return Response.json({ error: "this issue is not waiting for you" }, { status: 409 });
     const { stdout: out, stderr: err, code } = await runCli(["issue", verb, repo.key, String(n), text]);
     if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
     try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }

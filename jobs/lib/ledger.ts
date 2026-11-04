@@ -2,11 +2,12 @@
  * The job ledger: one folder per run in ~/.aleph/runs, the repo registry,
  * liveness and locks. See docs/specs/2026-09-24-agent-jobs.md.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, loadavg } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
+import * as record from "./record.ts";
 import { isLive } from "./process.ts";
 import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "./settings.ts";
@@ -146,34 +147,31 @@ export function readEnvFile(file: string | undefined): Record<string, string> {
   return env;
 }
 
+/** The run in `folder`: its entry in its job record (record.ts). */
 export function readRun(folder: string): Run | null {
-  try { return JSON.parse(readFileSync(join(folder, "state.json"), "utf8")); } catch { return null; }
+  const r = record.getRun(basename(folder));
+  if (!r) return null;
+  const { id: _, ...run } = r;
+  return run;
 }
 
 export function writeRun(folder: string, run: Run): void {
-  const tmp = join(folder, `.state.json.${process.pid}`);
-  writeFileSync(tmp, JSON.stringify(run, null, 2) + "\n");
-  renameSync(tmp, join(folder, "state.json"));
+  record.putRun(basename(folder), run);
 }
 
 export function updateRun(folder: string, change: Partial<Run>): Run {
-  const run = { ...readRun(folder)!, ...change };
-  writeRun(folder, run);
+  const r = record.patchRun(basename(folder), change);
+  if (!r) throw new Error(`no record holds the run ${basename(folder)}`);
+  const { id: _, ...run } = r;
   return run;
 }
 
 export interface Entry { id: string; folder: string; run: Run }
 
-/** Every run, oldest first. Folder names start with the time, so they sort. */
+/** Every run, oldest first: ids start with the time, so they sort. */
 export function allRuns(): Entry[] {
   const dir = runsDir();
-  if (!existsSync(dir)) return [];
-  const out: Entry[] = [];
-  for (const id of readdirSync(dir).sort()) {
-    const run = readRun(join(dir, id));
-    if (run) out.push({ id, folder: join(dir, id), run });
-  }
-  return out;
+  return record.allRunRecords().map(({ id, ...run }) => ({ id, folder: join(dir, id), run }));
 }
 
 /** Runs grouped by job, each group oldest first, in the order the jobs started. */

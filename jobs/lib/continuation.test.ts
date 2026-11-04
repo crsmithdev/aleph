@@ -7,6 +7,7 @@ import {
   infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedFailure, rerunStep, rescueCase, writeRerun, type Stuck,
 } from "./continuation.ts";
 import type { Entry, Repo, Run } from "./ledger.ts";
+import { writeRun } from "./ledger.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "continuation-"));
 const saved = { jobs: process.env.ALEPH_JOBS_DIR, factory: process.env.ALEPH_FACTORY_DIR };
@@ -26,7 +27,10 @@ const entry = (id: string, r: Partial<Run>): Entry => ({ id, folder: join(dir, "
 const folder = (id: string, files: Record<string, string> = {}): string => {
   const f = join(dir, "runs", id);
   mkdirSync(f, { recursive: true });
-  for (const [name, text] of Object.entries(files)) writeFileSync(join(f, name), text);
+  for (const [name, text] of Object.entries(files)) {
+    if (name === "state.json") writeRun(f, JSON.parse(text));
+    else writeFileSync(join(f, name), text);
+  }
   return f;
 };
 const repo = { key: "fac", path: "/nowhere", main: "main" } as Repo;

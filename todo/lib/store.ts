@@ -11,6 +11,7 @@
  * (`note`, `close`, `label`, `closeAndFile`, `file`). Callers do not read
  * `fm.labels` or name a task's path.
  */
+import * as record from "../../jobs/lib/record.ts";
 import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/git.ts";
 import { layout } from "../../jobs/lib/layout.ts";
 import * as issues from "./todo.ts";
@@ -177,8 +178,8 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
 
 // The fields.
 
-/** An item with an `ask`: it waits for Chris, so it is never dispatched and never triaged. */
-export const awaitsChris = (item: Issue): boolean => item.fm.ask !== undefined;
+/** An item with an Ask in its job record: it waits for Chris, so it is never dispatched and never triaged. */
+const asks = (doc: Doc, item: Issue, repo: Place): boolean => record.issueAsk(record.read(`${doc.repo ?? repo.key}-${issues.refOf(item)}`)) !== null;
 
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(",").map((s) => s.trim()).filter(Boolean) : []);
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
@@ -203,7 +204,7 @@ export const takenIn = (item: Issue): boolean => item.fm.intake !== undefined ||
  * In a repo with `author`, a top-level issue builds only after intake took it in.
  */
 export const isBuildable = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
-  status(item) === "open" && (parentOf(doc, item) === undefined || status(parentOf(doc, item)!) !== "parked") && !awaitsChris(item) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0
+  status(item) === "open" && (parentOf(doc, item) === undefined || status(parentOf(doc, item)!) !== "parked") && !asks(doc, item, repo) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0
   && (item.sub !== undefined || !repo.author || takenIn(item));
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
@@ -215,7 +216,7 @@ export const areasOf = (item: Issue): string[] => list(item.fm.areas);
  * In a repo with `author`, a spec alone does not sort it: intake takes in an issue filed with a spec too.
  */
 export const isSorted = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
-  awaitsChris(item) || item.sub !== undefined || isTracker(item)
+  asks(doc, item, repo) || item.sub !== undefined || isTracker(item)
   || (!planSet(item) && (partsOf(doc, item).length > 0 || takenIn(item) || (!repo.author && !!item.spec.trim())));
 
 /** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */

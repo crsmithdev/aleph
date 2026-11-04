@@ -6,11 +6,13 @@ import { writeList } from "../todo/lib/store.ts";
 import { add, addPart } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
-import { loadRegistry } from "../jobs/lib/ledger.ts";
+import { loadRegistry, writeRun } from "../jobs/lib/ledger.ts";
+import { removeRun } from "../jobs/lib/record.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/status.ts";
 import { state as fixture } from "./fixtures/status-state.ts";
 import { rows, withAttn } from "./test-now.ts";
+import { setAsk } from "../jobs/lib/ask.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -32,7 +34,7 @@ const HELD = { kind: "approval", reason: "held-path", question: "", options: [],
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", repo: "fac", told: true, started: ago(3), ...extra }));
+  writeRun(join(dir), { kind: "build", repo: "fac", told: true, started: ago(3), ...extra } as any);
   for (const [f, text] of Object.entries(files)) writeFileSync(join(dir, f), text);
 }
 
@@ -83,7 +85,7 @@ describe("state", () => {
     expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
     expect(s.issues.length).toBe(s.newIssues);
     expect(s.issues.every((i) => i.id.startsWith("fac-") && i.href.startsWith("#/issues/fac/") && i.status === "new")).toBe(true);
-    for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) rmSync(join(jobsDir, id), { recursive: true });
+    for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
   });
 
   test("landing counts land runs in progress; New counts open unlabelled issues, not goals or labelled ones", () => {
@@ -117,7 +119,7 @@ describe("state", () => {
       expect(s.running.some((j) => j.run?.kind === "plan")).toBe(true);
     } finally {
       for (const k of kids) k.kill();
-      for (const [id] of ids) rmSync(join(jobsDir, id), { recursive: true });
+      for (const [id] of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
     }
   });
 
@@ -164,7 +166,7 @@ describe("a land that found the job lock busy", () => {
     expect(card.reason).not.toBe("job lock busy");
     expect(card.run.kind).toBe("build");
     expect(facts(loadRegistry().fac).open[2]).toBe("passed");
-    for (const id of ["20261027-000040-a", "20261027-000041-a"]) rmSync(join(jobsDir, id), { recursive: true });
+    for (const id of ["20261027-000040-a", "20261027-000041-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
   });
 });
 
@@ -184,7 +186,7 @@ describe("an intake run", () => {
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("intake-fac-2");
     expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), why: "Starts at the next dispatch", kind: "ready" }]);
-    for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
+    for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
   });
 });
 
@@ -200,7 +202,7 @@ describe("a goal that acceptance failed twice", () => {
       const card = rows(withAttn({ ...fixture, stuck: [], factory: { ...fixture.factory, health: [] }, asks: [a!] }))[0];
       expect(card).toContain("Reviewer: land");
     } finally {
-      rmSync(join(jobsDir, "20261027-000060-a"), { recursive: true });
+      (rmSync(join(jobsDir, "20261027-000060-a"), { recursive: true }), removeRun("20261027-000060-a"));
     }
   });
 
@@ -212,12 +214,11 @@ describe("a goal that acceptance failed twice", () => {
     writeList({ key: "fac" }, "goal that failed acceptance twice", (doc) => {
       const goal = add(doc, "acceptance goal");
 
-      goal.fm.ask = "input";
-      goal.fm.reason = "acceptance-failed";
       goal.notes.push("- Oracle: `bun test ui/state.test.ts` fails on the acceptance check.");
       goalId = goal.id;
       return true;
     });
+    setAsk(`fac-${goalId}`, { kind: "input", reason: "acceptance-failed", question: "", options: [], why: [] });
     try {
       // The trailer commit on main names the goal; origin/main points at it, as a land would leave it.
       sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${goalId}`);

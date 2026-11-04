@@ -10,6 +10,8 @@ import { withEnv } from "./test-server.ts";
 import * as v from "./views/jobs.js";
 // @ts-ignore plain JS, shared with the page
 import * as jobView from "./views/job.js";
+import { writeRun } from "../jobs/lib/ledger.ts";
+import { removeRun } from "../jobs/lib/record.ts";
 
 let base: string, jobsDir: string;
 let restore: () => void;
@@ -28,7 +30,7 @@ const ago = (h: number) => new Date(now - h * 3600_000).toISOString();
 function run(id: string, extra: Record<string, unknown>, files: Record<string, string> = {}) {
   const dir = join(jobsDir, id);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "build", told: true, started: ago(3), ...extra }));
+  writeRun(join(dir), { kind: "build", told: true, started: ago(3), ...extra } as any);
   for (const [f, t] of Object.entries(files)) writeFileSync(join(dir, f), t);
 }
 async function get(path: string) {
@@ -88,11 +90,13 @@ describe("a land that found the job lock busy", () => {
       const d = await (await get("/api/jobs/fac-7")).json();
       expect(d.condition).toBe("passed");
       expect(d.reason).toBeUndefined();
+      // The job record gives the next step from the run that counts: the passed run, which waits for a land by hand.
+      expect(d.next).toEqual({ step: "wait", why: "it passed and waits for aleph land" });
       expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ condition: "failed", reason: "job lock busy" });
       expect((await (await get("/api/jobs?condition=failed")).json()).map((j: any) => j.name)).not.toContain("fac-7");
       expect((await (await get("/api/jobs?condition=passed")).json()).map((j: any) => j.name)).toContain("fac-7");
     } finally {
-      for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
+      for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
     }
   });
 });

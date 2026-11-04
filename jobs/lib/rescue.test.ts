@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { applyActions, pendingCases } from "./director.ts";
@@ -15,7 +15,7 @@ test("a QUESTION run waits for a spec edit: the Ask says so, and an edit drops t
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": "Stopped.\nQUESTION: which wins?" });
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
-  const a = askOf(readList({ key: "fac" })!.items.find((i) => issues.refOf(i) === String(id))!)!;
+  const a = askOf(`fac-${id}`)!;
   expect(a.reason).toBe("question");
   expect(a.recommended).toBeUndefined();
   expect(a.question).toContain("waits for a spec edit");

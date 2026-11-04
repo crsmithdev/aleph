@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeRun, type Run } from "./lib/ledger.ts";
+import { readRun, writeRun, type Run } from "./lib/ledger.ts";
 import { unitAlive } from "./lib/process.ts";
 export { unitAlive };
 import { config as storeConfig } from "../todo/lib/store.ts";
@@ -156,9 +156,10 @@ export function moveMain(): void {
   sh(other, "git", "commit", "-qm", "moved");
   sh(other, "git", "push", "-q", "origin", "main");
 }
-export const state = (run: string) => JSON.parse(readFileSync(join(jobsDir, run, "state.json"), "utf8"));
-/** `state` for a run that may be starting: its folder exists a moment before its state.json, so a missing file reads as no state yet. */
-export const stateNow = (run: string): { condition: string } => { try { return state(run); } catch { return { condition: "" }; } };
+/** The run's state: its entry in its job record. Throws when no record holds it yet. */
+export const state = (run: string): any => readRun(join(jobsDir, run)) ?? (() => { throw new Error(`no record holds ${run}`); })();
+/** `state` for a run that may be starting: its folder exists a moment before its record has it, so a missing run reads as no state yet. */
+export const stateNow = (run: string): { condition: string } => readRun(join(jobsDir, run)) ?? { condition: "" };
 export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, f), "utf8");
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 export const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
@@ -317,6 +318,8 @@ export function setup(): void {
   base = mkdtempSync(join(tmpdir(), "aleph-jobs-"));
   for (const d of ["run", "fake", "jobs", "vault"]) mkdirSync(join(base, d));
   jobsDir = join(base, "jobs");
+  // The test process reads and seeds the records the units write.
+  process.env.ALEPH_RECORDS_DIR = join(jobsDir, ".records");
   fakeLog = join(base, "fake");
   setupLog = join(base, "setup.log");
   fake = join(base, "fake-worker");
@@ -380,6 +383,7 @@ export function teardown(): void {
   try { lf?.stop(true); } catch {}
   try { if (base) killReferring(base); } catch {}
   if (base) rmSync(base, { recursive: true, force: true });
+  delete process.env.ALEPH_RECORDS_DIR;
 }
 export function resetLf(): void { lfPosts = []; lfStatus = 200; }
 export function setLfStatus(n: number): void { lfStatus = n; }

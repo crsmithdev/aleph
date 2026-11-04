@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { CLI } from "../cli.helpers.ts";
 import { renderItem } from "../../todo/lib/todo.ts";
 import { config, storeDir } from "../../todo/lib/store.ts";
-import { runsDir } from "./ledger.ts";
+import { runsDir, writeRun } from "./ledger.ts";
 import { layout } from "./layout.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-const VARS = ["ALEPH_ISSUES", "ALEPH_JOBS_DIR", "ALEPH_RUNS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS"];
+const VARS = ["ALEPH_ISSUES", "ALEPH_JOBS_DIR", "ALEPH_RECORDS_DIR", "ALEPH_RUNS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS"];
 let home: string, a: string;
 const saved: Record<string, string | undefined> = {};
 
@@ -44,7 +44,7 @@ beforeAll(() => {
   sh(join(a, "issues"), "git", "push", "-q", "origin", "main");
   const run = join(a, "runs", "20261030-100000-aleph-j1-agent");
   mkdirSync(run, { recursive: true });
-  writeFileSync(join(run, "state.json"), JSON.stringify({ job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", condition: "failed", told: true, started: "2026-10-30T10:00:00Z" }, null, 2) + "\n");
+  writeRun(run, { job: "20261030-100000-aleph-j1-agent", name: "j1", repo: "aleph", kind: "build", condition: "failed", told: true, started: "2026-10-30T10:00:00Z" });
   mkdirSync(join(a, "runs", "sandbox-run"), { recursive: true });
   mkdirSync(join(a, "factory"), { recursive: true });
   writeFileSync(join(a, "factory", "paused"), "");

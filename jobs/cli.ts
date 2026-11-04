@@ -19,7 +19,7 @@ import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as issues from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
-import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
+import { askOf, refIn, grant, readAlways, revoke } from "./lib/ask.ts";
 import { behind, directorStep, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/factory.ts";
 import { runTick } from "./lib/tick.ts";
 import { dispatchDetached, intakeDetached } from "./lib/launch.ts";
@@ -202,16 +202,16 @@ async function todoCmd(): Promise<void> {
     }
     case "list": {
       const rows = verbs.list(repo, { status: stat, label, kind: flag("kind") });
-      if (json) { out(rows.map(verbs.brief)); return; }
+      if (json) { out(rows.map(verbs.brief(repo.key))); return; }
       if (!rows.length) { console.log("no issues"); return; }
       printRows(rows, repo.key);
       return;
     }
     case "show": {
       const i = verbs.show(repo, id);
-      if (json) { out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes }); return; }
+      if (json) { out({ ...verbs.brief(repo.key)(i), request: i.request, spec: i.spec, notes: i.notes }); return; }
       console.log(`## ${i.id}. ${i.title}`);
-      const ask = askOf(i);
+      const ask = askOf(refIn(repo.key, i));
       console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
       console.log(`after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
@@ -285,7 +285,7 @@ function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { s
     return;
   }
   const rows = verbs.listRecent(repos, o).map((r) => ({ repo: r.repo.key, items: r.items }));
-  if (json) { out(rows.map((r) => ({ repo: r.repo, items: r.items.map(verbs.brief) }))); return; }
+  if (json) { out(rows.map((r) => ({ repo: r.repo, items: r.items.map(verbs.brief(r.repo)) }))); return; }
   if (!rows.length) { console.log("no issues"); return; }
   for (const r of rows) { console.log(r.repo); printRows(r.items, r.repo, "  "); }
 }

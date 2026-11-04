@@ -11,6 +11,16 @@ import { withEnv, withServer } from "./test-server.ts";
 import { when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
+import * as record from "../jobs/lib/record.ts";
+import { allHolds, type HoldRecord } from "../jobs/lib/factory-status.ts";
+
+/** Make `rows` the only hold records: each goal's `hold` and `started` events in its job record. */
+function setHolds(rows: HoldRecord[]): void {
+  const names = new Set([...record.all().map((r) => r.issue), ...rows.map((x) => x.name)]);
+  for (const n of names) record.update(n, (r) => {
+    r.events = rows.filter((x) => x.name === n).map((x) => (x.kind === "started" ? { at: x.at, kind: "started", what: x.text } : { at: x.at, kind: "hold", what: x.text, data: { gate: x.kind } }));
+  });
+}
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -31,12 +41,6 @@ beforeAll(async () => {
   const factory = join(base, "factory");
   mkdirSync(factory);
   writeFileSync(join(factory, "always.json"), JSON.stringify({ rescue: { action: "recommended", at: ago(30) }, "triage-failed": { action: "close", at: ago(40) }, "proposal-claude-md:global": { action: "approve", at: ago(50) } }));
-  writeFileSync(join(factory, "holds.jsonl"), [
-    // An old record, from before the 7 gates, still parses.
-    { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live" },
-    { at: ago(4), name: "r-3", kind: "started", text: "started" },
-    { at: ago(60 * 24 * 9), name: "r-4", kind: "gate", text: "too old" },
-  ].map((x) => JSON.stringify(x)).join("\n") + "\n");
   writeFileSync(join(factory, "tick.log"), [
     `${ago(3)} always: rescue: recommended on r-5`,
     `${ago(2)} firefighter: did answer r-6: picked the plain option`,
@@ -48,6 +52,12 @@ beforeAll(async () => {
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho '{}'\nexit 0\n`);
   chmodSync(fake, 0o755);
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake });
+  setHolds([
+    // An old record, from before the 7 gates, still reads.
+    { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live" },
+    { at: ago(4), name: "r-3", kind: "started", text: "started" },
+    { at: ago(60 * 24 * 9), name: "r-4", kind: "gate", text: "too old" },
+  ]);
   ({ stop, at } = await withServer({ warm: false }));
 });
 afterAll(() => {
@@ -163,11 +173,10 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).not.toContain("rescue: recommended<");
 });
 
-const withHolds = (rows: any[], f: () => void) => {
-  const file = join(process.env.ALEPH_FACTORY_DIR!, "holds.jsonl");
-  const was = readFileSync(file, "utf8");
-  writeFileSync(file, rows.map((x) => JSON.stringify(x)).join("\n") + "\n");
-  try { f(); } finally { writeFileSync(file, was); }
+const withHolds = (rows: HoldRecord[], f: () => void) => {
+  const was = allHolds();
+  setHolds(rows);
+  try { f(); } finally { setHolds(was); }
 };
 const hold = (min: number, name = "r-9", text = "busy") => ({ at: ago(min), name, kind: "gate", text });
 const gateLines = () => log().filter((e) => e.by === "Gate");

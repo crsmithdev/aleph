@@ -68,7 +68,7 @@ function reset(items: Seed[], o: { author?: boolean } = {}): void {
   writeList(repo, "reset", (doc) => {
     for (const i of items) {
       const item = issues.add(doc, i.title, { request: i.body, kind: i.kind, ...(i.source ? { source: i.source } : {}) });
-      if (i.ask) setAsk(item, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
+      if (i.ask) setAsk(`${repo.key}-${item.id}`, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
       if (i.after) item.fm.after = i.after;
       if (i.spec) item.spec = i.spec;
     }
@@ -127,7 +127,7 @@ test("an intake run records its route, the issue it is on and its cost", async (
   expect(item(1).spec).toBe("## Goal\nDo it.\n\n## Edit surface\n- x.ts\n\n## Oracle\n- `bun test x.test.ts` passes");
   expect(item(1).fm.intake).toBe("build");
   expect(issues.status(item(3))).toBe("done");
-  expect(askOf(item(2))).toMatchObject({ reason: "question" });
+  expect(askOf(`${repo.key}-2`)).toMatchObject({ reason: "question" });
 });
 
 test("a reply that fails the code check goes back once in the same session; a fixed reply is applied and the cost is the sum", async () => {
@@ -148,8 +148,8 @@ test("a reply that fails the code check twice asks Chris with the reason intake-
   const t = await run();
   expect(t.counts).toEqual({});
   expect(calls()).toHaveLength(2);
-  expect(askOf(item(1))).toMatchObject({ reason: "intake-failed" });
-  expect(askOf(item(1))!.question).toContain("nope.ts");
+  expect(askOf(`${repo.key}-1`)).toMatchObject({ reason: "intake-failed" });
+  expect(askOf(`${repo.key}-1`)!.question).toContain("nope.ts");
   expect(runOf(1)!.cause).toBe("no-answer");
 });
 
@@ -157,8 +157,8 @@ test("a malformed verdict is sent back once, then asks Chris", async () => {
   reset([{ title: "a", body: "VERDICT:bad" }]);
   await run();
   expect(calls()).toHaveLength(2);
-  expect(askOf(item(1))).toMatchObject({ reason: "intake-failed" });
-  expect(askOf(item(1))!.question).toContain('unknown route "maybe"');
+  expect(askOf(`${repo.key}-1`)).toMatchObject({ reason: "intake-failed" });
+  expect(askOf(`${repo.key}-1`)!.question).toContain('unknown route "maybe"');
 });
 
 test("an issue an Issue trailer on main names is done with no run", async () => {
@@ -300,9 +300,9 @@ describe("a run with no reply", () => {
   test("an exit that is not zero counts toward the limit, and the second asks Chris", async () => {
     reset([{ title: "a", body: "VERDICT:fail" }]);
     await run();
-    expect(item(1).fm.ask).toBeUndefined();
+    expect(askOf(`${repo.key}-1`)).toBeNull();
     await run();
-    expect(askOf(item(1))).toMatchObject({ reason: "intake-failed" });
+    expect(askOf(`${repo.key}-1`)).toMatchObject({ reason: "intake-failed" });
     expect(item(1).notes.at(-1)).toContain("no verdict in 2 runs: failed: intake exited 3");
   });
 
@@ -310,7 +310,7 @@ describe("a run with no reply", () => {
     reset([{ title: "a", body: "nothing" }]);
     await run();
     expect(calls()).toHaveLength(1);
-    expect(item(1).fm.ask).toBeUndefined();
+    expect(askOf(`${repo.key}-1`)).toBeNull();
   });
 
   test("retry: no Ask, and a third intake runs the command", async () => {
@@ -318,7 +318,7 @@ describe("a run with no reply", () => {
     reset([{ title: "a", body: "nothing" }]);
     await run();
     const t = await run();
-    expect(item(1).fm.ask).toBeUndefined();
+    expect(askOf(`${repo.key}-1`)).toBeNull();
     expect(t.skipped).toEqual([`${repo.key}-1: no verdict in 2 intake runs; standing: intake again next tick`]);
     const n = calls().length;
     await run();
@@ -340,7 +340,7 @@ describe("a run with no reply", () => {
     reset([{ title: "a", body: "VERDICT:structured" }]);
     const t = await run();
     expect(t.counts).toEqual({ ask: 1 });
-    expect(item(1).fm.ask).toBeUndefined();
+    expect(askOf(`${repo.key}-1`)).toBeNull();
     expect(isSorted(readList(repo)!, item(1))).toBe(false);
     expect(item(1).notes.at(-1)).toEndWith("always: took the recommendation B: do b");
   });

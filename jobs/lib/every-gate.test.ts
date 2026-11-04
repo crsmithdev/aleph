@@ -10,6 +10,7 @@ import type { Repo, Run } from "./ledger.ts";
 import { branchPorts } from "./unit.ts";
 import { workerVerdict } from "./worker-verdict.ts";
 import { fixture } from "../../tests/git-fixture.ts";
+import { writeRun } from "./ledger.ts";
 
 setDefaultTimeout(120_000);
 
@@ -47,7 +48,7 @@ function landSetup(file = "a.txt", held: string[] = []): string {
   folder = join(root, "j1-run");
   mkdirSync(folder);
   writeFileSync(join(root, "j1", "spec.md"), "## Oracle\n- `bun run test` passes.\n- `bun test x.test.ts` passes.\n");
-  writeFileSync(join(folder, "state.json"), JSON.stringify(base_run));
+  writeRun(join(folder), base_run as any);
   return git(path, "rev-parse", "main").out;
 }
 /** A runner that passes and writes, for a `bun test` command, a JUnit report of one passed test. */
@@ -57,7 +58,7 @@ const passes: Runner = async (_repo, _sha, command) => {
   return { code: 0, output: "" };
 };
 const held = (base: string, review: () => Promise<{ reason: string | null }>, runner: Runner = passes) =>
-  workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, { ...branchPorts(folder, base_run, repo, base, "work", { changed: [], runner, review: review as never }), checks: async () => ({ stop: null }) });
+  workerVerdict({ earlier: [], done: 0, rounds: 2, facts: {}, checked: {} }, { ...branchPorts(folder, base_run, repo, base, "work", { changed: [], runner, review: review as never }), checks: async () => ({ stop: null }) });
 const cleanup = () => { if (root) rmSync(root, { recursive: true, force: true }); root = ""; };
 
 test("gate failed Oracle command: the worker verdict gives condition stuck with checkName oracle and no review", async () => {

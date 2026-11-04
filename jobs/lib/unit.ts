@@ -3,6 +3,7 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with state.json, then `exit`, then the news.
  */
+import * as jobRecord from "./record.ts";
 import { NO_SKILLS, skillSection } from "./role-skill.ts";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -18,7 +19,7 @@ import { awaiting, workerVerdict, type NoVerdict, type Outcome, type VerdictPort
 import { admit, tagged, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
-import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
+import { allJobs, isOpen, jobById, lastReal, openJob, stepOf } from "./job.ts";
 import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
@@ -243,9 +244,10 @@ export async function startKept(go: typeof start = start): Promise<string[]> {
     if (!isOpen(j)) continue;
     const { folder, run } = lastReal(j);
     const mark = runFile(folder, PAUSED_NEXT);
-    if (!run.next || !existsSync(mark)) continue;
+    const { step } = stepOf(j);
+    if ((step !== "worker" && step !== "land") || !existsSync(mark)) continue;
     try { rmSync(mark); } catch { continue; }
-    await go(folder, run, run.next);
+    await go(folder, run, step);
     started.push(run.name);
   }
   return started;
@@ -406,13 +408,14 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return stuck("no-commit", "no commit", facts);
   const base = git(repo.path, "merge-base", main, tip).out;
 
-  // Each earlier run of the job that a failed check sent back is a fix round.
+  // The fix rounds so far are the job record's; the runs sent back say what they failed.
+  const done = jobRecord.read(jobRecord.keyOf(run))?.rounds ?? 0;
+  if (done) facts.round = done;
   const earlier = earlierRounds(jobById(run.job) ?? [], id);
-  if (earlier.length) facts.round = earlier.length;
   const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
   if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
   const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out };
-  return workerVerdict({ earlier: earlier.map((e) => e.run), rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, result: o.result, env }));
+  return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, result: o.result, env }));
 }
 
 /**

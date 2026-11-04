@@ -95,10 +95,10 @@ test("a land live past 30 minutes sets one rescue Ask; a land live for 10 minute
     const one = await firefight(ports());
     expect(one!.asked).toEqual([`${key}-1`]);
     expect((await firefight(ports()))!.asked).toEqual([]);
-    const ask = askOf(issues.find(readList({ key })!, 1)!);
+    const ask = askOf(`${key}-1`);
     expect(ask).toMatchObject({ kind: "input", reason: "rescue", recommended: "Wait" });
     expect(ask!.options.map((o) => o.label)).toEqual(["Wait", "Kill and rerun", "Drop"]);
-    expect(askOf(issues.find(readList({ key })!, 2)!)).toBeNull();
+    expect(askOf(`${key}-2`)).toBeNull();
     expect(calls()).toBe(0);
     expect(agentRuns()).toEqual([]);
   } finally {

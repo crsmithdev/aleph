@@ -10,16 +10,15 @@
  * the goal. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
  */
 import { skillSection } from "./role-skill.ts";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { reader } from "../../todo/lib/store.ts";
 import { needsOf } from "./ask.ts";
-import { factoryDir } from "./factory-status.ts";
 import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
 import { askOf, isAgentRun, isBuild, lastTagged, onOf, readRun, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
+import * as record from "./record.ts";
 import { jobSpec, runFile } from "./run-files.ts";
 
 // ---------------------------------------------------------------------------
@@ -117,13 +116,17 @@ export function goalBrief(item: { title: string; spec: string; notes: string[] }
 // ---------------------------------------------------------------------------
 // The rerun note: what the goal's next run reads, under "Note on the last run"
 
-const rerunFile = (name: string) => join(factoryDir(), "rerun", `${name}.md`);
+/** Leave the note in the goal's job record: a `rerun` event. */
 export function writeRerun(name: string, note: string): void {
-  mkdirSync(dirname(rerunFile(name)), { recursive: true });
-  writeFileSync(rerunFile(name), note + "\n");
+  record.addEvent(name, { kind: "rerun", what: note });
 }
-const rerunNote = (name: string): string => (existsSync(rerunFile(name)) ? readFileSync(rerunFile(name), "utf8").trim() : "");
-export const clearRerun = (name: string): void => rmSync(rerunFile(name), { force: true });
+/** The goal's rerun note: its newest `rerun` event, unless a `rerun-cleared` event came after it. */
+const rerunNote = (name: string): string => {
+  const e = record.read(name)?.events.findLast((x) => x.kind === "rerun" || x.kind === "rerun-cleared");
+  return e?.kind === "rerun" ? e.what.trim() : "";
+};
+/** The run started with the note: clear it. */
+export const clearRerun = (name: string): void => { if (rerunNote(name)) record.addEvent(name, { kind: "rerun-cleared", what: "the run started with the note" }); };
 
 // ---------------------------------------------------------------------------
 // What the unit starts after a run ends
@@ -261,8 +264,8 @@ export const questionOf = (result: string): string | undefined => lastTagged(res
 // The rescue of a stuck or failed run: which case it is, and the step
 
 /** The case of the safe default action taken on the run, or "" when none was. */
-export const rescued = (e: Entry): string => tailOf(e, "rescued", 1);
-export const markRescued = (e: Entry, key: string): void => writeFileSync(runFile(e.folder, "rescued"), key + "\n");
+export const rescued = (e: Entry): string => record.read(record.keyOf(e.run))?.events.findLast((x) => x.kind === "rescued" && x.run === e.id)?.what ?? "";
+export const markRescued = (e: Entry, key: string): void => void record.addEvent(record.keyOf(e.run), { kind: "rescued", run: e.id, what: key });
 
 /**
  * The question of a run that ended with no commit and asked about the spec, or null when it did not ask.

@@ -62,7 +62,7 @@ test("a touched item the store closed is done without a fresh trailer commit, un
 
 test("facts carry what stage() needs: status, spec, after, parts, ask kind and each job's last run", () => {
   const doc: Doc = { items: [
-    { ...item(21, "open"), spec: "s", fm: { after: ["demo-22"], ask: "approval", reason: "review" } },
+    { ...item(21, "open"), spec: "s", fm: { after: ["demo-22"] } },
     { ...item(22, "open"), fm: {} },
     { id: 22, sub: 1, title: "p", fm: {}, request: "", spec: "s", notes: [] },
   ] };
@@ -70,7 +70,9 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
   mkdirSync(folder, { recursive: true });
   writeRun(folder, { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", condition: "awaiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: STARTED });
   const f = facts(repo, doc);
-  expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [], ask: { kind: "approval", reason: "review" } });
+  // The run owns the issue's one Ask, so the issue has none of its own.
+  expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [] });
+  expect(f.items[21].ask).toBeUndefined();
   expect(f.items[22]).toMatchObject({ parts: ["demo-22.1"], after: [] });
   expect(f.runs[21]).toEqual([{ kind: "build", condition: "awaiting", open: true, ask: { kind: "input", reason: "question" } }]);
 });

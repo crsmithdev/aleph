@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { ctx, sh, goal, change, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { ctx, sh, goal, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 import { clearAsk } from "./ask.ts";
 
 // The test's clock: the run cap's hour, the streak and the notes read it.
@@ -34,7 +34,7 @@ test("a fourth no-commit run in a row is not dispatched; the item gets an Ask", 
   expect(out.skipped.join()).toContain("3 runs in a row with no commit");
   expect(ask(id)).not.toBeNull();
   expect(notes(id)).toContain("ended with no commit");
-  expect(readList({ key: "fac" })!.items.find((i) => i.id === id)!.fm.reason).toBe("no-commit");
+  expect(ask(id)?.reason).toBe("no-commit");
   await dispatch(f);
   expect(f.specs).toEqual([]);
 });
@@ -42,7 +42,7 @@ test("a fourth no-commit run in a row is not dispatched; the item gets an Ask", 
 const noCommitRuns = (id: number, n: number, back: number) => {
   for (let i = 0; i < n; i++) mk(`fac-${id}`, "build", "dropped", { reason: "run X ended with no commit: dropped", noCommit: true, started: ago((back - i) * 1000) });
 };
-const unlabel = (id: number) => change(id, (item) => clearAsk(item));
+const unlabel = async (id: number) => clearAsk(`fac-${id}`);
 const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
 
 test("answering the Ask restarts the no-commit streak; three more no-commit runs give it another Ask", async () => {

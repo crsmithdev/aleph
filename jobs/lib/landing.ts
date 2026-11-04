@@ -9,12 +9,12 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { closeAndFile } from "../../todo/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
-import { askOf, allRuns, isAwaiting, isAgentRun, loadRegistry, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
+import { askOf, allRuns, isAwaiting, isAgentRun, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { isLive } from "./process.ts";
 import { buildChecks } from "./related.ts";
 import { stopFields, type ChecksStop } from "./checks.ts";
 import { LOCK_BUSY, type Cause } from "./outcome.ts";
-import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
+import { allJobs, hasFile, isOpen, jobById, lastReal, stepOf } from "./job.ts";
 import { onMain } from "./status.ts";
 import { RELANDS, TODO_PATH } from "./continuation.ts";
 import { serverGraph } from "./ui-graph.ts";
@@ -52,13 +52,14 @@ export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: 
   return null;
 }
 
-/** Passed agent runs waiting to land by themselves (`--land` or an autoland repo), oldest first. */
+/**
+ * Passed agent runs waiting to land by themselves, oldest first: the job's next step is a land (nextStep set `next`
+ * for `--land` or an autoland repo). A land that lands again is the unit's own step, so it is not here.
+ */
 export function waitingToLand(jobs = allJobs()): string[] {
-  const repos = loadRegistry();
   return jobs.filter((j) => {
     const last = lastReal(j);
-    const r = last.run;
-    return isOpen(j) && landTerms(r)?.asked === false && !isLive(last.folder) && (r.land || (r.repo && repos[r.repo]?.autoland));
+    return isOpen(j) && isAgentRun(last.run.kind) && !isLive(last.folder) && stepOf(j).step === "land";
   }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
 }
 

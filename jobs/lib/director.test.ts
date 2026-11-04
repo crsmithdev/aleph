@@ -1,16 +1,16 @@
 // The director: every new Ask goes to it; it decides with actions code applies, or escalates with case text. The escalation
 // list, the action bound, the once-per-goal rerun and the record are code's, whatever the fake replies.
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { awaitsChris, writeList } from "../../todo/lib/store.ts";
-import { plainAsk, setAsk } from "./ask.ts";
+import { plainAsk, setAsk, awaitsChris } from "./ask.ts";
 import { directAll, MAX_ACTIONS, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "./factory.ts";
 import { allRuns, loadRegistry, readRun } from "./ledger.ts";
 import { setPaused } from "./factory-status.ts";
 import { readStore } from "./corrections.ts";
+import { lastEvent } from "./record.ts";
 import { asked, base, branch, calls, choice, dropped, fresh, item, key, landed, log, n, plain, ports, reply, replyWith, run, useDirectorFixture } from "./director.fixture.ts";
 
 useDirectorFixture();
@@ -50,7 +50,7 @@ test("an escalated Ask gets the director's case text and stays with Chris", asyn
   const a = asked(1)!;
   expect(a.situation).toBe(TEXT.situation);
   expect(a.recommend).toEqual(TEXT.recommend);
-  expect(awaitsChris(item(1))).toBe(true);
+  expect(awaitsChris(`${key}-1`)).toBe(true);
   expect(log()).toContain(`director: ${key}-1: question: escalated: the director did not decide`);
   // Escalated once: no second run.
   await direct();
@@ -87,7 +87,7 @@ test("the escalation list: a land on a security path and a host check get case t
   ]);
   expect(out.every((d) => d.applied.length === 0 && d.refused.every((r) => r.endsWith("the Ask is on the escalation list")))).toBe(true);
   expect(landed).toEqual([]);
-  expect(awaitsChris(item(2))).toBe(true);
+  expect(awaitsChris(`${key}-2`)).toBe(true);
   expect(readRun(folder)!.ask!.situation).toStartWith("The director did not decide this Ask");
   expect(prompt()).toContain("This Ask is on the escalation list");
 });
@@ -143,7 +143,7 @@ test(`at most ${MAX_ACTIONS} actions: the 11th is refused`, async () => {
   const [d] = await direct();
   expect(d.applied.length).toBe(10);
   expect(d.refused).toEqual(["rerun: more than 10 actions in one run"]);
-  expect(awaitsChris(item(1))).toBe(true);
+  expect(awaitsChris(`${key}-1`)).toBe(true);
 });
 
 test("a run-cap Ask: the director reruns the goal once; the second run-cap Ask on it goes to Chris", async () => {
@@ -152,10 +152,10 @@ test("a run-cap Ask: the director reruns the goal once; the second run-cap Ask o
   const [first] = await direct();
   expect(first).toMatchObject({ outcome: "decided", applied: ["rerun"] });
   expect(asked(1)).toBeNull();
-  writeList({ key }, "again", (doc) => { setAsk(issues.find(doc, 1)!, plainAsk("run-cap", "3 starts in an hour, again")); return true; });
+  setAsk(`${key}-1`, plainAsk("run-cap", "3 starts in an hour, again"));
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "escalated", why: `the director already decided a run-cap Ask on ${key}-1; the second goes to Chris` });
-  expect(awaitsChris(item(1))).toBe(true);
+  expect(awaitsChris(`${key}-1`)).toBe(true);
   expect(prompt()).toContain("This Ask is on the escalation list");
 });
 
@@ -166,7 +166,7 @@ test("a worker's question on a run: the director's answer drops the job with the
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "decided" });
   expect(dropped).toEqual([{ name: `${key}-1`, reason: `The director answered the worker's question "which module?": use ask.ts` }]);
-  expect(existsSync(join(process.env.ALEPH_FACTORY_DIR!, "rerun", `${key}-1.md`))).toBe(true);
+  expect(lastEvent(`${key}-1`, "rerun")?.what).toBe(`The director answered the worker's question "which module?": use ask.ts`);
 });
 
 test("a paused factory starts no director run", async () => {

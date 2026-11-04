@@ -4,10 +4,11 @@
  * the ALEPH_* variables that point at them. The work store needs a git repo, so it is made here, not kept in git.
  * Times in the run folders are written against ANCHOR and moved so the newest sits a few hours back from now.
  */
-import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { writeList } from "../../../todo/lib/store.ts";
 import { add, addPart, note, setStatus } from "../../../todo/lib/todo.ts";
+import { putRun } from "../../../jobs/lib/record.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };
@@ -65,12 +66,20 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
   }
   const shift = Date.now() - 2 * 3600_000 - ANCHOR;
   copyPlain(join(src, "jobs"), join(dest, "jobs"));
-  for (const id of readdirSync(join(dest, "jobs"))) {
-    const file = join(dest, "jobs", id, "state.json");
-    let run;
-    try { run = JSON.parse(readPlain(file)); } catch { continue; }
-    for (const k of ["started", "ended"]) if (run[k]) run[k] = new Date(Date.parse(run[k]) + shift).toISOString();
-    writeFileSync(file, JSON.stringify(run, null, 2) + "\n");
+  // The fixture keeps each run as a state.json; the copy keeps it in its job record, where the ledger reads it.
+  const records = process.env.ALEPH_RECORDS_DIR;
+  process.env.ALEPH_RECORDS_DIR = join(dest, "jobs", ".records");
+  try {
+    for (const id of readdirSync(join(dest, "jobs"))) {
+      const file = join(dest, "jobs", id, "state.json");
+      let run;
+      try { run = JSON.parse(readPlain(file)); } catch { continue; }
+      for (const k of ["started", "ended"]) if (run[k]) run[k] = new Date(Date.parse(run[k]) + shift).toISOString();
+      putRun(id, run);
+      rmSync(file);
+    }
+  } finally {
+    if (records === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = records;
   }
   mkdirSync(join(dest, "vault"), { recursive: true });
   if (lstatSync(join(src, "vault"), { throwIfNoEntry: false })?.isDirectory()) copyPlain(join(src, "vault"), join(dest, "vault"));

@@ -4,6 +4,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { loadRegistry } from "./ledger.ts";
 import { subjectOf } from "./stage.ts";
 import { repoStages } from "./status.ts";
+import { setAsk, plainAsk } from "./ask.ts";
 
 // The rows call repoStages in-process, as `aleph status <ref>` does, under the CLI's environment; one row runs the CLI.
 let restore: () => void;
@@ -62,7 +63,7 @@ const GOALS_DOTTED: Row[] = [
   } },
   { name: "dotted goal: awaiting its Ask while a trailer commit on main names it", stage: "awaiting", why: /input: acceptance-failed/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1, { ask: "input", reason: "acceptance-failed" }); landGoal(n, `${n}.1`); return a;
+    const a = seedGoal("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("acceptance-failed", "it failed twice")); landGoal(n, `${n}.1`); return a;
   } },
   { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });

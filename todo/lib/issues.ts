@@ -12,7 +12,7 @@ import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { recentRepos } from "../../jobs/lib/status.ts";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
-import { askIfPartDropped, askOf, clearAsk, decideAsk } from "../../jobs/lib/ask.ts";
+import { askIfPartDropped, askOf, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/ask.ts";
 import { triage } from "./triage.ts";
 
 /** The fields `add` and `edit` take. `labels` are the issue's areas. `spec` makes an issue buildable, and `after` is what it waits for. */
@@ -28,7 +28,7 @@ export interface Fields {
   after?: string[];
 }
 
-export const brief = (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(i), notes: i.notes.length });
+export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
 
 /** A bad value is refused before anything is written. */
 export function checkFields(f: Fields): void {
@@ -127,10 +127,10 @@ export function note(repo: store.Place, id: number | string, text: string, answe
   const w = write(repo, `todo: a note on item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     const line = issues.note(i, text);
-    const answered = answer && store.awaitsChris(i);
-    if (answered) clearAsk(i);
-    return { id: i.id, line, answered };
+    const answered = answer && awaitsChris(refIn(repo.key, i));
+    return { id: i.id, ref: refIn(repo.key, i), line, answered };
   })!;
+  if (w.value.answered) clearAsk(w.value.ref);
   return { result: { repo: repo.key, id: w.value.id, note: w.value.line, commit: w.commit }, answered: w.value.answered, follow: w.follow };
 }
 
@@ -144,13 +144,15 @@ export function decide(repo: store.Place, id: number | string, text: string, fie
   text = text.trim() || refuse("give the decision");
   const w = write(repo, `todo: item ${id}: decided`, (doc) => {
     const i = pick(repo, doc, id);
-    if (issues.status(i) !== "open" || !store.awaitsChris(i)) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
+    const ask = askOf(refIn(repo.key, i));
+    if (issues.status(i) !== "open" || !ask) refuse(`${repo.key}-${i.id} is not waiting for a decision`);
     issues.note(i, text);
-    decideAsk(i, text);
+    decideAsk(ask, i, text);
     if (fields.after !== undefined) setAfter(repo, doc, i, fields.after);
     return i;
   })!;
-  return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
+  clearAsk(refIn(repo.key, w.value));
+  return { result: { repo: repo.key, ...brief(repo.key)(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
 export function edit(repo: store.Place, id: number | string, fields: Fields, reason = "") {
@@ -176,7 +178,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
     if (kept !== undefined) setAfter(repo, doc, i, kept);
     return i;
   })!;
-  return { result: { repo: repo.key, ...brief(w.value), commit: w.commit }, item: w.value, follow: w.follow };
+  return { result: { repo: repo.key, ...brief(repo.key)(w.value), commit: w.commit }, item: w.value, follow: w.follow };
 }
 
 /** The commit at origin/<main> of a registry repo, for `since`; null when it cannot be read. */

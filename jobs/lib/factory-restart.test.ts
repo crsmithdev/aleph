@@ -4,6 +4,10 @@ import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
+import { rescued } from "./continuation.ts";
+
+/** The rescue mark of the run `mk` made. */
+const rescuedOf = (r: { folder: string }) => rescued({ id: r.folder.split("/").at(-1)!, folder: r.folder, run: readRun(r.folder)! });
 import { ctx, goal, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
@@ -23,7 +27,7 @@ test("a run killed by a host restart is dropped, its goal starts at once, and no
   expect(f.specs[0]).toContain("a host restart killed build run");
   expect(notes(id)).toContain("a host restart killed build run");
   expect(ask(id)).toBeNull();
-  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+  expect(rescuedOf(r)).toBe("");
 });
 
 test("a build a host restart killed, with a commit ahead of main, starts a recheck of its branch and no new run", async () => {
@@ -42,7 +46,7 @@ test("a build a host restart killed, with a commit ahead of main, starts a reche
   expect(notes(id)).toContain("its branch has the worker's commits");
   expect(readRun(r.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
   expect(ask(id)).toBeNull();
-  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+  expect(rescuedOf(r)).toBe("");
 });
 
 test("a recheck a host restart killed, with a commit ahead of main, starts a new recheck of its branch and no new goal run, and uses no rerun", async () => {
@@ -60,7 +64,7 @@ test("a recheck a host restart killed, with a commit ahead of main, starts a new
   expect(notes(id)).toContain("its branch has the worker's commits");
   expect(readRun(r.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
   expect(ask(id)).toBeNull();
-  expect(existsSync(join(r.folder, "rescued"))).toBe(false);
+  expect(rescuedOf(r)).toBe("");
 });
 
 test("a goal whose run a host restart killed keeps its rerun: the next no commit reruns it with no Ask", async () => {
@@ -118,7 +122,7 @@ test("a lost run is marked failed and the goal reruns once; a second lost run of
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
   expect(readRun(r.folder)).toMatchObject({ condition: "dropped", reason: expect.stringContaining("was lost") });
   expect(existsSync(join(r.folder, "exit"))).toBe(true);
-  expect(readFileSync(join(r.folder, "rescued"), "utf8").trim()).toBe("lost");
+  expect(rescuedOf(r)).toBe("lost");
   expect(notes(id)).toContain("was lost: its process ended with no end written: dropped, and the goal reruns once");
   expect(ask(id)).toBeNull();
 

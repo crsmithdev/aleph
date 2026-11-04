@@ -7,6 +7,7 @@
  * Each value is measured over local days. A count in the trailing column is the mean per day; a ratio, a rate and
  * a median are pooled over the 7 days.
  */
+import * as record from "./record.ts";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { allRuns, expand, loadRegistry, type Entry } from "./ledger.ts";
@@ -85,7 +86,7 @@ export interface Table {
 /** The metrics the design names that no recorded data gives; the table says so. */
 export const LEFT_OUT = [
   "cost of the reviewer: a build run records only its worker's cost",
-  "spec checks (before intake) with no usable result, and their time: spec-checks.jsonl keeps only the cost",
+  "spec checks (before intake) with no usable result, and their time: the job record keeps only the cost",
   "time in each state of an item after its start (awaiting, answered): no record keeps those changes with their times",
   "usage per agent: usage.jsonl is the account's quota, not per run",
 ];
@@ -317,11 +318,13 @@ export function readSources(): Sources {
   const keys = factoryKeys(), set = new Set(keys);
   const lists = reader({ fetch: false });
   const items = keys.flatMap((key) => (lists.list(key)?.items ?? []).map((item) => ({ name: `${key}-${issues.refOf(item)}`, item })));
+  const records = record.all();
   return {
     // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, director, monitor) is.
     runs: allRuns().filter((e) => !e.run.repo || set.has(e.run.repo)),
     holds: allHolds(),
-    specChecks: readJsonl(join(layout().factory, "spec-checks.jsonl")),
+    // Spec checks ran before intake; their cost is a `spec-check` event in the job record.
+    specChecks: records.flatMap((r) => r.events.filter((e) => e.kind === "spec-check").map((e) => ({ at: e.at, name: r.issue, cost: (e.data as { cost: number }).cost }))),
     items,
     storeLog: storeLog(),
     flakes: flakes(),

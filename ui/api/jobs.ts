@@ -1,4 +1,5 @@
 /** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
+import { keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/record.ts";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/git.ts";
@@ -63,6 +64,8 @@ export interface JobDetail extends Job {
   spec?: string;
   /** Why the job waited: its hold records, oldest first. */
   holds: HoldRecord[];
+  /** From its job record: the next step, the fix rounds, and what happened to it, oldest first. */
+  next?: NextStep; rounds?: number; events?: JobEvent[];
   /** For a part: its issue, its place among the issue's parts, and the part after it. */
   parent?: { id: string; href: string; n: number; of: number; next?: { id: string; href: string } };
 }
@@ -159,6 +162,8 @@ export const routes: Routes = {
     const detail: JobDetail = { ...projector.toJob(runs, v), runs: runInfos(runs, fit), holds: readHolds([projector.toJob(runs, v).name]) };
     const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
     if (blockers.length) detail.blockers = blockers;
+    const rec = readRecord(keyOf(runs.at(-1)!.run));
+    if (rec) Object.assign(detail, { next: nextStep(rec), rounds: rec.rounds, events: rec.events });
     annotate([detail], fit);
     const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
     const review = latestFile(runs, "review.md")?.text;

@@ -112,12 +112,12 @@ test("stalled lists what could move: a goal, a new issue and a passed run, each 
   const fresh = writeList({ key: "fac" }, "add an issue", (doc) => issues.add(doc, "new thing").id, true)!.value;
   expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
   writeFileSync(join(ctx.base, "repos.json"), JSON.stringify({ fac: { path: join(ctx.base, "repo"), sandbox: true, autoland: true } }));
-  const { folder } = mk(`fac-${id}`, "build", "passed");
+  const { folder } = mk(`fac-${id}`, "build", "passed", { next: "land" });
   expect(stalled()).toEqual([`land:fac-${id}`, `ingest:fac-${fresh}`]);
   setPaused(true);
   expect(stalled()).toEqual([]);
   setPaused(false);
-  writeRun(folder, { ...readRun(folder)!, condition: "stuck" });
+  writeRun(folder, { ...readRun(folder)!, condition: "stuck", next: undefined });
   // A stuck run holds only its own goal, which its open job keeps not ready; the new issue can still move.
   expect(stalled()).toEqual([`ingest:fac-${fresh}`]);
 });

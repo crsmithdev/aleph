@@ -15,11 +15,11 @@ import { readFileSync } from "node:fs";
 import * as issues from "../../todo/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
-import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "./ask.ts";
 import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
+import { allJobs, isOpen, issue as issueOf, lastReal, readFile, stepOf, type Job } from "./job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, isAgentRun, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
@@ -82,13 +82,12 @@ const lost = (jobs: Job[]): Job[] => {
   });
 };
 
-/** The open jobs whose last real run is stuck or failed, with no next run pending, its unit not live, and no Ask set on it. */
+/** The open jobs of factory repos whose next step is the rescue, with the unit of the last real run not live. */
 const stuckJobs = (jobs: Job[]): Job[] => {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   return jobs.filter((j) => {
     const last = lastReal(j);
-    const r = last.run;
-    return isOpen(j) && !!r.repo && keys.has(r.repo) && (r.condition === "stuck" || r.condition === "failed") && !r.next && !isLive(last.folder) && !asked(last);
+    return isOpen(j) && !!last.run.repo && keys.has(last.run.repo) && !isLive(last.folder) && stepOf(j).step === "rescue";
   });
 };
 
@@ -187,12 +186,7 @@ async function releaseEdited(act: Rescue): Promise<void> {
     try {
       const why = await act.drop(r.name, "the goal's spec was edited after the run asked about it; the goal starts again on the new spec");
       if (why) { factoryLog(`${r.name}: release after a spec edit failed (${why})`); continue; }
-      writeList(repo, `spec edit: release ${repo.key}-${issue}`, (doc) => {
-        const i = issues.find(doc, issue);
-        if (!i || i.fm.question !== question) return null;
-        clearAsk(i);
-        return true;
-      });
+      if (askOf(`${repo.key}-${issue}`)?.question === question) clearAsk(`${repo.key}-${issue}`);
       factoryLog(`${r.name}: the spec was edited; the run is dropped and the goal starts again`);
       await tell(`${repo.key}/${r.name}: the spec was edited; the goal starts again`);
     } catch (e: any) {

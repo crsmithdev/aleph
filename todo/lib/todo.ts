@@ -260,8 +260,8 @@ export interface Finding {
   fixable: boolean;
 }
 
-/** Fields of the old store shape: a file with one was not rewritten. */
-const RETIRED = ["status", "goals", "issue", "labels", "waiting_on", "due", "route", "created_date", "updated_date"];
+/** Fields of the old store shape: a file with one was not rewritten. `ask` moved to the job record (jobs/lib/record.ts). */
+const RETIRED = ["status", "goals", "issue", "labels", "waiting_on", "due", "route", "created_date", "updated_date", "ask"];
 
 export function lint(doc: Doc): Finding[] {
   const findings: Finding[] = [];
@@ -284,11 +284,8 @@ export function lint(doc: Doc): Finding[] {
       const refs = Array.isArray(after) ? after : [after];
       if (refs.some((r) => !ITEM_REF.test(String(r)))) findings.push({ id: refOf(item), problem: `after: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
     }
-    for (const key of ["source", "ask"] as const) {
-      const v = item.fm[key];
-      const ok: string[] = { source: [...SOURCES], ask: ["input", "approval"] }[key];
-      if (v !== undefined && !ok.includes(v as string)) findings.push({ id: refOf(item), problem: `${key} "${v}" is not one of ${ok.join(", ")}`, fixable: false });
-    }
+    const source = item.fm.source;
+    if (source !== undefined && !(SOURCES as readonly string[]).includes(source as string)) findings.push({ id: refOf(item), problem: `source "${source}" is not one of ${SOURCES.join(", ")}`, fixable: false });
     for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id: refOf(item), problem: `${key} is retired`, fixable: false });
     if (item.fm.id !== undefined && String(item.fm.id) !== refOf(item)) findings.push({ id: refOf(item), problem: `id says ${item.fm.id} but the file says ${refOf(item)}`, fixable: true });
     const kind = item.fm.kind;

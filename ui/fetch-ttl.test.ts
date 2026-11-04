@@ -8,6 +8,7 @@ import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
 import { waitFor } from "../tests/wait.ts";
+import { writeRun } from "../jobs/lib/ledger.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
 let restoreEnv: () => void;
@@ -39,7 +40,7 @@ beforeAll(() => {
   for (const [repo, name] of [["a", "a-1"], ["b", "b-1"]]) {
     const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "state.json"), JSON.stringify({ kind: "build", condition: "running", started: new Date().toISOString(), name, job: name, repo, on: `${repo}-1` }));
+    writeRun(join(folder), { kind: "build", condition: "running", started: new Date().toISOString(), name, job: name, repo, on: `${repo}-1` } as any);
   }
   restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "30" });
   cacheFetches(uiFetchTtl());

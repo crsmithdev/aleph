@@ -36,6 +36,7 @@ test("a stuck or failed run stops no gate: its open job keeps only its own goal 
 test("after a land that failed 'job lock busy' the passed agent run is waiting to land again", () => {
   const agent = entry("build", "passed");
   agent.run.land = true;
+  agent.run.next = "land";
   expect(waitingToLand([[agent, entry("land", "failed", "job lock busy")]])).toEqual(["n1"]);
   expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
 });
