@@ -1,13 +1,13 @@
 /**
  * The check runner: one loop for a run's checks, in a git worktree.
- * It owns the choice of checks, the slot, the time limit, the one rerun, the
+ * It owns the choice of checks, the admission, the time limit, the one rerun, the
  * log and the flake record. The caller gives what runs one check.
  */
 import { appendFileSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { recordFlake } from "./factory-status.ts";
-import { checkSlot, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "./ledger.ts";
+import { admit, type Admission, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "./ledger.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
 import { q } from "./agent-call.ts";
@@ -15,38 +15,31 @@ import { git } from "./git.ts";
 import { runFile } from "./run-files.ts";
 import type { Plan } from "./keep-earn.ts";
 
-/** Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock ended the check. `null` is a pass. */
+/**
+ * Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock
+ * ended the check. `null` is a pass. A check that a clock or a signal ended gives no verdict: its cause is `infra`.
+ */
 export type ChecksStop = Stated & { reason: string; timedOut?: boolean };
 
 /** The fields of a run that a stop sets: the clock flag stays out of the run. */
 export const stopFields = ({ timedOut: _, ...fields }: ChecksStop): Stated & { reason: string } => fields;
 
-/** One run of checks. `folder` gets checks.log. `record` gets each check that ran. */
-export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; record?: (c: CheckResult) => void }
+/** One run of checks. `folder` gets checks.log. `record` gets each check that ran. `admission` is for tests. */
+export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; record?: (c: CheckResult) => void; admission?: Admission }
 
-/** Runs one check with its output appended to `out`. `timedOut` comes from a clock: a command can return 124 by itself. */
-export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ code: number; timedOut: boolean }>;
+/**
+ * Runs one check with its output appended to `out`. `timedOut` comes from a clock: a command can return 124 by itself.
+ * `killed`: a signal ended the process.
+ */
+export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ code: number; timedOut: boolean; killed?: boolean }>;
 
 /** The names on bun's `(fail)` lines, each one once: its summary repeats them. */
 const failedTests = (log: string): string[] => [...new Set(log.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm).map((m) => m[1]))];
-
-/** Run `fn` holding a check slot: the slot is freed when `fn` settles, also when it throws. */
-export async function withSlot<T>(fn: () => T | Promise<T>): Promise<T> {
-  const free = await checkSlot();
-  try {
-    return await fn();
-  } finally {
-    free();
-  }
-}
 
 const tail = (file: string, n: number) => existsSync(file) ? readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "";
 
 /** The repo's checks with no `when`, and those whose globs match a changed file. */
 const chosen = (t: CheckTask): Check[] => t.repo.checks.filter((c) => !c.when || t.changed.some((f) => c.when!.some((g) => new Bun.Glob(g).match(f))));
-
-/** Whether the checks chosen for a diff are all of the repo's checks: none dropped for a `when` no changed file matches. */
-export const coversAll = (repo: Repo, changed: string[]): boolean => chosen({ repo, changed } as CheckTask).length === repo.checks.length;
 
 /** A command that runs `bun test`, directly or as the package's `test` script. */
 const BUN_TEST = /^bun (?:run )?test\b/;
@@ -64,7 +57,11 @@ export const runsBunTest = (cmd: string): boolean => BUN_TEST.test(cmd);
 export const testRecord = (file: string): TestRecord =>
   existsSync(file) ? junitRecord(readFileSync(file, "utf8")) : { ran: 0, passed: 0, failed: 0, skipped: 0, failures: [] };
 
-/** The one loop. A check that fails, not by timeout, runs once more on the same tree; a pass then is a flake. The first failure ends the loop. Returns why. */
+/**
+ * The one loop. Each check waits for the admission first. A check that fails runs once more on the same tree; a pass
+ * then is a flake. A check that a clock or a signal ends gives no verdict and does not run again here: the rescue
+ * runs it again. The first failure or no verdict ends the loop. Returns why.
+ */
 async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<ChecksStop | null> {
   const log = (text: string) => appendFileSync(runFile(t.folder, "checks.log"), text);
   for (const check of checks) {
@@ -79,32 +76,33 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
       rmSync(report, { force: true });
       return exec(run, out, limit);
     };
-    // The wait for a slot is outside the time limit and outside the check's seconds.
-    const { r, first, seconds } = await withSlot(async () => {
-      const limit = checkSeconds();
-      const t0 = Date.now();
-      let r = await once(limit);
-      let first: string | undefined;
-      if (r.code !== 0 && !r.timedOut) {
-        first = readFileSync(out, "utf8");
-        log(`## ${check.name}: exit ${r.code}, run again\n${tail(out, 100)}\n\n`);
-        writeFileSync(out, "");
-        r = await once(limit);
-      }
-      return { r, first, seconds: Math.round((Date.now() - t0) / 1000) };
-    });
-    const record = tests && !r.timedOut ? testRecord(report) : undefined;
+    // The wait for the admission is outside the time limit and outside the check's seconds.
+    await admit((line) => t.phase(`check ${check.name}: ${line}`), t.admission);
+    t.phase(`check ${check.name}`);
+    const limit = checkSeconds();
+    const t0 = Date.now();
+    let r = await once(limit);
+    let first: string | undefined;
+    if (r.code !== 0 && !r.timedOut && !r.killed) {
+      first = readFileSync(out, "utf8");
+      log(`## ${check.name}: exit ${r.code}, run again\n${tail(out, 100)}\n\n`);
+      writeFileSync(out, "");
+      r = await once(limit);
+    }
+    const seconds = Math.round((Date.now() - t0) / 1000);
+    const lost = r.timedOut || !!r.killed;
+    const record = tests && !lost ? testRecord(report) : undefined;
     const none = record?.ran === 0;
-    const ok = r.code === 0 && !r.timedOut && !none;
+    const ok = r.code === 0 && !lost && !none;
     const rerun = first !== undefined && ok;
     if (rerun) {
       const tests = failedTests(first!);
       const row = { repo: t.repo.key, check: check.name, run: basename(t.folder), at: new Date().toISOString(), ...(tests.length ? { tests } : {}) };
       if (!await recordFlake(row)) log(`## ${check.name}: flake not recorded, lock busy\n\n`);
     }
-    t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}), ...(record ? { tests: record } : {}) });
-    log(`## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
-    if (r.timedOut) return { cause: "check", checkName: check.name, reason: `timed out: check ${check.name}`, timedOut: true };
+    t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}), ...(lost ? { noVerdict: true as const } : {}), ...(record ? { tests: record } : {}) });
+    log(`## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : r.killed ? " (killed)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
+    if (lost) return { cause: "infra", checkName: check.name, reason: `no verdict: check ${check.name} ${r.timedOut ? "timed out" : "was killed"}`, timedOut: r.timedOut };
     if (r.code !== 0) return { cause: "check", checkName: check.name, reason: `${check.name} failed` };
     if (none) return { cause: "check", checkName: check.name, reason: `ran 0 tests: check ${check.name}` };
   }
@@ -125,14 +123,14 @@ export const checkEnv = (env: Record<string, string | undefined> = process.env):
  * Run `cmd` with bash in `cwd`, its output appended to `out`, under `timeout`, which puts it in a process group of its
  * own and signals the group. Whether it timed out comes from this clock, not from the exit code.
  */
-export async function shell(cmd: string, o: { cwd: string; env: Record<string, string | undefined>; out: string; limit: number; onSpawn?: CheckTask["onSpawn"] }): Promise<{ code: number; timedOut: boolean }> {
+export async function shell(cmd: string, o: { cwd: string; env: Record<string, string | undefined>; out: string; limit: number; onSpawn?: CheckTask["onSpawn"] }): Promise<{ code: number; timedOut: boolean; killed: boolean }> {
   const fd = openSync(o.out, "a");
   const start = performance.now();
   try {
     const p = Bun.spawn(["timeout", "--kill-after=30", String(o.limit), "bash", "-c", cmd], { cwd: o.cwd, env: o.env, stdin: "ignore", stdout: fd, stderr: fd });
     o.onSpawn?.(p);
     const code = await p.exited;
-    return { code, timedOut: performance.now() - start >= o.limit * 1000 };
+    return { code, timedOut: performance.now() - start >= o.limit * 1000, killed: p.signalCode !== null };
   } finally {
     closeSync(fd);
   }
@@ -158,12 +156,12 @@ export async function atCommit<T>(repo: Repo, sha: string, fn: (wt: string) => P
   }
 }
 
-/** The repo's setup commands in `wt`, their output appended to `out`: the first that fails, or null. */
-async function setup(repo: Repo, wt: string, env: Record<string, string | undefined>, out: string, onSpawn?: CheckTask["onSpawn"]): Promise<string | null> {
+/** The repo's setup commands in `wt`, their output appended to `out`: the first that fails, and whether a clock or a signal ended it; or null. */
+async function setup(repo: Repo, wt: string, env: Record<string, string | undefined>, out: string, onSpawn?: CheckTask["onSpawn"]): Promise<{ cmd: string; lost: boolean } | null> {
   for (const cmd of repo.setup) {
     appendFileSync(out, `$ ${cmd}\n`);
     const r = await shell(cmd, { cwd: wt, env, out, limit: checkSeconds(), onSpawn });
-    if (r.code !== 0 || r.timedOut) return cmd;
+    if (r.code !== 0 || r.timedOut || r.killed) return { cmd, lost: r.timedOut || r.killed };
   }
   return null;
 }
@@ -177,9 +175,12 @@ export async function checksAt(t: CheckTask, sha: string, env: Record<string, st
       t.phase("check setup");
       const log = join(t.folder, "check.out");
       writeFileSync(log, "");
-      const bad = await withSlot(() => setup(t.repo, wt, env, log, t.onSpawn));
+      await admit((line) => t.phase(`check setup: ${line}`), t.admission);
+      t.phase("check setup");
+      const bad = await setup(t.repo, wt, env, log, t.onSpawn);
       if (bad !== null) {
         appendFileSync(runFile(t.folder, "checks.log"), `## setup: exit 1\n${tail(log, 100)}\n\n`);
+        if (bad.lost) return { cause: "infra", checkName: "setup", reason: `no verdict: setup ${bad.cmd} timed out or was killed` };
         return { cause: "check", checkName: "setup", reason: "setup failed" };
       }
       const exec: CheckExec = (check, out, limit) => shell(check.run, { cwd: wt, env, out, limit, onSpawn: t.onSpawn });
@@ -210,7 +211,8 @@ export type Runner = (repo: Repo, sha: string, command: string, hidden?: Record<
  * with `hidden` in `.hidden`. A setup that fails or a worktree that git cannot add is `infra`, and the command does
  * not run. The command has 1200 seconds.
  */
-export const runOnCommit: Runner = (repo, sha, command, hidden) => withSlot(async () => {
+export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
+  await admit();
   // The logs stay out of the tree, so the command sees only the commit and `.hidden`.
   const logs = mkdtempSync(join(tmpdir(), "aleph-oncommit-"));
   try {
@@ -229,7 +231,7 @@ export const runOnCommit: Runner = (repo, sha, command, hidden) => withSlot(asyn
   } finally {
     rmSync(logs, { recursive: true, force: true });
   }
-});
+};
 
 /** A test file that a branch adds or changes with new cases: its path, its text on the head and the names of its new cases. */
 export interface NewTests { path: string; text: string; names: string[] }

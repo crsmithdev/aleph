@@ -55,7 +55,7 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_STALL_SECONDS: plain("ALEPH_STALL_SECONDS", stallSeconds),
   ALEPH_FIX_ROUNDS: plain("ALEPH_FIX_ROUNDS", s.fixRounds),
   ALEPH_LAND_BATCH: plain("ALEPH_LAND_BATCH", s.landBatch),
-  ALEPH_CHECK_SLOTS: plain("ALEPH_CHECK_SLOTS", s.checkSlots),
+  ALEPH_LOAD_LIMIT: plain("ALEPH_LOAD_LIMIT", s.loadLimit),
   ALEPH_UI_CACHE_TTL: plain("ALEPH_UI_CACHE_TTL", () => s.uiCacheMs() / 1000),
   ALEPH_UI_FETCH_TTL: plain("ALEPH_UI_FETCH_TTL", s.uiFetchTtl),
   ALEPH_UI_PORT: plain("ALEPH_UI_PORT", s.uiPort),

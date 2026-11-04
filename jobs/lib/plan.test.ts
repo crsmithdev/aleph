@@ -86,14 +86,14 @@ const planRuns = () => readdirSync(join(base, "jobs")).filter((d) => d.endsWith(
 async function dispatch(tier: Tier | null) {
   const starts: [string, Tier | null | undefined][] = [];
   const plans: Promise<{ planned: string[] } | { why: string }>[] = [];
-  const out: any = await dispatchIssues(async (_repo, name, _id, _spec, t) => { starts.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier,
+  const out: any = await dispatchIssues(async (_repo, name, _id, _spec, t) => { starts.push([name, t]); return null; }, undefined, undefined, async () => tier,
     (repo, id) => { plans.push(planNow(repo, id)); });
   const done = await Promise.all(plans);
   const refs = done.flatMap((r, i) => ("planned" in r ? [`${out.planned[i]} into ${r.planned.join(",")}`] : []));
   out.planned = refs.length ? refs : undefined;
   // The plan job's own dispatch, which starts the parts or the fallback worker.
   const then: [string, Tier | null | undefined][] = [];
-  if (plans.length) await dispatchIssues(async (_repo, name, _id, _spec, t) => { then.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier, () => {});
+  if (plans.length) await dispatchIssues(async (_repo, name, _id, _spec, t) => { then.push([name, t]); return null; }, undefined, undefined, async () => tier, () => {});
   return { starts, then, out };
 }
 

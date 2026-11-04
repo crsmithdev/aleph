@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|status|judge>
+ * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|suite|report|pause|resume|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
@@ -22,7 +22,7 @@ import * as verbs from "../todo/lib/issues.ts";
 import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
 import { ciStep } from "./lib/ci.ts";
 import { firefight } from "./lib/firefighter.ts";
-import { behind, correctionsStep, directorStep, planNow, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
+import { behind, correctionsStep, directorStep, planNow, report, runDispatch, setPaused, stallStep, suiteStep, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
 import { factoryRepos, health } from "./lib/factory-status.ts";
@@ -439,6 +439,7 @@ try {
     case "checked": out(checked(positional[0])); break;
     case "issue": await todoCmd(); break;
     case "tick": await tickCmd(); break;
+    case "suite": out(await suiteStep()); break;
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
       const day = flag("day") ?? addDays(issues.today(), -1);
@@ -472,7 +473,7 @@ try {
       out({ judge: judgeChoice() });
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|status|judge|dispatch|doctor|doc-claims|monitor> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|suite|report|pause|resume|status|judge|dispatch|doctor|doc-claims|monitor> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

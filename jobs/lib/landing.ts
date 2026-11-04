@@ -11,15 +11,14 @@ import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isAgentRun, loadRegistry, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { isLive } from "./process.ts";
-import { relatedTests, withTests } from "./related.ts";
-import { coversAll, stopFields, type ChecksStop } from "./checks.ts";
+import { buildChecks } from "./related.ts";
+import { stopFields, type ChecksStop } from "./checks.ts";
 import { LOCK_BUSY, type Cause } from "./outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal } from "./job.ts";
 import { onMain } from "./status.ts";
 import { RELANDS, TODO_PATH } from "./continuation.ts";
 import { serverGraph } from "./ui-graph.ts";
 import { landBatch } from "./settings.ts";
-import { writeBaseline } from "./factory-status.ts";
 import { runFile } from "./run-files.ts";
 import { writeTitle } from "./title.ts";
 
@@ -27,8 +26,8 @@ import { writeTitle } from "./title.ts";
 export interface CheckReport { why: ChecksStop | null; checks?: Run["checks"]; log?: string }
 
 export interface LandPorts {
-  /** The repo's checks on `commit`, which holds the work of `runs`. `changed` is what the commit changes. `only`, when given, runs in place of the repo's checks. */
-  check(commit: string, runs: Run[], changed: string[], only?: Check[]): Promise<CheckReport>;
+  /** The `picked` checks on `commit`, which holds the work of `runs`. `changed` is what the commit changes; `picked.tests` holds the test files of each narrowed check. */
+  check(commit: string, runs: Run[], changed: string[], picked: { checks: Check[]; tests: Map<string, string[]> }): Promise<CheckReport>;
   /** Start land runs for up to `room` runs waiting to land, and return when they are in the queue. */
   pull(room: number): Promise<void>;
 }
@@ -169,8 +168,6 @@ interface Attempt {
   finish: (m: Member, o: Outcome) => void;
   log: (step: string, out?: string) => void;
   ports: LandPorts;
-  /** Commits whose tree passed every check of the repo. */
-  covered: Set<string>;
 }
 
 /** A land that did not land: its verdict, with what it conflicted in. */
@@ -224,86 +221,31 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
 const names = (repo: Repo, from: string, to: string) => git(repo.path, "diff", "--name-only", from, to).out.split("\n").filter(Boolean);
 
 /**
- * The checks for one run whose own checks passed on an older origin/<main>, or null for all of the repo's checks.
- * Only the work of main's new commits together with the run's work is new. A check with `tests` globs runs only the
- * test files that depend on a file both sides changed, and does not run when the two sides share no file. The other
- * checks run whole.
+ * The checks on the chain's last commit: the tests its change reaches, the repo's critical tests and the checks that
+ * are not tests (buildChecks). The full suite runs on its own timer (`aleph suite`), so no land covers a tip. When
+ * the run's own checks passed on this very origin/<main> and tip, they ran the tests its change reaches: only the
+ * critical tests run, and none when the repo has none.
  */
-function narrowed(ctx: Attempt, items: Pending[], base: string): { checks: Check[]; line: string } | null {
-  const { repo, tips } = ctx;
-  const run = items[0].m.run;
-  if (items.length !== 1 || !repo.checks.some((c) => c.tests) || !run.checkedBase || !run.checkedTip || run.checkedTip !== tips.get(items[0].m)) return null;
-  if (!git(repo.path, "merge-base", "--is-ancestor", run.checkedBase, base).ok) return null;
-  const mine = new Set(names(repo, run.checkedBase, run.checkedTip));
-  const both = names(repo, run.checkedBase, base).filter((f) => mine.has(f));
-  const tests = both.length ? relatedTests(repo.path, items[0].commit, both, repo.checks.flatMap((c) => c.tests ?? [])) : [];
-  if (!tests) return null;
-  const checks = repo.checks.flatMap((c): Check[] => {
-    if (!c.tests) return [c];
-    const mineToo = tests.filter((f) => c.tests!.some((g) => new Bun.Glob(g).match(f)));
-    return mineToo.length ? [{ ...c, run: withTests(c.run, mineToo) }] : [];
-  });
-  const line = !both.length ? `checks narrowed: main's new commits share no file with the run since ${run.checkedBase}`
-    : `checks narrowed: ${both.length} file${both.length > 1 ? "s" : ""} changed on both sides, ${tests.length} related test file${tests.length === 1 ? "" : "s"}`;
-  return { checks, line: `${line}\n${[...both, ...tests.map((t) => `test: ${t}`)].join("\n")}`.trimEnd() };
-}
-
-/** The checks on the chain's last commit, or none when the run's own checks passed on this very origin/<main>. */
 async function check(ctx: Attempt, items: Pending[], base: string): Promise<ChecksStop | null> {
   const { repo, leader, base0, tips, checksOf, log, ports } = ctx;
   const first = items[0].m.run;
-  const changed = git(repo.path, "diff", "--name-only", base, items.at(-1)!.commit).out.split("\n").filter(Boolean);
-  const cover = (tip: string) => { if (coversAll(repo, changed)) ctx.covered.add(tip); };
-  // A build that ran only the tests its change reaches leaves the full suite to the land: no skip and no narrowing.
-  const whole = !first.checks?.some((c) => c.files !== undefined);
-  if (whole && items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m)) {
+  const tip = items.at(-1)!.commit;
+  const changed = names(repo, base, tip);
+  const same = items.length === 1 && base === base0 && first.checkedBase === base0 && first.checkedTip === tips.get(items[0].m);
+  const picked = buildChecks(repo, tip, same ? [] : changed, repo.critical);
+  const checks = same ? picked.checks.filter((c) => picked.tests.has(c.name)) : picked.checks;
+  if (same && !checks.length) {
     log(`checks skipped: main unchanged since ${base0}`);
     // The run's own checks passed on this base; a failed call that covered it earlier does not decide its verdict.
     checksOf.set(items[0].m, first.checks);
-    cover(items[0].commit);
     return null;
   }
-  const tip = items.at(-1)!.commit;
-  // A narrowed run does not cover the tip: the next baseline runs every check on it.
-  const narrow = whole ? narrowed(ctx, items, base) : null;
-  if (narrow) {
-    log(narrow.line);
-    if (!narrow.checks.length) { checksOf.set(items[0].m, first.checks); return null; }
-    const report = await ports.check(tip, [first], changed, narrow.checks);
-    checksOf.set(items[0].m, report.checks);
-    if (report.why && items[0].m !== ctx.leader && report.log !== undefined) items[0].m.log("checks.log", report.log);
-    return report.why;
-  }
-  log(`checks on ${items.length} run${items.length > 1 ? "s" : ""}`, items.map((i) => i.m.run.name).join("\n"));
-  const report = await ports.check(tip, items.map((i) => i.m.run), changed);
+  const files = [...picked.tests].filter(([name]) => checks.some((c) => c.name === name)).map(([name, f]) => `${name}: ${f.length} test file${f.length === 1 ? "" : "s"}\n${f.join("\n")}`);
+  log(`checks on ${items.length} run${items.length > 1 ? "s" : ""}${same ? `, critical tests only: main unchanged since ${base0}` : ""}`, [...items.map((i) => i.m.run.name), ...files].join("\n"));
+  const report = await ports.check(tip, items.map((i) => i.m.run), changed, { checks, tests: picked.tests });
   for (const i of items) checksOf.set(i.m, report.checks);
   if (report.why && items.length === 1 && items[0].m !== leader && report.log !== undefined) items[0].m.log("checks.log", report.log);
-  if (!report.why) cover(tip);
   return report.why;
-}
-
-/**
- * Write `commit` to baseline.json as green, the way the factory's baseline does, so the next dispatch does not run
- * the checks on it again. Never replaces the entry of a commit that is not an ancestor of `commit`.
- */
-export async function recordGreen(repo: Repo, commit: string, log: (step: string, out?: string) => void): Promise<void> {
-  try {
-    const release = await lock(`baseline-${repo.key}`, 60_000);
-    if (!release) { log("baseline not recorded: lock busy"); return; }
-    try {
-      const wrote = await writeBaseline(repo.key, (old) => {
-        if (old && old.commit !== commit && git(repo.path, "cat-file", "-e", `${old.commit}^{commit}`).ok
-          && !git(repo.path, "merge-base", "--is-ancestor", old.commit, commit).ok) return null;
-        return { repo: repo.key, commit, ok: true };
-      });
-      if (!wrote) { log("baseline not recorded: newer entry"); return; }
-      log(`baseline green: ${commit}`);
-    } finally {
-      release();
-    }
-  } catch (e) {
-    log(`baseline not recorded: ${e instanceof Error ? e.message : e}`);
-  }
 }
 
 /** The commits of `items` that pass, in order, and the commit they end on. `known` is why the whole chain is already known to fail. */
@@ -311,6 +253,8 @@ async function settle(ctx: Attempt, items: Pending[], base: string, known: Check
   if (!items.length) return { ok: [], tip: base };
   const why = known ?? await check(ctx, items, base);
   if (!why) return { ok: items, tip: items.at(-1)!.commit };
+  // No verdict blames no run: the batch does not split, and each run lands again (the rescue's infra case).
+  if (why.cause === "infra") { for (const i of items) ctx.finish(i.m, { outcome: { condition: "failed", ...stopFields(why) }, code: 1 }); return { ok: [], tip: base }; }
   if (items.length === 1) { ctx.finish(items[0].m, { outcome: { condition: "failed", ...stopFields(why) }, code: 1 }); return { ok: [], tip: base }; }
   ctx.log(`split ${items.length} runs: ${why.reason}`);
   const h = Math.floor(items.length / 2);
@@ -409,8 +353,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
         open.push(m);
       }
 
-      const covered = new Set<string>();
-      const ctx: Attempt = { repo, leader, base0, tips, checksOf, finish, log, ports, covered };
+      const ctx: Attempt = { repo, leader, base0, tips, checksOf, finish, log, ports };
       const chain = build(ctx, open, base0);
       const result = await settle(ctx, chain, base0, null);
       const ok = result.ok;
@@ -426,7 +369,6 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
             finish(m, { outcome: { condition: "landed", commit, checkItem }, code: 0 });
           }
           followCheckout(repo, log);
-          if (covered.has(result.tip)) await recordGreen(repo, result.tip, log);
           return conclude(leader, done, checksOf);
         }
         { const f = logged("fetch", fetchOrigin(repo.path)); if (!f.ok) return fail("infra", `fetch failed: ${f.out}`); }

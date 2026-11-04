@@ -14,18 +14,18 @@ test("a QUESTION run waits for a spec edit: the Ask says so, and an edit drops t
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": "Stopped.\nQUESTION: which wins?" });
   const f = fakes();
-  await dispatchIssues(f.start, undefined, undefined, f.rescue);
+  await dispatchIssues(f.start, undefined, f.rescue);
   const a = askOf(readList({ key: "fac" })!.items.find((i) => issues.refOf(i) === String(id))!)!;
   expect(a.reason).toBe("question");
   expect(a.recommended).toBeUndefined();
   expect(a.question).toContain("waits for a spec edit");
   // Nothing changed: the next dispatch starts nothing.
-  await dispatchIssues(f.start, undefined, undefined, f.rescue);
+  await dispatchIssues(f.start, undefined, f.rescue);
   expect(f.calls).toEqual([]);
   expect(f.specs).toEqual([]);
   // Chris edits the spec.
   writeList({ key: "fac" }, "edit", (doc) => { issues.find(doc, id)!.spec = "A clearer spec."; return true; });
-  await dispatchIssues(f.start, undefined, undefined, f.rescue);
+  await dispatchIssues(f.start, undefined, f.rescue);
   expect(f.calls).toContain(`drop fac-${id}`);
   expect(ask(id)).toBeNull();
   expect(f.specs.length).toBe(1);
@@ -36,13 +36,13 @@ test("a spec QUESTION run, then the director's answer: the job keeps its Ask or 
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": "Stopped.\nQUESTION: which wins?" });
   const f = fakes();
   // The real rescue path sets the plain question Ask and writes asked-spec.
-  await dispatchIssues(f.start, undefined, undefined, f.rescue);
+  await dispatchIssues(f.start, undefined, f.rescue);
   expect(ask(id)?.options).toEqual([]);
   const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `fac-${id}`)!;
   if (c.at === "lesson") throw new Error("not an item case");
   const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop });
   // The next dispatch: the director's answer must not leave the goal open with no Ask and no run.
-  await dispatchIssues(f.start, undefined, undefined, f.rescue);
+  await dispatchIssues(f.start, undefined, f.rescue);
   const hasAsk = ask(id) !== null;
   const started = f.specs.length > 0;
   expect(hasAsk || started).toBe(true);

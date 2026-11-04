@@ -69,12 +69,6 @@ export function testsOf(map: ImportMap, targets: string[], globs: string[]): str
   return [...seen].filter(isTest).sort();
 }
 
-/** The test files at `commit` that match `globs` and depend on any of `targets`, sorted, or null as `testsOf` says. */
-export function relatedTests(repoPath: string, commit: string, targets: string[], globs: string[]): string[] | null {
-  if (targets.some((f) => !MODULE.test(f))) return null;
-  return testsOf(importMap(repoPath, commit), targets, globs);
-}
-
 /** The names that bun test takes as test files. */
 export const BUN_TESTS = ["**/*.{test,spec}.{ts,tsx,js,jsx}", "**/*_{test,spec}.{ts,tsx,js,jsx}"];
 
@@ -97,18 +91,20 @@ export const withTests = (run: string, files: string[]): string => `${run} ${fil
 const BUN_TEST = /^bun (?:run )?test$/;
 
 /**
- * The checks of a build run on `commit`, with `changed` the files the run changes. A check whose command is
- * `bun test` or `bun run test` runs only the test files that `buildTests` gives, and does not run when it gives none.
+ * The checks of a build run or a land on `commit`, with `changed` the files the run changes. A check whose command is
+ * `bun test` or `bun run test` runs only the test files that `buildTests` gives, and the test files at `commit` that
+ * match `critical` (a land gives the repo's critical globs), and does not run when that is none.
  * `tests` holds the file list of each such check. The other checks, and a check that needs the full suite, stay whole.
  */
-export function buildChecks(repo: Repo, commit: string, changed: string[]): { checks: Check[]; tests: Map<string, string[]> } {
+export function buildChecks(repo: Repo, commit: string, changed: string[], critical: string[] = []): { checks: Check[]; tests: Map<string, string[]> } {
   const tests = new Map<string, string[]>();
   let map: ImportMap | undefined;
   const checks = repo.checks.flatMap((c): Check[] => {
     if (!BUN_TEST.test(c.run.trim())) return [c];
     map ??= importMap(repo.path, commit);
-    const files = buildTests(changed, map, c.tests ?? BUN_TESTS);
-    if (files === "full") return [c];
+    const reached = buildTests(changed, map, c.tests ?? BUN_TESTS);
+    if (reached === "full") return [c];
+    const files = [...new Set([...reached, ...[...map.files].filter((f) => critical.some((g) => new Bun.Glob(g).match(f)))])].sort();
     tests.set(c.name, files);
     return files.length ? [{ ...c, run: withTests(c.run, files) }] : [];
   });

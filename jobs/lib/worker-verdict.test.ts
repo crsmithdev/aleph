@@ -49,6 +49,8 @@ describe("checks", () => {
     expect((await plain({ cause: "check", checkName: "lint", reason: "lint failed" }, "tests")).round).toBeUndefined();
     expect((await plain(tests, undefined)).round).toBeUndefined();
     expect(await plain({ cause: "infra", reason: "bundle failed" }, "tests")).toEqual({ condition: "stuck", cause: "infra", reason: "bundle failed" });
+    // A check that gave no verdict goes to the rescue, which runs it again; it is not a fix round.
+    expect(await plain({ cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out", timedOut: true }, "tests")).toEqual({ condition: "stuck", cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out" });
   });
 
   test("a check that failed the same way on the run before asks Chris instead of a round", async () => {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { lock } from "./ledger.ts";
+import { admit, lock } from "./ledger.ts";
 
 let base: string;
 let saved: string | undefined;
@@ -83,4 +83,30 @@ for (let i = 0; i < 12; i++) {
     const errors = await Promise.all(procs.map((p) => new Response(p.stderr).text()));
     expect(codes, errors.join("")).toEqual(procs.map(() => 0));
   }, 30_000);
+});
+
+describe("admit", () => {
+  const keys = ["XDG_RUNTIME_DIR", "ALEPH_LOAD_LIMIT"];
+  let saved: Record<string, string | undefined>;
+  beforeEach(() => { saved = Object.fromEntries(keys.map((k) => [k, process.env[k]])); Object.assign(process.env, { XDG_RUNTIME_DIR: base, ALEPH_LOAD_LIMIT: "4" }); });
+  afterEach(() => { for (const k of keys) if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; });
+
+  test("a start that had to wait keeps the queue for the gap; the next start waits behind it and then reads the load", async () => {
+    let endGap!: () => void;
+    const gap = new Promise<void>((r) => { endGap = r; });
+    const reads: string[] = [];
+    const first = { load: () => { reads.push("first"); return reads.length === 1 ? 6 : 1; }, pause: (ms: number) => ms === 15_000 ? gap : Promise.resolve() };
+    await admit(() => {}, first);
+    expect(reads).toEqual(["first", "first"]);
+    let queued!: (line: string) => void;
+    const said = new Promise<string>((r) => { queued = r; });
+    const second = admit((l) => queued(l), { load: () => { reads.push("second"); return 1; }, pause: () => Promise.resolve() });
+    expect(await said).toBe("waiting: queued behind another start under load");
+    expect(reads).toEqual(["first", "first"]);
+    endGap();
+    await second;
+    expect(reads).toEqual(["first", "first", "second"]);
+    // The second start did not wait for the load, so it keeps no gap: the queue is free.
+    (await lock("admit", 0))!();
+  });
 });

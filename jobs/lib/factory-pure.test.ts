@@ -52,7 +52,7 @@ test("a dispatch with checks, three factory repos and no open goals fetches the 
   const path = process.env.PATH;
   process.env.PATH = `${join(ctx.base, "bin")}:${path}`;
   try {
-    const out = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined);
+    const out = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
     expect(out.started).toEqual([]);
   } finally {
     process.env.PATH = path;
@@ -119,18 +119,17 @@ test("stalled lists what could move: a goal, a new issue and a passed run, each 
   expect(stalled()).toEqual([`ingest:fac-${fresh}`]);
 });
 
-test("stalled counts a red baseline only on the commit origin/main still has", async () => {
+test("stalled counts a red baseline until a later suite run is green, also after main moves", async () => {
   const repo = join(ctx.base, "repo");
   const head = () => Bun.spawnSync(["git", "-C", repo, "rev-parse", "origin/main"], { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
   const id = goal();
   const fresh = writeList({ key: "fac" }, "add a plan", (doc) => { const i = issues.add(doc, "plan me"); i.fm.plan = "true"; return i.id; }, true)!.value;
-  const old = head();
+  await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
   sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "next");
   sh(repo, "git", "push", "-q", "origin", "main");
-  await writeBaseline("fac", () => ({ repo: "fac", commit: old, ok: false, failed: "tests" }));
-  expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
-  await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
   expect(stalled()).toEqual([]);
+  await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: true }));
+  expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
 });
 
 test("writeBaseline waits for the baseline-file lock, here and in another process, and both entries survive", async () => {

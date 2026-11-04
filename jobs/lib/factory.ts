@@ -70,12 +70,13 @@ export function doneChecker(): (ref: string) => boolean {
 
 /** `tier` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
 type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<string | null>;
-type Checks = (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>;
+export type Checks = (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
  * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
  * and from the tick as a fallback. While the factory is paused it does nothing. Else its steps run first: the next
- * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands and the close of parents whose parts are done. Then each goal meets the 7 gates of goalDecision in
+ * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands and the close of parents whose parts are done.
+ * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 7 gates of goalDecision in
  * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds goes to the
  * routing step (its spec check, or the planner) and then starts. Each start holds a lock on its goal and re-reads
  * the jobs under it, so two dispatches at once start a goal once. `start` dispatches the run; it
@@ -86,14 +87,14 @@ type Land = (name: string) => Promise<string | null>;
  * `specCheck` starts a goal's spec check detached (spec-check.ts), for a repo with `author` set: a goal
  * starts only once its spec version has a recorded verdict of pass or error.
  */
-export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
   }
   const kept = await startKept();
   if (kept.length) factoryLog(`started the steps the pause kept: ${kept.join(", ")}`);
-  if (rescue) await rescueStuck(rescue, land, checks && ((repo) => baseline(repo, checks)));
+  if (rescue) await rescueStuck(rescue, land, async (repo) => mainState(repo));
   const landed: string[] = [];
   if (land) {
     // All at once: the lands queue on the repo's lock, and the first takes the rest into one batch.
@@ -105,27 +106,15 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
   const started: string[] = [];
   const skipped: string[] = [];
   const planned: string[] = [];
-  const lineOf = (b: Baseline) => (b.state === "green" ? null : b.line);
-  const reds = new Map<string, string | null>();
+  const redOf = mainRed();
   const done = doneChecker();
-  // Baselines run for the repos in the list, then the list is read again, until every repo in it has one. The start loop
-  // works from that last list, so a goal written during any baseline is in it: a dispatch that skipped with
-  // `main baseline running` has its goal started by the one that held the baseline.
-  // A parent whose parts all landed closes without a green main, so the closing comes before the baselines.
+  // A parent whose parts all landed closes without a green main.
   for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
-  let goals = openGoals();
-  if (checks) {
-    for (;;) {
-      const missing = goals.filter(({ repo }) => !reds.has(repo.key));
-      if (!missing.length) break;
-      for (const { repo } of missing) if (!reds.has(repo.key)) reds.set(repo.key, lineOf(await baseline(repo, checks)));
-      goals = openGoals();
-    }
-  }
+  const goals = openGoals();
   // The planner starts an agent run, so the baseline gate holds it as it holds a goal.
   const planners: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
-    if (reds.get(repo.key)) continue;
+    if (redOf(repo)) continue;
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) if (planSet(item)) planners.push({ repo, item });
   }
   for (const { repo, item } of byPriority(planners)) {
@@ -138,7 +127,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
   for (const { repo, item: listed } of goals) {
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
-    const red = reds.get(repo.key);
+    const red = redOf(repo);
     // The cheap facts first: the pause was asked above.
     const first = goalDecision({ name, item: listed, done, red });
     if (first.kind !== "ready") { skip(name, first.kind, first.why); continue; }
@@ -315,11 +304,21 @@ export async function episodeStep(): Promise<string[]> {
 export type Baseline = { state: "green" } | { state: "red" | "unchecked" | "running"; line: string };
 
 /**
+ * Main's state as the last suite run recorded it in baseline.json. A red record stays red until a later suite run
+ * is green, also when main has moved since; a repo with no record is unchecked.
+ */
+export function mainState(repo: Repo): Baseline {
+  const b = baselines()[repo.key];
+  if (!b) return { state: "unchecked", line: "main is unchecked: no suite run yet" };
+  return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
+}
+
+/**
  * Whether the repo's checks pass on its current origin/<main>: run once per
  * commit, kept in baseline.json. Returns the closed state with its line.
- * One baseline runs per repo at a time, under a lock; a dispatch that finds it
- * taken starts nothing. Only a failed check is recorded: an error that kept
- * the checks from running is reported but tried again by the next dispatch.
+ * One baseline runs per repo at a time, under a lock; a suite run that finds it
+ * taken leaves it. A pass and a failed check are recorded: an error that kept
+ * the checks from running (no verdict) is reported, and the next suite run tries again.
  */
 export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>): Promise<Baseline> {
   const unchecked = (line: string): Baseline => ({ state: "unchecked", line });
@@ -346,6 +345,24 @@ export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, 
     }
   }
   return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
+}
+
+/**
+ * `aleph suite`, from its own timer: the full checks on origin/<main> of each factory repo whose main moved since
+ * the last record (`baseline`). While the factory is paused it does nothing. A repo that turns green starts a
+ * dispatch, so the goals its red main held start at once.
+ */
+export async function suiteStep(checks: Checks = baselineChecks): Promise<Record<string, string>> {
+  if (gates({ only: ["pause"] })) return {};
+  const out: Record<string, string> = {};
+  for (const repo of sandboxRepos()) {
+    const was = mainState(repo).state;
+    const b = await baseline(repo, checks);
+    out[repo.key] = b.state === "green" ? "green" : b.line;
+    factoryLog(`suite ${repo.key}: ${out[repo.key]}`);
+    if (b.state === "green" && was === "red") dispatchDetached();
+  }
+  return out;
 }
 
 /**
@@ -535,5 +552,5 @@ const recheckGoal = (name: string) => refusal(async () => { await (await recheck
 /** `aleph dispatch`: one dispatch of the ready goals. */
 export async function runDispatch() {
   // `ALEPH_RESCUE=off` leaves a stuck or failed run as it is: its open job keeps its goal not ready.
-  return dispatchIssues(startGoal, baselineChecks, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
+  return dispatchIssues(startGoal, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
 }

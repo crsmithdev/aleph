@@ -3,20 +3,21 @@
  * liveness and locks. See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { availableParallelism, homedir } from "node:os";
+import { homedir, loadavg } from "node:os";
 import { join } from "node:path";
 import { needsOf, type Ask } from "./ask.ts";
 import { layout } from "./layout.ts";
 import { isLive } from "./process.ts";
 import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
-import { checkSlots, reposFile } from "./settings.ts";
+import { loadLimit, reposFile } from "./settings.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. A run from before 4 Nov 2026 may have a hidden check with its test counts. */
-/** `files`: the number of test files a build ran in place of the full suite. */
+/** `files`: the number of test files a build or a land ran in place of the full suite. */
 /** `tests`: the record of a check that ran `bun test`, from its JUnit report. */
-export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number; tests?: TestRecord }
+/** `noVerdict`: a clock or a signal ended the check, so it neither passed nor failed. */
+export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number; tests?: TestRecord; noVerdict?: true }
 
 /** A failed test: its file, its name with its `describe` names (`a > b`), and the first 20 lines of its failure. */
 export interface FailedTest { file: string; name: string; message: string }
@@ -104,6 +105,8 @@ export interface Repo {
   held: string[];
   /** The spec check runs before each goal's first worker run. */
   author?: boolean;
+  /** Globs of test files that every land runs, besides the tests its change reaches. */
+  critical?: string[];
 }
 
 export const OPEN: State[] = ["running", "passed", "awaiting", "failed", "stuck"];
@@ -122,7 +125,7 @@ export function loadRegistry(): Record<string, Repo> {
     repos[key] = {
       key, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
       setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
-      sandbox: r.sandbox ?? false, held: r.held ?? [], author: r.author ?? false,
+      sandbox: r.sandbox ?? false, held: r.held ?? [], author: r.author ?? false, critical: r.critical ?? [],
     };
   }
   return repos;
@@ -363,23 +366,34 @@ function readVerdictFile(file: string): Review | undefined {
 
 /** The reason of a land that found the job lock taken: it did nothing to the job. */
 
-/** How many check runs of the test suite may run at once across the factory: ALEPH_CHECK_SLOTS, default 2. */
+/** How the admission reads the load and waits: `load` gives the 1-minute load average. Tests give both. */
+export interface Admission { load: () => number; pause: (ms: number) => Promise<void> }
+const realAdmission: Admission = { load: () => loadavg()[0], pause: (ms) => Bun.sleep(ms) };
 
-/** Each suite run's share of the cores: cores / slots, at least 1. */
-export const testParallel = () => Math.max(1, Math.floor(availableParallelism() / checkSlots()));
+/** How long a start that had to wait keeps the queue, so the load average shows it before the next start reads the load. */
+const ADMIT_GAP_MS = 15_000;
 
 /**
- * Wait for a free check slot (a lock `check-slot-<n>`) and take it. The wait
- * has no end: the caller starts its time limit after this returns.
+ * Wait until the 1-minute load average is under `loadLimit()`. A check, a worker and a land call it before they start.
+ * The waiters queue on the lock `admit`, so one reads the load at a time; one that had to wait keeps the lock for
+ * ADMIT_GAP_MS after it starts. The wait has no end, fails nothing and counts against no time limit. `say` gets the
+ * reason of each wait, for the run's phase.
  */
-export async function checkSlot(): Promise<() => void> {
-  for (;;) {
-    for (let n = 0; n < checkSlots(); n++) {
-      const release = await lock(`check-slot-${n}`, 0);
-      if (release) return release;
-    }
-    await Bun.sleep(100);
+export async function admit(say: (line: string) => void = () => {}, a: Admission = realAdmission): Promise<void> {
+  let release = await lock("admit", 0);
+  if (!release) {
+    say("waiting: queued behind another start under load");
+    release = (await lock("admit", Infinity))!;
   }
+  let waited = false;
+  for (let load = a.load(); load >= loadLimit(); load = a.load()) {
+    say(`waiting: load ${load.toFixed(1)} is at or over ${loadLimit()}`);
+    waited = true;
+    await a.pause(5000);
+  }
+  if (!waited) return release();
+  const free = release;
+  void a.pause(ADMIT_GAP_MS).then(free);
 }
 
 /** The systemd-run properties of every factory run unit: the shell, the UI and Claude Code sessions win when the cores are busy. */

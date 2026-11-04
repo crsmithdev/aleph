@@ -110,9 +110,9 @@ describe("the state rule", () => {
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: worker" });
   });
 
-  test("a check past its limit is stopped and fails as timed out", async () => {
+  test("a check past its limit is stopped and gives no verdict", async () => {
     const r = await actionJob("slowcheck", "commit slow/x.txt", { ALEPH_CHECK_TIMEOUT: "1" });
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: check slow" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", cause: "infra", reason: "no verdict: check slow timed out" });
   });
 });
 

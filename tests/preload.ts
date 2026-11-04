@@ -30,6 +30,8 @@ const vars: Record<string, string> = {
   ALEPH_RULE_CMD: "false",
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
+// No check, worker or land in a test waits for the host's load: the admission's own tests give a fake load.
+process.env.ALEPH_LOAD_LIMIT = "Infinity";
 
 // Bun.spawn and Bun.spawnSync without an `env` give the child the environment this process started with, not
 // process.env, so the child would miss the settings above. Here a call without an `env` passes process.env.

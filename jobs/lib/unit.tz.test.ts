@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "./ledger.ts";
 import { checkEnv, checksAt, runOnCommit } from "./checks.ts";
-import { checkSlot } from "./ledger.ts";
 import { fixture } from "../../tests/git-fixture.ts";
 
 // The check path through checksAt: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
@@ -23,14 +22,14 @@ const oneCommit = (path: string) => fixture("unit-tz", (dir) => {
   sh(dir, "git", "commit", "-q", "-m", "init");
 }, path);
 
-const KEYS = ["TZ", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS"];
+const KEYS = ["TZ", "XDG_RUNTIME_DIR"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "unit-tz-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, { TZ: "Asia/Tokyo", XDG_RUNTIME_DIR: join(base, "run"), ALEPH_CHECK_SLOTS: "1" });
+  Object.assign(process.env, { TZ: "Asia/Tokyo", XDG_RUNTIME_DIR: join(base, "run") });
 });
 
 afterEach(() => {
@@ -52,16 +51,16 @@ function committed(setup: string[] = [], checks: { name: string; run: string }[]
 /** The repo's worktrees besides its main checkout. */
 const extraTrees = (path: string) => sh(path, "git", "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).length - 1;
 
-test("checksAt hands each check's process to onSpawn, so a drop can kill a running check", async () => {
+test("checksAt hands each check's process to onSpawn, so a drop can kill a running check, and a killed check gives no verdict", async () => {
   const { repo, sha } = committed([], [{ name: "slow", run: "sleep 60" }]);
   const spawned: ReturnType<typeof Bun.spawn>[] = [];
   const why = await checksAt({
     folder: base, repo, changed: [], phase: () => {},
     onSpawn: (p) => { spawned.push(p); setTimeout(() => p.kill("SIGKILL"), 200); },
   }, sha, process.env);
-  // The check and its rerun after the failure.
-  expect(spawned).toHaveLength(2);
-  expect(why).toMatchObject({ cause: "check", checkName: "slow", reason: "slow failed" });
+  // A killed check does not run again here.
+  expect(spawned).toHaveLength(1);
+  expect(why).toMatchObject({ cause: "infra", checkName: "slow", reason: "no verdict: check slow was killed" });
   expect(extraTrees(repo.path)).toBe(0);
 }, 20_000);
 
@@ -99,7 +98,6 @@ test("runOnCommit puts the hidden files in .hidden", async () => {
 });
 
 test("runOnCommit: two runs for one repo at the same time do not remove each other's worktree", async () => {
-  process.env.ALEPH_CHECK_SLOTS = "2";
   const { repo, sha } = committed();
   const [a, b] = await Promise.all([runOnCommit(repo, sha, "sleep 0.3; cat f.txt"), runOnCommit(repo, sha, "cat f.txt; exit 3")]);
   expect([a, b]).toEqual([{ code: 0, output: "x\n" }, { code: 3, output: "x\n" }]);
@@ -119,20 +117,4 @@ test("runOnCommit: a failing setup returns infra with the setup log, and the com
   expect(r.output).toStartWith("setup failed\n");
   expect(r.output).toContain("KNOWN-SETUP-TEXT-716\n");
   expect(r.output).not.toContain("boom");
-});
-
-test("runOnCommit waits for a check slot, and frees it after a run and after an infra result", async () => {
-  const { repo, sha } = committed();
-  const free = await checkSlot();
-  let done = false;
-  const p = runOnCommit(repo, sha, "echo boom; exit 3").then((r) => { done = true; return r; });
-  await Bun.sleep(300);
-  expect(done).toBe(false);
-  // No worktree before the slot.
-  expect(extraTrees(repo.path)).toBe(0);
-  free();
-  expect((await p).code).toBe(3);
-  (await checkSlot())();
-  expect((await runOnCommit({ ...repo, setup: ["false"] }, sha, "true")).infra).toBe(true);
-  (await checkSlot())();
 });

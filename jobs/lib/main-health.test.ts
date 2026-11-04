@@ -33,12 +33,14 @@ function repo(): Repo & { commit: () => string } {
   return { key: "fac", path, main: "main", commit } as unknown as Repo & { commit: () => string };
 }
 
-test("a red baseline stops goals only while origin/main is its commit", async () => {
+test("a red baseline stops goals after main moves, until a later baseline is green", async () => {
   const r = repo();
   const old = r.commit();
   await writeBaseline("fac", () => ({ repo: "fac", commit: old, ok: false, failed: "tests" }));
   expect(mainRed()(r)).toBe(`main is red at ${old.slice(0, 7)}: tests`);
-  r.commit();
+  const next = r.commit();
+  expect(mainRed()(r)).toBe(`main is red at ${old.slice(0, 7)}: tests`);
+  await writeBaseline("fac", () => ({ repo: "fac", commit: next, ok: true }));
   expect(mainRed()(r)).toBeNull();
 });
 

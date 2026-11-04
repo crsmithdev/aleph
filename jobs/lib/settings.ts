@@ -8,7 +8,7 @@
  * every ALEPH_* variable to the units it starts.
  */
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { availableParallelism, homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { layout } from "./layout.ts";
 
@@ -51,8 +51,11 @@ function cap(envName: string, key: string, dflt: number): number {
   return typeof f === "number" && Number.isFinite(f) ? f : dflt;
 }
 
-/** The most agent runs live at once. */
-export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", 10);
+/**
+ * The most agent runs live at once: a sixth of the cores (4 of 24). A run's checks use half the cores (package.json),
+ * so two suites fill the load limit while the other runs are in their worker step; more starts would only queue.
+ */
+export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.floor(availableParallelism() / 6)));
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 export const TRIAGE_CAP = () => num("ALEPH_TRIAGE_CAP", 5);
@@ -75,7 +78,8 @@ export const goalLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 export const landBatch = () => Math.max(1, Math.floor(num("ALEPH_LAND_BATCH", 8)) || 1);
-export const checkSlots = () => Math.max(1, Math.floor(Number(process.env.ALEPH_CHECK_SLOTS)) || 2);
+/** A check, a worker or a land starts only while the 1-minute load average is under this. */
+export const loadLimit = () => num("ALEPH_LOAD_LIMIT", availableParallelism());
 /** How long the UI keeps a computed read, 0 when off. */
 export const uiCacheMs = () => { const n = num("ALEPH_UI_CACHE_TTL", 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 

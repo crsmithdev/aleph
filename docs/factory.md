@@ -9,9 +9,11 @@ A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Facto
 ```bash
 systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
 systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
+systemctl --user link ~/aleph/jobs/systemd/aleph-suite.service
+systemctl --user enable --now ~/aleph/jobs/systemd/aleph-suite.timer
 ```
 
-The `aleph-tick` timer runs `aleph tick` every 5 minutes. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
+The `aleph-tick` timer runs `aleph tick` every 5 minutes. The `aleph-suite` timer runs `aleph suite` every hour. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
 
 ## Commands
 
@@ -19,6 +21,7 @@ The `aleph-tick` timer runs `aleph tick` every 5 minutes. To start the tick afte
 |---|---|
 | `aleph dispatch` | Starts a run for each ready goal, up to the caps |
 | `aleph tick` | Dispatches, triages, and does the periodic work; the timer runs it |
+| `aleph suite` | Runs the full checks on `origin/main` of each factory repo whose main moved since the last run, and records the baseline; its timer runs it |
 | `aleph triage <repo>-<n>` | Triages one issue now |
 | `aleph status [<repo>-<n>[.<k>]] [--json]` | The state of one issue, or of each open issue in the recent repos |
 | `aleph jobs` | Open jobs, then the jobs that ended in the last 24 hours |
@@ -79,7 +82,7 @@ Verify is one station, with the run phase `verify`. In order, it runs:
 3. the keep-gate on the branch's new tests;
 4. the Oracle commands of the spec that the checks did not run.
 
-Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log`. The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A setup that fails, or a worktree that git cannot add, skips the Oracle command and is not a failure. Each detached worktree goes when its step ends.
+The checks run only the test files that the branch's change reaches, and every check that is not a test, such as `tsc`. Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log`. The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A setup that fails, or a worktree that git cannot add, skips the Oracle command and is not a failure. Each detached worktree goes when its step ends.
 
 ### When a run is stuck
 
@@ -88,6 +91,7 @@ A run is stuck when:
 - the last line of the worker's output is not a `result` event with `is_error` false;
 - it made no commit;
 - a check fails after the fix rounds;
+- a check gives no verdict: a clock (`ALEPH_CHECK_TIMEOUT`) or a signal ended it. Its cause is `infra`, it is not a fix round, and the rescue checks the branch again once;
 - it reaches the time box (`ALEPH_JOB_TIMEOUT`, 30 minutes). The factory drops it and sends the issue to the planner to split, or asks you when it is a part or already split;
 - its output file does not grow for `ALEPH_STALL_SECONDS` (600). The reason is `stalled: no output for 10 minutes`.
 
@@ -112,10 +116,11 @@ A diff that changes a path in the repo's `held` list or a security path (`SECURI
 
 ### The land
 
-Lands of one repo go one at a time, in the order they became ready. A land merges the branch onto `origin/main` in memory (`git merge-tree`), runs the checks on that tree, and pushes that tree as one squash commit. The commit ends with `Issue: <repo>-<n>` when the run is on an issue, then `Job: <job>`. A held land also writes `Held-by:` with the name of the lander.
+Lands of one repo go one at a time, in the order they became ready. A land merges the branch onto `origin/main` in memory (`git merge-tree`), runs the checks on that tree, and pushes that tree as one squash commit. A land does not run the full suite: `aleph suite` runs it on its own timer. The commit ends with `Issue: <repo>-<n>` when the run is on an issue, then `Job: <job>`. A held land also writes `Held-by:` with the name of the lander.
 
-- **Batch.** The land that takes the lock also takes the passed runs queued behind it, up to `ALEPH_LAND_BATCH` (8). It checks the last commit once and pushes all of them in one push. If the checks fail, it splits the batch in half until it finds the run that fails.
-- **Skipped checks.** When `origin/main` is still the commit a run's checks passed on, the land pushes without the checks.
+- **Checks.** The land runs the test files that the change reaches, the test files that match the repo's `critical` globs in `~/.aleph/repos.json` (none by default), and every check that is not a test, such as `tsc`. A change to a file that is not a module, such as a doc, runs every test, as in a build. A failing test that the change does not reach does not stop the land.
+- **Batch.** The land that takes the lock also takes the passed runs queued behind it, up to `ALEPH_LAND_BATCH` (8). It checks the last commit once and pushes all of them in one push. If the checks fail, it splits the batch in half until it finds the run that fails. If the checks give no verdict, the batch does not split: each run fails with the cause `infra`, and the rescue lands it again.
+- **Critical tests only.** When `origin/main` is still the commit a run's checks passed on, the land runs only the critical tests, and pushes with no check when the repo has none.
 - **After the push.** The land fast-forwards the repo's main checkout if it is clean, and restarts `aleph-ui` when the change touches a file the server imports.
 
 ## Gates
@@ -125,7 +130,7 @@ Each dispatch first does its steps: it starts the next steps a pause kept, rescu
 | Gate | Binds when |
 |---|---|
 | Pause | `aleph pause` (`~/.aleph/factory/paused`), until `aleph resume`. A paused dispatch does nothing, not even its steps |
-| Baseline | The checks on `origin/main` failed (kept in `~/.aleph/factory/baseline.json`), still run, or could not run |
+| Baseline | The last `aleph suite` run failed (kept in `~/.aleph/factory/baseline.json`). It holds until a later suite run passes, also after main moves. A main that no suite run has checked does not hold |
 | Not ready | The goal is done, waits on an issue in its `after` list, has an open job, or has a planner or spec check running |
 | Live cap | `ALEPH_LIVE_CAP` runs are live |
 | Busy file | A file in the goal's Edit surface had 3 land conflicts in 7 days, and another open job names it |
@@ -145,7 +150,11 @@ Whatever would wait for you is an Ask, of kind `input` or `approval`, with a rea
 
 ## Flakes and health
 
-A check that fails in a run, a land or the baseline runs once more on the same tree (not after a time-out). If it passes, it counts as passed, and the flake goes to `~/.aleph/factory/flaky.json`. Two flakes of one check in 7 days raise a health line in `aleph report`.
+A check that fails in a run, a land or the baseline runs once more on the same tree (not after a time-out or a kill, which give no verdict).
+
+## Load
+
+A check, a worker and a land start only while the 1-minute load average is under `ALEPH_LOAD_LIMIT`. Otherwise they wait in a queue, and the run's phase says why. The wait fails nothing and counts against no time limit. A start that had to wait keeps the queue for 15 seconds, so the load average shows it before the next start reads the load. The full suite runs on half the cores (`ALEPH_TEST_PARALLEL` in `package.json`). If it passes, it counts as passed, and the flake goes to `~/.aleph/factory/flaky.json`. Two flakes of one check in 7 days raise a health line in `aleph report`.
 
 ## Settings
 
@@ -153,7 +162,8 @@ The live cap is read from its variable first, then from `~/.aleph/factory/caps.j
 
 | Variable | Default | Does |
 |---|---|---|
-| `ALEPH_LIVE_CAP` | 10 | Runs live at once |
+| `ALEPH_LIVE_CAP` | 4 | Runs live at once: a sixth of the cores |
+| `ALEPH_LOAD_LIMIT` | 24 | The 1-minute load average under which a check, a worker or a land starts: the number of cores |
 | `ALEPH_JOB_TIMEOUT` | 1800 | Seconds in a worker's time box |
 | `ALEPH_CHECK_TIMEOUT` | 1200 | Seconds for the checks |
 | `ALEPH_REVIEW_TIMEOUT` | 600 | Seconds for a review |

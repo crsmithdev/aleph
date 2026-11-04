@@ -15,7 +15,7 @@ import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, parseReview, REVIEW_SCHEMA, securityChange, testFindings } from "./gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
 import { awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
-import { tagged, isAgentRun, onOf, testParallel, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "./ledger.ts";
+import { admit, tagged, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
@@ -38,7 +38,7 @@ import { jobSpec, jobSpecFile, runFile } from "./run-files.ts";
 let child: ReturnType<typeof Bun.spawn> | null = null;
 
 
-interface Exec { code: number; timedOut: boolean }
+interface Exec { code: number; timedOut: boolean; killed: boolean }
 
 /**
  * Run a command with its output appended to `out`. With a limit, it runs under
@@ -53,9 +53,10 @@ async function exec(argv: string[], o: { cwd: string; env: Record<string, string
   const start = performance.now();
   child = Bun.spawn(cmd, { cwd: o.cwd, env: o.env, stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: fd, stderr: fd });
   const code = await child.exited;
+  const killed = child.signalCode !== null;
   child = null;
   closeSync(fd);
-  return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000 };
+  return { code, timedOut: o.limit !== undefined && performance.now() - start >= o.limit * 1000, killed };
 }
 
 /** The `result` of the last result event; else the last assistant text; else empty. */
@@ -109,10 +110,12 @@ function landPorts({ folder, run }: Entry, repo: Repo, env: Record<string, strin
   const logFile = runFile(folder, "checks.log");
   return {
     pull: (room) => pullWaiting(repo, run, room),
-    check: async (commit, _runs, changed, only) => {
-      const on = only ? { ...repo, checks: only } : repo;
+    check: async (commit, _runs, changed, picked) => {
       const before = existsSync(logFile) ? readFileSync(logFile, "utf8").length : 0;
-      const why = await checksAt(taskOf(folder, on, changed, phase), commit, env);
+      const task = taskOf(folder, { ...repo, checks: picked.checks }, changed, phase);
+      const rec = task.record!;
+      task.record = (c) => rec(picked.tests.has(c.name) ? { ...c, files: picked.tests.get(c.name)!.length } : c);
+      const why = await checksAt(task, commit, env);
       return { why, checks: readRun(folder)?.checks, log: existsSync(logFile) ? readFileSync(logFile, "utf8").slice(before) : undefined };
     },
   };
@@ -169,7 +172,7 @@ export async function unit(folder: string): Promise<void> {
   const dispatcherPath = runPath();
   const env: Record<string, string | undefined> = {
     ...process.env, ...readEnvFile(repo?.env ?? runEnvFile()),
-    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: run.job, ALEPH_JOB_RUN: id, ALEPH_TEST_PARALLEL: String(testParallel()),
+    PATH: dispatcherPath, HOME: homedir(), ALEPH_JOB_ID: run.job, ALEPH_JOB_RUN: id,
   };
   delete env.ANTHROPIC_API_KEY;
   delete env.CLAUDECODE;
@@ -182,6 +185,11 @@ export async function unit(folder: string): Promise<void> {
   let outcome: Outcome;
   let code = 0;
   try {
+    // A worker or a land starts only under the load limit: it waits, with the reason as its phase.
+    if (run.kind !== "plain") {
+      await admit((line) => updateRun(folder, { phase: line }));
+      updateRun(folder, { phase: undefined });
+    }
     if (run.kind === "plain") {
       const r = await exec(["bash", "-c", readFileSync(runFile(folder, "command.txt"), "utf8")], { cwd: process.cwd(), env, out: runFile(folder, "output.log") });
       code = r.code;
@@ -421,7 +429,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
   let findings: string[] | undefined;
   return {
     checks: async () => {
-      // A build runs only the tests its change reaches; the land runs the full suite.
+      // A build runs only the tests its change reaches; the full suite runs on its own timer (`aleph suite`).
       const build = buildChecks(repo, tip, o.changed);
       const rec = recorder(folder);
       const record = (c: CheckResult) => rec(build.tests.has(c.name) ? { ...c, files: build.tests.get(c.name)!.length } : c);

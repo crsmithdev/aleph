@@ -102,20 +102,20 @@ export function queued(e: Entry): Entry {
 }
 
 /** Checks that fail when `bad` says why, and move main during the first `races` calls. */
-export function ports(o: { bad?: (files: string[]) => string | null; races?: number; raceOn?: (names: string[]) => boolean; room?: number[] } = {}): LandPorts & { calls: string[][]; only: (Check[] | undefined)[] } {
+export function ports(o: { bad?: (files: string[]) => string | null; races?: number; raceOn?: (names: string[]) => boolean; room?: number[]; stop?: ChecksStop } = {}): LandPorts & { calls: string[][]; only: Check[][] } {
   const calls: string[][] = [];
-  const only: (Check[] | undefined)[] = [];
+  const only: Check[][] = [];
   let races = o.races ?? 0;
   return {
     calls,
     only,
     pull: async (room) => { o.room?.push(room); },
-    check: async (commit, runs, _changed, narrowed) => {
+    check: async (commit, runs, _changed, picked) => {
       calls.push(runs.map((r) => r.name));
-      only.push(narrowed);
+      only.push(picked.checks);
       if (races > 0 && (o.raceOn?.(runs.map((r) => r.name)) ?? true)) { races--; moveMain(); }
       const reason = o.bad?.(filesAt(commit)) ?? null;
-      const why: ChecksStop | null = reason ? { cause: "check", checkName: reason.replace(/ failed$/, ""), reason } : null;
+      const why: ChecksStop | null = o.stop ?? (reason ? { cause: "check", checkName: reason.replace(/ failed$/, ""), reason } : null);
       return { why, checks: [{ name: "fake", ok: !why, seconds: 0 }], log: reason ? `the log of ${reason}\n` : "" };
     },
   };

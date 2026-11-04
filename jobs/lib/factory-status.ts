@@ -10,7 +10,6 @@ import { reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
-import { git } from "./git.ts";
 import { isOpen, lastReal, openJob, type Job } from "./job.ts";
 import type { Bound, Gate } from "./goal-decision.ts";
 import { layout, readFactoryLog } from "./layout.ts";
@@ -215,17 +214,14 @@ export function redMains(): RedMain[] {
 }
 
 /**
- * The red line that stops a goal start, per repo: its baseline failed and origin/<main> is still that commit. A red
- * record for an older commit no longer counts; the next baseline checks the new one. One rev-parse per repo per query.
+ * The red line that stops a goal start, per repo: its last baseline failed. The full suite runs on its own timer, so a
+ * red record stays until a later suite run is green, also when main has moved since.
  */
 export function mainRed(): (repo: Repo) => string | null {
-  const base = baselines(), reds = new Map<string, string | null>();
+  const base = baselines();
   return (repo) => {
-    if (!reds.has(repo.key)) {
-      const b = base[repo.key];
-      reds.set(repo.key, b && !b.ok && git(repo.path, "rev-parse", `origin/${repo.main}`).out === b.commit ? redLine(b) : null);
-    }
-    return reds.get(repo.key)!;
+    const b = base[repo.key];
+    return b && !b.ok ? redLine(b) : null;
   };
 }
 
@@ -274,7 +270,7 @@ export function flakeNames(f: Flake): { kind: "test" | "check"; name: string }[]
 export function suiteLines(runs: Entry[] = allRuns()): string[] {
   const last = new Map<string, { at: string; seconds: number }>();
   for (const { run } of runs) {
-    const c = run.repo && (run.checks ?? []).find((c) => /^tests?$/.test(c.name) && c.ok && !c.rerun);
+    const c = run.repo && (run.checks ?? []).find((c) => /^tests?$/.test(c.name) && c.ok && !c.rerun && c.files === undefined);
     if (!c) continue;
     const at = run.ended ?? run.started;
     if (at >= (last.get(run.repo!)?.at ?? "")) last.set(run.repo!, { at, seconds: c.seconds });

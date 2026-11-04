@@ -31,7 +31,7 @@ describe("the spec check before a goal starts", () => {
   const run = async () => {
     const f = fakes();
     const launched: string[] = [];
-    const out = await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, planDetached, (r, ref) => { launched.push(`${r.key}-${ref}`); });
+    const out = await dispatchIssues(f.start, f.land, f.rescue, undefined, planDetached, (r, ref) => { launched.push(`${r.key}-${ref}`); });
     return { out, calls: f.calls, launched };
   };
   let saved: string | undefined;

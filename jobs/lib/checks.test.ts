@@ -4,17 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { addedLines, keepGate, mutants, newCases, runChecks, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
-import { checkSlot } from "./ledger.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
 
-const KEYS = ["ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS", "ALEPH_CHECK_TIMEOUT"];
+const KEYS = ["ALEPH_FACTORY_DIR", "XDG_RUNTIME_DIR", "ALEPH_LOAD_LIMIT", "ALEPH_CHECK_TIMEOUT"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "checks-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, { ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run"), ALEPH_CHECK_SLOTS: "4" });
+  Object.assign(process.env, { ALEPH_FACTORY_DIR: join(base, "factory"), XDG_RUNTIME_DIR: join(base, "run") });
   delete process.env.ALEPH_CHECK_TIMEOUT;
 });
 
@@ -26,7 +25,7 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-type Reply = { code: number; timedOut?: boolean; print?: string };
+type Reply = { code: number; timedOut?: boolean; killed?: boolean; print?: string };
 const repo = (...names: string[]) => ({ key: "r", checks: names.map((name) => ({ name, run: name })) }) as unknown as Repo;
 
 /** Runs the repo's checks with a fake exec that gives the replies in order. */
@@ -37,7 +36,7 @@ async function run(r: Repo, replies: Reply[], changed: string[] = []) {
     calls.push(check.name);
     const reply = replies.shift()!;
     writeFileSync(out, reply.print ?? "");
-    return { code: reply.code, timedOut: reply.timedOut ?? false };
+    return { code: reply.code, timedOut: reply.timedOut ?? false, killed: reply.killed };
   };
   const failed = await runChecks({ folder: base, repo: r, changed, phase: () => {}, record: (c) => results.push(c) }, exec);
   return { failed, calls, results, log: readFileSync(join(base, "checks.log"), "utf8") };
@@ -65,34 +64,37 @@ test("a failure on both runs fails the check, records no flake and stops the loo
   expect(flakes()).toEqual([]);
 });
 
-test("a timeout has no rerun", async () => {
+test("a timeout gives no verdict and has no rerun", async () => {
   const r = await run(repo("a"), [{ code: 124, timedOut: true }]);
-  expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "timed out: check a", timedOut: true }, calls: ["a"] });
+  expect(r).toMatchObject({ failed: { cause: "infra", checkName: "a", reason: "no verdict: check a timed out", timedOut: true }, calls: ["a"], results: [{ name: "a", ok: false, noVerdict: true }] });
   expect(r.log).toContain("exit 124 (timed out)");
 });
 
-test("a second run that times out is a timeout", async () => {
+test("a second run that times out gives no verdict", async () => {
   const r = await run(repo("a"), [{ code: 1 }, { code: 124, timedOut: true }]);
-  expect(r).toMatchObject({ failed: { cause: "check", checkName: "a", reason: "timed out: check a", timedOut: true }, results: [{ ok: false }] });
+  expect(r).toMatchObject({ failed: { cause: "infra", checkName: "a", reason: "no verdict: check a timed out" }, results: [{ ok: false, noVerdict: true }] });
   expect(flakes()).toEqual([]);
 });
 
-test("a check waits for a free slot, and its time limit starts only once it holds one", async () => {
-  Object.assign(process.env, { ALEPH_CHECK_SLOTS: "1", ALEPH_CHECK_TIMEOUT: "7" });
-  const free = await checkSlot();
-  let freed = false;
-  const calls: { freed: boolean; limit: number }[] = [];
-  const exec: CheckExec = async (_check, out, limit) => { calls.push({ freed, limit }); writeFileSync(out, ""); return { code: 0, timedOut: false }; };
-  let reached!: () => void;
-  const atCheck = new Promise<void>((r) => { reached = r; });
-  const done = runChecks({ folder: base, repo: repo("a"), changed: [], phase: () => reached() }, exec);
-  await atCheck;
-  // exec, which applies the limit from its own start, is not called while the test holds the only slot.
-  expect(calls).toEqual([]);
-  freed = true;
-  free();
-  expect(await done).toBeNull();
-  expect(calls).toEqual([{ freed: true, limit: 7 }]);
+test("a check that a signal killed gives no verdict and has no rerun", async () => {
+  const r = await run(repo("a", "b"), [{ code: 137, killed: true }]);
+  expect(r).toMatchObject({ failed: { cause: "infra", checkName: "a", reason: "no verdict: check a was killed" }, calls: ["a"], results: [{ ok: false, noVerdict: true }] });
+  expect(r.log).toContain("exit 137 (killed)");
+});
+
+test("a check waits while the load is at or over the limit, its time limit starts after, and the wait is its phase", async () => {
+  Object.assign(process.env, { ALEPH_LOAD_LIMIT: "8", ALEPH_CHECK_TIMEOUT: "7" });
+  const loads = [12, 8, 3];
+  const calls: { limit: number }[] = [];
+  const pauses: { ms: number; ran: number }[] = [];
+  const phases: string[] = [];
+  const exec: CheckExec = async (_check, out, limit) => { calls.push({ limit }); writeFileSync(out, ""); return { code: 0, timedOut: false }; };
+  const admission = { load: () => loads.shift()!, pause: async (ms: number) => { pauses.push({ ms, ran: calls.length }); } };
+  expect(await runChecks({ folder: base, repo: repo("a"), changed: [], phase: (p) => phases.push(p), admission }, exec)).toBeNull();
+  // Two reads at or over the limit: two pauses before the check ran, then the queue's gap after it started.
+  expect(pauses).toEqual([{ ms: 5000, ran: 0 }, { ms: 5000, ran: 0 }, { ms: 15000, ran: 0 }]);
+  expect(calls).toEqual([{ limit: 7 }]);
+  expect(phases).toEqual(["check a", "check a: waiting: load 12.0 is at or over 8", "check a: waiting: load 8.0 is at or over 8", "check a"]);
 });
 
 test("exit code 124 without the clock is an ordinary failure", async () => {

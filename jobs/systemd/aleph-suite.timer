@@ -1,0 +1,11 @@
+# Every hour. `aleph suite` runs the checks only on a main that moved since the last record, and nothing while paused.
+[Unit]
+Description=aleph full suite, every hour
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -110,3 +110,13 @@ test("a member that failed in attempt 1 does not take the leader out when main m
   expect(mainFiles()).toContain(`${names[0]}.txt`);
   expect(mainFiles()).not.toContain(`${names[1]}.txt`);
 });
+
+test("a batch whose checks give no verdict does not split: each run fails as infra and nothing is pushed", async () => {
+  const [a, b] = [job("n1", [["n1.txt", "1\n"]]), queued(job("n2", [["n2.txt", "2\n"]]))];
+  const p = ports({ stop: { cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out", timedOut: true } });
+  const r = await land(a, repo, p);
+  expect(r.outcome).toEqual({ condition: "failed", cause: "infra", checkName: "tests", reason: "no verdict: check tests timed out" });
+  expect(given(b).verdict).toEqual(r.outcome);
+  expect(p.calls).toEqual([["n1", "n2"]]);
+  expect(pushes()).toBe(0);
+});
