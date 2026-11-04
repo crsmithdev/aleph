@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, count, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -143,7 +143,6 @@ const EMPTY_TYPES = {
 const DAY = 86_400_000, STEP = 50;
 const KNOWLEDGE = ["decision", "gotcha", "project", "entity", "concept"];
 const STATUS = { use: "In use", stale: "Stale", never: "Never read", lint: "Lint problem" };
-const fmt = (n) => Number(n).toLocaleString("en-US");
 const shortDay = (s) => day(`${String(s).slice(0, 10)}T00:00`);
 
 /** A note's status: a refusal first; else in use when recall returned it in the last 7 days, stale when earlier, never when it never did. */
@@ -187,7 +186,7 @@ export function typeTiles(m, rows) {
 }
 
 const dateOr = (s) => (s ? esc(shortDay(s) || s) : "–");
-const renderTiles = (m, rows, type) => tiles("Memory types", typeTiles(m, rows).map((t) => tile({ k: t.name, v: typeof t.n === "number" ? fmt(t.n) : t.n, key: t.id, on: t.id === type,
+const renderTiles = (m, rows, type) => tiles("Memory types", typeTiles(m, rows).map((t) => tile({ k: t.name, v: typeof t.n === "number" ? count(t.n) : t.n, key: t.id, on: t.id === type,
   body: `${small(t.unit)}<span class="st ${t.tone}">${esc(t.status)}</span><dl class="dates"><dt>Write</dt><dd>${dateOr(t.write)}</dd><dt>Use</dt><dd>${dateOr(t.use)}</dd></dl>` })).join(""));
 
 /** Each knowledge kind's notes by when recall last returned them. */

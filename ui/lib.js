@@ -16,6 +16,7 @@ export const clock = (iso) => {
 /** A label as the page shows it. */
 export const labelName = (l) => l;
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
+export const count = (n) => Number(n).toLocaleString("en-US");
 
 /** `≈1.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */
 export const wkText = (wk) => (wk ? `\u2248${wk.pct < 0.05 ? "<0.1" : wk.pct.toFixed(1)}% wk` : "");

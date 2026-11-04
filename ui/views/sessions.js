@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/agents. The session and skill detail routes stay in their own views.
-import { barList, barRow, card, chips, costHtml, dataTable, empty, error, esc, filterBar, heads, idLink, money, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when, wireScope } from "../lib.js";
+import { barList, count, barRow, card, chips, costHtml, dataTable, empty, error, esc, filterBar, heads, idLink, money, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when, wireScope } from "../lib.js";
 
 export const view = {
   path: "/sessions",
@@ -37,7 +37,6 @@ export function options(q = new URLSearchParams()) {
 const skillHref = (name) => `#/skills/${encodeURIComponent(name)}`;
 const toolsOf = (d) => d?.activity?.tools ?? [];
 const skillsOf = (d) => d?.skills?.skills ?? [];
-const fmt = (n) => Number(n).toLocaleString("en-US");
 
 /** The five highest failure rates of the tools and skills with at least five calls. */
 export function failing(d) {
@@ -67,11 +66,11 @@ export function shownSessions(d, o) {
 }
 
 const rate = (r) => `${Math.round(r.rate * 100)}%`;
-const renderFails = (d, o) => tiles("Failing most", failing(d).map((r) => tile({ k: r.name, v: rate(r), body: small(`${r.kind}: ${fmt(r.errors)} of ${fmt(r.n)} ${r.kind === "tool" ? "calls" : "uses"}`), key: r.pick, on: o.pick === r.pick })).join(""));
+const renderFails = (d, o) => tiles("Failing most", failing(d).map((r) => tile({ k: r.name, v: rate(r), body: small(`${r.kind}: ${count(r.errors)} of ${count(r.n)} ${r.kind === "tool" ? "calls" : "uses"}`), key: r.pick, on: o.pick === r.pick })).join(""));
 
 function ranked(kind, rows, o) {
   const top = Math.max(1, ...rows.map((r) => r.n));
-  const row = (r) => barRow(esc(r.name), 0, `${fmt(r.n)} · ${fmt(r.errors)} err`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
+  const row = (r) => barRow(esc(r.name), 0, `${count(r.n)} · ${count(r.errors)} err`, { key: `${kind}:${r.name}`, on: o.pick === `${kind}:${r.name}`,
     bar: `<span class="errbar" aria-hidden="true" style="width:${Math.max(1, (r.n / top) * 100).toFixed(2)}%"><i style="flex:${Math.max(0, r.n - r.errors)}"></i>${r.errors ? `<u style="flex:${r.errors}"></u>` : ""}</span>` });
   const rest = rows.slice(ROWS);
   return barList(rows.slice(0, ROWS).map(row).join("")) + (rest.length ? `<details class="more"${rest.some((r) => o.pick === `${kind}:${r.name}`) ? " open" : ""}><summary>${rest.length} more</summary>${barList(rest.map(row).join(""))}</details>` : "");
@@ -84,7 +83,7 @@ function toolsCard(d, o) {
   if (a.langfuse === "off") return card("Tools", empty("Langfuse is not configured.", "Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in <code>~/.aleph/.env</code>."), opts);
   if (a.langfuse === "error") return card("Tools", error(`Langfuse failed: ${a.error}`, "Check that Langfuse is running, then reload."), opts);
   const t = toolsOf(d);
-  return card("Tools", `<p>${fmt(sum(t, (x) => x.calls))} calls, ${fmt(sum(t, (x) => x.errors))} errors. The red part of a bar is errors.</p>` +
+  return card("Tools", `<p>${count(sum(t, (x) => x.calls))} calls, ${count(sum(t, (x) => x.errors))} errors. The red part of a bar is errors.</p>` +
     (t.length ? ranked("tool", t.map((x) => ({ name: x.name, n: x.calls, errors: x.errors })), o) : empty("No tool calls in this period.")), opts);
 }
 
@@ -92,7 +91,7 @@ function skillsCard(d, o) {
   const opts = { count: `${o.days} days` };
   if (d.skills?.error) return card("Skills", error(`Skills failed: ${d.skills.error}`, "Check that Langfuse is running, then reload."), opts);
   const s = skillsOf(d), unused = d.skills?.unused ?? [];
-  return card("Skills", `<p>${fmt(sum(s, (x) => x.uses))} uses, ${fmt(sum(s, (x) => x.errors))} errors.${d.skills?.failed ? ` The last reload failed: ${esc(d.skills.failed)}.` : ""}</p>` +
+  return card("Skills", `<p>${count(sum(s, (x) => x.uses))} uses, ${count(sum(s, (x) => x.errors))} errors.${d.skills?.failed ? ` The last reload failed: ${esc(d.skills.failed)}.` : ""}</p>` +
     (s.length ? ranked("skill", s.map((x) => ({ name: x.name, n: x.uses, errors: x.errors })), o) : empty(`No skill was used in the last ${o.days} days.`, "A use is a Skill tool call or a slash command.")) +
     (unused.length ? `<h3>Unused <span class="count">${unused.length}</span></h3><div class="unused">${unused.map((n) => `<a href="${esc(skillHref(n))}">${esc(n)}</a>`).join("")}</div>` : ""), opts);
 }
@@ -102,12 +101,12 @@ function hooksCard(d) {
   if (a.langfuse !== "ok") return "";
   const denials = a.denials ?? { total: 0, recent: [] };
   const hooks = (a.hooks ?? []).length
-    ? dataTable(heads(["Hook", "Calls", "Errors", "Last"], ["Calls", "Errors"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${fmt(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${h.errors}</td><td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
+    ? dataTable(heads(["Hook", "Calls", "Errors", "Last"], ["Calls", "Errors"]), a.hooks.map((h) => `<tr><td class="wide">${esc(h.name)}</td><td class="num">${count(h.calls)}</td><td class="num${h.errors ? " bad" : ""}">${h.errors}</td><td class="time">${esc(when(h.lastAt))}</td></tr>`).join(""))
     : empty("No hook calls in this period.");
   const list = denials.recent.length
     ? dataTable(heads(["Reason", "When"]), denials.recent.map((r) => `<tr><td class="wide" title="${esc(r.reason)}">${esc(r.reason)}</td><td class="time">${esc(when(r.at))}</td></tr>`).join(""))
     : empty("The gate denied nothing in this period.");
-  return `<div class="pair">${card("Hooks", hooks)}${card("Verify-gate denials", list, { count: fmt(denials.total) })}</div>`;
+  return `<div class="pair">${card("Hooks", hooks)}${card("Verify-gate denials", list, { count: count(denials.total) })}</div>`;
 }
 
 function renderSessionsTable(d, o) {
@@ -125,7 +124,7 @@ function sessionsHead(d, o) {
   const name = o.pick.slice(o.pick.indexOf(":") + 1), n = shownSessions(d, o).length;
   const title = o.pick ? `Sessions that used ${name}` : "Sessions";
   const open = o.pick.startsWith("skill:") ? `<a href="${esc(skillHref(name))}">Open the skill</a>` : "";
-  return sectionHead(title, { count: fmt(n), aside: `${open}${o.pick ? `<button type="button" class="act" data-tile="">Show all sessions</button>` : ""}` });
+  return sectionHead(title, { count: count(n), aside: `${open}${o.pick ? `<button type="button" class="act" data-tile="">Show all sessions</button>` : ""}` });
 }
 
 const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
