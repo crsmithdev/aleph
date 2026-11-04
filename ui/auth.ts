@@ -48,12 +48,12 @@ export function loginPage(): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Aleph — sign in</title>
-<style>
+<style>:root{--fs-md:14px}
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1115;color:#e6e8ec;font:16px system-ui,sans-serif}
 form{display:flex;flex-direction:column;gap:12px;width:260px}
 input,button{padding:10px 12px;border-radius:6px;border:1px solid #2a2f3a;background:#171a21;color:inherit;font:inherit}
 button{background:#3b6ef5;border-color:#3b6ef5;cursor:pointer}
-#err{color:#ff6b6b;min-height:1.2em;font-size:14px}
+#err{color:#ff6b6b;min-height:1.2em;font-size:var(--fs-md)}
 </style></head><body>
 <form id="f"><input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus required>
 <button type="submit">Sign in</button><div id="err" role="alert"></div></form>

@@ -43,6 +43,7 @@
   --mono: 'Hack Nerd Font', 'Hack', ui-monospace, monospace;
   /* Type scale. Weights: 400 text, 500 ids and numbers, 600 headings and table headers.
      Colours: --ink text, --ink-2 secondary text, --muted headers and meta. */
+  --fs-2xs: 11px;         /* badges and ids on narrow cards, bar labels */
   --fs-xs: 12px;          /* table headers, meta, badges */
   --fs-sm: 13px;          /* table cells, secondary text */
   --fs-md: 14px;          /* body */
@@ -618,7 +619,7 @@ pre.stat b { color: var(--need); }
 .chat .msg p { margin: 0 0 8px; }
 .chat .msg ul, .chat .msg ol { margin: 0 0 8px; padding-left: 22px; }
 .chat .msg :last-child { margin-bottom: 0; }
-.chat .msg code { font-size: 0.86em; background: var(--sunk); padding: 0 3px; border-radius: var(--r-tag); }
+.chat .msg code { font-size: var(--fs-xs); background: var(--sunk); padding: 0 3px; border-radius: var(--r-tag); }
 .chat .msg pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat .msg pre code { background: none; padding: 0; font-size: inherit; }
 .chat .msg.user { width: fit-content; max-width: min(88%, 64ch); margin: 0 0 12px auto; padding: 10px 14px; background: var(--sunk); border-radius: 12px; color: var(--ink); }
@@ -729,8 +730,8 @@ a.tile .k::after, button.tile .k::after { content: " \203A"; }
 .tile.sc { gap: 4px; padding: 12px 14px; }
 .tile.sc .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .tile.sc .k::after { content: none; }
-.tile.sc b em { font-size: 18px; font-style: normal; font-weight: 400; }
-.tile.sc .q { font-size: 12px; color: var(--ink); }
+.tile.sc b em { font-size: var(--fs-lg); font-style: normal; font-weight: 400; }
+.tile.sc .q { font-size: var(--fs-xs); color: var(--ink); }
 .tile.sc .q .m { color: var(--muted); }
 .tile.sc .tr { font-size: var(--fs-sm); font-weight: 600; color: var(--muted); white-space: nowrap; }
 .tile.sc .tr.good { color: var(--good); }
@@ -837,7 +838,7 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-tl > .num { font-size: var(--fs-sm); text-align: right; font-variant-numeric: tabular-nums; }
 .dp-lane { position: relative; height: 22px; background: var(--bg); border-radius: var(--r-tag); }
 .dp-bar, .dp-wait { position: absolute; top: 2px; height: 18px; min-width: 3px; border-radius: 3px; box-sizing: border-box; }
-.dp-bar { padding-left: 6px; overflow: hidden; white-space: nowrap; color: #fff; font: 500 11px/18px var(--sans); }
+.dp-bar { padding-left: 6px; overflow: hidden; white-space: nowrap; color: #fff; font: 500 var(--fs-2xs)/18px var(--sans); }
 a.dp-bar { text-decoration: none; }
 a.dp-bar:hover, a.dp-bar:focus-visible { filter: brightness(1.15); outline-offset: 1px; }
 .dp-wait, .dp-key .t-wait i { background: repeating-linear-gradient(90deg, var(--rule) 0 5px, transparent 5px 9px); }
@@ -926,9 +927,9 @@ ul.logs .step { margin: 6px 0; }
 .lane-card .blockers { margin-top: 6px; font-size: var(--fs-sm); }
 @container (max-width: 420px) {
   .job-card.small .ih { gap: 4px; }
-  .job-card.small .ih > .badge, .job-card.small .ih > .kind-tag { padding: 1px 5px; font-size: 10px; }
-  .job-card.small .ih > .num, .job-card.small .ih > .part, .job-card.small .ih > .why { font-size: 10px; }
-  .job-card.small .ih > .idp, .job-card.small .ih > .idl { font-size: 11px; }
+  .job-card.small .ih > .badge, .job-card.small .ih > .kind-tag { padding: 1px 5px; font-size: var(--fs-2xs); }
+  .job-card.small .ih > .num, .job-card.small .ih > .part, .job-card.small .ih > .why { font-size: var(--fs-2xs); }
+  .job-card.small .ih > .idp, .job-card.small .ih > .idl { font-size: var(--fs-2xs); }
 }
 .issue-row > .ih, .issue-row > .t { flex: 1 1 100%; min-width: 0; }
 .issue-row > .ih { gap: 6px; }
@@ -990,7 +991,7 @@ ul.logs .step { margin: 6px 0; }
 .ask-box { background: var(--surface); border: 1px solid var(--k-ring); border-radius: var(--r-card); overflow: hidden; box-shadow: var(--lift); }
 .ask-fold { margin: 0; padding: 0; border: 0; }
 .ask-fold > summary::before, .ask-fold[open] > summary::before { content: none; }
-.ask-head { cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--k-bg); font-size: 17px; line-height: 1.35; color: var(--ink); }
+.ask-head { cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--k-bg); font-size: var(--fs-lg); line-height: 1.35; color: var(--ink); }
 .ask-head:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .ask-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--k); }
 .ask-head .t { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
