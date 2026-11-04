@@ -74,6 +74,14 @@ test("an Oracle that fails once and then passes is one passing oracle result wit
   expect(readRun(folder)!.checks!.at(-1)).toEqual({ name: "oracle", ok: true, seconds: expect.any(Number), rerun: true, tests: { ran: 1, passed: 1, failed: 0, skipped: 0, failures: [] } });
 });
 
+test("an Oracle command with no verdict (timed out) is an infra stop with a noVerdict oracle result, not a pass", async () => {
+  const r = await verdict(async () => ({ code: 124, output: "timed out after 1200 s", infra: true }));
+  expect(r.outcome).toMatchObject({ condition: "stuck", cause: "infra", checkName: "oracle", reason: "no verdict: oracle: bun test x.test.ts" });
+  expect(r.outcome.failed).toBeUndefined();
+  expect(readRun(folder)!.checks!.at(-1)).toEqual({ name: "oracle", ok: false, seconds: expect.any(Number), noVerdict: true });
+  expect(readFileSync(join(folder, "checks.log"), "utf8")).toContain("## oracle: no verdict\n$ bun test x.test.ts\ntimed out after 1200 s");
+});
+
 test("an Oracle `bun test` that runs 0 tests fails", async () => {
   const r = await verdict(async () => ({ code: 0, output: "" }));
   expect(r.outcome).toMatchObject({ condition: "stuck", checkName: "oracle", reason: "oracle ran 0 tests: bun test x.test.ts" });

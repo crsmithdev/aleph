@@ -76,9 +76,8 @@ const factoryRepos = (): Repo[] => Object.values(loadRegistry()).filter((r) => r
 const empty = (ask: Ask | null | undefined): ask is Ask => !!ask && !ask.situation?.trim();
 
 /** Every Ask that has no case text: open items that await Chris, then awaiting runs, oldest run first, then proposed lessons. */
-export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = allRuns()): Case[] {
+export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = allRuns(), lists: store.Reader = store.reader()): Case[] {
   const out: Case[] = [];
-  const lists = store.reader();
   for (const repo of repos) {
     for (const item of lists.list(repo.key)?.items ?? []) {
       if (issues.status(item) !== "open" || !store.awaitsChris(item)) continue;

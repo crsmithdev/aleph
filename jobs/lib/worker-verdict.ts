@@ -1,6 +1,6 @@
 /**
  * The worker verdict: the policy for a branch after its worker. Two stations run on it. Verify: the checks,
- * the doc claims, the keep-gate and the Oracle. Then the reviewer (a reviewer with
+ * the doc claims, the keep-gate and the Oracle. A keep-gate or Oracle with no verdict stops the run as `infra`, never as a pass. Then the reviewer (a reviewer with
  * no verdict runs once more). A reviewer's pass on a diff that changes a security path or a held path waits
  * for Chris with a held-path Ask. A failure of a check, the keep-gate, the Oracle or the reviewer goes back to
  * the worker as a fix round while rounds are left. The ports run each step; unit.ts gives the git and worktree
@@ -27,7 +27,7 @@ export interface VerdictPorts {
   /** Why the worker's final message makes a doc claim that its transcript does not back, else null. */
   docClaims(): string | null;
   /** The keep-gate: why a new test case of the branch does not fail on its base, does not pass on its head, or earns no keep, else null. */
-  keepGate(): Promise<string | null>;
+  keepGate(): Promise<string | NoVerdict | null>;
   /** The diff stat, for an Ask. */
   stat(): string;
   /** The security path the diff changes, else null. */
@@ -35,9 +35,12 @@ export interface VerdictPorts {
   /** The held rule the diff breaks, else null. */
   heldRule(): string | null;
   /** The reason of the first Oracle command that fails twice, else null. */
-  oracle(): Promise<string | null>;
+  oracle(): Promise<string | NoVerdict | null>;
   review(): Promise<ReviewCall>;
 }
+
+/** A step that could not run to a verdict (its setup failed, a clock or a signal ended it): neither a pass nor a failure. */
+export interface NoVerdict { noVerdict: string }
 
 /** The branch facts the policy reads besides the ports. */
 export interface Branch {
@@ -106,10 +109,13 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   // After the checks, so a doc-claims failure leaves their runs and results as they were.
   const claims = p.docClaims();
   if (claims) return stopped({ cause: "check", checkName: "doc-claims", reason: claims }, { ...facts, ...checkBack(earlier, "doc-claims", claims, rounds) });
+  // A step with no verdict is stuck as `infra`: not a fix round; the rescue checks the branch again once, then asks.
   const kept = await p.keepGate();
+  if (typeof kept === "object" && kept) return stopped({ cause: "infra", checkName: "keep-gate", reason: kept.noVerdict }, facts);
   if (kept) return stopped({ cause: "check", checkName: "keep-gate", reason: kept }, { ...facts, ...checkBack(earlier, "keep-gate", kept, rounds) });
   Object.assign(facts, b.checked);
   const bad = await p.oracle();
+  if (typeof bad === "object" && bad) return stopped({ cause: "infra", checkName: "oracle", reason: bad.noVerdict }, facts);
   if (bad) return stopped({ cause: "check", checkName: "oracle", reason: bad }, { ...facts, ...checkBack(earlier, "oracle", bad, rounds) });
 
   // The reviewer.

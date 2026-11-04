@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, writeF
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { dispatchIssues, report, setPaused, stalled, stallStep } from "./factory.ts";
+import { dispatchIssues, report, setPaused, stalled } from "./factory.ts";
+import { readTick, sweep } from "./tick.ts";
 import { spentToday, runsToday, health, writeBaseline } from "./factory-status.ts";
 import { lock, readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
@@ -168,12 +169,14 @@ test("health says a stall only after 15 minutes of ticks, and stops when the wor
   const id = goal();
   const t0 = Date.parse("2026-11-01T12:00:00Z"), min = 60_000;
   const said = (at: number) => health(at).filter((l) => l.includes("can start"));
-  stallStep(t0);
-  stallStep(t0 + 5 * min);
+  // The sweep's ports start nothing: the goal stays ready.
+  const stallStep = (at: number) => sweep(at, readTick(), { dispatch: async () => {}, suite: () => {} });
+  await stallStep(t0);
+  await stallStep(t0 + 5 * min);
   expect(said(t0 + 14 * min)).toEqual([]);
   expect(said(t0 + 15 * min)).toEqual(["health: 1 goal can start, but no run started in 15 minutes"]);
   await change(id, (item) => { issues.setStatus(item, "done"); });
-  stallStep(t0 + 16 * min);
+  await stallStep(t0 + 16 * min);
   expect(said(t0 + 16 * min)).toEqual([]);
   expect(health(t0).some((l) => l.includes("24 hours"))).toBe(false);
 });

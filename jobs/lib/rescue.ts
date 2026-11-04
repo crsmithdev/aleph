@@ -142,10 +142,13 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
   return out;
 }
 
+/** The killed, lost, stuck and failed jobs that the rescue acts on. */
+export const toRescue = (jobs: Job[]): Job[] => [...killed(jobs), ...lost(jobs), ...stuckJobs(jobs)];
+
 /** Take the safe default action for each killed, lost, stuck or failed job, one job at a time under its lock. */
 export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
   await releaseEdited(act);
-  const pending = (jobs: Job[]) => [...killed(jobs), ...lost(jobs), ...stuckJobs(jobs)];
+  const pending = toRescue;
   for (const first of pending(allJobs())) {
     const name = first[0].run.name;
     // Wait: the dispatch that holds it may have read the job before this run ended, and would not act on it.

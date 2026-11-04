@@ -242,7 +242,7 @@ async function decide(req: Request, params: Record<string, string>): Promise<Res
 }
 
 /**
- * An asking issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the label leaves; the tick triages it),
+ * An asking issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the label leaves; triage runs again at once),
  * `rerun` is `aleph issue decide`. `aleph issue note` takes the answer as its text, not as a flag.
  */
 /** `aleph issue edit` from the Issue page: the CLI stays the one writer. A body that opens with `## Request` keeps that heading. */

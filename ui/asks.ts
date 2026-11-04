@@ -153,7 +153,7 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
         return c.run ? [a("drop", "Drop the job", "Discards the run's branch; the issue stays open.", run)]
           : [a("drop", "Drop the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
       case "rerun": return [rerun(reason, issue)];
-      case "retry": return [a("retriage", "Run triage again", "Removes the label; the next tick triages the issue again.", issue)];
+      case "retry": return [a("retriage", "Run triage again", "Removes the label; triage runs again at once.", issue)];
       case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
       case "deny":
         if (reason === "proposal") return [a("deny", "Drop the proposal", "Marks the issue dropped; the work does not start.", issue)];

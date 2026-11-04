@@ -225,7 +225,7 @@ export function mainRed(): (repo: Repo) => string | null {
   };
 }
 
-/** How long work may wait with nothing moving before it is stalled: three ticks. */
+/** How long work may wait with nothing moving before it is stalled: 15 minutes. */
 const STALL_MS = 15 * 60_000;
 
 /** A land run live for longer than this is stuck: 99% of land runs end within 20 minutes. */

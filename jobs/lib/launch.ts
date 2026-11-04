@@ -105,7 +105,7 @@ export async function runLogged(args: string[], log: string): Promise<number | n
 /**
  * Start `aleph dispatch` detached, for a transition that may free a slot, clear a hold or ready a
  * goal: the caller never waits for the baseline checks, and a failure never reaches it. Off when
- * `ALEPH_DISPATCH=off`; the tick still dispatches.
+ * `ALEPH_DISPATCH=off`; the tick's sweep still dispatches what it finds missed.
  */
 export function dispatchDetached(): void {
   if (!dispatchOn()) return;
@@ -116,6 +116,18 @@ export function dispatchDetached(): void {
 export function triageDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;
   detached(["triage", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
+}
+
+/** Start `aleph director` detached, for a new Ask: the director decides it now, not at a tick. It never fails the caller. */
+export function directorDetached(): void {
+  if (!dispatchOn()) return;
+  detached(["director"], join(factoryDir(), "dispatch.log"));
+}
+
+/** Start `aleph suite` detached, for a main that moved while its record is red. It never fails the caller. */
+export function suiteDetached(): void {
+  if (!dispatchOn()) return;
+  detached(["suite"], join(factoryDir(), "dispatch.log"));
 }
 
 /** Start `aleph spec-check <repo>-<ref>` detached, for a goal whose spec version has no verdict; it never fails the caller. */

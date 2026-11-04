@@ -93,23 +93,46 @@ export function gitChecks(): Check[] {
   ];
 }
 
-export function unitChecks(): Check[] {
+/** The timers whose next run doctor checks: the tick and the suite. */
+const TIMERS = ["aleph-tick.timer", "aleph-suite.timer"];
+
+/**
+ * The time to each timer's next run, from `systemctl list-timers --output=json`, whose `next` is wall-clock
+ * microseconds. `NextElapseUSecMonotonic` is not that time: for an `OnUnitActiveSec` timer it is a point on the
+ * monotonic clock, counted from boot, so it reads as the uptime plus the wait.
+ */
+export function timerChecks(now = Date.now()): Check[] {
+  const r = systemctl("list-timers", "--all", "--output=json", ...TIMERS);
+  let rows: { unit: string; next?: number | null }[] = [];
+  try { rows = r.ok ? JSON.parse(r.out) : []; } catch {}
+  return TIMERS.map((unit) => {
+    const name = `${unit} next run`;
+    const next = rows.find((x) => x.unit === unit)?.next;
+    if (next) return ok(name, `in ${wait(next / 1000 - now)} (${new Date(next / 1000).toISOString()})`);
+    const service = unit.replace(/\.timer$/, ".service");
+    if (r.ok && inProgress(service)) return ok(name, `${service} is running`);
+    return bad(name, r.ok ? `${unit} has no next run` : r.out.split("\n")[0] || "systemctl failed");
+  });
+}
+
+/** `4 min 10 s`, `45 s`; a time past is `0 s`. */
+function wait(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return s >= 60 ? `${Math.floor(s / 60)} min ${s % 60} s` : `${s} s`;
+}
+
+export function unitChecks(now = Date.now()): Check[] {
   const checks: Check[] = [];
-  for (const unit of ["aleph-ui", "home-proxy", "aleph-tick.timer"]) {
+  for (const unit of ["aleph-ui", "home-proxy", ...TIMERS]) {
     const r = systemctl("is-active", unit);
     checks.push(r.ok && r.out === "active" ? ok(`unit ${unit}`, "active") : bad(`unit ${unit}`, r.out.split("\n")[0] || "not active"));
   }
-  const t = systemctl("show", "aleph-tick.timer", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic");
-  const next = t.out.split("\n").map((l) => l.split("=")[1]?.trim()).filter((v) => v && v !== "0" && v !== "n/a" && v !== "infinity");
-  if (t.ok && next.length) checks.push(ok("timer next run", next[0]!));
-  else if (t.ok && tickInProgress()) checks.push(ok("timer next run", "aleph-tick.service is running; a tick is in progress"));
-  else checks.push(bad("timer next run", "aleph-tick.timer has no next run"));
-  return checks;
+  return [...checks, ...timerChecks(now)];
 }
 
 /** A oneshot service reports `activating` while it runs (exit 3), so read the state word and ignore the exit code. */
-function tickInProgress(): boolean {
-  const state = systemctl("is-active", "aleph-tick.service").out.split("\n")[0]?.trim();
+function inProgress(service: string): boolean {
+  const state = systemctl("is-active", service).out.split("\n")[0]?.trim();
   return state === "activating" || state === "active";
 }
 

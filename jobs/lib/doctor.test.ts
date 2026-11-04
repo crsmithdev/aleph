@@ -54,10 +54,27 @@ describe("git", () => {
 
 describe("units", () => {
   const noNextRun = (svc: string, exit: number) =>
-    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo ${svc}; exit ${exit}; }; echo active;; show) echo NextElapseUSecRealtime=; echo NextElapseUSecMonotonic=0;; esac`);
+    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-tick.service ] && { echo ${svc}; exit ${exit}; }; echo active;; list-timers) echo '[]';; esac`);
   test("no next run while the tick service is activating (exit 3) passes", () => {
     noNextRun("activating", 3);
-    expect(unitChecks().at(-1)).toMatchObject({ name: "timer next run", ok: true, detail: expect.stringContaining("tick is in progress") });
+    expect(unitChecks().find((c) => c.name === "aleph-tick.timer next run")).toMatchObject({ ok: true, detail: "aleph-tick.service is running" });
+  });
+
+  test("the next run is the wall-clock time from list-timers less now, for the tick and the suite, not the monotonic time from boot", () => {
+    const now = Date.parse("2026-11-04T20:00:00Z");
+    const at = (ms: number) => (now + ms) * 1000;
+    fakeCtl(`case "$2" in is-active) echo active;; list-timers) echo '[{"next":${at(250_000)},"unit":"aleph-tick.timer"},{"next":${at(45 * 60_000)},"unit":"aleph-suite.timer"}]';; show) echo NextElapseUSecMonotonic=14h 18min;; esac`);
+    expect(unitChecks(now).filter((c) => c.name.endsWith("next run"))).toEqual([
+      { name: "aleph-tick.timer next run", ok: true, detail: "in 4 min 10 s (2026-11-04T20:04:10.000Z)" },
+      { name: "aleph-suite.timer next run", ok: true, detail: "in 45 min 0 s (2026-11-04T20:45:00.000Z)" },
+    ]);
+  });
+
+  test("a timer with no next run and no running service fails, and the suite timer is checked", () => {
+    fakeCtl(`case "$2" in is-active) [ "$3" = aleph-suite.timer ] && { echo inactive; exit 3; }; [ "$3" = aleph-suite.service ] && { echo inactive; exit 3; }; echo active;; list-timers) echo '[]';; esac`);
+    const c = unitChecks(Date.parse("2026-11-04T20:00:00Z"));
+    expect(c.find((x) => x.name === "unit aleph-suite.timer")).toMatchObject({ ok: false, detail: "inactive" });
+    expect(c.find((x) => x.name === "aleph-suite.timer next run")).toMatchObject({ ok: false, detail: "aleph-suite.timer has no next run" });
   });
 });
 

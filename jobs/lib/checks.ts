@@ -209,7 +209,7 @@ export type Runner = (repo: Repo, sha: string, command: string, hidden?: Record<
 /**
  * One command on `sha`, as the checks run: the repo's setup and then the command run in a detached worktree at `sha`,
  * with `hidden` in `.hidden`. A setup that fails or a worktree that git cannot add is `infra`, and the command does
- * not run. The command has 1200 seconds.
+ * not run. The command has `ALEPH_CHECK_TIMEOUT` seconds, as a check has; one that a clock or a signal ends is `infra` too.
  */
 export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
   await admit();
@@ -223,8 +223,11 @@ export const runOnCommit: Runner = async (repo, sha, command, hidden) => {
       if (hidden) writeHidden(wt, hidden);
       const out = join(logs, "out.log");
       writeFileSync(out, "");
-      const r = await shell(command, { cwd: wt, env, out, limit: 1200 });
-      return { code: r.code, output: readFileSync(out, "utf8") };
+      const limit = checkSeconds();
+      const r = await shell(command, { cwd: wt, env, out, limit });
+      const output = readFileSync(out, "utf8");
+      if (r.timedOut || r.killed) return { code: r.code, output: `${output}\n${r.timedOut ? `timed out after ${limit} s` : "killed"}`, infra: true };
+      return { code: r.code, output };
     });
   } catch (e) {
     return { code: 1, output: e instanceof Error ? e.message : String(e), infra: true };
@@ -359,18 +362,18 @@ export function mutants(sources: Source[], max = 10): { path: string; line: numb
  * base (its file did not load there) must then earn its keep on `sources`, the changed source files: see earnKeep.
  * Returns the reason and the lines for checks.log, or null. A fault of the set-up is not a failure.
  */
-export async function keepGate(repo: Repo, base: string, tip: string, tests: NewTests[], sources: Source[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string } | null> {
+export async function keepGate(repo: Repo, base: string, tip: string, tests: NewTests[], sources: Source[], runner: Runner = runOnCommit): Promise<{ reason: string; log: string; noVerdict?: true } | null> {
   if (!tests.length) return null;
   const test = `bun test --reporter=junit --reporter-outfile=${REPORT} ${tests.map((t) => q(`./${t.path}`)).join(" ")}; c=$?; cat ${REPORT}; exit $c`;
   let head = await runner(repo, tip, test);
   if (!head.infra && head.code !== 0) head = await runner(repo, tip, test);
-  if (head.infra) return null;
+  if (head.infra) return noVerdict("the new tests did not run on the head", head);
   if (head.code !== 0) return { reason: "keep-gate: the new tests fail on the head", log: `The new tests fail on the head commit:\n${lastLines(head.output.split("<?xml")[0], 40).replaceAll(" ⏎ ", "\n")}` };
   // The head's files reach the base clone in `.hidden`, by index, as runOnCommit gives hidden files.
   const files = Object.fromEntries(tests.map((t, i) => [String(i), t.text]));
   const copy = tests.map((t, i) => `mkdir -p ${q(dirname(t.path))} && cp .hidden/${i} ${q(t.path)}`).join(" && ");
   const onBase = await runner(repo, base, `${copy} && { ${test}; }`, files);
-  if (onBase.infra) return null;
+  if (onBase.infra) return noVerdict("the new tests did not run on the base", onBase);
   const fresh = new Set(tests.flatMap((t) => t.names));
   const passed = junitPassed(onBase.output).filter((c) => fresh.has(c.name)).map((c) => `${c.file} > ${c.name}`);
   if (passed.length) return {
@@ -382,6 +385,10 @@ export async function keepGate(repo: Repo, base: string, tip: string, tests: New
   return earnKeep(repo, tip, tests, unran, sources, runner);
 }
 
+/** A keep-gate step whose command could not run to a verdict (`infra`): no pass, and no failure of the branch. */
+const noVerdict = (what: string, r: Ran): { reason: string; log: string; noVerdict: true } =>
+  ({ reason: `no verdict: keep-gate: ${what}`, log: `No verdict: ${what}:\n${lastLines(r.output, 40).replaceAll(" ⏎ ", "\n")}`, noVerdict: true });
+
 let earnScript: string | undefined;
 
 /**
@@ -390,12 +397,13 @@ let earnScript: string | undefined;
  * files do not cover, or fail on a mutant of a changed line. keep-earn.ts runs it on `tip`, with at most 10 mutants.
  * A branch with no changed source line has nothing to earn against, so it passes.
  */
-async function earnKeep(repo: Repo, tip: string, tests: NewTests[], cases: Plan["cases"], sources: Source[], runner: Runner): Promise<{ reason: string; log: string } | null> {
+async function earnKeep(repo: Repo, tip: string, tests: NewTests[], cases: Plan["cases"], sources: Source[], runner: Runner): Promise<{ reason: string; log: string; noVerdict?: true } | null> {
   if (!cases.length || !sources.length) return null;
   const plan: Plan = { cases, files: tests.map((t) => t.path), changed: Object.fromEntries(sources.map((s) => [s.path, s.lines])), mutants: mutants(sources) };
   earnScript ??= readFileSync(join(import.meta.dir, "keep-earn.ts"), "utf8");
   const r = await runner(repo, tip, "bun .hidden/earn.ts .hidden/plan.json", { "earn.ts": earnScript, "plan.json": JSON.stringify(plan) });
-  const line = r.infra ? undefined : r.output.match(/^KEEP-EARN (.*)$/gm)?.pop();
+  if (r.infra) return noVerdict("the coverage and mutant run did not finish", r);
+  const line = r.output.match(/^KEEP-EARN (.*)$/gm)?.pop();
   if (!line) return null;
   const { unearned, mutants: n } = JSON.parse(line.slice("KEEP-EARN ".length)) as { unearned: string[]; mutants: number };
   if (!unearned.length) return null;

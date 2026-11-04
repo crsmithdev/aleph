@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { ChecksStop } from "./checks.ts";
 import type { Run } from "./ledger.ts";
-import { missingVerdict, workerVerdict, type Branch, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
+import { missingVerdict, workerVerdict, type Branch, type NoVerdict, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
 
 const run = (r: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "fac-1", condition: "stuck", ...r } as Run);
 const checked = { checkedBase: "b0", checkedTip: "t1" };
 
 /** Fake ports: each step passes unless given; `calls` names the steps that ran. */
-function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: string; kept?: string; security?: string; rule?: string; oracle?: string; reviews?: ReviewCall[] } = {}) {
+function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: string; kept?: string | NoVerdict; security?: string; rule?: string; oracle?: string | NoVerdict; reviews?: ReviewCall[] } = {}) {
   const calls: string[] = [];
   const reviews = [...(o.reviews ?? [{ reason: null }])];
   const p: VerdictPorts = {
@@ -111,6 +111,15 @@ describe("after the checks", () => {
     const { p, calls } = ports({ oracle: "oracle failed: bun test x" });
     expect((await workerVerdict(branch(), p)).outcome).toEqual({ condition: "stuck", cause: "check", checkName: "oracle", reason: "oracle failed: bun test x", ...checked, failed: "oracle", round: 0 });
     expect(calls).not.toContain("review");
+  });
+
+  test("a keep-gate or an Oracle with no verdict is an infra stop: no pass, no fix round, no reviewer", async () => {
+    const kept = ports({ kept: { noVerdict: "no verdict: keep-gate: the new tests did not run on the head" } });
+    expect((await workerVerdict(branch(), kept.p)).outcome).toEqual({ condition: "stuck", cause: "infra", checkName: "keep-gate", reason: "no verdict: keep-gate: the new tests did not run on the head" });
+    expect(kept.calls).toEqual(["checks", "docClaims", "keepGate"]);
+    const oracle = ports({ oracle: { noVerdict: "no verdict: oracle: bun test x" } });
+    expect((await workerVerdict(branch(), oracle.p)).outcome).toEqual({ condition: "stuck", cause: "infra", checkName: "oracle", reason: "no verdict: oracle: bun test x", ...checked });
+    expect(oracle.calls).not.toContain("review");
   });
 
   test("a held rule waits for Chris after the reviewer passes, with one held-path Ask and no next step", async () => {

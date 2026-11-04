@@ -13,14 +13,14 @@ systemctl --user link ~/aleph/jobs/systemd/aleph-suite.service
 systemctl --user enable --now ~/aleph/jobs/systemd/aleph-suite.timer
 ```
 
-The `aleph-tick` timer runs `aleph tick` every 5 minutes. The `aleph-suite` timer runs `aleph suite` every hour. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
+The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer runs `aleph suite` every hour. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
 
 ## Commands
 
 | Command | Does |
 |---|---|
 | `aleph dispatch` | Starts a run for each ready goal, up to the caps |
-| `aleph tick` | Dispatches, triages, and does the periodic work; the timer runs it |
+| `aleph tick` | Does the periodic work that is due, and the sweep; the timer runs it |
 | `aleph suite` | Runs the full checks on `origin/main` of each factory repo whose main moved since the last run, and records the baseline; its timer runs it |
 | `aleph triage <repo>-<n>` | Triages one issue now |
 | `aleph status [<repo>-<n>[.<k>]] [--json]` | The state of one issue, or of each open issue in the recent repos |
@@ -45,7 +45,7 @@ issue ──triage──▶ goal(s) ──dispatch──▶ worker run ──▶
 
 ### Triage
 
-The tick triages open issues that have no goals, oldest first, at most `ALEPH_TRIAGE_CAP` (5) a tick, and only while live runs are under the live cap. An issue added with `aleph issue add`, a note on an issue that waits for you, and a worker's `FOLLOWUP:` line each start a triage at once, under the dispatch's gates.
+An issue added with `aleph issue add`, a note on an issue that waits for you, and a worker's `FOLLOWUP:` line each start a triage at once, under the dispatch's gates. Each dispatch, and so each run's end, starts a triage for the open issues that have no spec, oldest first, at most `ALEPH_TRIAGE_CAP` (5), while live runs are under the live cap: a triage that the live cap held starts when a run ends. A triage run that gives no route starts the next try at once.
 
 Triage is one read-only run per issue (`claude-opus-5-5`, with Read, Grep and Glob). It returns a route:
 
@@ -82,7 +82,7 @@ Verify is one station, with the run phase `verify`. In order, it runs:
 3. the keep-gate on the branch's new tests;
 4. the Oracle commands of the spec that the checks did not run.
 
-The checks run only the test files that the branch's change reaches, and every check that is not a test, such as `tsc`. Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log`. The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A setup that fails, or a worktree that git cannot add, skips the Oracle command and is not a failure. Each detached worktree goes when its step ends.
+The checks run only the test files that the branch's change reaches, and every check that is not a test, such as `tsc`. Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log`. The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A keep-gate or Oracle command whose setup fails, whose worktree git cannot add, or that a clock (`ALEPH_CHECK_TIMEOUT`) or a signal ended gives no verdict: it is neither a pass nor a failure. The run is stuck with the cause `infra` and a `noVerdict` result for `keep-gate` or `oracle`, and the rescue checks the branch again once, then asks. Each detached worktree goes when its step ends.
 
 ### When a run is stuck
 
@@ -140,13 +140,17 @@ A goal that no gate holds goes to its spec check (a repo with `"author": true` i
 
 A stuck or failed run holds only its own goal, through its open job. The rescue takes a safe action on it once per goal per case, or sets a `rescue` Ask. A lost run (its process ended and wrote no end) is marked failed and its goal reruns once; a second lost run of the goal sets a `rescue` Ask.
 
-The firefighter is code in each tick (`jobs/lib/firefighter.ts`); no agent runs. A failed baseline and a red GitHub CI on main each file one issue of priority `critical`, kind `bug` and label `red-main` per failing commit. The request names the commit (`Failing commit: <sha>`) and holds the last 200 lines of the log, at most 8000 characters: `checks.log` of the baseline, or `gh run view <id> --log-failed` of the CI run. A second tick, or a second source for the same commit, files nothing more. While the repo has an open `red-main` issue, a new failing commit is one note on that issue, not a second issue. A land live for 30 minutes or more gets a `rescue` Ask on its issue, once per land run, and the director decides.
+The firefighter is code in the tick, every 5 minutes (`jobs/lib/firefighter.ts`); no agent runs. A failed baseline and a red GitHub CI on main each file one issue of priority `critical`, kind `bug` and label `red-main` per failing commit. The request names the commit (`Failing commit: <sha>`) and holds the last 200 lines of the log, at most 8000 characters: `checks.log` of the baseline, or `gh run view <id> --log-failed` of the CI run. A second tick, or a second source for the same commit, files nothing more. While the repo has an open `red-main` issue, a new failing commit is one note on that issue, not a second issue. A land live for 30 minutes or more gets a `rescue` Ask on its issue, once per land run, and the director decides.
 
 `aleph recheck <name>` is the way out of a stuck run that keeps its work, for example one that a flaky test on main stuck. It merges the current `origin/main` into the branch, runs the checks, the held rule and the reviewer, and lands like any passed run.
 
 ## Asks and Always rules
 
-Whatever would wait for you is an Ask, of kind `input` or `approval`, with a reason, a question and options. Every new Ask goes to the director first: one read-only run of `claude-fable-5-1` per Ask, which decides it with actions that code checks and applies, or escalates it to you with its case text (situation, effects and recommendation). Code keeps an escalation list that the director cannot decide: a land that changes a security path or `bun.lock`, a memory proposal, a host check, a second run-cap or rescue Ask on the same goal, and closing or dropping an issue you filed. Each decision is a Director entry in the Gates page log. The Status page lists the Asks under "Awaiting you"; an Ask shows its buttons only once the director has escalated it. The Always button writes a rule to `~/.aleph/factory/always.json` that maps the reason to an action, and the next Ask with that reason takes the action without you. `aleph always` lists and changes the same rules.
+Whatever would wait for you is an Ask, of kind `input` or `approval`, with a reason, a question and options. Every new Ask goes to the director first, at once: the write that sets an Ask (a dispatch, a run's end, a triage, the corrections, the firefighter) starts `aleph director`. It is one read-only run of `claude-fable-5-1` per Ask, which decides it with actions that code checks and applies, or escalates it to you with its case text (situation, effects and recommendation). Code keeps an escalation list that the director cannot decide: a land that changes a security path or `bun.lock`, a memory proposal, a host check, a second run-cap or rescue Ask on the same goal, and closing or dropping an issue you filed. Each decision is a Director entry in the Gates page log. The Status page lists the Asks under "Awaiting you"; an Ask shows its buttons only once the director has escalated it. The Always button writes a rule to `~/.aleph/factory/always.json` that maps the reason to an action, and the next Ask with that reason takes the action without you. `aleph always` lists and changes the same rules.
+
+## The tick
+
+The tick starts only periodic work, each step on its own due rule: the corrections and the monitor once a day, the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready goal with no run, an issue to triage, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep writes `missed: <key>` in `tick.log`, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
 
 ## Flakes and health
 
@@ -171,9 +175,9 @@ The live cap is read from its variable first, then from `~/.aleph/factory/caps.j
 | `ALEPH_STALL_SECONDS` | 600 | Seconds without output before a run is stopped |
 | `ALEPH_FIX_ROUNDS` | 2 | Fix rounds per job |
 | `ALEPH_LAND_BATCH` | 8 | Runs one land may push together |
-| `ALEPH_TRIAGE_CAP` | 5 | Triage runs per tick |
+| `ALEPH_TRIAGE_CAP` | 5 | Triage runs one dispatch starts |
 | `ALEPH_TRIAGE_TRIES` | 2 | Failed triage runs before an Ask |
-| `ALEPH_DIRECTOR_CAP` | 3 | Director runs per tick, one per Ask |
+| `ALEPH_DIRECTOR_CAP` | 3 | Director runs per `aleph director`, one per Ask |
 | `ALEPH_WORKER_CMD` | `claude` | The worker command |
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 

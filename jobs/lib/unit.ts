@@ -14,12 +14,12 @@ import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, parseReview, REVIEW_SCHEMA, securityChange, testFindings } from "./gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
-import { awaiting, workerVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
+import { awaiting, workerVerdict, type NoVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
 import { admit, tagged, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
-import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "./checks.ts";
+import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
@@ -446,9 +446,14 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
     keepGate: async () => {
       verify();
       const head = git(repo.path, "rev-parse", tip).out;
+      const start = performance.now();
       const kept = await keepGate(repo, base, head, newTests(repo.path, base, head), changedSources(repo.path, base, head), o.runner ?? runOnCommit);
-      if (kept) appendFileSync(runFile(folder, "checks.log"), `## keep-gate: exit 1\n${kept.log}\n\n`);
-      return kept?.reason ?? null;
+      if (!kept) return null;
+      appendFileSync(runFile(folder, "checks.log"), `## keep-gate: ${kept.noVerdict ? "no verdict" : "exit 1"}\n${kept.log}\n\n`);
+      if (!kept.noVerdict) return kept.reason;
+      // No verdict is a result on the run beside the checks, so the job page shows it.
+      updateRun(folder, { checks: [...readRun(folder)?.checks ?? [], { name: "keep-gate", ok: false, seconds: Math.round((performance.now() - start) / 1000), noVerdict: true }] });
+      return { noVerdict: kept.reason };
     },
     stat: () => git(repo.path, "diff", "--stat", base, tip).out,
     security: () => securityChange(repo.path, base, tip),
@@ -465,10 +470,11 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
 /**
  * The goal's Oracle commands, run on the branch in a detached worktree, the last step of Verify.
  * A command the run's checks already ran is skipped; one that fails runs once more.
- * Returns the reason of the first that fails twice, or null. A fault of the set-up (`infra`) is not a failure.
+ * Returns the reason of the first that fails twice, or null. A command that could not run to a verdict (`infra`: its
+ * setup failed, or a clock or a signal ended it) stops the Oracle with no verdict: it is neither a pass nor a failure.
  * When a command ran, the run's `checks` gets one result `oracle` beside the repo's checks; checks.log gets each command's section.
  */
-async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: () => void): Promise<string | null> {
+async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: () => void): Promise<string | NoVerdict | null> {
   const specFile = jobSpecFile(folder, run);
   if (!existsSync(specFile)) return null;
   const ran = new Set((readRun(folder)?.checks ?? []).map((c) => c.name));
@@ -478,10 +484,15 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   let any = false, rerun = false;
   // The `bun test` commands' records, summed.
   let tests: TestRecord | undefined;
-  const result = (ok: boolean) => {
-    if (!any) return;
+  const result = (ok: boolean, none = false) => {
+    if (!any && !none) return;
     const checks = readRun(folder)?.checks ?? [];
-    updateRun(folder, { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(tests ? { tests } : {}) }] });
+    updateRun(folder, { checks: [...checks, { name: "oracle", ok, seconds: Math.round((performance.now() - start) / 1000), ...(rerun ? { rerun } : {}), ...(none ? { noVerdict: true as const } : {}), ...(tests ? { tests } : {}) }] });
+  };
+  const noVerdict = (command: string, r: Ran): NoVerdict => {
+    appendFileSync(runFile(folder, "checks.log"), `## oracle: no verdict\n$ ${command}\n${lastLines(r.output, 80).replaceAll(" ⏎ ", "\n")}\n\n`);
+    result(false, true);
+    return { noVerdict: `no verdict: oracle: ${command}` };
   };
   const report = junitFile(folder, "oracle");
   const once = (command: string) => {
@@ -492,9 +503,9 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
     if (done.has(command)) continue;
     phase();
     let r = await once(command);
-    if (r.infra) continue;
+    if (r.infra) return noVerdict(command, r);
     let second = false;
-    if (r.code !== 0) { second = true; r = await once(command); if (r.infra) continue; }
+    if (r.code !== 0) { second = true; r = await once(command); if (r.infra) return noVerdict(command, r); }
     any = true;
     // As for a check: `rerun` is a command that failed and then passed.
     rerun ||= second && r.code === 0;

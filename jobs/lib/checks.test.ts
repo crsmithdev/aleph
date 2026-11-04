@@ -215,6 +215,13 @@ describe("the keep-gate", () => {
     expect(commands.map((c) => c.split(":")[0])).toEqual(["head", "head"]);
   });
 
+  test("a command that could not run (infra) on the head or the base is no verdict, not a pass", async () => {
+    const tests = [{ path: "lib/m.test.ts", text: testText, names: ["new"] }];
+    const infraOn = (where: string): Runner => async (_r, sha) => (sha === where ? { code: 124, output: "timed out after 1200 s", infra: true } : { code: sha === "head" ? 0 : 1, output: "" });
+    expect(await keepGate({ key: "r" } as Repo, "base", "head", tests, [], infraOn("head"))).toMatchObject({ noVerdict: true, reason: "no verdict: keep-gate: the new tests did not run on the head" });
+    expect(await keepGate({ key: "r" } as Repo, "base", "head", tests, [], infraOn("base"))).toMatchObject({ noVerdict: true, reason: "no verdict: keep-gate: the new tests did not run on the base" });
+  });
+
   test("no new case runs nothing", async () => {
     expect(await keepGate({ key: "r" } as Repo, "base", "head", [], [], async () => { throw new Error("ran"); })).toBeNull();
   });

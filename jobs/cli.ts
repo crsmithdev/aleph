@@ -20,19 +20,16 @@ import * as issues from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
 import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
-import { ciStep } from "./lib/ci.ts";
-import { firefight } from "./lib/firefighter.ts";
-import { behind, correctionsStep, directorStep, planNow, report, runDispatch, setPaused, stallStep, suiteStep, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
+import { behind, directorStep, planNow, report, runDispatch, setPaused, suiteStep, triageNow } from "./lib/factory.ts";
+import { runTick } from "./lib/tick.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
-import { factoryRepos, health } from "./lib/factory-status.ts";
-import { factoryLog } from "./lib/layout.ts";
+import { health } from "./lib/factory-status.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/monitor-table.ts";
-import { monitorStep, runMonitor, tableOf } from "./lib/monitor.ts";
+import { runMonitor, tableOf } from "./lib/monitor.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import type { Fate } from "./lib/outcome.ts";
 import { refuse, Refusal } from "./lib/refusal.ts";
-import { smokeStep } from "./lib/smoke.ts";
 import * as doctor from "./lib/doctor.ts";
 import { facts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
@@ -252,6 +249,8 @@ async function todoCmd(): Promise<void> {
       const c = verbs.close(repo, id, sub, text);
       warn(c.follow);
       out(c.result);
+      // A goal that waited on this issue can start, and a dropped part can set its parent's Ask: the dispatch takes both.
+      if (repo.sandbox) dispatchDetached();
       return;
     }
     case "lint": {
@@ -318,22 +317,9 @@ async function dispatchCmd(): Promise<void> {
   out(await runDispatch());
 }
 
-/**
- * `aleph tick`, from the timer: a dispatch as the fallback for what no run's end and no issue write has
- * started. Last, the monitor's daily report, which runs while paused.
- */
+/** `aleph tick`, from the timer every minute: the periodic steps that are due and the sweep (tick.ts). */
 async function tickCmd(): Promise<void> {
-  await correctionsStep();
-  const d = await runDispatch();
-  const t = await triageStep();
-  await directorStep();
-  const episodes = await episodeStep();
-  try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
-  try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }
-  await smokeStep();
-  const f = await firefight();
-  const m = await monitorStep();
-  out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f && (f.filed.length || f.asked.length) ? { firefighter: f } : {}), ...(m ? { monitor: m.day } : {}) });
+  out(await runTick());
 }
 
 /**
@@ -439,6 +425,7 @@ try {
     case "checked": out(checked(positional[0])); break;
     case "issue": await todoCmd(); break;
     case "tick": await tickCmd(); break;
+    case "director": out(await directorStep()); break;
     case "suite": out(await suiteStep()); break;
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
