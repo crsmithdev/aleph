@@ -9,6 +9,9 @@
   --muted: #62688A;
   --rule: #DCD9EC;
   --lift: 0 1px 3px rgb(40 36 80 / .12), 0 2px 8px rgb(40 36 80 / .06);  /* the top Status card's shadow */
+  --float: 0 6px 24px rgb(0 0 0 / .25);  /* the font picker's open list */
+  --float-sm: 0 2px 8px rgb(0 0 0 / .2);  /* the font picker's button */
+  --on-fill: #fff;        /* text on a coloured bar */
   --rule-2: #E8E6F3;
   --need: #8A5A00;        /* needs you: yellow */
   --need-bg: #F3EEE6;
@@ -93,6 +96,9 @@
     --muted: #8E96BA;
     --rule: #3A3F58;
     --lift: 0 1px 3px rgb(0 0 0 / .45), 0 2px 8px rgb(0 0 0 / .3);
+    --float: 0 6px 24px rgb(0 0 0 / .25);
+    --float-sm: 0 2px 8px rgb(0 0 0 / .2);
+    --on-fill: #fff;
     --rule-2: #2E3245;      /* editorGroup.border */
     --need: #FFCB6B;
     --need-bg: #474344;
@@ -124,6 +130,9 @@
     --muted: #8E96BA;
     --rule: #3A3F58;
     --lift: 0 1px 3px rgb(0 0 0 / .45), 0 2px 8px rgb(0 0 0 / .3);
+    --float: 0 6px 24px rgb(0 0 0 / .25);
+    --float-sm: 0 2px 8px rgb(0 0 0 / .2);
+    --on-fill: #fff;
     --rule-2: #2E3245;      /* editorGroup.border */
     --need: #FFCB6B;
     --need-bg: #474344;
@@ -838,7 +847,7 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-tl > .num { font-size: var(--fs-sm); text-align: right; font-variant-numeric: tabular-nums; }
 .dp-lane { position: relative; height: 22px; background: var(--bg); border-radius: var(--r-tag); }
 .dp-bar, .dp-wait { position: absolute; top: 2px; height: 18px; min-width: 3px; border-radius: var(--r-hair); box-sizing: border-box; }
-.dp-bar { padding-left: 6px; overflow: hidden; white-space: nowrap; color: #fff; font: 500 var(--fs-2xs)/18px var(--sans); }
+.dp-bar { padding-left: 6px; overflow: hidden; white-space: nowrap; color: var(--on-fill); font: 500 var(--fs-2xs)/18px var(--sans); }
 a.dp-bar { text-decoration: none; }
 a.dp-bar:hover, a.dp-bar:focus-visible { filter: brightness(1.15); outline-offset: 1px; }
 .dp-wait, .dp-key .t-wait i { background: repeating-linear-gradient(90deg, var(--rule) 0 5px, transparent 5px 9px); }
@@ -847,6 +856,17 @@ a.dp-bar:hover, a.dp-bar:focus-visible { filter: brightness(1.15); outline-offse
 .t-bad.dp-bar, .dp-key .t-bad i { background: var(--stuck); }
 .t-land.dp-bar, .dp-key .t-land i { background: var(--done); }
 .t-aux.dp-bar, .dp-key .t-aux i { background: var(--muted); }
+/* the dark theme's fills are too light for --on-fill, so the bars take the light theme's */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .t-build.dp-bar { background: #3B5FC8; }
+  :root:not([data-theme="light"]) .t-bad.dp-bar { background: #C0304C; }
+  :root:not([data-theme="light"]) .t-land.dp-bar { background: #437018; }
+  :root:not([data-theme="light"]) .t-aux.dp-bar { background: #62688A; }
+}
+:root[data-theme="dark"] .t-build.dp-bar { background: #3B5FC8; }
+:root[data-theme="dark"] .t-bad.dp-bar { background: #C0304C; }
+:root[data-theme="dark"] .t-land.dp-bar { background: #437018; }
+:root[data-theme="dark"] .t-aux.dp-bar { background: #62688A; }
 .dp-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: var(--r-hair); }
 .t-made.dp-mark, .dp-key .t-made i { background: var(--muted); }
 .t-done.dp-mark, .dp-key .t-done i { background: var(--ink); }
@@ -885,7 +905,7 @@ pre.diff span.del { background: var(--stuck-bg); color: var(--del); }
 .usebar div { height: 10px; background: var(--run); border-radius: var(--r-ctl); }
 .usebar i { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--ink); }
 .obar { display: flex; gap: 2px; }
-.obar > * { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: 56px; padding: 8px 10px; overflow: hidden; border: 0; color: #fff; font: inherit; font-size: var(--fs-sm); text-align: left; }
+.obar > * { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: 56px; padding: 8px 10px; overflow: hidden; border: 0; color: var(--on-fill); font: inherit; font-size: var(--fs-sm); text-align: left; }
 .obar > :first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); }
 .obar > :last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
 .obar span { font-size: var(--fs-xs); white-space: nowrap; }
