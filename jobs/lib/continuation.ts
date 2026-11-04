@@ -65,6 +65,10 @@ A test that is not the goal's own, fails or times out, and passes alone or on a 
 a flake: print \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\`.
 Check such a failure once, by running its file alone, then go on: do not run the full
 suite again to get a clean run, because the factory's checks rerun a failed check.
+Each new test must fail without your change and check something the other tests of its
+file do not: a changed line they do not cover, or a result they do not assert. The
+factory's checks reject any other new test. So do not add a test for a helper that the
+existing tests already reach through its callers.
 For a durable fact about the repo or its tools that you checked, print
 \`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`. Write each tag in
 capitals at the start of its line.
