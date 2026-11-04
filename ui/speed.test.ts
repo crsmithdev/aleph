@@ -10,6 +10,8 @@ import { durShort, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { dur } from "./lib.js";
 import { writeRun } from "../jobs/lib/ledger.ts";
+import * as record from "../jobs/lib/record.ts";
+import { averageFigures, figures } from "./api/speed.ts";
 
 let base: string;
 let restore: () => void;
@@ -69,7 +71,7 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
   const b = await (await get("?window=week&baseline=1")).json();
   expect(b.window).toBe("week");
   expect(Object.keys(b.baseline).sort()).toEqual(["base", "basis", "prev"]);
-  expect(Object.keys(b.baseline.prev)).toContain("queueP90");
+  expect(Object.keys(b.baseline.prev)).toContain("askP50");
   // The Efficiency page reads the day and month answers: Status's one request fills them.
   expect(Object.keys(b.others).sort()).toEqual(["day", "month"]);
   expect(b.others.month.window).toBe("month");
@@ -350,4 +352,18 @@ test("cardTrend writes a sub-point change with pct() and keeps the flat marker f
   expect(cardTrend(0.503, 0.5, null, o)).toContain("▲ 0.3%");
   expect(cardTrend(0.5, 0.5, null, o)).toContain("▬ 0%");
   expect(cardTrend(0.63, 0.5, null, o)).toContain("▲ 13%");
+});
+
+test("asks: the window counts the Asks set and takes the p50 wait of the Asks cleared in it, in the answer and in figures()", () => {
+  const rec = (key: string, asks: { set: string; cleared?: string }[]) => record.write({ ...record.empty(key), asks });
+  rec("fx-1", [{ set: at(1, 9), cleared: at(1, 10) }, { set: at(0, 8), cleared: at(0, 8, 30) }]); // waits 3600, 1800
+  rec("fx-2", [{ set: at(0, 7) }, { set: at(40, 9), cleared: at(40, 10) }]); // open; and one outside the window
+  rec("fx-3", [{ set: at(8, 9), cleared: at(0, 12) }]); // set before the week, cleared in it: a wait, not a count
+  const s = speed("week", now);
+  expect(s.asks.count).toBe(3);
+  expect(s.asks.wait).toMatchObject({ count: 3 });
+  expect(s.asks.wait.p50).toBe(3600);
+  expect(figures(s)).toMatchObject({ asks: 3, askP50: 3600 });
+  expect(figures(speed("hour", new Date(2026, 8, 1)))).toMatchObject({ asks: null, askP50: null });
+  expect(averageFigures([figures(s)]).askP50).toBe(3600);
 });

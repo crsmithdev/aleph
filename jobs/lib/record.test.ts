@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +8,7 @@ import * as record from "./record.ts";
 let dir: string;
 const saved = process.env.ALEPH_RECORDS_DIR;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "aleph-record-")); process.env.ALEPH_RECORDS_DIR = dir; });
-afterEach(() => { rmSync(dir, { recursive: true, force: true }); if (saved === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = saved; });
+afterEach(() => { setSystemTime(); rmSync(dir, { recursive: true, force: true }); if (saved === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = saved; });
 
 const AT = "2026-11-04T10:00:00.000Z";
 const run = (o: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "aleph-7", repo: "aleph", on: "aleph-7", condition: "running", told: false, started: AT, ...o });
@@ -99,4 +99,23 @@ test("next: a stuck run the factory asked Chris about waits", () => {
 test("next: a goal with no run waits for its hold, else starts", () => {
   expect(record.next(rec([], { wait: { kind: "after", reason: "after aleph-6", since: AT } }))).toEqual({ step: "wait", why: "after aleph-6" });
   expect(record.next(rec([])).step).toBe("start");
+});
+
+test("an Ask set on a record and cleared keeps its set time and clear time, through the issue and through a run", () => {
+  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
+  setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
+  record.setIssueAsk("aleph-7", ask);
+  record.setIssueAsk("aleph-7", { ...ask, situation: "case text" });
+  setSystemTime(new Date("2026-11-04T10:05:00.000Z"));
+  record.setIssueAsk("aleph-7", null);
+  setSystemTime(new Date("2026-11-04T11:00:00.000Z"));
+  record.putRun("r1", run({ ask }));
+  setSystemTime(new Date("2026-11-04T11:10:00.000Z"));
+  record.patchRun("r1", { ask: { ...ask, situation: "case text" } });
+  setSystemTime(new Date("2026-11-04T11:30:00.000Z"));
+  record.patchRun("r1", { ask: undefined, condition: "passed" });
+  expect(record.read("aleph-7")!.asks).toEqual([
+    { set: "2026-11-04T10:00:00.000Z", cleared: "2026-11-04T10:05:00.000Z" },
+    { set: "2026-11-04T11:00:00.000Z", cleared: "2026-11-04T11:30:00.000Z" },
+  ]);
 });

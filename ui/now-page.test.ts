@@ -29,8 +29,8 @@ const WEEK = {
   ],
 };
 
-const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, queueP50: 60, queueP90: 300, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, queueP50: 60, queueP90: 300, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };
-const withBase = (d: any, queue = { count: 4, p50: 90, p90: 400 }) => ({ ...d, phases: { ...d.phases, queue }, baseline: BASE });
+const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, askP50: 60, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, askP50: 60, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };
+const withBase = (d: any, asks = { count: 4, wait: { count: 3, p50: 90, p90: 400 } }) => ({ ...d, asks, baseline: BASE });
 
 const USAGE = { now: { seven_day: 7, five_hour: 2, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
 
@@ -45,6 +45,14 @@ test("the scorecard before the data arrives: dashes, and usage unknown with no u
   const h = view.renderTiles({ ...state, usage: undefined }, null);
   expect(h.match(/<b>–/g)?.length).toBe(5);
   expect(h).not.toContain('class="tr');
+});
+
+test("the Asks to Chris card shows the count and the p50 wait, dashes with no Ask, and no Queue wait card", () => {
+  const h = view.renderTiles({ ...state, usage: USAGE }, withBase(WEEK), "week");
+  expect(h).toContain("Asks to Chris");
+  expect(h).toContain("<b>4<em> / 1m</em></b>");
+  expect(h).not.toContain("Queue wait");
+  expect(view.renderTiles({ ...state, usage: USAGE }, withBase(WEEK, { count: 0, wait: { count: 0, p50: 0, p90: 0 } }), "week")).toContain("<b>–<em> / –</em></b>");
 });
 
 test("the Landed card shows the clean share, then the clean count, and trends on the clean share", () => {

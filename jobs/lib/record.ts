@@ -26,6 +26,8 @@ export interface JobRecord {
   ask: Ask | null;
   /** The run whose Ask `ask` is, while that run awaits Chris; absent when the Ask is on the issue. */
   askRun?: string;
+  /** Every Ask the record held, oldest first: when it was set and, once it is gone, when it was cleared. */
+  asks?: { set: string; cleared?: string }[];
   /** Why the goal waits to start, or null. */
   wait: { kind: string; reason: string; since: string } | null;
   /** The fix rounds of the newest job: its build runs that a check or the reviewer sent back. */
@@ -144,7 +146,13 @@ export function update(key: string, fn: (r: JobRecord) => JobRecord | void): Job
   const release = lockSync(key);
   try {
     const draft = read(key) ?? empty(key);
+    const had = draft.ask ? `ask ${draft.askRun ?? ""}` : "";
     const after = derive(fn(draft) ?? draft);
+    if ((after.ask ? `ask ${after.askRun ?? ""}` : "") !== had) {
+      const at = new Date().toISOString(), open = after.asks?.find((a) => !a.cleared);
+      if (open) open.cleared = at;
+      if (after.ask) (after.asks ??= []).push({ set: at });
+    }
     write(after);
     return after;
   } finally {
