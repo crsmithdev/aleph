@@ -78,6 +78,30 @@ test("mountStatus fetches the week and the day and fills the scorecard and the c
   resetSpeed();
 });
 
+test("the slowness panel ranks the phases by p90, and the Status page puts the row above the lanes", async () => {
+  const P = (p90: number) => ({ count: 3, p50: 1, p90 });
+  const h = view.renderSlowness({ phases: { intake: P(258), queue: P(1716), implement: P(272), land: P(100) } });
+  const order = ["queue", "implement", "intake", "land"].map((n) => h.indexOf(`<span class="bl">${n}</span>`));
+  expect(order.every((i) => i >= 0) && [...order].sort((a, b) => a - b).join() === order.join()).toBe(true);
+  expect(view.renderSlowness(null)).toContain("Loading the phases");
+  expect(view.renderSlowness({ error: "no <data>" })).toContain("no &lt;data&gt;");
+  expect(view.renderSlowness({ phases: {} })).toContain("No work ended in the window");
+  const monitor = { day: "2026-11-04", findings: ["one"], table: "t" };
+  const page = view.view.render({ ...state, usage: USAGE, factory: { ...state.factory, monitor } }, {}, new URLSearchParams());
+  const at = ['class="insights"', 'id="causes"', 'id="slowness"', 'id="monitor"', 'class="lanes"'].map((x) => page.indexOf(x));
+  expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
+  const row = page.slice(at[0], at[4]);
+  expect(row.includes('id="causes"') && row.includes('id="slowness"') && row.includes('id="monitor"')).toBe(true);
+  // @ts-ignore plain JS shared with the page
+  const { resetSpeed } = await import("./views/speed.js");
+  resetSpeed();
+  const slow = { innerHTML: "" };
+  await view.mountStatus({ querySelector: (s: string) => (s === "#slowness" ? slow : null) }, { ...state, usage: USAGE }, async () => ({ ok: true, json: async () => ({ ...WEEK, phases: { queue: P(1716), land: P(100) } }) }));
+  expect(slow.innerHTML.indexOf('<span class="bl">queue</span>')).toBeGreaterThanOrEqual(0);
+  expect(slow.innerHTML.indexOf('<span class="bl">queue</span>')).toBeLessThan(slow.innerHTML.indexOf('<span class="bl">land</span>'));
+  resetSpeed();
+});
+
 test("the lanes: Running shows live agent runs of the cap and lists every open run; Latest done has two at most", () => {
   const mk = (n: number, kind: string) => job({ name: `${kind}-${n}`, run: { kind, started: "2026-10-30T09:00:00Z" } });
   const running = [...Array.from({ length: 12 }, (_, i) => mk(i, "agent")), mk(1, "land"), mk(2, "land")];

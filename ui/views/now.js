@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
+import { barList, barRow, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
 import { causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -15,7 +15,7 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section>${renderMonitor(s)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><div class="insights"><section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section><section id="slowness" class="card" aria-label="Causes of slowness">${renderSlowness(speedOf(w))}</section>${renderMonitor(s)}</div>${renderLanes(s)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -43,6 +43,18 @@ export function renderCauses(d, win = d?.window ?? "week") {
   return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p>${barList(cs.map((x, i) => causeRow(`<a href="${keep(EFFICIENCY, win)}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join(""))}`;
 }
 
+const PHASES = ["intake", "queue", "implement", "land"];
+/** The four phases of lead time, largest p90 first, each as its share of the four p90 seconds. `d` is null while it loads, `{ error }` on a failed load. */
+export function renderSlowness(d) {
+  const title = `<h2>Causes of slowness, largest first</h2>`;
+  if (!d) return `${title}${loadingLine("the phases")}`;
+  if (d.error) return `${title}<p>${esc(d.error)}</p>`;
+  const ps = PHASES.filter((n) => d.phases?.[n]?.count).map((n) => ({ n, p90: d.phases[n].p90 })).sort((a, b) => b.p90 - a.p90);
+  if (!ps.length) return `${title}<p>No work ended in the window.</p>`;
+  const sum = ps.reduce((a, x) => a + x.p90, 0);
+  return `${title}${barList(ps.map((x, i) => barRow(esc(x.n), (x.p90 / ps[0].p90) * 100, `${esc(dur(x.p90))} · ${pctText(x.p90 / sum)}`, { top: i === 0 })).join(""))}`;
+}
+
 /**
  * The monitor's newest daily report: the reader's findings in rank order, and the whole table behind a fold. Nothing before the first report.
  */
@@ -65,6 +77,8 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   const tiles = root.querySelector("#scorecard"), causes = root.querySelector("#causes");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
   if (causes) causes.innerHTML = renderCauses(speedOf(w), w);
+  const slowness = root.querySelector("#slowness");
+  if (slowness) slowness.innerHTML = renderSlowness(speedOf(w));
 }
 
 /** The count of a section: `N / cap` where a cap applies. */
