@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList } from "../../todo/lib/store.ts";
-import { titleProblem } from "../../todo/lib/todo.ts";
-import { explainLesson, mine, proposals, readStore } from "./corrections.ts";
+import { section, titleProblem } from "../../todo/lib/todo.ts";
+import { approve, explainLesson, mine, proposals, readStore } from "./corrections.ts";
+import { missingSections } from "./goal-spec.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -118,6 +119,19 @@ test("a proposed lesson without target gets title and target on the next mine", 
   await mine(NOW + 1000);
   expect(proposals()[0].target).toBe("fac checks");
   expect(proposals()[0].title!.length).toBeGreaterThan(0);
+});
+
+test("an approved claude-md proposal files a spec with Goal, Edit surface and Oracle", async () => {
+  pickFirst = true; checkP = 0.4; ruleP = 0.5; scope = "repo";
+  await mine(NOW);
+  const l = proposals()[0];
+  expect(approve(l.id, repo)).toBe("fac-1");
+  const [item] = readList(repo)!.items;
+  expect(missingSections(item.spec)).toEqual([]);
+  expect(section(item.spec, "Goal")).toContain(l.sentence);
+  expect(section(item.spec, "Edit surface")).toBe("- CLAUDE.md");
+  expect(section(item.spec, "Oracle")).toContain(`grep -F '${l.sentence}' CLAUDE.md`);
+  expect(section(item.spec, "Oracle")).not.toContain("Signals:");
 });
 
 describe("standing proposals", () => {
