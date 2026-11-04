@@ -21,7 +21,7 @@ export interface Issue {
   fm: Frontmatter;
   /** What was asked. Verbatim. Empty on a part the planner wrote. */
   request: string;
-  /** What a run builds: Markdown with the sections `## Goal`, `## Edit surface`, `## Oracle` and `## Time box`. Verbatim. */
+  /** What a run builds: Markdown with the sections `## Goal`, `## Edit surface` and `## Oracle`. Verbatim. */
   spec: string;
   /** Raw `- YYYY-MM-DD HH:MM: text` lines, in the order they were appended. */
   notes: string[];

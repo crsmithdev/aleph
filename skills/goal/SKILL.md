@@ -29,7 +29,7 @@ web. Put the value and its source URL in the recommended answer.
 Ask at most four questions, all in one call. Each has 2-4 options, and
 exactly one is first and marked "(Recommended)". Ask only about the product:
 what it must do, for whom, what good looks like and what it must not do. Work
-out the Edit surface and the Time box yourself and write them into the issue.
+out the Edit surface yourself and write it into the issue.
 Propose the Oracle yourself, and ask only when the end state has more than one
 reasonable check.
 
@@ -50,7 +50,6 @@ reasonable check.
   exist, such as `aleph check`. Acceptance does not run an Oracle command with a
   placeholder such as `<file>`, so the Oracle names the real path. "The tests
   pass" alone is not an oracle.
-- **Time box**: default 40 minutes and one run.
 
 If Chris answers "use your defaults", take every recommended answer. Write
 no issue while a question is open.
@@ -68,9 +67,6 @@ The body has these sections, each non-empty:
 
 ## Oracle
 <the check; a web fact with its value and URL>
-
-## Time box
-<minutes>, one run.
 
 ## Defaults taken
 - <question>: <answer>   (only the questions answered by default)

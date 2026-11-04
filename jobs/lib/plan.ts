@@ -11,6 +11,7 @@ import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { missingSections, surfacePaths } from "./goal-spec.ts";
+import { cutTitle } from "./title.ts";
 import { note, partsOf, readList, writeList } from "../../todo/lib/store.ts";
 import { askPartDropped } from "./ask.ts";
 import { allRuns, lock, type Repo } from "./ledger.ts";
@@ -68,13 +69,11 @@ export function parsePlan(output: string, least = 2): Child[] | string {
   const children: Child[] = [];
   for (const [i, c] of list.entries()) {
     const n = i + 1;
-    const title = text(c?.title), body = text(c?.body);
+    // A title that breaks the rule is cut to fit, not a reason to discard the plan.
+    const title = cutTitle(text(c?.title) ?? ""), body = text(c?.body);
     if (!title) return `child ${n} has no title`;
-    const bad = issues.titleProblem(title, { part: true });
-    if (bad) return `child ${n}: ${bad}`;
     if (!body) return `child ${n} has no body`;
-    // The planner's goals also need a Time box.
-    const missing = [...missingSections(body), ...(section(body, "Time box") ? [] : ["Time box"])];
+    const missing = missingSections(body);
     if (missing.length) return `child ${n} has no ${missing[0]}`;
     if (!realOracle(section(body, "Oracle"))) return `child ${n}'s Oracle names no command or test file`;
     const waits = c.waits_on ?? [];
@@ -129,11 +128,10 @@ ${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 mo
 
 {"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
 
-Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each body is in the goal format, with all four sections non-empty:
+Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each body is in the goal format, with all three sections non-empty:
   ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
-  ## Time box (default: 45 minutes, one run)
 
 The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. There is no \`aleph check\` command: never name one. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`.
 

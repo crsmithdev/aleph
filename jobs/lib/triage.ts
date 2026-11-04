@@ -16,8 +16,6 @@ import { factoryDir, gates } from "./factory-status.ts";
 import { git } from "./git.ts";
 import { TRIAGE_CAP, TRIAGE_TRIES } from "./settings.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
-/** Triage runs that end with no verdict, for one item, before it gets an Ask (reason `triage-failed`); `ALEPH_TRIAGE_TRIES` changes it. */
-
 
 /** The model a triage run asks for; `ui/usage.ts` books its cost under this name. */
 export const TRIAGE_MODEL = OPUS_MODEL;
@@ -127,17 +125,20 @@ ${mainSince(repo, item)}
 
 Reply with one JSON object and nothing else, with one of these routes:
 
-- {"route": "build", "spec": "<spec>", "after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]}: the issue is work one factory run can do alone. The issue keeps its own title and text; "spec" is written on it. "spec" is in this format, with these four sections:
+- {"route": "build", "spec": "<spec>", "after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]}: the issue is work one factory run can do alone. The issue keeps its own title and text; "spec" is written on it. "spec" is in this format, with these three sections:
   ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
-  ## Time box (default: 45 minutes, one run)
 
   The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the issues that must be done before this one starts; leave it out when none.
 - {"route": "plan", "spec": "<spec>", "after": [...]}: the issue is too large for one run. The fields are as for "build". A planner splits it into parts, and if it cannot, the issue builds from "spec".
 - {"route": "close", "reason": "<why>"}: it is already fixed, a duplicate of <repo>-<n> (name it), or stale.
-- {"route": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work. Before a "build" or "plan" route, check this: read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds; no worker runs. When you are unsure, return "build" as usual.
+- {"route": "done", "commit": "<sha>", "reason": "<what the commit holds>"}: main already holds the work; no worker runs.
 - {"route": "ask", "question": "<one plain sentence>", "options": [{"label": "<short>", "line": "<one line of what it does>", "after": "<optional <repo>-<n>: set only when choosing this option means waiting for that issue first>"}], "recommended": "<an option's label>", "why": ["<short bullet of context>"]}: it needs a choice only Chris can make: what the product does for him, what he sees, what it costs, or what to work on first. Write the question and the options in plain words a user of the product reads: no file paths, function names, line numbers or code. Give 2 to 4 options, and 2 to 4 short "why" lines; "recommended" is one option's label, exactly. Chris answers by pressing one option's button, so each option must be something a factory run can do.
+- {"route": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
+- {"route": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "build" for it: Chris picks from the tracker which flakes to fix, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "build".
+
+Done before build: before a "build" or "plan" route, read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds. When you are unsure, return "build" as usual.
 
 Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "build" with "after" set to it.
 
@@ -148,8 +149,6 @@ Test-only follow-ups: when the issue's source is \`worker\` (a follow-up a facto
 A worker follow-up that names a defect (wrong behaviour, a hole in a gate, a bug) still builds, even when its oracle is a test: a gate hole is a defect, so it is a "build". Issues whose source is not \`worker\` are not covered by this rule.
 
 Never ask Chris about how to build it: code structure, which module or helper, naming, test shape, whether to wait for another open issue, or whether a refactor is worth it. Decide those yourself: pick the best option and return "build" (with "after" when the work must wait for an open issue), or "close" when it is not worth doing or is already done.
-- {"route": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
-- {"route": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "build" for it: Chris picks from the tracker which flakes to fix, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "build".
 `;
 }
 

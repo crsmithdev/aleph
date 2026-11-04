@@ -6,7 +6,7 @@ import { readList, writeList, partsOf } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
-import { isLarge, parsePlan, realOracle, runPlan, topFolders } from "./plan.ts";
+import { isLarge, parsePlan, realOracle, runPlan, topFolders, type Child } from "./plan.ts";
 import type { Tier } from "./route.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
 
@@ -144,8 +144,9 @@ test("the check: sections, the oracle, the waits and the count", () => {
   expect(parsePlan(reply([child("a"), { ...child("b"), waits_on: [2] }]))).toBe("child 2 waits on something that is not an earlier child");
   expect(parsePlan(reply([child("a"), child("b", "it works")]))).toBe("child 2's Oracle names no command or test file");
   expect(parsePlan(reply([child("a"), child("b", "`aleph check tests`")]))).toBe("child 2's Oracle names no command or test file");
-  expect(parsePlan(reply([child("a"), { ...child("b"), title: "Check foo: bar" }]))).toStartWith("child 2: the title has a ': ' prefix");
-  expect(parsePlan(reply([child("a"), { ...child("b"), title: `[Group] ${"a".repeat(53)}` }]))).toStartWith("child 2: the title is 61 characters");
+  // A title that breaks the rule is cut to fit; a child with no Time box passes.
+  const cut = parsePlan(reply([child("a"), { ...child("b"), title: "Check foo: bar." }, { ...child("c"), title: `[Group] ${"a ".repeat(30)}` }, { title: "d", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Oracle\n`bun test`" }])) as Child[];
+  expect(cut.map((c) => c.title)).toEqual(["a", "bar", `[Group] ${"a ".repeat(25)}a`, "d"]);
   expect(realOracle("the new ui/plan.test.ts passes")).toBe(true);
   expect(topFolders("## Edit surface\n- `jobs/lib/plan.ts` (new)\n- ui/views/now.js\n- README.md\n## Oracle\nx/y")).toEqual(["jobs", "ui"]);
   expect(isLarge("sonnet", "## Edit surface\njobs/a.ts and jobs/b.ts")).toBe(false);
