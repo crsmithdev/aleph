@@ -73,6 +73,9 @@ Type, size and effect tokens (`ui/app.css:47-55`):
 | `--fs-lg` | 15px | section headings | 7 |
 | `--fs-xl` | 26px | page title, in `--display` | not counted, used in shorthand `font:` |
 | `--fs-metric` | 32px | the figure on a tile | not counted, used in shorthand `font:` |
+| `--fw-text` | 400 | text | not counted, used in shorthand `font:` |
+| `--fw-mid` | 500 | ids and numbers | not counted, used in shorthand `font:` |
+| `--fw-strong` | 600 | headings and table headers | not counted, used in shorthand `font:` |
 | `--r-card` | 10px | cards, tiles | 8 |
 | `--r-ctl` | 6px | controls | 19, and 2 in mixed shorthands |
 | `--r-tag` | 4px | badges, code blocks | 20, and 1 in a mixed shorthand |
@@ -82,7 +85,7 @@ Type, size and effect tokens (`ui/app.css:47-55`):
 | `--gap` | 24px | between page blocks | 1 |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles | `--mono` 10, `--num` 2, `--sans` 1, `--display` 1 as `font-family` |
 
-Weights have no token: 400 text, 500 ids and numbers, 600 headings and table headers (see Deviations). `font-weight` literals: 600 has 27, 500 has 5 and 400 has 4.
+Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers, `--fw-strong` 600 for headings and table headers. 700 stays a literal on `.mark` and `.tile b`.
 
 Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 10 times, `(max-width: 1100px)` 3 and `(min-width: 721px)` 1.
 
