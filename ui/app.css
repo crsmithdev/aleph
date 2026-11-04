@@ -61,6 +61,7 @@
   /* Radii and gaps. */
   --r-card: 10px; --r-ctl: 6px; --r-tag: 4px; --r-hair: 2px; --r-pill: 999px;
   --sp-2: 2px; --sp-4: 4px; --sp-6: 6px; --sp-8: 8px; --sp-10: 10px; --sp-12: 12px; --sp-16: 16px;
+  --z-rowlink: 1; --z-sticky: 2; --z-overlay: 50;
   --gap: 24px;            /* between the blocks of a page */
   --gap-in: var(--sp-16);         /* between tiles, and between cards side by side */
 }
@@ -606,7 +607,7 @@ pre.stat b { color: var(--need); }
 @media (max-width: 720px) {
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .side {
-    position: sticky; z-index: 2; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-10);
+    position: sticky; z-index: var(--z-sticky); height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-10);
     border-right: 0; border-bottom: 1px solid var(--rule); padding: var(--sp-8) var(--sp-16); overflow: visible;
   }
   .side .mark { padding: 0; flex: none; }
@@ -707,7 +708,7 @@ pre.stat b { color: var(--need); }
   .wf { grid-template-columns: minmax(0, 1fr); }
   .wf-detail { position: static; max-height: none; }
   .wf-grid { max-height: 36vh; overflow: auto; scroll-padding-top: 24px; }
-  .wf-axis { z-index: 2; }
+  .wf-axis { z-index: var(--z-sticky); }
   .wf-axis .wf-l { visibility: hidden; }
   .wf-axis .wf-r span:nth-child(2), .wf-axis .wf-r span:nth-child(4) { display: none; }
   .wf-axis, .wf-row { grid-template-columns: minmax(100px, 40%) minmax(0, 1fr); }
@@ -789,7 +790,7 @@ tr.rowlink { position: relative; }
 tr.rowlink td.wide a { color: inherit; text-decoration: none; }
 tr.rowlink td.wide a::after { content: ""; position: absolute; inset: 0; }
 tr.rowlink:hover td.wide a, tr.rowlink td.wide a:focus-visible { text-decoration: underline; }
-tr.rowlink a.idl, tr.rowlink td.drop { position: relative; z-index: 1; }
+tr.rowlink a.idl, tr.rowlink td.drop { position: relative; z-index: var(--z-rowlink); }
 table.tbl td.drop { width: 28px; padding: 0; text-align: right; }
 .cancel { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--r-tag); color: var(--muted); cursor: pointer; }
 .cancel svg { width: 14px; height: 14px; pointer-events: none; }

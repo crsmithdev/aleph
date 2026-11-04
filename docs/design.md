@@ -88,6 +88,9 @@ Type, size and effect tokens (`ui/app.css:47-55`):
 | `--sp-10` | 10px | `gap`, `padding`, `margin` | 49, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
 | `--sp-12` | 12px | `gap`, `padding`, `margin` | 46, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
 | `--sp-16` | 16px | `gap`, `padding`, `margin` | 20, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
+| `--z-rowlink` | 1 | `tr.rowlink` links above the row link | 1 |
+| `--z-sticky` | 2 | sticky bar, waterfall axis | 2 |
+| `--z-overlay` | 50 | font picker | 1, in `ui/index.html` |
 | `--gap-in` | 16px | between tiles and side-by-side cards | 7 |
 | `--gap` | 24px | between page blocks | 1 |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles | `--mono` 10, `--num` 2, `--sans` 1, `--display` 1 as `font-family` |
@@ -98,7 +101,7 @@ Breakpoints are not tokens, because custom properties do not work in `@media`. T
 
 Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. Widths and heights stay literal.
 
-Radii: the five `--r-*` tokens; one literal is left, `6px` on the login page (`ui/auth.ts:54`). Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` has 4 literal uses (1, 2, 2, 50). Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:414`).
+Radii: the five `--r-*` tokens; one literal is left, `6px` on the login page (`ui/auth.ts:54`). Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` is tokens, `--z-rowlink` < `--z-sticky` < `--z-overlay`. Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:414`).
 
 Rules taken from the audit of 2026-11-04 (`docs/findings/2026-11-04-ui-design-audit.md`). Each pattern has 3 or more uses and no token yet. Until its token lands, use the value given here.
 
