@@ -92,7 +92,8 @@ export async function probe(repo: Repo, log: string, fault: typeof clockFault = 
       `if claude -p 'say ok' --output-format json 2>/dev/null | grep -q '"is_error":false'; then echo "PASS claude -p: ok"; else echo "FAIL claude -p: no result"; fi`,
       `${gitPrelude("../in.bundle", [`+${main}:${main}`]).join(" && ")} && git switch -q -c probe ${q(`origin/${repo.main}`)} >&2`,
       `${repo.setup.join(" && ") || "true"} >&2`,
-      `if bun test >&2; then echo "PASS bun test: passed"; else echo "FAIL bun test: failed"; fi`,
+      // As the checks run it (CHECK_ENV in checks.ts): the sandbox has the host's zone, and some tests assume UTC.
+      `if TZ=UTC bun test >&2; then echo "PASS bun test: passed"; else echo "FAIL bun test: failed"; fi`,
     ].join("\n");
     const step = await sandboxed(dir, script, {
       read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
