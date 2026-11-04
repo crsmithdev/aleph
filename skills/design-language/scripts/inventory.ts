@@ -15,7 +15,7 @@ const args = process.argv.slice(2);
 const summary = args.includes("--summary");
 const roots = args.filter((a) => a !== "--summary");
 const EXT = /\.(css|html|js|jsx|ts|tsx|vue|svelte)$/;
-const SKIP = /node_modules|\.test\.|\/fixtures\/|\/shots\//;
+const SKIP = /node_modules|\/vendor\/|\.min\.js$|\.test\.|\/fixtures\/|\/shots\//;
 
 function files(p: string): string[] {
   if (statSync(p).isFile()) return [p];
