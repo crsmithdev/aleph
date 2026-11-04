@@ -13,7 +13,6 @@ import { skillSection } from "./role-skill.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { reader } from "../../todo/lib/store.ts";
 import { needsOf } from "./ask.ts";
-import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
 import { askOf, isAgentRun, isBuild, lastTagged, onOf, readRun, TAG_FORMAT, type Check, type Entry, type FailedTest, type Repo, type Run } from "./ledger.ts";
@@ -51,32 +50,32 @@ const FACTORY = (run: Run, main: string, checks: Check[] = []) => `You are a wor
 Work only there. Do the goal below. Commit every change on this branch: only its commits count.
 Never merge, never push, never touch another branch.
 
-Nobody answers questions during the run. For a choice the Oracle does not settle, take
-the answer you would recommend and print \`DEFAULT: <question> -> <answer>\`. If you
-cannot meet a clause of the Oracle, stop and print \`QUESTION: <question that names the
-clause>\`; never defer that clause with \`DEFAULT:\` or \`FOLLOWUP:\`. For work you find
-but do not do, print \`FOLLOWUP: <title>\`; it must not cover anything the Oracle names.
+Nobody answers questions during the run. Your reply ends with structured output; each
+fact you report is one of its fields. For a choice the Oracle does not settle, take the
+answer you would recommend and add it to \`defaults\`. If you cannot meet a clause of the
+Oracle, stop and set \`question\` to a question that names the clause; else \`question\` is
+null. Never defer that clause with \`defaults\` or \`followups\`. For work you find but do not do, add a title to \`followups\`; it must not
+cover anything the Oracle names.
 A test that is not the goal's own, fails or times out, and passes alone or on a rerun is
-a flake: print \`FLAKE: <test file> > <test name>: <what you saw>\` and no \`FOLLOWUP:\`.
+a flake: add it to \`flakes\` and not to \`followups\`.
 Check such a failure once, by running its file alone, then go on: do not run the full
 suite again to get a clean run, because the factory's checks rerun a failed check.
 Each new test must fail without your change and check something the other tests of its
 file do not: a changed line they do not cover, or a result they do not assert. The
 factory's checks reject any other new test. So do not add a test for a helper that the
 existing tests already reach through its callers.
-Write each tag in capitals at the start of its line.
 
 If the goal already holds and no edit is needed, make no commit, run the repo's tests,
-and print exactly one line \`${ALREADY_MET}: <evidence>\`: the files, lines and commit on
-\`${main}\` that show it. If you cannot do the goal, make no commit and give the reason
-in your final text.
+and set \`already_met.evidence\` to the files, lines and commit on \`${main}\` that show it;
+else \`already_met\` is null. If you cannot do the goal, make no commit and give the reason
+in \`summary\`.
 
 ${checksSentence(checks)} Chrome is at \`/usr/bin/google-chrome\`, so the repo's browser tests run. For a screenshot of a page that
 your own server serves on \`http://127.0.0.1:<port>\`, run \`google-chrome --headless=new --window-size=1440,900 --screenshot=<out.png> <url>\`
 with a path inside the repo, and commit the PNG.
 For each code change, follow the code-change method at the end of this brief. ${FOREGROUND}
-End with a summary of what you did and what you ran, each thing said once:
-at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
+End with a summary of what you did and what you ran in \`summary\`, each thing said once:
+at most 120 words of prose, plus a list only for separate items.`;
 
 /** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, folder: string, run: Run, repo: Repo): string {
@@ -268,15 +267,12 @@ export const rescued = (e: Entry): string => record.read(record.keyOf(e.run))?.e
 export const markRescued = (e: Entry, key: string): void => void record.addEvent(record.keyOf(e.run), { kind: "rescued", run: e.id, what: key });
 
 /**
- * The question of a run that ended with no commit and asked about the spec, or null when it did not ask.
- * The text is the run's own question, else its last `QUESTION:` line; it may be empty. A rerun reads the
- * same spec and asks again, so such a run waits for a spec edit.
+ * The question of a run that ended with no commit and asked about the spec, or null when it did not ask: the
+ * worker's `question` field, kept on the run. A rerun reads the same spec and asks again, so such a run waits for a spec edit.
  */
-export function askedQuestion(r: Run, result: string): string | null {
-  if (causeOf(r) !== "no-commit") return null;
-  const q = questionOf(result);
-  if (!r.question && q === undefined) return null;
-  return r.question || q || "";
+export function askedQuestion(r: Run): string | null {
+  if (causeOf(r) !== "no-commit" || !r.question) return null;
+  return r.question;
 }
 
 export type RescueCase = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";

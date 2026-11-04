@@ -94,10 +94,10 @@ export const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start,
 
 
 // A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.
-export const claimed = (name: string, result: string) => {
+export const claimed = (name: string, evidence: string) => {
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `main for ${name}`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
-  return mk(name, "build", "stuck", { reason: "no commit" }, { "result.md": result });
+  return mk(name, "build", "stuck", { reason: "no commit", alreadyMet: evidence });
 };
 /** A suite run with these checks, as `aleph suite` does, then a dispatch. */
 export const withChecks = async (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<ChecksStop | null>) => {

@@ -76,8 +76,12 @@ export interface Run {
   next?: "worker" | "land";
   /** A factory run: the price of its worker's `result` event, at API rates. */
   cost?: number;
-  /** A factory run: the `DEFAULT: <question> -> <answer>` lines of its result. */
+  /** A factory run: the worker's `defaults`, each as `<choice> -> <what it chose>`. */
   defaults?: string[];
+  /** A factory run: the titles of the worker's `followups`. */
+  followups?: string[];
+  /** A factory run: the worker's evidence that the goal is already met, when it says so. */
+  alreadyMet?: string;
   /** An agent or land run: each check that ran, skipped `when` checks left out. */
   checks?: CheckResult[];
   /** An agent run whose checks passed: origin/<main> as the checks saw it. A land with main still there skips the checks. */
@@ -400,8 +404,8 @@ export async function admit(say: (line: string) => void = () => {}, a: Admission
 /** The systemd-run properties of every factory run unit: the shell, the UI and Claude Code sessions win when the cores are busy. */
 export const LOW = ["--property=CPUWeight=20", "--nice=10"];
 
-/** The agent output tags: a line `<TAG>: <value>` in a worker's or reviewer's text. `ERROR:` is not one. */
-export const TAGS = ["FOLLOWUP", "DEFAULT", "QUESTION", "FLAKE", "CHECK", "VERDICT"] as const;
+/** The agent output tags that a parser reads: a line `<TAG>: <value>` in a worker's or reviewer's text. `ERROR:` is not one. */
+export const TAGS = ["QUESTION", "VERDICT"] as const;
 export type Tag = (typeof TAGS)[number];
 
 /** One sentence for prompts that says how a tag line is read. */
@@ -411,10 +415,6 @@ const tagValue = (line: string, tag: string): string | undefined => {
   const m = line.match(/^\s*[`*]*([A-Z][A-Z-]*):(.*)$/);
   return m && m[1] === tag ? m[2].replace(/^[`*]+(?=\s)/, "").replace(/[`*\s]+$/, "").trim() : undefined;
 };
-
-/** The value of every line of the text that carries the tag; lines with an empty value are dropped. */
-export const tagged = (text: string, tag: Tag | string): string[] =>
-  text.split("\n").map((l) => tagValue(l, tag)).filter((v): v is string => !!v);
 
 /** The value of the last line that carries the tag, or undefined when there is none. */
 export const lastTagged = (text: string, tag: Tag | string): string | undefined =>

@@ -214,17 +214,18 @@ case $action in
   quiet) echo '{"type":"system"}'; sleep 30 ;;
   chatty) echo c > c.txt; git add c.txt; git commit -qm "add c.txt"; for i in 1 2 3 4 5; do echo '{"type":"system"}'; sleep 1; done ;;
   exit3) exit 3 ;;
-  question) echo '{"type":"result","result":"I looked.\\nQUESTION: which colour?"}'; exit 0 ;;
+  question) echo '{"type":"result","result":"I looked.\\nQUESTION: which colour?","structured_output":{"summary":"I looked.","defaults":[],"followups":[],"flakes":[],"already_met":null,"question":"which colour?"}}'; exit 0 ;;
   error) echo '{"type":"result","is_error":true,"result":"API Error: 500"}'; exit 0 ;;
   noresult) echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'; exit 0 ;;
+  nostructured) echo n > n.txt; git add n.txt; git commit -qm "add n.txt"; echo '{"type":"result","is_error":false,"result":"done"}'; exit 0 ;;
   trailing) echo x > t.txt; git add t.txt; git commit -qm "add t.txt"; echo '{"type":"result","is_error":false,"result":"done"}'; echo 'one more line'; exit 0 ;;
-  already-met) echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"Looked.\\nGoal: Already met — main has the change"}'; echo '{"type":"command_lifecycle","phase":"end"}'; exit 0 ;;
+  already-met) echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"","structured_output":{"summary":"Looked.","defaults":[],"followups":[],"flakes":[],"already_met":{"evidence":"main has the change"},"question":null}}'; echo '{"type":"command_lifecycle","phase":"end"}'; exit 0 ;;
   defaults) echo d > d.txt; git add d.txt; git commit -qm "add d.txt"
-    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nDEFAULT: which colour? -> blue\\nFOLLOWUP: paint the fence"}'; exit 0 ;;
+    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"","structured_output":{"summary":"Done.","defaults":[{"choice":"which colour?","chose":"blue"}],"followups":[{"title":"paint the fence"}],"flakes":[],"already_met":null,"question":null}}'; exit 0 ;;
   flake-followup) echo f > fu.txt; git add fu.txt; git commit -qm "add fu.txt"
-    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nFOLLOWUP: Fix the flaky paint test in a.test.ts"}'; exit 0 ;;
+    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"","structured_output":{"summary":"Done.","defaults":[],"followups":[{"title":"Fix the flaky paint test in a.test.ts"}],"flakes":[],"already_met":null,"question":null}}'; exit 0 ;;
   flake) echo f > fl.txt; git add fl.txt; git commit -qm "add fl.txt"
-    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nFLAKE: a.test.ts > slow one: timed out, passed alone\\nFOLLOWUP: mend the gate"}'; exit 0 ;;
+    echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"","structured_output":{"summary":"Done.","defaults":[],"followups":[{"title":"mend the gate"}],"flakes":[{"file":"a.test.ts","name":"slow one","what":"timed out, passed alone"}],"already_met":null,"question":null}}'; exit 0 ;;
   fail-then-fix) echo "$RANDOM" > f.txt; git add f.txt
     if printf '%s' "$prompt" | grep -q 'The check \`tests\` failed'; then git rm -q FAIL; else echo x > FAIL; git add FAIL; fi
     git commit -qm "work" ;;
@@ -240,7 +241,7 @@ case $action in
     gh auth status > /dev/null 2>&1; echo $? > "$FAKE_LOG/gh.code" ;;
 esac
 echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
-echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"did '"$action"'"}'
+echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"did '"$action"'","structured_output":{"summary":"did '"$action"'","defaults":[],"followups":[],"flakes":[],"already_met":null,"question":null}}'
 `;
 
 /** Pids (not this process) whose cmdline, environ or cwd holds `dir`. */

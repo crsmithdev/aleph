@@ -17,9 +17,8 @@ import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "./ask.ts";
 import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "./factory-status.ts";
-import { alreadyMet } from "./gate.ts";
 import { fetchOrigin, git } from "./git.ts";
-import { allJobs, isOpen, issue as issueOf, lastReal, readFile, stepOf, type Job } from "./job.ts";
+import { allJobs, isOpen, issue as issueOf, lastReal, stepOf, type Job } from "./job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
 import { factoryLog } from "./layout.ts";
 import { allRuns, isAgentRun, loadRegistry, lock, tell, updateRun, type Repo } from "./ledger.ts";
@@ -271,7 +270,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   };
   const choice = (question: string, why: string[]) => normalizeAsk({ question, options: RERUN_OPTIONS, recommended: "Rerun", why: [`Run: ${name}, ${r.condition}`, `Reason: ${reason}`, ...why] }, { kind: "input", reason: "rescue" })!;
   // A run that ended with a QUESTION about the spec: a rerun reads the same spec and asks again, so it waits for a spec edit.
-  const asked = askedQuestion(r, readFile(last, "result.md") ?? "");
+  const asked = askedQuestion(r);
   const specQuestion = asked !== null;
   // `spec`: the run asked about this issue's spec, so it waits for a spec edit.
   const chris = async (question: string, ask: Ask, spec?: issues.Issue) => {
@@ -331,7 +330,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     return chris(text, plainAsk("question", text, [`Run: ${name}, ${r.condition}`]), item);
   }
   const found = noCommit ? foundDone(stuck) : null;
-  const claim = noCommit ? alreadyMet(readFile(last, "result.md") ?? "") : null;
+  const claim = noCommit ? r.alreadyMet ?? null : null;
   const key = rescueCase(r, !!found, claim);
   if (!key) return chris(`${name} is ${r.condition} (${reason}); drop it, recheck it, or edit the goal?`, choice(`${name} is ${r.condition} (${reason}): how should the factory go on?`, ["No safe default covers this case"]));
 

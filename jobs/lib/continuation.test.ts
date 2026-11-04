@@ -128,13 +128,11 @@ describe("next step after a land", () => {
 });
 
 describe("rescue of a stuck or failed run", () => {
-  test("no commit and a QUESTION asks Chris and waits for a spec edit, whatever else holds", () => {
+  test("no commit and a question asks Chris and waits for a spec edit, whatever else holds", () => {
     const r = run({ condition: "stuck", cause: "no-commit" });
-    expect(askedQuestion(r, "did things\nQUESTION: which clause wins?\n")).toBe("which clause wins?");
-    expect(askedQuestion({ ...r, question: "from the run" }, "QUESTION: from the log")).toBe("from the run");
-    expect(askedQuestion(r, "QUESTION:")).toBe("");
-    expect(askedQuestion(r, "no question here")).toBeNull();
-    expect(askedQuestion(run({ cause: "check" }), "QUESTION: x")).toBeNull();
+    expect(askedQuestion({ ...r, question: "which clause wins?" })).toBe("which clause wins?");
+    expect(askedQuestion(r)).toBeNull();
+    expect(askedQuestion(run({ cause: "check", question: "x" }))).toBeNull();
     expect(questionOf("  QUESTION: a\nQUESTION: b ")).toBe("b");
     expect(questionOf("QUESTION: a\n**QUESTION: b**\nquestion: c")).toBe("b");
   });

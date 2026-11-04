@@ -23,7 +23,7 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 
    "Fix the bug" becomes "a test that fails on the bug, then passes". "Add validation" becomes "tests for the invalid inputs, then make them pass". "Refactor X" becomes "the same tests pass before and after". Done when every step has a `verify:` that a command can show; step 3 runs each one.
 
-2. **Settle each reading.** Where the goal reads two ways and the readings lead to different code, take the reading you would recommend and record it: in the `DEFAULT:` line when your brief defines one, else in your summary. Where a simpler approach than the one the goal names meets the goal, take it and say why. Done when each ambiguity you found has a recorded choice.
+2. **Settle each reading.** Where the goal reads two ways and the readings lead to different code, take the reading you would recommend and record it: in the `defaults` field when your brief defines one, else in your summary. Where a simpler approach than the one the goal names meets the goal, take it and say why. Done when each ambiguity you found has a recorded choice.
 
 3. **Make the change** under the rules below. Done when each `verify:` from step 1 shows its result in a run after your last edit.
 
@@ -42,7 +42,7 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 - Match the style of the file you edit, even where you would write it another way.
 - Leave adjacent code, comments and formatting as they are.
 - Remove the imports, variables and functions that your change made unused.
-- Record pre-existing dead code, a bug or a slow path that you find as a follow-up (`FOLLOWUP:` when your brief defines it), and leave that code as it is.
+- Record pre-existing dead code, a bug or a slow path that you find as a follow-up (in the `followups` field when your brief defines it), and leave that code as it is.
 
 ### Interfaces
 

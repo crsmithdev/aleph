@@ -3,8 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./unit.ts";
-import { heldRule, securityChange, testFindings, outcome, parseReview, replyOf, verdict } from "./gate.ts";
-import { tagged } from "./ledger.ts";
+import { heldRule, securityChange, testFindings, outcome, parseReview, parseWorker, replyOf, verdict } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -87,7 +86,6 @@ test("only a last line that is a result event with is_error false is a finished 
   expect(outcome('{"type":"result","is_error":true,"result":"API Error"}')).toMatchObject({ ok: false, line: "API Error" });
   expect(outcome('{"type":"result","result":"no flag"}').ok).toBe(false);
   expect(outcome("")).toMatchObject({ ok: false, line: "no output" });
-  expect(tagged("x\n DEFAULT: a? -> b\nDEFAULT:\nFOLLOWUP: c", "DEFAULT")).toEqual(["a? -> b"]);
 });
 
 test("replyOf reads the text and the cost of a result event; other stdout is the text", () => {
@@ -107,4 +105,14 @@ test("parseReview names the failed clauses as the reason and writes a review.md 
   expect(verdict((parseReview({ verdict: "pass", summary: "9 of 9 passed.", failures: [] }) as { text: string }).text)).toEqual({ pass: true });
   expect(parseReview(undefined)).toBe("no structured output");
   expect(parseReview({ verdict: "maybe" })).toBe('unknown verdict "maybe"');
+});
+
+test("parseWorker turns the worker's fields into the run's facts, and a reply with none into a reason", () => {
+  expect(parseWorker({
+    summary: "Done.", defaults: [{ choice: "which colour?", chose: "blue" }], followups: [{ title: "paint the fence" }],
+    flakes: [{ file: "a.test.ts", name: "slow one", what: "timed out" }], already_met: { evidence: "abc123 has it" }, question: "which clause wins?",
+  })).toEqual({ summary: "Done.", defaults: ["which colour? -> blue"], followups: ["paint the fence"], flakes: ["a.test.ts > slow one: timed out"], alreadyMet: "abc123 has it", question: "which clause wins?" });
+  expect(parseWorker({ summary: "x", defaults: [], followups: [], flakes: [], already_met: null, question: null })).toMatchObject({ alreadyMet: null, question: null });
+  expect(parseWorker(undefined)).toBe("no structured output");
+  expect(parseWorker({ defaults: [] })).toBe("no summary");
 });

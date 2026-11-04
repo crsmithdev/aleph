@@ -40,8 +40,10 @@ describe("a factory run", () => {
     expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ condition: "stuck", reason: expect.stringContaining('"type":"assistant"') });
     expect(state((await fjob("ftrail", "trailing")).json.run)).toMatchObject({ condition: "stuck", reason: "one more line" });
     expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
+    expect(state((await fjob("fnoout", "nostructured")).json.run)).toMatchObject({ condition: "stuck", reason: "worker: no structured output" });
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--json-schema");
     expect(told).toContain("fac/ferr stuck");
-    for (const n of ["ferr", "fnone", "ftrail", "fidle"]) await drop(n);
+    for (const n of ["ferr", "fnone", "ftrail", "fidle", "fnoout"]) await drop(n);
   });
 });
 

@@ -46,7 +46,7 @@ issue ──intake──▶ goal(s) ──dispatch──▶ worker run ──▶
 
 ### Intake
 
-Intake is the one agent run before work starts on an issue. An issue added with `aleph issue add`, a note on an issue that waits for you, and a worker's `FOLLOWUP:` line each start an intake at once, under the dispatch's gates. Each dispatch, and so each run's end, starts an intake for the open issues that are not sorted, oldest first, at most `ALEPH_INTAKE_CAP` (5), while live runs are under the live cap: an intake that the live cap held starts when a run ends. An intake run that gives no reply starts the next try at once. An issue is not sorted when it has no spec; in a repo with `"author": true` in the registry, an issue filed with a spec is not sorted either until intake takes it in. An issue with `plan` set (a run of it reached its time box, or you asked to plan the rest) goes to intake from the dispatch, to be split. An Ask that intake sets starts the director at once.
+Intake is the one agent run before work starts on an issue. An issue added with `aleph issue add`, a note on an issue that waits for you, and a worker's follow-up each start an intake at once, under the dispatch's gates. Each dispatch, and so each run's end, starts an intake for the open issues that are not sorted, oldest first, at most `ALEPH_INTAKE_CAP` (5), while live runs are under the live cap: an intake that the live cap held starts when a run ends. An intake run that gives no reply starts the next try at once. An issue is not sorted when it has no spec; in a repo with `"author": true` in the registry, an issue filed with a spec is not sorted either until intake takes it in. An issue with `plan` set (a run of it reached its time box, or you asked to plan the rest) goes to intake from the dispatch, to be split. An Ask that intake sets starts the director at once.
 
 Code decides first, with no run: an issue that a commit on main names in an `Issue:` trailer is done, and an issue of kind `flake` becomes a note on the flake tracker. Else intake is one read-only run (`claude-opus-5-5`, with Read, Grep and Glob, on a clone of `origin/main`) that returns a route as JSON:
 
@@ -67,13 +67,18 @@ The dispatch starts a build run for each ready goal, up to the live cap. Each st
 
 The worker is `claude -p` on the host, in the job's worktree `<repo>/.worktrees/job-<name>` on the branch `factory/<name>`. The first run of a job makes the worktree from `origin/main`; a fix round uses the same worktree. The worker's environment sends `git push` to github nowhere and gives `gh` no token. Only the branch's commits count: the checks and the reviewer read the branch, not the worktree. The ledger of runs is `~/.aleph/runs`.
 
-The worker ends its result with tagged lines:
+The worker ends with structured output (`--json-schema`, `WORKER_SCHEMA` in `jobs/lib/gate.ts`). Its fields:
 
-| Line | Becomes |
+| Field | Becomes |
 |---|---|
-| `FOLLOWUP: <title>` | An issue with `source: worker`, at the priority of the issue it came from |
-| `FLAKE: <test file> > <test name>: <what>` | A note on the repo's flake tracker |
-| `DEFAULT: <choice> -> <what it chose>` | A line in the report |
+| `summary` | The run's `result.md` |
+| `followups[].title` | An issue with `source: worker`, at the priority of the issue it came from |
+| `flakes[]`: `file`, `name`, `what` | A note on the repo's flake tracker |
+| `defaults[]`: `choice`, `chose` | A line in the report |
+| `already_met.evidence` | The claim that the goal already holds, which the repo's checks on `origin/main` decide |
+| `question` | A question on a clause of the Oracle it cannot meet; with no commit, the goal waits for a spec edit |
+
+A run whose final event has no structured output, such as one that hit its turn limit or was stopped, is stuck.
 
 ### Verify
 

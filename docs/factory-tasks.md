@@ -17,8 +17,8 @@ This table states what starts each factory task, what it does and what stops two
 
 | Source | Files | Stops the same ticket twice |
 |---|---|---|
-| Worker `FOLLOWUP:` line | An issue with source `worker` | `sameTopic` against open issues; a match is a note. Intake has its own duplicate check after that |
-| Worker `FLAKE:` line | A note on the flake tracker, no issue | One open tracker per repo |
+| Worker `followups` entry | An issue with source `worker` | `sameTopic` against open issues; a match is a note. Intake has its own duplicate check after that |
+| Worker `flakes` entry | A note on the flake tracker, no issue | One open tracker per repo |
 | Corrections | A proposal per lesson | Lesson state |
 
 ## Known gaps

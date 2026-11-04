@@ -19,9 +19,9 @@ afterEach(teardown);
 for (const red of [false, true]) {
   test(`a second claimed run after one rescued as claimed, main ${red ? "red: it asks Chris" : "green: the item is done"}`, async () => {
     const id = goal();
-    const first = mk(`fac-${id}`, "build", "dropped", { reason: "no commit" }, { "result.md": "Goal: Already met\n" });
+    const first = mk(`fac-${id}`, "build", "dropped", { reason: "no commit", alreadyMet: "main has it" });
     markRescued({ id: first.folder.split("/").at(-1)!, folder: first.folder, run: readRun(first.folder)! }, "claimed");
-    claimed(`fac-${id}`, "Goal: Already met\n");
+    claimed(`fac-${id}`, "main has it");
     const f = fakes();
     await withChecks(f, async () => (red ? { cause: "check" as const, checkName: "tests", reason: "tests failed" } : null));
     if (red) {

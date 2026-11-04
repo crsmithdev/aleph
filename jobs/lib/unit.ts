@@ -13,10 +13,10 @@ import { file as fileIssues, note, noteFlake, reader } from "../../todo/lib/stor
 import { OPUS_MODEL } from "./agent-call.ts";
 import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
-import { heldRule, parseReview, REVIEW_SCHEMA, securityChange, testFindings } from "./gate.ts";
+import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "./gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
 import { awaiting, workerVerdict, type NoVerdict, type Outcome, type VerdictPorts } from "./worker-verdict.ts";
-import { admit, tagged, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "./ledger.ts";
+import { admit, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "./ledger.ts";
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob, stepOf } from "./job.ts";
@@ -349,7 +349,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 
   const argv = [workerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-    ...(run.model ? ["--model", run.model] : [])];
+    ...(run.model ? ["--model", run.model] : []), ...(repo.sandbox ? schemaFlags(WORKER_SCHEMA) : [])];
   const text = brief(id, folder, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
@@ -391,19 +391,24 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 }
 
 /**
- * A factory worker's run after its worker: the tags of its final message, then the worker verdict on its branch.
- * Only the branch's commits count: what the worker left uncommitted is not checked.
+ * A factory worker's run after its worker: the fields of its structured output, then the worker verdict on its branch.
+ * A reply with no structured output is stuck. Only the branch's commits count: what the worker left uncommitted is not checked.
  */
 async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, w: Awaited<ReturnType<typeof agentCall>>, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const tip = `refs/heads/${run.branch!}`;
   const main = `refs/remotes/origin/${repo.main}`;
   const stuck = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, cause, reason, ...extra }, code: 1 });
   const o = w.outcome;
-  writeFileSync(runFile(folder, "result.md"), o.result);
-  const facts: Partial<Outcome> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
-  await fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
-  noteFlakes(repo, run, tagged(o.result, "FLAKE"));
+  const reply = parseWorker(structuredOf(readFileSync(runFile(folder, "output.log"), "utf8")));
+  writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? o.result : reply.summary);
+  const facts: Partial<Outcome> = o.cost !== undefined ? { cost: o.cost } : {};
+  if (typeof reply !== "string") {
+    Object.assign(facts, { defaults: reply.defaults, followups: reply.followups }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
+    await fileFollowups(repo, run, reply.followups);
+    noteFlakes(repo, run, reply.flakes);
+  }
   if (w.cause) return stuck(w.cause.kind, w.cause.reason, facts);
+  if (typeof reply === "string") return stuck("other", `worker: ${reply}`, facts);
   { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`, facts); }
   if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return stuck("no-commit", "no commit", facts);
   const base = git(repo.path, "merge-base", main, tip).out;
@@ -415,7 +420,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
   if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
   const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out };
-  return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, result: o.result, env }));
+  return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, result: reply.summary, env }));
 }
 
 /**
@@ -662,7 +667,7 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
 }
 
 /**
- * A worker's `FOLLOWUP:` lines each become a `task` with `source: worker`: the title writer's title, and the run and the whole line in its request,
+ * A worker's `followups` each become a `task` with `source: worker`: the title writer's title, and the run and the whole line in its request,
  * filed in one store commit. An empty line such as "none" files nothing, and a line on the topic of an open issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
  */
 export async function fileFollowups(repo: Repo, run: Run, lines: string[]): Promise<void> {
@@ -702,7 +707,7 @@ export function sameTopic(a: string, b: string): boolean {
   return [...short].filter((w) => long.has(w)).length / short.size >= (shared ? 0.5 : 0.7);
 }
 
-/** A worker's `FLAKE:` lines become notes on the repo's flake tracker; they file no issue and start no intake. */
+/** A worker's `flakes` become notes on the repo's flake tracker; they file no issue and start no intake. */
 function noteFlakes(repo: Repo, run: Run, lines: string[]): void {
   for (const line of lines) noteFlake(repo, `job ${run.name}: ${line}`);
 }

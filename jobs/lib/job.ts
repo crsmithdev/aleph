@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { needsOf } from "./ask.ts";
-import { tagged, allJobs, askOf, isBuild, isOpen, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
+import { allJobs, askOf, isOpen, onOf, reviewOf, type CheckResult, type Entry, type Run, type State } from "./ledger.ts";
 import { isLost } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { runFile, type RunFile } from "./run-files.ts";
@@ -135,7 +135,7 @@ export function view(j: Job): JobView {
   const v: JobView = {
     job: r.job, name: r.name, run: { id: last.id, kind: r.kind, started: r.started }, condition: r.condition, started: j[0].run.started,
     defaults: j.findLast((e) => e.run.defaults !== undefined)?.run.defaults ?? [],
-    followups: tagged(latestFile(j, "result.md", (e) => isBuild(e.run.kind))?.text ?? "", "FOLLOWUP"),
+    followups: j.findLast((e) => e.run.followups !== undefined)?.run.followups ?? [],
   };
   if (r.repo) v.repo = r.repo;
   for (const k of ["phase", "reason", "question", "say", "session", "ended"] as const) if (r[k]) (v as any)[k] = r[k];

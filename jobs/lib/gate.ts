@@ -3,7 +3,7 @@
  * needs Chris. See "Held paths" in docs/specs/2026-10-26-seed-factory.md.
  */
 import { git } from "./git.ts";
-import { tagged } from "./ledger.ts";
+import { lastTagged } from "./ledger.ts";
 import { NO_OUTPUT } from "./structured.ts";
 
 export interface Outcome { ok: boolean; line: string; result: string; cost?: number }
@@ -37,24 +37,64 @@ export function replyOf(stdout: string): { text: string; cost?: number } {
   return o.result || o.cost !== undefined ? { text: o.result, cost: o.cost } : { text: stdout };
 }
 
-/** The marker a worker's claim that the goal is already met starts with; the FACTORY prompt asks for it. */
-export const ALREADY_MET = "Goal: Already met";
+const text = { type: "string", minLength: 1 };
 
-/**
- * The worker's claim that the goal is already met, as its last `Goal: Already met`
- * line: the reason given after it, or "no reason given". Null when there is no claim.
- */
-export function alreadyMet(result: string): string | null {
-  const m = result.split("\n").map((l) => /^Goal:\s*already met\b[\s:.\-—]*(.*)$/i.exec(l.trim())).filter(Boolean).at(-1);
-  return m ? (m[1].trim() || "no reason given") : null;
+/** The JSON schema of the factory worker's reply. */
+export const WORKER_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["summary", "defaults", "followups", "flakes", "already_met", "question"],
+  properties: {
+    summary: { ...text, description: "What you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items." },
+    defaults: {
+      type: "array", description: "Each choice the Oracle does not settle, and the answer you took.",
+      items: { type: "object", additionalProperties: false, required: ["choice", "chose"], properties: { choice: text, chose: text } },
+    },
+    followups: {
+      type: "array", description: "Work you found but did not do. Not a flake, and nothing the Oracle names.",
+      items: { type: "object", additionalProperties: false, required: ["title"], properties: { title: { ...text, maxLength: 60 } } },
+    },
+    flakes: {
+      type: "array", description: "Tests that are not the goal's own, failed or timed out, and passed alone or on a rerun.",
+      items: { type: "object", additionalProperties: false, required: ["file", "name", "what"], properties: { file: text, name: text, what: { ...text, description: "What you saw." } } },
+    },
+    already_met: {
+      description: "Null, unless the goal already holds and you made no commit.",
+      anyOf: [
+        { type: "null" },
+        { type: "object", additionalProperties: false, required: ["evidence"], properties: { evidence: { ...text, description: "The files, lines and commit on main that show the goal holds." } } },
+      ],
+    },
+    question: {
+      description: "Null, unless you cannot meet a clause of the Oracle: then the question that names the clause.",
+      anyOf: [{ type: "null" }, text],
+    },
+  },
+};
+
+/** The factory worker's reply: result.md's text, the defaults as `<choice> -> <chose>`, follow-up titles, flake notes, the already-met evidence, and the question. */
+export interface WorkerReply { summary: string; defaults: string[]; followups: string[]; flakes: string[]; alreadyMet: string | null; question: string | null }
+
+/** The worker's structured output, or why it does not do. */
+export function parseWorker(raw: any): WorkerReply | string {
+  if (raw === undefined) return NO_OUTPUT;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "not an object";
+  if (typeof raw.summary !== "string") return "no summary";
+  const list = (v: unknown): any[] => (Array.isArray(v) ? v : []);
+  return {
+    summary: raw.summary,
+    defaults: list(raw.defaults).map((d) => `${line(d?.choice)} -> ${line(d?.chose)}`),
+    followups: list(raw.followups).map((f) => line(f?.title)).filter(Boolean),
+    flakes: list(raw.flakes).map((f) => `${line(f?.file)} > ${line(f?.name)}: ${line(f?.what)}`),
+    alreadyMet: raw.already_met ? line(raw.already_met.evidence) || "no reason given" : null,
+    question: line(raw.question) || null,
+  };
 }
 
 /**
- * The reviewer's verdict: its last `VERDICT:` line. `pass`, or `hold` with
+ * The reviewer's verdict: the last `VERDICT:` line of its review.md. `pass`, or `hold` with
  * a reason; null when there is no such line or it says neither.
  */
 export function verdict(result: string): { pass: true } | { pass: false; reason: string } | null {
-  const v = tagged(result, "VERDICT").at(-1);
+  const v = lastTagged(result, "VERDICT");
   if (v === undefined) return null;
   if (v === "pass") return { pass: true };
   if (v === "hold" || v.startsWith("hold ")) return { pass: false, reason: v.slice(4).trim() || "no reason given" };

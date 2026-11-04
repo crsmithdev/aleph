@@ -12,7 +12,7 @@ import { verdict as reviewVerdict } from "./gate.ts";
 import type { Run } from "./ledger.ts";
 
 /** The fields of the run that a verdict sets. */
-export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "stat" | "checkedBase" | "checkedTip">;
+export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
 export interface Verdict { outcome: Outcome; code: number }
 
 /** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict. */

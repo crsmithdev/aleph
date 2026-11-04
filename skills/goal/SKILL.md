@@ -85,4 +85,4 @@ commit, and intake takes it in before the first run. When it runs after another,
 `aleph issue edit <repo> <id> --spec -`.
 
 Then say the issue number (`<repo>-<n>`) and that intake takes it in and the dispatch starts the run. `aleph report` at the next session start shows the result,
-and the worker's `DEFAULT:` lines show the questions it answered itself.
+and the worker's defaults show the questions it answered itself.

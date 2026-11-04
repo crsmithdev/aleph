@@ -10,9 +10,9 @@ import { goal, mk, ask, fakes, setup, teardown } from "./factory.helpers.ts";
 beforeEach(setup);
 afterEach(teardown);
 
-test("a QUESTION run waits for a spec edit: the Ask says so, and an edit drops the run, clears the Ask and starts the goal", async () => {
+test("a run with a question waits for a spec edit: the Ask says so, and an edit drops the run, clears the Ask and starts the goal", async () => {
   const id = goal();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": "Stopped.\nQUESTION: which wins?" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
   const a = askOf(`fac-${id}`)!;
@@ -31,9 +31,9 @@ test("a QUESTION run waits for a spec edit: the Ask says so, and an edit drops t
   expect(f.specs.length).toBe(1);
 });
 
-test("a spec QUESTION run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {
+test("a spec question run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {
   const id = goal();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": "Stopped.\nQUESTION: which wins?" });
+  mk(`fac-${id}`, "build", "stuck", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
   // The real rescue path sets the plain question Ask and writes asked-spec.
   await dispatchIssues(f.start, undefined, f.rescue);
