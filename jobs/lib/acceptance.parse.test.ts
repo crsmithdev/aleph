@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { failedTests, oracleCommands, rerunOf, scenarioMarks } from "./acceptance.ts";
+import * as issues from "../../todo/lib/todo.ts";
+import { failedTests, oracleCommands, rerunOf, scenarioMarks, scenarioTexts, setAside } from "./acceptance.ts";
 
 // The pure parsers of acceptance.ts: no git repo, no store.
 const FAILED = "jobs/lib/acceptance.test.ts:\n(fail) outer (x) > one [1.00ms]\n\nb.test.ts:\n(fail) two\n 2 fail\n";
@@ -18,7 +19,22 @@ test("failedTests takes each failure with the file above it, and rerunOf names o
   expect(rerunOf("bun run test", [{ name: "no file" }])).toBe("bun run test");
 });
 
-test("scenarioMarks reads the capital CHECK lines, wrapped ones too; a fail wins over a pass", () => {
-  const marks = scenarioMarks("  CHECK: pass scenario 1: ok\ncheck: fail scenario 1: lowercase\n**CHECK: pass scenario 2: ok**\nCHECK: fail scenario 2: no\n");
-  expect([...marks]).toEqual([[1, "pass"], [2, "fail"]]);
+test("scenarioMarks reads the capital CHECK lines, wrapped ones too, with the observation; a fail wins over a pass", () => {
+  const marks = scenarioMarks("  CHECK: pass scenario 1: ok\ncheck: fail scenario 1: lowercase\n**CHECK: pass scenario 2: ok**\nCHECK: fail scenario 2: the panel shows 0.0%\n");
+  expect([...marks]).toEqual([[1, { mark: "pass", seen: "ok" }], [2, { mark: "fail", seen: "the panel shows 0.0%" }]]);
+});
+
+test("scenarioTexts keeps each scenario's lines up to the next number", () => {
+  expect([...scenarioTexts("Intro\n1. the widget\n   turns purple\n\n2) the gizmo hums\n")]).toEqual([[1, "1. the widget\nturns purple"], [2, "2) the gizmo hums"]]);
+});
+
+test("setAside reads the scenario numbers that a set-aside note opens with, and not a part of a scenario", () => {
+  const item = { notes: [
+    "- 2026-11-01 10:00: sealed checks: the reviewer set aside: scenario 2 – about the general CLI",
+    "- 2026-11-01 10:00: sealed checks: the reviewer set aside: scenarios 3, 4 and 6: same reason",
+    "- 2026-11-01 10:00: sealed checks: the reviewer set aside: scenario 7's \"another record\": outside the goal",
+    "- 2026-11-01 10:00: sealed checks: the reviewer set aside: the part of scenario 5 about other fields",
+    "- 2026-11-01 10:00: acceptance: fail at abc: scenario 9 failed",
+  ] } as unknown as issues.Issue;
+  expect([...setAside(item)].sort()).toEqual([2, 3, 4, 6, 7]);
 });

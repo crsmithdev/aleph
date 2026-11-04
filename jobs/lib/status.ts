@@ -26,8 +26,10 @@ export interface Accepted {
   sha?: string;
   /** The command that failed. */
   command?: string;
-  /** How many runs of the Oracle failed. */
+  /** How many runs of the Oracle failed. One is final. */
   fails: number;
+  /** After a final failure: the follow-up issue that acceptance filed, as `<repo>-<n>`. */
+  followup?: string;
   /** After a failure: the origin/<main> commit the reopened goal's earlier landings are at or before. */
   since?: string;
   /** The report has listed this result. */
@@ -59,7 +61,8 @@ export function resultLine(key: string, id: number | string): string | null {
   if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
   if (r.result === "skipped") return "acceptance: skipped, no runnable command: only the checks at the land covered it";
   if (r.retest) return `acceptance: fail, waits for a rerun: ${r.command}`;
-  return `acceptance: fail${r.fails >= 2 ? " twice" : ", rerun"}: ${r.command}`;
+  if (!r.fails) return `acceptance: fail, runs again at a later commit: ${r.command}`;
+  return `acceptance: fail: ${r.command}${r.followup ? `; follow-up ${r.followup}` : ""}`;
 }
 
 /** The commits of `hits` the goal's reopening has not already counted: those that are not at or before its `since`. */

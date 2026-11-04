@@ -1,7 +1,8 @@
-// Acceptance reruns a failed test: a pass on the rerun is a flake; a repeat in a test the goal touched reopens the goal.
+// Acceptance reruns a failed test: a pass on the rerun is a flake; a repeat in a test the goal touched files a follow-up.
 import { expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { rerunOf } from "./acceptance.ts";
 import { readRecord, resultLine } from "./status.ts";
@@ -52,13 +53,19 @@ test("on a busy machine the rerun waits, and then runs on the commit that failed
   expect(readRecord("fac", id)?.result).toBe("pass");
 });
 
-test("a repeat in a test the goal touched reopens; a repeat only in others goes to the flake list", async () => {
+test("a repeat in a test the goal touched files a follow-up with the command and its output; a repeat only in others goes to the flake list", async () => {
   const mine = doneGoal("`bun run test`");
   landFile(mine, "jobs/lib/acceptance.test.ts");
   await acceptanceStep(runner(1, FAILED));
-  expect(issues.status(item(mine))).toBe("open");
+  expect(issues.status(item(mine))).toBe("done");
   expect(notes(mine)).toContain("acceptance: fail at");
   expect(notes(mine)).toContain("(fail) jobs/lib/acceptance.test.ts > outer (x) > one");
+  const f = readList({ key: "fac" })!.items.find((i) => i.fm.kind === "acceptance")!;
+  expect(readRecord("fac", mine)?.followup).toBe(`fac-${f.id}`);
+  expect(f.request).toContain(`fac-${mine} (thing)`);
+  expect(f.request).toContain(sh(repoDir(), "git", "rev-parse", "origin/main"));
+  expect(f.request).toContain("### `bun run test`\n\nIt exited 1");
+  expect(f.request).toContain("(fail) outer (x) > one");
   // The other failure of that run did not touch this goal's files.
   expect(flakeNotes()).toContain("b.test.ts > two: failed twice");
   const other = doneGoal("`bun run test`");

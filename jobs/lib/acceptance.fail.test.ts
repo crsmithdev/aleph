@@ -1,4 +1,4 @@
-// Acceptance of a done goal that fails: the reopen, the Ask on a second fail, and an infra result.
+// Acceptance of a done goal that fails: an infra result, and a real failure that is final.
 import { expect, test } from "bun:test";
 import * as issues from "../../todo/lib/todo.ts";
 import { accept } from "./acceptance.ts";
@@ -21,15 +21,14 @@ test("an infra result leaves the issue done, writes no record and says acceptanc
   expect(readRecord("fac", id)).toBeNull();
 });
 
-test("an infra result after one real failure does not ask Chris or change the record", async () => {
+test("a real failure is final: a later step runs nothing, asks nothing and keeps the record", async () => {
   const id = doneGoal("`bun run ok`");
   await acceptanceStep(runner(1, "boom"));
   const before = readRecord("fac", id);
   expect(before?.fails).toBe(1);
   land(id);
   closeAgain(id);
-  const lines = await acceptanceStep(infra("bundle failed: x"));
-  expect(lines[0]).toContain("acceptance not run");
+  expect(await acceptanceStep(infra("bundle failed: x"))).toEqual([]);
   expect(askOf(item(id))).toBeNull();
   expect(issues.status(item(id))).toBe("done");
   expect(readRecord("fac", id)).toEqual(before);

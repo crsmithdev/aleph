@@ -5,7 +5,9 @@
  * The result of each goal is kept in <factory>/acceptance/<repo>-<n>.json. A failure is not yet a
  * result: only the failed tests run again, on the same commit, when the machine is quiet. Tests that
  * pass then, and tests the goal did not touch, go to the flake list. A repeat in a test the goal
- * touched reopens the goal for one more worker run; a second sets an Ask (input, acceptance-failed).
+ * touched, or a failed sealed scenario, is final: the goal stays done, and one follow-up issue
+ * (kind `acceptance`) gets the failures. A failure of a follow-up files nothing: it sets an Ask
+ * (input, acceptance-failed) on the follow-up. A scenario the build reviewer set aside does not fail.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
@@ -14,6 +16,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { plainAsk, setAsk, type Ask } from "./ask.ts";
 import { note, noteFlake, readHidden, reopen as storeReopen, writeList } from "../../todo/lib/store.ts";
+import { cutTitle } from "./title.ts";
 import { lastLines, runOnCommit, type Ran, type Runner } from "./checks.ts";
 import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
 import { SCENARIOS } from "./author.ts";
@@ -30,8 +33,11 @@ export const MAX_WAIT_MS = 24 * 3_600_000;
 const EXTRA_RERUNS = 2;
 
 
-/** A record that ends the goal's acceptance: nothing runs again for it. */
-export const final = (r: Accepted | null): boolean => !!r && (r.result !== "fail" || r.fails >= 2);
+/** A record that ends the goal's acceptance: nothing runs again for it. The first real failure is final. */
+export const final = (r: Accepted | null): boolean => !!r && (r.result !== "fail" || r.fails >= 1);
+
+/** The kind of the issue that acceptance files after a goal fails. */
+export const FOLLOWUP_KIND = "acceptance";
 
 const CHECK = "(?:bun test|bun run|bunx tsc)";
 /** A plain check command, or a shell `for` loop whose body runs one. */
@@ -128,16 +134,47 @@ let calls = 0;
 /** The numbers of the scenarios in a `scenarios.md` text, in order (`1.` or `1)` at a line start). */
 export const scenarioNumbers = (text: string): number[] => [...text.matchAll(/^\s*(\d+)[.)]\s+\S/gm)].map((m) => Number(m[1]));
 
-/** `pass` or `fail` by scenario number, from the `CHECK: pass|fail scenario <n>: ...` lines of an agent's reply. A fail wins over a pass for one number. */
-export function scenarioMarks(output: string): Map<number, "pass" | "fail"> {
-  const marks = new Map<number, "pass" | "fail">();
+/** The text of each scenario in a `scenarios.md` text, by number: its numbered line and the lines up to the next one. */
+export function scenarioTexts(text: string): Map<number, string> {
+  const texts = new Map<number, string>();
+  let at: number | undefined;
+  for (const line of text.split("\n")) {
+    const m = /^\s*(\d+)[.)]\s+\S/.exec(line);
+    if (m) { at = Number(m[1]); texts.set(at, line.trim()); continue; }
+    if (at !== undefined && line.trim()) texts.set(at, `${texts.get(at)}\n${line.trim()}`);
+  }
+  return texts;
+}
+
+/** A scenario's mark and what the agent observed. */
+export interface Mark { mark: "pass" | "fail"; seen: string }
+
+/** The mark by scenario number, from the `CHECK: pass|fail scenario <n>: <what was observed>` lines of an agent's reply. A fail wins over a pass for one number. */
+export function scenarioMarks(output: string): Map<number, Mark> {
+  const marks = new Map<number, Mark>();
   for (const line of tagged(output, "CHECK")) {
-    const m = line.match(/^(pass|fail)\s+scenario\s+(\d+)\b/i);
+    const m = line.match(/^(pass|fail)\s+scenario\s+(\d+)\b\s*:?\s*(.*)$/i);
     if (!m) continue;
-    const n = Number(m[2]), v = m[1].toLowerCase() as "pass" | "fail";
-    if (v === "fail" || !marks.has(n)) marks.set(n, v);
+    const n = Number(m[2]), mark = m[1].toLowerCase() as "pass" | "fail";
+    if (mark === "fail" || !marks.has(n)) marks.set(n, { mark, seen: m[3].trim() });
   }
   return marks;
+}
+
+const SET_ASIDE = "sealed checks: the reviewer set aside: ";
+/**
+ * The scenario numbers the build reviewer set aside, from the item's notes (`unit.ts` writes them). A note counts
+ * only when it opens with `scenario <n>` or `scenarios <n>, <m> and <k>`; a note on part of a scenario does not.
+ */
+export function setAside(item: issues.Issue): Set<number> {
+  const out = new Set<number>();
+  for (const line of item.notes) {
+    const at = line.indexOf(SET_ASIDE);
+    if (at < 0) continue;
+    const m = /^scenarios?\s+(\d+(?:\s*(?:,|&|and|,\s*and)\s*\d+)*)/i.exec(line.slice(at + SET_ASIDE.length));
+    for (const n of m?.[1].match(/\d+/g) ?? []) out.add(Number(n));
+  }
+  return out;
 }
 
 /** What the scenario agent said; `infra` marks a fault of the sandbox or the agent call, not a result. */
@@ -207,6 +244,30 @@ function reopen(repo: Repo, id: number | string, text: string, ask?: Ask): strin
   }
 }
 
+/**
+ * File the follow-up of the goal `item` that failed at the commit `full`: one issue of kind `acceptance` that names
+ * the goal, the commit and each failure, with no spec, so triage writes it. The goal gets the note `text` in the same write.
+ * Returns the new issue's number, or why there is none.
+ */
+function fileFollowup(repo: Repo, item: issues.Issue, full: string, text: string, found: string[]): number | { error: string } {
+  const ref = issues.refOf(item);
+  const name = `${repo.key}-${ref}`;
+  const title = cutTitle(`Fix the acceptance failure of ${name}`);
+  const request = `Acceptance of ${name} (${item.title}) failed on origin/${repo.main} at ${full}. The goal stays done. This issue is the follow-up: each failure below is from the acceptance run.\n\n## Failures\n\n${found.join("\n\n")}\n`;
+  try {
+    const w = writeList(repo, `todo: a follow-up of ${name}: acceptance failed`, (doc) => {
+      const goal = issues.find(doc, ref);
+      if (!goal) return null;
+      const f = issues.add(doc, title, { kind: FOLLOWUP_KIND, request, source: "agent" });
+      issues.note(goal, `${text}; follow-up ${repo.key}-${f.id}`);
+      return f.id;
+    }, true);
+    return w ? w.value : { error: `no issue ${ref}` };
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  }
+}
+
 /** The commands that passed on each repo's latest accepted commit. The file has no `.json` name, so `unshown` does not read it as a result. */
 const passesFile = () => join(acceptanceDir(), "passes");
 function readPasses(): Record<string, { commit: string; commands: string[] }> {
@@ -252,7 +313,7 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOn
   const prev = readRecord(repo.key, ref);
   const waiting = prev?.retest;
   // Held by the cap at this commit: it runs again at a later one.
-  if (prev?.result === "fail" && !waiting && prev.fails < 2 && cappedAt() === git(repo.path, "rev-parse", `origin/${repo.main}`).out && prev.sha === git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out) {
+  if (prev?.result === "fail" && !waiting && !prev.fails && cappedAt() === git(repo.path, "rev-parse", `origin/${repo.main}`).out && prev.sha === git(repo.path, "rev-parse", "--short=7", `origin/${repo.main}`).out) {
     return `${name}: acceptance held at ${prev.sha}: the fail cap was reached at this commit`;
   }
   const began = Date.parse(waiting?.since ?? "");
@@ -277,9 +338,12 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOn
     const bad = noteFlake(repo, `acceptance ${name}: ${label}: ${how} at ${sha}`);
     if (typeof bad === "string") flaked.push(`(no flake note: ${bad})`);
   };
-  /** The goal failed: past the cap nothing reopens; else the first fail reopens it, the second asks Chris. `out` goes in the note. */
-  const failed_ = async (command: string, out: string, why: string): Promise<string> => {
-    // Many goals failing at one commit point to a shared fault, not to the goals: none reopens, and each keeps its fail record.
+  /**
+   * The goal failed: past the cap nothing acts. Else the record is final and the goal stays done. A goal files one
+   * follow-up issue with the failures `found`; a follow-up files nothing, and opens again with an Ask. `out` goes in the note.
+   */
+  const failed_ = async (command: string, out: string, why: string, found: string[]): Promise<string> => {
+    // Many goals failing at one commit point to a shared fault, not to the goals: none acts, and each keeps its fail record.
     const cap = acceptanceFailCap();
     const count = failsAt(repo, sha, name);
     if (count >= cap) {
@@ -287,20 +351,25 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOn
       if (cappedAt() === full) return `${name}: acceptance held at ${sha}: the fail cap was reached at this commit`;
       mkdirSync(acceptanceDir(), { recursive: true });
       writeFileSync(cappedFile(), JSON.stringify({ commit: full }));
-      const line = `acceptance: ${count} goals failed at ${sha} (limit ${cap}); none reopens, they run again at a later commit`;
+      const line = `acceptance: ${count} goals failed at ${sha} (limit ${cap}); none acts, they run again at a later commit`;
       await tell(line);
       return line;
     }
     const fails = (prev?.fails ?? 0) + 1;
-    if (fails < 2) {
-      const bad = reopen(repo, ref, `acceptance: fail at ${sha}: ${out}`);
-      if (bad) return `${name}: acceptance failed but the issue was not reopened: ${bad}`;
-      writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
-      return `${name}: acceptance failed at ${sha} (${command}); reopened for one more run`;
+    if (item.fm.kind === FOLLOWUP_KIND) {
+      // The front matter keeps a fact on one line, with no quotes or backslashes.
+      const fact = (t: string) => t.replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").slice(0, 500);
+      const facts = [fact(`${name} at ${sha}: ${out}`), fact(`the goal it follows: ${section(item.request, "Failures")}`)];
+      const bad = reopen(repo, ref, `acceptance: fail again at ${sha}: ${out}`, plainAsk("acceptance-failed", why, facts));
+      if (bad) return `${name}: acceptance failed at ${sha} (${command}) but the follow-up was not reopened: ${bad}`;
+      writeRecord(repo.key, ref, { result: "fail", sha, command, fails });
+      return `${name}: acceptance failed at ${sha} (${command}) on a follow-up; asks Chris`;
     }
-    const bad = reopen(repo, ref, `acceptance: fail again at ${sha}: ${out} | ${why.charAt(0).toLowerCase()}${why.slice(1)}`, plainAsk("acceptance-failed", why, [out]));
-    writeRecord(repo.key, ref, { result: "fail", sha, command, fails, since: full });
-    return `${name}: acceptance failed again at ${sha} (${command}); asks Chris${bad ? ` (no issue note: ${bad})` : ""}`;
+    const filed = fileFollowup(repo, item, full, `acceptance: fail at ${sha}: ${out}`, found);
+    if (typeof filed !== "number") return `${name}: acceptance failed but no follow-up was filed: ${filed.error}`;
+    const followup = `${repo.key}-${filed}`;
+    writeRecord(repo.key, ref, { result: "fail", sha, command, fails, followup });
+    return `${name}: acceptance failed at ${sha} (${command}); filed the follow-up ${followup}`;
   };
   // A waiting rerun takes up at its command: the commands before it passed.
   for (const command of waiting ? commands.slice(Math.max(0, commands.indexOf(waiting.command))) : commands) {
@@ -361,8 +430,11 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOn
       if (why) { for (const t of others) flake(t, why); continue; }
     } else for (const t of others) flake(t, "failed twice, in a test the goal did not touch,");
     const out = `\`${command}\` exited ${r.code}${r.code === 0 ? " with failing tests" : ""}, and the quiet rerun failed too: ${tests.length ? `${tests.slice(0, 40).map((t) => `(fail) ${testLabel(t).slice(0, 200)}`).join(" ⏎ ")} ⏎ ` : ""}${lastLines(r.output)}`;
-    return failed_(command, out, `The Oracle command \`${command}\` still fails after the rerun, so the factory stopped; fix it or the goal.`);
+    const tail = r.output.replace(/\s+$/, "").split("\n").slice(-40).map((l) => l.slice(0, 200)).join("\n");
+    const found = [`### \`${command}\`\n\nIt exited ${r.code}${r.code === 0 ? " with failing tests" : ""}, and the quiet rerun failed too. The output tail:\n\n\`\`\`\n${tail}\n\`\`\``];
+    return failed_(command, out, `The Oracle command \`${command}\` of ${name} still fails after the rerun; fix it or close it.`, found);
   }
+  let asides = "";
   if (scenarios) {
     let got: Awaited<ReturnType<ScenarioCheck>>;
     try { got = await check(repo, full, scenarios); } catch (e: any) { got = { output: String(e?.message ?? e), infra: true }; }
@@ -370,13 +442,20 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOn
     const marks = scenarioMarks(got.output);
     const missing = numbers.filter((n) => !marks.has(n));
     if (missing.length) return `${name}: acceptance not run: the scenario check gave no CHECK line for scenario ${missing.join(", ")}`;
-    const bad = numbers.filter((n) => marks.get(n) === "fail");
+    const aside = setAside(item);
+    const failedNs = numbers.filter((n) => marks.get(n)!.mark === "fail");
+    const bad = failedNs.filter((n) => !aside.has(n));
+    const kept = failedNs.filter((n) => aside.has(n));
+    if (kept.length) asides = `; scenario${kept.length > 1 ? "s" : ""} ${kept.join(", ")} set aside by the reviewer`;
     if (bad.length) {
       const which = `scenario${bad.length > 1 ? "s" : ""} ${bad.join(", ")}`;
-      return failed_(which, `${which} failed`, `Sealed ${which} still fail${bad.length > 1 ? "" : "s"} after the rerun, so the factory stopped; fix it or the goal.`);
+      const texts = scenarioTexts(scenarios);
+      const found = bad.map((n) => `### Scenario ${n}\n\n${texts.get(n)}\n\nObserved: ${marks.get(n)!.seen || "(the agent said nothing)"}`);
+      const seen = bad.map((n) => `${n}: ${marks.get(n)!.seen}`).join("; ");
+      return failed_(which, `${which} failed: ${seen}`, `Sealed ${which} of ${name} fail${bad.length > 1 ? "" : "s"} on main; fix it or close it.`, found);
     }
   }
-  const seen = flaked.length ? `; on the flake list: ${flaked.join(", ")}` : "";
+  const seen = `${flaked.length ? `; on the flake list: ${flaked.join(", ")}` : ""}${asides}`;
   const bad = note(repo, ref, `acceptance: pass at ${sha}${seen}`);
   writeRecord(repo.key, ref, { result: "pass", sha, fails: prev?.fails ?? 0 });
   return `${name}: acceptance passed at ${sha}${seen}${archived(repo, name)}${bad ? ` (no issue note: ${bad})` : ""}`;
@@ -399,7 +478,7 @@ export async function sealedVerdict(repo: Repo, name: string, check: ScenarioChe
   const marks = scenarioMarks(got.output);
   const missing = numbers.filter((n) => !marks.has(n));
   if (missing.length) return { state: "infra", fault: `the scenario check gave no CHECK line for scenario ${missing.join(", ")}` };
-  const failed = numbers.filter((n) => marks.get(n) === "fail");
+  const failed = numbers.filter((n) => marks.get(n)!.mark === "fail");
   return failed.length ? { state: "fail", failed } : { state: "pass" };
 }
 

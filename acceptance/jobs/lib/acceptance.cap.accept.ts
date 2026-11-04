@@ -3,6 +3,7 @@
 import { expect, test } from "bun:test";
 import { writeList } from "../../../todo/lib/store.ts";
 import * as issues from "../../../todo/lib/todo.ts";
+import { readRecord } from "../../../jobs/lib/status.ts";
 import { acceptanceStep } from "../../../jobs/lib/factory.ts";
 import { closeAgain, item, land, runner, useAcceptanceFixture } from "../../../jobs/lib/acceptance.fixture.ts";
 
@@ -15,7 +16,8 @@ test("ALEPH_ACCEPTANCE_FAIL_CAP changes the limit", async () => {
     for (const id of ids) land(id);
     for (const id of ids) closeAgain(id);
     await acceptanceStep(runner(1, "boom"));
-    expect(issues.status(item(ids[0]))).toBe("open");
+    expect(readRecord("fac", ids[0])?.followup).toMatch(/^fac-\d+$/);
+    expect(readRecord("fac", ids[1])?.followup).toBeUndefined();
     expect(issues.status(item(ids[1]))).toBe("done");
   } finally { delete process.env.ALEPH_ACCEPTANCE_FAIL_CAP; }
 });

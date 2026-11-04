@@ -152,7 +152,7 @@ const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged
 /** The four priorities, in rank order. */
 export const PRIORITIES = ["low", "medium", "high", "critical"] as const;
 
-export const KINDS = ["task", "bug", "check", "flake", "proposal"] as const;
+export const KINDS = ["task", "bug", "check", "flake", "proposal", "acceptance"] as const;
 export type Kind = (typeof KINDS)[number];
 
 /** Matches `: ` anywhere in a title. */
@@ -168,7 +168,7 @@ export function titleProblem(title: string, o: { part?: boolean } = {}): string 
   return null;
 }
 
-/** Null for a kind the store knows, else the message that names the five. */
+/** Null for a kind the store knows, else the message that names them. */
 export const kindProblem = (kind: string): string | null => ((KINDS as readonly string[]).includes(kind) ? null : `unknown kind "${kind}": use ${KINDS.join(", ")}`);
 
 export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; now?: Date } = {}): Issue {

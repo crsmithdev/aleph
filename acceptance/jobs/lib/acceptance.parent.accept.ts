@@ -8,7 +8,7 @@ import { doneGoal, flakeNotes, item, landFile, notes, parentOf, ran, repoDir, RE
 
 useAcceptanceFixture();
 
-test("a repeat in an untouched file that passes at the goal's parent and fails at its newest commit reopens the goal", async () => {
+test("a repeat in an untouched file that passes at the goal's parent and fails at its newest commit is a failure of the goal", async () => {
   const id = doneGoal("`bun run test`");
   landFile(id, "c.ts");
   const parent = parentOf(id);
@@ -16,7 +16,7 @@ test("a repeat in an untouched file that passes at the goal's parent and fails a
   const r: Runner = async (_repo, sha, command) => { ran.push(command); at.push(sha); return command === "bun run test" || sha !== parent ? RERUN_FAIL : { code: 0, output: "" }; };
   await acceptanceStep(r);
   expect(at).toContain(parent);
-  expect(issues.status(item(id))).toBe("open");
+  expect(issues.status(item(id))).toBe("done");
   expect(notes(id)).toContain("acceptance: fail at");
 });
 

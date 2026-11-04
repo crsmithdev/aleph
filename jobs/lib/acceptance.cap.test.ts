@@ -8,19 +8,20 @@ import { closeAgain, item, land, repoDir, runner, sh, useAcceptanceFixture } fro
 
 useAcceptanceFixture();
 
-test("the fifth goal failing at one commit does not reopen, the fourth does, and a later commit reopens as usual", async () => {
+test("the fifth goal failing at one commit files no follow-up, the fourth does, and a later commit files one as usual", async () => {
   delete process.env.ALEPH_ACCEPTANCE_FAIL_CAP;
   const ids = [1, 2, 3, 4, 5].map(() => writeList({ key: "fac" }, "add", (doc) => issues.add(doc, "thing", { spec: "## Goal\nx\n## Edit surface\na.ts\n## Oracle\n`bun run ok`\n## Time box\n40 minutes" }).id, true)!.value);
   for (const id of ids) land(id);
   for (const id of ids) closeAgain(id);
   const lines = await acceptanceStep(runner(1, "boom"));
-  for (const id of ids.slice(0, 4)) expect(issues.status(item(id))).toBe("open");
+  for (const id of ids.slice(0, 4)) expect(readRecord("fac", id)?.followup).toMatch(/^fac-\d+$/);
   expect(readRecord("fac", ids[3])?.fails).toBe(1);
   const fifth = ids[4];
   expect(issues.status(item(fifth))).toBe("done");
   expect(readRecord("fac", fifth)?.result).toBe("fail");
   expect(readRecord("fac", fifth)?.fails).toBe(0);
   expect(readRecord("fac", fifth)?.retest).toBeUndefined();
+  expect(readRecord("fac", fifth)?.followup).toBeUndefined();
   const cap = lines.filter((l) => l.includes("5 goals failed at"));
   expect(cap).toHaveLength(1);
   expect(cap[0]).toContain(sh(repoDir(), "git", "rev-parse", "--short=7", "origin/main"));
@@ -31,10 +32,11 @@ test("the fifth goal failing at one commit does not reopen, the fourth does, and
   expect(again.join("\n")).toContain("held at");
   expect(issues.status(item(fifth))).toBe("done");
   expect(readRecord("fac", fifth)?.fails).toBe(0);
-  // A later commit: the goal runs again and reopens as usual.
+  // A later commit: the goal runs again and files a follow-up as usual.
   land(fifth);
   const later = await acceptanceStep(runner(1, "boom"));
-  expect(later.join("\n")).toContain("reopened for one more run");
-  expect(issues.status(item(fifth))).toBe("open");
+  expect(later.join("\n")).toContain(`fac-${fifth}: acceptance failed at`);
+  expect(later.join("\n")).toContain("filed the follow-up");
+  expect(issues.status(item(fifth))).toBe("done");
   expect(readRecord("fac", fifth)?.fails).toBe(1);
 });

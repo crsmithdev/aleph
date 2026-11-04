@@ -10,7 +10,7 @@ This table states what starts each factory task, what it does and what stops two
 | Review | Inside a build, after the checks | Reviewer reads the diff cold | Pass, or a send-back | Ask on a second no verdict | One per build, in the unit |
 | Land | A build passes, or `aleph land` | Merges main, checks, pushes | Facts, acceptance | Conflict that a rework cannot clear | Lock `land-start-<repo>-<name>` |
 | Facts | Dispatch; a landed job with no facts marker | Keeps checked notes in the vault | Nothing | None | Lock `facts-<name>`; the marker is read again under it |
-| Acceptance | Dispatch; a done goal with no final result | Reruns the Oracle on main | Flake note, reopen or Ask | Ask on a second real failure | Lock per goal; a pass is reused per commit and command |
+| Acceptance | Dispatch; a done goal with no final result | Reruns the Oracle on main | Flake note, follow-up issue or Ask | Ask when a follow-up fails acceptance | Lock per goal; a pass is reused per commit and command |
 | Director | Tick; an Ask with no case text | Read-only run per Ask; code checks and applies its actions, or writes its case text | The action taken, or the Ask to Chris | The escalation list, or an Ask it did not decide | Lock `director-<on>`; an Ask with case text is not taken again |
 | Firefighter | Tick; a new event in the snapshot (stuck, failed, lost, looping runs, red main) | Read-only run; code checks and applies its actions | The action taken | Its `tell` lines | `firefighter.json` keeps the event keys it saw |
 | Corrections | Tick; once a day from 03:00 local | Groups signals into lessons and proposes a check, a rule or a skill | A proposal | Approve or decline | Signal ids already in a lesson are skipped |

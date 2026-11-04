@@ -186,7 +186,7 @@ async function todoCmd(): Promise<void> {
     status: stat,
     ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal]");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   const registry = loadRegistry();
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label, kind: flag("kind") }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
@@ -284,7 +284,7 @@ async function todoCmd(): Promise<void> {
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal]");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   }
 }
 

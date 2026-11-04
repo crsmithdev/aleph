@@ -291,8 +291,9 @@ const ACCEPTANCE_DAYS = 2;
  * The acceptance run: every done goal (one whose land is on origin/<main>, or a `planned` parent
  * closed as done) whose Oracle has not been run since it was done gets it run on origin/<main>,
  * under srt. Pass: a note. A failure reruns the failed tests on that commit once the machine is
- * quiet, and only a repeat in a test the goal touched counts. First repeat: the goal reopens with the
- * output as a note and the dispatch starts it again; second: an Ask (input, acceptance-failed). See acceptance.ts.
+ * quiet, and only a repeat in a test the goal touched counts. A repeat, or a failed sealed scenario, is final:
+ * the goal stays done and one follow-up issue gets the failures. A follow-up that fails gets an Ask
+ * (input, acceptance-failed) and files nothing. See acceptance.ts.
  */
 export async function acceptanceStep(run: Runner = runOnCommit, now = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string[]> {
   const lines: string[] = [];

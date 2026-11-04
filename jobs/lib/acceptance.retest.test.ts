@@ -7,7 +7,7 @@ import { answers, doneGoal, FAILED, flakeNotes, item, landFile, notes, ran, RERU
 
 useAcceptanceFixture();
 
-test("a failure pinned to the wrong file does not reopen the goal when the original command passes", async () => {
+test("a failure pinned to the wrong file files no follow-up when the original command passes", async () => {
   const id = doneGoal("`bun run test`");
   landFile(id, "jobs/lib/acceptance.test.ts");
   const none = { code: 1, output: 'bun test\nerror: regex "^one$" matched 0 tests. Searched 1 file\n' };
@@ -19,7 +19,7 @@ test("a failure pinned to the wrong file does not reopen the goal when the origi
   expect(notes(id)).not.toContain("acceptance: fail");
 });
 
-test("a failure that names no test reopens only if the command fails again", async () => {
+test("a failure that names no test files a follow-up only if the command fails again", async () => {
   const id = doneGoal("`bunx tsc`");
   await acceptanceStep(answers({ code: 2, output: "a.ts(1,1): error" }, { code: 0, output: "" }));
   expect(ran).toEqual(["bunx tsc", "bunx tsc"]);
@@ -27,10 +27,11 @@ test("a failure that names no test reopens only if the command fails again", asy
   expect(flakeNotes()).toContain("`bunx tsc`: failed under load");
   const id2 = doneGoal("`bunx tsc`");
   await acceptanceStep(runner(2, "a.ts(1,1): error"));
-  expect(issues.status(item(id2))).toBe("open");
+  expect(issues.status(item(id2))).toBe("done");
+  expect(readRecord("fac", id2)?.followup).toMatch(/^fac-\d+$/);
 });
 
-test("an infra error on the rerun keeps the failure waiting and reopens nothing", async () => {
+test("an infra error on the rerun keeps the failure waiting and files nothing", async () => {
   const id = doneGoal("`bun run test`");
   const lines = await acceptanceStep(answers({ code: 1, output: FAILED }, { code: 1, output: "bun install: ConnectionRefused", infra: true }));
   expect(lines[0]).toContain("acceptance not run");

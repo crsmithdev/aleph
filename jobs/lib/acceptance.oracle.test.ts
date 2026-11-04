@@ -14,7 +14,7 @@ test("a run with exit 0 whose bun test summary reports failures fails; with 0 fa
   const id = doneGoal("`for i in 1 2; do bun test x & done; wait`");
   await acceptanceStep(runner(0, "bun test\n 3 pass\n 1 fail\nRan 4 tests"));
   expect(notes(id)).toContain("acceptance: fail at");
-  expect(issues.status(item(id))).toBe("open");
+  expect(issues.status(item(id))).toBe("done");
   expect(resultLine("fac", id)).toContain("fail");
   const id2 = doneGoal("`bun test x`");
   await acceptanceStep(runner(0, "bun test\n 4 pass\n 0 fail\nRan 4 tests"));
