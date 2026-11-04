@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, tag, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
+import { blockersHtml, bytes, chip, tag, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -231,7 +231,7 @@ export function renderJob(j) {
   const id = localId(j.name, j.repo), p = j.parent;
   const back = p ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(p.id, j.repo)}`, p.href], [`job ${id}`]] : [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [id]];
   const nav = [p ? `<a class="act" href="${esc(p.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next part: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
-  const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? `<span class="chip">part ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}</span>` : ""}<span class="idp">${esc(j.name)}</span></div>`;
+  const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `part ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}` }) : ""}<span class="idp">${esc(j.name)}</span></div>`;
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
   const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(j.name)}" data-file="checks.log">checks.log</button>` : "";

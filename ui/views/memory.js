@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -92,7 +92,7 @@ function renderEpisodic(e) {
 }
 
 function renderProcedural(p) {
-  const skills = p.skills.length ? `<p class="chips">${p.skills.map((n) => `<a class="chip" href="#/skills/${encodeURIComponent(n)}">${esc(n)}</a>`).join("")}</p>` : none("No skills.", "Folders under <code>skills/</code> fill this.");
+  const skills = p.skills.length ? chipRow(p.skills.map((n) => chip(n, { el: "a", attrs: ` href="#/skills/${encodeURIComponent(n)}"` })).join(""), "p") : none("No skills.", "Folders under <code>skills/</code> fill this.");
   const claude = p.claudeMd ? `<p><code>${esc(p.claudeMd.path)}</code> ${q(`${p.claudeMd.lines} lines, written ${ago(p.claudeMd.at)}`)}</p>` : none("No identity/CLAUDE.md.");
   const hooks = p.hooks.length
     ? dataTable("", p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide" title="${esc(h.command)}"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`).join(""))

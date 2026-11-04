@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { chips, costHtml, crumb, durMs as dur, error, esc, filterBar, idLink, md, pageHead, shortModel, tag, when } from "../lib.js";
+import { chip, chips, costHtml, crumb, durMs as dur, error, esc, filterBar, idLink, md, pageHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -35,7 +35,7 @@ const clip = (text, html) => {
 /** A system part as a one-line chip: the tag, and its summary or first line; it opens to the whole text. */
 function sysChip({ tag, body }) {
   const peek = (body.match(/<summary>([\s\S]*?)<\/summary>/)?.[1] ?? body.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim().slice(0, 100);
-  return `<details class="sysc"><summary><span class="chip">${esc(tag)}</span><span class="peek">${esc(peek)}</span></summary><pre>${esc(body)}</pre></details>`;
+  return `<details class="sysc"><summary>${chip(tag)}<span class="peek">${esc(peek)}</span></summary><pre>${esc(body)}</pre></details>`;
 }
 
 /** A tool call on one line: name, key argument, error mark, duration; it opens to input and output. */

@@ -1,7 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { barList, barRow, blockersHtml, barsOption, badge, tag, priorityBadge, card, sectionHead, chart, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, blockersHtml, barsOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -227,7 +227,7 @@ export function renderRow(r) {
     ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
   return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
-    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td><span class="chip kind">${esc(r.kind ?? "task")}</span>${chips(r.labels)}</td>` +
+    `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
     `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td>` +
     `<td class="time">${esc(dateText(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
 }
@@ -595,8 +595,8 @@ export function renderIssue(d) {
   const ref = String(d.ref ?? d.id), inventory = "#/issues", project = [d.repo, `#/issues?project=${encodeURIComponent(d.repo)}`];
   const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   // Front matter the page shows nowhere else: a chip each.
-  const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => `<span class="chip">${esc(`${k}: ${Array.isArray(v) ? v.map(labelName).join(", ") : v}`)}</span>`).join("");
-  const pills = `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}<span class="chip kind">kind: ${esc(d.kind ?? "task")}</span><span class="chip">source: ${esc(source)}</span>${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(`${d.repo}-${ref}`)}</span></div>`;
+  const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.map(labelName).join(", ") : v}`)).join("");
+  const pills = `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(`${d.repo}-${ref}`)}</span></div>`;
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
     `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;

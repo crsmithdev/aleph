@@ -1,7 +1,7 @@
 // The Gates view: what can stop, hold or ask. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Pause, Resume and "Mark it checked"
 // buttons and the Waiting-for-you buttons; `mount` runs the rule switches and "Mark all done".
-import { badge, tag, dataTable, empty, esc, hashQuery, heads, idLink, pageHead, repoIdLink, sectionHead, when } from "../lib.js";
+import { badge, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, repoIdLink, sectionHead, when } from "../lib.js";
 import { askRow } from "./now.js";
 
 export const view = {
@@ -128,13 +128,12 @@ export function renderRules(d) {
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
 export function renderHeld(d) {
-  const chips = (l) => l.map((p) => `<code class="chip">${esc(p)}</code>`).join("");
   const repos = d.repoHeld ?? [];
   const rows = repos.length
-    ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${chips(r.held)}</div></div>`).join("")
+    ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${r.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>`).join("")
     : `<p class="quiet">No repo names held paths.</p>`;
   return `<section class="card" aria-label="Held paths">${sectionHead("Held paths")}<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
-    `<div class="held-repo"><b>Every repo</b> <div class="held">${chips(d.held)}</div></div>${rows}</section>`;
+    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}</section>`;
 }
 
 /** What a worker step may touch, from the profile sandbox.ts builds. Read-only. */

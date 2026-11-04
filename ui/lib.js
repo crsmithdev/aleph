@@ -354,8 +354,14 @@ export function priorityBadge(p) {
   return tag(k, PRIORITY_TONES[k]);
 }
 
+/** One chip: `text` escaped, or `html` as given; `el` is the tag, `cls` extra classes, `attrs` extra attributes (with a leading space, already escaped). */
+export const chip = (text, { el = "span", cls = "", attrs = "", html } = {}) => `<${el} class="chip${cls ? ` ${cls}` : ""}"${attrs}>${html ?? esc(text)}</${el}>`;
+
+/** Built chips in their row; `el` is the row's tag. */
+export const chipRow = (html, el = "span") => `<${el} class="chips">${html}</${el}>`;
+
 /** Labels as small rounded chips; "" for none. */
-export const chips = (labels) => (labels?.length ? `<span class="chips">${labels.map((l) => `<span class="chip">${esc(labelName(l))}</span>`).join("")}</span>` : "");
+export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(labelName(l))).join("")) : "");
 
 const opt = (o) => (typeof o === "object" && o ? { value: String(o.value), label: String(o.label ?? o.value) } : { value: String(o), label: String(o) });
 /**
