@@ -37,13 +37,11 @@ function bare<T>(name: string, fn: () => T, extra: Record<string, string> = {}):
   }
 }
 
-/** A cap with no caps.json: the factory folder points at a path that does not exist. */
-const capped = (name: string, fn: () => number) => () => bare(name, fn, { ALEPH_FACTORY_DIR: join(ROOT, ".doc-claims-no-factory") });
 const plain = (name: string, fn: () => string | number) => () => bare(name, fn);
 
 /** Each setting a doc may give a default for, read from the code with its variable unset. */
 export const DEFAULTS: Truth["defaults"] = {
-  ALEPH_LIVE_CAP: capped("ALEPH_LIVE_CAP", s.LIVE_CAP),
+  ALEPH_LIVE_CAP: () => s.LIVE_CAP_DEFAULT,
   ALEPH_DIRECTOR_CAP: plain("ALEPH_DIRECTOR_CAP", s.DIRECTOR_CAP),
   ALEPH_INTAKE_CAP: plain("ALEPH_INTAKE_CAP", s.INTAKE_CAP),
   ALEPH_INTAKE_TRIES: plain("ALEPH_INTAKE_TRIES", s.INTAKE_TRIES),
@@ -55,7 +53,7 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_STALL_SECONDS: plain("ALEPH_STALL_SECONDS", stallSeconds),
   ALEPH_FIX_ROUNDS: plain("ALEPH_FIX_ROUNDS", s.fixRounds),
   ALEPH_LAND_BATCH: plain("ALEPH_LAND_BATCH", s.landBatch),
-  ALEPH_LOAD_LIMIT: plain("ALEPH_LOAD_LIMIT", s.loadLimit),
+  ALEPH_LOAD_LIMIT: () => s.LOAD_LIMIT_DEFAULT,
   ALEPH_UI_CACHE_TTL: plain("ALEPH_UI_CACHE_TTL", () => s.uiCacheMs() / 1000),
   ALEPH_UI_FETCH_TTL: plain("ALEPH_UI_FETCH_TTL", s.uiFetchTtl),
   ALEPH_UI_PORT: plain("ALEPH_UI_PORT", s.uiPort),

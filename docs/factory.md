@@ -168,8 +168,8 @@ The live cap is read from its variable first, then from `~/.aleph/factory/caps.j
 
 | Variable | Default | Does |
 |---|---|---|
-| `ALEPH_LIVE_CAP` | 4 | Runs live at once: a sixth of the cores |
-| `ALEPH_LOAD_LIMIT` | 24 | The 1-minute load average under which a check, a worker or a land starts: the number of cores |
+| `ALEPH_LIVE_CAP` | cores / 6, at least 1 | Runs live at once (4 on a machine with 24 cores) |
+| `ALEPH_LOAD_LIMIT` | cores | The 1-minute load average under which a check, a worker or a land starts |
 | `ALEPH_JOB_TIMEOUT` | 1800 | Seconds in a worker's time box |
 | `ALEPH_CHECK_TIMEOUT` | 1200 | Seconds for the checks |
 | `ALEPH_REVIEW_TIMEOUT` | 600 | Seconds for a review |

@@ -55,6 +55,8 @@ function cap(envName: string, key: string, dflt: number): number {
  * The most agent runs live at once: a sixth of the cores (4 of 24). A run's checks use half the cores (package.json),
  * so two suites fill the load limit while the other runs are in their worker step; more starts would only queue.
  */
+/** The live cap's default as the docs state it; the number depends on the machine. */
+export const LIVE_CAP_DEFAULT = "cores / 6, at least 1";
 export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.floor(availableParallelism() / 6)));
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
@@ -78,6 +80,8 @@ export const goalLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 export const landBatch = () => Math.max(1, Math.floor(num("ALEPH_LAND_BATCH", 8)) || 1);
+/** The load limit's default as the docs state it; the number depends on the machine. */
+export const LOAD_LIMIT_DEFAULT = "cores";
 /** A check, a worker or a land starts only while the 1-minute load average is under this. */
 export const loadLimit = () => num("ALEPH_LOAD_LIMIT", availableParallelism());
 /** How long the UI keeps a computed read, 0 when off. */
