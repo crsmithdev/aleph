@@ -40,8 +40,13 @@ test("stuck and failed jobs are one alert that links to their cards", () => {
   expect(h).toBe('<span class="say error">Alert: <a href="#jobs-stuck">jobs are unhealthy</a>.</span>');
 });
 
-test("two repos with the same trouble say it once", () => {
-  expect(said({ health: [mainRed, "health: koans main is red at def5678: lint"] })).toBe("Alert: the build is failing on main.");
+test("a red main or CI of a repo other than aleph is a warning, not an alert", () => {
+  const koans = "health: koans main is red at def5678: lint";
+  const koansCi = "health: koans CI on main has failed 1 run in a row since 2026-11-01 10:00 UTC (def5678): https://x";
+  expect(said({ health: [koans] })).toBe("Everything is running smoothly; koans main is red at def5678: lint.");
+  expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [koans] } })).toContain('class="say warning"');
+  expect(said({ health: [koansCi] })).toStartWith("Everything is running smoothly; koans CI on main has failed");
+  expect(said({ health: [mainRed, koans] })).toBe("Alert: the build is failing on main; koans main is red at def5678: lint.");
 });
 
 test("the sentence says at most three parts, the most serious first", () => {

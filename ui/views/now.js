@@ -102,8 +102,10 @@ const WEEKLY_WARN = 90;
 
 /** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
 const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?/;
+/** A red main or a red CI of a repo other than aleph: that repo's trouble, not the factory's, so a warning. */
+const OTHER_REPO_RED = /^(?!aleph )\S+ (main is red|CI on main has failed)/;
 /** Health lines that are warnings, not alerts: the status sentence says them in the warning colour, and they make no card. */
-const WARN_HEALTH = /full suite took/;
+const isWarn = (l) => /full suite took/.test(l) || OTHER_REPO_RED.test(l.replace(/^health:\s*/, ""));
 
 /** What the status sentence says for an error line, most serious first. A line with no entry is said as it is, after these. */
 const ALERTS = [
@@ -131,7 +133,7 @@ export function renderLede(s, stale = false) {
   if (f.paused && alert) said.push(["the factory is paused", ""]);
   const week = s.usage?.now?.seven_day;
   if (week >= WEEKLY_WARN) said.push([`weekly usage is at ${pct(week)}`, ""]);
-  for (const l of f.health || []) if (WARN_HEALTH.test(l)) said.push([l.replace(/^health:\s*/, ""), ""]);
+  for (const l of f.health || []) if (isWarn(l)) said.push([l.replace(/^health:\s*/, ""), ""]);
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
   if (stale) return `<span class="say error">Alert: this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
   if (alert) return `<span class="say error">Alert: ${parts}.</span>`;
@@ -244,7 +246,7 @@ const TICK_GRACE_MS = 5 * 60_000;
 /** Lines of the factory's own trouble that are errors: health (a red main among them) and a stopped tick; each once. */
 function errorLines(s) {
   const f = s.factory;
-  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l) && !WARN_HEALTH.test(l));
+  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l) && !isWarn(l));
   if (f.nextTick !== undefined && f.tickInProgress !== true) {
     if (f.nextTick === null) out.push("the factory tick has stopped: aleph-tick.timer has no next run");
     else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`the factory tick has stopped: aleph-tick.timer was due at ${f.nextTick}`);
