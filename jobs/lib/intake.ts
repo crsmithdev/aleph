@@ -9,12 +9,13 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { isSorted, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../todo/lib/store.ts";
+import { areasOf, isSorted, labels, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../todo/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { endLost, openRun } from "./agent-run.ts";
-import { factoryDir, gates } from "./factory-status.ts";
+import { factoryDir, gates, mainRed } from "./factory-status.ts";
+import { redCi } from "./ci.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { withMainClone } from "./main-clone.ts";
 import { itemOnMain } from "./status.ts";
@@ -335,6 +336,12 @@ const testOnly = (item: issues.Issue, v: Extract<Route, { route: "build" }>): bo
   return sourceOf(item) === "worker" && item.fm.kind !== "bug" && paths.length > 0 && paths.every((p) => TEST_FILE.test(p));
 };
 
+/** A red-main issue's red, while its repo's main or CI is still red; else null. Intake does not close such an issue: the fix may lie outside the repo, and that is Chris's to decide. */
+function stillRed(repo: Repo, item: issues.Issue): string | null {
+  if (!areasOf(item).includes("red-main") && !labels(item).includes("red-main")) return null;
+  return mainRed()(repo) ?? (redCi().some((c) => c.repo === repo.key) ? "GitHub CI on main is red" : null);
+}
+
 /** Apply a route to the item through the work store; the route applied, or null when the item changed under the run. */
 function apply(repo: Repo, id: number, v: Route): Applied | null {
   const ref = `${repo.key}-${id}`;
@@ -484,6 +491,8 @@ async function intakeItem(repo: Repo, id: number, counts: Counts, skipped: strin
       let v: Route = got;
       if (v.route === "done") v.commit = commitOnMain(repo, v.commit)!.slice(0, 12);
       if (v.route === "build" && testOnly(item, v)) v = { route: "close", reason: "test-only follow-up" };
+      const red = stillRed(repo, item);
+      if (red && (v.route === "close" || v.route === "done")) v = { route: "ask", reason: v.reason, ask: plainAsk("question", `Main is still red (${red}), and intake would close this issue: ${v.reason}`) };
       const applied = apply(repo, id, v);
       if (applied) {
         counts[applied] = (counts[applied] ?? 0) + 1;

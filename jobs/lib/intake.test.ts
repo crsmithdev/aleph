@@ -60,7 +60,7 @@ echo "{\\"type\\":\\"result\\",\\"is_error\\":false,\\"result\\":\\"\\",\\"sessi
 
 // Each test gets its own list: the store keeps an item's file until something replaces it.
 let lists = 0;
-type Seed = { title: string; body?: string; ask?: boolean; after?: string[]; spec?: string; kind?: string; source?: "worker" };
+type Seed = { title: string; body?: string; ask?: boolean; after?: string[]; spec?: string; kind?: string; source?: "worker"; redMain?: boolean };
 function reset(items: Seed[], o: { author?: boolean } = {}): void {
   repo.key = `int${++lists}`;
   repo.author = o.author;
@@ -71,6 +71,7 @@ function reset(items: Seed[], o: { author?: boolean } = {}): void {
       if (i.ask) setAsk(`${repo.key}-${item.id}`, { kind: "input", reason: "question", question: "Which plan, A or B?", options: [], why: [] });
       if (i.after) item.fm.after = i.after;
       if (i.spec) item.spec = i.spec;
+      if (i.redMain) item.fm.areas = ["red-main"];
     }
     return true;
   }, true);
@@ -369,4 +370,20 @@ test("intakeNow takes in one issue with no tick, and leaves a sorted one alone",
   expect((await intakeNow(repo, 1)).counts).toEqual({ close: 1 });
   expect((await intakeNow(repo, 2)).counts).toEqual({});
   expect(calls()).toHaveLength(1);
+});
+
+test("intake does not close a red-main issue while its main is still red: it asks Chris; once main is green it closes", async () => {
+  reset([{ title: "Fix the red main at abc1234", body: "VERDICT:close", redMain: true }]);
+  const file = join(factoryHome, "baseline.json");
+  writeFileSync(file, JSON.stringify({ [repo.key]: { repo: repo.key, commit: "abc1234", ok: false, failed: "setup" } }));
+  const red = await run();
+  expect(red.counts).toEqual({ ask: 1 });
+  expect(issues.status(item(1))).toBe("open");
+  expect(askOf(`${repo.key}-1`)!.question).toContain("Main is still red (main is red at abc1234: setup)");
+  expect(askOf(`${repo.key}-1`)!.question).toContain("duplicate of int-1");
+
+  reset([{ title: "Fix the red main at abc1234", body: "VERDICT:close", redMain: true }]);
+  writeFileSync(file, JSON.stringify({ [repo.key]: { repo: repo.key, commit: "abc1234", ok: true } }));
+  expect((await run()).counts).toEqual({ close: 1 });
+  expect(issues.status(item(1))).toBe("done");
 });

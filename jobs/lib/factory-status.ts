@@ -148,7 +148,8 @@ export const flakes = (): Flake[] => {
   try { return JSON.parse(readFileSync(flakyFile(), "utf8")); } catch { return []; }
 };
 
-export interface Baseline { repo: string; commit: string; ok: boolean; failed?: string }
+/** `config`: the setup and checks the record ran, as JSON; a record from before it has none. */
+export interface Baseline { repo: string; commit: string; config?: string; ok: boolean; failed?: string }
 
 const baselineFile = () => join(factoryDir(), "baseline.json");
 

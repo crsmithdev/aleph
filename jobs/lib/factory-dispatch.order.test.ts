@@ -6,6 +6,8 @@ import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { readList } from "../../todo/lib/store.ts";
 import { ctx, fakes, withChecks, setup, teardown } from "./factory.helpers.ts";
+import { baselineConfig } from "./factory.ts";
+import { loadRegistry } from "./ledger.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -14,7 +16,7 @@ afterEach(teardown);
 const redBaseline = () => {
   const commit = Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: join(ctx.base, "repo") }).stdout.toString().trim();
   mkdirSync(join(ctx.base, "factory"), { recursive: true });
-  writeFileSync(join(ctx.base, "factory", "baseline.json"), JSON.stringify({ fac: { repo: "fac", commit, ok: false, failed: "x" } }));
+  writeFileSync(join(ctx.base, "factory", "baseline.json"), JSON.stringify({ fac: { repo: "fac", commit, config: baselineConfig(loadRegistry().fac!), ok: false, failed: "x" } }));
   return commit;
 };
 const doneParent = (): number => writeList({ key: "fac" }, "add", (doc) => {

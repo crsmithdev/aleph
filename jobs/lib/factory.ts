@@ -327,6 +327,9 @@ export function mainState(repo: Repo): Baseline {
   return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
 }
 
+/** What a suite record holds for besides its commit: the setup and checks it ran. A change of either runs the suite again. */
+export const baselineConfig = (repo: Repo): string => JSON.stringify([repo.setup ?? [], repo.checks ?? []]);
+
 /**
  * Whether the repo's checks pass on its current origin/<main>: run once per
  * commit, kept in baseline.json. Returns the closed state with its line.
@@ -339,7 +342,8 @@ export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, 
   if (!fetchOrigin(repo.path).ok) return unchecked("main is unchecked: fetch failed");
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
   if (!commit) return unchecked(`main is unchecked: no origin/${repo.main}`);
-  const known = () => { const b = baselines()[repo.key]; return b && b.commit === commit ? b : undefined; };
+  const config = baselineConfig(repo);
+  const known = () => { const b = baselines()[repo.key]; return b && b.commit === commit && b.config === config ? b : undefined; };
   let b = known();
   if (!b) {
     const release = await lock(`baseline-${repo.key}`, 0);
@@ -350,7 +354,7 @@ export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, 
       if (!b) {
         const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key));
         if (why && why.cause !== "check") return unchecked(`main is unchecked: ${why.reason}`);
-        b = { repo: repo.key, commit, ok: !why, ...(why ? { failed: why.checkName ?? "" } : {}) };
+        b = { repo: repo.key, commit, config, ok: !why, ...(why ? { failed: why.checkName ?? "" } : {}) };
         const entry = b;
         await writeBaseline(repo.key, () => entry);
       }

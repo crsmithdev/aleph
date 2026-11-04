@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, writeF
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { dispatchIssues, report, setPaused, stalled } from "./factory.ts";
+import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
 import { spentToday, runsToday, health, writeBaseline } from "./factory-status.ts";
 import { lock, readRun, writeRun } from "./ledger.ts";
@@ -198,4 +198,18 @@ test("health warns when the last full suite of a repo took more than the budget"
   // The last run is the one that ended last, not the one that started last.
   suite("20261103-000000-c", "2026-11-03T00:03:00Z", 90);
   expect(said()).toEqual([]);
+});
+
+test("a suite record holds for its commit and its checks: a change of the repo's checks runs them again on the same commit", async () => {
+  const repo = { key: "fac", path: join(ctx.base, "repo"), main: "main", setup: ["bun install"], checks: [{ name: "tests", run: "bun test" }] } as any;
+  let ran = 0;
+  const failing = async () => { ran++; return { cause: "check", reason: "setup failed", checkName: "setup" } as any; };
+  const passing = async () => { ran++; return null; };
+  expect(await baseline(repo, failing)).toMatchObject({ state: "red" });
+  expect(await baseline(repo, failing)).toMatchObject({ state: "red" });
+  expect(ran).toBe(1);
+  repo.setup = [];
+  repo.checks = [];
+  expect(await baseline(repo, passing)).toEqual({ state: "green" });
+  expect(ran).toBe(2);
 });
