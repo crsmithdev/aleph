@@ -37,6 +37,8 @@ test("Baseline binds on each line the dispatch gives for a main that is not gree
 test("Baseline lets the red-main fix through, and the later gates still bind on it", () => {
   const fix = item({ labels: ["red-main"] });
   expect(kind({ item: fix, red: "main is red at abc1234: tests" })).toBe("ready");
+  // The firefighter's `add` writes the label into `areas`, as aleph-1161 has it.
+  expect(kind({ item: item({ areas: ["red-main"] }), red: "main is red at abc1234: tests" })).toBe("ready");
   expect(kind({ item: fix, red: "main is red at abc1234: tests", probe: { why: "probe failed", text: "probe failed" } })).toBe("probe");
 });
 

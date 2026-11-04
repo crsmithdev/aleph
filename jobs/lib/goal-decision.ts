@@ -6,7 +6,7 @@
  * The dispatch asks the 7 gates in the order of GATES; the first that binds skips the goal,
  * and its name is the kind of the hold record.
  */
-import { afterOf, labels } from "../../todo/lib/store.ts";
+import { afterOf, areasOf, labels } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 
 /** Runs of one goal in a row that may end with no commit before the dispatch stops starting it. */
@@ -84,7 +84,8 @@ function notReady(f: GoalFacts): Extract<GoalDecision, { kind: "not-ready" }> | 
 export function goalDecision(f: GoalFacts): GoalDecision {
   if (f.pause) return { kind: "pause", ...f.pause };
   // The fix of a red main is the one goal a red baseline lets through: it is how main gets green again.
-  if (f.red && !labels(f.item).includes("red-main")) return { kind: "baseline", why: f.red, text: f.red };
+  // `add` writes the label into `areas`; an older issue may carry it in `labels`, as the firefighter's isRedMain reads.
+  if (f.red && !areasOf(f.item).includes("red-main") && !labels(f.item).includes("red-main")) return { kind: "baseline", why: f.red, text: f.red };
   if (f.probe) return { kind: "probe", ...f.probe };
   const not = notReady(f);
   if (not) return not;
