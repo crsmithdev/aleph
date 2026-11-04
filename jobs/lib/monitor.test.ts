@@ -52,7 +52,7 @@ test("the tick's step reads yesterday's table with a tool-less reader once a day
   expect(r.findings).toEqual(["Build runs with no usable result rose to 38% from 20%.", "Plan runs per item rose to 1.4 from 1.1."]);
   const prompt = readFileSync(join(base, "prompt.md"), "utf8");
   expect(prompt).toContain("# Factory monitor 2026-10-20");
-  expect(prompt).toContain("Acceptance failures that led to a real fix: 0 of 0");
+  expect(prompt).toContain("## Stages");
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--model claude-opus-5-5 --tools ");
   const runs = allRuns().filter((e) => e.run.kind === "monitor");
   expect(runs).toHaveLength(1);
@@ -89,7 +89,6 @@ test("the Status panel and the report line show the newest report", async () => 
   const p = monitorPanel()!;
   expect(p.day).toBe("2026-10-20");
   expect(p.findings).toHaveLength(2);
-  expect(p.headline).toStartWith("Acceptance failures that led to a real fix:");
   expect(p.table).toContain("## Stages");
   expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 names 2 things that look off; first: Build runs with no usable result rose to 38% from 20%.");
   // A report older than 3 days is no longer said.

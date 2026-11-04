@@ -1,6 +1,6 @@
 /**
- * The worker verdict: the policy for a branch after its worker. Two stations run on it. Verify: the checks
- * (the hidden check last), the doc claims, the keep-gate and the Oracle. Then the reviewer (a reviewer with
+ * The worker verdict: the policy for a branch after its worker. Two stations run on it. Verify: the checks,
+ * the doc claims, the keep-gate and the Oracle. Then the reviewer (a reviewer with
  * no verdict runs once more). A reviewer's pass on a diff that changes a security path or a held path waits
  * for Chris with a held-path Ask. A failure of a check, the keep-gate, the Oracle or the reviewer goes back to
  * the worker as a fix round while rounds are left. The ports run each step; unit.ts gives the git and sandbox
@@ -20,10 +20,10 @@ export interface ReviewCall { reason: string | null; cost?: number; none?: boole
 
 /** What runs each step on the branch. */
 export interface VerdictPorts {
-  /** The repo's checks and the hidden check: why they stopped, or null, and the last check of the run that failed. */
+  /** The repo's checks: why they stopped, or null, and the last check of the run that failed. */
   checks(): Promise<{ stop: ChecksStop | null; failed?: string }>;
-  /** The Ask question when the hidden check failed the same way on the run before, else null. */
-  repeatedHidden(): { question: string } | null;
+  /** The Ask question when `check` failed with the same failing tests on the run before, else null. */
+  repeatedFailure(check: string): { question: string } | null;
   /** Why the worker's final message makes a doc claim that its transcript does not back, else null. */
   docClaims(): string | null;
   /** The keep-gate: why a new test case of the branch does not fail on its base, does not pass on its head, or earns no keep, else null. */
@@ -63,8 +63,7 @@ const stopped = (why: ChecksStop, extra: Partial<Outcome> = {}): Verdict => ({ o
  */
 function backCheck(stop: ChecksStop, check: string | undefined): string | null {
   if (!check || stop.timedOut) return null;
-  const own = stop.cause === "check" ? stop.checkName === check : check === "hidden" && stop.cause === "hidden-check";
-  return own ? check : null;
+  return stop.cause === "check" && stop.checkName === check ? check : null;
 }
 
 /**
@@ -100,8 +99,8 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   if (stop) {
     const check = backCheck(stop, failed);
     if (!check) return stopped(stop, facts);
-    const same = earlier && check === "hidden" && earlier.length < rounds ? p.repeatedHidden() : null;
-    if (same) return { outcome: { ...awaiting("question", same.question), question: same.question, cause: "hidden-check", reason: stop.reason, ...facts }, code: 0 };
+    const same = earlier && earlier.length < rounds ? p.repeatedFailure(check) : null;
+    if (same) return { outcome: { ...awaiting("question", same.question), question: same.question, ...stopFields(stop), ...facts }, code: 0 };
     return stopped(stop, { ...facts, ...checkBack(earlier, check, stop.reason, rounds) });
   }
   // After the checks, so a doc-claims failure leaves their runs and results as they were.

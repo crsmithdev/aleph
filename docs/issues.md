@@ -34,7 +34,6 @@ An issue added with `--spec -` is ready to build: the factory starts it without 
 | `done <repo> <id> ["<summary>"]` | Closes the issue as done |
 | `drop <repo> <id> "<reason>"` | Closes the issue as dropped |
 | `lint [<repo>] [--fix]` | Checks every file; `--fix` repairs what is mechanical |
-| `hidden <repo> <id> [<file>...]` | Lists the hidden checks, or copies files in as hidden checks |
 
 Every command that takes an `<id>` also takes a goal, `<n>.<k>`. With no repo, `list` and `lint` cover the recent repos: those with a run or an issue change in the last 7 days, latest first.
 

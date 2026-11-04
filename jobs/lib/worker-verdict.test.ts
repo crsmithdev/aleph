@@ -12,7 +12,7 @@ function ports(o: { stop?: ChecksStop; failed?: string; same?: string; claims?: 
   const reviews = [...(o.reviews ?? [{ reason: null }])];
   const p: VerdictPorts = {
     checks: async () => { calls.push("checks"); return { stop: o.stop ?? null, failed: o.failed }; },
-    repeatedHidden: () => { calls.push("repeatedHidden"); return o.same ? { question: o.same } : null; },
+    repeatedFailure: (check) => { calls.push(`repeatedFailure ${check}`); return o.same ? { question: o.same } : null; },
     docClaims: () => { calls.push("docClaims"); return o.claims ?? null; },
     keepGate: async () => { calls.push("keepGate"); return o.kept ?? null; },
     stat: () => " a.ts | 1 +",
@@ -33,7 +33,8 @@ describe("checks", () => {
     const { p, calls } = ports({ stop: tests, failed: "tests" });
     const v = await workerVerdict(branch({ earlier: [run({ failed: "tests" })], facts: { cost: 1 } }), p);
     expect(v).toEqual({ outcome: { condition: "stuck", cause: "check", checkName: "tests", reason: "tests failed", cost: 1, failed: "tests", round: 1 }, code: 1 });
-    expect(calls).toEqual(["checks"]);
+    // The earlier round failed tests too, so the repeat rule looks; this fake finds no repeat.
+    expect(calls).toEqual(["checks", "repeatedFailure tests"]);
   });
 
   test("at the cap the run stays stuck and its reason counts the rounds; a cap of 0 adds nothing; a recheck has no rounds", async () => {
@@ -47,20 +48,18 @@ describe("checks", () => {
     expect(await plain({ ...tests, reason: "timed out: check tests", timedOut: true }, "tests")).toEqual({ condition: "stuck", cause: "check", checkName: "tests", reason: "timed out: check tests" });
     expect((await plain({ cause: "check", checkName: "lint", reason: "lint failed" }, "tests")).round).toBeUndefined();
     expect((await plain(tests, undefined)).round).toBeUndefined();
-    expect(await plain({ cause: "infra", reason: "hidden checks unreadable" }, "hidden")).toEqual({ condition: "stuck", cause: "infra", reason: "hidden checks unreadable" });
-    expect(await plain({ cause: "hidden-check", reason: "hidden check failed" }, "hidden")).toMatchObject({ failed: "hidden", round: 0 });
+    expect(await plain({ cause: "infra", reason: "bundle failed" }, "tests")).toEqual({ condition: "stuck", cause: "infra", reason: "bundle failed" });
   });
 
-  test("a hidden check that failed the same way on the run before asks Chris instead of a round", async () => {
-    const hidden: ChecksStop = { cause: "hidden-check", reason: "hidden check failed: 1 of 2 tests" };
-    const { p, calls } = ports({ stop: hidden, failed: "hidden", same: "Is the test wrong?" });
-    const v = await workerVerdict(branch({ earlier: [run({ failed: "hidden" })] }), p);
+  test("a check that failed the same way on the run before asks Chris instead of a round", async () => {
+    const { p, calls } = ports({ stop: tests, failed: "tests", same: "Is the test wrong?" });
+    const v = await workerVerdict(branch({ earlier: [run({ failed: "tests" })] }), p);
     expect(v.code).toBe(0);
-    expect(v.outcome).toMatchObject({ condition: "awaiting", question: "Is the test wrong?", cause: "hidden-check", reason: hidden.reason, ask: { reason: "question" } });
-    expect(calls).toEqual(["checks", "repeatedHidden"]);
+    expect(v.outcome).toMatchObject({ condition: "awaiting", question: "Is the test wrong?", cause: "check", checkName: "tests", reason: tests.reason, ask: { reason: "question" } });
+    expect(calls).toEqual(["checks", "repeatedFailure tests"]);
     // No round left, or a recheck: the question is not asked.
     for (const earlier of [two, undefined]) {
-      const q = ports({ stop: hidden, failed: "hidden", same: "Is the test wrong?" });
+      const q = ports({ stop: tests, failed: "tests", same: "Is the test wrong?" });
       expect((await workerVerdict(branch({ earlier }), q.p)).outcome.condition).toBe("stuck");
       expect(q.calls).toEqual(["checks"]);
     }

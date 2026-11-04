@@ -73,19 +73,13 @@ function sandboxed(setup: string[], checks: { name: string; run: string }[]) {
   const dir = join(base, "sb");
   for (const d of ["check", "checklog", "home", "tmp", "out"]) mkdirSync(join(dir, d), { recursive: true });
   sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
-  return { dir, repo: { key: "r", path, setup, checks, hiddenRun: "echo '1 pass'; echo '2 fail'; exit 1" } as unknown as Repo };
+  return { dir, repo: { key: "r", path, setup, checks } as unknown as Repo };
 }
 
 test("checksInSandbox states a failed setup as the check `setup`", async () => {
   const { dir, repo } = sandboxed(["false"], [{ name: "a", run: "true" }]);
   const why = await checksInSandbox({ folder: base, repo, changed: [], phase: () => {} }, dir, "out/in.bundle", "refs/heads/main");
   expect(why).toEqual({ cause: "check", checkName: "setup", reason: "setup failed" });
-});
-
-test("checksInSandbox states a failed hidden check as hidden-check", async () => {
-  const { dir, repo } = sandboxed([], [{ name: "a", run: "true" }]);
-  const why = await checksInSandbox({ folder: base, repo, changed: [], phase: () => {} }, dir, "out/in.bundle", "refs/heads/main", { "h.test.ts": "x" });
-  expect(why).toEqual({ cause: "hidden-check", reason: "hidden check failed: 2 of 3 tests" });
 });
 
 /** A repo with one commit and its sha, for runOnCommit. */

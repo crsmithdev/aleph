@@ -74,17 +74,16 @@ export const REVIEW_SCHEMA = {
         properties: { clause: { type: "string", minLength: 1, description: "The failed clause, named by a few words." }, observed: { type: "string", minLength: 1 } },
       },
     },
-    set_aside: { type: "array", items: { type: "string", minLength: 1 }, description: "Each sealed scenario set aside, and why." },
   },
 };
 
-export interface Review { pass: boolean; reason: string; asides: string[]; text: string }
+export interface Review { pass: boolean; reason: string; text: string }
 
 const line = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
 
 /**
  * The reviewer's structured output, or why it does not do. `reason` names the failed clauses; `text` is review.md:
- * the summary, a `CHECK: fail` line for each failure, a `SET-ASIDE:` line for each scenario set aside, and the `VERDICT:` line `verdict` reads.
+ * the summary, a `CHECK: fail` line for each failure, and the `VERDICT:` line `verdict` reads.
  */
 export function parseReview(raw: any): Review | string {
   if (raw === undefined) return NO_OUTPUT;
@@ -92,15 +91,13 @@ export function parseReview(raw: any): Review | string {
   if (raw.verdict !== "pass" && raw.verdict !== "hold") return `unknown verdict ${JSON.stringify(raw.verdict)}`;
   const pass = raw.verdict === "pass";
   const failures = (Array.isArray(raw.failures) ? raw.failures : []).map((f: any) => ({ clause: line(f?.clause), observed: line(f?.observed) })).filter((f: { clause: string }) => f.clause);
-  const asides = (Array.isArray(raw.set_aside) ? raw.set_aside : []).map(line).filter(Boolean);
   const reason = pass ? "" : failures.map((f: { clause: string }) => f.clause).join("; ") || "no reason given";
   const text = [
     typeof raw.summary === "string" ? raw.summary.trim() : "", "",
     ...failures.map((f: { clause: string; observed: string }) => `CHECK: fail ${f.clause}: ${f.observed}`),
-    ...asides.map((a: string) => `SET-ASIDE: ${a}`),
     `VERDICT: ${pass ? "pass" : `hold ${reason}`}`,
   ].join("\n");
-  return { pass, reason, asides, text: `${text.trim()}\n` };
+  return { pass, reason, text: `${text.trim()}\n` };
 }
 
 const TEST = /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[cm]?[jt]sx?$/;

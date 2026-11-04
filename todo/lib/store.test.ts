@@ -221,17 +221,6 @@ describe("the writers of the new shape", () => {
   });
 });
 
-describe("readHidden", () => {
-  test("an item with no hidden files reads as none, and a store with no origin/main throws", () => {
-    const r = repo([{ title: "Check" }]);
-    expect(store.readHidden(r, 1)).toEqual({});
-    const saved = process.env.ALEPH_ISSUES;
-    process.env.ALEPH_ISSUES = mkdtempSync(join(tmpdir(), "no-store-"));
-    sh(process.env.ALEPH_ISSUES, "git", "init", "-q");
-    try { expect(() => store.readHidden(r, 1)).toThrow("work store"); } finally { process.env.ALEPH_ISSUES = saved; }
-  });
-});
-
 describe("a part's source", () => {
   test("addPart stores agent, or the parent's source when it is not chris; a part with none stored reads agent", () => {
     const doc = { items: [] } as unknown as issues.Doc;

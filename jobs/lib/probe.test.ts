@@ -35,7 +35,7 @@ afterAll(() => {
 
 // The probe's clock check reads the wall clock, the monotonic clock and Windows time; under load they part, so the tests give it no fault.
 const noFault = () => null;
-const repo = (): Repo => ({ key: "demo", path: repoDir, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: true, held: [], hiddenRun: "" });
+const repo = (): Repo => ({ key: "demo", path: repoDir, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: true, held: [] });
 
 test("the probe script sets each NO_SUBMODULES setting after git init and before git fetch", async () => {
   const { NO_SUBMODULES } = await import("./git.ts");

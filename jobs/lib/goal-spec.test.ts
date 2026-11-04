@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "bun:test";
-import { isVersion, missingSections, specVersion, surfacePaths, uiGoal } from "./goal-spec.ts";
+import { isVersion, missingSections, oracleCommands, specVersion, surfacePaths, uiGoal } from "./goal-spec.ts";
 
 const SPEC = "## Goal\nShip it.\n\n## Edit surface (the files the run may change)\n- `jobs/lib/plan.ts` (new)\n- ui/views/now.js: the row.\n- README.md\n\n## Oracle\n- `bun test jobs/lib/plan.test.ts` passes.\n";
 const item = (over: { title?: string; request?: string; spec?: string } = {}) => ({ title: "T", request: "R", spec: SPEC, ...over }) as any;
@@ -46,4 +46,14 @@ test("a UI goal names a page file or a path under ui/ in its Edit surface; other
   expect(uiGoal(uiSpec("- web/App.tsx"))).toBe(true);
   expect(uiGoal(uiSpec("- jobs/lib/probe.ts\n- docs/factory.md"))).toBe(false);
   expect(uiGoal("## Goal\n\nx\n")).toBe(false);
+});
+
+test("a placeholder of more than one word is not runnable; a redirection with a space is", () => {
+  const body = "## Oracle\n`bun test <that file>`\n`bun test <test file path>`\n`bun test jobs/lib/a.test.ts 2>&1`\n`bun test jobs/lib/a.test.ts <in >out`\n`bun test jobs/lib/a.test.ts > out.log`";
+  expect(oracleCommands(body)).toEqual(["bun test jobs/lib/a.test.ts 2>&1", "bun test jobs/lib/a.test.ts <in >out", "bun test jobs/lib/a.test.ts > out.log"]);
+});
+
+test("a bun test file without .test or .spec in its name gets a ./ path; other arguments stay", () => {
+  const body = "## Oracle\n`bun test acceptance/ui/lib.accept.ts`\n`bun test ./acceptance/a.accept.ts jobs/lib/a.test.ts -t x`\n`bunx tsc`";
+  expect(oracleCommands(body)).toEqual(["bun test ./acceptance/ui/lib.accept.ts", "bun test ./acceptance/a.accept.ts jobs/lib/a.test.ts -t x", "bunx tsc"]);
 });

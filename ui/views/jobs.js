@@ -167,10 +167,10 @@ export function change(stat) {
   return m ? { lines: `+${m[2] ?? 0} −${m[3] ?? 0}`, files: plural(Number(m[1]), "file") } : null;
 }
 
-/** The runs that do the work: not the reviews, which run inside a build, and not the facts run after the land. */
+/** The runs that do the work: not the reviews, which run inside a build, and not an old facts run after the land. */
 const workRuns = (j) => (j.runs ?? []).filter((r) => r.kind !== "review" && r.kind !== "facts");
 
-/** The Timeline's segments for a job: Work (builds, reviews in them, the land) and After the land (facts, acceptance). */
+/** The Timeline's segments for a job: Work (builds, reviews in them, the land). */
 export function jobSegments(j, now = Date.now()) {
   const work = spans(workRuns(j), now);
   const count = {};
@@ -189,18 +189,6 @@ export function jobSegments(j, now = Date.now()) {
       events: [...waits.map((w) => waitEvent(w, j.holds ?? [])), ...events,
         ...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: inline(d) })),
         ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: inline(f) }))],
-    }],
-  });
-  const facts = spans((j.runs ?? []).filter((r) => r.kind === "facts"), now), accepted = /^acceptance: (\w+)/.exec(j.acceptance ?? "")?.[1];
-  if (facts.length || accepted) segments.push({
-    title: "After the land",
-    rows: [{
-      head: `<span class="quiet">${esc([facts.length ? "facts" : "", accepted ? "acceptance" : ""].filter(Boolean).join(", "))}</span>`,
-      bars: barsOf(facts), waits: [], marks: [],
-      result: accepted ? tag(accepted === "pass" ? "accepted" : "rejected", accepted === "pass" ? "done" : "stuck") : "",
-      time: timeText(facts.length ? Math.max(...facts.map((x) => x.end)) - facts[0].start : 0), cost: costText(facts.reduce((n, x) => n + (x.r.cost ?? 0), 0)),
-      events: [...facts.map((x) => ({ at: x.end, tag: "Facts", tone: "quiet", html: `${inline(x.r.reason ?? "")}${logButtons(j.name, x.r)}` })),
-        ...(accepted ? [{ tag: accepted === "pass" ? "Accepted" : "Rejected", tone: accepted === "pass" ? "done" : "stuck", html: inline(j.acceptance.replace(/^acceptance: /, "")) }] : [])],
     }],
   });
   return segments;

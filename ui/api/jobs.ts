@@ -5,7 +5,7 @@ import { git } from "../../jobs/lib/git.ts";
 import { OPUS_MODEL } from "../../jobs/lib/agent-call.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { isAgentRun, isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
-import { allJobs, checkedBy, lookMinutes, sealed, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
+import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
@@ -168,7 +168,7 @@ export const routes: Routes = {
     if (by.length) detail.checkedBy = by;
     const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;
     const shortstat = landedIn ? git(landedIn.path, "show", "--shortstat", "--format=", v.commit!).out : "";
-    if (shortstat) detail.look = lookMinutes(changedLinesOf(shortstat), sealed(runs));
+    if (shortstat) detail.look = lookMinutes(changedLinesOf(shortstat));
     // The job's diff stat (branch, landed commit, or the kept file), else the stat the run kept.
     const jd = jobDiff(runs);
     if (jd?.stat) detail.stat = jd.stat;

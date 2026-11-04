@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   afterLand, askedQuestion, brief, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, goalBrief,
-  infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedHidden, rerunStep, rescueCase, writeRerun, type Stuck,
+  infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedFailure, rerunStep, rescueCase, writeRerun, type Stuck,
 } from "./continuation.ts";
 import type { Entry, Repo, Run } from "./ledger.ts";
 
@@ -62,23 +62,20 @@ describe("next step after a build or recheck", () => {
     expect(nextBrief(folder("review-back"), ended).note).toBe("The reviewer sent this branch back: reviewer: no test\n\nFix what it names, run the tests, and commit.");
   });
 
-  test("a failed hidden check's note names the failing tests and never their source", () => {
-    const f = folder("hidden-1", { "hidden.log": "SECRET source line\n(fail) suite > one [3.00ms]\n(pass) suite > two\n" });
-    const note = nextBrief(f, run({ failed: "hidden", reason: "hidden: 1 of 2 failed" })).note;
-    expect(note).toContain("hidden: 1 of 2 failed");
-    expect(note).toContain("- suite > one");
-    expect(note).not.toContain("SECRET");
-  });
-
-  test("the same hidden failure on two runs in a row asks instead of a third round", () => {
-    folder("hidden-prev", { "hidden.log": "boom\n(fail) suite > one\n" });
-    const now = folder("hidden-now", { "hidden.log": "boom again\n(fail) suite > one\n" });
-    const same = repeatedHidden(now, [entry("hidden-prev", { failed: "hidden" })]);
+  test("the same failing tests of a check on two runs in a row ask instead of a third round", () => {
+    const log = (first: string, second: string) => ({ "checks.log": `## tests: exit 1, run again\n${first}\n\n## tests: exit 1 (second run)\n${second}\n\n` });
+    folder("fail-prev", log("(fail) suite > other", "boom\n(fail) suite > one [3.00ms]\n"));
+    const now = folder("fail-now", log("", "boom again\n(fail) suite > one\n"));
+    const same = repeatedFailure(now, "tests", [entry("fail-prev", { failed: "tests" })]);
     expect(same?.names).toEqual(["suite > one"]);
-    expect(same?.question).toContain("failed the same way on two runs in a row");
-    expect(repeatedHidden(now, [entry("hidden-prev", { failed: "tests" })])).toBeNull();
-    const other = folder("hidden-other", { "hidden.log": "(fail) suite > two\n" });
-    expect(repeatedHidden(other, [entry("hidden-prev", { failed: "hidden" })])).toBeNull();
+    expect(same?.question).toContain("The check `tests` failed the same way on two runs in a row");
+    expect(same?.question).toContain("boom again");
+    expect(repeatedFailure(now, "tests", [entry("fail-prev", { failed: "lint" })])).toBeNull();
+    const other = folder("fail-other", log("", "(fail) suite > two\n"));
+    expect(repeatedFailure(other, "tests", [entry("fail-prev", { failed: "tests" })])).toBeNull();
+    const none = folder("fail-none", log("", "error: tsc\n"));
+    folder("fail-none-prev", log("", "error: tsc\n"));
+    expect(repeatedFailure(none, "tests", [entry("fail-none-prev", { failed: "tests" })])).toBeNull();
   });
 
   test("the fix rounds are the job's other build runs that were sent back", () => {
@@ -140,11 +137,6 @@ describe("rescue of a stuck or failed run", () => {
     const red = claimStep(s, "foo.ts:3", "tests fail");
     expect(red.rerun).toContain("but the checks do not pass on origin/main (tests fail)");
     expect(red.done).toBeUndefined();
-    // A green main with a failing sealed scenario does not close the item: the goal reruns with the number only.
-    const sealed = claimStep(s, "foo.ts:3", null, [2, 4]);
-    expect(sealed.done).toBeUndefined();
-    expect(sealed.action).toBe("drop");
-    expect(sealed.rerun).toContain("sealed scenarios 2, 4 fail on origin/main");
   });
 
   test("the other safe cases, and none for the rest", () => {

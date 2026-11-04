@@ -6,70 +6,12 @@
  * commit at refs/aleph/facts, so `aleph status` inside the sandbox gives the
  * same answer as Chris's session from the same bundle.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { readFetched, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { fetchOrigin, git, gitWith, jobCommit } from "./git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
-import { layout } from "./layout.ts";
-
-export const acceptanceDir = () => join(layout().factory, "acceptance");
-const acceptanceFile = (key: string, id: number | string) => join(acceptanceDir(), `${key}-${id}.json`);
-
-export interface Accepted {
-  /** `pass`, `skipped` (no runnable command), or `fail`. */
-  result: "pass" | "skipped" | "fail";
-  /** The short sha of origin/<main> the Oracle ran on. */
-  sha?: string;
-  /** The command that failed. */
-  command?: string;
-  /** How many runs of the Oracle failed. One is final. */
-  fails: number;
-  /** After a final failure: the follow-up issue that acceptance filed, as `<repo>-<n>`. */
-  followup?: string;
-  /** After a failure: the origin/<main> commit the reopened goal's earlier landings are at or before. */
-  since?: string;
-  /** The report has listed this result. */
-  shown?: boolean;
-  /** A failure that waits for its rerun on a quiet machine. */
-  retest?: Retest;
-}
-
-/** One failed test of a `bun test` run. `file` is unset when the output names no file above it. */
-export interface FailedTest { file?: string; name: string }
-
-/** What a failure runs again: `rerun`, on the commit that failed. */
-export interface Retest { commit: string; command: string; rerun: string; tests: FailedTest[]; /** When the wait for a quiet machine began (ISO time). After `MAX_WAIT_MS` the rerun runs whatever the load. */ since?: string }
-
-/** Writes the goal's acceptance record. */
-export function writeRecord(key: string, id: number | string, r: Accepted): void {
-  mkdirSync(acceptanceDir(), { recursive: true });
-  writeFileSync(acceptanceFile(key, id), JSON.stringify(r, null, 2) + "\n");
-}
-
-export function readRecord(key: string, id: number | string): Accepted | null {
-  try { return JSON.parse(readFileSync(acceptanceFile(key, id), "utf8")); } catch { return null; }
-}
-
-/** The result as one line for the report and the Lands card, or null when the goal has none. */
-export function resultLine(key: string, id: number | string): string | null {
-  const r = readRecord(key, id);
-  if (!r) return null;
-  if (r.result === "pass") return `acceptance: pass at ${r.sha}`;
-  if (r.result === "skipped") return "acceptance: skipped, no runnable command: only the checks at the land covered it";
-  if (r.retest) return `acceptance: fail, waits for a rerun: ${r.command}`;
-  if (!r.fails) return `acceptance: fail, runs again at a later commit: ${r.command}`;
-  return `acceptance: fail: ${r.command}${r.followup ? `; follow-up ${r.followup}` : ""}`;
-}
-
-/** The commits of `hits` the goal's reopening has not already counted: those that are not at or before its `since`. */
-export function afterReopen(cwd: string, key: string, id: number | string, hits: string[]): string[] {
-  const since = readRecord(key, id)?.since;
-  return since ? hits.filter((h) => !git(cwd, "merge-base", "--is-ancestor", h, since).ok) : hits;
-}
 
 export const FACTS_REF = "refs/aleph/facts";
 
@@ -172,31 +114,13 @@ export function landedIndex(cwd: string, main: string, key: string, since: (n: s
   for (const [h, n] of hits) if (!reverted.has(h)) out.set(n, [...(out.get(n) ?? []), h]);
   // An item whose trailer commits are all reverted: the store's done is stale for it.
   for (const [h, n] of hits) if (reverted.has(h) && !out.has(n)) revertedOnly.get(out)!.add(n);
-  // An issue the acceptance run reopened is done again only by a commit after the reopening.
-  for (const [n, hs] of out) {
-    const later = afterReopen(cwd, key, n, hs);
-    if (later.length) out.set(n, later); else out.delete(n);
-  }
   return out;
 }
 
-/** The commits on `main` whose `Issue:` trailer names `ref` (`<repo>-<n>[.<m>]`), reverted ones and those before `since` too: acceptance reads an issue's earlier lands. */
-export function commitsNaming(cwd: string, main: string, ref: string): string[] {
-  const rows = git(cwd, "log", main, TRAILERS).out.split("\n").filter(Boolean);
-  return rows.map((r) => r.split("\t")).filter(([, issue]) => values(issue).includes(ref)).map(([h]) => h);
-}
-
-/**
- * The short sha of a commit on origin/<main> that names the item, or null. It reads the ref as it is: the caller fetches.
- * `anyTime` also counts a commit before `since`, for an item that acceptance reopened.
- */
-export function itemOnMain(repo: { path: string; key: string; main: string } | undefined, n: number | string | undefined, o: { anyTime?: boolean } = {}): string | null {
+/** The short sha of a commit on origin/<main> that names the item, or null. It reads the ref as it is: the caller fetches. */
+export function itemOnMain(repo: { path: string; key: string; main: string } | undefined, n: number | string | undefined): string | null {
   if (!repo || n === undefined) return null;
   const main = `origin/${repo.main}`;
-  if (o.anyTime) {
-    const reverted = revertedOn(repo.path, main);
-    return commitsNaming(repo.path, main, `${repo.key}-${n}`).find((h) => !reverted.has(h))?.slice(0, 7) ?? null;
-  }
   const hit = landedCommits(repo.path, main, repo.key, n)[0];
   return hit ? hit.slice(0, 7) : null;
 }

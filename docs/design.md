@@ -148,7 +148,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 | `ui/views/jobs.js:11` | Rounds a window length to a stable number, not display. |
 | `ui/views/memory.js:198`, `236`, `ui/views/sessions.js:74`, `ui/views/session.js:148`, `ui/timeline.js:138`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
-| `ui/api/speed.ts:136`, `491` | Hand-built labels, not shown by any view: the bucket `label` and its `pad` stay: `acceptance/ui/speed.accept.ts:77`, `78` and `88` read `label`. No view does; remove both with those assertions. |
+| `ui/api/speed.ts:136`, `491` | Hand-built labels, not shown by any view: the bucket `label` and its `pad`. No view reads them. |
 
 ## Tables
 

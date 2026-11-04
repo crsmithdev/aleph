@@ -45,7 +45,6 @@ const plain = (name: string, fn: () => string | number) => () => bare(name, fn);
 export const DEFAULTS: Truth["defaults"] = {
   ALEPH_LIVE_CAP: capped("ALEPH_LIVE_CAP", s.LIVE_CAP),
   ALEPH_DIRECTOR_CAP: plain("ALEPH_DIRECTOR_CAP", s.DIRECTOR_CAP),
-  ALEPH_ACCEPTANCE_FAIL_CAP: plain("ALEPH_ACCEPTANCE_FAIL_CAP", s.acceptanceFailCap),
   ALEPH_TRIAGE_CAP: plain("ALEPH_TRIAGE_CAP", s.TRIAGE_CAP),
   ALEPH_TRIAGE_TRIES: plain("ALEPH_TRIAGE_TRIES", s.TRIAGE_TRIES),
   ALEPH_PROPOSE_AT: plain("ALEPH_PROPOSE_AT", s.PROPOSE_AT),

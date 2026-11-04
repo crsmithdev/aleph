@@ -1,7 +1,7 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { env, fx, remoteItem, sec, seed, sh, tasks, useFixture } from "./fixture.ts";
+import { env, fx, remoteItem, seed, sh, tasks, useFixture } from "./fixture.ts";
 
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
 setDefaultTimeout(30000);
@@ -137,19 +137,3 @@ test("aleph issue is the only command: aleph todo is gone", () => {
   expect(usage).not.toContain("todo");
 });
 
-test("hidden copies files into the store as one commit, lists them, and show counts them", () => {
-  seed("# To do\n\n" + sec(3, "kind: goal"));
-  const f = join(fx.base, "a.test.ts");
-  writeFileSync(f, 'import { test } from "bun:test";\ntest("a", () => {});\n');
-  expect(aleph("issue", "show", "proj", "3").out).toContain("hidden checks: 0");
-  expect(aleph("issue", "hidden", "proj", "3").out).toContain("no hidden checks");
-  const before = sh(fx.base, "git", "--git-dir", fx.remote, "rev-list", "--count", "main");
-  const h = aleph("issue", "hidden", "proj", "3", f);
-  expect(h.code).toBe(0);
-  expect(Number(sh(fx.base, "git", "--git-dir", fx.remote, "rev-list", "--count", "main"))).toBe(Number(before) + 1);
-  expect(sh(fx.base, "git", "--git-dir", fx.remote, "show", "main:proj/hidden/proj-3/a.test.ts")).toContain('test("a"');
-  expect(aleph("issue", "hidden", "proj", "3").out.trim()).toBe("a.test.ts");
-  expect(aleph("issue", "show", "proj", "3").out).toContain("hidden checks: 1");
-  expect(aleph("issue", "hidden", "proj", "99", f).err).toContain("has no issue 99");
-  expect(aleph("issue", "hidden", "proj", "3", join(fx.base, "nope.ts")).code).toBe(1);
-});

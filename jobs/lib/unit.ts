@@ -4,12 +4,11 @@
  * command. Both end with state.json, then `exit`, then the news.
  */
 import { NO_SKILLS, skillSection } from "./role-skill.ts";
-import { SCENARIOS } from "./author.ts";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { file as fileIssues, note, noteFlake, readHidden, reader } from "../../todo/lib/store.ts";
+import { file as fileIssues, note, noteFlake, reader } from "../../todo/lib/store.ts";
 import { OPUS_MODEL, q } from "./agent-call.ts";
 import { agentCall } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
@@ -23,14 +22,13 @@ import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
 import { bridge, sandboxNetnsPid } from "./netns.ts";
 import { serveShots } from "./shot.ts";
 import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallSeconds, workerToken } from "./sandbox.ts";
-import { oracleCommands } from "./acceptance.ts";
-import { HIDDEN_UNREADABLE, changedSources, checksInSandbox, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, hiddenOf, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
+import { changedSources, checksInSandbox, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { buildChecks } from "./related.ts";
-import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, nextBrief } from "./continuation.ts";
-import { outsideSurface, uiGoal } from "./goal-spec.ts";
+import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "./continuation.ts";
+import { oracleCommands, outsideSurface, uiGoal } from "./goal-spec.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
@@ -119,14 +117,7 @@ function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, s
       const before = existsSync(logFile) ? readFileSync(logFile, "utf8").length : 0;
       let why: ChecksStop | null;
       if (repo.sandbox) {
-        const hidden: Record<string, string> = {};
-        let readable = true;
-        for (const r of runs) {
-          const files = hiddenOf(repo, r);
-          if (!files) { readable = false; break; }
-          for (const [name, text] of Object.entries(files)) hidden[name in hidden ? `${r.on ?? onOf(r)}-${name}` : name] = text;
-        }
-        why = readable ? await sandboxChecks(taskOf(folder, on, changed, phase), id, commit, hidden) : { cause: "infra", reason: HIDDEN_UNREADABLE };
+        why = await sandboxChecks(taskOf(folder, on, changed, phase), id, commit);
       } else {
         const owner = runs.find((r) => r.worktree && existsSync(r.worktree)) ?? runs[0];
         why = await worktreeChecks(taskOf(folder, on, changed, phase), inWorktree(owner.worktree!, env), owner, commit);
@@ -405,8 +396,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const bundle = {
       bundle: "../in.bundle", refs: [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])],
-      // The goal's checks that the worker writes to .hidden/ stay out of its commits.
-      setup: [prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`, "echo .hidden/ >> .git/info/exclude", ...repo.setup],
+      setup: [prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`, ...repo.setup],
     };
     phase("worker");
     // Chrome stays outside the sandbox: the worker's shot requests are served here, through a bridge into its network namespace.
@@ -473,8 +463,6 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
   let findings: string[] | undefined;
   return {
     checks: async () => {
-      const hidden = hiddenOf(repo, run);
-      if (!hidden) return { stop: { cause: "infra", reason: HIDDEN_UNREADABLE } };
       // A build runs only the tests its change reaches; the land runs the full suite.
       const build = buildChecks(repo, tip, o.changed);
       const rec = recorder(folder);
@@ -483,10 +471,10 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
         appendFileSync(runFile(folder, "checks.log"), `## ${name}: ${files.length} test file${files.length === 1 ? "" : "s"} that the change reaches\n${files.join("\n")}\n\n`);
         if (!files.length) record({ name, ok: true, seconds: 0 });
       }
-      const stop = await checksInSandbox({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip, hidden);
+      const stop = await checksInSandbox({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip);
       return { stop, failed: readRun(folder)?.checks?.findLast((c) => !c.ok)?.name };
     },
-    repeatedHidden: () => repeatedHidden(folder, o.earlier ?? []),
+    repeatedFailure: (check) => repeatedFailure(folder, check, o.earlier ?? []),
     docClaims: () => o.result === undefined ? null : docClaims(folder, o.result),
     keepGate: async () => {
       verify();
@@ -519,7 +507,6 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   const ran = new Set((readRun(folder)?.checks ?? []).map((c) => c.name));
   const done = new Set(repo.checks.filter((c) => ran.has(c.name)).map((c) => c.run.trim()));
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
-  const hidden = hiddenOf(repo, run) ?? undefined;
   const start = performance.now();
   let any = false, rerun = false;
   const result = (ok: boolean) => {
@@ -530,10 +517,10 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
   for (const command of oracleCommands(readFileSync(specFile, "utf8"))) {
     if (done.has(command)) continue;
     phase();
-    let r = await runner(repo, tip, command, hidden);
+    let r = await runner(repo, tip, command);
     if (r.infra) continue;
     let second = false;
-    if (r.code !== 0) { second = true; r = await runner(repo, tip, command, hidden); if (r.infra) continue; }
+    if (r.code !== 0) { second = true; r = await runner(repo, tip, command); if (r.infra) continue; }
     any = true;
     // As for a check: `rerun` is a command that failed and then passed.
     rerun ||= second && r.code === 0;
@@ -596,27 +583,19 @@ box, and a long command ends it with no verdict. Run only a few targeted command
 of your own, each ending in well under a minute. ${FOREGROUND}
 
 Check the whole branch before you give a verdict; do not stop at the first defect.
-Check each Oracle clause of the spec, each requirement in the Goal section, and each sealed scenario if there are any.
+Check each Oracle clause of the spec and each requirement in the Goal section.
 The Oracle is a check stored on the issue, so the goal does not need a new committed test. A committed test
 needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting
 behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new
 command wiring. Hold a committed test that has none of these reasons, and one at the wrong layer or in the wrong file.
 The "summary" is the verdict in one sentence and the passes as a count, such as \`7 of 9 passed\`, in at most 80 words.
 Each failure goes in "failures": its clause, named by a few words without its reason, and what was observed. Do not
-list a pass. A sealed scenario is named by its number only (\`scenario 2\`); do not quote its text. Say each thing
-once. The list of failures has no cap: list every failure, not only the first. The verdict is "pass" when nothing
+list a pass. Say each thing once. The list of failures has no cap: list every failure, not only the first. The verdict is "pass" when nothing
 failed, else "hold".`;
 
 const TESTS = `The diff changes tests. Judge each finding below against the goal: hold only
 when the goal does not call for the change, or the change weakens a check the
 goal keeps. A change the goal calls for passes.`;
-
-const SEALED = `The worker never saw these scenarios. Check each one by observing behaviour: write throwaway
-tests or scripts outside the repo's tracked files and run them. The diff and the branch's own tests are not
-evidence, because the worker wrote them. Be sceptical: do not talk yourself out of a defect you found.
-Hold when the branch fails a scenario that the goal requires. The hold reason goes to the worker: say what a
-user of the code sees that the goal does not allow, and do not quote or mention the scenarios. If a scenario
-asks for more than the goal or contradicts it, set it aside: put the scenario and why in "set_aside".`;
 
 const OUTSIDE = `The branch changes these files, and the Edit surface of the goal names none of them. Judge each one
 against the goal: hold only when the goal does not need the change. A change the goal needs passes.`;
@@ -627,14 +606,13 @@ change on main and this job's change. The job's own work was reviewed in an earl
 
 /**
  * The reviewer's prompt: the instructions, the test findings if any, the files outside the Edit surface if any,
- * the sealed scenarios if any, the goal and the diff. A merge run's diff is the merge commit's only (`merge`).
+ * the goal and the diff. A merge run's diff is the merge commit's only (`merge`).
  */
-export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], scenarios = "", o: { outside?: string[]; merge?: boolean } = {}): string {
+export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], o: { outside?: string[]; merge?: boolean } = {}): string {
   const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";
   const outside = o.outside?.length ? `\n\n## Changes outside the Edit surface\n\n${OUTSIDE}\n\n${o.outside.map((f) => `- ${f}`).join("\n")}` : "";
-  const sealed = scenarios ? `\n\n## Sealed scenarios\n\n${SEALED}\n\n${scenarios.trim()}` : "";
   const head = o.merge ? `## The merge commit's conflict resolution\n\n${MERGE}` : "## Diff from the merge base";
-  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${outside}${sealed}\n\n## Goal issue\n\n${spec}\n\n${head}\n\n${diff}\n`;
+  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${outside}\n\n## Goal issue\n\n${spec}\n\n${head}\n\n${diff}\n`;
 }
 
 /**
@@ -670,20 +648,13 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const spec = jobSpec(folder, run);
     const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
     const diff = reviewDiff(repo.path, range, reviewDiffMax());
-    const goal = onOf(run);
-    let scenarios = "";
-    try { scenarios = goal === undefined ? "" : readHidden(repo, goal)[SCENARIOS] ?? ""; } catch { return { reason: "reviewer: no verdict (the sealed scenarios are unreadable)", none: true }; }
-    const text = reviewPrompt(run.name, spec, diff, findings, scenarios, { outside: outsideSurface(spec, changed), merge: range.merge });
+    const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
     writeFileSync(runFile(folder, "review-prompt.md"), text);
     const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL, ...schemaFlags(REVIEW_SCHEMA)];
     const bundle = {
       bundle: "../out/out.bundle", refs: [`+refs/heads/${branch}:refs/heads/${branch}`],
-      setup: [
-        `git switch -q ${q(branch)}`,
-        // The scenarios need code that runs. A failed setup shows when the reviewer runs it, so it does not stop the review.
-        ...(scenarios ? [`{ ${repo.setup.map((c) => `${c} && `).join("")}true; } || true`] : []),
-      ],
+      setup: [`git switch -q ${q(branch)}`],
     };
     const log = runFile(folder, "review.log");
     const w = await agentCall("scenario reviewer", rdir, bundle, argv, {
@@ -700,7 +671,6 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
     if (w.cause) return none(w.cause.reason);
     if (typeof v === "string") return none(v);
-    for (const aside of v.asides) note(repo, goal!, `sealed checks: the reviewer set aside: ${aside}`);
     return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
   } finally {
     removeRunFolder(rdir);

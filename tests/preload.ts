@@ -29,8 +29,6 @@ const vars: Record<string, string> = {
   ALEPH_MONITOR_CMD: "false",
   // Nor through the title writer: `false` fails, so a title that breaks the rule is cut.
   ALEPH_RULE_CMD: "false",
-  // Nor through the scenario author, which the spec check of a repo with `author` runs: `false` fails, so the goal has none.
-  ALEPH_AUTHOR_CMD: "false",
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
 

@@ -9,7 +9,7 @@
  * every ALEPH_* variable to the units it starts.
  */
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import { availableParallelism, homedir } from "node:os";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { layout } from "./layout.ts";
 
@@ -56,8 +56,6 @@ function cap(envName: string, key: string, dflt: number): number {
 export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", 10);
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
-/** Goals failing acceptance at one commit, at which none of them reopens. */
-export const acceptanceFailCap = () => { const n = Math.floor(Number(process.env.ALEPH_ACCEPTANCE_FAIL_CAP)); return n >= 1 ? n : 5; };
 export const TRIAGE_CAP = () => num("ALEPH_TRIAGE_CAP", 5);
 export const TRIAGE_TRIES = () => num("ALEPH_TRIAGE_TRIES", 2);
 /** How many signals make a lesson a proposal. */
@@ -79,8 +77,6 @@ export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
 export const landBatch = () => Math.max(1, Math.floor(num("ALEPH_LAND_BATCH", 8)) || 1);
 export const checkSlots = () => Math.max(1, Math.floor(Number(process.env.ALEPH_CHECK_SLOTS)) || 2);
-/** The load average under which the machine counts as quiet. */
-export const quietLoad = () => Number(process.env.ALEPH_QUIET_LOAD) || availableParallelism() / 2;
 /** How long the UI keeps a computed read, 0 when off. */
 export const uiCacheMs = () => { const n = num("ALEPH_UI_CACHE_TTL", 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 

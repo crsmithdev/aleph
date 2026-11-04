@@ -27,8 +27,7 @@ import { securityChange } from "./gate.ts";
 import { missingSections } from "./goal-spec.ts";
 import { onMain, itemOnMain } from "./status.ts";
 import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
-import { sealedNote, writeRerun } from "./continuation.ts";
-import { sealedVerdict, type Sealed } from "./acceptance.ts";
+import { writeRerun } from "./continuation.ts";
 import { explainLesson, proposals, type Lesson } from "./corrections.ts";
 import { factoryDir } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -496,13 +495,10 @@ const fallback = (why: string): Text => ({ situation: `The director did not deci
 export interface Ports {
   land: (name: string) => Promise<string | null>;
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
-  /** The item's sealed scenarios, checked against origin/<main>. */
-  scenarios: (repo: Repo, name: string) => Promise<Sealed>;
 }
 export const defaultPorts: Ports = {
   land: (name) => refusal(async () => { await (await landJob(name, { lander: "director" }, { output: "ignore" })).child?.exited; }),
   drop: (name, reason, fate) => refusal(() => dropJob(name, { reason, quiet: true, fate })),
-  scenarios: (repo, name) => sealedVerdict(repo, name),
 };
 
 /** The result of one action: applied (and whether it decides the Ask), or refused. */
@@ -586,11 +582,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       const why = await refusal(async () => verbs.close(repo, n!, "drop", `director: dropped: ${a.reason}`));
       return why ? no(a, why) : done(a);
     }
-    // The sealed scenarios, if any, pass on origin/<main> before the item closes as already met.
-    const sealed = await ports.scenarios(repo, id);
-    if (sealed.state === "infra") return no(a, `the sealed scenario check failed: ${sealed.fault}; the issue stays open`);
     const open = jobOf(c, n);
-    if (sealed.state === "fail") return no(a, `sealed scenario${sealed.failed.length > 1 ? "s" : ""} ${sealed.failed.join(", ")} fail${sealed.failed.length > 1 ? "" : "s"} on main: ${sealedNote(sealed.failed, repo.main)}`);
     if (open) { const why = await ports.drop(open, `closed by the director: ${a.note}`, "already-met"); if (why) return no(a, why); }
     const why = store.note(repo, n!, `director: closed: ${a.note}`, { done: true });
     return why ? no(a, why) : done(a);

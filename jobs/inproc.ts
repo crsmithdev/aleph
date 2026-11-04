@@ -100,8 +100,8 @@ export const issueAdd = (key: string, title: string, fields: verbs.Fields = {}, 
 export const issueList = (key: string, o: { status?: string; label?: string; kind?: string } = {}) => call(() => verbs.list(loadRegistry()[key]!, o).map(verbs.brief));
 /** `aleph issue show <repo> <ref> --json`. */
 export const issueShow = (key: string, ref: number | string) => call(() => {
-  const { item: i, hidden } = verbs.show(loadRegistry()[key]!, idOf(ref));
-  return { ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, hidden };
+  const i = verbs.show(loadRegistry()[key]!, idOf(ref));
+  return { ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes };
 });
 /** `aleph issue note <repo> <ref> <text>`, as Chris's note when no worker writes it. */
 export const issueNote = (key: string, ref: number | string, text: string) =>
@@ -112,9 +112,6 @@ export const issueEdit = (key: string, ref: number | string, fields: verbs.Field
 /** `aleph issue done|drop <repo> <ref> [<text>]`. */
 export const issueClose = (key: string, ref: number | string, how: "done" | "drop", text = "") =>
   call(() => verbs.close(loadRegistry()[key]!, idOf(ref), how, text).result);
-/** `aleph issue hidden <repo> <ref> [<file>...]`: the list with no files, else the write. */
-export const issueHidden = (key: string, ref: number | string, files?: Record<string, string>) =>
-  call(() => files ? verbs.hiddenAdd(loadRegistry()[key]!, idOf(ref), files).result : verbs.hiddenList(loadRegistry()[key]!, idOf(ref)));
 
 /** `aleph status <repo>-<n>[.<k>] --json`. */
 export const status = (ref: string) => call(() => {

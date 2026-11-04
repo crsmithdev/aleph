@@ -134,14 +134,12 @@ See [Factory](docs/factory.md) and [Factory tasks](docs/factory-tasks.md).
 | `compose/langfuse.yml` | Self-hosted Langfuse on `127.0.0.1:3010` |
 | `docs/` | Reference pages, decision records, specs and findings |
 | `tests/live/` | Tests against a running Langfuse and real headless sessions |
-| `acceptance/` | Goal tests out of the suite, which `bun run accept` runs |
 
 ## Development
 
 ```bash
 bun run test        # the suite, in parallel, with a mock Langfuse
 bun run test:all    # the suite and the slow tests that start Chrome, as CI and the factory's checks run it
-bun run accept      # the archived goal tests in acceptance/; aleph-accept.timer runs them each night
 bunx tsc            # the type check
 ALEPH_LIVE=1 bun test tests/live   # needs a running Langfuse and a logged-in claude
 ```

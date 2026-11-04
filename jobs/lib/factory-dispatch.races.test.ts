@@ -18,7 +18,7 @@ test("a goal turned back into an issue during the baseline is not started", asyn
     baselined = true;
     await change(id, (item) => { item.spec = ""; });
     return null;
-  }, undefined, undefined, undefined, undefined, undefined, () => {});
+  }, undefined, undefined, undefined, undefined, undefined);
   expect(baselined).toBe(true);
   expect(calls).toEqual([]);
   expect(out.skipped).toEqual([]);
@@ -30,7 +30,7 @@ test("a goal closed during the baseline is not started", async () => {
   const out = await dispatchIssues(async (_repo, name) => { calls.push(name); return null; }, async () => {
     await change(id, (item) => issues.setStatus(item, "done"));
     return null;
-  }, undefined, undefined, undefined, undefined, undefined, () => {});
+  }, undefined, undefined, undefined, undefined, undefined);
   expect(calls).toEqual([]);
   expect(out.skipped).toEqual([]);
 });
@@ -57,7 +57,7 @@ test("a goal turned back into an issue while an earlier goal starts is not start
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => { item.spec = ""; });
     return null;
-  }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
+  }, async () => null, undefined, undefined, undefined, undefined, undefined);
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
   expect(out.skipped).toEqual([`fac-${second}: not a goal`]);
@@ -80,10 +80,10 @@ test("a goal added while the baseline of a repo that joined the list runs is sta
     if (repo.key === "fac") first = goal([], "two");
     else {
       second = goal([], "two");
-      b = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
+      b = await dispatchIssues(async () => null, async () => null, undefined, undefined, undefined, undefined, undefined);
     }
     return null;
-  }, undefined, undefined, undefined, undefined, undefined, () => {});
+  }, undefined, undefined, undefined, undefined, undefined);
   expect(b!.skipped).toContain(`two-${first}: main baseline running`);
   expect(b!.skipped).toContain(`two-${second}: main baseline running`);
   expect(a.started).toContain(`two-${first}`);

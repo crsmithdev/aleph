@@ -22,8 +22,7 @@ const DAY = 24 * 3600_000;
 
 /**
  * One change of one item file in one store commit. Only the lines the table reads are kept: the `reason:` and
- * `closed_as:` front matter, and the added notes of acceptance results, lands and set-asides. The history holds the
- * notes of items the store no longer has.
+ * `closed_as:` front matter.
  */
 export interface StoreChange { at: string; item: string; added: string[]; removed: string[] }
 
@@ -54,24 +53,15 @@ export interface StageRow {
   minutes: number | null;
 }
 
-/**
- * What became of each acceptance failure. A failure that filed a follow-up is fixed when the follow-up landed and its
- * acceptance passed. An older failure is fixed when a later land on its goal and the next acceptance passed.
- */
-export interface Acceptance { failures: number; fixed: number; notFixed: number; pending: number; closed: number; open: number }
-
 export interface HoldRow { kind: string; records: number; goals: number; hours: number }
 
 export interface Window {
   from: string; to: string;
   stages: StageRow[];
-  acceptance: Acceptance;
   asks: Record<string, number>;
   holds: HoldRow[];
   /** Goals with a hold record of a kind that stops a start, of all goals with a record. */
   held: { goals: number; seen: number };
-  /** Goals with a reviewer's set-aside note, of the goals whose build run was reviewed. */
-  setAside: { goals: number; notes: number; reviewed: number };
   reopens: number;
   /** The seven-day usage, in percent, at the end of the window. */
   quota: number | null;
@@ -80,8 +70,8 @@ export interface Window {
 export interface FlakeSection {
   /** `<repo> <test|check> <name>` and its reruns in 7 days, two or more, most first, at most 5. */
   reruns: { key: string; n: number }[];
-  /** Each tracker with notes in 7 days, and the test of its notes that flaked most in acceptance. */
-  trackers: { ref: string; notes: number; files: number; top?: { name: string; n: number } }[];
+  /** Each tracker with notes in 7 days. */
+  trackers: { ref: string; notes: number; files: number }[];
 }
 
 export interface Table {
@@ -89,14 +79,12 @@ export interface Table {
   made: string;
   today: Window;
   trailing: Window;
-  /** Every acceptance failure the store holds. */
-  acceptanceAll: Acceptance;
   flakes: FlakeSection;
 }
 
 /** The metrics the design names that no recorded data gives; the table says so. */
 export const LEFT_OUT = [
-  "cost of the scenario reviewer: a build run records only its worker's cost",
+  "cost of the reviewer: a build run records only its worker's cost",
   "spec checks with no usable result, and their time: spec-checks.jsonl keeps only the cost",
   "time in each state of an item after its start (awaiting, answered): no record keeps those changes with their times",
   "usage per agent: usage.jsonl is the account's quota, not per run",
@@ -178,74 +166,6 @@ function stageRows(src: Sources, from: number, to: number): StageRow[] {
   });
 }
 
-type Event = { at: number; kind: "fail" | "land" | "pass"; followup?: string };
-
-/** Each item's notes, from the store now and from its history, and whether it is open now; an item the store no longer has is closed. */
-export type Notes = Map<string, { lines: Set<string>; open: boolean }>;
-
-export function notesOf(src: Pick<Sources, "items" | "storeLog">): Notes {
-  const out: Notes = new Map();
-  for (const { name, item } of src.items) out.set(name, { lines: new Set(item.notes), open: issues.status(item) === "open" });
-  for (const c of src.storeLog) {
-    const added = c.added.filter((l) => l.startsWith("- "));
-    if (!added.length) continue;
-    if (!out.has(c.item)) out.set(c.item, { lines: new Set(), open: false });
-    for (const l of added) out.get(c.item)!.lines.add(l);
-  }
-  return out;
-}
-
-/** The acceptance events of an item's notes, oldest first. */
-function events(lines: Iterable<string>): Event[] {
-  const out: Event[] = [];
-  for (const line of lines) {
-    const n = noteOf(line);
-    if (!n) continue;
-    if (/^acceptance: fail (again )?at /.test(n.text)) {
-      const f = /; follow-up (\S+)$/.exec(n.text);
-      out.push({ at: n.at, kind: "fail", ...(f ? { followup: f[1] } : {}) });
-    }
-    else if (/^acceptance: pass at /.test(n.text)) out.push({ at: n.at, kind: "pass" });
-    else if (/^job \S+ landed$/.test(n.text)) out.push({ at: n.at, kind: "land" });
-  }
-  return out.sort((a, b) => a.at - b.at);
-}
-
-/**
- * Each acceptance failure noted in [from, to). A failure that filed a follow-up (v6 phase 3B on) is judged on the
- * follow-up: fixed when it landed and its next acceptance passed; not fixed when that acceptance failed; pending when
- * none ran yet; closed or open by the follow-up's status when it has no land. An older failure is judged on its own
- * item: fixed when a land follows it and the next acceptance after that land passed; not fixed when that acceptance
- * failed; pending when none ran yet. With no land after it, it is closed (the item is done or dropped) or open.
- */
-export function acceptanceOf(notes: Notes, from: number, to: number): Acceptance {
-  const a: Acceptance = { failures: 0, fixed: 0, notFixed: 0, pending: 0, closed: 0, open: 0 };
-  for (const { lines, open } of notes.values()) {
-    const ev = events(lines);
-    ev.forEach((e, i) => {
-      if (e.kind !== "fail" || e.at < from || e.at >= to) return;
-      a.failures++;
-      let land: boolean, after: Event | undefined, still: boolean;
-      if (e.followup) {
-        // A follow-up the notes do not have is no longer in the store: it is closed.
-        const f = notes.get(e.followup) ?? { lines: [], open: false };
-        const fe = events(f.lines), k = fe.findIndex((x) => x.kind === "land");
-        land = k >= 0; after = fe.slice(k + 1).find((x) => x.kind !== "land"); still = f.open;
-      } else {
-        const rest = ev.slice(i + 1);
-        const next = rest.findIndex((x) => x.kind !== "land");
-        land = rest.slice(0, next < 0 ? rest.length : next).some((x) => x.kind === "land");
-        after = rest[next]; still = open;
-      }
-      if (!land) { still ? a.open++ : a.closed++; return; }
-      if (!after) a.pending++;
-      else if (after.kind === "pass") a.fixed++;
-      else a.notFixed++;
-    });
-  }
-  return a;
-}
-
 function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRow[]; held: Window["held"] } {
   const byName = new Map<string, HoldRecord[]>();
   for (const h of holds) byName.set(h.name, [...(byName.get(h.name) ?? []), h]);
@@ -293,18 +213,6 @@ function reopensOf(src: Sources, from: number, to: number): number {
     && c.removed.some((l) => l.startsWith("closed_as:")) && !c.added.some((l) => l.startsWith("closed_as:"))).length;
 }
 
-function setAsideOf(src: Sources, all: Notes, from: number, to: number): Window["setAside"] {
-  const goals = new Set<string>();
-  let notes = 0;
-  for (const [name, { lines }] of all) for (const line of lines) {
-    const n = noteOf(line);
-    if (n && n.at >= from && n.at < to && n.text.startsWith("sealed checks: the reviewer set aside:")) { notes++; goals.add(name); }
-  }
-  const reviewed = new Set(src.runs.filter((e) => e.run.kind === "build" && e.run.review && e.run.review.call !== "pending" && inside(e.run.started, from, to))
-    .map((e) => e.run.on ?? e.run.name));
-  return { goals: goals.size, notes, reviewed: reviewed.size };
-}
-
 function quotaAt(usage: Sources["usage"], to: number): number | null {
   let best: { at: number; v: number } | null = null;
   for (const u of usage) {
@@ -315,21 +223,19 @@ function quotaAt(usage: Sources["usage"], to: number): number | null {
   return best?.v ?? null;
 }
 
-export function windowOf(src: Sources, from: number, to: number, notes = notesOf(src)): Window {
+export function windowOf(src: Sources, from: number, to: number): Window {
   const h = holdRows(src.holds, from, to);
   return {
     from: new Date(from).toISOString(), to: new Date(to).toISOString(),
     stages: stageRows(src, from, to),
-    acceptance: acceptanceOf(notes, from, to),
     asks: asksOf(src, from, to),
     holds: h.rows, held: h.held,
-    setAside: setAsideOf(src, notes, from, to),
     reopens: reopensOf(src, from, to),
     quota: quotaAt(src.usage, to),
   };
 }
 
-/** The flake counts of the 7 days before `now`: the reruns on flaky.json, each tracker's notes, and the test that flaked most in acceptance. */
+/** The flake counts of the 7 days before `now`: the reruns on flaky.json and each tracker's notes. */
 export function flakeSection(rows: Flake[], trackers: Sources["trackers"], now: number): FlakeSection {
   const counts = new Map<string, number>();
   for (const f of rows) {
@@ -343,7 +249,6 @@ export function flakeSection(rows: Flake[], trackers: Sources["trackers"], now: 
   const out: FlakeSection = { reruns, trackers: [] };
   for (const t of trackers) {
     const files = new Set<string>();
-    const tests = new Map<string, number>();
     let k = 0;
     for (const line of t.notes) {
       const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (.*)$/.exec(line);
@@ -354,11 +259,8 @@ export function flakeSection(rows: Flake[], trackers: Sources["trackers"], now: 
       const cut = m[3].indexOf(" > ");
       // The caller's prefix ("job x: ", "firefighter: ") is not part of the file name.
       if (cut >= 0) files.add(m[3].slice(0, cut).split(": ").at(-1)!.trim());
-      const a = /^acceptance \S+: (.+?): failed/.exec(m[3]);
-      if (a) tests.set(a[1], (tests.get(a[1]) ?? 0) + 1);
     }
-    const top = [...tests].sort((x, y) => y[1] - x[1])[0];
-    if (k) out.trackers.push({ ref: t.ref, notes: k, files: files.size, ...(top ? { top: { name: top[0], n: top[1] } } : {}) });
+    if (k) out.trackers.push({ ref: t.ref, notes: k, files: files.size });
   }
   return out;
 }
@@ -367,8 +269,7 @@ export function flakeSection(rows: Flake[], trackers: Sources["trackers"], now: 
 export function flakeHealth(f: FlakeSection): string[] {
   return [
     ...f.reruns.map((r) => `health: ${r.key} passed on rerun ${r.n} times in 7 days`),
-    ...f.trackers.flatMap((t) => [`health: ${t.ref} holds ${t.notes} flake notes in 7 days, ${t.files} test files`,
-      ...(t.top ? [`health: most flaked in acceptance in 7 days: ${t.top.name} (${t.top.n} times)`] : [])]),
+    ...f.trackers.map((t) => `health: ${t.ref} holds ${t.notes} flake notes in 7 days, ${t.files} test files`),
   ];
 }
 
@@ -386,10 +287,7 @@ export function trackersOf(lists: Reader, keys = factoryKeys()): Sources["tracke
 /** The flake lines of `aleph report`, read now. */
 export const flakeLines = (now = Date.now(), lists: Reader = reader()): string[] => flakeHealth(flakeSection(flakes(), trackersOf(lists), now));
 
-/** The notes the history keeps: acceptance results, lands and set-asides. */
-const KEPT_NOTE = /^- \d{4}-\d\d-\d\d \d\d:\d\d: (acceptance: (fail|pass)|job \S+ landed$|sealed checks: the reviewer set aside:)/;
-
-/** The changes of the store's item files, from its git history: all of it, as the acceptance counts are of all time. */
+/** The changes of the store's item files, from its git history. */
 export function storeLog(dir = storeDir()): StoreChange[] {
   if (!existsSync(dir)) return [];
   const rev = git(dir, "rev-parse", "--verify", "-q", "origin/main").ok ? "origin/main" : "HEAD";
@@ -404,7 +302,6 @@ export function storeLog(dir = storeDir()): StoreChange[] {
     if (!cur || line.startsWith("+++") || line.startsWith("---")) continue;
     const m = /^([+-])((?:reason|closed_as): .*)$/.exec(line);
     if (m) (m[1] === "+" ? cur.added : cur.removed).push(m[2]);
-    else if (line.startsWith("+") && KEPT_NOTE.test(line.slice(1))) cur.added.push(line.slice(1));
   }
   return out.filter((c) => c.added.length || c.removed.length);
 }
@@ -436,12 +333,10 @@ export function readSources(): Sources {
 /** The table of local day `day` and the 7 days before it. `now` bounds the flake counts: the end of the day, or now when the day is today. */
 export function measure(src: Sources, day: string, now = Date.now()): Table {
   const from = dayStart(day), to = dayStart(addDays(day, 1)), back = dayStart(addDays(day, -7));
-  const notes = notesOf(src);
   return {
     day, made: new Date(now).toISOString(),
-    today: windowOf(src, from, to, notes),
-    trailing: windowOf(src, back, from, notes),
-    acceptanceAll: acceptanceOf(notes, -Infinity, to),
+    today: windowOf(src, from, to),
+    trailing: windowOf(src, back, from),
     flakes: flakeSection(src.flakes, src.trackers, Math.min(now, to)),
   };
 }
@@ -454,22 +349,11 @@ const money = (n: number | null): string => (n === null ? "-" : `$${n.toFixed(2)
 /** A cell: the day's value, then the trailing value in brackets. */
 const cell = (a: string, b: string) => `${a} (${b})`;
 
-/** The first metric, in one sentence. */
-export function acceptanceLine(t: Table): string {
-  const w = t.trailing.acceptance, d = t.today.acceptance, all = t.acceptanceAll;
-  const week = { failures: w.failures + d.failures, fixed: w.fixed + d.fixed };
-  return `Acceptance failures that led to a real fix: ${week.fixed} of ${week.failures} in the 8 days to ${t.day} (${pct(week.fixed, week.failures)}); ${all.fixed} of ${all.failures} in all (${pct(all.fixed, all.failures)}).`;
-}
-
 /** The table as Markdown: what the reader reads, the vault note holds and the Status panel shows. */
 export function renderTable(t: Table): string {
   const d = t.today, w = t.trailing, per = (n: number) => num(n / 7);
   const out: string[] = [`# Factory monitor ${t.day}`, "", `Each cell: the day (the trailing 7 days: a count is the mean per day; a ratio, rate or median is pooled).`, ""];
-  out.push("## Acceptance", "", acceptanceLine(t), "");
-  out.push("| | failures | fixed | land, not fixed | land, not yet accepted | closed with no land | open with no land |", "|---|---|---|---|---|---|---|");
-  for (const [k, a] of [[t.day, d.acceptance], ["trailing 7 days", w.acceptance], ["all", t.acceptanceAll]] as const)
-    out.push(`| ${k} | ${a.failures} | ${a.fixed} | ${a.notFixed} | ${a.pending} | ${a.closed} | ${a.open} |`);
-  out.push("", "## Stages", "", "| stage | runs | runs per item | no usable result | cost | cost per item | median minutes |", "|---|---|---|---|---|---|---|");
+  out.push("## Stages", "", "| stage | runs | runs per item | no usable result | cost | cost per item | median minutes |", "|---|---|---|---|---|---|---|");
   for (const stage of STAGES) {
     const a = d.stages.find((s) => s.stage === stage), b = w.stages.find((s) => s.stage === stage);
     if (!a && !b) continue;
@@ -482,9 +366,8 @@ export function renderTable(t: Table): string {
   const reasons = [...new Set([...Object.keys(d.asks), ...Object.keys(w.asks)])].sort((a, b) => (d.asks[b] ?? 0) - (d.asks[a] ?? 0) || (w.asks[b] ?? 0) - (w.asks[a] ?? 0));
   for (const r of reasons) out.push(`| ${r} | ${cell(String(d.asks[r] ?? 0), per(w.asks[r] ?? 0))} |`);
   if (!reasons.length) out.push("| none | 0 (0) |");
-  out.push("", "## Holds and set-asides", "");
+  out.push("", "## Holds", "");
   out.push(`- Goals held at least once: ${cell(`${d.held.goals} of ${d.held.seen} (${pct(d.held.goals, d.held.seen)})`, `${pct(w.held.goals, w.held.seen)}`)}`);
-  out.push(`- Reviewed goals with a set-aside scenario: ${cell(`${d.setAside.goals} of ${d.setAside.reviewed} (${pct(d.setAside.goals, d.setAside.reviewed)}), ${d.setAside.notes} notes`, `${pct(w.setAside.goals, w.setAside.reviewed)}`)}`);
   out.push(`- Reopens: ${cell(String(d.reopens), per(w.reopens))}`);
   out.push(`- Seven-day quota used at the end of the day: ${d.quota === null ? "-" : `${d.quota}%`} (${w.quota === null ? "-" : `${w.quota}% a week before`})`);
   out.push("", "| hold record kind | records | goals | hours in the state |", "|---|---|---|---|");
@@ -533,10 +416,10 @@ export function latestReport(): Report | null {
 }
 
 /** What the Status panel shows of the newest report. */
-export function monitorPanel(): { day: string; headline: string; findings: string[]; error?: string; table: string } | null {
+export function monitorPanel(): { day: string; findings: string[]; error?: string; table: string } | null {
   const r = latestReport();
   if (!r) return null;
-  return { day: r.day, headline: acceptanceLine(r.table), findings: r.findings, ...(r.error ? { error: r.error } : {}), table: renderTable(r.table) };
+  return { day: r.day, findings: r.findings, ...(r.error ? { error: r.error } : {}), table: renderTable(r.table) };
 }
 
 /** The report's line in `aleph report`: the newest report of the last 2 days and its first finding. */

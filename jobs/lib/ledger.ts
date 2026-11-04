@@ -13,7 +13,7 @@ import { checkSlots, reposFile } from "./settings.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
-/** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. The hidden check adds its test counts. */
+/** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. A run from before 4 Nov 2026 may have a hidden check with its test counts. */
 /** `files`: the number of test files a build ran in place of the full suite. */
 export interface CheckResult { name: string; ok: boolean; seconds: number; passed?: number; total?: number; rerun?: boolean; files?: number }
 
@@ -44,8 +44,6 @@ export interface Run {
   check?: "open" | "done";
   /** The issue that holds an open manual check. */
   checkItem?: number;
-  /** A land run the facts gate has looked at: dispatch does not read its job again. */
-  facts?: true;
   /** New shape: the goal or issue the run is on, `<repo>-<n>`. */
   on?: string;
   /** New shape: what the run waits on. */
@@ -66,10 +64,6 @@ export interface Run {
   next?: "worker" | "land";
   /** A factory run: the price of its worker's `result` event, at API rates. */
   cost?: number;
-  /** A facts run: the titles of the notes it wrote. */
-  kept?: string[];
-  /** A facts run: the facts it rejected, each with its reason. */
-  rejected?: { fact: string; reason: string }[];
   /** A factory run: the `DEFAULT: <question> -> <answer>` lines of its result. */
   defaults?: string[];
   /** An agent or land run: each check that ran, skipped `when` checks left out. */
@@ -101,9 +95,7 @@ export interface Repo {
   sandbox: boolean;
   /** Globs a factory run may not change without Chris. */
   held: string[];
-  /** The command of the hidden check, run on `.hidden/` in the check clone. */
-  hiddenRun: string;
-  /** A fresh author writes each goal's hidden checks before its first worker run. */
+  /** The spec check runs before each goal's first worker run. */
   author?: boolean;
 }
 
@@ -123,7 +115,7 @@ export function loadRegistry(): Record<string, Repo> {
     repos[key] = {
       key, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
       setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
-      sandbox: r.sandbox ?? false, held: r.held ?? [], hiddenRun: r.hiddenRun ?? "bun test ./.hidden", author: r.author ?? false,
+      sandbox: r.sandbox ?? false, held: r.held ?? [], author: r.author ?? false,
     };
   }
   return repos;
@@ -387,7 +379,7 @@ export async function checkSlot(): Promise<() => void> {
 export const LOW = ["--property=CPUWeight=20", "--nice=10"];
 
 /** The agent output tags: a line `<TAG>: <value>` in a worker's or reviewer's text. `ERROR:` is not one. */
-export const TAGS = ["FOLLOWUP", "DEFAULT", "QUESTION", "FACT", "FLAKE", "SET-ASIDE", "CHECK", "VERDICT"] as const;
+export const TAGS = ["FOLLOWUP", "DEFAULT", "QUESTION", "FLAKE", "CHECK", "VERDICT"] as const;
 export type Tag = (typeof TAGS)[number];
 
 /** One sentence for prompts that says how a tag line is read. */

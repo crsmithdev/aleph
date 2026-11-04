@@ -117,17 +117,9 @@ function renderProspective(p) {
 const renderParametric = () =>
   `<p>The model weights. Aleph does not store them. <a href="#/memory/${encodeURIComponent("Seven Agent Memory Types Mapped Onto Aleph")}">The rule</a>: keep what the model already knows out of the vault.</p>`;
 
-function renderGates(g, runs = [], week = { days: 7, kept: 0, rejected: 0 }) {
-  const none2 = (what, fills) => none(`No ${what} yet.`, fills);
-  const lessons = (xs, what, fills) => (xs.length ? fold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : none2(what, fills));
-  const run = (r) => `<div class="sub"><h4>${esc(r.job)} ${q(`${esc(r.run)} · ${ago(r.at)}`)}</h4>` +
-    (r.kept.length ? fold(r.kept, (k) => `${link(k.title)} ${q(esc(k.source))}`) : `<p class="quiet">Nothing kept.</p>`) +
-    (r.rejected.length ? fold(r.rejected, (x) => `${esc(x.fact)} ${q(esc(x.reason))}`) : `<p class="quiet">Nothing rejected.</p>`) + `</div>`;
-  const facts = runs.length
-    ? `<p>${q(`Last ${week.days} days:`)} <strong>${week.kept}</strong> kept, <strong>${week.rejected}</strong> rejected</p>${runs.map(run).join("")}`
-    : none2("facts run", "The factory's facts gate (aleph-352) fills this.");
-  return `<div class="kinds">${sub("Facts runs", runs.length, facts)}` +
-    `${sub("Corrections", g.corrections.length, lessons(g.corrections, "correction", "The correction miner (aleph-353) fills this."))}${sub("Proposals", g.proposals.length, lessons(g.proposals, "proposal", "A correction seen 3 times (aleph-353) becomes one."))}</div>`;
+function renderGates(g) {
+  const lessons = (xs, what, fills) => (xs.length ? fold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : none(`No ${what} yet.`, fills));
+  return `<div class="kinds">${sub("Corrections", g.corrections.length, lessons(g.corrections, "correction", "The correction miner (aleph-353) fills this."))}${sub("Proposals", g.proposals.length, lessons(g.proposals, "proposal", "A correction seen 3 times (aleph-353) becomes one."))}</div>`;
 }
 
 const EMPTY_TYPES = {
@@ -232,10 +224,9 @@ function renderBroad(m) {
   const lint = m.lint ?? { refuse: [], warn: [] }, rules = lintRules(lint), top = Math.max(1, ...rules.map((r) => r.refused + r.warned));
   const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.")) +
     `<details class="fold"><summary>Every finding</summary>${renderHealth(m)}</details>`, { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
-  const t = { ...EMPTY_TYPES, ...(m.types ?? {}) }, week = m.factsWeek ?? { days: 7, kept: 0, rejected: 0 }, all = week.kept + week.rejected;
-  const gates = card("Factory memory gates", `<div class="stack" role="img" aria-label="${week.kept} kept, ${week.rejected} rejected"><div class="c-use" style="width:${all ? ((week.kept / all) * 100).toFixed(1) : 0}%"></div></div>` +
-    `<div class="key"><span><i class="c-use"></i>${week.kept} kept</span><span><i class="c-never"></i>${week.rejected} rejected</span><span>${t.gates.corrections.length} corrections</span><span>${t.gates.proposals.length} proposals</span></div>` +
-    `<details class="fold" id="gates"><summary>Facts runs, corrections and proposals</summary>${renderGates(t.gates, m.facts, m.factsWeek)}</details>`, { count: `${week.days} days` });
+  const t = { ...EMPTY_TYPES, ...(m.types ?? {}) };
+  const gates = card("Factory memory gates", `<div class="key"><span>${t.gates.corrections.length} corrections</span><span>${t.gates.proposals.length} proposals</span></div>` +
+    `<details class="fold" id="gates"><summary>Corrections and proposals</summary>${renderGates(t.gates)}</details>`);
   const writes = card("Recent writes", renderWrites({ writes: (m.writes ?? []).slice(0, 5) }) +
     ((m.writes ?? []).length > 5 ? `<details class="fold"><summary>${m.writes.length - 5} more</summary>${renderWrites({ writes: m.writes.slice(5) })}</details>` : ""), { count: (m.writes ?? []).length });
   return `<div class="pair">${lintCard}${gates}</div>${writes}`;

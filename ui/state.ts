@@ -13,7 +13,7 @@ import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/ask.
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../todo/lib/store.ts";
 import { idOf, parseGoalRef, PRIORITIES, refOf, status } from "../todo/lib/todo.ts";
-import { facts, landedIndex, resultLine, stages } from "../jobs/lib/status.ts";
+import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
 import type { Wk } from "./usage.ts";
 
@@ -50,14 +50,10 @@ export interface Job {
   /** A landed job whose manual check is still open. */
   check?: "open";
   checks?: { name: string; ok: boolean; seconds: number }[];
-  /** The hidden check's test counts, when the job's item has hidden checks. */
-  hidden?: { passed: number; total: number };
   /** Lands: the trailers of the land commit. Needs-you: the trailers the land will write. */
   trailers?: { key: string; value: string }[];
   /** A triage run: its verdict as `goal`, `close`, `done` or `ask`; none while it runs or when it gave no verdict. */
   outcome?: string;
-  /** Lands: the acceptance run's result for the job's goal, as `acceptance: pass at <sha>`. */
-  acceptance?: string;
   /** Stuck: the open issue this job waits on or its last run names; the row offers Wait instead of Re-check. */
   blocker?: Blocker;
 }
@@ -239,10 +235,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     if (asked) job.ask = asked;
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
-    if (v.hidden) job.hidden = v.hidden;
     if (v.check === "open") job.check = "open";
-    const accepted = v.condition === "landed" && todo !== undefined && v.repo ? resultLine(v.repo, todo) : null;
-    if (accepted) job.acceptance = accepted;
     const trailers = v.condition === "landed" ? landedTrailers(repo, v.commit)
       : v.condition === "awaiting" ? [
         ...needsYouIssue(v.repo, todo),

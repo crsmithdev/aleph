@@ -18,7 +18,6 @@ import { allRuns, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, typ
 import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
-import { nightlyLine } from "./nightly-accept.ts";
 import { LIVE_CAP, suiteBudgetSeconds } from "./settings.ts";
 
 export const factoryDir = () => layout().factory;
@@ -113,10 +112,9 @@ function specSpent(now: number): number {
   return sum;
 }
 
-/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and director runs (and the explain runs from before the director), which `runsToday` does not count, and the spec checks. A director run has no repo (its `on` is an item ref, a run folder or a lesson id), so it is not filtered by one, as a firefighter run is not. */
+/** The dollars of the runs started in the last 24 hours: `runsToday`, and the firefighter and director runs (and the explain runs from before the director), which `runsToday` does not count, and the spec checks. A director run has no repo (its `on` is an item ref, a run folder or a lesson id), so it is not filtered by one, as a firefighter run is not. */
 export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "director" || e.run.kind === "explain" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
+  const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "director" || e.run.kind === "explain") && now - Date.parse(e.run.started) < DAY);
   return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0) + specSpent(now);
 }
 
@@ -309,8 +307,8 @@ export function suiteLines(runs: Entry[] = allRuns()): string[] {
 }
 
 /**
- * The factory's health lines: stalled work, a failed probe, a red main or CI, a slow
- * full suite and a failed nightly acceptance run. The flake counts are the monitor's (monitor-table.ts). `jobs` is the
+ * The factory's health lines: stalled work, a failed probe, a red main or CI and a slow
+ * full suite. The flake counts are the monitor's (monitor-table.ts). `jobs` is the
  * caller's, when it has read them already.
  */
 export function health(now = Date.now(), o: { jobs?: Job[] } = {}): string[] {
@@ -319,8 +317,6 @@ export function health(now = Date.now(), o: { jobs?: Job[] } = {}): string[] {
   lines.push(...suiteLines(o.jobs?.flat()));
   const smoke = smokeLine();
   if (smoke) lines.push(smoke);
-  const nightly = nightlyLine();
-  if (nightly) lines.push(nightly);
   const p = lastProbe();
   if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
   for (const r of redMains()) lines.push(`health: ${r.line}`);

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
 import { waitFor } from "../../tests/wait.ts";
-import { lock, readRun, writeRun } from "./ledger.ts";
+import { readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, goal, mk, notes, ask, fakes, dispatch, setup, sh, teardown } from "./factory.helpers.ts";
 
@@ -69,9 +69,9 @@ test("a goal whose run a host restart killed keeps its rerun: the next no commit
   killedRun(`fac-${id}`);
   const f = fakes();
   f.start = async () => null;
-  await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
+  await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined);
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
-  await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined, () => {});
+  await dispatchIssues(f.start, async () => null, f.land, f.rescue, undefined, undefined, undefined);
   expect(f.calls).toEqual([`drop fac-${id}`, `drop fac-${id}`]);
   expect(ask(id)).toBeNull();
 });
@@ -155,38 +155,6 @@ test("a land killed by a host restart fails and lands again, and the goal does n
   expect(f.calls).not.toContain(`drop fac-${id}`);
   expect(readRun(l.folder)).toMatchObject({ condition: "failed", reason: "host restart" });
   expect(existsSync(join(l.folder, "exit"))).toBe(true);
-});
-
-// A landed job whose facts run is `running` with no pid: a facts run writes none, so only its start tells a restart from a live review.
-const factsOf = (id: number, started: string) => {
-  const first = mk(`fac-${id}`, "build", "passed", { branch: "b", started: BEFORE_BOOT });
-  mk(`fac-${id}`, "land", "landed", { job: first.job, branch: "b", commit: "abc1234", facts: true, started: BEFORE_BOOT });
-  return mk(`fac-${id}`, "facts", "running", { job: first.job, phase: "facts", shown: false, started });
-};
-
-test("a facts run a host restart killed ends done, with the reason, and stays unshown for the news", async () => {
-  const id = goal();
-  const fr = factsOf(id, BEFORE_BOOT);
-  await dispatch(fakes());
-  const run = readRun(fr.folder)!;
-  expect(run).toMatchObject({ condition: "done", reason: "host restart", shown: false });
-  expect(run.ended).toBeTruthy();
-  expect(run.phase).toBeUndefined();
-});
-
-test("a facts run started after this boot, with its lock held, is still running", async () => {
-  const id = goal();
-  const fr = factsOf(id, new Date().toISOString());
-  const release = (await lock(`fac-${id}`, 0))!;
-  await dispatch(fakes());
-  expect(readRun(fr.folder)!.condition).toBe("running");
-  release();
-});
-
-test("a facts run whose process died with no restart ends: nothing holds its lock", async () => {
-  const fr = factsOf(goal(), new Date().toISOString());
-  await dispatch(fakes());
-  expect(readRun(fr.folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before its verdicts" });
 });
 
 // A run held before v6 phase 6, whose second review a host restart killed: call.md says PENDING from before the boot.

@@ -174,50 +174,6 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
   }
 }
 
-const hiddenDir = (key: string, id: number | string): string => `${key}/hidden/${id}`;
-
-/** Where an item's hidden checks may be, first choice first: the goal id directory, then the old number. */
-function hiddenDirs(key: string, id: number | string): string[] {
-  if (typeof id === "number") return [hiddenDir(key, `${key}-${id}`), hiddenDir(key, id)];
-  const n = id.startsWith(`${key}-`) ? id.slice(key.length + 1).match(/^\d+/)?.[0] : undefined;
-  return n === undefined ? [hiddenDir(key, id)] : [hiddenDir(key, id), hiddenDir(key, n)];
-}
-
-/** An item's hidden check files on the store's origin/main, by file name; empty when it has none. The goal id directory wins over the old number's. */
-export function readHidden(repo: Place, id: number | string): Record<string, string> {
-  const dir = storeDir();
-  fetch(dir);
-  // A failed ls-tree also means "no such folder", so an unreadable store has to be told apart first.
-  if (!git(dir, "rev-parse", "--verify", "-q", `origin/${MAIN}`).ok) throw new Error(`no origin/${MAIN} in the work store`);
-  for (const where of hiddenDirs(repo.key, id)) {
-    const ls = git(dir, "ls-tree", "--name-only", `origin/${MAIN}:${where}`);
-    const names = ls.ok ? ls.out.split("\n").filter(Boolean) : [];
-    if (!names.length) continue;
-    const texts = readFiles(dir, names.map((n) => `origin/${MAIN}:${where}/${n}`));
-    return Object.fromEntries(names.map((n, i) => [n, texts[i]]));
-  }
-  return {};
-}
-
-/** Put `files` (by file name) in an item's hidden checks as one commit on the store's origin/main. */
-export function writeHidden(repo: Place, id: number | string, files: Record<string, string>): { commit: string; follow: string | null } {
-  const dir = storeDir();
-  for (let attempt = 1; ; attempt++) {
-    fetchNow(dir);
-    const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
-    const put = Object.fromEntries(Object.entries(files).map(([n, text]) => [`${hiddenDir(repo.key, id)}/${n}`, text]));
-    const tree = treeWithFiles(dir, `${base}^{tree}`, put);
-    const commit = git(dir, "commit-tree", tree, "-p", base, "-m", `${repo.key}: hidden checks for item ${id}`);
-    if (!commit.ok) throw new Error(`commit-tree failed: ${commit.out}`);
-    const push = git(dir, "push", "-q", "origin", `${commit.out}:refs/heads/${MAIN}`);
-    if (push.ok) {
-      fetchedAt.set(dir, Date.now());
-      return { commit: commit.out, follow: followMain(dir, MAIN) };
-    }
-    if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
-  }
-}
-
 // The fields.
 
 /** An item with an `ask`: it waits for Chris, so it is never dispatched and never triaged. */

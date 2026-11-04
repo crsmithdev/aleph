@@ -100,11 +100,11 @@ test("replyOf reads the text and the cost of a result event; other stdout is the
 });
 
 test("parseReview names the failed clauses as the reason and writes a review.md that verdict reads", () => {
-  const hold = parseReview({ verdict: "hold", summary: "Two fail.", failures: [{ clause: "flag test", observed: "none" }, { clause: "scenario 2", observed: "exit 1" }], set_aside: ["scenario 3: more than the goal"] });
-  expect(hold).toMatchObject({ pass: false, reason: "flag test; scenario 2", asides: ["scenario 3: more than the goal"] });
+  const hold = parseReview({ verdict: "hold", summary: "Two fail.", failures: [{ clause: "flag test", observed: "none" }, { clause: "doc line", observed: "exit 1" }] });
+  expect(hold).toMatchObject({ pass: false, reason: "flag test; doc line" });
   const text = (hold as { text: string }).text;
-  expect(text).toBe("Two fail.\n\nCHECK: fail flag test: none\nCHECK: fail scenario 2: exit 1\nSET-ASIDE: scenario 3: more than the goal\nVERDICT: hold flag test; scenario 2\n");
-  expect(verdict(text)).toEqual({ pass: false, reason: "flag test; scenario 2" });
+  expect(text).toBe("Two fail.\n\nCHECK: fail flag test: none\nCHECK: fail doc line: exit 1\nVERDICT: hold flag test; doc line\n");
+  expect(verdict(text)).toEqual({ pass: false, reason: "flag test; doc line" });
   expect(verdict((parseReview({ verdict: "pass", summary: "9 of 9 passed.", failures: [] }) as { text: string }).text)).toEqual({ pass: true });
   expect(parseReview(undefined)).toBe("no structured output");
   expect(parseReview({ verdict: "maybe" })).toBe('unknown verdict "maybe"');

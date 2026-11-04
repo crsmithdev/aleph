@@ -6,9 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { recordFlake } from "./factory-status.ts";
-import { checkSlot, onOf, type Check, type CheckResult, type Repo, type Run } from "./ledger.ts";
-import { SCENARIOS } from "./author.ts";
-import { readHidden } from "../../todo/lib/store.ts";
+import { checkSlot, type Check, type CheckResult, type Repo, type Run } from "./ledger.ts";
 import { makeRunFolder, removeRunFolder, sandboxed } from "./sandbox.ts";
 import type { Stated } from "./outcome.ts";
 import { checkSeconds } from "./settings.ts";
@@ -86,25 +84,6 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
   return null;
 }
 
-/** The hidden check: last, with no rerun. Its log can show the tests' source, so it goes to its own file and never into checks.log. */
-async function runHidden(t: CheckTask, check: Check, exec: CheckExec): Promise<ChecksStop | null> {
-  t.phase(`check ${check.name}`);
-  const out = runFile(t.folder, "hidden.log");
-  writeFileSync(out, "");
-  const { r, seconds } = await withSlot(async () => {
-    const t0 = Date.now();
-    return { r: await exec(check, out, checkSeconds()), seconds: Math.round((Date.now() - t0) / 1000) };
-  });
-  const text = readFileSync(out, "utf8");
-  const pass = Number(text.match(/^\s*(\d+) pass\s*$/m)?.[1] ?? 0);
-  const fail = Number(text.match(/^\s*(\d+) fail\s*$/m)?.[1] ?? 0);
-  t.record?.({ name: check.name, ok: r.code === 0 && !r.timedOut, seconds, ...(pass + fail ? { passed: pass, total: pass + fail } : {}) });
-  appendFileSync(runFile(t.folder, "checks.log"), `## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : ""}\n\n`);
-  if (r.timedOut) return { cause: "check", checkName: check.name, reason: `timed out: check ${check.name}`, timedOut: true };
-  if (r.code !== 0) return { cause: "hidden-check", reason: fail ? `hidden check failed: ${fail} of ${pass + fail} tests` : "hidden check failed" };
-  return null;
-}
-
 /** The checks that apply to the task, each run by `exec` on a tree the caller set up. */
 export const runChecks = (t: CheckTask, exec: CheckExec): Promise<ChecksStop | null> => runAll(t, chosen(t), exec);
 
@@ -137,7 +116,7 @@ const CHECK_ENV = { TZ: "UTC", ALEPH_BROWSER_TESTS: "1" };
  * step, so its exit code comes from outside the sandbox and it cannot write
  * checklog/.
  */
-export async function checksInSandbox(t: CheckTask, dir: string, bundle: string, ref: string, hiddenFiles: Record<string, string> = {}): Promise<ChecksStop | null> {
+export async function checksInSandbox(t: CheckTask, dir: string, bundle: string, ref: string): Promise<ChecksStop | null> {
   const noise = join(t.folder, "check.out");
   const step = { cwd: "check", env: CHECK_ENV, hideCiMissing: true, sockets: true, onSpawn: t.onSpawn };
   t.phase("check setup");
@@ -148,11 +127,7 @@ export async function checksInSandbox(t: CheckTask, dir: string, bundle: string,
     return { cause: "check", checkName: "setup", reason: "setup failed" };
   }
   const exec = (read: string[]): CheckExec => (check, out, limit) => sandboxed(dir, check.run, { ...step, read, write: ["check", "home", "tmp"], limit, stdout: out, stderr: out });
-  const failed = await runAll(t, chosen(t), exec([]));
-  if (failed || !Object.keys(hiddenFiles).length) return failed;
-  // The hidden files reach the disk only now, after the repo's own checks have passed.
-  writeHidden(dir, hiddenFiles);
-  return runHidden(t, { name: "hidden", run: `cp -r ../hidden .hidden; ${t.repo.hiddenRun}` }, exec(["hidden"]));
+  return runAll(t, chosen(t), exec([]));
 }
 
 const writeHidden = (dir: string, files: Record<string, string>) => {
@@ -382,27 +357,15 @@ export async function worktreeChecks(t: CheckTask, exec: CheckExec, run: Run, co
   }
 }
 
-export const HIDDEN_UNREADABLE = "hidden checks unreadable";
-
-/** The hidden test files of the run's item, none for a run with no item, or null when the work store cannot be read: such a run must not pass without them. Its scenarios go to the reviewer, not to a check. */
-export function hiddenOf(repo: Repo, run: Run): Record<string, string> | null {
-  const id = onOf(run);
-  if (id === undefined) return {};
-  try {
-    const { [SCENARIOS]: _, ...tests } = readHidden(repo, id);
-    return tests;
-  } catch { return null; }
-}
-
 /** The checks on a land's squash commit: the commit goes in as a bundle. */
-export async function sandboxChecks(t: CheckTask, id: string, commit: string, hidden: Record<string, string>): Promise<ChecksStop | null> {
+export async function sandboxChecks(t: CheckTask, id: string, commit: string): Promise<ChecksStop | null> {
   const dir = makeRunFolder(id);
   const ref = `refs/aleph/land/${id}`;
   try {
     git(t.repo.path, "update-ref", ref, commit);
     const b = git(t.repo.path, "bundle", "create", join(dir, "out", "land.bundle"), ref);
     if (!b.ok) return { cause: "infra", reason: `bundle failed: ${b.out}` };
-    return await checksInSandbox(t, dir, "out/land.bundle", ref, hidden);
+    return await checksInSandbox(t, dir, "out/land.bundle", ref);
   } finally {
     git(t.repo.path, "update-ref", "-d", ref);
     removeRunFolder(dir);

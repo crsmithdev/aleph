@@ -2,7 +2,7 @@ import { expect, spyOn, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { CLI, acceptanceDetached, detached } from "./launch.ts";
+import { CLI, detached } from "./launch.ts";
 
 async function withFakeSystemdRun(exit: number, body: (dir: string, argvLog: string) => void | Promise<void>) {
   const savedPath = process.env.PATH, savedFg = process.env.ALEPH_JOB_FOREGROUND;
@@ -43,23 +43,6 @@ test("detached starts its verb in a unit of its own, a different one per call", 
       expect(l).toContain(`--property=StandardOutput=append:${log}`);
       expect(l).toContain(`--property=StandardError=append:${log}`);
       expect(l.endsWith(` ${process.execPath} ${CLI} plan aleph-1`)).toBe(true);
-    }
-  });
-});
-
-test("acceptanceDetached starts no process in the foreground, and ignores ALEPH_DISPATCH=off elsewhere", async () => {
-  await withFakeSystemdRun(0, (_dir, argvLog) => {
-    const off = process.env.ALEPH_DISPATCH;
-    process.env.ALEPH_DISPATCH = "off";
-    try {
-      process.env.ALEPH_JOB_FOREGROUND = "1";
-      acceptanceDetached();
-      expect(() => readFileSync(argvLog, "utf8")).toThrow();
-      delete process.env.ALEPH_JOB_FOREGROUND;
-      acceptanceDetached();
-      expect(readFileSync(argvLog, "utf8")).toContain("acceptance");
-    } finally {
-      if (off === undefined) delete process.env.ALEPH_DISPATCH; else process.env.ALEPH_DISPATCH = off;
     }
   });
 });

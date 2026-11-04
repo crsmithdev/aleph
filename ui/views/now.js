@@ -44,8 +44,7 @@ export function renderCauses(d, win = d?.window ?? "week") {
 }
 
 /**
- * The monitor's newest daily report: the share of acceptance failures that led to a real fix, the reader's findings
- * in rank order, and the whole table behind a fold. Nothing before the first report.
+ * The monitor's newest daily report: the reader's findings in rank order, and the whole table behind a fold. Nothing before the first report.
  */
 export function renderMonitor(s) {
   const m = s.factory?.monitor;
@@ -53,7 +52,7 @@ export function renderMonitor(s) {
   const said = m.error ? `<p class="quiet">No reading: ${esc(m.error)}</p>`
     : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ol>`
     : `<p class="quiet">Nothing looks off.</p>`;
-  return card(`Monitor, ${m.day}`, `<p>${esc(m.headline)}</p>${said}` +
+  return card(`Monitor, ${m.day}`, said +
     `<details class="more" data-keep="more:monitor"><summary>Table</summary><pre class="monitor-table">${esc(m.table)}</pre></details>`, { id: "monitor" });
 }
 
@@ -102,9 +101,9 @@ const MAX_SAID = 3;
 const WEEKLY_WARN = 90;
 
 /** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
-const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?|most flaked in acceptance/;
+const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?/;
 /** Health lines that are warnings, not alerts: the status sentence says them in the warning colour, and they make no card. */
-const WARN_HEALTH = /full suite took|nightly acceptance run failed/;
+const WARN_HEALTH = /full suite took/;
 
 /** What the status sentence says for an error line, most serious first. A line with no entry is said as it is, after these. */
 const ALERTS = [

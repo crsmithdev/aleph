@@ -19,7 +19,6 @@ import { ALREADY_MET } from "./gate.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";
 import { askOf, isAgentRun, isBuild, lastTagged, onOf, runsDir, TAG_FORMAT, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
-import { hiddenOf } from "./checks.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import { jobSpec, runFile } from "./run-files.ts";
 import { uiGoal } from "./goal-spec.ts";
@@ -69,9 +68,7 @@ Each new test must fail without your change and check something the other tests 
 file do not: a changed line they do not cover, or a result they do not assert. The
 factory's checks reject any other new test. So do not add a test for a helper that the
 existing tests already reach through its callers.
-For a durable fact about the repo or its tools that you checked, print
-\`FACT: <one sentence> [source: <file:line | commit sha | https URL>]\`. Write each tag in
-capitals at the start of its line.
+Write each tag in capitals at the start of its line.
 
 If the goal already holds and no edit is needed, make no commit, run the repo's tests,
 and print exactly one line \`${ALREADY_MET}: <evidence>\`: the files, lines and commit on
@@ -85,18 +82,7 @@ For each code change, follow the code-change method at the end of this brief. ${
 End with a summary of what you did and what you ran, each thing said once:
 at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
 
-/**
- * The goal's checks for the brief: its test files stored on the issue, with how to run them, or "" when it has none.
- * They stay on the issue and out of the repo. The sealed scenarios are not among them: only the reviewer sees those.
- */
-function goalChecks(repo: Repo, run: Run): string {
-  const files = Object.entries(hiddenOf(repo, run) ?? {});
-  if (!files.length) return "";
-  const text = files.map(([name, body]) => `### .hidden/${name}\n\n\`\`\`\n${body.trimEnd()}\n\`\`\``).join("\n\n");
-  return `## The goal's checks\n\nThese test files are stored on the issue, not in the repo. The factory runs them after the repo's checks with \`${repo.hiddenRun}\`. To run them yourself, write each one at the path its heading gives and run that command. Never commit them: remove \`.hidden/\` before you end.\n\n${text}`;
-}
-
-/** The worker's brief: the fixed text, the spec, the goal's checks, every note in order, and the previous run's files. A merge run gets the merge brief. */
+/** The worker's brief: the fixed text, the spec, every note in order, and the previous run's files. A merge run gets the merge brief. */
 export function brief(id: string, folder: string, run: Run, repo: Repo): string {
   if (run.merge) {
     const land = (jobById(run.job) ?? []).filter((e) => e.run.kind === "land" && e.id !== id).at(-1)?.run;
@@ -104,8 +90,6 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
   const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? [], uiGoal(jobSpec(folder, run))) : FIXED(run)), `## Spec\n\n${jobSpec(folder, run)}`];
-  const goal = goalChecks(repo, run);
-  if (goal) parts.push(goal);
   const runs = jobById(run.job) ?? [];
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];
@@ -216,13 +200,11 @@ function mergeBrief(land: Run, repo: Repo, title?: string): string {
 
 /**
  * What the next worker gets when the run in `folder` sends the job back: the note it reads as its spec,
- * and whether it is a merge run. A failed check, the hidden check and the reviewer each have their note;
+ * and whether it is a merge run. A failed check and the reviewer each have their note;
  * a land that bounced has bounceNote.
  */
 export function nextBrief(folder: string, run: Run): { note: string; merge: boolean } {
-  const note = run.failed === "hidden"
-    ? hiddenNote(folder, run)
-    : run.failed === "review"
+  const note = run.failed === "review"
     ? `The reviewer sent this branch back: ${run.reason}\n\nFix what it names, run the tests, and commit.`
     : run.failed
     ? `The check \`${run.failed}\` failed on this branch. The last 80 lines of its log:\n\n${checkLog(folder, run.failed)}\n\nFix the cause, run the tests, and commit.`
@@ -230,18 +212,20 @@ export function nextBrief(folder: string, run: Run): { note: string; merge: bool
   return { note, merge: !run.failed && isMergeBounce(run) };
 }
 
-/** The last 80 lines of the named check's section of the run's checks.log. */
-function checkLog(folder: string, name: string): string {
+/** The named check's last section of the run's checks.log, without its heading line. */
+function checkSection(folder: string, name: string): string {
   const file = runFile(folder, "checks.log");
   if (!existsSync(file)) return "";
   const section = readFileSync(file, "utf8").split(/^## /m).findLast((x) => x.startsWith(`${name}: exit`)) ?? "";
-  return section.split("\n").slice(1).join("\n").trimEnd().split("\n").slice(-80).join("\n");
+  return section.split("\n").slice(1).join("\n").trimEnd();
 }
 
-/** The failing tests of a run's hidden.log, each with the lines of its failure that precede its `(fail)` line. */
-function hiddenFailures(folder: string): { name: string; failure: string }[] {
-  const file = runFile(folder, "hidden.log");
-  const lines = (existsSync(file) ? readFileSync(file, "utf8") : "").split("\n");
+/** The last 80 lines of the named check's section of the run's checks.log. */
+const checkLog = (folder: string, name: string): string => checkSection(folder, name).split("\n").slice(-80).join("\n");
+
+/** The failing tests of the named check's section of a run's checks.log, each with the lines of its failure that precede its `(fail)` line. */
+function checkFailures(folder: string, check: string): { name: string; failure: string }[] {
+  const lines = checkSection(folder, check).split("\n");
   const seen = new Map<string, string>();
   let block: string[] = [];
   for (const line of lines) {
@@ -255,37 +239,29 @@ function hiddenFailures(folder: string): { name: string; failure: string }[] {
   return [...seen].map(([name, failure]) => ({ name, failure }));
 }
 
-/**
- * The fix-round note for a failed hidden check: the reason and the names of
- * the failing tests, read from hidden.log. The tests' source is in the brief.
- */
-function hiddenNote(folder: string, run: Run): string {
-  const names = hiddenFailures(folder).map((f) => f.name);
-  return `${run.reason}\n${names.length ? `\nThe failing tests:\n${names.map((n) => `- ${n}`).join("\n")}\n` : ""}\nThe tests are under "The goal's checks" in this brief. Run them, fix the cause, and commit.`;
-}
-
 // ---------------------------------------------------------------------------
-// Fix rounds: the runs before, and the hidden failures they share. The rule itself is in worker-verdict.ts.
+// Fix rounds: the runs before, and the failures they share. The rule itself is in worker-verdict.ts.
 
 /** The job's fix rounds before run `id`: its other build runs that a check or the reviewer sent back. */
 export const earlierRounds = (job: Job, id: string): Entry[] => job.filter((e) => e.id !== id && isBuild(e.run.kind) && e.run.failed);
 
 /**
- * A goal's check that fails unchanged twice: the run before this one also failed the hidden check with the same
- * failing names. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
- * and Chris tells a wrong test from a wrong branch. Null when the failures differ or there is no run before.
+ * A check that fails unchanged twice: the run before this one also failed `check` with the same failing test
+ * names. A third fix round would likely fail again, so the Ask names the tests and quotes their failures,
+ * and Chris tells a wrong test from a wrong branch. Null when the failures differ, the check names no
+ * failing test, or there is no run before.
  */
-export function repeatedHidden(folder: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
+export function repeatedFailure(folder: string, check: string, earlier: { id: string; run: Run }[]): { question: string; names: string[] } | null {
   const prev = earlier.at(-1);
-  if (!prev || prev.run.failed !== "hidden") return null;
-  const now = hiddenFailures(folder);
-  const before = hiddenFailures(join(runsDir(), prev.id)).map((f) => f.name).sort();
+  if (!prev || prev.run.failed !== check) return null;
+  const now = checkFailures(folder, check);
+  const before = checkFailures(join(runsDir(), prev.id), check).map((f) => f.name).sort();
   const names = now.map((f) => f.name).sort();
   if (!names.length || names.join("\n") !== before.join("\n")) return null;
   const quoted = now.slice(0, 5).map((f) => `- ${f.name}${f.failure ? `\n${f.failure.split("\n").map((l) => `    ${l}`).join("\n")}` : ""}`).join("\n");
   return {
     names,
-    question: `The goal's test${names.length > 1 ? "s" : ""} on the issue failed the same way on two runs in a row, so no third fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
+    question: `The check \`${check}\` failed the same way on two runs in a row, so no third fix round starts. The failing test${names.length > 1 ? "s" : ""} and the failure:\n${quoted}\nIs the test wrong, or the branch? Answer to send the worker back with your reading, or drop the run.`,
   };
 }
 
@@ -348,16 +324,9 @@ export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
   return { action: "drop", dropReason: `${text}. Run the goal again from the start.`, noted: `${text}: dropped, and the goal reruns once`, told: `${text}: the goal reruns` };
 }
 
-/** The rerun note for failed sealed scenarios: their numbers only, never their text. */
-export const sealedNote = (failed: number[], main: string): string =>
-  `The last run said the goal is already met, but sealed scenario${failed.length > 1 ? "s" : ""} ${failed.join(", ")} fail${failed.length > 1 ? "" : "s"} on origin/${main}. Make the change the goal asks for.`;
-
-/** The step for a worker's claim that the goal is met, by `red`, the red line of main, and `failed`, the failed sealed scenario numbers. */
-export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failed: number[] = []): Step {
+/** The step for a worker's claim that the goal is met, by `red`, the red line of main. */
+export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null): Step {
   const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
-  if (!red && failed.length) {
-    return { action: "drop", rerun: sealedNote(failed, repo.main), noted: `${said}, but sealed scenario${failed.length > 1 ? "s" : ""} ${failed.join(", ")} fail${failed.length > 1 ? "" : "s"} on origin/${repo.main}; dropped, and the goal reruns once` };
-  }
   if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "already-met" };
   return {
     action: "drop",

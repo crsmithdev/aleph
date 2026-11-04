@@ -80,7 +80,7 @@ test("outsideSurface lists the changed files the Edit surface does not name, and
   const files = ["jobs/lib/unit.ts", "ui/views/jobs.js", "docs/factory.md", "jobs/lib/gate.ts", "uix.ts"];
   expect(outsideSurface(spec, files)).toEqual(["jobs/lib/gate.ts", "uix.ts"]);
   expect(outsideSurface("## Goal\nno surface\n", files)).toEqual([]);
-  const p = reviewPrompt("n", spec, "diff", [], "", { outside: outsideSurface(spec, files) });
+  const p = reviewPrompt("n", spec, "diff", [], { outside: outsideSurface(spec, files) });
   expect(p).toContain("## Changes outside the Edit surface");
   expect(p).toContain("- jobs/lib/gate.ts\n- uix.ts");
   expect(reviewPrompt("n", spec, "diff", [])).not.toContain("## Changes outside the Edit surface");
@@ -106,7 +106,7 @@ test("a merge run's reviewer reads only how the merge commit resolved its confli
   const whole = reviewRange(path, run, base, "work");
   expect(whole).toEqual({ from: base, to: "work", merge: false });
   expect(reviewDiff(path, whole, 1e6)).toContain("+the job's change");
-  expect(reviewPrompt("n", "goal", diff, [], "", { merge: true })).toContain("## The merge commit's conflict resolution");
+  expect(reviewPrompt("n", "goal", diff, [], { merge: true })).toContain("## The merge commit's conflict resolution");
   expect(reviewPrompt("n", "goal", diff, [])).toContain("## Diff from the merge base");
 });
 

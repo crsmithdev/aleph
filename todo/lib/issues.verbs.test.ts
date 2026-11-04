@@ -27,7 +27,7 @@ async function code<T>(f: () => T | Promise<T>): Promise<{ code: number; value?:
 }
 const add = async (title: string, fields: verbs.Fields = {}) => { verbs.checkFields(fields); return verbs.add(proj(), title, fields); };
 const list = (o: { status?: string; label?: string } = {}) => verbs.list(proj(), o).map(verbs.brief);
-const show = (id: number) => { const { item: i, hidden } = verbs.show(proj(), id); return { ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, hidden }; };
+const show = (id: number) => { const i = verbs.show(proj(), id); return { ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes }; };
 /** The lines `aleph issue lint` prints on stderr, and its exit code. */
 function lint(): { code: number; err: string } {
   try {

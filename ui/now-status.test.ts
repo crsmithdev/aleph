@@ -85,22 +85,10 @@ test("a full suite over its budget is a warning part, not an alert and not a car
   expect(view.view.render(withFactory({ health: [slow] }))).not.toContain('data-kind="error"');
 });
 
-test("a failed nightly acceptance run is a warning part, not an alert and not a card", () => {
-  const failed = "health: aleph nightly acceptance run failed at abc1234: 2 tests failed";
-  expect(said({ health: [failed] })).toBe("Everything is running smoothly; aleph nightly acceptance run failed at abc1234: 2 tests failed.");
-  expect(view.view.render(withFactory({ health: [failed] }))).not.toContain('data-kind="error"');
-});
-
 test("the page has no banner and the status line holds the alert", () => {
   const page = view.view.render(withFactory({ health: [mainRed] }));
   expect(page).not.toContain('class="banner"');
   expect(page).toMatch(/<header class="ph shead">[^]*the build is failing on main/);
-});
-
-test("the most flaked line stays in the report and off the status sentence and the error rows", () => {
-  const line = "health: most flaked in acceptance in 7 days: a.test.ts > twice (1 times)";
-  const page = view.view.render({ ...withFactory({ health: [line] }), asks: [], stuck: [] });
-  expect(page).not.toContain("most flaked");
 });
 
 test("the status line says your attention is needed when the Issues section has an item", () => {

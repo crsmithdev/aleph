@@ -190,7 +190,7 @@ describe("run logs", () => {
 });
 
 describe("GET /api/jobs/:name/diff", () => {
-  test("a landed job sealed with scenarios shows the sealed look and the scenarios in checkedBy", async () => {
+  test("a landed job shows its look and the reviewer in checkedBy", async () => {
     const fac = join(base, "fac");
     sh(fac, "git", "switch", "-qc", "tmp-seal");
     writeFileSync(join(fac, "c.txt"), "sealed\n");
@@ -198,10 +198,10 @@ describe("GET /api/jobs/:name/diff", () => {
     const commit = sh(fac, "git", "rev-parse", "HEAD");
     sh(fac, "git", "switch", "-q", "main");
     sh(fac, "git", "branch", "-D", "tmp-seal");
-    run("20261027-000060-a", { job: "fac-S", name: "fac-S", repo: "fac", branch: "factory/fac-S", condition: "landed", commit }, { "review.md": "land", "review-prompt.md": "## Sealed scenarios\n- s\n" });
+    run("20261027-000060-a", { job: "fac-S", name: "fac-S", repo: "fac", branch: "factory/fac-S", condition: "landed", commit }, { "review.md": "land" });
     const d = (await (await get("/api/jobs/fac-S")).json()) as any;
-    expect(d.look).toBe(2);
-    expect(d.checkedBy).toEqual(["reviewer", "sealed scenarios"]);
+    expect(d.look).toBe(3);
+    expect(d.checkedBy).toEqual(["reviewer"]);
   });
   test("a dropped job's kept diff.patch is served when the branch is gone; none recorded says so", async () => {
     run("20261027-000051-a", { job: "fac-K", name: "fac-K", repo: "fac", branch: "factory/fac-K", condition: "dropped" }, { "diff.patch": "+kept line\n", "diff.stat": " k.txt | 1 +\n" });

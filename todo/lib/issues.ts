@@ -57,29 +57,6 @@ function pick(repo: store.Place, doc: issues.Doc, id: number | string): issues.I
   return issues.find(doc, id) ?? refuse(`${repo.key} has no issue ${id}`);
 }
 
-/** An issue's hidden check files in the store. */
-const readHiddenOf = (repo: store.Place, g: issues.Issue): Record<string, string> => {
-  try { return store.readHidden(repo, `${repo.key}-${issues.refOf(g)}`); } catch (e: any) { return refuse(e?.message ?? String(e)); }
-};
-
-/** The names of an issue's hidden check files. */
-export function hiddenList(repo: store.Place, id: number | string): string[] {
-  return Object.keys(readHiddenOf(repo, pick(repo, readIssues(repo), id)));
-}
-
-/** Store `files` as the issue's hidden checks, in `<repo>/hidden/<repo>-<id>/`. */
-export function hiddenAdd(repo: store.Place, id: number | string, files: Record<string, string>) {
-  const g = pick(repo, readIssues(repo), id);
-  const ref = `${repo.key}-${issues.refOf(g)}`;
-  try {
-    const w = store.writeHidden(repo, ref, files);
-    return { result: { repo: repo.key, id: ref, hidden: Object.keys(files), commit: w.commit }, follow: w.follow };
-  } catch (e: any) {
-    if (e instanceof Refusal) throw e;
-    return refuse(e?.message ?? String(e));
-  }
-}
-
 // Every verb but `add` needs a list on main; `add` starts one.
 function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) => T | null, create = false) {
   try {
@@ -140,12 +117,8 @@ export function filterRows(doc: issues.Doc, o: { status?: string; label?: string
     .filter((i) => (o.label ? store.areasOf(i).includes(o.label) : true));
 }
 
-/** How many hidden check files an item has in the store. */
-export const hiddenCount = (repo: store.Place, id: number | string): number => Object.keys(store.readHidden(repo, typeof id === "number" ? id : `${repo.key}-${id}`)).length;
-
-export function show(repo: store.Place, id: number | string): { item: issues.Issue; hidden: number } {
-  const item = pick(repo, readIssues(repo), id);
-  return { item, hidden: hiddenCount(repo, id) };
+export function show(repo: store.Place, id: number | string): issues.Issue {
+  return pick(repo, readIssues(repo), id);
 }
 
 /** Add a note; `answer` marks it as Chris's answer, which clears the item's Ask (`answered`). */

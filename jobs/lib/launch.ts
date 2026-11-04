@@ -123,11 +123,3 @@ export function planDetached(repo: Repo, id: number): void {
   detached(["plan", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
 }
 
-/**
- * Start `aleph acceptance` detached: the dispatch never waits for the acceptance runs. It does not check `dispatchOn()`
- * (acceptance is not a start), and in the foreground, where only the tests run units, it starts nothing.
- */
-export function acceptanceDetached(): void {
-  if (foreground()) return;
-  detached(["acceptance"], join(factoryDir(), "dispatch.log"));
-}

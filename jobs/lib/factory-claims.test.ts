@@ -70,7 +70,7 @@ test("a pass that began before a pause starts nothing after it", async () => {
     mkdirSync(factoryDir(), { recursive: true });
     writeFileSync(join(factoryDir(), "paused"), "");
     return null;
-  }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
+  }, async () => null, undefined, undefined, undefined, undefined, undefined);
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.skipped.at(-1)).toEndWith(": paused");
 });

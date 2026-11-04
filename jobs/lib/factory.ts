@@ -10,27 +10,24 @@ import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, rea
 import { fetchOrigin, git } from "./git.ts";
 import { askChris, askOf, needsOf, plainAsk } from "./ask.ts";
 import { factoryLog } from "./layout.ts";
-import { itemOnMain, readRecord, repoStages } from "./status.ts";
+import { itemOnMain, repoStages } from "./status.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { isLive, isStarting } from "./process.ts";
-import { endKilledFacts, rescueStuck, type Rescue } from "./rescue.ts";
+import { rescueStuck, type Rescue } from "./rescue.ts";
 import { clearRerun, goalBrief } from "./continuation.ts";
 import { type Fate } from "./outcome.ts";
-import { allJobs, checkedBy, lookMinutes, sealed, lastReal, openJob } from "./job.ts";
-import { accept, final, reaccept, reopenedByAcceptance, sandboxScenarios, unshown, type ScenarioCheck } from "./acceptance.ts";
+import { allJobs, checkedBy, lookMinutes, openJob } from "./job.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
-import { endLost } from "./agent-run.ts";
-import { factsGate } from "./facts.ts";
 import { directAll, type Decision, type Ports as DirectorPorts } from "./director.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
-import { baselineChecks, runOnCommit, type ChecksStop, type Runner } from "./checks.ts";
+import { baselineChecks, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { startKept } from "./unit.ts";
-import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
+import { dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
 import { markLaunched, passNotes, recordedVerdict, specChecking } from "./spec-check.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
@@ -44,34 +41,6 @@ import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from 
 const LIVE_REFUSAL = / agent runs are live/;
 import { goalLockWaitMs, rescueOn } from "./settings.ts";
 
-
-/**
- * The facts gate for every landed job of a factory repo that has a commit, no facts marker on its land run and no facts run yet. A land that
- * comes through the unit's own next step is picked up by the dispatch the unit starts when it ends.
- */
-async function factsStep(): Promise<void> {
-  endKilledFacts();
-  await endLost("facts", (run) => run.name, "its verdicts");
-  const keys = new Map(sandboxRepos().map((r) => [r.key, r]));
-  for (const j of allJobs()) {
-    const last = lastReal(j);
-    const repo = last.run.repo ? keys.get(last.run.repo) : undefined;
-    if (!repo || last.run.condition !== "landed" || !last.run.commit || last.run.facts || j.some((e) => e.run.kind === "facts")) continue;
-    const name = last.run.name;
-    const release = await lock(`facts-${name}`, 0);
-    if (!release) continue;
-    try {
-      // Read again under the lock: another dispatch may have run the gate meanwhile.
-      const now = allJobs().find((x) => x[0].run.job === j[0].run.job);
-      if (!now || now.some((e) => e.run.kind === "facts" || e.run.facts)) continue;
-      await factsGate(repo, last, last.run.commit, factoryLog);
-    } catch (e: any) {
-      factoryLog(`${name}: facts gate failed: ${e?.message ?? e}`);
-    } finally {
-      release();
-    }
-  }
-}
 
 /** The buildable issues of each factory repo. */
 export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos(), lists);
@@ -107,8 +76,7 @@ type Land = (name: string) => Promise<string | null>;
 /**
  * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
  * and from the tick as a fallback. While the factory is paused it does nothing. Else its steps run first: the next
- * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands, the facts, the
- * acceptance run and the close of parents whose parts are done. Then each goal meets the 7 gates of goalDecision in
+ * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands and the close of parents whose parts are done. Then each goal meets the 7 gates of goalDecision in
  * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds goes to the
  * routing step (its spec check, or the planner) and then starts. Each start holds a lock on its goal and re-reads
  * the jobs under it, so two dispatches at once start a goal once. `start` dispatches the run; it
@@ -118,9 +86,8 @@ type Land = (name: string) => Promise<string | null>;
  * `plan` starts an issue's planner detached; the dispatch does not wait for it.
  * `specCheck` starts a goal's spec check detached (spec-check.ts), for a repo with `author` set: a goal
  * starts only once its spec version has a recorded verdict of pass or error.
- * `acceptance` starts the acceptance run detached (`aleph acceptance`); goal starts do not wait for it.
  */
-export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached, acceptance: () => void = acceptanceDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, checks?: Checks, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -136,8 +103,6 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     names.forEach((name, i) => { if (!whys[i]) landed.push(name); });
     if (landed.length) factoryLog(`landed ${landed.join(", ")}`);
   }
-  await factsStep();
-  if (checks) acceptance();
   const started: string[] = [];
   const skipped: string[] = [];
   const planned: string[] = [];
@@ -282,82 +247,6 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
   }
   return lines;
 }
-
-/** Done goals older than this many days are not accepted: the step starts with the goals closed lately. */
-const ACCEPTANCE_DAYS = 2;
-
-/**
- * The acceptance run: every done goal (one whose land is on origin/<main>, or a `planned` parent
- * closed as done) whose Oracle has not been run since it was done gets it run on origin/<main>,
- * under srt. Pass: a note. A failure reruns the failed tests on that commit once the machine is
- * quiet, and only a repeat in a test the goal touched counts. A repeat, or a failed sealed scenario, is final:
- * the goal stays done and one follow-up issue gets the failures. A follow-up that fails gets an Ask
- * (input, acceptance-failed) and files nothing. See acceptance.ts.
- */
-export async function acceptanceStep(run: Runner = runOnCommit, now = issues.clock(), check: ScenarioCheck = sandboxScenarios): Promise<string[]> {
-  const lines: string[] = [];
-  const since = issues.today(new Date(now.getTime() - ACCEPTANCE_DAYS * 86_400_000));
-  const lists = reader();
-  for (const repo of sandboxRepos()) {
-    const list = lists.list(repo.key)?.items ?? [];
-    const due = list.filter((i) => !!i.spec.trim() && issues.status(i) === "done" && (String(i.fm.updated ?? "") >= since || !!readRecord(repo.key, issues.refOf(i))?.retest) && !final(readRecord(repo.key, issues.refOf(i))));
-    if (!due.length) continue;
-    if (!fetchOrigin(repo.path).ok) { lines.push(`${repo.key}: acceptance not run: fetch failed`); continue; }
-    for (const listed of due) {
-      const release = await lock(`acceptance-${repo.key}-${issues.refOf(listed)}`, 0);
-      if (!release) continue;
-      try {
-        const item = reader().item(repo.key, issues.refOf(listed));
-        if (!item || issues.status(item) !== "done" || final(readRecord(repo.key, issues.refOf(item)))) continue;
-        if (!itemOnMain(repo, issues.idOf(item))) continue;
-        lines.push(await accept(repo, item, run, now, check));
-      } finally {
-        release();
-      }
-    }
-  }
-  for (const l of lines) factoryLog(l);
-  return lines;
-}
-
-/** The commit that made an acceptance infra error no result (9fd990c): goals reopened by a fail written before it are candidates. */
-const INFRA_FIX = "9fd990c";
-
-/**
- * `aleph accept <repo>`: the open goals whose last note is an `acceptance: fail` written before the infra
- * fix (or before `before`) and after `since`, and whose job landed, get their Oracle run again on origin/<main>.
- * See reaccept in acceptance.ts.
- */
-export async function reacceptReopened(repoKey: string, o: { since?: string; before?: string; run?: Runner } = {}): Promise<string[]> {
-  const repo = sandboxRepos().find((r) => r.key === repoKey) ?? loadRegistry()[repoKey];
-  if (!repo) throw new Error(`no repo ${repoKey} in the registry`);
-  if (!fetchOrigin(repo.path).ok) return [`${repo.key}: re-accept not run: fetch failed`];
-  const ms = (s: string | undefined, what: string): number | undefined => {
-    if (s === undefined) return undefined;
-    const t = Date.parse(s);
-    if (Number.isNaN(t)) throw new Error(`${what}: not a date: ${s}`);
-    return t;
-  };
-  const fixed = Number(git(repo.path, "log", "-1", "--format=%ct", INFRA_FIX).out) * 1000;
-  const before = ms(o.before, "--before") ?? (fixed || Infinity);
-  const since = ms(o.since, "--reopened-since") ?? -Infinity;
-  const lines: string[] = [];
-  const list = reader().list(repo.key)?.items ?? [];
-  for (const listed of list.filter((i) => !!i.spec.trim() && reopenedByAcceptance(i, since, before))) {
-    const release = await lock(`acceptance-${repo.key}-${issues.refOf(listed)}`, 0);
-    if (!release) continue;
-    try {
-      const item = reader().item(repo.key, issues.refOf(listed));
-      if (!item || !reopenedByAcceptance(item, since, before) || !itemOnMain(repo, issues.idOf(item), { anyTime: true })) continue;
-      lines.push(await reaccept(repo, item, o.run));
-    } finally {
-      release();
-    }
-  }
-  for (const l of lines) factoryLog(l);
-  return lines;
-}
-
 
 const localDay = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 
@@ -507,18 +396,6 @@ export function behind(repo: Repo): string | null {
 
 const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
 
-/** The first source of the vault note titled `title`, or undefined. */
-function noteSource(title: string): string | undefined {
-  for (const d of ["gotchas", "concepts"]) {
-    try {
-      const m = /^sources:\s*\[([^\]]*)\]/m.exec(readFileSync(join(vaultDir(), "wiki", d, `${title}.md`), "utf8"));
-      const first = m?.[1].split(",")[0].trim();
-      if (first) return first;
-    } catch {}
-  }
-  return undefined;
-}
-
 /** The heading a run's report entry goes under. */
 const laneOf = (e: Entry): string =>
   e.run.condition === "landed" ? "delivered" : isAwaiting(e.run.condition) ? "needs you" : e.run.condition === "stuck" || e.run.condition === "failed" ? "stuck" : "other";
@@ -537,23 +414,14 @@ function entry(e: Entry): string {
     if (j) lines.push(`  checked by: ${checkedBy(j).join(", ") || "nothing recorded"}`);
     const repo = r.repo ? loadRegistry()[r.repo] : undefined;
     const stat = repo ? git(repo.path, "show", "--shortstat", "--format=", r.commit).out : "";
-    if (stat) lines.push(`  look: about ${lookMinutes(changedLinesOf(stat), !!j && sealed(j))} min (estimate)`);
+    if (stat) lines.push(`  look: about ${lookMinutes(changedLinesOf(stat))} min (estimate)`);
   }
   if (needs === "held" || needs === "review") {
     if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
     lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
   }
   for (const d of r.defaults ?? []) lines.push(`  DEFAULT: ${d}`);
-  const hidden = r.checks?.find((c) => c.name === "hidden" && c.total);
-  if (hidden) lines.push(`  hidden ${hidden.passed}/${hidden.total}`);
   for (const c of r.checks ?? []) if (c.rerun) lines.push(`  ${c.name} passed on rerun`);
-  if (r.kind === "facts") {
-    for (const k of r.kept ?? []) {
-      const src = noteSource(k);
-      lines.push(`  kept: ${k}${src ? ` (${src})` : ""}`);
-    }
-    for (const x of r.rejected ?? []) lines.push(`  rejected: ${typeof x === "string" ? x : `${x.fact}: ${x.reason}`}`);
-  }
   if (r.cost !== undefined) lines.push(`  cost ${money(r.cost)} at the API price`);
   return lines.join("\n");
 }
@@ -566,7 +434,6 @@ export function report(now = Date.now()): string {
   const lines = runLines(now);
   const due = cameDue();
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));
-  lines.push(...unshown());
   const eps = newEpisodes();
   if (eps.length) lines.push(["episodes:", ...eps.map((t) => `  ${t}`)].join("\n"));
   const lessons = proposals();

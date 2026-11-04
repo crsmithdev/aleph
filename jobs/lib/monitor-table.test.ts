@@ -2,9 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { acceptanceLine, acceptanceOf, flakeHealth, flakeSection, measure, notesOf, renderTable, storeLog, type Sources } from "./monitor-table.ts";
+import { flakeHealth, flakeSection, measure, renderTable, storeLog, type Sources } from "./monitor-table.ts";
 import type { Entry, Run } from "./ledger.ts";
-import type { Issue } from "../../todo/lib/todo.ts";
 
 const DAY = "2026-10-20";
 /** A local time on a day, as an ISO string. */
@@ -17,71 +16,7 @@ function run(o: Partial<Run> & { kind: Run["kind"]; started: string }): Entry {
   const id = `r${++n}`;
   return { id, folder: `/x/${id}`, run: { job: id, name: o.on ?? id, condition: "done", told: true, ...o } as Run };
 }
-const item = (status: string, notes: string[]): Issue => ({ id: 1, title: "t", fm: (status === "open" ? {} : { closed_as: status }) as any, request: "", spec: "", notes });
 const empty: Sources = { runs: [], holds: [], specChecks: [], items: [], storeLog: [], flakes: [], trackers: [], usage: [] };
-
-describe("acceptance: the share of failures that led to a real fix", () => {
-  const fail = (h: number) => note(DAY, h, "acceptance: fail at abc1234: scenarios 1 failed");
-  const land = (h: number) => note(DAY, h, "job p-1 landed");
-  const pass = (h: number) => note(DAY, h, "acceptance: pass at def5678");
-  const items = [
-    { name: "p-1", item: item("done", [fail(9), land(10), pass(11)]) },
-    { name: "p-2", item: item("open", [fail(9), land(10), note(DAY, 11, "acceptance: fail again at x: y")]) },
-    { name: "p-3", item: item("done", [fail(9), note(DAY, 10, "closed by hand")]) },
-    { name: "p-4", item: item("open", [fail(9)]) },
-    { name: "p-5", item: item("open", [fail(9), land(10)]) },
-  ];
-
-  test("a land that the next acceptance passed is a fix; a land it failed is not; no acceptance yet is pending", () => {
-    expect(acceptanceOf(notesOf({ items, storeLog: [] }), -Infinity, Infinity))
-      .toEqual({ failures: 6, fixed: 1, notFixed: 1, pending: 1, closed: 1, open: 2 });
-  });
-
-  test("a failure with no land after it is closed or open by the item's status; the second failure of p-2 is open", () => {
-    const a = acceptanceOf(notesOf({ items: items.slice(1, 2), storeLog: [] }), -Infinity, Infinity);
-    expect(a).toEqual({ failures: 2, fixed: 0, notFixed: 1, pending: 0, closed: 0, open: 1 });
-  });
-
-  test("an item only the store's history has counts, and is closed", () => {
-    const storeLog = [{ at: at(DAY, 9), item: "p-9", added: [fail(9), note(DAY, 10, "job p-9 landed"), pass(12)], removed: [] }];
-    expect(acceptanceOf(notesOf({ items: [], storeLog }), -Infinity, Infinity)).toMatchObject({ failures: 1, fixed: 1 });
-  });
-
-  test("a failure that filed a follow-up is judged on the follow-up; a failure with no follow-up part keeps the old rule", () => {
-    const filed = (m: number) => note(DAY, 9, `acceptance: fail at abc1234: scenarios 1 failed; follow-up q-${m}`);
-    const goals = [
-      // The follow-up landed and its acceptance passed: fixed.
-      { name: "q-1", item: item("done", [filed(11)]) },
-      { name: "q-11", item: item("done", [note(DAY, 10, "job q-11 landed"), note(DAY, 11, "acceptance: pass at def5678")]) },
-      // The follow-up landed and its acceptance failed: not fixed, and the follow-up's own failure is open.
-      { name: "q-2", item: item("done", [filed(12)]) },
-      { name: "q-12", item: item("open", [note(DAY, 10, "job q-12 landed"), note(DAY, 11, "acceptance: fail again at def5678: x")]) },
-      // The follow-up landed and no acceptance ran yet: pending.
-      { name: "q-3", item: item("done", [filed(13)]) },
-      { name: "q-13", item: item("done", [note(DAY, 10, "job q-13 landed")]) },
-      // The follow-up has not landed: open, though the goal is done.
-      { name: "q-4", item: item("done", [filed(14)]) },
-      { name: "q-14", item: item("open", []) },
-      // An old-format failure: a land on the goal and the next acceptance passed.
-      { name: "q-5", item: item("done", [fail(9), note(DAY, 10, "job q-5 landed"), pass(11)]) },
-    ];
-    const one = (k: number) => acceptanceOf(notesOf({ items: goals.slice(2 * k, 2 * k + 2), storeLog: [] }), -Infinity, Infinity);
-    expect(one(0)).toEqual({ failures: 1, fixed: 1, notFixed: 0, pending: 0, closed: 0, open: 0 });
-    expect(one(1)).toEqual({ failures: 2, fixed: 0, notFixed: 1, pending: 0, closed: 0, open: 1 });
-    expect(one(2)).toEqual({ failures: 1, fixed: 0, notFixed: 0, pending: 1, closed: 0, open: 0 });
-    expect(one(3)).toEqual({ failures: 1, fixed: 0, notFixed: 0, pending: 0, closed: 0, open: 1 });
-    expect(one(4)).toEqual({ failures: 1, fixed: 1, notFixed: 0, pending: 0, closed: 0, open: 0 });
-  });
-
-  test("only failures noted inside the window count", () => {
-    expect(acceptanceOf(notesOf({ items, storeLog: [] }), Date.parse(at(DAY, 10)), Infinity).failures).toBe(1);
-  });
-
-  test("the first metric is one sentence over the day and the 7 days before it, and over all time", () => {
-    const t = measure({ ...empty, items }, DAY, Date.parse(at(DAY, 23)));
-    expect(acceptanceLine(t)).toBe("Acceptance failures that led to a real fix: 1 of 6 in the 8 days to 2026-10-20 (17%); 1 of 6 in all (17%).");
-  });
-});
 
 describe("stages", () => {
   const runs = [
@@ -123,7 +58,7 @@ describe("stages", () => {
   });
 });
 
-describe("Asks, reopens, holds and set-asides", () => {
+describe("Asks, reopens and holds", () => {
   const storeLog = [
     { at: at(DAY, 9), item: "p-1", added: ["reason: spec-check"], removed: [] },
     { at: at(DAY, 10), item: "p-2", added: ["reason: spec-check"], removed: ["reason: question"] },
@@ -140,11 +75,7 @@ describe("Asks, reopens, holds and set-asides", () => {
     // The last record of a goal has no known end: it counts as a record and as no time.
     { at: at(DAY, 10), name: "p-3", kind: "busy", text: "" },
   ];
-  const items = [
-    { name: "p-1", item: item("open", [note(DAY, 9, "sealed checks: the reviewer set aside: 3 asks for more"), note(DAY, 9, "sealed checks: the reviewer set aside: 4 too")]) },
-  ];
-  const reviewed = [run({ kind: "build", on: "p-1", started: at(DAY, 8), ended: at(DAY, 9), review: { call: "land" } }), run({ kind: "build", on: "p-2", started: at(DAY, 8), ended: at(DAY, 9), review: { call: "back" } })];
-  const t = measure({ ...empty, storeLog, runs: [...runs, ...reviewed], holds, items }, DAY, Date.parse(at(DAY, 23)));
+  const t = measure({ ...empty, storeLog, runs, holds }, DAY, Date.parse(at(DAY, 23)));
 
   test("each reason line a store commit adds is an Ask, and so is a run's own Ask", () => {
     expect(t.today.asks).toEqual({ "spec-check": 2, "held-path": 1 });
@@ -173,10 +104,6 @@ describe("Asks, reopens, holds and set-asides", () => {
     ] }, DAY, Date.parse(at(DAY, 23)));
     expect(v6.today.held).toEqual({ goals: 3, seen: 5 });
   });
-
-  test("the set-aside share is of the goals whose build was reviewed that day", () => {
-    expect(t.today.setAside).toEqual({ goals: 1, notes: 2, reviewed: 2 });
-  });
 });
 
 describe("flakes: the counts aleph report prints", () => {
@@ -194,11 +121,10 @@ describe("flakes: the counts aleph report prints", () => {
     note("2026-10-01", 9, "old: e.test.ts > old"),
   ] }];
 
-  test("two reruns of a test in 7 days make a line; a tracker gives its notes, its files and its most flaked test", () => {
+  test("two reruns of a test in 7 days make a line; a tracker gives its notes and its files", () => {
     expect(flakeHealth(flakeSection(rows, trackers, now))).toEqual([
       "health: p test a.test.ts > one passed on rerun 2 times in 7 days",
       "health: p-7 holds 3 flake notes in 7 days, 2 test files",
-      "health: most flaked in acceptance in 7 days: c.test.ts > twice (2 times)",
     ]);
   });
 
@@ -207,7 +133,7 @@ describe("flakes: the counts aleph report prints", () => {
   });
 });
 
-test("storeLog reads the reason, closed_as and kept note lines of each item file from the store's git history", () => {
+test("storeLog reads the reason and closed_as lines of each item file from the store's git history", () => {
   const dir = mkdtempSync(join(tmpdir(), "monitor-store-"));
   const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
   const git = (...a: string[]) => { const p = Bun.spawnSync(["git", ...a], { cwd: dir, env }); if (p.exitCode) throw new Error(p.stderr.toString()); };
@@ -220,8 +146,8 @@ test("storeLog reads the reason, closed_as and kept note lines of each item file
     git("add", "."); git("commit", "-q", "-m", "two");
     const log = storeLog(dir);
     expect(log.map((c) => ({ item: c.item, added: c.added, removed: c.removed }))).toEqual([
-      { item: "p-1", added: ["reason: spec-check", "- 2026-10-20 10:00: acceptance: fail at abc: x"], removed: ["closed_as: done"] },
-      { item: "p-1", added: ["closed_as: done", "- 2026-10-20 09:00: job p-1 landed"], removed: [] },
+      { item: "p-1", added: ["reason: spec-check"], removed: ["closed_as: done"] },
+      { item: "p-1", added: ["closed_as: done"], removed: [] },
     ]);
     expect(Number.isNaN(Date.parse(log[0].at))).toBe(false);
   } finally {

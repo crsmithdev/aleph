@@ -7,7 +7,7 @@
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
 import { isLive } from "./lib/process.ts";
 import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
@@ -22,7 +22,7 @@ import * as verbs from "../todo/lib/issues.ts";
 import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
 import { ciStep } from "./lib/ci.ts";
 import { firefight } from "./lib/firefighter.ts";
-import { acceptanceStep, behind, correctionsStep, directorStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
+import { behind, correctionsStep, directorStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
 import { factoryDir, factoryRepos, health, paused } from "./lib/factory-status.ts";
@@ -34,7 +34,6 @@ import type { Fate } from "./lib/outcome.ts";
 import { refuse, Refusal } from "./lib/refusal.ts";
 import { probe } from "./lib/probe.ts";
 import { smokeStep } from "./lib/smoke.ts";
-import { runNightly } from "./lib/nightly-accept.ts";
 import * as doctor from "./lib/doctor.ts";
 import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
@@ -186,7 +185,7 @@ async function todoCmd(): Promise<void> {
     status: stat,
     ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   const registry = loadRegistry();
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label, kind: flag("kind") }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
@@ -214,14 +213,13 @@ async function todoCmd(): Promise<void> {
       return;
     }
     case "show": {
-      const { item: i, hidden } = verbs.show(repo, id);
-      if (json) { out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes, hidden }); return; }
+      const i = verbs.show(repo, id);
+      if (json) { out({ ...verbs.brief(i), request: i.request, spec: i.spec, notes: i.notes }); return; }
       console.log(`## ${i.id}. ${i.title}`);
       const ask = askOf(i);
       console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
       console.log(`after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
       console.log(`ask ${ask ? `${ask.kind} (${ask.reason}): ${ask.question}` : "-"}`);
-      console.log(`hidden checks: ${hidden}`);
       if (i.request.trim()) console.log(`\n## Request\n\n${i.request}`);
       if (i.spec.trim()) console.log(`\n${i.spec}`);
       if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
@@ -257,20 +255,6 @@ async function todoCmd(): Promise<void> {
       out(c.result);
       return;
     }
-    case "hidden": {
-      if (!args.slice(1).length) {
-        const have = verbs.hiddenList(repo, id);
-        if (json) { out(have); return; }
-        if (!have.length) console.log("no hidden checks");
-        for (const n of have) console.log(n);
-        return;
-      }
-      const files = Object.fromEntries(args.slice(1).map((f) => [basename(f), readFileSync(f, "utf8")]));
-      const h = verbs.hiddenAdd(repo, id, files);
-      warn(h.follow);
-      out(h.result);
-      return;
-    }
     case "lint": {
       if (fixing) {
         const l = verbs.lintFix(repo);
@@ -284,7 +268,7 @@ async function todoCmd(): Promise<void> {
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|hidden> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   }
 }
 
@@ -475,18 +459,6 @@ try {
     case "land": await started(await land(positional[0], { checked: rest.includes("--checked") }, { command })); break;
     case "checked": out(checked(positional[0])); break;
     case "issue": await todoCmd(); break;
-    case "accept": {
-      const lines = await reacceptReopened(positional[0] ?? refuse("usage: aleph accept <repo> [--reopened-since <iso>] [--before <iso>]"), { since: flag("reopened-since"), before: flag("before") });
-      console.log(lines.join("\n") || "nothing to re-accept");
-      break;
-    }
-    case "accept-nightly": {
-      const key = positional[0] ?? refuse("usage: aleph accept-nightly <repo>");
-      const r = runNightly(loadRegistry()[key] ?? refuse(`no repo ${key} in the registry`));
-      out(r);
-      if (!r.ok) process.exit(1);
-      break;
-    }
     case "tick": await tickCmd(); break;
     case "monitor": {
       // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
@@ -500,7 +472,6 @@ try {
     case "dispatch": await dispatchCmd(); break;
     case "triage": await triageCmd(); break;
     case "plan": await planCmd(); break;
-    case "acceptance": out({ acceptance: await acceptanceStep() }); break;
     case "spec-check": await specCheckCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;

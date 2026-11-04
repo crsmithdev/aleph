@@ -100,8 +100,6 @@ export interface JobView {
   item?: number | string; cost?: number; model?: string; commit?: string; stat?: string;
   defaults: string[]; followups: string[];
   checks?: CheckResult[];
-  /** The hidden check's test counts, when the job's item has hidden checks. */
-  hidden?: { passed: number; total: number };
   /** The review of the last run: its call and reason. */
   review?: { call: string; reason?: string };
   /** A landed job's manual check. */
@@ -110,27 +108,17 @@ export interface JobView {
   lost?: true;
 }
 
-/** The reviewer checked sealed scenarios: a run folder holds `review.md` and a `review-prompt.md` with a `## Sealed scenarios` section. */
-const scenariosChecked = (j: Job): boolean =>
-  j.some((e) => {
-    if (!existsSync(runFile(e.folder, "review.md"))) return false;
-    try { return readFileSync(runFile(e.folder, "review-prompt.md"), "utf8").includes("## Sealed scenarios"); } catch { return false; }
-  });
-
-/** The job's goal was checked in secret: the reviewer checked sealed scenarios. A hidden check does not count, since the worker's brief shows the hidden test files. */
-export const sealed = (j: Job): boolean => scenariosChecked(j);
-
 /** What checked a job, in the order it ran: its checks, then the reviewers that left a file. Deterministic checks and model judges are named apart. */
 export function checkedBy(j: Job): string[] {
   const checks = j.findLast((e) => e.run.checks?.length)?.run.checks ?? [];
-  const names = checks.filter((c) => c.ok).map((c) => (c.name === "hidden" && c.total ? `hidden ${c.passed ?? 0}/${c.total}` : c.name));
+  const names = checks.filter((c) => c.ok).map((c) => c.name);
   const has = (f: string) => j.some((e) => existsSync(join(e.folder, f)));
-  return [...names, ...(has("review.md") ? ["reviewer", ...(scenariosChecked(j) ? ["sealed scenarios"] : [])] : []), ...(has(join("browser", "report.md")) ? ["browser review"] : [])];
+  return [...names, ...(has("review.md") ? ["reviewer"] : []), ...(has(join("browser", "report.md")) ? ["browser review"] : [])];
 }
 
-/** Minutes a spot check of a delivery should take, an estimate: one, one per 200 changed lines, and one more unless the reviewer checked sealed scenarios (see `sealed`). */
-export function lookMinutes(changedLines: number, sealed: boolean): number {
-  return 1 + Math.ceil(changedLines / 200) + (sealed ? 0 : 1);
+/** Minutes a spot check of a delivery should take, an estimate: two, and one per 200 changed lines. */
+export function lookMinutes(changedLines: number): number {
+  return 2 + Math.ceil(changedLines / 200);
 }
 
 export function view(j: Job): JobView {
@@ -157,8 +145,6 @@ export function view(j: Job): JobView {
   // The latest checks that ran; a stuck or failed job shows its last run's, even none.
   const checks = r.condition === "stuck" || r.condition === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
   if (Array.isArray(checks)) v.checks = checks;
-  const hid = j.findLast((e) => e.run.checks?.some((c) => c.name === "hidden" && c.total))?.run.checks?.find((c) => c.name === "hidden");
-  if (hid?.total) v.hidden = { passed: hid.passed ?? 0, total: hid.total };
   const review = reviewOf(last);
   if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };
   if (r.condition === "landed" && r.check) v.check = r.check;

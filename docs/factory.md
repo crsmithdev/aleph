@@ -9,14 +9,10 @@ A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Facto
 ```bash
 systemctl --user link ~/aleph/jobs/systemd/aleph-tick.service
 systemctl --user enable --now ~/aleph/jobs/systemd/aleph-tick.timer
-systemctl --user link ~/aleph/jobs/systemd/aleph-accept.service
-systemctl --user enable --now ~/aleph/jobs/systemd/aleph-accept.timer
 aleph sandbox probe     # check the sandbox isolation from inside its profile
 ```
 
-The `aleph-tick` timer runs `aleph tick` every 5 minutes. The `aleph-accept` timer runs `aleph accept-nightly aleph` at 03:30.
-
-When a goal passes acceptance, its hidden test files go to `acceptance/<repo>-<n>/` on main, in a commit of their own. A goal's tests stay out of the suite: `bun run test` does not run `acceptance/`, and `bun run accept` does. A failed nightly run is a health line on the Status page until a later run passes. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
+The `aleph-tick` timer runs `aleph tick` every 5 minutes. To start the tick after a Windows restart under WSL, see [Start at boot](start-at-boot.md).
 
 ## Commands
 
@@ -24,7 +20,6 @@ When a goal passes acceptance, its hidden test files go to `acceptance/<repo>-<n
 |---|---|
 | `aleph dispatch` | Starts a run for each ready goal, up to the caps |
 | `aleph tick` | Dispatches, triages, and does the periodic work; the timer runs it |
-| `aleph accept-nightly <repo>` | Runs `bun run accept` on `origin/main` in a worktree of its own, and keeps the result for the health line |
 | `aleph triage <repo>-<n>` | Triages one issue now |
 | `aleph status [<repo>-<n>[.<k>]] [--json]` | The state of one issue, or of each open issue in the recent repos |
 | `aleph jobs` | Open jobs, then the jobs that ended in the last 24 hours |
@@ -83,18 +78,17 @@ The worker ends its result with tagged lines:
 | `FOLLOWUP: <title>` | An issue with `source: worker`, at the priority of the issue it came from |
 | `FLAKE: <test file> > <test name>: <what>` | A note on the repo's flake tracker |
 | `DEFAULT: <choice> -> <what it chose>` | A line in the report |
-| `FACT: <claim> [source: <ref>]` | A vault note, after a facts run checks it against its source |
 
 ### Verify
 
 Verify is one station, with the run phase `verify`. In order, it runs:
 
-1. the repo's setup and checks on a fresh clone of the branch, under `srt`, then the hidden check;
+1. the repo's setup and checks on a fresh clone of the branch, under `srt`;
 2. the doc-claims check of the worker's final message against its transcript;
 3. the keep-gate on the branch's new tests;
 4. the Oracle commands of the spec that the checks did not run.
 
-Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log` (the hidden check to `hidden.log`). The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A sandbox fault skips the Oracle and is not a failure.
+Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log`. The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A sandbox fault skips the Oracle and is not a failure.
 
 ### When a run is stuck
 
@@ -108,11 +102,11 @@ A run is stuck when:
 
 A failed check sends the job back to its worker on the same branch, with a note that names the check and holds the last 80 lines of its log. This happens at most `ALEPH_FIX_ROUNDS` (2) times a job. After the last round, the run stays stuck as `<check> failed after <n> fix rounds`.
 
-When a hidden check fails twice in a row with the same failing tests, no further fix round starts. The run asks you, and quotes the failure, so you can tell a wrong test from a wrong branch.
+When a check fails on two runs in a row with the same failing tests, no further fix round starts. The run asks you, and quotes the failure, so you can tell a wrong test from a wrong branch.
 
 ### Review
 
-When Verify passes, a fresh reviewer (`claude-opus-5-5`, under `srt`, in a clone of the branch) reads the goal and the diff. It ends with a verdict: `pass` or `hold <reason>`. There is one review: no second review follows it.
+When Verify passes, a fresh reviewer (`claude-opus-5-5`, under `srt`, in a clone of the branch) reads the goal and the diff, and checks the spec's Goal and Oracle. It ends with a verdict: `pass` or `hold <reason>`. There is one review: no second review follows it.
 
 - `hold` starts a fix round, like a failed check. The run record shows the round as `stuck` with `next: worker` until the next round starts. After the last round, the run asks you, with the reason `review`.
 - No verdict, an error or the time box (`ALEPH_REVIEW_TIMEOUT`, 10 minutes) runs the reviewer once more. A second miss asks you, with the reason `review`.
@@ -120,13 +114,6 @@ When Verify passes, a fresh reviewer (`claude-opus-5-5`, under `srt`, in a clone
 - A merge run, which only merges `origin/main` into the branch after a land conflict, gets a review of its merge commit only: the merge commit's diff against its first parent.
 
 A change that deletes or renames a test, changes a `test`, `it`, `describe` or `expect` line, or adds `.skip`, `.only` or `.todo` does not stop the run. The reviewer gets each one as a finding, and holds only when the goal does not call for it. The reviewer also gets the list of changed files that the spec's Edit surface does not name, and holds only when the goal does not need the change.
-
-### Hidden checks and sealed scenarios
-
-An issue can have checks the worker never sees:
-
-- **Hidden test files**, in the work store at `<repo>/hidden/<id>/`, added with `aleph issue hidden`. After the repo's checks pass, aleph copies them into the check clone as `.hidden/` and runs `hiddenRun` from the registry (default `bun test ./.hidden`). A fix round gets the names of the failing tests, never their source.
-- **Sealed scenarios**, with `"author": true` in the registry. In the spec check of each spec version, a fresh `claude -p` with no tools reads the goal section only and writes 3 to 8 behaviours to `scenarios.md` among the hidden files; a new version's scenarios replace the old. The spec check then sets aside each scenario that does not follow from the goal or cannot hold with the Oracle: it leaves the file, and the note `sealed checks: <version> the spec check set aside: scenario <n>: <why>` says why. The reviewer checks each scenario left on the branch.
 
 ### Held paths
 
@@ -142,7 +129,7 @@ Lands of one repo go one at a time, in the order they became ready. A land merge
 
 ## Gates
 
-Each dispatch first does its steps: it starts the next steps a pause kept, rescues stuck, failed, killed and lost runs, lands the passed runs, runs the facts and acceptance steps, and closes parents whose parts are done. Then it asks each queued goal 7 gates, in this order. The first gate that binds skips the goal for this dispatch, and a record in `~/.aleph/factory/holds.jsonl` names that gate. The next dispatch asks again.
+Each dispatch first does its steps: it starts the next steps a pause kept, rescues stuck, failed, killed and lost runs, lands the passed runs, and closes parents whose parts are done. Then it asks each queued goal 7 gates, in this order. The first gate that binds skips the goal for this dispatch, and a record in `~/.aleph/factory/holds.jsonl` names that gate. The next dispatch asks again.
 
 | Gate | Binds when |
 |---|---|
@@ -154,7 +141,7 @@ Each dispatch first does its steps: it starts the next steps a pause kept, rescu
 | Busy file | A file in the goal's Edit surface had 3 land conflicts in 7 days, and another open job names it |
 | Loop guard | The goal's last 3 runs made no commit, or it started 3 times in 60 minutes. The dispatch sets an Ask in place of a start |
 
-A goal that no gate holds goes to its spec check (a repo with `"author": true`) or the planner, and then starts. GitHub CI on main does not gate.
+A goal that no gate holds goes to its spec check (a repo with `"author": true` in the registry) or the planner, and then starts. GitHub CI on main does not gate.
 
 A stuck or failed run holds only its own goal, through its open job. The rescue takes a safe action on it once per goal per case, or sets a `rescue` Ask. A lost run (its process ended and wrote no end) is marked failed and its goal reruns once; a second lost run of the goal sets a `rescue` Ask.
 
@@ -168,7 +155,7 @@ Whatever would wait for you is an Ask, of kind `input` or `approval`, with a rea
 
 ## Flakes and health
 
-A check that fails in a run, a land or the baseline runs once more on the same tree (not after a time-out, and not the hidden check). If it passes, it counts as passed, and the flake goes to `~/.aleph/factory/flaky.json`. Two flakes of one check in 7 days raise a health line in `aleph report`.
+A check that fails in a run, a land or the baseline runs once more on the same tree (not after a time-out). If it passes, it counts as passed, and the flake goes to `~/.aleph/factory/flaky.json`. Two flakes of one check in 7 days raise a health line in `aleph report`.
 
 ## Settings
 
@@ -190,4 +177,4 @@ The live cap is read from its variable first, then from `~/.aleph/factory/caps.j
 | `ALEPH_WORKER_CMD` | `claude` | The worker command |
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 
-For each agent role (`TRIAGE`, `PLAN`, `AUTHOR`, `FACTS`, `DIRECTOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.
+For each agent role (`TRIAGE`, `PLAN`, `SPECCHECK`, `DIRECTOR`, `MONITOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.

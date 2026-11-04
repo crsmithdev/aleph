@@ -115,36 +115,6 @@ test("warm() fills the misses cache, so the first request runs vault misses zero
   }
 });
 
-function factsRun(id: string, repo: string, started: string, kept: string[], rejected: string[]) {
-  const dir = join(base, "jobs", id);
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "state.json"), JSON.stringify({ kind: "facts", job: `job-${id}`, name: id, repo, condition: "done", told: true, started, ended: started, kept, rejected }));
-}
-
-test("facts runs fill the gates section, newest first, scoped by project", async () => {
-  const empty: any = await (await at("/api/memory")).json();
-  expect(empty.facts).toEqual([]);
-  expect(v.renderMemory(empty)).toContain("facts gate");
-
-  for (const [t, src] of [["Kept One", "ui/a.ts:3"], ["Kept Two", "abc1234"]])
-    writeFileSync(join(base, "vault", "wiki", "gotchas", `${t}.md`), `---\nkind: gotcha\nscope: aleph\nconfidence: reported\nupdated: ${today}\nsupersedes: []\nsources: [${src}, job:x]\nwritten_by: factory\n---\n**Claim.** ${t}.\n`);
-  const now = Date.now();
-  factsRun("20261001-000000-a-facts", "aleph", new Date(now - 3600_000).toISOString(), ["Kept One", "Kept Two"], ["A fact: it is stale"]);
-  factsRun("20261002-000000-b-facts", "aleph", new Date(now).toISOString(), [], ["Fact X: reason X", "Fact Y: reason Y"]);
-  clearCache();
-  const m: any = await (await at("/api/memory")).json();
-  expect(m.facts.map((r: any) => r.run)).toEqual(["20261002-000000-b-facts", "20261001-000000-a-facts"]);
-  expect(m.facts[1].kept).toEqual([{ title: "Kept One", source: "ui/a.ts:3" }, { title: "Kept Two", source: "abc1234" }]);
-  expect(m.facts[0].rejected).toEqual([{ fact: "Fact X", reason: "reason X" }, { fact: "Fact Y", reason: "reason Y" }]);
-  expect(m.factsWeek).toMatchObject({ kept: 2, rejected: 3 });
-
-  const h = v.renderMemory(m);
-  for (const s of ['href="#/memory/Kept%20One"', 'href="#/memory/Kept%20Two"', "stale", "reason X", "reason Y"]) expect(h).toContain(s);
-
-  const other: any = await (await at("/api/memory?project=other")).json();
-  expect(other.facts).toEqual([]);
-});
-
 /** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. While the file `gate` exists, the stub waits before it fails. */
 async function failing(name: string, ttl: string) {
   const bin = join(base, name), log = join(base, `${name}-calls`), gate = join(base, `${name}-gate`);
@@ -206,7 +176,7 @@ test("the browser filters, ranks a search first and sorts; episodes come only on
 });
 
 test("the page is the board, then broad health, then the note browser; the type comes from the query", () => {
-  const m = { exists: true, total: 2, byKind: { gotcha: 2 }, byScope: { aleph: 2 }, home: [], writes: [], facts: [], factsWeek: { days: 7, kept: 3, rejected: 1 },
+  const m = { exists: true, total: 2, byKind: { gotcha: 2 }, byScope: { aleph: 2 }, home: [], writes: [],
     lint: { refuse: [{ note: "B", rule: "schema", detail: "no confidence" }, { note: "B", rule: "dangling", detail: "x" }], warn: [{ note: "A", rule: "orphan", detail: "y" }] },
     notes: [row({ title: "A" }), row({ title: "B", read: "2026-10-01", problems: [{ rule: "schema", detail: "no confidence" }] })] };
   const h = v.renderMemory(m);

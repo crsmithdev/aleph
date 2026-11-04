@@ -15,11 +15,9 @@ import { readFileSync } from "node:fs";
 import * as issues from "../../todo/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
-import { endRun } from "./agent-run.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
-import { sealedVerdict, type Sealed } from "./acceptance.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, readFile, type Job } from "./job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "./continuation.ts";
@@ -32,8 +30,6 @@ import { onMain } from "./status.ts";
 import { rescueWaitMs } from "./settings.ts";
 
 /** What a safe default action does to a run: both return the refusal, or null. */
-/** The sealed-scenario check of an item against origin/<main>. */
-export type SealedCheck = (repo: Repo, name: string) => Promise<Sealed>;
 
 export interface Rescue {
   /** Drop the job, with the reason; the factory writes the issue note and the news itself. */
@@ -96,23 +92,6 @@ const stuckJobs = (jobs: Job[]): Job[] => {
   });
 };
 
-/**
- * End each facts run that a host restart killed: `running`, started before this boot. A facts run writes no pid, so its
- * process cannot be checked, and a run from before the boot has no reviewer left. It ends `done` with the reason, and
- * stays unshown so the news reports it. It is not run again: its facts are lost, and the job has a facts run, so the
- * gate never reviews them. Sandbox repos only, as `killed`.
- */
-export const endKilledFacts = (): void => {
-  const keys = new Set(sandboxRepos().map((r) => r.key));
-  const booted = bootedAt();
-  for (const e of allRuns()) {
-    const r = e.run;
-    if (r.kind !== "facts" || r.condition !== "running" || !r.repo || !keys.has(r.repo) || Date.parse(r.started) >= booted) continue;
-    endRun(e.folder, "host restart");
-    factoryLog(`${r.name}: a host restart killed its facts run; its facts are lost`);
-  }
-};
-
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
 
 const SLOW_LAND_OPTIONS = [
@@ -164,7 +143,7 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
 }
 
 /** Take the safe default action for each killed, lost, stuck or failed job, one job at a time under its lock. */
-export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain, sealed: SealedCheck = sealedVerdict): Promise<void> {
+export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
   await releaseEdited(act);
   const pending = (jobs: Job[]) => [...killed(jobs), ...lost(jobs), ...stuckJobs(jobs)];
   for (const first of pending(allJobs())) {
@@ -175,7 +154,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
     try {
       // Read again under the lock: another dispatch may have acted on it.
       const runs = pending(allJobs()).find((j) => j[0].run.job === first[0].run.job);
-      if (runs) await rescueJob(runs, act, land, checkMain, sealed);
+      if (runs) await rescueJob(runs, act, land, checkMain);
     } catch (e: any) {
       factoryLog(`rescue of ${name} failed: ${e?.message ?? e}`);
     } finally {
@@ -274,7 +253,7 @@ function sendToPlanner(repo: Repo, issue: number): string | null {
 }
 
 /** Choose the rescue of one job, and do it. The once-only rule is here: a mark on the run counts the case against the goal. */
-async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckMain, sealed: SealedCheck = sealedVerdict): Promise<void> {
+async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
   const last = lastReal(runs);
   const r = last.run;
   const repo = loadRegistry()[r.repo!];
@@ -364,20 +343,9 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     const main: Baseline = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
     if (main.state === "unchecked" || main.state === "running") { factoryLog(`${name}: the claim waits: ${main.line}`); return; }
     const red = main.state === "red" ? main.line : null;
-    // A green main is not enough: the item's sealed scenarios, if any, are checked on origin/<main> before the item closes.
-    let failed: number[] = [];
-    if (!red) {
-      const got = await sealed(repo, name);
-      if (got.state === "infra") { factoryLog(`${name}: the claim waits: the sealed scenario check failed: ${got.fault}`); return; }
-      if (got.state === "fail") failed = got.failed;
-    }
     markRescued(last, key);
-    if (failed.length && earlier) {
-      const nums = `scenario${failed.length > 1 ? "s" : ""} ${failed.join(", ")}`;
-      return chris(`${name} says the goal is already met again (${claim}), but sealed ${nums} still fail${failed.length > 1 ? "" : "s"}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but sealed ${nums} fail: how should the factory go on?`, [`Claim: ${claim}`]));
-    }
     if (red && earlier) return chris(`${name} says the goal is already met again (${claim}), but ${red}. Drop it, or change the goal?`, choice(`${name} says the goal is already met again, but ${red}: how should the factory go on?`, [`Claim: ${claim}`]));
-    return take(claimStep(stuck, claim, red, failed));
+    return take(claimStep(stuck, claim, red));
   }
   if (key === "duplicate") {
     markRescued(last, key);

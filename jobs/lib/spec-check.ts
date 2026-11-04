@@ -5,15 +5,13 @@
  * with every other problem as a note, which the worker reads (`passNotes`). A goal is held at most once: after a hold,
  * the next check passes, with its problems as notes. The check runs once for each
  * version of the spec (goal-spec.ts): the issue's note carries the version, so an edit makes it run again.
- * With `"author": true`, the run first seals the version's acceptance scenarios (author.ts), and the check
- * judges them too: a scenario that does not follow from the Goal or cannot hold with the Oracle is set aside,
- * which removes it from the sealed file; it never holds the goal.
+ * It runs for a repo with `"author": true` in the registry.
  * The dispatch never runs it inline: it reads the recorded verdict (`recordedVerdict`) and, when there is
  * none, starts `aleph spec-check` detached (`runSpecCheck`), which ends by starting a dispatch.
  */
 import { mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { note, readHidden, reader, writeHidden } from "../../todo/lib/store.ts";
+import { note, reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
@@ -21,7 +19,6 @@ import { withMainClone } from "./main-clone.ts";
 import { isVersion, specVersion } from "./goal-spec.ts";
 import { lock, type Repo } from "./ledger.ts";
 import { NO_OUTPUT } from "./structured.ts";
-import { SCENARIOS, scenarioCount, seal, withoutScenarios } from "./author.ts";
 import { askChris, plainAsk } from "./ask.ts";
 import { factoryDir, issueJob, recordHold, recordSpecCost } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -31,11 +28,8 @@ import { OPUS_MODEL } from "./agent-call.ts";
 export const SPEC_CHECK_MODEL = OPUS_MODEL;
 const NOTE = "spec check:";
 
-/**
- * The sealed scenarios go in the prompt with a fourth question; with none, the check asks three.
- * `held`: the goal was held once already, so this check may only pass, with notes.
- */
-export function specCheckPrompt(item: issues.Issue, scenarios = "", held = false): string {
+/** `held`: the goal was held once already, so this check may only pass, with notes. */
+export function specCheckPrompt(item: issues.Issue, held = false): string {
   const part = (name: string) => section(item.spec, name) || "(none)";
   return `Check one spec before a builder starts on it. The code of the codebase is your working directory; read it with your tools.
 
@@ -55,7 +49,7 @@ Read the spec as the builder who will build it alone: nobody answers questions d
 - **Wrong about the code.** A clause that names a file, function, flag or behaviour that does not exist or does not behave as the clause says.
 - **Out of reach.** An Oracle clause whose code lies outside the Edit surface.
 - **Not observable.** An Oracle clause that no check can see. A check counts when it runs normally and an assertion observes the changed output, state or error. These do not count: a read of the source text, "does not throw", a snapshot alone, a mock or log call, and a manual look.
-- **Bare bun test path.** An Oracle command bun test <path> whose path has no ./ prefix and whose file name has no .test or .spec: run by hand, bun reads it as a name filter that matches no test file, so it never passes (acceptance adds the ./ itself, but a worker or reader running the command as written does not). Name it and propose the ./ path.
+- **Bare bun test path.** An Oracle command bun test <path> whose path has no ./ prefix and whose file name has no .test or .spec: run by hand, bun reads it as a name filter that matches no test file, so it never passes (the factory's Oracle run adds the ./ itself, but a worker or reader running the command as written does not). Name it and propose the ./ path.
 
 ## Block or note
 A problem blocks the goal only when no builder could do the work as written:
@@ -89,18 +83,12 @@ ${part("Edit surface")}
 
 ## Oracle
 ${part("Oracle")}
-${scenarios ? `
-## Sealed scenarios
-A separate author wrote these from the Goal alone; an evaluator checks each one on the finished work.
 
-${scenarios.trim()}
-` : ""}
-Apply the method to every clause. Answer ${scenarios ? "four" : "three"} questions, each from the passes above:
+Apply the method to every clause. Answer three questions, each from the passes above:
 1. Can every clause of the Goal and the Oracle be true at the same time in this codebase? Name each pair that cannot.
 2. Does the Edit surface hold the code that each Oracle clause needs to change? Name each clause whose code is outside it.
 3. Does the Oracle ask for something that no check or reviewer can observe? Name each such clause.
-${scenarios ? `4. Does each sealed scenario follow from the Goal, and can it be true together with the Oracle? Put each one that does not in "set_aside", with its number and why. A set-aside scenario is removed; it is not a problem of the spec, so do not hold for it.
-` : ""}${held ? "\nThis goal was held once already and its spec was edited. Do not hold it again: write every problem as a note.\n" : ""}
+${held ? "\nThis goal was held once already and its spec was edited. Do not hold it again: write every problem as a note.\n" : ""}
 Write each problem as its quoted clause, then its rewrite. ${held ? `The verdict is "pass", and every problem goes in "notes".` : `The verdict is "hold" when one problem or more blocks the goal, else "pass". Each block goes in "blocks" and each other problem in "notes".`} The lists are the only part of the reply that the factory keeps, so write each problem there in full: its quoted clause and its rewrite. Never name a problem there by a number or a label.`;
 }
 
@@ -113,14 +101,10 @@ export const SPEC_CHECK_SCHEMA = {
     verdict: { enum: ["pass", "hold"] },
     blocks: problems,
     notes: problems,
-    set_aside: {
-      type: "array", description: "The sealed scenarios that do not follow from the Goal or cannot hold with the Oracle.",
-      items: { type: "object", additionalProperties: false, required: ["scenario", "why"], properties: { scenario: { type: "integer", minimum: 1 }, why: { type: "string", minLength: 1 } } },
-    },
   },
 };
 
-export type SpecReply = { pass: boolean; blocks: string[]; notes: string[]; asides: Map<number, string> };
+export type SpecReply = { pass: boolean; blocks: string[]; notes: string[] };
 
 const oneLine = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
 const lines = (v: unknown): string[] => (Array.isArray(v) ? v.map(oneLine).filter(Boolean) : []);
@@ -130,11 +114,7 @@ export function parseSpecCheck(raw: any): SpecReply | string {
   if (raw === undefined) return NO_OUTPUT;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "not an object";
   if (raw.verdict !== "pass" && raw.verdict !== "hold") return `unknown verdict ${JSON.stringify(raw.verdict)}`;
-  const asides = new Map<number, string>();
-  for (const a of Array.isArray(raw.set_aside) ? raw.set_aside : []) {
-    if (Number.isInteger(a?.scenario) && !asides.has(a.scenario)) asides.set(a.scenario, oneLine(a.why));
-  }
-  return { pass: raw.verdict === "pass", blocks: lines(raw.blocks), notes: lines(raw.notes), asides };
+  return { pass: raw.verdict === "pass", blocks: lines(raw.blocks), notes: lines(raw.notes) };
 }
 
 /** Problems as the one line a note keeps. */
@@ -149,21 +129,11 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
   const say = (text: string) => { note(repo, ref, `${NOTE} ${version} ${text}`); };
   let cost: number | undefined;
   try {
-    const sealCost = repo.author ? await seal(repo, id) : undefined;
-    let scenarios = "";
-    if (repo.author) try { scenarios = readHidden(repo, `${repo.key}-${ref}`)[SCENARIOS] ?? ""; } catch {}
-    if (!scenarioCount(scenarios)) scenarios = "";
     const held = heldBefore(item);
-    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: SPEC_CHECK_SCHEMA, cwd: dir }, specCheckPrompt(item, scenarios, held)));
-    cost = sealCost === undefined && reply.cost === undefined ? undefined : (sealCost ?? 0) + (reply.cost ?? 0);
+    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: SPEC_CHECK_SCHEMA, cwd: dir }, specCheckPrompt(item, held)));
+    cost = reply.cost;
     const v = parseSpecCheck(reply.data);
     if (typeof v === "string") { say(`error: the reply has no verdict: ${v}`); return { verdict: "error", cost }; }
-    // A set-aside scenario leaves the sealed file; the others keep their numbers, so acceptance and the reviewer agree on them.
-    const asides = [...v.asides].filter(([n]) => scenarios && new RegExp(`^\\s*${n}[.)]\\s+\\S`, "m").test(scenarios));
-    if (asides.length) {
-      writeHidden(repo, `${repo.key}-${ref}`, { [SCENARIOS]: withoutScenarios(scenarios, new Set(asides.map(([n]) => n))) });
-      for (const [n, why] of asides) note(repo, ref, `sealed checks: ${version} the spec check set aside: scenario ${n}: ${why}`);
-    }
     // A goal is held at most once: a second hold passes, and its problems go to the worker as notes.
     // A pass with blocks keeps them as notes too.
     if (v.pass || held) {

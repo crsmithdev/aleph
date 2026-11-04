@@ -174,7 +174,6 @@ echo x >> "$FAKE_LOG/review-calls"
 case $prompt in
   *REVIEW:holdonce*) if [ -e "$FAKE_LOG/holdonce" ]; then echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}'; else touch "$FAKE_LOG/holdonce"; echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"hold","summary":"Looked.","failures":[{"clause":"the flag has no test","observed":"seen"}]}}'; fi ;;
   *REVIEW:noneonce*) if [ -e "$FAKE_LOG/noneonce" ]; then echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}'; else touch "$FAKE_LOG/noneonce"; echo '{"type":"result","is_error":true,"result":"API Error: 529"}'; fi ;;
-  *REVIEW:setaside*) echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[],"set_aside":["scenario 2 asks for more than the goal"]}}' ;;
   *REVIEW:hold*) echo '{"type":"result","is_error":false,"result":"","total_cost_usd":0.02,"structured_output":{"verdict":"hold","summary":"Looked.","failures":[{"clause":"tests do not cover the new flag","observed":"seen"}]}}' ;;
   *REVIEW:none*) echo '{"type":"result","is_error":false,"total_cost_usd":0.02,"result":"Looks fine to me."}' ;;
   *REVIEW:error*) echo '{"type":"result","is_error":true,"result":"API Error: 529"}' ;;
@@ -229,9 +228,6 @@ case $action in
     echo '{"type":"result","is_error":false,"total_cost_usd":0.25,"result":"Done.\\nFLAKE: a.test.ts > slow one: timed out, passed alone\\nFOLLOWUP: mend the gate"}'; exit 0 ;;
   fail-then-fix) echo "$RANDOM" > f.txt; git add f.txt
     if printf '%s' "$prompt" | grep -q 'The check \`tests\` failed'; then git rm -q FAIL; else echo x > FAIL; git add FAIL; fi
-    git commit -qm "work" ;;
-  hidden-fix) echo "$RANDOM" > f.txt; git add f.txt
-    if printf '%s' "$prompt" | grep -q 'hidden check failed'; then echo ok > hid.txt; git add hid.txt; fi
     git commit -qm "work" ;;
   flaky) mkdir -p flaky; echo "$RANDOM" > "flaky/$RANDOM"; git add flaky; git commit -qm "add flaky" ;;
   fail-always) echo "$RANDOM" > f.txt; echo x > FAIL; git add f.txt FAIL; git commit -qm "work" ;;

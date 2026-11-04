@@ -52,3 +52,23 @@ export function isVersion(item: Issue, recorded: string): boolean {
   const r = recorded.trim();
   return r === specVersion(item) || r === hash(item.spec.trim()) || r === textOf(item);
 }
+
+const CHECK = "(?:bun test|bun run|bunx tsc)";
+/** A plain check command, or a shell `for` loop whose body runs one. */
+const RUNNABLE = new RegExp(`^${CHECK}(\\s|$)|^for\\s.*;\\s*do\\b.*[\\s;&|(]${CHECK}(?=[\\s;&|)]|$)`);
+/** A placeholder such as `<file>`, `<repo>-<n>` or `<that file>` that the Oracle leaves for the reader to fill in. Not a redirection: a space inside the brackets must be followed by a letter, so `<in >out` does not match. */
+const PLACEHOLDER = /<[A-Za-z][A-Za-z0-9_-]*(?: [A-Za-z][A-Za-z0-9_-]*)*>/;
+/** A test file by its name, as `bun test` takes one. */
+const TEST_FILE = /\.(?:test|spec)\.(?:ts|js)$/;
+
+/**
+ * `bun test` takes a file whose name has no `.test` or `.spec` (such as `a.accept.ts`) only with a `./` path; without it
+ * the argument is a name filter that matches no test file. This adds the `./`.
+ */
+const asPath = (command: string): string =>
+  /^bun test\s/.test(command) ? command.replace(/(?<=\s)(?![./])(\S+\.[jt]sx?)(?=\s|$)/g, (arg) => (TEST_FILE.test(arg) ? arg : `./${arg}`)) : command;
+
+/** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
+export function oracleCommands(body: string): string[] {
+  return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => asPath(m[1].trim())).filter((c) => RUNNABLE.test(c) && !PLACEHOLDER.test(c));
+}

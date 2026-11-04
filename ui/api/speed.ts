@@ -90,7 +90,7 @@ export const CLASS_TEXT: Record<Class, string> = {
 };
 /** The breakdown's name of each stated cause that has one. */
 const CAUSE_NAME: Partial<Record<Cause, string>> = {
-  reviewer: "Reviewer sent back", check: "Checks failed", "hidden-check": "Checks failed",
+  reviewer: "Reviewer sent back", check: "Checks failed",
   "time-box": "Stalled or timed out", stalled: "Stalled or timed out",
   "no-commit": "No commit", conflict: "Passed, not landed",
 };
@@ -321,7 +321,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-export const AGENT_ROLES = [["worker", "Worker", "build"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["facts", "Fact checker", "facts"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
+export const AGENT_ROLES = [["worker", "Worker", "build"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
 export type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */

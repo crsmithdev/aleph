@@ -28,7 +28,7 @@ beforeAll(() => {
   commit(clone, "first");
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
   sh(clone, "git", "fetch", "-q");
-  repo = { key: "demo", path: clone, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: false, held: [], hiddenRun: "" };
+  repo = { key: "demo", path: clone, main: "main", setup: [], checks: [], manual: [], autoland: true, sandbox: false, held: [] };
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 
@@ -40,18 +40,14 @@ test("a touched item the store closed is done without a fresh trailer commit, un
     mkdirSync(folder, { recursive: true });
     writeRun(folder, { kind: "build", job: `j${n}`, name: `j${n}`, repo: "demo", on: `demo-${n}`, condition: "done", told: true, shown: true, started: new Date().toISOString() });
   }
-  // 12: its trailer commit is at or before the acceptance since.
+  // 12: landed.
   sh(clone, "git", "fetch", "-q");
   sh(clone, "git", "reset", "-q", "--hard", "origin/main");
   commit(clone, "land 12\n\nIssue: demo-12");
-  const since = sh(clone, "git", "rev-parse", "HEAD");
   // 13: landed, then reverted.
   commit(clone, "land 13\n\nIssue: demo-13");
   sh(clone, "git", "revert", "--no-edit", "HEAD");
   sh(clone, "git", "push", "-q", "origin", "HEAD:main");
-  process.env.ALEPH_FACTORY_DIR = join(base, "factory");
-  mkdirSync(join(base, "factory", "acceptance"), { recursive: true });
-  writeFileSync(join(base, "factory", "acceptance", "demo-12.json"), JSON.stringify({ result: "fail", fails: 1, since }));
   const states = (items?: number[]) => repoStages(sandbox, { fetch: true, doc: closed, items }).map((s) => [s.id, s.stage]);
   expect(states()).toEqual([["demo-11", "done"], ["demo-12", "done"], ["demo-13", "new"]]);
   expect(states([11])).toEqual([["demo-11", "done"]]);

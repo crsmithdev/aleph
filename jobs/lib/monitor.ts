@@ -9,7 +9,7 @@ import { OPUS_MODEL } from "./agent-call.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { lock } from "./ledger.ts";
 import { factoryLog } from "./layout.ts";
-import { acceptanceLine, addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "./monitor-table.ts";
+import { addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "./monitor-table.ts";
 import { monitorOn } from "./settings.ts";
 import * as issues from "../../todo/lib/todo.ts";
 
@@ -27,9 +27,8 @@ export function readerPrompt(table: string): string {
   return [
     "You read the factory monitor's table of one day below. Name what looks off, ranked, most serious first.",
     "Each finding gives its numbers from the table: the day's value and the trailing value it differs from.",
-    "Look first at the share of acceptance failures that led to a real fix: it decides whether acceptance earns its failure path.",
-    "Then look for a stage whose runs per item, runs with no usable result or cost per item rose against the trailing 7 days,",
-    "an Ask reason or a hold kind that grew, and a rise in reopens or set-asides. A small count is noise: say so rather than rank it high.",
+    "Look for a stage whose runs per item, runs with no usable result or cost per item rose against the trailing 7 days,",
+    "an Ask reason or a hold kind that grew, and a rise in reopens. A small count is noise: say so rather than rank it high.",
     "You only read. Do not suggest that you file, answer or change anything.",
     "",
     "Reply with at most 7 lines, each `<rank>. <finding>` in one sentence. When nothing looks off, reply one line `NOTHING: <why>`.",
@@ -84,7 +83,7 @@ export async function monitorStep(now = new Date()): Promise<Report | null> {
   if (!day) return null;
   try {
     const r = await runMonitor(day);
-    if (r) factoryLog(`monitor ${day}: ${r.error ? `no reading: ${r.error}` : `${r.findings.length} findings`}; ${acceptanceLine(r.table)}`);
+    if (r) factoryLog(`monitor ${day}: ${r.error ? `no reading: ${r.error}` : `${r.findings.length} findings`}`);
     return r;
   } catch (e: any) {
     factoryLog(`monitor ${day}: failed: ${e?.message ?? e}`);

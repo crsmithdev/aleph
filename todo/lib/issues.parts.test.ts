@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { base, itemsRemote, seedGoal, sh, setup, teardown } from "../../jobs/cli.helpers";
-import { issueAdd, issueClose, issueEdit, issueHidden, issueNote, issueShow, status } from "../../jobs/inproc";
+import { seedGoal, setup, teardown } from "../../jobs/cli.helpers";
+import { issueAdd, issueClose, issueEdit, issueNote, issueShow, status } from "../../jobs/inproc";
 
 // The verbs of `aleph issue` on a part `<n>.<k>`, and the drop of a part, called in-process as the CLI calls them.
 beforeAll(setup);
@@ -38,17 +36,6 @@ describe("the drop of a part", () => {
 });
 
 describe("the verbs on a part", () => {
-  test("hidden writes under the part's id on the store's main and lists it", async () => {
-    const n = await add();
-    seedGoal("fac", n, 1);
-    const f = join(base, "g.test.ts");
-    writeFileSync(f, 'import { test } from "bun:test";\ntest("g", () => {});\n');
-    const w = await issueHidden("fac", `${n}.1`, { "g.test.ts": await Bun.file(f).text() });
-    expect(w.code, w.stderr).toBe(0);
-    expect(sh(base, "git", "--git-dir", itemsRemote, "show", `main:fac/hidden/fac-${n}.1/g.test.ts`)).toContain('test("g"');
-    expect((await issueHidden("fac", `${n}.1`)).json.join("\n")).toBe("g.test.ts");
-  });
-
   test("show --json, note, and edit; after takes a plain or a dotted ref", async () => {
     const n = await add("Listed");
     const m = await add("Other");

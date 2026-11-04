@@ -274,7 +274,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   expect(r.triage).toMatchObject({ live: 0, runs: 1, hours: 0.5, models: ["opus"] });
   expect(r.director).toMatchObject({ live: 0, runs: 1, hours: 1, models: ["fable"] });
   expect(r.reviewer).toMatchObject({ live: null, runs: 1, hours: null, p50: null });
-  expect(a.roles.map((x) => x.key)).toEqual(["worker", "triage", "planner", "facts", "firefighter", "director", "reviewer"]);
+  expect(a.roles.map((x) => x.key)).toEqual(["worker", "triage", "planner", "firefighter", "director", "reviewer"]);
   expect(a.mean).toBe(1); // 8 agent hours over 8
   expect(a.points.map((p) => p.worker ?? 0)).toEqual([0, 1, 2, 1.5, 0, 1, 0, 1]);
   expect(a.points[2].triage).toBe(0.5);
