@@ -90,6 +90,7 @@ Verify from inside the worktree you edited. For interactive checks spin up a
 one-off server on a free port at or above 3002 and kill it when done; never
 assume a shared server is serving your code. Headless checks run as
 `claude -p` with `CLAUDECODE` unset.
+Verify each status claim against the tool output that produced it, and name each task by its ID before reporting what that task did.
 
 ## Memory
 
