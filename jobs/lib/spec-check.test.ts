@@ -68,7 +68,7 @@ test("the prompt carries the spec-review method, with and without sealed scenari
 test("the prompt holds only on a block, carries the request, and with held it cannot hold", () => {
   const item = { title: "T", spec: SPEC, request: "REQUESTTEXT" } as any;
   const p = specCheckPrompt(item);
-  for (const s of ["## Request", "REQUESTTEXT", "## Block or note", "`VERDICT: pass <notes>`", "`VERDICT: hold <blocks>`"]) expect(p).toContain(s);
+  for (const s of ["## Request", "REQUESTTEXT", "## Block or note", "`VERDICT: pass <notes>`", "`VERDICT: hold <blocks>`", "It never asks the builder to add a committed test"]) expect(p).toContain(s);
   const h = specCheckPrompt(item, "", true);
   expect(h).toContain("Do not hold it again");
   expect(h).not.toContain("VERDICT: hold");

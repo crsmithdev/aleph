@@ -70,6 +70,7 @@ Every other problem is a note: a vague word, an open choice, a scope edge, a fal
 ## Problems and rewrites
 Each problem quotes its clause exactly and proposes replacement text. Write an Oracle rewrite as an observable rule in this form:
 \`When <trigger or input>, <the subject> <does the observable thing>.\`
+A rewrite names a test file or command that exists and the behaviour it observes. It never asks the builder to add a committed test: the factory refuses a new test that passes without the change, or that fails without it only because the code it calls does not exist yet. So a refactor or a move gets no new test, and the repo's existing tests and checks observe it. The builder decides whether a bug fix or new lasting behaviour earns a test.
 
 # Spec: ${item.title}
 ${item.request.trim() ? `
