@@ -2,6 +2,8 @@
 
 `aleph-ui` serves the factory UI: the Status page, issues, jobs, sessions, skills and memory. It binds to `127.0.0.1` and prints its URL.
 
+The design reference (tokens, formats, tables, charts and components) is [docs/design.md](design.md).
+
 ```bash
 aleph-ui --port 3020    # the default port is ALEPH_UI_PORT, else 3020
 ```
