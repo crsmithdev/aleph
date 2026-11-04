@@ -34,9 +34,9 @@ test("a flake line is not shown on the Status page", () => {
   expect(withAttn(calm)).not.toContain("rerun");
 });
 
-test("a long unbroken word in the status sentence (a URL) breaks: .lede .say sets overflow-wrap: anywhere", async () => {
+test("a long unbroken word in the status sentence (a URL) breaks: .shead .say sets overflow-wrap: anywhere", async () => {
   const html = await Bun.file(new URL("../../ui/app.css", import.meta.url)).text();
-  const say = [...html.matchAll(/\.lede \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
+  const say = [...html.matchAll(/\.shead \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
   expect(say).toContain("overflow-wrap: anywhere");
 });
 

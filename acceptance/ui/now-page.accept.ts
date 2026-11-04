@@ -71,7 +71,7 @@ test("Queued cards show why each goal waits", () => {
 
 test("the page order is the status line, Awaiting you, the scorecard, the lanes, the causes; the window picker, no flow strip", () => {
   const page = view.view.render(full);
-  const order = ['class="lede"', 'class="asof"', 'class="say', 'data-act="pause"', 'id="needs"', 'id="scorecard"', 'id="lane-running"', 'id="lane-queued"', 'id="lane-done"', 'id="causes"'];
+  const order = ['class="ph shead"', 'class="asof"', 'class="say', 'data-act="pause"', 'id="needs"', 'id="scorecard"', 'id="lane-running"', 'id="lane-queued"', 'id="lane-done"', 'id="causes"'];
   const at = order.map((t) => page.indexOf(t));
   expect(at.every((v) => v >= 0)).toBe(true);
   expect(at).toEqual([...at].sort((a, b) => a - b));
@@ -82,9 +82,12 @@ const pressedIn = (h: string) => [...(h.match(/data-name="window">(.*?)<\/div>/)
 
 test("the page head holds the Hour, Day, Week, Month picker with the chosen window pressed", () => {
   const page = view.view.render(full, {}, new URLSearchParams("window=month"));
-  const head = page.match(/<header class="ph">.*?<\/header>/)![0];
-  expect(head).toContain("<h1>Status</h1>");
+  const head = page.match(/<header class="ph shead">.*?<\/header>/)![0];
+  expect(head).toContain('class="say');
   expect(head).toContain('class="aside"');
+  const pause = head.indexOf('data-act="pause"');
+  expect(pause >= 0 || head.indexOf('data-act="resume"') >= 0).toBe(true);
+  expect(pause).toBeGreaterThan(head.indexOf('data-name="window"'));
   expect(pressedIn(head).map((m) => m[1])).toEqual(["hour", "day", "week", "month"]);
   expect(pressedIn(head).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
   for (const t of [">Hour<", ">Day<", ">Week<", ">Month<"]) expect(head).toContain(t);
