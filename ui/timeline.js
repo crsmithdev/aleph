@@ -114,10 +114,10 @@ export function waitEvent(w, holds = []) {
   return { at: w.start, tag: w.chris ? "Awaiting you" : "Waiting", tone: "need", html: esc(`Waited ${lifespan(w.end - w.start)}${w.chris ? " for your answer" : ""}${why}.`) };
 }
 
-/** A bar's label: the kind, a number when the lane has more than one of that kind, the model and, with `cost`, the cost. */
-export function barLabel(r, nth, { cost = false } = {}) {
+/** A label: the kind, a number when the lane has more than one of that kind, the model (not on a bar) and, with `cost`, the cost. */
+export function barLabel(r, nth, { cost = false, model = true } = {}) {
   const kind = r.kind === "worker" ? "build" : r.kind;
-  return [nth ? `${kind} ${nth}` : kind, shortModel(r.model), cost && r.cost ? money(r.cost) : ""].filter(Boolean).join(" · ");
+  return [nth ? `${kind} ${nth}` : kind, model ? shortModel(r.model) : "", cost && r.cost ? money(r.cost) : ""].filter(Boolean).join(" · ");
 }
 
 /** The bars of a lane from its spans: the label of each, and a tip with the condition, the time and the reason. */
@@ -126,7 +126,7 @@ export function barsOf(runs, { cost = false } = {}) {
   for (const { r } of runs) count[r.kind] = (count[r.kind] ?? 0) + 1;
   return runs.map(({ r, start, end }) => {
     seen[r.kind] = (seen[r.kind] ?? 0) + 1;
-    const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost });
+    const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost, model: false });
     return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${lifespan(end - start)}${r.reason ? ` · ${r.reason}` : ""}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
   });
 }
@@ -155,13 +155,19 @@ export function renderTimeline(segments) {
   // A tick near the end ends at its time, so it stays inside the axis.
   const ticks = axisTimes(times, x).map((t) => `<span${x(t) > 0.9 ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t, oneDay))}</span>`).join("");
   const at = (a, b) => `left:${pct(x(a))}%;width:${pct(Math.max(0.004, x(b) - x(a)))}%`;
+  // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
+  const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
   const lane = (r) => `<div class="dp-lane">` +
     r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting you" : "Waiting"} · ${lifespan(w.end - w.start)}`)}"></span>`).join("") +
-    r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ""} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(b.label)}</${t}>`; }).join("") +
+    r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ""} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}</${t}>`; }).join("") +
     (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
+  // An event of more than about 3 lines (and with no log opening inside it) is clamped, with a button to read the rest.
+  const evt = (html) => (!html.includes("data-logs") && html.replace(/<[^>]*>/g, "").length > 180
+    ? `<div class="dp-evt"><div class="dp-txt clamp">${html}</div><button class="link dp-more" type="button" aria-expanded="false">Show more</button></div>`
+    : `<div class="dp-evt">${html}</div>`);
   const events = (evs) => {
     const list = [...(evs ?? [])].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
-    return list.length ? `<div class="dp-evs">${list.map((e) => `<div class="dp-ev"><span class="dp-at">${esc(timeOf(e.at, oneDay))}</span><span>${tag(e.tag, e.tone)}</span><div class="dp-evt">${e.html}</div></div>`).join("")}</div>` : "";
+    return list.length ? `<div class="dp-evs">${list.map((e) => `<div class="dp-ev"><span class="dp-at">${esc(timeOf(e.at, oneDay))}</span><span>${tag(e.tag, e.tone)}</span>${evt(e.html)}</div>`).join("")}</div>` : "";
   };
   const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
   return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2><ul class="dp-key">${key}</ul></div>` +
@@ -185,3 +191,13 @@ export const costText = (n) => (n ? money(n) : "–");
 export const timeText = (ms) => (ms > 0 ? dur(ms / 1000) : "–");
 /** "08:11 to 08:39" for a span in one day, else with the dates. */
 export const fromTo = (a, b) => (new Date(a).toDateString() === new Date(b).toDateString() ? `${clock(new Date(a))} to ${clock(new Date(b))}` : `${when(new Date(a))} to ${when(new Date(b))}`);
+
+if (typeof document !== "undefined") {
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest?.(".dp-more");
+    if (!b) return;
+    const open = b.previousElementSibling.classList.toggle("clamp") === false;
+    b.setAttribute("aria-expanded", String(open));
+    b.textContent = open ? "Show less" : "Show more";
+  });
+}

@@ -143,3 +143,17 @@ describe("waitEvent", () => {
     expect(mapped[0].html).toBe("Waited 9 min.");
   });
 });
+
+describe("the issue page's tidy-up", () => {
+  const html = renderIssue(issue({ derived: { stage: "done" }, timeline: { filed: 0, runs: [run("build", "2026-11-01T10:30:00Z", "2026-11-01T14:40:00Z", { model: "claude-sonnet-5-5" }), run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed" })] }, notes: ["- 2026-11-01 10:00: a note"] }));
+  test("the Stage is in title case, no bar or tip names a model, and there is no Detail h2", () => {
+    expect(html).toContain('<span class="dp-v">Done</span>');
+    expect(html).not.toMatch(/sonnet|opus/i);
+    expect(html).not.toContain("<h2>Detail</h2>");
+  });
+  test("a long event is clamped with a button to read the rest; a short one is not", () => {
+    const seg = (text: string) => renderTimeline([{ title: "t", rows: [{ head: "h", bars: [], waits: [], events: [{ at: 1, tag: "x", html: text }] }] }]);
+    expect(seg("word ".repeat(60))).toContain('class="dp-txt clamp"');
+    expect(seg("short")).not.toContain("dp-more");
+  });
+});

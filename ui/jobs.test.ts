@@ -235,7 +235,7 @@ describe("render", () => {
     const h = v.renderJob(job);
     // The review runs inside its build, so it is no bar of its own.
     expect(h.match(/class="dp-bar /g)).toHaveLength(3);
-    for (const t of ["build 1 · m1 · $0.50", "build 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
+    for (const t of ["build 1 · $0.50", "build 2 · $0.25", ">land<", "fixed it", "Looks right.", "a.txt | 1 +", 'href="http://lf/sessions/s"', 'data-job="fac-9"', "Fix &lt;it&gt;"]) expect(h).toContain(t);
     for (const t of [">Failed<", ">Passed<", ">Landed<", ">Default<", ">Follow-up<", "a? -&gt; b", "tidy"]) expect(h).toContain(t);
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");

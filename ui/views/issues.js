@@ -561,6 +561,8 @@ export function issueSegments(d, now = Date.now()) {
   return segments;
 }
 
+const title = (s) => String(s).replace(/^./, (c) => c.toUpperCase());
+
 /** The KPI strip of an issue: parts or stage, elapsed, waiting, cost and commits. */
 function issueKpis(d, segments, now = Date.now()) {
   const goals = d.goals ?? [], open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
@@ -573,8 +575,8 @@ function issueKpis(d, segments, now = Date.now()) {
   const commits = d.commits ?? [];
   const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
   return renderKpis([
-    goals.length ? { k: "Parts done", v: esc(`${done} of ${goals.length}`), sub: esc(goals.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${g.stage}`).join(", ")) }
-      : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
+    goals.length ? { k: "Parts done", v: esc(`${done} of ${goals.length}`), sub: esc(goals.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
+      : { k: "Stage", v: esc(title(d.derived?.stage ?? d.status)), sub: "" },
     { k: open ? "Open for" : "Elapsed", v: esc(times.length ? lifespan(hi - lo) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: esc(times.length ? lifespan(waited) : "–"), sub: chris ? esc(`${lifespan(chris)} for your answer`) : "" },
     { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 run" : `${runs} runs`) },
@@ -621,7 +623,7 @@ export function renderIssue(d) {
   return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askRow(d.ask) : "") +
     issueKpis(d, segments) + renderTimeline(segments) +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
-    `<div class="dp-detail"><h2>Detail</h2>${fold("Notes", esc(d.notes.length), notes)}${fold("Commits", esc(d.commits.length), commits)}</div></div>`;
+    `<div class="dp-detail">${fold("Notes", esc(d.notes.length), notes)}${fold("Commits", esc(d.commits.length), commits)}</div></div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view

@@ -853,6 +853,8 @@ a.dp-bar:hover, a.dp-bar:focus-visible { filter: brightness(1.15); outline-offse
 .dp-ev { display: grid; grid-template-columns: 88px 96px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 4px 0; font-size: var(--fs-sm); line-height: 1.5; }
 .dp-at { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .dp-evt { min-width: 0; overflow-wrap: anywhere; }
+.dp-txt.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+.dp-more { font-size: var(--fs-xs); }
 .dp-evt code, .dp-head code { font: var(--fs-xs) var(--mono); background: var(--sunk); padding: 1px 4px; border-radius: var(--r-tag); }
 .dp-logs { display: block; margin-top: 2px; font-size: var(--fs-xs); }
 button.link { all: unset; cursor: pointer; color: var(--run); }
