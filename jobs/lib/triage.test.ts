@@ -28,6 +28,7 @@ echo "$PWD $*" >> "$FAKE_LOG"
 case $prompt in
   *VERDICT:goal*) echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test\\n## Time box\\n45 minutes"}' ;;
   *VERDICT:parts*) echo '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","after":["tri-9"],"parts":[{"title":"[Big] Do the first half","body":"## Goal\\nHalf one.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"},{"title":"[Big] Do the second half of the work and then merge it all into","body":"## Goal\\nHalf two.\\n## Edit surface\\ny.ts\\n## Oracle\\nbun test x.test.ts","after":[1]}]}' ;;
+  *VERDICT:waits*) echo '{"route":"build","spec":"## Goal\\nDo it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test","after":["'$FAKE_KEY'-1","'$FAKE_KEY'-2"]}' ;;
   *VERDICT:badparts*) echo '{"route":"plan","spec":"## Goal\\nAll of it.\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts","parts":[{"title":"only","body":"## Goal\\nx\\n## Edit surface\\nx.ts\\n## Oracle\\nbun test x.test.ts"}]}' ;;
   *VERDICT:close*) echo 'Looked at it. {"route":"close","reason":"duplicate of tri-1"}' ;;
   *VERDICT:chris*) echo '{"route":"ask","question":"Which plan, A or B?"}' ;;
@@ -228,6 +229,20 @@ test("the prompt keeps how-to-build questions away from Chris and asks him in pl
   expect(p).toContain("Never ask Chris about how to build it");
   expect(p).toContain("no file paths, function names, line numbers or code");
   expect(p).toContain('"after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]');
+});
+
+test("the prompt sets after only when the work needs the other issue's change", () => {
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(p).toContain("not just because the two issues touch the same file or table");
+});
+
+test("a build route drops an after-link to an item that waits for Chris, keeps one to an ordinary open issue, and notes the drop", async () => {
+  reset([{ title: "asks", ask: true }, { title: "plain" }, { title: "a", body: "VERDICT:waits" }]);
+  process.env.FAKE_KEY = repo.key;
+  await run();
+  expect(item(3).fm.after).toEqual([`${repo.key}-2`]);
+  expect(item(3).notes.some((n) => n.includes(`dropped after ${repo.key}-1`) && n.includes("waits for Chris"))).toBe(true);
+  expect(item(3).notes.some((n) => n.includes(`dropped after ${repo.key}-2`))).toBe(false);
 });
 
 test("the prompt keeps the spec close to the request: tentative words stay the worker's choice", () => {

@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { isSorted, noteFlake, reader, sort } from "../../todo/lib/store.ts";
+import { awaitsChris, isSorted, noteFlake, reader, sort } from "../../todo/lib/store.ts";
 import { always, askNote, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
@@ -133,7 +133,7 @@ Reply with one JSON object and nothing else, with one of these routes:
   ## Edit surface (the files the run may change)
   ## Oracle (the checks that tell it is done)
 
-  The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the issues that must be done before this one starts; leave it out when none.
+  The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`. There is no \`aleph check\` command: never name one. "after" names the issues that must be done before this one starts; set it only when the work needs the other issue's change, not just because the two issues touch the same file or table; leave it out when none.
 - {"route": "plan", "spec": "<spec>", "after": [...], "parts": [{"title": "<title>", "body": "<part spec>", "after": [<optional numbers of earlier parts, from 1>]}]}: the issue is too large for one run. "spec" and "after" are as for "build", and "spec" is the whole goal. "parts" splits it into 2 to 6 parts: each is work one factory run can do alone, in one run of under an hour, and together they do the whole goal. Each "body" is a spec in the format above, with all three sections non-empty. When the parts fail the check, the issue builds from "spec" as one run. Return "plan" only when one run cannot do the work: a small change that touches files in several folders is still one "build".
 
   ${PART_RULES.replace(/\n\n/g, "\n\n  ")}
@@ -175,10 +175,17 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
   const ok = sort(repo, id, `triage ${ref}: ${applied}`, (item, doc) => {
     if (v.route === "build" || v.route === "plan") {
       item.spec = v.spec;
-      if (v.after.length) item.fm.after = v.after;
-      issues.note(item, `triage: ${v.route}${v.after.length ? `, after ${v.after.join(", ")}` : ""}`);
+      // An open item with an Ask (a proposal too) waits for Chris: an after-link to it would stall this issue on his answer.
+      const waits = v.after.filter((r) => {
+        const o = r.startsWith(`${repo.key}-`) ? issues.find(doc, r.slice(repo.key.length + 1)) : undefined;
+        return o !== undefined && issues.status(o) === "open" && awaitsChris(o);
+      });
+      const after = v.after.filter((r) => !waits.includes(r));
+      if (after.length) item.fm.after = after;
+      issues.note(item, `triage: ${v.route}${after.length ? `, after ${after.join(", ")}` : ""}`);
+      if (waits.length) issues.note(item, `triage: dropped after ${waits.join(", ")}: it waits for Chris`);
       if (v.route === "plan" && typeof v.parts === "string") issues.note(item, `triage: its parts fail the check (${v.parts}); it builds from its spec as one run`);
-      else if (v.route === "plan") addParts(repo, doc, item, v.parts as Part[], "triage", v.after);
+      else if (v.route === "plan") addParts(repo, doc, item, v.parts as Part[], "triage", after);
     } else if (v.route === "done") {
       issues.setStatus(item, "done", undefined, v.reason);
       issues.note(item, `triage: already on main in ${v.commit}: ${v.reason}`);
