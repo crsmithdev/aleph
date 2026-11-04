@@ -3,6 +3,7 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with state.json, then `exit`, then the news.
  */
+import { NO_SKILLS, skillSection } from "./role-skill.ts";
 import { SCENARIOS } from "./author.ts";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -340,7 +341,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
     GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
   };
-  const argv = [workerCmd(), "-p", "--strict-mcp-config", "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill",
+  const argv = [workerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : [])];
   const text = brief(id, folder, run, repo);
@@ -392,7 +393,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
   phase("setup");
   { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`); }
   const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
-  const dir = makeRunFolder(id, { codeChange: true });
+  const dir = makeRunFolder(id);
   try {
     // The store and ledger facts ride along, so `aleph status` inside answers as it does outside.
     const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, writeFacts(repo), ...(prev ? [`refs/heads/${branch}`] : []));
@@ -400,7 +401,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const text = brief(id, folder, run, repo);
     writeFileSync(runFile(folder, "prompt.md"), text);
     const argv = [workerCmd(), "-p", "--strict-mcp-config", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill", ...(run.model ? ["--model", run.model] : [])];
+      NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", ...(run.model ? ["--model", run.model] : [])];
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const bundle = {
       bundle: "../in.bundle", refs: [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])],
@@ -631,7 +632,7 @@ before the VERDICT line.`;
 export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], scenarios = ""): string {
   const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";
   const sealed = scenarios ? `\n\n## Sealed scenarios\n\n${SEALED}\n\n${scenarios.trim()}` : "";
-  return `${REVIEW.replace("%NAME%", name)}${tests}${sealed}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
+  return `${REVIEW.replace("%NAME%", name)}\n\nJudge the branch by the method below.\n\n${skillSection("code-review", "Review method")}${tests}${sealed}\n\n## Goal issue\n\n${spec}\n\n## Diff from the merge base\n\n${diff}\n`;
 }
 
 /**
@@ -653,7 +654,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     try { scenarios = goal === undefined ? "" : readHidden(repo, goal)[SCENARIOS] ?? ""; } catch { return { reason: "reviewer: no verdict (the sealed scenarios are unreadable)", none: true }; }
     const text = reviewPrompt(run.name, spec, diff, findings, scenarios);
     writeFileSync(runFile(folder, "review-prompt.md"), text);
-    const argv = [reviewerCmd(), "-p", "--strict-mcp-config", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const bundle = {
       bundle: "../out/out.bundle", refs: [`+refs/heads/${branch}:refs/heads/${branch}`],

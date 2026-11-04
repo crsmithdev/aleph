@@ -29,9 +29,6 @@ test("profile hides a CI-missing tool under denyRead only with the option", () =
   } finally { process.env.PATH = old; }
 });
 
-test("makeRunFolder puts the code-change skill in home/ only with the option", () => {
-  const skill = (d: string) => join(d, "home/.claude/skills/code-change/SKILL.md");
-  expect(existsSync(skill(makeRunFolder("r-plain")))).toBe(false);
-  const dir = makeRunFolder("r-skill", { codeChange: true });
-  expect(readFileSync(skill(dir), "utf8")).toBe(readFileSync(join(import.meta.dir, "../../skills/code-change/SKILL.md"), "utf8"));
+test("makeRunFolder puts no skill in home/", () => {
+  expect(existsSync(join(makeRunFolder("r-plain"), "home/.claude/skills"))).toBe(false);
 });

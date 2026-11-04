@@ -189,11 +189,15 @@ describe("the goal's brief", () => {
 });
 
 describe("the worker brief", () => {
-  test("a sandbox repo's brief names the code-change skill; the fixed brief does not", () => {
+  test("a sandbox repo's brief carries the code-change method as text; the fixed brief does not", () => {
     folder("j1", { "spec.md": "# Spec\n" });
     const f = folder("rb1");
     const r = run({ worktree: "/w", branch: "factory/fac-1" });
-    expect(brief("rb1", f, r, { ...repo, sandbox: true } as Repo)).toContain("`code-change` skill");
+    const sandboxed = brief("rb1", f, r, { ...repo, sandbox: true } as Repo);
+    expect(sandboxed).toContain("follow the code-change method at the end of this brief");
+    expect(sandboxed).toContain("## Code-change method\n\nAdapted from karpathy-guidelines");
+    expect(sandboxed).not.toContain("name: code-change");
+    expect(sandboxed).not.toContain("Skill tool");
     expect(brief("rb1", f, r, repo)).not.toContain("code-change");
   });
 });

@@ -22,7 +22,7 @@ describe("a factory run", () => {
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
     expect(runsLeft()).toEqual([]);
     expect(file(r.json.run, "prompt.md")).toContain("inside\na sandbox");
-    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--permission-mode bypassPermissions --tools Read Write Edit Bash Grep Glob Skill");
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--permission-mode bypassPermissions --disable-slash-commands --tools Read Write Edit Bash Grep Glob\n");
     expect(s.checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
   });

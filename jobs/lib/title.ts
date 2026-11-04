@@ -3,6 +3,7 @@
  * `FOLLOWUP:` line, a lesson, a landing's manual check) becomes a title that
  * `titleProblem` accepts. The source text goes into the request, not the title.
  */
+import { NO_SKILLS } from "./role-skill.ts";
 import { titleProblem, TITLE_RULE } from "../../todo/lib/todo.ts";
 import { ruleCmd } from "./settings.ts";
 
@@ -20,7 +21,7 @@ export async function writeLine(system: string, input: string, max: number): Pro
   delete env.ANTHROPIC_API_KEY;
   env.MAX_THINKING_TOKENS = "0";
   try {
-    const proc = Bun.spawn([cmd, "-p", "--strict-mcp-config", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const proc = Bun.spawn([cmd, "-p", "--strict-mcp-config", NO_SKILLS, "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
     const timer = setTimeout(() => proc.kill(), 30_000);
     const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = await proc.exited;

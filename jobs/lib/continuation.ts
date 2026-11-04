@@ -9,6 +9,7 @@
  * next run reads, and `rescued` in a run folder, which counts a rescue case against
  * the goal. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
  */
+import { skillSection } from "./role-skill.ts";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { reader } from "../../todo/lib/store.ts";
@@ -64,7 +65,7 @@ cannot do the goal makes no commit and gives the reason in its final text; it do
 ${checksSentence(checks)} Chrome cannot start in the sandbox. For a screenshot of a page
 served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
 the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
-Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. For each code change, invoke the \`code-change\` skill with the Skill tool and follow it. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
+Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. For each code change, follow the code-change method at the end of this brief. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
 
 /**
  * The goal's checks for the brief: its test files stored on the issue, with how to run them, or "" when it has none.
@@ -98,6 +99,7 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
       if (text !== undefined) parts.push(`### ${f}\n\n${text.trim()}`);
     }
   }
+  if (repo.sandbox) parts.push(skillSection("code-change", "Code-change method"));
   return parts.join("\n\n") + "\n";
 }
 

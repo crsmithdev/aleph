@@ -70,6 +70,9 @@ test("the reviewer prompt names a deleted test; without findings it has no test 
   const p = reviewPrompt("n", "goal", "diff", []);
   expect(p).toContain("ran the checks that this change reaches");
   expect(p).toContain("they passed");
+  // The reviewer judges by the code-review skill, given as text: no frontmatter, and no Skill tool.
+  expect(p).toContain("## Review method\n\nAdapted from the review rubric");
+  expect(p).not.toContain("name: code-review");
   expect(p).toContain("Do not change tracked files.");
   expect(p).toContain("Do not run the full test suite");
 });

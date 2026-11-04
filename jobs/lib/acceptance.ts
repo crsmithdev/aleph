@@ -9,6 +9,7 @@
  * (kind `acceptance`) gets the failures. A failure of a follow-up files nothing: it sets an Ask
  * (input, acceptance-failed) on the follow-up. A scenario the build reviewer set aside does not fail.
  */
+import { NO_SKILLS } from "./role-skill.ts";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import { join } from "node:path";
@@ -200,7 +201,7 @@ export const sandboxScenarios: ScenarioCheck = async (repo, sha, scenarios) => {
     git(repo.path, "update-ref", ref, sha);
     const b = git(repo.path, "bundle", "create", join(rdir, "out", "accept.bundle"), ref);
     if (!b.ok) return { output: `bundle failed: ${b.out}`, infra: true };
-    const argv = [reviewerCmd(), "-p", "--strict-mcp-config", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const script = [
       "set -e", "exec 3>&1 1>&2", ...gitPrelude("../out/accept.bundle", [`+${ref}:${ref}`]), `git switch -q --detach ${q(ref)}`,

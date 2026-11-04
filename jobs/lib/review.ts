@@ -7,6 +7,7 @@
  * run's owner. The verdict, a `PENDING` line or a last `ERROR: <reason>` line
  * are read back from call.md (`readCall`), and `recordReview` puts the call on the run's state.json. Nothing lands here: `reviewBack` in unit.ts passes a held run that passed both reviews.
  */
+import { NO_SKILLS } from "./role-skill.ts";
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { OPUS_MODEL } from "./agent-call.ts";
@@ -184,7 +185,7 @@ async function review(folder: string): Promise<void> {
       HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"),
     };
     delete env.ANTHROPIC_API_KEY;
-    const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--strict-mcp-config", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const log = runFile(folder, "review.log");
     const once = async (): Promise<string | null> => {

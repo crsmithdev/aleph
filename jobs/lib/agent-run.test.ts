@@ -34,6 +34,7 @@ test("a run holds its state, its prompt, its output and its ending", async () =>
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--model m-1 --tools Read");
   // The role loads no MCP server from the user's config.
   expect(readFileSync(join(base, "args"), "utf8")).toContain("--strict-mcp-config");
+  expect(readFileSync(join(base, "args"), "utf8")).toContain("--disable-slash-commands");
   expect(readFileSync(join(run.folder, "output.log"), "utf8")).toBe("reply\nnoise\n");
   run.end("ok", { route: "close" });
   const r = readRun(run.folder)!;
