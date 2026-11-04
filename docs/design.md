@@ -275,6 +275,13 @@ Reference view = the view that follows the rules best.
 | Pager | `pager()` | `ui/views/issues.js:241` |
 | Empty state | `empty()` | `ui/views/jobs.js:87` |
 
+Cards with their own markup, because `card()` would add a heading or change the element:
+
+- Memory browse table (`#mem-table`) and inspector (`#mem-inspector`): the table card has no heading, and the inspector is an `aside` with `aria-live`.
+- Sessions (`ui/views/sessions.js`): its head is the redrawn `#ag-sess-head`, not a section head.
+- Issues (`ui/views/issues.js`): the section has no heading; `#inv-count` is its head.
+- Causes (`ui/views/now.js`): the section is the redraw target, and `renderCauses()` writes its whole content.
+
 These references were chosen by reading the code, not by looking at the pages. Gap: no view is a reference for a chart's empty or loading state.
 
 ## Rules

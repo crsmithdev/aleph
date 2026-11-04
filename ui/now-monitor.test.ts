@@ -8,7 +8,7 @@ const monitor = { day: "2026-10-20", headline: "Acceptance failures that led to 
 
 test("the Monitor panel shows the day, the first metric, the findings in rank order and the table behind a fold", () => {
   const html = view.view.render({ ...calm, factory: { ...calm.factory, monitor } });
-  expect(html).toContain('<section id="monitor"');
+  expect(html).toContain('id="monitor" aria-label="Monitor, 2026-10-20"');
   expect(html).toContain("Monitor, 2026-10-20");
   expect(html).toContain(monitor.headline);
   expect(html).toContain('<ol class="findings"><li>Build runs &lt;b&gt;rose&lt;/b&gt;.</li><li>Plans rose.</li></ol>');

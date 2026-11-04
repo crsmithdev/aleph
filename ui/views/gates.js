@@ -1,7 +1,7 @@
 // The Gates view: what can stop, hold or ask. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Pause, Resume and "Mark it checked"
 // buttons and the Waiting-for-you buttons; `mount` runs the rule switches and "Mark all done".
-import { badge, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, repoIdLink, sectionHead, when } from "../lib.js";
+import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, repoIdLink, sectionHead, when } from "../lib.js";
 import { askRow } from "./now.js";
 
 export const view = {
@@ -132,16 +132,16 @@ export function renderHeld(d) {
   const rows = repos.length
     ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${r.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>`).join("")
     : `<p class="quiet">No repo names held paths.</p>`;
-  return `<section class="card" aria-label="Held paths">${sectionHead("Held paths")}<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
-    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}</section>`;
+  return card("Held paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
+    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`);
 }
 
 /** What a worker step may touch, from the profile sandbox.ts builds. Read-only. */
 export function renderSandbox(d) {
   const s = d.sandbox;
   const row = (k, v) => `<dt>${esc(k)}</dt><dd>${v.map((x) => `<code>${esc(x)}</code>`).join(", ") || "none"}</dd>`;
-  return `<section class="card" aria-label="Sandbox permissions">${sectionHead("Sandbox permissions")}<p class="quiet">What a worker step may touch. A run that needs more ends with a host chore.</p>` +
-    `<dl class="sbx">${row("Read", s.read)}${row("Write", s.write)}${row("Network", [...s.network.domains, ...(s.network.localBinding ? ["local ports"] : [])])}${row("Host", s.denied.map((p) => `no ${p}`))}</dl></section>`;
+  return card("Sandbox permissions", `<p class="quiet">What a worker step may touch. A run that needs more ends with a host chore.</p>` +
+    `<dl class="sbx">${row("Read", s.read)}${row("Write", s.write)}${row("Network", [...s.network.domains, ...(s.network.localBinding ? ["local ports"] : [])])}${row("Host", s.denied.map((p) => `no ${p}`))}</dl>`);
 }
 
 /** An item of the log as a link: an issue ref to its page, `rule` to the Rules. */

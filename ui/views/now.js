@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
+import { barList, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
 import { causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -53,8 +53,8 @@ export function renderMonitor(s) {
   const said = m.error ? `<p class="quiet">No reading: ${esc(m.error)}</p>`
     : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ol>`
     : `<p class="quiet">Nothing looks off.</p>`;
-  return `<section id="monitor" class="card" aria-labelledby="h-monitor"><h2 id="h-monitor">Monitor, ${esc(m.day)}</h2><p>${esc(m.headline)}</p>${said}` +
-    `<details class="more" data-keep="more:monitor"><summary>Table</summary><pre class="monitor-table">${esc(m.table)}</pre></details></section>`;
+  return card(`Monitor, ${m.day}`, `<p>${esc(m.headline)}</p>${said}` +
+    `<details class="more" data-keep="more:monitor"><summary>Table</summary><pre class="monitor-table">${esc(m.table)}</pre></details>`, { id: "monitor" });
 }
 
 /** Fetch the window with its baseline in one request, then fill the scorecard and the causes. */
