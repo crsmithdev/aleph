@@ -202,6 +202,14 @@ describe("the keep-gate", () => {
       const { result } = await gate({ base: "export const other = 1;\n", head: flat }, shared.replace("expect(m(2)).toBe(2)", `expect(typeof m).toBe("function")`), flatSources);
       expect(result?.reason).toBe("keep-gate: 1 new test covers no changed line: lib/m.test.ts > fixed");
     }, 30_000);
+
+    test("with no mutant, a case that only loads a file of two changed functions runs no changed line and goes back", async () => {
+      const two = "export const other = 1;\nexport function m(x: number) {\n  return x;\n}\nexport function n(y: number) {\n  return y;\n}\n";
+      const twoSources = [{ path: "m.ts", lines: [3, 6], text: two }];
+      const loadOnly = testText.replace("m()).toBe(2)", "m(1)).toBe(1)");
+      const { result } = await gate({ base: "export const other = 1;\n", head: two }, loadOnly, twoSources);
+      expect(result?.reason).toBe("keep-gate: 1 new test covers no changed line: lib/m.test.ts > fixed");
+    }, 30_000);
   });
 });
 

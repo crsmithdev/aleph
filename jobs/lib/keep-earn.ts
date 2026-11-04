@@ -3,7 +3,8 @@
  * nothing from aleph, because it runs in the target repo. The argument is a plan file: the new cases to judge,
  * the test files, the changed source lines and the mutants. A case earns its keep when it covers a changed line
  * that the other cases of the test files do not cover, or when it fails on a mutant that it passes without.
- * When the plan has no mutant, a case earns its keep when it covers any changed line, even one that other cases cover.
+ * When the plan has no mutant, a case earns its keep when it runs a changed line that the load of the modules alone
+ * does not run (bun marks such a line as run, with a count of 1, when no function ran): the line's count must beat the count with no case run.
  * Each bun call has 60 seconds. After 300 seconds the stage stops and every case passes.
  * The last line of the output is `KEEP-EARN <json>`: the cases that did not earn their keep and the mutant count.
  */
@@ -26,18 +27,18 @@ const bun = (args: string[]) => Bun.spawnSync(["timeout", "-k", "5", "60", "bun"
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const id = (c: { file: string; name: string }) => `${c.file} > ${c.name}`;
 
-/** The changed lines, as `path:line`, that one bun run of the test files with the name filter `filter` covers. */
-function covered(plan: Plan, filter: string): Set<string> {
+/** The changed lines, as `path:line`, that one bun run of the test files with the name filter `filter` covers, and more often than in `floor`. */
+function covered(plan: Plan, filter: string, floor = new Map<string, number>()): Map<string, number> {
   rmSync(COV, { recursive: true, force: true });
   bun(["--coverage", "--coverage-reporter=lcov", `--coverage-dir=${COV}`, "-t", filter, ...plan.files.map((f) => `./${f}`)]);
-  const hit = new Set<string>();
+  const hit = new Map<string, number>();
   const lcov = `${COV}/lcov.info`;
   if (!existsSync(lcov)) return hit;
   let file = "";
   for (const l of readFileSync(lcov, "utf8").split("\n")) {
     if (l.startsWith("SF:")) file = l.slice(3);
     const m = /^DA:(\d+),(\d+)/.exec(l);
-    if (m && Number(m[2]) > 0 && plan.changed[file]?.includes(Number(m[1]))) hit.add(`${file}:${m[1]}`);
+    if (m && Number(m[2]) > (floor.get(`${file}:${m[1]}`) ?? 0) && plan.changed[file]?.includes(Number(m[1]))) hit.set(`${file}:${m[1]}`, Number(m[2]));
   }
   return hit;
 }
@@ -53,13 +54,14 @@ function passed(files: string[]): Set<string> | null {
 
 const plan: Plan = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const left = new Set(plan.cases.map(id));
+const loaded = plan.mutants.length ? undefined : covered(plan, "^$");
 for (const c of plan.cases) {
   if (late()) break;
   // bun matches -t against the full name: the describe names and the case name, with spaces between.
   const name = `(?:^|.* )${esc(c.name)}$`;
-  const alone = covered(plan, name);
+  const alone = covered(plan, name, loaded);
   const others = covered(plan, `^(?!${name})`);
-  if (plan.mutants.length ? [...alone].some((l) => !others.has(l)) : alone.size) left.delete(id(c));
+  if (plan.mutants.length ? [...alone.keys()].some((l) => !others.has(l)) : alone.size) left.delete(id(c));
 }
 let ran = 0;
 for (const m of plan.mutants) {
