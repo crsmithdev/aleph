@@ -115,10 +115,10 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis 
   if (value === null || value === undefined || base === null || base === undefined) return "";
   const change = kind === "points" ? (value - base) * 100 : base === 0 ? (value === 0 ? 0 : NaN) : ((value - base) / base) * 100;
   if (Number.isNaN(change)) return "";
-  const n = Math.round(Math.abs(change)), down = change < 0;
+  const down = change < 0;
   const tip = `${prev === null || prev === undefined ? "No previous value" : `Previous ${format(prev)}`}; baseline ${format(base)}, ${basis}${kind === "points" ? " (change in percentage points)" : ""}`;
-  if (!n) return `<span class="tr" title="${esc(tip)}">▬ 0%</span>`;
-  return `<span class="tr ${down === lowerIsGood ? "good" : "warn"}" title="${esc(tip)}">${down ? "▼" : "▲"} ${n}%</span>`;
+  if (change === 0) return `<span class="tr" title="${esc(tip)}">▬ 0%</span>`;
+  return `<span class="tr ${down === lowerIsGood ? "good" : "warn"}" title="${esc(tip)}">${down ? "▼" : "▲"} ${pct(Math.abs(change))}</span>`;
 }
 
 /**

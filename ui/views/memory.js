@@ -171,7 +171,7 @@ const newest = (xs) => xs.filter(Boolean).sort().at(-1) ?? "";
 export function typeTiles(m, rows) {
   const t = { ...EMPTY_TYPES, ...(m.types ?? {}) };
   const known = rows.filter(isKnown), eps = rows.filter((n) => n.kind === "episode");
-  const kept = known.length ? Math.round((known.filter((n) => n.read).length / known.length) * 100) : 0;
+  const kept = known.length ? (known.filter((n) => n.read).length / known.length) * 100 : 0;
   const stats = t.retrieval.stats;
   const hooks = t.procedural.hooks.length;
   return [

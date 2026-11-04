@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
+import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
 import { causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -134,7 +134,7 @@ export function renderLede(s, stale = false) {
   const alert = alerts.size > 0;
   if (f.paused && alert) said.push(["the factory is paused", ""]);
   const week = s.usage?.now?.seven_day;
-  if (week >= WEEKLY_WARN) said.push([`weekly usage is at ${Math.round(week)}%`, ""]);
+  if (week >= WEEKLY_WARN) said.push([`weekly usage is at ${pct(week)}`, ""]);
   for (const l of f.health || []) if (WARN_HEALTH.test(l)) said.push([l.replace(/^health:\s*/, ""), ""]);
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
   if (stale) return `<span class="say error">Alert: this status is out of date${parts ? `; ${parts}` : ""}.</span>`;

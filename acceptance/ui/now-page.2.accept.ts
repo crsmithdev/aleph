@@ -38,7 +38,7 @@ const USAGE = { now: { seven_day: 7, five_hour: 2, seven_day_resets_at: "2026-11
 test("the scorecard has five cards: Lost time, Completion, Landed, Queue wait, Usage", () => {
   const h = view.renderTiles({ ...state, now: "2026-11-01T08:00:00Z", usage: USAGE }, withBase(WEEK), "week");
   expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Lost time", "Completion", "Landed", "Queue wait", "Usage"]);
-  expect([...h.matchAll(/<b>(.*?)<\/b>/g)].map((m) => m[1])).toEqual(["38%<em> / 6.0h</em>", "26m<em> / 4h36m</em>", "7<em> / 91%</em>", "1m<em> / 6m</em>", "7%"]);
+  expect([...h.matchAll(/<b>(.*?)<\/b>/g)].map((m) => m[1])).toEqual(["38%<em> / 6.0h</em>", "26m<em> / 4h 36m</em>", "7<em> / 91%</em>", "1m<em> / 6m</em>", "7%"]);
   expect([...h.matchAll(/<span class="q"><span>([^<]*)<\/span><span class="m"> \/ ([^<]*)</g)].map((m) => `${m[1]} / ${m[2]}`)).toEqual(["p50 / p90", "issues / clean", "p50 / p90"]);
   // Lost time: percentage points (38 - 25 = 13), bad when up; Completion: relative (1570 vs 1200 = +31%), bad when up; Landed: relative (7 vs 5 = +40%), good when up.
   expect(h).toContain('class="tr warn" title="Previous 30%; baseline 25%, the previous 7 days (change in percentage points)">▲ 13%');
@@ -76,7 +76,7 @@ test("an ask card starts its meta row with the id, then the priority, the date a
     at: "2026-10-27T10:05:00", since: "2026-10-27T09:00:00", part: { n: 1, m: 2, parent: "aleph-6", href: "#/issues/aleph/6" },
     actions: [{ act: "answer", label: "Answer", hint: "h", primary: true, args: {}, recommended: false }], details: {} } as any, "2026-10-27T11:05:00");
   const head = row.match(/<div class="ih">[^]*?<\/div>/)![0];
-  const order = ["idl", "badge need\">high", 'class="part"', "num date\">10/27 10:05", "num dur\">2h05m"].map((x) => head.indexOf(x));
+  const order = ["idl", "badge need\">high", 'class="part"', "num date\">10/27 10:05", "num dur\">2h 05m"].map((x) => head.indexOf(x));
   expect(order.every((i) => i >= 0)).toBe(true);
   expect(order).toEqual([...order].sort((a, b) => a - b));
   expect(head).not.toContain("kind-tag");

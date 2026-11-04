@@ -257,3 +257,10 @@ test("prospective issues carry their priority, medium when they have none, and t
     writeFileSync(join(base, "repos.json"), "{}");
   }
 });
+
+test("typeTiles writes the unrounded returned share", async () => {
+  // @ts-ignore plain JS shared with the page
+  const { typeTiles } = await import("./views/memory.js");
+  const rows = Array.from({ length: 1000 }, (_, i) => ({ kind: "decision", read: i < 3 ? "2026-11-01" : null }));
+  expect(typeTiles({ exists: true }, rows).find((t: any) => t.id === "semantic").status).toStartWith("0.3% returned");
+});
