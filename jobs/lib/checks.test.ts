@@ -193,6 +193,15 @@ describe("the keep-gate", () => {
       expect((await gate(code, twin, sources)).result).toBeNull();
       expect((await gate(code, twin)).commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
     }, 30_000);
+
+    test("with no mutant of the changed lines, a case that runs a changed line stays even when another case runs it; one that runs none goes back", async () => {
+      const flat = "export const other = 1;\nexport function m(x: number) {\n  return x;\n}\n";
+      const flatSources = [{ path: "m.ts", lines: [3], text: flat }];
+      const shared = testText.replace("m()).toBe(2)", "m(1)).toBe(1)").replace(`expect(typeof m).toBe("function")`, "expect(m(2)).toBe(2)");
+      expect((await gate({ base: "export const other = 1;\n", head: flat }, shared, flatSources)).result).toBeNull();
+      const { result } = await gate({ base: "export const other = 1;\n", head: flat }, shared.replace("expect(m(2)).toBe(2)", `expect(typeof m).toBe("function")`), flatSources);
+      expect(result?.reason).toBe("keep-gate: 1 new test covers no changed line: lib/m.test.ts > fixed");
+    }, 30_000);
   });
 });
 

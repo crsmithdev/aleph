@@ -3,6 +3,7 @@
  * nothing from aleph, because it runs in the target repo. The argument is a plan file: the new cases to judge,
  * the test files, the changed source lines and the mutants. A case earns its keep when it covers a changed line
  * that the other cases of the test files do not cover, or when it fails on a mutant that it passes without.
+ * When the plan has no mutant, a case earns its keep when it covers any changed line, even one that other cases cover.
  * Each bun call has 60 seconds. After 300 seconds the stage stops and every case passes.
  * The last line of the output is `KEEP-EARN <json>`: the cases that did not earn their keep and the mutant count.
  */
@@ -58,7 +59,7 @@ for (const c of plan.cases) {
   const name = `(?:^|.* )${esc(c.name)}$`;
   const alone = covered(plan, name);
   const others = covered(plan, `^(?!${name})`);
-  if ([...alone].some((l) => !others.has(l))) left.delete(id(c));
+  if (plan.mutants.length ? [...alone].some((l) => !others.has(l)) : alone.size) left.delete(id(c));
 }
 let ran = 0;
 for (const m of plan.mutants) {

@@ -338,6 +338,10 @@ async function earnKeep(repo: Repo, tip: string, tests: NewTests[], cases: Plan[
   const { unearned, mutants: n } = JSON.parse(line.slice("KEEP-EARN ".length)) as { unearned: string[]; mutants: number };
   if (!unearned.length) return null;
   const one = unearned.length === 1;
+  if (!plan.mutants.length) return {
+    reason: `keep-gate: ${unearned.length} new test${one ? " covers" : "s cover"} no changed line: ${unearned.join("; ")}`,
+    log: `These new tests fail on the base commit only because their file does not load there. The changed lines have no mutant, so a new test must run a changed line, and on the head these run none:\n${unearned.map((u) => `- ${u}`).join("\n")}\nMake each one check what the change does, or remove it: a committed test needs a lasting reason.`,
+  };
   return {
     reason: `keep-gate: ${unearned.length} new test${one ? " adds" : "s add"} no coverage of the changed lines and kill${one ? "s" : ""} no mutant: ${unearned.join("; ")}`,
     log: `These new tests fail on the base commit only because their file does not load there. On the head they cover no changed line that the other cases of their files do not cover, and they pass on each of the ${n} mutant${n === 1 ? "" : "s"} of the changed lines:\n${unearned.map((u) => `- ${u}`).join("\n")}\nMake each one check what the change does, or remove it: a committed test needs a lasting reason.`,
