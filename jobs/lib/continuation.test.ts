@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  afterLand, askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, goalBrief,
+  afterLand, askedQuestion, brief, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, goalBrief,
   infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedHidden, rerunStep, rescueCase, writeRerun, type Stuck,
 } from "./continuation.ts";
 import type { Entry, Repo, Run } from "./ledger.ts";
@@ -185,5 +185,15 @@ describe("the goal's brief", () => {
     expect(b.spec).toEndWith("## Note on the last run\n\nThe last run made no commit.\n");
     clearRerun("fac-7");
     expect(goalBrief(item, "fac-7", []).rerun).toBe(false);
+  });
+});
+
+describe("the worker brief", () => {
+  test("a sandbox repo's brief names the code-change skill; the fixed brief does not", () => {
+    folder("j1", { "spec.md": "# Spec\n" });
+    const f = folder("rb1");
+    const r = run({ worktree: "/w", branch: "factory/fac-1" });
+    expect(brief("rb1", f, r, { ...repo, sandbox: true } as Repo)).toContain("`code-change` skill");
+    expect(brief("rb1", f, r, repo)).not.toContain("code-change");
   });
 });

@@ -392,7 +392,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
   phase("setup");
   { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`); }
   const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
-  const dir = makeRunFolder(id);
+  const dir = makeRunFolder(id, { codeChange: true });
   try {
     // The store and ledger facts ride along, so `aleph status` inside answers as it does outside.
     const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, writeFacts(repo), ...(prev ? [`refs/heads/${branch}`] : []));
@@ -400,7 +400,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     const text = brief(id, folder, run, repo);
     writeFileSync(runFile(folder, "prompt.md"), text);
     const argv = [workerCmd(), "-p", "--strict-mcp-config", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", ...(run.model ? ["--model", run.model] : [])];
+      "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill", ...(run.model ? ["--model", run.model] : [])];
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const bundle = {
       bundle: "../in.bundle", refs: [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])],

@@ -4,7 +4,7 @@
  * folder and the bundles; each step is one `srt` call with its own profile.
  * See "Sandbox" in docs/specs/2026-10-26-seed-factory.md.
  */
-import { chmodSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { expand, testParallel } from "./ledger.ts";
@@ -65,17 +65,22 @@ export function linkBins(dir: string): void {
   if (existsSync(join(dir, "bin", "bun"))) symlinkSync(realpathSync(join(dir, "bin", "bun")), join(dir, "bin", "bunx"));
 }
 
+const CODE_CHANGE_SKILL = join(import.meta.dir, "..", "..", "skills", "code-change");
+
 /**
  * A new run folder: home/ with Claude Code settings and a git identity, work/,
  * tmp/, out/ for the bundle the worker hands
  * back, check/ and checklog/ for the checks, and bin/ with links to claude, bun,
  * bunx and git, and aleph-shot, the client of the screenshot requests.
+ * With `codeChange`, home/ also holds the code-change skill, for the build worker.
  */
-export function makeRunFolder(id: string): string {
+export function makeRunFolder(id: string, o: { codeChange?: boolean } = {}): string {
   const dir = join(sandboxDir(), id);
   rmSync(dir, { recursive: true, force: true });
   for (const d of ["home", "work", "tmp", "out", "check", "checklog"]) mkdirSync(join(dir, d), { recursive: true });
   writeHome(join(dir, "home"));
+  // The build worker's skill: Claude Code reads skills from $CLAUDE_CONFIG_DIR/skills.
+  if (o.codeChange) cpSync(CODE_CHANGE_SKILL, join(dir, "home/.claude/skills/code-change"), { recursive: true });
   linkBins(dir);
   writeFileSync(join(dir, "bin", "aleph-shot"), SHOT_CLIENT);
   chmodSync(join(dir, "bin", "aleph-shot"), 0o755);

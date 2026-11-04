@@ -1,5 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { makeRunFolder, profile } from "./sandbox.ts";
@@ -27,4 +27,11 @@ test("profile hides a CI-missing tool under denyRead only with the option", () =
     process.env.PATH = "/nonexistent";
     expect(deny({ hideCiMissing: true })).toEqual(plain);
   } finally { process.env.PATH = old; }
+});
+
+test("makeRunFolder puts the code-change skill in home/ only with the option", () => {
+  const skill = (d: string) => join(d, "home/.claude/skills/code-change/SKILL.md");
+  expect(existsSync(skill(makeRunFolder("r-plain")))).toBe(false);
+  const dir = makeRunFolder("r-skill", { codeChange: true });
+  expect(readFileSync(skill(dir), "utf8")).toBe(readFileSync(join(import.meta.dir, "../../skills/code-change/SKILL.md"), "utf8"));
 });

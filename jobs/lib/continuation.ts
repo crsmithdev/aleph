@@ -64,7 +64,7 @@ cannot do the goal makes no commit and gives the reason in its final text; it do
 ${checksSentence(checks)} Chrome cannot start in the sandbox. For a screenshot of a page
 served by your own server on 127.0.0.1, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`:
 the factory takes the shot outside the sandbox and writes the PNG at the path, which must be inside the repo, and you commit it.
-Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
+Only \`http://127.0.0.1:<port>\` URLs of your own server are loaded. For each code change, invoke the \`code-change\` skill with the Skill tool and follow it. ${FOREGROUND} End with a summary of what you did and what you ran, each thing said once: at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
 
 /**
  * The goal's checks for the brief: its test files stored on the issue, with how to run them, or "" when it has none.
