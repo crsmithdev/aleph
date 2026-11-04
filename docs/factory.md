@@ -147,6 +147,8 @@ A goal that no gate holds goes to its spec check (a repo with `"author": true`) 
 
 A stuck or failed run holds only its own goal, through its open job. The rescue takes a safe action on it once per goal per case, or sets a `rescue` Ask. A lost run (its process ended and wrote no end) is marked failed and its goal reruns once; a second lost run of the goal sets a `rescue` Ask.
 
+The firefighter is code in each tick (`jobs/lib/firefighter.ts`); no agent runs. A failed baseline, a red GitHub CI on main and a failed sandbox probe each file one issue of priority `critical`, kind `bug` and label `red-main` per failing commit. The request names the commit (`Failing commit: <sha>`) and holds the last 200 lines of the log, at most 8000 characters: `checks.log` of the baseline, `gh run view <id> --log-failed` of the CI run, or `probe.log` of the probe. A second tick, or a second source for the same commit, files nothing more. While the repo has an open `red-main` issue, a new failing commit is one note on that issue, not a second issue. A land live for 30 minutes or more gets a `rescue` Ask on its issue, once per land run, and the director decides.
+
 `aleph recheck <name>` is the way out of a stuck run that keeps its work, for example one that a flaky test on main stuck. It merges the current `origin/main` into the branch, runs the checks, the held rule and the reviewer, and lands like any passed run.
 
 ## Asks and Always rules
@@ -177,4 +179,4 @@ The live cap is read from its variable first, then from `~/.aleph/factory/caps.j
 | `ALEPH_WORKER_CMD` | `claude` | The worker command |
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 
-For each agent role (`TRIAGE`, `PLAN`, `AUTHOR`, `FACTS`, `FIREFIGHTER`, `DIRECTOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.
+For each agent role (`TRIAGE`, `PLAN`, `AUTHOR`, `FACTS`, `DIRECTOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.

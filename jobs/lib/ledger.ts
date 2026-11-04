@@ -21,6 +21,7 @@ export interface CheckResult { name: string; ok: boolean; seconds: number; passe
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
+  /** `firefighter` is read only: runs from before the firefighter became code (v6) keep it. */
   kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "director" | "explain" | "agent" | "monitor";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   condition: State; phase?: string;
@@ -78,7 +79,7 @@ export interface Run {
   stat?: string;
   /** A land of a held run: the commit gets `Held-by: <lander>`. */
   held?: boolean;
-  /** Who landed a held run: absent (a run from before this field) means Chris. */
+  /** Who landed a held run: absent (a run from before this field) means Chris; `firefighter` is from before the director. */
   lander?: "Chris" | "firefighter" | "director";
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
   told: boolean; shown?: boolean; started: string; ended?: string;

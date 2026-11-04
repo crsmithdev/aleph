@@ -219,7 +219,7 @@ export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}:
 /** A red main: a failed baseline or a red GitHub CI streak. `id` names the red commit or streak; `line` says it with the repo. */
 export interface RedMain { repo: string; source: "baseline" | "ci"; id: string; line: string }
 
-/** Every red main now, the baselines first: what the health lines, the Gates page and the firefighter report. */
+/** Every red main now, the baselines first: what the health lines and the Gates page report, and the firefighter files. */
 export function redMains(): RedMain[] {
   const base = Object.values(baselines()).filter((b) => !b.ok)
     .map((b): RedMain => ({ repo: b.repo, source: "baseline", id: `red:${b.repo}:${b.commit}`, line: `${b.repo} ${redLine(b)}` }));
@@ -242,7 +242,8 @@ export function mainRed(): (repo: Repo) => string | null {
   };
 }
 
-export interface Probe { at: string; ok: boolean; failed: string[] }
+/** `repo` and `commit` say what the probe ran on: origin/<main> of that repo. Older records lack them. */
+export interface Probe { at: string; ok: boolean; failed: string[]; repo?: string; commit?: string }
 
 export function saveProbe(p: Probe): void {
   mkdirSync(factoryDir(), { recursive: true });
@@ -257,7 +258,7 @@ export const lastProbe = (): Probe | null => {
 const STALL_MS = 15 * 60_000;
 
 /** A land run live for longer than this is stuck: 99% of land runs end within 20 minutes. */
-const LAND_STUCK_MS = 30 * 60_000;
+export const LAND_STUCK_MS = 30 * 60_000;
 
 const stallFile = () => join(factoryDir(), "stalls.json");
 

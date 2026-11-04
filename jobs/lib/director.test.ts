@@ -11,9 +11,9 @@ import { directorStep } from "./factory.ts";
 import { allRuns, loadRegistry, readRun } from "./ledger.ts";
 import { setPaused } from "./factory-status.ts";
 import { readStore } from "./corrections.ts";
-import { asked, base, branch, calls, choice, dropped, fresh, item, key, landed, log, n, plain, ports, reply, replyWith, run, useFirefighterFixture } from "./firefighter.fixture.ts";
+import { asked, base, branch, calls, choice, dropped, fresh, item, key, landed, log, n, plain, ports, reply, replyWith, run, useDirectorFixture } from "./director.fixture.ts";
 
-useFirefighterFixture();
+useDirectorFixture();
 
 const repo = () => loadRegistry()[key];
 const direct = () => directAll([repo()], ports());

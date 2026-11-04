@@ -9,7 +9,8 @@ import { base } from "../cli.helpers";
 import { asCli, call, issueShow, status, type Result } from "../inproc.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ciStep } from "./ci.ts";
-import { behind, correctionsStep, episodeStep, directorStep, firefighterStep, probeDue, report, runDispatch, stallStep, triageStep } from "./factory.ts";
+import { firefight } from "./firefighter.ts";
+import { behind, correctionsStep, episodeStep, directorStep, probeDue, report, runDispatch, stallStep, triageStep } from "./factory.ts";
 import { factoryDir, factoryRepos, health, paused, setPaused } from "./factory-status.ts";
 import { fetchOrigin } from "./git.ts";
 import { factoryLog } from "./layout.ts";
@@ -63,9 +64,9 @@ export const tick = (extra: Record<string, string> = {}): Promise<any> => asCli(
   try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
   try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }
   await smokeStep();
-  const f = await firefighterStep();
+  const f = await firefight();
   const m = await monitorStep();
-  return { ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f?.run ? { firefighter: f } : {}), ...(m ? { monitor: m.day } : {}) };
+  return { ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f && (f.filed.length || f.asked.length) ? { firefighter: f } : {}), ...(m ? { monitor: m.day } : {}) };
 });
 
 /** `aleph pause` and `aleph resume`; the resume's dispatch is off in the tests (ALEPH_DISPATCH=off). */

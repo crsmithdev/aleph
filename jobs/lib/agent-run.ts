@@ -49,7 +49,7 @@ export async function callAgent(c: Call, input: string): Promise<{ text: string;
 
 /** The ledger's line for a role's run. `job` defaults to the folder's own name. */
 export interface Opening extends Call {
-  role: "triage" | "plan" | "facts" | "firefighter" | "director" | "monitor";
+  role: "triage" | "plan" | "facts" | "director" | "monitor";
   name: string;
   /** The first line of command.txt. */
   command: string;

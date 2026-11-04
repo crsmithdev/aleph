@@ -73,7 +73,8 @@ export async function probe(repo: Repo, log: string, fault: typeof clockFault = 
   const fake = process.env.ALEPH_PROBE_FAKE;
   if (fake === "pass" || fake === "fail") {
     const failed = fake === "pass" ? [] : ["faked"];
-    const p = { at: new Date().toISOString(), ok: !failed.length, failed };
+    const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
+    const p = { at: new Date().toISOString(), ok: !failed.length, failed, repo: repo.key, ...(commit ? { commit } : {}) };
     saveProbe(p);
     return { ...p, results: [] };
   }
@@ -83,6 +84,7 @@ export async function probe(repo: Repo, log: string, fault: typeof clockFault = 
     fetchOrigin(repo.path);
     git(repo.path, "bundle", "create", join(dir, "in.bundle"), `refs/remotes/origin/${repo.main}`);
     const main = `refs/remotes/origin/${repo.main}`;
+    const commit = git(repo.path, "rev-parse", main).out;
     writeFileSync(log, "");
     writeFileSync(`${log}.stderr`, "");
     const script = [
@@ -104,7 +106,7 @@ export async function probe(repo: Repo, log: string, fault: typeof clockFault = 
       const last = lastLines(readFileSync(`${log}.stderr`, "utf8"));
       failed[failed.length - 1] += ` (exit ${step.code}${step.timedOut ? ", time box ended it" : ""}${last ? `; stderr: ${last}` : ""})`;
     }
-    const p = { at: new Date().toISOString(), ok: !failed.length, failed };
+    const p = { at: new Date().toISOString(), ok: !failed.length, failed, repo: repo.key, ...(commit ? { commit } : {}) };
     saveProbe(p);
     return { ...p, results };
   } finally {

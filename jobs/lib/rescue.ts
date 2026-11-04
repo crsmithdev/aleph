@@ -9,6 +9,7 @@
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
  * the goal; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, and no host
  * restart explains it) is marked failed and gets the same action, once per goal; a second lost run of the goal sets the Ask.
+ * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
 import { readFileSync, rmSync, statSync } from "node:fs";
 import * as issues from "../../todo/lib/todo.ts";
@@ -16,7 +17,7 @@ import { isVersion } from "./goal-spec.ts";
 import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
 import { endRun } from "./agent-run.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, needsOf, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask } from "./ask.ts";
-import { factoryRepos as sandboxRepos } from "./factory-status.ts";
+import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "./factory-status.ts";
 import { alreadyMet } from "./gate.ts";
 import { sealedVerdict, type Sealed } from "./acceptance.ts";
 import { fetchOrigin, git } from "./git.ts";
@@ -150,6 +151,54 @@ function restartReviews(act: Rescue): void {
 }
 
 /** How long a dispatch waits for a run's rescue lock before it skips the run. */
+
+const SLOW_LAND_OPTIONS = [
+  { label: "Wait", line: "Leave the land running; it may still end" },
+  { label: "Kill and rerun", line: "Stop the land and land the job again" },
+  { label: "Drop", line: "Stop the land and drop the job" },
+];
+
+/** The open jobs of factory repos whose last real run is a land live for LAND_STUCK_MS or more, with no Ask set on it. */
+const slowLands = (jobs: Job[], now: number): Job[] => {
+  const keys = new Set(sandboxRepos().map((r) => r.key));
+  return jobs.filter((j) => {
+    const last = lastReal(j);
+    const r = last.run;
+    return isOpen(j) && !!r.repo && keys.has(r.repo) && r.kind === "land" && r.condition === "running" && isLive(last.folder)
+      && now - Date.parse(r.started) >= LAND_STUCK_MS && !asked(last);
+  });
+};
+
+/**
+ * Each land live for 30 minutes or more gets a rescue Ask (input, rescue) on its issue, once per land run: the director
+ * decides to wait, kill and rerun, or drop. The land runs on. Returns the names of the jobs it asked about.
+ */
+export async function askSlowLands(now = Date.now()): Promise<string[]> {
+  const out: string[] = [];
+  for (const first of slowLands(allJobs(), now)) {
+    const name = first[0].run.name;
+    const release = await lock(`rescue-${first[0].run.repo}-${name}`, 0);
+    if (!release) continue;
+    try {
+      // Read again under the lock: another tick may have asked.
+      const runs = slowLands(allJobs(), now).find((j) => j[0].run.job === first[0].run.job);
+      if (!runs) continue;
+      const last = lastReal(runs);
+      const r = last.run;
+      const repo = loadRegistry()[r.repo!];
+      const minutes = Math.floor((now - Date.parse(r.started)) / 60_000);
+      const question = `${name}: its land run ${last.id} is live for ${minutes} minutes, and 99% of lands end within 20. Wait, kill and rerun, or drop?`;
+      const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { kind: "input", reason: "rescue" })!;
+      const why = askFromRun(last, repo, issueOf(runs), ask, question);
+      if (why) { factoryLog(`firefighter: ${name}: no rescue Ask for its slow land: ${why}`); continue; }
+      factoryLog(`firefighter: ${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director`);
+      out.push(name);
+    } finally {
+      release();
+    }
+  }
+  return out;
+}
 
 /** Take the safe default action for each killed, lost, stuck or failed job and each killed review, one job at a time under its lock. */
 export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain, sealed: SealedCheck = sealedVerdict): Promise<void> {

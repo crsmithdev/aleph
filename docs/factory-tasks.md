@@ -12,7 +12,7 @@ This table states what starts each factory task, what it does and what stops two
 | Facts | Dispatch; a landed job with no facts marker | Keeps checked notes in the vault | Nothing | None | Lock `facts-<name>`; the marker is read again under it |
 | Acceptance | Dispatch; a done goal with no final result | Reruns the Oracle on main | Flake note, follow-up issue or Ask | Ask when a follow-up fails acceptance | Lock per goal; a pass is reused per commit and command |
 | Director | Tick; an Ask with no case text | Read-only run per Ask; code checks and applies its actions, or writes its case text | The action taken, or the Ask to Chris | The escalation list, or an Ask it did not decide | Lock `director-<on>`; an Ask with case text is not taken again |
-| Firefighter | Tick; a new event in the snapshot (stuck, failed, lost, looping runs, red main) | Read-only run; code checks and applies its actions | The action taken | Its `tell` lines | `firefighter.json` keeps the event keys it saw |
+| Firefighter | Tick; a red baseline, a red CI on main, a failed probe, a land live for 30 minutes | Code: files a critical issue with the log, or sets a rescue Ask | An issue, a note or an Ask | None | The issue's `Failing commit:` line; the land run's `asked` file |
 | Corrections | Tick; once a day from 03:00 local | Groups signals into lessons and proposes a check, a rule or a skill | A proposal | Approve or decline | Signal ids already in a lesson are skipped |
 | Episodes | Tick; a finished goal | Writes its episode page | Nothing | None | `episodes-seen` |
 

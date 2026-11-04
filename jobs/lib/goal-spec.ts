@@ -1,6 +1,6 @@
 /**
  * A goal's spec: the Markdown sections a goal issue must have, the paths of its Edit surface, and
- * its version. The spec check, the planner, the firefighter, the rescue and the busy-file wait all
+ * its version. The spec check, the planner, the director, the rescue and the busy-file wait all
  * read a spec through this module.
  */
 import { createHash } from "node:crypto";

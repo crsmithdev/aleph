@@ -1,7 +1,7 @@
 /**
  * GitHub CI on each factory repo's main. The tick reads the latest runs with `gh` and keeps the
  * result in factory/ci.json; the report and the Status page show a red CI as a health line, and
- * the firefighter sees it as a `red` event, once per red streak.
+ * the firefighter files one critical issue per failing head (firefighter.ts).
  */
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";

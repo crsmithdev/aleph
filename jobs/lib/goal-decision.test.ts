@@ -34,6 +34,12 @@ test("Baseline binds on each line the dispatch gives for a main that is not gree
   expect(kind({ red: null })).toBe("ready");
 });
 
+test("Baseline lets the red-main fix through, and the later gates still bind on it", () => {
+  const fix = item({ labels: ["red-main"] });
+  expect(kind({ item: fix, red: "main is red at abc1234: tests" })).toBe("ready");
+  expect(kind({ item: fix, red: "main is red at abc1234: tests", probe: { why: "probe failed", text: "probe failed" } })).toBe("probe");
+});
+
 test("Not ready covers a done goal, an after ref, an open job, a planner and a spec check, in that order", () => {
   const all: Partial<GoalFacts> = { done: (r) => r === "fac-9", item: item({ after: ["fac-1"] }), open: "running", planning: true, checking: true };
   expect(goalDecision(facts(all)).why).toBe("the item is already done");

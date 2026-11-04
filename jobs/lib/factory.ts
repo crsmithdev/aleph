@@ -11,7 +11,6 @@ import { fetchOrigin, git } from "./git.ts";
 import { askChris, askOf, needsOf, plainAsk } from "./ask.ts";
 import { factoryLog } from "./layout.ts";
 import { itemOnMain, readRecord, repoStages } from "./status.ts";
-import { firefight, type Fired, type Ports } from "./firefighter.ts";
 import { countsLine, triageIssue, triageOpen, type Counts } from "./triage.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { isLive, isStarting } from "./process.ts";
@@ -401,30 +400,13 @@ export async function triageStep(): Promise<{ triaged: Counts; skipped: string[]
 
 /**
  * The tick's director (director.ts): one run for each new Ask, those triage just raised among them. Under the pause
- * alone, as the firefighter: a decision can let a goal start. An error is logged, never thrown.
+ * alone: a decision can let a goal start. An error is logged, never thrown.
  */
 export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
   if (gates({ only: ["pause"] })) return [];
   const d = await directAll(sandboxRepos(), ports);
   if (d.some((x) => x.outcome === "decided")) dispatchDetached();
   return d;
-}
-
-/**
- * The tick's firefighter (firefighter.ts): a snapshot every tick, and one run only when it holds
- * something new. Under the pause alone. An error is logged, never thrown.
- */
-export async function firefighterStep(ports?: Ports): Promise<Fired | null> {
-  if (gates({ only: ["pause"] })) return null;
-  try {
-    const f = await firefight(ports);
-    if (f.run) factoryLog(`firefighter ${f.run}: ${f.events.length} new events; ${f.applied.length} applied, ${f.refused.length} refused`);
-    if (f.applied.length) dispatchDetached();
-    return f;
-  } catch (e: any) {
-    factoryLog(`firefighter: failed: ${e?.message ?? e}`);
-    return null;
-  }
 }
 
 /** The tick's episode pages for goals that finished (episode.ts); never throws. */

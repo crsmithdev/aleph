@@ -12,9 +12,9 @@ import { openRun } from "../../../jobs/lib/agent-run.ts";
 import { allRuns, loadRegistry, readRun } from "../../../jobs/lib/ledger.ts";
 import { liveEntries, runsToday } from "../../../jobs/lib/factory-status.ts";
 import { MAX_SPEC_EDITS, defaultPorts, directAll, parseCaseText, pendingCases, prompt } from "../../../jobs/lib/director.ts";
-import { addGoal, asked, base, branch, calls, fresh, held, item, key, landed, log, n, plain, ports, reply, repoPath, run, sh, useFirefighterFixture } from "../../../jobs/lib/firefighter.fixture.ts";
+import { addGoal, asked, base, branch, calls, fresh, held, item, key, landed, log, n, plain, ports, reply, repoPath, run, sh, useDirectorFixture } from "../../../jobs/lib/director.fixture.ts";
 
-useFirefighterFixture();
+useDirectorFixture();
 
 const repo = () => loadRegistry()[key];
 const direct = (p = ports()) => directAll([repo()], p);

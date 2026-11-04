@@ -1,7 +1,7 @@
-// The shared setup of the firefighter.*.test.ts and director.*.test.ts files: one work store, one repo and a fake agent per file (the firefighter's
-// and the director's command), and a new repo key per test.
+// The shared setup of the director's test files: one work store, one repo and a fake agent per file (the director's
+// command), and a new repo key per test.
 import { afterAll, beforeAll, beforeEach } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
@@ -99,9 +99,9 @@ export const ports = (): Ports => ({
 });
 
 /** Registers the hooks: the store, the repo, the fake and the tell server for the file, and clean fakes for each test. */
-export function useFirefighterFixture(): void {
+export function useDirectorFixture(): void {
   beforeAll(() => {
-    base = mkdtempSync(join(tmpdir(), "aleph-firefighter-"));
+    base = mkdtempSync(join(tmpdir(), "aleph-director-"));
     sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
     sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
     sh(join(base, "items"), "git", "commit", "-q", "--allow-empty", "-m", "start");
@@ -114,7 +114,7 @@ export function useFirefighterFixture(): void {
     chmodSync(join(base, "fake"), 0o755);
     server = Bun.serve({ port: 0, fetch: async (req) => { told.push(await req.text()); return new Response("ok"); } });
     Object.assign(process.env, gitEnv, {
-      ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_FIREFIGHTER_CMD: join(base, "fake"), ALEPH_DIRECTOR_CMD: join(base, "fake"), FF_DIR: base,
+      ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_DIRECTOR_CMD: join(base, "fake"), FF_DIR: base,
       // The director's prompt names the vault and the needs-you log; both are under base, never ~/.aleph.
       ALEPH_VAULT: join(base, "vault"), ALEPH_NEEDS_YOU_LOG: join(base, "needs-you-log.md"),
       ALEPH_DISPATCH: "off", SIDETONE_TELL_URL: `http://127.0.0.1:${server.port}/tell`,
@@ -129,7 +129,6 @@ export function useFirefighterFixture(): void {
   beforeEach(() => { rmSync(join(base, "calls"), { force: true }); landed = []; dropped = []; told = []; sealed = { state: "none" }; reply([]); });
 }
 
-export const firefighterRuns = () => existsSync(process.env.ALEPH_JOBS_DIR!) ? readdirSync(process.env.ALEPH_JOBS_DIR!).filter((d) => d.endsWith("-firefighter")) : [];
 
 /** Chris's standing permissions for this test's factory directory. */
 export const alwaysFile = (s: object) => {
