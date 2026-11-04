@@ -1,30 +1,14 @@
 /**
- * the review's browser step, run by the harness outside the reviewer's sandbox: srt's
- * profile blocks the Unix sockets Chrome needs, and srt puts the reviewer in a network
- * namespace of its own, so a server the reviewer binds on localhost is out of host Chrome's
- * reach. The harness therefore starts the one-off `bun ui/server.ts` itself, from the merge
- * result, runs /usr/bin/google-chrome --headless against it over --remote-debugging-pipe
- * (no debugging port), and writes the screenshots, console errors and horizontal scroll of
- * each changed view at 1440 and 390 px, light and dark, to browser/ in the run folder, which
- * the reviewer reads and cannot write. The server is stopped when the step ends, before the
- * reviewer starts.
+ * Chrome for the harness, outside the sandbox: srt's profile blocks the Unix sockets Chrome
+ * needs. The harness runs /usr/bin/google-chrome --headless over --remote-debugging-pipe (no
+ * debugging port), with a profile of its own. shot.ts takes the workers' screenshots with it.
  *
- * Chrome keeps its own sandbox: there is no --no-sandbox fallback. When Chrome's sandbox
- * cannot start, the report says so and the review goes on with no browser result.
+ * Chrome keeps its own sandbox: there is no --no-sandbox fallback.
  */
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { closeSync, existsSync, mkdtempSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { closeSync, openSync, readFileSync } from "node:fs";
 
-/** The harness's output, relative to the run folder: read-only for the reviewer. */
-export const BROWSER = "browser";
-export const SANDBOX_ERROR = "ERROR: Chrome sandbox unavailable";
-
-const SIZES: [number, number][] = [[1440, 900], [390, 844]];
-const SCHEMES = ["light", "dark"] as const;
-const MAX_VIEWS = 8;
 const FIRST_PORT = 3002;
 const chrome = () => process.env.ALEPH_REVIEW_CHROME ?? "/usr/bin/google-chrome";
 
@@ -58,57 +42,6 @@ export async function freePort(from = FIRST_PORT): Promise<number> {
     if (ok) return port;
   }
   throw new Error(`no free port from ${from}`);
-}
-
-/** The routes of the views a diff changes: `ui/views/<name>.js` is `#/<name up to its first dash>`; any other change under ui/ is the front page. At most MAX_VIEWS. */
-export function changedViews(files: string[], origin: string): string[] {
-  const routes: string[] = [];
-  for (const f of files) {
-    const m = f.match(/^ui\/views\/([\w]+)[\w-]*\.js$/);
-    const r = m ? `#/${m[1]}` : f.startsWith("ui/") ? "" : null;
-    if (r !== null && !routes.includes(r)) routes.push(r);
-  }
-  return routes.slice(0, MAX_VIEWS).map((r) => `${origin}/${r}`);
-}
-
-/** A running `bun ui/server.ts`: `stop` ends it, and waits for it to be gone. */
-export interface UiServer { url: string; stop: () => Promise<void> }
-
-/**
- * Start `bun ui/server.ts` in `dir` on port 0, outside the sandbox, with git on its PATH, and wait until
- * it prints its URL and the URL answers. The kernel picks the port, so no other process can take it
- * between a probe and the bind. Throws, with the server gone, when it exits or does not answer within `waitMs`.
- */
-export async function startUiServer(dir: string, log: string, env: Record<string, string | undefined>, waitMs = 30_000): Promise<UiServer> {
-  const from = existsSync(log) ? statSync(log).size : 0;
-  const fd = openSync(log, "a");
-  let child: ReturnType<typeof spawn>;
-  try {
-    child = spawn(process.execPath, ["ui/server.ts", "--port", "0"], { cwd: dir, env, stdio: ["ignore", fd, fd] });
-  } finally { closeSync(fd); }
-  const gone = new Promise<void>((ok) => { child.once("exit", () => ok()); child.once("error", () => ok()); });
-  const stop = async () => {
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    child.kill("SIGTERM");
-    await Promise.race([gone, Bun.sleep(5000)]);
-    if (child.exitCode === null && child.signalCode === null) { child.kill("SIGKILL"); await gone; }
-  };
-  // The URL line this child printed: the log may hold lines of an earlier server, so read from where it ended.
-  const printed = () => readFileSync(log, "utf8").slice(from).match(/^http:\/\/127\.0\.0\.1:(\d+)\/$/m)?.[1];
-  try {
-    const end = Date.now() + waitMs;
-    for (;;) {
-      if (child.exitCode !== null || child.signalCode !== null) throw new Error(`ui server exited: ${tail(log, 5)}`);
-      const port = printed();
-      const url = port && `http://127.0.0.1:${port}`;
-      if (url && await fetch(`${url}/`, { signal: AbortSignal.timeout(2000) }).then((r) => r.ok, () => false)) return { url, stop };
-      if (Date.now() > end) throw new Error(port ? `ui server did not answer on port ${port}` : "ui server printed no URL");
-      await Bun.sleep(100);
-    }
-  } catch (e) {
-    await stop();
-    throw e;
-  }
 }
 
 /** A CDP connection over Chrome's pipe: commands on fd 3, answers and events on fd 4, each message ended by a NUL. */
@@ -159,119 +92,4 @@ export class Pipe {
   }
 }
 
-interface Shot { width: number; scheme: string; file: string; overflow: string; errors: string[] }
-
-const evalValue = async (cdp: Pipe, sessionId: string, expression: string): Promise<any> => {
-  const r = await cdp.send("Runtime.evaluate", { expression, returnByValue: true }, sessionId);
-  if (r.exceptionDetails) throw new Error(`Runtime.evaluate: ${r.exceptionDetails.text ?? "exception"}`);
-  const v = r.result?.value;
-  if (typeof v === "string") { try { return JSON.parse(v); } catch { return v; } }
-  return v;
-};
-
-/** Up to 3 elements whose right edge is past the viewport, as tag#id.class and width. Runs in the page. */
-const OFFENDERS = `JSON.stringify([...document.querySelectorAll("body *")].map((e) => [e, e.getBoundingClientRect()]).filter(([, r]) => r.width > 0 && r.right > document.documentElement.clientWidth + 0.5).slice(0, 3).map(([e, r]) => ({ selector: e.tagName.toLowerCase() + (e.id ? "#" + e.id : "") + (typeof e.className === "string" && e.className.trim() ? "." + e.className.trim().split(/\\s+/)[0] : ""), width: Math.round(r.width) })))`;
-
-/** `overflow: none`, or `overflow: <scrollWidth> > <clientWidth>` and up to 3 offending elements. */
-async function measure(cdp: Pipe, sessionId: string): Promise<string> {
-  const w = await evalValue(cdp, sessionId, "JSON.stringify({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth })");
-  const sw = Number(w?.scrollWidth), cw = Number(w?.clientWidth);
-  if (!Number.isFinite(sw) || !Number.isFinite(cw)) throw new Error("scrollWidth and clientWidth unreadable");
-  if (!(sw > cw)) return "overflow: none";
-  let els: { selector: string; width: number }[] = [];
-  try { const v = await evalValue(cdp, sessionId, OFFENDERS); if (Array.isArray(v)) els = v.slice(0, 3); } catch { /* the widths stand */ }
-  return `overflow: ${sw} > ${cw}${els.length ? ` — ${els.map((e) => `${String(e.selector).replace(/[|\s]+/g, " ")} (${e.width}px)`).join(", ")}` : ""}`;
-}
-
-/** One view at one size and scheme, in its own tab. */
-async function shoot(cdp: Pipe, url: string, width: number, height: number, scheme: string, file: string): Promise<Shot> {
-  const errors: string[] = [];
-  const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });
-  const { sessionId } = await cdp.send("Target.attachToTarget", { targetId, flatten: true });
-  let loaded!: () => void;
-  const load = new Promise<void>((ok) => { loaded = ok; });
-  const off = cdp.on((m) => {
-    if (m.sessionId !== sessionId) return;
-    if (m.method === "Page.loadEventFired") loaded();
-    else if (m.method === "Runtime.exceptionThrown") errors.push(m.params.exceptionDetails?.exception?.description?.split("\n")[0] ?? m.params.exceptionDetails?.text ?? "exception");
-    else if (m.method === "Runtime.consoleAPICalled" && m.params.type === "error") errors.push(`console.error: ${(m.params.args ?? []).map((a: any) => a.value ?? a.description ?? "").join(" ")}`);
-    else if (m.method === "Log.entryAdded" && m.params.entry?.level === "error") errors.push(`${m.params.entry.text}${m.params.entry.url ? ` (${m.params.entry.url})` : ""}`);
-  });
-  try {
-    for (const d of ["Page.enable", "Runtime.enable", "Log.enable"]) await cdp.send(d, {}, sessionId);
-    await cdp.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: width < 600 }, sessionId);
-    await cdp.send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-color-scheme", value: scheme }] }, sessionId);
-    const nav = await cdp.send("Page.navigate", { url }, sessionId);
-    if (nav.errorText) errors.push(`navigation: ${nav.errorText}`);
-    await Promise.race([load, Bun.sleep(15_000)]);
-    // A moment for the view's scripts to draw after load.
-    await Bun.sleep(Number(process.env.ALEPH_REVIEW_SETTLE_MS ?? 500));
-    const overflow = await measure(cdp, sessionId);
-    const shotH = await cdp.send("Page.getLayoutMetrics", {}, sessionId).then((m) => Math.min(4000, Math.max(height, Math.ceil(m.cssContentSize?.height ?? height)))).catch(() => height);
-    const png = await cdp.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width, height: shotH, scale: 1 } }, sessionId);
-    writeFileSync(file, Buffer.from(png.data, "base64"));
-    return { width, scheme, file, overflow, errors };
-  } finally {
-    off();
-    await cdp.send("Target.closeTarget", { targetId }).catch(() => {});
-  }
-}
-
 export const tail = (file: string, n = 20) => { try { return readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n"); } catch { return ""; } };
-
-/**
- * Load each view in `urls` at 1440 and 390 px, light and dark, in Chrome,
- * and write `<folder>/browser/report.md` (atomically, last), the screenshots and chrome.log. Never throws.
- */
-export async function browserStep(folder: string, urls: string[], ): Promise<void> {
-  const out = join(folder, BROWSER);
-  const log = join(out, "chrome.log");
-  const lines: string[] = ["# Browser", ""];
-  const report = () => { writeFileSync(join(out, "report.md.part"), lines.join("\n") + "\n"); renameSync(join(out, "report.md.part"), join(out, "report.md")); };
-  // Chrome's profile is the harness's own, outside the run folder: the reviewer cannot plant one.
-  const profileDir = mkdtempSync(join(tmpdir(), "aleph-review-chrome-"));
-  let child: ReturnType<typeof spawn> | null = null;
-  try {
-    if (!urls.length) { lines.push("ERROR: no view to load"); return report(); }
-    child = startChrome(profileDir, log);
-    const exited = new Promise<void>((ok) => { child!.on("exit", () => ok()); child!.on("error", () => ok()); });
-    const cdp = new Pipe(child.stdio[3] as NodeJS.WritableStream, child.stdio[4] as NodeJS.ReadableStream);
-    exited.then(() => cdp.close(new Error("Chrome exited")));
-    let version: string;
-    try {
-      version = (await cdp.send("Browser.getVersion", {}, undefined, 30_000)).product ?? "Chrome";
-    } catch {
-      const t = tail(log);
-      lines.push(/sandbox/i.test(t) ? SANDBOX_ERROR : "ERROR: Chrome did not start", "", "```", t, "```");
-      return report();
-    }
-    lines.push(`${version}, run by the harness. Screenshots are full page, up to 4000 px tall.`, "");
-    let n = 0;
-    for (const url of urls) {
-      n++;
-      lines.push(`## ${n}. ${url}`, "", "| width | scheme | overflow | errors | screenshot |", "|---|---|---|---|---|");
-      const errs: string[] = [];
-      for (const [w, h] of SIZES) for (const scheme of SCHEMES) {
-        const file = join(out, `${n}-${w}-${scheme}.png`);
-        try {
-          const s = await shoot(cdp, url, w, h, scheme, file);
-          lines.push(`| ${w} | ${scheme} | ${s.overflow} | ${s.errors.length} | ${file} |`);
-          errs.push(...s.errors.map((e) => `- ${w} ${scheme}: ${e.replace(/\s+/g, " ").slice(0, 300)}`));
-        } catch (e: any) {
-          lines.push(`| ${w} | ${scheme} | overflow: ? | ? | ERROR: CDP failed: ${String(e?.message ?? e).replace(/\s+/g, " ")} |`);
-        }
-      }
-      lines.push("", ...(errs.length ? ["Errors:", ...errs] : ["No page errors."]), "");
-    }
-    report();
-  } catch (e: any) {
-    try { lines.push(`ERROR: browser step: ${String(e?.message ?? e).replace(/\s+/g, " ")}`); report(); } catch { /* the run folder is gone */ }
-  } finally {
-    if (child && child.exitCode === null) {
-      child.kill("SIGTERM");
-      await Promise.race([new Promise((ok) => child!.once("exit", ok)), Bun.sleep(5000)]);
-      if (child.exitCode === null) child.kill("SIGKILL");
-    }
-    rmSync(profileDir, { recursive: true, force: true });
-  }
-}

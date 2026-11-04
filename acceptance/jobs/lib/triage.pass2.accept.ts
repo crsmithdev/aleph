@@ -212,7 +212,7 @@ test("parseRoute wants the field its route needs", () => {
   expect(parseRoute('{"route":"build"}')).toBe("build without a spec");
   expect(parseRoute('{"route":"plan"}')).toBe("plan without a spec");
   expect(parseRoute('{"route":"build","spec":"## Goal\\nb","after":["aleph-265.1","aleph-3","soon"]}')).toEqual({ route: "build", spec: "## Goal\nb", after: ["aleph-265.1", "aleph-3"] });
-  expect(parseRoute('{"route":"plan","spec":"## Request\\nr\\n## Goal\\nb"}')).toEqual({ route: "plan", spec: "## Goal\nb", after: [], children: "no children list" });
+  expect(parseRoute('{"route":"plan","spec":"## Request\\nr\\n## Goal\\nb"}')).toEqual({ route: "plan", spec: "## Goal\nb", after: [], parts: "no parts list" });
   expect(parseRoute('{"verdict":"close","reason":"x"}')).toBe("unknown route undefined");
   expect(parseRoute("[]")).toBe("no JSON");
 });

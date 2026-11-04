@@ -598,7 +598,7 @@ export function renderIssue(d) {
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
     `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;
-  const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Blocked by</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
+  const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
   const goals = d.goals ?? [];
   const part = (id, title, name, text) => (text || !goals.length
     ? `<section class="dp-panel dp-prose${text ? "" : " edit-only"}" aria-labelledby="h-${id}"><div class="dp-ph"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea></section>`

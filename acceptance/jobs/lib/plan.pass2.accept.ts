@@ -12,12 +12,12 @@ import { fitTitles, parsePlan, prompt, runPlan } from "../../../jobs/lib/plan.ts
 import type { Tier } from "../../../jobs/lib/route.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 
-const child = (title: string, oracle = "`bun test jobs/lib/x.test.ts`") =>
+const part = (title: string, oracle = "`bun test jobs/lib/x.test.ts`") =>
   ({ title, body: `## Goal\nDo ${title}.\n## Edit surface\njobs/lib/x.ts\n## Oracle\n${oracle}\n## Time box\n30 minutes` });
-const reply = (children: object[]) => JSON.stringify({ children });
-const THREE = reply([child("one"), { ...child("two"), waits_on: [1] }, { ...child("three"), waits_on: [1, 2] }]);
-const ONE = reply([child("only")]);
-const NO_ORACLE = reply([child("one"), { title: "two", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Time box\n1 hour" }]);
+const reply = (parts: object[]) => JSON.stringify({ parts });
+const THREE = reply([part("one"), { ...part("two"), after: [1] }, { ...part("three"), after: [1, 2] }]);
+const ONE = reply([part("only")]);
+const NO_ORACLE = reply([part("one"), { title: "two", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Time box\n1 hour" }]);
 
 // The fake planner: the reply is named by a `PLAN:<word>` line in the goal's body; each call is logged.
 const fake = (base: string) => `#!/bin/bash
@@ -105,7 +105,7 @@ async function dispatch(tier: Tier | null) {
   const done = await Promise.all(plans);
   const refs = done.flatMap((r, i) => ("planned" in r ? [`${out.planned[i]} into ${r.planned.join(",")}`] : []));
   out.planned = refs.length ? refs : undefined;
-  // The plan job's own dispatch, which starts the children or the fallback worker.
+  // The plan job's own dispatch, which starts the parts or the fallback worker.
   const then: [string, Tier | null | undefined][] = [];
   if (plans.length) await dispatchIssues(async (_repo, name, _id, _spec, t) => { then.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier, () => {});
   return { starts, then, out };
@@ -231,7 +231,7 @@ test("a plan job left running by a dead process is ended as failed, and the goal
   expect(out.planned).toEqual([expect.stringContaining(`fac-${id} into`)]);
 });
 
-test("the planner prompt limits each child's Goal to 3 sentences with no implementation design", () => {
+test("the planner prompt limits each part's Goal to 3 sentences with no implementation design", () => {
   const p = prompt({ key: "fac" } as any, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as any);
   expect(p).toContain("the behaviour in at most 3 sentences");
   expect(p).toContain("no implementation design");
@@ -266,9 +266,9 @@ describe("the planner prompt's similar episodes", () => {
   });
 });
 
-test("a child title over 60 characters is cut to 60 when the title writer fails, and the prompt asks for a short one", async () => {
-  const long = child(`${"word ".repeat(12)}end`);
-  const parsed = parsePlan(reply([child("one"), long]));
+test("a part title over 60 characters is cut to 60 when the title writer fails, and the prompt asks for a short one", async () => {
+  const long = part(`${"word ".repeat(12)}end`);
+  const parsed = parsePlan(reply([part("one"), long]));
   const got = Array.isArray(parsed) ? await fitTitles(parsed) : parsed;
   expect(Array.isArray(got) && got[1].title.length <= 60 && got[1].title.startsWith("word word")).toBe(true);
   expect(prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any)).toContain("at most 60 characters");

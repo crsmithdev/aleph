@@ -6,7 +6,7 @@ import { readList, writeList, partsOf } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues, planNow } from "./factory.ts";
 import { readRun, writeRun } from "./ledger.ts";
-import { fitTitles, isLarge, parsePlan, prompt, realOracle, runPlan, topFolders, type Child } from "./plan.ts";
+import { fitTitles, isLarge, parsePlan, prompt, realOracle, runPlan, topFolders, type Part } from "./plan.ts";
 import type { Tier } from "./route.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
 
@@ -16,12 +16,12 @@ function sh(cwd: string, ...args: string[]): void {
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
 }
 
-const child = (title: string, oracle = "`bun test jobs/lib/x.test.ts`") =>
+const part = (title: string, oracle = "`bun test jobs/lib/x.test.ts`") =>
   ({ title, body: `## Goal\nDo ${title}.\n## Edit surface\njobs/lib/x.ts\n## Oracle\n${oracle}\n## Time box\n30 minutes` });
-const reply = (children: object[]) => JSON.stringify({ children });
-const THREE = reply([child("one"), { ...child("two"), waits_on: [1] }, { ...child("three"), waits_on: [1, 2] }]);
-const ONE = reply([child("only")]);
-const NO_ORACLE = reply([child("one"), { title: "two", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Time box\n1 hour" }]);
+const reply = (parts: object[]) => JSON.stringify({ parts });
+const THREE = reply([part("one"), { ...part("two"), after: [1] }, { ...part("three"), after: [1, 2] }]);
+const ONE = reply([part("only")]);
+const NO_ORACLE = reply([part("one"), { title: "two", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Time box\n1 hour" }]);
 
 // The fake planner: the reply is named by a `PLAN:<word>` line in the goal's body; each call is logged.
 const fake = (base: string) => `#!/bin/bash
@@ -92,7 +92,7 @@ async function dispatch(tier: Tier | null) {
   const done = await Promise.all(plans);
   const refs = done.flatMap((r, i) => ("planned" in r ? [`${out.planned[i]} into ${r.planned.join(",")}`] : []));
   out.planned = refs.length ? refs : undefined;
-  // The plan job's own dispatch, which starts the children or the fallback worker.
+  // The plan job's own dispatch, which starts the parts or the fallback worker.
   const then: [string, Tier | null | undefined][] = [];
   if (plans.length) await dispatchIssues(async (_repo, name, _id, _spec, t) => { then.push([name, t]); return null; }, undefined, undefined, undefined, async () => tier, () => {});
   return { starts, then, out };
@@ -140,13 +140,13 @@ test("a plan run with the cause no-answer and a free reason counts as a try", as
 
 test("the check: sections, the oracle, the waits and the count", async () => {
   expect(parsePlan(THREE)).toHaveLength(3);
-  expect(parsePlan(ONE)).toBe("1 children, not 2 to 6");
-  expect(parsePlan(NO_ORACLE)).toBe("child 2 has no Oracle");
-  expect(parsePlan(reply([child("a"), { ...child("b"), waits_on: [2] }]))).toBe("child 2 waits on something that is not an earlier child");
-  expect(parsePlan(reply([child("a"), child("b", "it works")]))).toBe("child 2's Oracle names no command or test file");
-  expect(parsePlan(reply([child("a"), child("b", "`aleph check tests`")]))).toBe("child 2's Oracle names no command or test file");
-  // A title that breaks the rule passes the check; with no title writer, fitTitles cuts it and keeps the group. A child with no Time box passes.
-  const kept = parsePlan(reply([child("a"), { ...child("b"), title: "Check foo: bar." }, { ...child("c"), title: `[Group] ${"a ".repeat(30)}` }, { title: "d", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Oracle\n`bun test`" }])) as Child[];
+  expect(parsePlan(ONE)).toBe("1 parts, not 2 to 6");
+  expect(parsePlan(NO_ORACLE)).toBe("part 2 has no Oracle");
+  expect(parsePlan(reply([part("a"), { ...part("b"), after: [2] }]))).toBe("part 2 has an after that is not an earlier part");
+  expect(parsePlan(reply([part("a"), part("b", "it works")]))).toBe("part 2's Oracle names no command or test file");
+  expect(parsePlan(reply([part("a"), part("b", "`aleph check tests`")]))).toBe("part 2's Oracle names no command or test file");
+  // A title that breaks the rule passes the check; with no title writer, fitTitles cuts it and keeps the group. A part with no Time box passes.
+  const kept = parsePlan(reply([part("a"), { ...part("b"), title: "Check foo: bar." }, { ...part("c"), title: `[Group] ${"a ".repeat(30)}` }, { title: "d", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Oracle\n`bun test`" }])) as Part[];
   expect(kept.map((c) => c.title)).toEqual(["a", "Check foo: bar.", `[Group] ${"a ".repeat(30).trim()}`, "d"]);
   expect((await fitTitles(kept)).map((c) => c.title)).toEqual(["a", "bar", `[Group] ${"a ".repeat(25)}a`, "d"]);
   expect(realOracle("the new ui/plan.test.ts passes")).toBe(true);
@@ -165,7 +165,7 @@ test("a part title that breaks the rule goes to the title writer, and the group 
   process.env.ALEPH_RULE_CMD = cmd;
   try {
     const long = "[Status head] Merge the Status title and status line into one head row";
-    const got = await fitTitles([{ title: long, spec: "s", waits: [] }, { title: "[Status head] Fine", spec: "s", waits: [] }]);
+    const got = await fitTitles([{ title: long, spec: "s", after: [] }, { title: "[Status head] Fine", spec: "s", after: [] }]);
     expect(got.map((c) => c.title)).toEqual(["[Status head] Merge the title and status line", "[Status head] Fine"]);
     // One call, for the long title only, and the group is not in what the writer reads.
     const calls = readFileSync(join(base, "title-calls"), "utf8").trim().split("\n");
@@ -177,10 +177,10 @@ test("a part title that breaks the rule goes to the title writer, and the group 
   }
 });
 
-test("the prompt pushes against serial chains and keeps each Goal to its own child", () => {
+test("the prompt pushes against serial chains and keeps each Goal to its own part", () => {
   const p = prompt({ key: "fac" } as any, { id: 1, title: "t", fm: {}, request: "", spec: "b", notes: [] } as any);
-  expect(p).toContain("do not chain children in a line by habit");
-  expect(p).toContain("Each child's Goal says only what that child does");
+  expect(p).toContain("do not chain parts in a line by habit");
+  expect(p).toContain("Each part's Goal says only what that part does");
 });
 
 test("a goal triage routed build starts one worker run, though its Edit surface spans two folders", async () => {

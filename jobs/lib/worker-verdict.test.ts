@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ChecksStop } from "./checks.ts";
 import type { Run } from "./ledger.ts";
-import { landBlock, workerVerdict, type Branch, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
+import { missingVerdict, workerVerdict, type Branch, type ReviewCall, type VerdictPorts } from "./worker-verdict.ts";
 
 const run = (r: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "fac-1", condition: "stuck", ...r } as Run);
 const checked = { checkedBase: "b0", checkedTip: "t1" };
@@ -141,11 +141,11 @@ describe("the reviewer", () => {
   });
 });
 
-describe("landBlock", () => {
+describe("missingVerdict", () => {
   test("a held run may land once the reviewer gave a verdict; no second review is read", () => {
-    expect(landBlock(undefined)).toBe("the reviewer has no verdict yet");
-    expect(landBlock("Looks fine.")).toBe("the reviewer has no verdict yet");
-    expect(landBlock("VERDICT: pass")).toBeNull();
-    expect(landBlock("VERDICT: hold x")).toBeNull();
+    expect(missingVerdict(undefined)).toBe("the reviewer has no verdict yet");
+    expect(missingVerdict("Looks fine.")).toBe("the reviewer has no verdict yet");
+    expect(missingVerdict("VERDICT: pass")).toBeNull();
+    expect(missingVerdict("VERDICT: hold x")).toBeNull();
   });
 });

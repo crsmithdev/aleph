@@ -4,7 +4,7 @@
  * parts `<repo>-<n>.1 .. .k`, each with its own oracle. The parts are filed in the
  * work store in one commit. Each run is a job in the ledger, kind `plan`, `on` the
  * issue. Triage writes the parts of the issues it routes `plan` itself, with the same
- * check (`checkChildren`) and filing (`addParts`). See docs/specs/2026-10-26-seed-factory.md, "Planner".
+ * check (`checkParts`) and filing (`addParts`). See docs/specs/2026-10-26-seed-factory.md, "Planner".
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,7 +28,7 @@ export const PLAN_MODEL = OPUS_MODEL;
 export const PLAN_TRIES = 2;
 
 export type Rate = (spec: string) => Promise<Tier | null>;
-export interface Child { title: string; spec: string; waits: number[] }
+export interface Part { title: string; spec: string; after: number[] }
 
 /** Top-level folders that hold only docs or tests: an Edit surface that also names one of them is not wider for it. */
 const SIDE_FOLDERS = new Set(["docs", "acceptance", "tests", "test", "__tests__"]);
@@ -70,48 +70,48 @@ export function realOracle(text: string): boolean {
 
 const text = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
 
-/** The children in the planner's output (the whole output, or its outermost braces), or why they fail the check. */
-export function parsePlan(output: string, least = 2): Child[] | string {
+/** The parts in the planner's output (the whole output, or its outermost braces), or why they fail the check. */
+export function parsePlan(output: string, least = 2): Part[] | string {
   let raw: any;
   for (const s of [output.trim(), output.slice(output.indexOf("{"), output.lastIndexOf("}") + 1)]) {
     try { raw = JSON.parse(s); break; } catch {}
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return "no JSON";
-  return checkChildren(raw.children, least);
+  return checkParts(raw.parts, least);
 }
 
 /**
- * The check of a `children` list, from the planner or from triage: `least` to 6 children, each with a title,
- * a body with the goal's sections and a real Oracle, and waits on earlier children only. The children, or why they fail.
+ * The check of a `parts` list, from the planner or from triage: `least` to 6 parts, each with a title,
+ * a body with the goal's sections and a real Oracle, and an `after` of earlier parts only. The parts, or why they fail.
  * A title that breaks the title rule is kept: `fitTitles` rewrites it before the parts are filed.
  */
-export function checkChildren(list: unknown, least = 2): Child[] | string {
-  if (!Array.isArray(list)) return "no children list";
-  if (list.length < least || list.length > 6) return `${list.length} children, not ${least} to 6`;
-  const children: Child[] = [];
+export function checkParts(list: unknown, least = 2): Part[] | string {
+  if (!Array.isArray(list)) return "no parts list";
+  if (list.length < least || list.length > 6) return `${list.length} parts, not ${least} to 6`;
+  const parts: Part[] = [];
   for (const [i, c] of list.entries()) {
     const n = i + 1;
     const title = text(c?.title)?.replace(/\s+/g, " "), body = text(c?.body);
-    if (!title) return `child ${n} has no title`;
-    if (!body) return `child ${n} has no body`;
+    if (!title) return `part ${n} has no title`;
+    if (!body) return `part ${n} has no body`;
     const missing = missingSections(body);
-    if (missing.length) return `child ${n} has no ${missing[0]}`;
-    if (!realOracle(section(body, "Oracle"))) return `child ${n}'s Oracle names no command or test file`;
-    const waits = c.waits_on ?? [];
-    if (!Array.isArray(waits) || waits.some((w: unknown) => !Number.isInteger(w) || (w as number) < 1 || (w as number) >= n)) return `child ${n} waits on something that is not an earlier child`;
-    children.push({ title, spec: body, waits: [...new Set(waits as number[])] });
+    if (missing.length) return `part ${n} has no ${missing[0]}`;
+    if (!realOracle(section(body, "Oracle"))) return `part ${n}'s Oracle names no command or test file`;
+    const after = c.after ?? [];
+    if (!Array.isArray(after) || after.some((w: unknown) => !Number.isInteger(w) || (w as number) < 1 || (w as number) >= n)) return `part ${n} has an after that is not an earlier part`;
+    parts.push({ title, spec: body, after: [...new Set(after as number[])] });
   }
-  return children;
+  return parts;
 }
 
-/** The children, each title that breaks the title rule rewritten by the title writer, its `[Group] ` kept. */
-export const fitTitles = (children: Child[]): Promise<Child[]> =>
-  Promise.all(children.map(async (c) => (issues.titleProblem(c.title, { part: true }) ? { ...c, title: await writePartTitle(c.title) } : c)));
+/** The parts, each title that breaks the title rule rewritten by the title writer, its `[Group] ` kept. */
+export const fitTitles = (parts: Part[]): Promise<Part[]> =>
+  Promise.all(parts.map(async (c) => (issues.titleProblem(c.title, { part: true }) ? { ...c, title: await writePartTitle(c.title) } : c)));
 
-/** The rules for the children's titles and waits, in the planner's prompt and in triage's. */
-export const CHILD_RULES = `Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each child's Goal says only what that child does, not the work of another child: the checks of each child are written from its own Goal.
+/** The rules for the parts' titles and `after` lists, in the planner's prompt and in triage's. */
+export const PART_RULES = `Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each part's Goal says only what that part does, not the work of another part: the checks of each part are written from its own Goal.
 
-"waits_on" lists the earlier children (by their place in the list, the first is 1) that must land first. A child waits only when it changes a file an earlier child changes, or uses what an earlier child adds. Children that wait on nothing run at once, side by side, so give a wait for each of those two reasons and for no other: do not chain children in a line by habit. Split the work so that most children can run side by side.`;
+"after" lists the earlier parts (by their place in the list, the first is 1) that must land first. A part has an earlier part in its "after" only when it changes a file that part changes, or uses what that part adds. Parts with an empty "after" run at once, side by side, so add an entry for each of those two reasons and for no other: do not chain parts in a line by habit. Split the work so that most parts can run side by side.`;
 
 export interface Episode { title: string; body: string }
 
@@ -154,9 +154,9 @@ export function prompt(repo: Repo, item: issues.Issue, episodes: Episode[] = [],
 
 ${[item.request, item.spec].map((t) => t.trim()).filter(Boolean).join("\n\n") || "(no text)"}
 ${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${parts.length ? `\n# Its parts so far\n\n${parts.map((p) => `- ${repo.key}-${issues.refOf(p)} (${issues.status(p)}): ${p.title}`).join("\n")}\n` : ""}${episodes.length ? `\n# How similar goals went\n\n${episodes.map(episodeText).join("\n")}` : ""}
-${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 more child goals." : "Split it into 2 to 6 child goals."} Each child is work one factory run can do alone, in one run of under an hour, and the children together do the whole goal. Reply with one JSON object and nothing else:
+${parts.length ? "Plan only what the parts that are done do not cover: 1 to 6 more parts." : "Split it into 2 to 6 parts."} Each part is work one factory run can do alone, in one run of under an hour, and the parts together do the whole goal. Reply with one JSON object and nothing else:
 
-{"children": [{"title": "<title>", "body": "<child goal body>", "waits_on": [<optional numbers of earlier children, from 1>]}]}
+{"parts": [{"title": "<title>", "body": "<part goal body>", "after": [<optional numbers of earlier parts, from 1>]}]}
 
 Each body is in the goal format, with all three sections non-empty:
   ## Goal (the behaviour in at most 3 sentences; no implementation design, and no claim about code on main that you did not read)
@@ -165,7 +165,7 @@ Each body is in the goal format, with all three sections non-empty:
 
 The Oracle is a check stored on the issue: the worker sees it and can run it. The factory runs this repo's checks itself, so the Oracle names only real commands of this repo, as they are typed in a shell (such as \`bun run test\`). It does not ask for a new committed test. A committed test needs a lasting reason: a bug fix gets one regression test at the lowest layer that shows the bug; new lasting behaviour of a module gets a row in that module's existing test file; a CLI end-to-end test is only for new command wiring. There is no \`aleph check\` command: never name one. For one file, name it, as in \`bun test path/to/x.test.ts\`; for the full suite, use \`bun run test\`.
 
-${CHILD_RULES}
+${PART_RULES}
 `;
 }
 
@@ -183,27 +183,27 @@ function planRefusal(repo: Repo, doc: issues.Doc, issue: issues.Issue): string |
 }
 
 /**
- * Add the parts `<repo>-<id>.k` to the issue in a write, which clears its `plan` and its spec. Each part waits on the
- * earlier parts it names and on `after`, what the issue itself waits on. The note names `who` split it. The parts' refs.
+ * Add the parts `<repo>-<id>.k` to the issue in a write, which clears its `plan` and its spec. Each part's `after` is the
+ * earlier parts it names and the issue's own `after`. The note names `who` split it. The parts' refs.
  */
-export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, children: Child[], who: string, after: string[] = []): string[] {
+export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, parts: Part[], who: string, after: string[] = []): string[] {
   const refs: string[] = [];
-  for (const c of children) {
-    const part = issues.addPart(doc, issue, { title: c.title, spec: c.spec, after: [...after, ...c.waits.map((w) => refs[w - 1])] });
+  for (const c of parts) {
+    const part = issues.addPart(doc, issue, { title: c.title, spec: c.spec, after: [...after, ...c.after.map((w) => refs[w - 1])] });
     refs.push(`${repo.key}-${issues.refOf(part)}`);
   }
   delete issue.fm.plan;
   issue.spec = "";
-  issues.note(issue, `${who}: split into ${refs.map((r, i) => `${r} (${children[i].title})`).join(", ")}; this issue closes when they are done`);
+  issues.note(issue, `${who}: split into ${refs.map((r, i) => `${r} (${parts[i].title})`).join(", ")}; this issue closes when they are done`);
   return refs;
 }
 
 /** File the parts `<repo>-<id>.k` as one commit, which clears `plan` and the issue's spec. The parts' ids, or null when the issue is no longer one to plan. */
-export function fileChildren(repo: Repo, id: number | string, children: Child[]): string[] | null {
-  const w = writeList(repo, `plan ${repo.key}-${id}: ${children.length} parts`, (doc) => {
+export function fileParts(repo: Repo, id: number | string, parts: Part[]): string[] | null {
+  const w = writeList(repo, `plan ${repo.key}-${id}: ${parts.length} parts`, (doc) => {
     const issue = issues.find(doc, id);
     if (!issue || planRefusal(repo, doc, issue)) return null;
-    return addParts(repo, doc, issue, children, "planner");
+    return addParts(repo, doc, issue, parts, "planner");
   });
   return w?.value ?? null;
 }
@@ -226,7 +226,7 @@ function endPlan(repo: Repo, id: number | string, why: string): string | null {
   }
 }
 
-/** Planner runs of an issue that ended with no children. */
+/** Planner runs of an issue that ended with no parts. */
 const badPlans = (repo: Repo, id: number | string) =>
   allRuns().filter((e) => e.run.kind === "plan" && e.run.on === `${repo.key}-${id}` && causeOf(e.run) === "no-answer").length;
 
@@ -264,7 +264,7 @@ export type Planned = { planned: string[] } | { why: string };
 
 /**
  * Plan one goal now, as `aleph plan` does: planner runs until one reply passes
- * the check, at most PLAN_TRIES. It returns the children filed, or why it filed
+ * the check, at most PLAN_TRIES. It returns the parts filed, or why it filed
  * none (then the goal runs as one worker run).
  */
 export async function runPlan(repo: Repo, id: number): Promise<Planned> {
@@ -305,7 +305,7 @@ async function plan(repo: Repo, id: number): Promise<Planned> {
         const input = prompt(repo, item, await recallEpisodes(`${item.title}\n${section(item.spec, "Goal")}`), parts);
         const plan = parsePlan(await withMainClone(repo, "plan-", (dir) => run.ask(input, dir)), parts.length ? 1 : 2);
         if (typeof plan === "string") { why = `malformed plan: ${plan}`; noAnswer(why); continue; }
-        const refs = fileChildren(repo, id, await fitTitles(plan));
+        const refs = fileParts(repo, id, await fitTitles(plan));
         if (!refs) { end("the issue changed during the run"); return { why: "the issue changed during the planner run" }; }
         end("planned");
         return { planned: refs };

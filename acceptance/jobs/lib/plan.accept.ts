@@ -11,12 +11,12 @@ function sh(cwd: string, ...args: string[]): void {
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);
 }
 
-const child = (title: string, oracle = "`bun test jobs/lib/x.test.ts`") =>
+const part = (title: string, oracle = "`bun test jobs/lib/x.test.ts`") =>
   ({ title, body: `## Goal\nDo ${title}.\n## Edit surface\njobs/lib/x.ts\n## Oracle\n${oracle}\n## Time box\n30 minutes` });
-const reply = (children: object[]) => JSON.stringify({ children });
-const THREE = reply([child("one"), { ...child("two"), waits_on: [1] }, { ...child("three"), waits_on: [1, 2] }]);
-const ONE = reply([child("only")]);
-const NO_ORACLE = reply([child("one"), { title: "two", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Time box\n1 hour" }]);
+const reply = (parts: object[]) => JSON.stringify({ parts });
+const THREE = reply([part("one"), { ...part("two"), after: [1] }, { ...part("three"), after: [1, 2] }]);
+const ONE = reply([part("only")]);
+const NO_ORACLE = reply([part("one"), { title: "two", body: "## Goal\nx\n## Edit surface\na/b.ts\n## Time box\n1 hour" }]);
 
 // The fake planner: the reply is named by a `PLAN:<word>` line in the goal's body; each call is logged.
 const fake = (base: string) => `#!/bin/bash

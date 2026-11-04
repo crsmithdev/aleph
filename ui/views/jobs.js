@@ -233,7 +233,7 @@ export function renderJob(j) {
   const back = p ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(p.id, j.repo)}`, p.href], [`job ${id}`]] : [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [id]];
   const nav = [p ? `<a class="act" href="${esc(p.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next part: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
   const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? `<span class="chip">part ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}</span>` : ""}<span class="idp">${esc(j.name)}</span></div>`;
-  const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Blocked by</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
+  const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
   const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(j.name)}" data-file="checks.log">checks.log</button>` : "";
   const checks = j.checks?.length

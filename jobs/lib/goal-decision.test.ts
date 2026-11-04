@@ -12,7 +12,7 @@ test("a goal with no fact against it is ready, and a fact not read stops nothing
 
 test("Not ready names only the open after refs, in both lines", () => {
   const d = goalDecision(facts({ item: item({ after: ["fac-1", "fac-2", "fac-3"] }), done: (r) => r === "fac-1" }));
-  expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "blocked: after fac-2,fac-3", text: "Waits on fac-2, fac-3" });
+  expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "after fac-2,fac-3", text: "Waits on fac-2, fac-3" });
 });
 
 test("the 7 gates bind in the order of GATES, Loop guard last", () => {
@@ -43,7 +43,7 @@ test("Baseline lets the red-main fix through, and the later gates still bind on 
 test("Not ready covers a done goal, an after ref, an open job, a planner and a spec check, in that order", () => {
   const all: Partial<GoalFacts> = { done: (r) => r === "fac-9", item: item({ after: ["fac-1"] }), open: "running", planning: true, checking: true };
   expect(goalDecision(facts(all)).why).toBe("the item is already done");
-  expect(goalDecision(facts({ ...all, done: () => false })).why).toBe("blocked: after fac-1");
+  expect(goalDecision(facts({ ...all, done: () => false })).why).toBe("after fac-1");
   expect(goalDecision(facts({ ...all, done: () => false, item: item() })).why).toBe("its job is running");
   expect(goalDecision(facts({ ...all, done: () => false, item: item(), open: null })).why).toBe("planning");
   expect(goalDecision(facts({ checking: true }))).toMatchObject({ kind: "not-ready", why: "spec check running" });

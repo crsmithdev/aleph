@@ -59,7 +59,7 @@ describe("a factory run", () => {
       ids.push(m, n);
       const d1 = await aleph(["dispatch"], on());
       expect(d1.json.started).toEqual([`fac-${m}`]);
-      expect(d1.json.skipped).toContain(`fac-${n}: blocked: after fac-${m}`);
+      expect(d1.json.skipped).toContain(`fac-${n}: after fac-${m}`);
       writeFileSync(gate("g"), "");
       await until(() => settled(m));
       patchItem("fac", `${m}`, { status: "done" });

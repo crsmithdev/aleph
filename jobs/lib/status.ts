@@ -98,7 +98,7 @@ export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs:
   for (const job of jobs) {
     const item = issue(job);
     if (item === undefined || job[0].run.repo !== repo.key) continue;
-    // A triage run marks its item in the store, and a planner run files children and does not land:
+    // A triage run marks its item in the store, and a planner run files parts and does not land:
     // neither is a factory run working on the item, so a goal they close in the store is done.
     if (typeof item === "number" && repo.sandbox && job.some((e) => e.run.kind !== "triage" && e.run.kind !== "plan")) touched.add(item);
     (runs[item] ??= []).push(runViewOf(job));

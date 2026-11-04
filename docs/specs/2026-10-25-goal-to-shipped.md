@@ -224,7 +224,7 @@ which is how Ona's factory ended in chores. The rule:
 - **Work store.** Items in a private git repo at `~/.aleph/issues`, written
   only through `aleph issue`; no
   product repo's `main` moves when an item changes.
-- **Held paths.** A run that passes both reviews lands by itself. Only a diff
+- **Held paths.** A run that passes the review lands by itself. Only a diff
   in `SECURITY_PATHS` (`jobs/lib/gate.ts`) waits for Chris. The reviewer judges
   edits to existing tests.
 

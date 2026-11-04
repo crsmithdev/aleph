@@ -136,7 +136,7 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   return { outcome: { ...awaiting("review", hold.reason, [stat]), cause: "reviewer", reason: hold.reason, stat, ...facts }, code: 0 };
 }
 
-/** Why the reviewer does not let a held run land, or null: it has given a verdict (`review` is its review.md). */
-export function landBlock(review: string | undefined): string | null {
+/** Why a held run cannot land yet: the reviewer has given no verdict; null once it has (`review` is its review.md). */
+export function missingVerdict(review: string | undefined): string | null {
   return reviewVerdict(review ?? "") ? null : "the reviewer has no verdict yet";
 }

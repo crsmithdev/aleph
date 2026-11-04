@@ -17,7 +17,7 @@ import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
 import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, editAnswers, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask } from "./ask.ts";
 import { allRuns, isAgentRun, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
-import { landBlock } from "./worker-verdict.ts";
+import { missingVerdict } from "./worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile } from "./job.ts";
 import { isLive, isStarting } from "./process.ts";
@@ -499,8 +499,8 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     if (c.ask.reason === "held-path") {
       const runs = openJob(c.entry.run.name);
       const agent = runs?.findLast((e) => isAgentRun(e.run.kind)) ?? c.entry;
-      const blocked = landBlock(readFile(agent, "review.md"));
-      if (blocked) return no(a, blocked);
+      const missing = missingVerdict(readFile(agent, "review.md"));
+      if (missing) return no(a, missing);
     }
     const why = await ports.land(c.entry.run.name);
     return why ? no(a, why) : done(a);

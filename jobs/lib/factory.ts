@@ -650,7 +650,7 @@ export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Coun
 
 /**
  * Plan one goal at once, as `aleph plan` does, under the factory's gates: not paused, no
- * failed probe, a factory repo. When it ends, the children or the fallback worker start from
+ * failed probe, a factory repo. When it ends, the parts or the fallback worker start from
  * a dispatch of their own.
  */
 export async function planNow(repo: Repo, id: number): Promise<{ planned: string[] } | { why: string }> {

@@ -23,7 +23,7 @@ test("a goal given an after while an earlier goal starts is not started", async 
   }, async () => null, undefined, undefined, undefined, undefined, undefined, () => {});
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
-  expect(out.skipped).toEqual([`fac-${second}: blocked: after fac-${other}.1`]);
+  expect(out.skipped).toEqual([`fac-${second}: after fac-${other}.1`]);
 });
 
 // The list is read after the baselines, so the closed gap is between that read and a goal's lock: an earlier goal's start closes it.

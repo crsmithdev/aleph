@@ -73,7 +73,7 @@ function notReady(f: GoalFacts): Extract<GoalDecision, { kind: "not-ready" }> | 
   const not = (why: string, text: string) => ({ kind: "not-ready" as const, why, text });
   if (f.done(f.name)) return not("the item is already done", "The item is already done");
   const ids = pendingWaits(afterOf(f.item), f.done);
-  if (ids.length) return { ...not(`blocked: after ${ids.join(",")}`, `Waits on ${ids.join(", ")}`), ids };
+  if (ids.length) return { ...not(`after ${ids.join(",")}`, `Waits on ${ids.join(", ")}`), ids };
   if (f.open) return not(`its job is ${f.open}`, `Its job is ${f.open}`);
   if (f.planning) return not("planning", "A planner run is splitting it");
   if (f.checking) return not("spec check running", "Its spec check is running");

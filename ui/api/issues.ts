@@ -231,7 +231,7 @@ async function decide(req: Request, params: Record<string, string>): Promise<Res
     if (!rec) return Response.json({ error: "this issue has no recommendation to approve" }, { status: 400 });
     note = `Chris decided: ${rec}`;
   }
-  // In process, as the firefighter does: an option's dependency sets `after`.
+  // In process: the chosen option's `after` becomes the issue's `after`.
   try {
     const r = issues.decide(repo, n, note, after ? { after } : {});
     return Response.json(r.result);

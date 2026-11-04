@@ -41,11 +41,11 @@ test("the sandbox prompt sends a clause the worker cannot meet to a QUESTION lin
   writeFileSync(join(dir, "job-q", "spec.md"), "# a goal\n");
   const run = { name: "job-q", job: "job-q", branch: "factory/job-q", kind: "build", condition: "running" } as any;
   const text = prompt("run-5", join(dir, "run-5"), run, { sandbox: true, main: "main" } as any).replace(/\s+/g, " ");
-  expect(text).toContain("`QUESTION: <question that names the Oracle clause>`");
+  expect(text).toContain("`QUESTION: <question that names the clause>`");
   expect(text).toContain("cannot meet a clause of the Oracle");
-  expect(text).toContain("Do not use `DEFAULT:` or `FOLLOWUP:` for that clause");
-  expect(text).toContain("a `FOLLOWUP:` must not cover anything the Oracle names");
-  expect(text).toContain("`DEFAULT:` is for choices the Oracle does not settle");
+  expect(text).toContain("never defer that clause with `DEFAULT:` or `FOLLOWUP:`");
+  expect(text).toContain("`FOLLOWUP: <title>`; it must not cover anything the Oracle names");
+  expect(text).toContain("For a choice the Oracle does not settle, take the answer you would recommend and print `DEFAULT:");
   expect(text).toContain("DEFAULT:");
   expect(text).toContain("FOLLOWUP:");
 });

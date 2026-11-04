@@ -75,7 +75,7 @@ export function episodeTitle(repo: Repo, item: issues.Issue): string {
 export interface Commit { sha: string; subject: string; stat: string }
 export type Langfuse = { error: string } | { traces: { id: string; tokens: number | null }[] };
 
-/** The land commits of the goal; a planned parent has those of the items it waits on. */
+/** The land commits of the goal; a parent has those of its parts. */
 function commitsOf(repo: Repo, item: issues.Issue): Commit[] {
   fetchOrigin(repo.path);
   const main = `origin/${repo.main}`;
