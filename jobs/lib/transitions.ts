@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
-import { allRuns, askOf, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { allRuns, askOf, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, nextStamp, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "./process.ts";
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
@@ -69,14 +69,11 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
       if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
     }
     mkdirSync(runsDir(), { recursive: true });
-    // Runs sort by folder name, so two runs of one job never share a second:
-    // a follow-up started in its land's second would sort before that land.
-    for (;;) {
-      const prefix = `${stamp()}-${tag}-`;
-      id = `${prefix}${run.kind}`;
-      if (!readdirSync(runsDir()).some((d) => d.startsWith(prefix))) break;
-      await Bun.sleep(200);
-    }
+    // Runs sort by folder name, so a run's stamp comes after the stamp of each earlier run of its tag: a follow-up
+    // started in its land's second, or a land started after the wall clock steps back (WSL2 does, by about a second), would sort before it.
+    const now = stamp();
+    const last = readdirSync(runsDir()).filter((d) => d.slice(16).startsWith(`${tag}-`)).map((d) => d.slice(0, 15)).sort().at(-1);
+    id = `${last && last >= now ? nextStamp(last) : now}-${tag}-${run.kind}`;
     const folder = join(runsDir(), id);
     mkdirSync(folder);
     writeFileSync(runFile(folder, "command.txt"), quote(["aleph", ...command]) + "\n");

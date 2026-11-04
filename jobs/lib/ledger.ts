@@ -292,6 +292,12 @@ export function stamp(d = new Date()): string {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
+/** The `stamp` one second after the stamp `s`. */
+export function nextStamp(s: string): string {
+  const [y, mo, d, h, mi, se] = s.match(/^(\d{4})(\d\d)(\d\d)-(\d\d)(\d\d)(\d\d)$/)!.slice(1).map(Number);
+  return stamp(new Date(y, mo - 1, d, h, mi, se + 1));
+}
+
 /** The one line of news for an ended run. */
 export function newsLine(run: Run, note?: string): string {
   if (run.kind === "plain") return `${run.name} ${run.condition === "done" ? "finished" : "failed"}`;

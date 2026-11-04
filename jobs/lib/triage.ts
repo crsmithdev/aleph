@@ -209,19 +209,21 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
  * limit, give it an Ask (reason `triage-failed`) so later ticks skip it. The line to report, or null.
  */
 function giveUp(repo: Repo, id: number, reason: string): string | null {
-  // After a standing retry, only the runs since it count.
+  // After a standing retry, only the runs since it count. The mark names the runs that counted before it:
+  // a time would not do, because the wall clock can step back (WSL2 steps it back every half minute).
   const mark = join(factoryDir(), "standing-retry", `${repo.key}-${id}`);
-  let since = 0;
-  try { since = Number(readFileSync(mark, "utf8")) || 0; } catch {}
-  const n = allRuns().filter((e) => e.run.kind === "triage" && e.run.repo === repo.key && onOf(e.run) === id
-    && (e.run.made ?? 0) > since
-    && causeOf(e.run) === "no-answer").length;
+  let before: string[] = [];
+  try { before = JSON.parse(readFileSync(mark, "utf8")); } catch {}
+  const runs = allRuns().filter((e) => e.run.kind === "triage" && e.run.repo === repo.key && onOf(e.run) === id
+    && !before.includes(e.id)
+    && causeOf(e.run) === "no-answer");
+  const n = runs.length;
   if (n < TRIAGE_TRIES()) return null;
   const grant = always("triage-failed")?.action;
   const ref = `${repo.key}-${id}`;
   if (grant === "retry") {
     mkdirSync(join(factoryDir(), "standing-retry"), { recursive: true });
-    writeFileSync(mark, String(Date.now()));
+    writeFileSync(mark, JSON.stringify([...before, ...runs.map((e) => e.id)]));
     logAlways("triage-failed", "retry", ref);
     return `${ref}: no verdict in ${n} triages; standing: triage again next tick`;
   }

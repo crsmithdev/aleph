@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, branchExists, file, itemsRemote, jobsDir, moveMain, remote, repo, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
@@ -68,6 +68,21 @@ describe("land", () => {
     const again = await checked("phonelater");
     expect(again.code).toBe(1);
     expect(again.stderr).toContain("phonelater has no open check");
+  });
+
+  test("a land started after the wall clock steps back sorts after its build run", async () => {
+    // WSL2 steps the wall clock back by about a second: a run's stamp must still come after its job's earlier runs.
+    const b = await job("stepback", "commit stepback.txt");
+    setSystemTime(new Date(Date.parse(state(b.json.run).started) - 1000));
+    let r;
+    try {
+      r = await land("stepback");
+    } finally {
+      setSystemTime();
+    }
+    const runs = readdirSync(jobsDir).filter((d) => d.includes("-demo-stepback-")).sort();
+    expect(runs).toEqual([b.json.run, r.json.run]);
+    expect((await jobView("stepback")).json).toMatchObject({ run: { kind: "land" }, condition: "landed" });
   });
 
   test("in a repo that lands by itself, a passed job lands with no aleph land", async () => {

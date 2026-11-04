@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -122,6 +122,22 @@ describe("standing permissions", () => {
     expect(calls()).toBe(n + 1);
     expect(t3.skipped[0]).toContain("malformed verdict");
     expect(tickLog()).toContain("always: triage-failed: retry");
+  });
+
+  test("retry: a wall clock that steps back does not bring the earlier triages back into the count", async () => {
+    grant("triage-failed", "retry");
+    reset([{ title: "a", body: "nothing" }]);
+    try {
+      await run();
+      // The wall clock steps back, as the WSL2 clock does every half minute, and then comes forward again.
+      setSystemTime(new Date(Date.now() - 60_000));
+      await run();
+      setSystemTime();
+      const t3 = await run();
+      expect(t3.skipped[0]).toContain("malformed verdict");
+    } finally {
+      setSystemTime();
+    }
   });
 
   test("close: the item is done with the note", async () => {

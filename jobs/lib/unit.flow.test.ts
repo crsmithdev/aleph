@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, branchExists, fakeLog, file, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../cli.helpers";
@@ -27,6 +27,16 @@ describe("job", () => {
       const r = await actionJob("alpha", "commit c.txt", {}, "other");
       expect(r.code).toBe(1);
       expect(r.stderr).toContain("alpha is open in demo");
+    });
+
+    test("a follow-up started after the wall clock steps back sorts after the job's runs", async () => {
+      const before = readdirSync(jobsDir).filter((d) => d.endsWith("-demo-alpha-build")).sort();
+      setSystemTime(new Date(Date.now() - 60_000));
+      const r = await actionJob("alpha", "commit s.txt").finally(() => setSystemTime());
+      expect(r.code).toBe(0);
+      expect(r.json.job).toBe(before[0]);
+      expect([...before, r.json.run].sort().at(-1)).toBe(r.json.run);
+      expect((await jobView("alpha")).json.run.id).toBe(r.json.run);
     });
 
     test("drop writes the fate by-hand, none with --quiet, and --fate overrides it", async () => {
