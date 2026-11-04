@@ -60,41 +60,41 @@ All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), 
 | `--seg-landed`, `-fixed`, `-nothing`, `-restarted`, `-dropped` | `ui/app.css:35` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #1BAF7A, #EDA100, #E87BA4 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #C792EA, #89DDFF | extra chart series |
-| `--lift` | `0 1px 3px` and `0 2px 8px` shadows | heavier black shadows | the top Status card; 1 `token-use` |
+| `--lift` | `0 1px 3px` and `0 2px 8px` shadows | heavier black shadows | the top Status card |
 
 Type, size and effect tokens (`ui/app.css:47-55`):
 
-| Token | Value | Role | Uses |
-|---|---|---|---|
-| `--fs-2xs` | 11px | badges and ids on narrow cards, bar labels | 3 |
-| `--fs-xs` | 12px | table headers, meta, badges | 41 |
-| `--fs-sm` | 13px | table cells, secondary text | 54 |
-| `--fs-md` | 14px | body | 6 |
-| `--fs-lg` | 15px | section headings | 7 |
-| `--fs-2xl` | 20px | brand mark, detail figure, tile figure in `--mono` | not counted, used in shorthand `font:` |
-| `--fs-xl` | 26px | page title, in `--display` | not counted, used in shorthand `font:` |
-| `--fs-metric` | 32px | the figure on a tile | not counted, used in shorthand `font:` |
-| `--fw-text` | 400 | text | not counted, used in shorthand `font:` |
-| `--fw-mid` | 500 | ids and numbers | not counted, used in shorthand `font:` |
-| `--fw-strong` | 600 | headings and table headers | not counted, used in shorthand `font:` |
-| `--r-card` | 10px | cards, tiles | 8 |
-| `--r-ctl` | 6px | controls | 19, and 2 in mixed shorthands |
-| `--r-tag` | 4px | badges, code blocks | 20, and 1 in a mixed shorthand |
-| `--r-hair` | 2px | bars, marks, thin rules | 11, and 1 in a mixed shorthand |
-| `--r-pill` | 999px | chips, pills | 3 |
-| `--sp-2` | 2px | `gap`, `padding`, `margin` | 36, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
-| `--sp-4` | 4px | `gap`, `padding`, `margin` | 59, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
-| `--sp-6` | 6px | `gap`, `padding`, `margin` | 56, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
-| `--sp-8` | 8px | `gap`, `padding`, `margin` | 83, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
-| `--sp-10` | 10px | `gap`, `padding`, `margin` | 49, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
-| `--sp-12` | 12px | `gap`, `padding`, `margin` | 46, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
-| `--sp-16` | 16px | `gap`, `padding`, `margin` | 20, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
-| `--z-rowlink` | 1 | `tr.rowlink` links above the row link | 1 |
-| `--z-sticky` | 2 | sticky bar, waterfall axis | 2 |
-| `--z-overlay` | 50 | font picker | 1, in `ui/index.html` |
-| `--gap-in` | 16px | between tiles and side-by-side cards | 7 |
-| `--gap` | 24px | between page blocks | 1 |
-| `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles | `--mono` 10, `--num` 2, `--sans` 1, `--display` 1 as `font-family` |
+| Token | Value | Role |
+|---|---|---|
+| `--fs-2xs` | 11px | badges and ids on narrow cards, bar labels |
+| `--fs-xs` | 12px | table headers, meta, badges |
+| `--fs-sm` | 13px | table cells, secondary text |
+| `--fs-md` | 14px | body |
+| `--fs-lg` | 15px | section headings |
+| `--fs-2xl` | 20px | brand mark, detail figure, tile figure in `--mono` |
+| `--fs-xl` | 26px | page title, in `--display` |
+| `--fs-metric` | 32px | the figure on a tile |
+| `--fw-text` | 400 | text |
+| `--fw-mid` | 500 | ids and numbers |
+| `--fw-strong` | 600 | headings and table headers |
+| `--r-card` | 10px | cards, tiles |
+| `--r-ctl` | 6px | controls |
+| `--r-tag` | 4px | badges, code blocks |
+| `--r-hair` | 2px | bars, marks, thin rules |
+| `--r-pill` | 999px | chips, pills |
+| `--sp-2` | 2px | `gap`, `padding`, `margin` |
+| `--sp-4` | 4px | `gap`, `padding`, `margin` |
+| `--sp-6` | 6px | `gap`, `padding`, `margin` |
+| `--sp-8` | 8px | `gap`, `padding`, `margin` |
+| `--sp-10` | 10px | `gap`, `padding`, `margin` |
+| `--sp-12` | 12px | `gap`, `padding`, `margin` |
+| `--sp-16` | 16px | `gap`, `padding`, `margin` |
+| `--z-rowlink` | 1 | `tr.rowlink` links above the row link |
+| `--z-sticky` | 2 | sticky bar, waterfall axis |
+| `--z-overlay` | 50 | font picker |
+| `--gap-in` | 16px | between tiles and side-by-side cards |
+| `--gap` | 24px | between page blocks |
+| `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles |
 
 Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers, `--fw-strong` 600 for headings and table headers. 700 stays a literal on `.mark` and `.tile b`.
 

@@ -48,7 +48,7 @@ Done when every group above has a list, and you can name the file you have not r
    - interaction states, disclosure, content blocks, copy, page structure, responsive behaviour, accessibility minimums (text contrast 4.5:1), motion and reduced motion
    Done when every rule names its token or helper and its use count.
 4. **Pick the references.** For each component (card, table, badge, chip, button, chart, filter bar, pager, page header, empty state), name the view that follows the rules best. Where two views build the same thing two ways, record it as a deviation. Confirm uncertain cases in a browser in light and dark at desktop and phone width, on a server you start on a free port and stop after. Done when each component has a reference view or a stated gap.
-5. **Write `docs/design.md`:** Principles (at most 5, each drawn from the code), Tokens (token, light, dark, role, uses), Formats (kind, format, example, helper, uses), Tables, Charts and data displays, Interaction, Content, Voice and copy, Layout and responsive, Accessibility, Components (with reference views), Rules (what to use, what never to hard-code), and Deviations. Add one line to the UI's main doc that points to it.
+5. **Write `docs/design.md`:** Principles (at most 5, each drawn from the code), Tokens (token, light, dark, role), Formats (kind, format, example, helper, uses), Tables, Charts and data displays, Interaction, Content, Voice and copy, Layout and responsive, Accessibility, Components (with reference views), Rules (what to use, what never to hard-code), and Deviations. Add one line to the UI's main doc that points to it.
 6. **File the fixes.** One issue per group of deviations, worst first, through the repo's issue tool.
 
 ## Audit
