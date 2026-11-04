@@ -124,9 +124,16 @@ const testLabel = (t: FailedTest) => `${t.file ?? "(no file)"} > ${t.name}`;
 const NO_MATCH = /matched 0 tests/;
 const failing = (r: Ran) => r.code !== 0 || FAIL_SUMMARY.test(r.output);
 
+/**
+ * `bun test` takes a file whose name has no `.test` or `.spec` (such as `a.accept.ts`) only with a `./` path; without it
+ * the argument is a name filter that matches no test file. This adds the `./`.
+ */
+const asPath = (command: string): string =>
+  /^bun test\s/.test(command) ? command.replace(/(?<=\s)(?![./])(\S+\.[jt]sx?)(?=\s|$)/g, (arg) => (TEST_FILE.test(arg) ? arg : `./${arg}`)) : command;
+
 /** The commands in backticks in the issue's `## Oracle` section that start with a command the repo's checks use. */
 export function oracleCommands(body: string): string[] {
-  return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => m[1].trim()).filter((c) => RUNNABLE.test(c) && !PLACEHOLDER.test(c));
+  return [...section(body, "Oracle").matchAll(/`([^`\n]+)`/g)].map((m) => asPath(m[1].trim())).filter((c) => RUNNABLE.test(c) && !PLACEHOLDER.test(c));
 }
 
 /** Makes each scenario check's folder and ref its own. */

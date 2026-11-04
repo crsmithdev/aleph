@@ -10,6 +10,11 @@ test("a placeholder of more than one word is not runnable; a redirection with a 
   expect(oracleCommands(body)).toEqual(["bun test jobs/lib/a.test.ts 2>&1", "bun test jobs/lib/a.test.ts <in >out", "bun test jobs/lib/a.test.ts > out.log"]);
 });
 
+test("a bun test file without .test or .spec in its name gets a ./ path; other arguments stay", () => {
+  const body = "## Oracle\n`bun test acceptance/ui/lib.accept.ts`\n`bun test ./acceptance/a.accept.ts jobs/lib/a.test.ts -t x`\n`bunx tsc`";
+  expect(oracleCommands(body)).toEqual(["bun test ./acceptance/ui/lib.accept.ts", "bun test ./acceptance/a.accept.ts jobs/lib/a.test.ts -t x", "bunx tsc"]);
+});
+
 test("failedTests takes each failure with the file above it, and rerunOf names only those", () => {
   const tests = failedTests(FAILED);
   expect(tests).toEqual([{ file: "jobs/lib/acceptance.test.ts", name: "outer (x) > one" }, { file: "b.test.ts", name: "two" }]);
