@@ -215,7 +215,7 @@ export const sandboxScenarios: ScenarioCheck = async (repo, sha, scenarios) => {
       w = await sandboxed(rdir, script, {
         read: ["out/accept.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: `${SCENARIO_PROMPT}\n\n## Scenarios\n\n${scenarios.trim()}\n`,
         env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-        stdout: log, stderr: join(rdir, "agent.err"), limit: reviewSeconds(), stall: stallSeconds(),
+        stdout: log, stderr: join(rdir, "agent.err"), limit: reviewSeconds(), stall: stallSeconds(), sockets: true,
       });
     } finally {
       free();

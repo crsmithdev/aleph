@@ -30,6 +30,8 @@ function denied(): [string, string][] {
     // so the probe reads the folders that hold data.
     ["read ~/.aleph", `ls ${h}/.aleph/secrets || ls ${h}/.aleph/jobs || ls ${h}/.aleph/items || ls ${h}/.aleph/issues || ls ${h}/.aleph/vault`],
     ["docker socket", "curl -sf --max-time 3 --unix-socket /var/run/docker.sock http://x/version"],
+    // The probe runs with Unix sockets allowed, as the Chrome steps do: the host's own sockets must stay out of reach.
+    [`user D-Bus socket`, `bun -e ${q(`const s=require("net").connect({path:"/run/user/${process.getuid?.() ?? 1000}/bus"});s.on("connect",()=>process.exit(0));s.on("error",()=>process.exit(1));setTimeout(()=>process.exit(1),3000)`)}`],
     ["cmd.exe", "timeout 5 /mnt/c/Windows/System32/cmd.exe /c echo hi"],
     ["127.0.0.1:3010", "curl -sf --max-time 3 http://127.0.0.1:3010"],
     ["172.17.0.1:8421", "curl -sf --max-time 3 http://172.17.0.1:8421"],
@@ -89,6 +91,8 @@ export async function probe(repo: Repo, log: string, fault: typeof clockFault = 
     writeFileSync(`${log}.stderr`, "");
     const script = [
       ...denied().map(([name, cmd]) => `if ( ${cmd} ) >/dev/null 2>&1; then echo "FAIL ${name}: reachable"; else echo "PASS ${name}: denied"; fi`),
+      // The Unix sockets Chrome needs work inside, so "user D-Bus socket: denied" is the namespace's doing, not the filter's.
+      `if bun -e ${q(`require("net").createServer().listen(process.env.TMPDIR+"/probe.sock",()=>process.exit(0)).on("error",()=>process.exit(1))`)} >/dev/null 2>&1; then echo "PASS unix sockets: allowed"; else echo "FAIL unix sockets: blocked"; fi`,
       `if claude -p 'say ok' --output-format json 2>/dev/null | grep -q '"is_error":false'; then echo "PASS claude -p: ok"; else echo "FAIL claude -p: no result"; fi`,
       `${gitPrelude("../in.bundle", [`+${main}:${main}`]).join(" && ")} && git switch -q -c probe ${q(`origin/${repo.main}`)} >&2`,
       `${repo.setup.join(" && ") || "true"} >&2`,
@@ -96,12 +100,12 @@ export async function probe(repo: Repo, log: string, fault: typeof clockFault = 
       `if TZ=UTC bun test >&2; then echo "PASS bun test: passed"; else echo "FAIL bun test: failed"; fi`,
     ].join("\n");
     const step = await sandboxed(dir, script, {
-      read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() },
+      read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken() }, sockets: true,
       stdout: log, stderr: `${log}.stderr`, limit: 1200,
     });
     const results = readFileSync(log, "utf8").split("\n").filter((l) => /^(PASS|FAIL) /.test(l))
       .map((l) => ({ name: l.slice(5, l.lastIndexOf(": ")), ok: l.startsWith("PASS") }));
-    const expected = denied().length + 2;
+    const expected = denied().length + 3;
     const failed = failedChecks(results, expected, fault(started));
     if (results.length < expected) {
       const last = lastLines(readFileSync(`${log}.stderr`, "utf8"));

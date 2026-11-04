@@ -12,7 +12,7 @@ const CHROME = "/usr/bin/google-chrome";
 
 /**
  * The tests that start Chrome run only with ALEPH_BROWSER_TESTS=1: `bun run test:all`, CI and the factory's checks
- * set it, and a plain `bun run test` skips them. A sandboxed run (srt) has no working Chrome. CI must have one:
+ * set it, and a plain `bun run test` skips them. A check runs them under srt with Unix sockets allowed. CI must have one:
  * there a missing Chrome fails, and does not skip.
  */
 export const chromeUsable = process.env.ALEPH_BROWSER_TESTS === "1" && (process.env.CI === "true" || (existsSync(CHROME) && Bun.spawnSync([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--dump-dom", "about:blank"], { stdout: "ignore", stderr: "ignore", timeout: 20_000, env: { ...process.env, HOME: tmpdir() } }).exitCode === 0));
@@ -49,7 +49,8 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
   mkdirSync(profile);
   process.env.ALEPH_REVIEW_CHROME = CHROME;
   const argv = chromeArgv(profile);
-  const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"], env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
+  const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"], // Under srt, Chrome's SingletonSocket needs the short ALEPH_CHROME_TMP: a socket path holds 108 characters.
+    env: { HOME: profile, TMPDIR: process.env.ALEPH_CHROME_TMP ?? profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
   const cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
   // The first call waits for Chrome to start; 30 s as in shot.ts and review-browser.ts, since a busy CI runner took over 15 s (runs 41675736380, cc2f927ff).
   await cdp.send("Browser.getVersion", {}, undefined, 30_000);

@@ -31,6 +31,10 @@ export function outsideSurface(body: string, files: string[]): string[] {
   return files.filter((f) => !surface.some((p) => f === p || f.startsWith(p.endsWith("/") ? p : `${p}/`)));
 }
 
+/** A UI goal: its Edit surface names a page file (HTML, CSS, a browser script or component) or a path under `ui/`. Its worker may run Chrome. */
+export const uiGoal = (body: string): boolean =>
+  surfacePaths(body).some((p) => p === "ui" || p.startsWith("ui/") || /\.(html|css|jsx?|tsx|vue|svelte)$/.test(p));
+
 const hash = (text: string): string => createHash("sha256").update(text).digest("hex").slice(0, 12);
 
 /** The text of a goal that an edit changes: its title, request and spec. */

@@ -1,6 +1,6 @@
 /**
- * Chrome for the harness, outside the sandbox: srt's profile blocks the Unix sockets Chrome
- * needs. The harness runs /usr/bin/google-chrome --headless over --remote-debugging-pipe (no
+ * Chrome for the harness, outside the sandbox. (Inside it, Chrome runs only in a step whose profile allows
+ * Unix sockets: see `sockets` in sandbox.ts.) The harness runs /usr/bin/google-chrome --headless over --remote-debugging-pipe (no
  * debugging port), with a profile of its own. shot.ts takes the workers' screenshots with it.
  *
  * Chrome keeps its own sandbox: there is no --no-sandbox fallback.

@@ -82,7 +82,7 @@ export function makeRunFolder(id: string): string {
   return dir;
 }
 
-export const removeRunFolder = (dir: string) => rmSync(dir, { recursive: true, force: true });
+export const removeRunFolder = (dir: string) => { rmSync(dir, { recursive: true, force: true }); rmSync(chromeTmp(dir), { recursive: true, force: true }); };
 
 /** The network a step reaches: the domains it may name, and whether it may listen on a local port. */
 export interface Net { domains: string[]; localBinding: boolean }
@@ -96,8 +96,14 @@ const WORKER_NET: Net = { domains: ["api.anthropic.com", "registry.npmjs.org"], 
  */
 /** srt's own sockets: a short folder, because a Unix socket path holds 108 characters and a run folder's name has no limit. */
 export const sockDir = (dir: string): string => join(layout().sandbox, ".s", Bun.hash(dir).toString(16).slice(0, 12));
+/** Chrome's temp folder in a step with `sockets`: short for the same reason, as Chrome puts its SingletonSocket there. */
+export const chromeTmp = (dir: string): string => join(layout().sandbox, ".c", Bun.hash(dir).toString(16).slice(0, 12));
 
-export function profile(dir: string, o: { read: string[]; write: string[]; net?: Net; hideCiMissing?: boolean }): string {
+/**
+ * `sockets` turns off srt's seccomp filter on Unix sockets, which Chrome needs for its own processes. The sandbox keeps
+ * its own network namespace and file view, so the host's sockets stay out of reach; the probe checks that (probe.ts).
+ */
+export function profile(dir: string, o: { read: string[]; write: string[]; net?: Net; hideCiMissing?: boolean; sockets?: boolean }): string {
   const vendor = join(expand("~/.aleph/tools/lib/node_modules/@anthropic-ai/sandbox-runtime"), "vendor");
   const bins = ["claude", "bun", "git"].map((b) => { try { return realpathSync(join(dir, "bin", b)); } catch { return null; } }).filter(Boolean) as string[];
   const net = o.net ?? WORKER_NET;
@@ -106,11 +112,11 @@ export function profile(dir: string, o: { read: string[]; write: string[]; net?:
   const roots = new Set(o.write.map((p) => p.split("/")[0]));
   const read = o.read.flatMap((p) => p === "." ? readdirSync(dir).filter((e) => !roots.has(e)) : [p]);
   const settings = {
-    network: { allowedDomains: net.domains, allowLocalBinding: net.localBinding, deniedDomains: [] },
+    network: { allowedDomains: net.domains, allowLocalBinding: net.localBinding, deniedDomains: [], ...(o.sockets ? { allowAllUnixSockets: true } : {}) },
     filesystem: {
       denyRead: ["/home", "/root", "/mnt", "/run", "/var/run", "/srv", "/tmp", ...(o.hideCiMissing ? toolPaths(NOT_ON_CI) : [])],
       allowRead: [...bins, vendor, join(dir, "bin"), sockDir(dir), ...read.map((p) => join(dir, p))],
-      allowWrite: o.write.map((p) => join(dir, p)),
+      allowWrite: [...o.write.map((p) => join(dir, p)), ...(o.sockets ? [chromeTmp(dir)] : [])],
       denyWrite: [],
     },
   };
@@ -136,13 +142,14 @@ export const stallReason = (): string => {
  * profile: it tests the flow, not the isolation.
  */
 export async function sandboxed(dir: string, script: string, o: {
-  read: string[]; write: string[]; net?: Net; hideCiMissing?: boolean; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stall?: number; stdin?: string;
+  read: string[]; write: string[]; net?: Net; hideCiMissing?: boolean; sockets?: boolean; cwd: string; env?: Record<string, string>; stdout: string; stderr: string; limit?: number; stall?: number; stdin?: string;
   onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void;
 }): Promise<Step> {
   const inner: Record<string, string> = {
     HOME: join(dir, "home"), CLAUDE_CONFIG_DIR: join(dir, "home/.claude"), TMPDIR: join(dir, "tmp"),
     PATH: `${join(dir, "bin")}:/usr/local/bin:/usr/bin:/bin`, LANG: "C.UTF-8",
-    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", DISABLE_AUTOUPDATER: "1", ALEPH_TEST_PARALLEL: String(testParallel()), ...o.env,
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1", DISABLE_AUTOUPDATER: "1", ALEPH_TEST_PARALLEL: String(testParallel()),
+    ...(o.sockets ? { ALEPH_CHROME_TMP: chromeTmp(dir) } : {}), ...o.env,
   };
   const pass = process.env.ALEPH_SANDBOX_CMD;
   // srt adds the proxy variables the sandbox needs to the environment it gets, so the
@@ -154,6 +161,7 @@ export async function sandboxed(dir: string, script: string, o: {
   const cmd = o.limit ? ["timeout", "--kill-after=30", String(o.limit), ...argv] : argv;
   const sock = sockDir(dir);
   if (!pass) mkdirSync(sock, { recursive: true });
+  if (o.sockets && !pass) mkdirSync(chromeTmp(dir), { recursive: true });
   const env = pass ? process.env : { ...inner, TMPDIR: sock };
   const out = openSync(o.stdout, "a");
   const err = o.stderr === o.stdout ? out : openSync(o.stderr, "a");

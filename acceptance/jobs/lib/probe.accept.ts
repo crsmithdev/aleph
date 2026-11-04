@@ -46,7 +46,7 @@ test("a probe with no results names exit code and stderr, not an earlier probe's
   expect(p.ok).toBe(false);
   expect(p.results).toEqual([]);
   expect(p.failed).toHaveLength(1);
-  expect(p.failed[0]).toContain("11 checks gave no answer");
+  expect(p.failed[0]).toContain("13 checks gave no answer");
   expect(p.failed[0]).toContain("exit 3");
   expect(p.failed[0]).toContain("boom: listen failed");
   expect(p.failed[0]).not.toContain("old probe");
@@ -55,12 +55,12 @@ test("a probe with no results names exit code and stderr, not an earlier probe's
 
 test("a failed bun test with all results gives only bun test, whatever is on stderr", async () => {
   const log = join(base, "probe2.log");
-  const lines = [...Array(10).keys()].map((i) => `PASS check ${i}: denied`);
+  const lines = [...Array(12).keys()].map((i) => `PASS check ${i}: denied`);
   writeFileSync(join(base, "all"), `#!/bin/bash\necho "error: 1 test failed" >&2\n${lines.map((l) => `echo "${l}"`).join("\n")}\necho "FAIL bun test: failed"\n`, { mode: 0o755 });
   process.env.ALEPH_SANDBOX_CMD = join(base, "all");
   try {
     const p = await probe(repo(), log, noFault);
-    expect(p.results).toHaveLength(11);
+    expect(p.results).toHaveLength(13);
     expect(p.failed).toEqual(["bun test"]);
   } finally { process.env.ALEPH_SANDBOX_CMD = join(base, "boom"); }
 });

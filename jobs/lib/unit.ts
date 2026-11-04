@@ -29,7 +29,7 @@ import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { buildChecks } from "./related.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedHidden, nextBrief } from "./continuation.ts";
-import { outsideSurface } from "./goal-spec.ts";
+import { outsideSurface, uiGoal } from "./goal-spec.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
 import { postTrace } from "./trace.ts";
 import { runLogged, startUnit } from "./launch.ts";
@@ -423,7 +423,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
         read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
         env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
         stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"), limit: workSeconds(run),
-        stall: stallSeconds(),
+        stall: stallSeconds(), sockets: uiGoal(jobSpec(folder, run)),
         onSpawn: (p) => { child = p; },
       });
     } finally { await shots.stop(); }
@@ -691,7 +691,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     const w = await agentCall("scenario reviewer", rdir, bundle, argv, {
       read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
       env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-      stdout: log, stderr: runFile(folder, "review.err"), limit: reviewSeconds(), stall: stallSeconds(),
+      stdout: log, stderr: runFile(folder, "review.err"), limit: reviewSeconds(), stall: stallSeconds(), sockets: true,
       onSpawn: (p) => { child = p; },
     });
     child = null;

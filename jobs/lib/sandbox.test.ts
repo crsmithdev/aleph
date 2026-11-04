@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { makeRunFolder, profile } from "./sandbox.ts";
+import { chromeTmp, makeRunFolder, profile } from "./sandbox.ts";
 
 const base = mkdtempSync(join(tmpdir(), "aleph-sandbox-"));
 process.env.ALEPH_SANDBOX_DIR = join(base, "runs");
@@ -31,4 +31,15 @@ test("profile hides a CI-missing tool under denyRead only with the option", () =
 
 test("makeRunFolder puts no skill in home/", () => {
   expect(existsSync(join(makeRunFolder("r-plain"), "home/.claude/skills"))).toBe(false);
+});
+
+test("a profile allows Unix sockets only with `sockets`, and keeps its file and network walls", () => {
+  const dir = makeRunFolder("r-sockets");
+  const read = (o: object) => JSON.parse(readFileSync(profile(dir, { read: [], write: ["tmp"], ...o }), "utf8"));
+  const plain = read({}), open = read({ sockets: true });
+  expect(plain.network.allowAllUnixSockets).toBeUndefined();
+  expect(open.network.allowAllUnixSockets).toBe(true);
+  // The one more write root is Chrome's short temp folder.
+  expect(open.filesystem).toEqual({ ...plain.filesystem, allowWrite: [...plain.filesystem.allowWrite, chromeTmp(dir)] });
+  expect({ ...open.network, allowAllUnixSockets: undefined }).toEqual({ ...plain.network, allowAllUnixSockets: undefined });
 });
