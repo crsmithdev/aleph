@@ -41,8 +41,8 @@ const tail = (file: string, n: number) => existsSync(file) ? readFileSync(file, 
 /** The repo's checks with no `when`, and those whose globs match a changed file. */
 const chosen = (t: CheckTask): Check[] => t.repo.checks.filter((c) => !c.when || t.changed.some((f) => c.when!.some((g) => new Bun.Glob(g).match(f))));
 
-/** A command that runs `bun test`, directly or as the package's `test` script. */
-const BUN_TEST = /^bun (?:run )?test\b/;
+/** A command that runs `bun test`, directly or as a package script such as `test` or `test:all`, with the whole script name. */
+const BUN_TEST = /^bun (?:run )?test\b\S*/;
 
 /** The JUnit report of the check `name` in the run folder. */
 export const junitFile = (folder: string, name: string): string => join(folder, `junit-${name.replace(/[^\w.-]/g, "-")}.xml`);

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addedLines, keepGate, mutants, newCases, runChecks, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { addedLines, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
 
@@ -153,6 +153,10 @@ test("withJunit: the reporter flags go after `bun test` or `bun run test`, and o
   expect(withJunit("bun run test './a.test.ts'", "/r/junit-tests.xml")).toBe("bun run test --reporter=junit --reporter-outfile='/r/junit-tests.xml' './a.test.ts'");
   expect(withJunit("bun test app", "/r/j.xml")).toBe("bun test --reporter=junit --reporter-outfile='/r/j.xml' app");
   expect(withJunit("bunx tsc", "/r/j.xml")).toBe("bunx tsc");
+  expect(withJunit("bun run test:all", "/r/j.xml")).toBe("bun run test:all --reporter=junit --reporter-outfile='/r/j.xml'");
+  expect(withJunit("bun run test:all './a.test.ts'", "/r/j.xml")).toBe("bun run test:all --reporter=junit --reporter-outfile='/r/j.xml' './a.test.ts'");
+  expect(runsBunTest("bun run test:all")).toBe(true);
+  expect(runsBunTest("bunx tsc")).toBe(false);
 });
 
 test("flake rows from parallel processes all survive", async () => {
