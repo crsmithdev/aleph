@@ -74,12 +74,15 @@ export const BUN_TESTS = ["**/*.{test,spec}.{ts,tsx,js,jsx}", "**/*_{test,spec}.
 
 /**
  * The test files that a build run's change reaches: each changed test file and each test that depends on a changed
- * file. A test file that the change removes drops out. "full" when `testsOf` gives null, or when a preload file
- * depends on a changed file: a preload runs before every test.
+ * file. A test file that the change removes drops out. A change of only files that are not modules reaches no test.
+ * "full" when the change mixes a module with a file that is not a module, or holds bunfig.toml (it sets the preload),
+ * or when `testsOf` gives null, or when a preload file depends on a changed file: a preload runs before every test.
  */
 export function buildTests(changed: string[], map: ImportMap, globs: string[]): string[] | "full" {
   const isTest = (f: string) => globs.some((g) => new Bun.Glob(g).match(f));
   const targets = changed.filter((f) => map.files.has(f) || !isTest(f));
+  const other = targets.filter((f) => !MODULE.test(f));
+  if (other.length) return other.length === targets.length && !other.includes("bunfig.toml") ? [] : "full";
   const tests = testsOf(map, targets, [...globs, ...map.preload]);
   if (!tests || tests.some((f) => map.preload.includes(f))) return "full";
   return tests;

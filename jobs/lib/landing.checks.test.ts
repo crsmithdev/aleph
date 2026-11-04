@@ -53,10 +53,13 @@ test("a land whose change no test reaches runs no test", async () => {
   expect(p.only).toEqual([[TYPES]]);
 });
 
-test("a land whose change is not a module runs every test, as a build does", async () => {
+test("a land whose change is not a module runs no test, or only the critical tests", async () => {
   seedTree();
   const { p } = await landed("prose", [["notes.md", "run\n"]], [["b.ts", "export const b = 4;\n"]]);
-  expect(p.only).toEqual([[TESTS, TYPES]]);
+  expect(p.only).toEqual([[TYPES]]);
+  repo.critical = ["b.test.ts"];
+  const crit = await landed("prosecrit", [["notes.md", "run2\n"]], [["b.ts", "export const b = 7;\n"]]);
+  expect(crit.p.only).toEqual([[narrowed("b.test.ts"), TYPES]]);
 });
 
 test("on an unchanged main a land skips the checks when the repo has no critical tests", async () => {
