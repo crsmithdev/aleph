@@ -48,12 +48,13 @@ export function loginPage(): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><link rel="icon" href="data:,"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Aleph — sign in</title>
-<style>:root{--fs-md:14px}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0f1115;color:#e6e8ec;font:16px system-ui,sans-serif}
+<link rel="stylesheet" href="/app.css">
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font:var(--fs-md)/1.5 var(--sans)}
 form{display:flex;flex-direction:column;gap:12px;width:260px}
-input,button{padding:10px 12px;border-radius:6px;border:1px solid #2a2f3a;background:#171a21;color:inherit;font:inherit}
-button{background:#3b6ef5;border-color:#3b6ef5;cursor:pointer}
-#err{color:#ff6b6b;min-height:1.2em;font-size:var(--fs-md)}
+input,button{padding:10px 12px;border-radius:var(--r-ctl);border:1px solid var(--rule);background:var(--sunk);color:inherit;font:inherit}
+button{background:var(--run);border-color:var(--run);color:var(--on-fill);cursor:pointer}
+#err{color:var(--stuck);min-height:1.2em}
 </style></head><body>
 <form id="f"><input type="password" name="password" placeholder="Password" autocomplete="current-password" autofocus required>
 <button type="submit">Sign in</button><div id="err" role="alert"></div></form>
@@ -74,6 +75,7 @@ export function gate(req: Request): Response | null {
   const path = new URL(req.url).pathname;
   if (path === "/api/login") return null;
   if (hasSession(req)) return null;
+  if (req.method === "GET" && path === "/app.css") return null; // the login page's tokens
   if (req.method === "GET" && (path === "/" || path === "/index.html")) {
     return new Response(loginPage(), { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
   }

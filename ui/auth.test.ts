@@ -31,6 +31,13 @@ test("password gate: login, session across servers, logout", async () => {
   expect(html).toContain("<input");
   expect(html).toContain('type="password"');
   expect(html).not.toContain("/api/views");
+  expect(html).not.toMatch(/#0f1115|#e6e8ec|#2a2f3a|#171a21|#3b6ef5|#ff6b6b|6px|14px/i);
+  expect(html).toContain("background:var(--bg)");
+  expect(html).toContain('href="/app.css"');
+  const css = await at("/app.css");
+  expect(css.status).toBe(200);
+  expect(await css.text()).toContain("--bg:");
+  expect((await at("/app.css", { method: "POST" })).status).toBe(401);
   expect((await at("/api/state")).status).toBe(401);
   expect((await at("/lib.js")).status).toBe(401);
   expect((await at("/api/pause", { method: "POST" })).status).toBe(401);
