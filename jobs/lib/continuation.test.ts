@@ -203,6 +203,7 @@ describe("the worker brief", () => {
     const r = run({ worktree: "/w", branch: "factory/fac-1" });
     const sandboxed = brief("rb1", f, r, { ...repo, sandbox: true } as Repo);
     expect(sandboxed).toContain("follow the code-change method at the end of this brief");
+    expect(sandboxed).toContain("do not run the full\nsuite again to get a clean run");
     expect(sandboxed).toContain("## Code-change method\n\nAdapted from karpathy-guidelines");
     expect(sandboxed).not.toContain("name: code-change");
     expect(sandboxed).not.toContain("Skill tool");
