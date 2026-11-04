@@ -128,9 +128,7 @@ export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis 
 export function statCard({ k, v, v2, q, note, trend: tr = "", extra = "", href, key, on = false }) {
   const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
   const qual = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>` : note ? `<span class="q m">${esc(note)}</span>` : "";
-  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${tr}</span><b>${esc(v)}${second}</b>${extra}${qual}`;
-  if (key) return `<button type="button" class="tile sc" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
-  return href ? `<a class="tile sc" href="${esc(href)}">${inner}</a>` : `<div class="tile sc">${inner}</div>`;
+  return tile({ cls: "sc", html: `<span class="r1"><span class="k">${esc(k)}</span>${tr}</span><b>${esc(v)}${second}</b>${extra}${qual}`, key, on, href });
 }
 
 /** The trend of one figure of `d` against the baseline of its own /api/speed answer; empty with no baseline. */

@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { chip, chips, costHtml, crumb, durMs as dur, error, esc, filterBar, idLink, md, pageHead, shortModel, tag, when } from "../lib.js";
+import { chip, chips, costHtml, crumb, durMs as dur, error, esc, filterBar, idLink, md, pager, pageHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -91,8 +91,7 @@ export function chatTurn(id, t) {
 
 /** Under the chat: "20 of 73" and "Show 20 more", which fetches the next turns. */
 const chatPager = (shown, total) => {
-  const more = Math.min(CHAT_PAGE, total - shown);
-  return `<div class="pager chat-pager">${more > 0 ? `<button type="button" class="act" data-chat-from="${shown + 1}">Show ${more} more</button>` : ""}<span class="of">${shown} of ${total}</span></div>`;
+  return pager(shown, total, CHAT_PAGE, { cls: "chat-pager", attr: "data-chat-from", value: (_, n) => n + 1 });
 };
 
 const chatBody = (d) => `<div class="chat">${d.turns.map((t) => chatTurn(d.id, t)).join("")}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}`;

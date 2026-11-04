@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
+import { barList, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
 import { causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -72,8 +72,6 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
 const section = (id, title, n, body, cap) =>
   `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${n === null ? "" : `<span class="count">${n}${cap > 0 ? ` of ${cap}` : ""}</span>`}</div>${body}`;
 
-/** An empty section on this page: one quiet line. */
-const empty = (line) => `<div class="empty"><p class="hint">${esc(line)}</p></div>`;
 const BOX_MIN = 40;
 const STAT_FILES = 12;
 

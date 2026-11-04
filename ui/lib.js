@@ -443,10 +443,10 @@ export function keepWindow(w) {
  * A metric tile. With `key` it selects the detail below it: a button with `data-tile` and `aria-pressed`.
  * With `href` it goes to another page. With neither it has no detail, and it is a plain block. `v` is text, `vHtml` is HTML.
  */
-export function tile({ k, v = "", vHtml, body = "", key, on = false, href }) {
-  const inner = `<span class="k">${esc(k)}</span><b>${vHtml ?? esc(v)}</b>${body}`;
-  if (key) return `<button type="button" class="tile" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
-  return href ? `<a class="tile" href="${esc(href)}">${inner}</a>` : `<div class="tile">${inner}</div>`;
+export function tile({ k, v = "", vHtml, body = "", key, on = false, href, cls = "", html }) {
+  const inner = html ?? `<span class="k">${esc(k)}</span><b>${vHtml ?? esc(v)}</b>${body}`, c = cls ? `tile ${cls}` : "tile";
+  if (key) return `<button type="button" class="${c}" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
+  return href ? `<a class="${c}" href="${esc(href)}">${inner}</a>` : `<div class="${c}">${inner}</div>`;
 }
 export const tiles = (label, html) => `<section class="tiles" aria-label="${esc(label)}">${html}</section>`;
 export const small = (t) => `<small>${esc(t)}</small>`;
@@ -500,9 +500,9 @@ export const lineOption = (labels, name, data, { interval = "auto", step = false
 });
 
 /** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */
-export function pager(shown, total, step = 50) {
+export function pager(shown, total, step = 50, { cls = "", attr = "data-more", value = more => more } = {}) {
   const n = Math.min(shown, total), more = Math.min(step, total - n);
-  return `<div class="pager">${more > 0 ? `<button type="button" class="act" data-more="${more}">Show ${more} more</button>` : ""}<span class="of">${n} of ${total}</span></div>`;
+  return `<div class="pager${cls ? ` ${cls}` : ""}">${more > 0 ? `<button type="button" class="act" ${attr}="${value(more, n)}">Show ${more} more</button>` : ""}<span class="of">${n} of ${total}</span></div>`;
 }
 
 /** A sortable header cell; `sort` is `{key, dir}` (dir 1 up, -1 down). Every table shows the same arrow. */
