@@ -184,7 +184,7 @@ async function review(folder: string): Promise<void> {
       HOME: home, CLAUDE_CONFIG_DIR: join(home, ".claude"),
     };
     delete env.ANTHROPIC_API_KEY;
-    const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [process.env.ALEPH_REVIEW_CMD ?? "claude", "-p", "--strict-mcp-config", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const log = runFile(folder, "review.log");
     const once = async (): Promise<string | null> => {

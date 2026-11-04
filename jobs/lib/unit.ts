@@ -346,7 +346,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
     GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
   };
-  const argv = [workerCmd(), "-p", "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill",
+  const argv = [workerCmd(), "-p", "--strict-mcp-config", "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "Skill",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : [])];
   const text = brief(id, folder, run, repo);
@@ -411,7 +411,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
       phase("scenarios");
       authorCost = await seal(repo, goalId);
     }
-    const argv = [workerCmd(), "-p", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [workerCmd(), "-p", "--strict-mcp-config", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", ...(run.model ? ["--model", run.model] : [])];
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
     const bundle = {
@@ -666,7 +666,7 @@ async function review(id: string, folder: string, run: Run, repo: Repo, dir: str
     try { scenarios = goal === undefined ? "" : readHidden(repo, goal)[SCENARIOS] ?? ""; } catch { return { reason: "reviewer: no verdict (the sealed scenarios are unreadable)", none: true }; }
     const text = reviewPrompt(run.name, spec, diff, findings, scenarios);
     writeFileSync(runFile(folder, "review-prompt.md"), text);
-    const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [reviewerCmd(), "-p", "--strict-mcp-config", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const bundle = {
       bundle: "../out/out.bundle", refs: [`+refs/heads/${branch}:refs/heads/${branch}`],

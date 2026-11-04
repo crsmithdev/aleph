@@ -20,7 +20,7 @@ export async function writeLine(system: string, input: string, max: number): Pro
   delete env.ANTHROPIC_API_KEY;
   env.MAX_THINKING_TOKENS = "0";
   try {
-    const proc = Bun.spawn([cmd, "-p", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const proc = Bun.spawn([cmd, "-p", "--strict-mcp-config", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
     const timer = setTimeout(() => proc.kill(), 30_000);
     const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = await proc.exited;

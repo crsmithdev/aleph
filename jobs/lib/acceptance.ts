@@ -161,7 +161,7 @@ export const sandboxScenarios: ScenarioCheck = async (repo, sha, scenarios) => {
     git(repo.path, "update-ref", ref, sha);
     const b = git(repo.path, "bundle", "create", join(rdir, "out", "accept.bundle"), ref);
     if (!b.ok) return { output: `bundle failed: ${b.out}`, infra: true };
-    const argv = [reviewerCmd(), "-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    const argv = [reviewerCmd(), "-p", "--strict-mcp-config", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL];
     const script = [
       "set -e", "exec 3>&1 1>&2", ...gitPrelude("../out/accept.bundle", [`+${ref}:${ref}`]), `git switch -q --detach ${q(ref)}`,
