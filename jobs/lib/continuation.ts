@@ -104,13 +104,13 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
 
 /**
  * The spec of a goal's next job: the title, the spec, the reasons of the earlier drops (newest first), the notes on
- * the issue, the spec check's notes, and the rerun note when a rescue or the director left one. `rerun` says a rerun
+ * the issue, and the rerun note when a rescue or the director left one. `rerun` says a rerun
  * note went in: the factory clears it once the run starts.
  */
-export function goalBrief(item: { title: string; spec: string; notes: string[] }, name: string, jobs: Job[], checkNotes = ""): { spec: string; rerun: boolean } {
+export function goalBrief(item: { title: string; spec: string; notes: string[] }, name: string, jobs: Job[]): { spec: string; rerun: boolean } {
   const again = rerunNote(name);
   const drops = jobsNamed(name, null, jobs).filter((j) => j.at(-1)!.run.condition === "dropped" && j.at(-1)!.run.reason).map((j) => `- ${j.at(-1)!.run.reason}`).reverse();
-  const spec = `# ${item.title}\n\n${item.spec.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${checkNotes ? `\n## Spec check notes\n\nThe spec check found these problems in the spec; none of them stops the goal. Settle each one with the answer you would recommend and print \`DEFAULT:\` for it.\n\n${checkNotes}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
+  const spec = `# ${item.title}\n\n${item.spec.trim()}\n${drops.length ? `\n## Reasons of the earlier drops, newest first\n\n${drops.join("\n")}\n` : ""}${item.notes.length ? `\n## Notes on the issue\n\n${item.notes.join("\n")}\n` : ""}${again ? `\n## Note on the last run\n\n${again}\n` : ""}`;
   return { spec, rerun: !!again };
 }
 

@@ -44,7 +44,7 @@ const GOALS_NEW: Row[] = [
   { name: "new goal: working", stage: "working", build: async () => newRun(goal(), { kind: "build", condition: "running" }) },
   // GOALS_NEW[1] is the blocked goal that the `aleph status` test below reads.
   { name: "new goal: blocked", stage: "blocked", why: /after fac-/, build: async () => goal({ after: [ref(goal())] }) },
-  { name: "new goal: planning", stage: "planning", build: async () => newRun(goal(), { kind: "plan", condition: "running" }) },
+  { name: "new goal: planning", stage: "planning", build: async () => goal({ plan: "true" }) },
 ];
 
 // A commit on origin/main that names goal `goalRef` (`<n>.<k>`) and its issue `n`, as the land of a goal does; returns its sha.

@@ -119,7 +119,7 @@ async function chrisSignals(cfg: LangfuseConfig, from: Date, seen: Set<string>):
     .sort((a, b) => Date.parse(a.timestamp!) - Date.parse(b.timestamp!));
   const lastBySession = new Map<string, Trace>();
   const out: Signal[] = [];
-  // A factory worker's or triage's session id is its run's job or session; its trace is named "factory ...".
+  // A factory worker's or intake's session id is its run's job or session; its trace is named "factory ...".
   const factory = new Set(allRuns().flatMap((e) => [e.run.job, e.run.session].filter((x): x is string => !!x)));
   for (const t of traces) {
     if (t.name?.startsWith("factory ") || (t.sessionId && factory.has(t.sessionId))) continue;

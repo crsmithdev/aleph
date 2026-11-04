@@ -19,7 +19,8 @@ import { uiFetchTtl as fetchTtlSetting } from "../../jobs/lib/settings.ts";
 
 export { labels };
 
-export interface Place { key: string }
+/** A repo of the store. With `author`, intake also takes in an issue filed with a spec before it builds. */
+export interface Place { key: string; author?: boolean }
 
 const MAIN = "main";
 const ATTEMPTS = 5;
@@ -195,17 +196,27 @@ export const parentOf = (doc: Doc, item: Issue): Issue | undefined => (item.sub 
 export const planSet = (item: Issue): boolean => item.fm.plan === "true";
 /** The flake tracker: a note log, never built. */
 export const isTracker = (item: Issue): boolean => item.fm.tracker === "true";
-/** An open issue a factory run can build: it has a spec, no parts and no Ask, and is neither to plan nor the tracker. */
-export const isBuildable = (doc: Doc, item: Issue): boolean =>
-  status(item) === "open" && (parentOf(doc, item) === undefined || status(parentOf(doc, item)!) !== "parked") && !awaitsChris(item) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0;
+/** Whether intake took the item in: its `intake` field, or a triage `build` or `plan` note from before intake. */
+export const takenIn = (item: Issue): boolean => item.fm.intake !== undefined || item.notes.some((n) => /: triage: (build|plan)\b/.test(n));
+/**
+ * An open issue a factory run can build: it has a spec, no parts and no Ask, and is neither to plan nor the tracker.
+ * In a repo with `author`, a top-level issue builds only after intake took it in.
+ */
+export const isBuildable = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
+  status(item) === "open" && (parentOf(doc, item) === undefined || status(parentOf(doc, item)!) !== "parked") && !awaitsChris(item) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0
+  && (item.sub !== undefined || !repo.author || takenIn(item));
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
 /** The item's areas: its `areas`. */
 export const areasOf = (item: Issue): string[] => list(item.fm.areas);
 
-/** An item triage leaves alone: asking, a part, the tracker, to plan, or with a spec or parts. */
-export const isSorted = (doc: Doc, item: Issue): boolean =>
-  awaitsChris(item) || item.sub !== undefined || isTracker(item) || planSet(item) || !!item.spec.trim() || partsOf(doc, item).length > 0;
+/**
+ * An item intake leaves alone: asking, a part, the tracker, or, unless it is to plan, with parts, taken in, or with a spec.
+ * In a repo with `author`, a spec alone does not sort it: intake takes in an issue filed with a spec too.
+ */
+export const isSorted = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
+  awaitsChris(item) || item.sub !== undefined || isTracker(item)
+  || (!planSet(item) && (partsOf(doc, item).length > 0 || takenIn(item) || (!repo.author && !!item.spec.trim())));
 
 /** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */
 export function label(item: Issue, add: string[], remove: string[] = []): void {
@@ -256,7 +267,7 @@ export function byPriority<T extends { item: Issue }>(entries: T[]): T[] {
 export function goals<R extends Place>(repos: R[], lists: Reader = reader()): { repo: R; item: Issue }[] {
   return byPriority(repos.flatMap((repo) => {
     const doc = lists.list(repo.key);
-    return (doc?.items ?? []).filter((i) => isBuildable(doc!, i)).map((item) => ({ repo, item }));
+    return (doc?.items ?? []).filter((i) => isBuildable(doc!, i, repo)).map((item) => ({ repo, item }));
   }));
 }
 
@@ -269,7 +280,7 @@ export function goal(repo: Place, id: number | string): Issue | null {
   const r = reader();
   const doc = r.list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
-  return doc && item && isBuildable(doc, item) ? item : null;
+  return doc && item && isBuildable(doc, item, repo) ? item : null;
 }
 
 // The writes.
@@ -302,12 +313,12 @@ export const close = (repo: Place, id: number | string, text: string): string | 
 
 /**
  * Change item `id` with `change` as one commit, while it is still open and not
- * sorted: triage's write. False when the item is gone, closed or sorted.
+ * sorted: intake's write. False when the item is gone, closed or sorted.
  */
 export function sort(repo: Place, id: number | string, message: string, change: (item: Issue, doc: Doc) => void): boolean {
   const w = writeList(repo, message, (doc) => {
     const item = issues.find(doc, id);
-    if (!item || status(item) !== "open" || isSorted(doc, item)) return null;
+    if (!item || status(item) !== "open" || isSorted(doc, item, repo)) return null;
     change(item, doc);
     return true;
   });

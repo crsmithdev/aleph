@@ -1,6 +1,6 @@
 # Factory
 
-The factory builds issues without you. It triages each open issue into goals, starts a worker for each ready goal, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
+The factory builds issues without you. It takes in each open issue as goals, starts a worker for each ready goal, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
 
 A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Factory tasks](factory-tasks.md) lists each task the factory runs, what starts it and what stops two runs from doing the same work. The design is in [the seed factory spec](specs/2026-10-26-seed-factory.md).
 
@@ -22,7 +22,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph dispatch` | Starts a run for each ready goal, up to the caps |
 | `aleph tick` | Does the periodic work that is due, and the sweep; the timer runs it |
 | `aleph suite` | Runs the full checks on `origin/main` of each factory repo whose main moved since the last run, and records the baseline; its timer runs it |
-| `aleph triage <repo>-<n>` | Triages one issue now |
+| `aleph intake <repo>-<n>` | Takes in one issue now |
 | `aleph status [<repo>-<n>[.<k>]] [--json]` | The state of one issue, or of each open issue in the recent repos |
 | `aleph jobs` | Open jobs, then the jobs that ended in the last 24 hours |
 | `aleph report` | Runs not yet shown, how far each checkout is behind `origin/main`, and health lines |
@@ -37,27 +37,29 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 ## How an issue becomes a commit
 
 ```text
-issue ──triage──▶ goal(s) ──dispatch──▶ worker run ──▶ checks ──▶ reviewer ──▶ land
-                    ▲                       ▲             │           │
-                    └── planner splits      └─ fix round ─┴───────────┘
-                        a large issue          (at most ALEPH_FIX_ROUNDS)
+issue ──intake──▶ goal(s) ──dispatch──▶ worker run ──▶ checks ──▶ reviewer ──▶ land
+         │  ▲                               ▲             │           │
+ a large │  └─ code checks the spec,        └─ fix round ─┴───────────┘
+ issue   │     sends it back once              (at most ALEPH_FIX_ROUNDS)
+         └──▶ parts (goals)
 ```
 
-### Triage
+### Intake
 
-An issue added with `aleph issue add`, a note on an issue that waits for you, and a worker's `FOLLOWUP:` line each start a triage at once, under the dispatch's gates. Each dispatch, and so each run's end, starts a triage for the open issues that have no spec, oldest first, at most `ALEPH_TRIAGE_CAP` (5), while live runs are under the live cap: a triage that the live cap held starts when a run ends. A triage run that gives no route starts the next try at once.
+Intake is the one agent run before work starts on an issue. An issue added with `aleph issue add`, a note on an issue that waits for you, and a worker's `FOLLOWUP:` line each start an intake at once, under the dispatch's gates. Each dispatch, and so each run's end, starts an intake for the open issues that are not sorted, oldest first, at most `ALEPH_INTAKE_CAP` (5), while live runs are under the live cap: an intake that the live cap held starts when a run ends. An intake run that gives no reply starts the next try at once. An issue is not sorted when it has no spec; in a repo with `"author": true` in the registry, an issue filed with a spec is not sorted either until intake takes it in. An issue with `plan` set (a run of it reached its time box, or you asked to plan the rest) goes to intake from the dispatch, to be split. An Ask that intake sets starts the director at once.
 
-Triage is one read-only run per issue (`claude-opus-5-5`, with Read, Grep and Glob). It returns a route:
+Code decides first, with no run: an issue that a commit on main names in an `Issue:` trailer is done, and an issue of kind `flake` becomes a note on the flake tracker. Else intake is one read-only run (`claude-opus-5-5`, with Read, Grep and Glob, on a clone of `origin/main`) that returns a route as JSON:
 
 | Route | Does |
 |---|---|
-| `build` | Writes the issue's spec |
-| `plan` | Writes the spec and sets `plan`, so a planner run (`claude-opus-5-5`) splits it into goals |
+| `build` | Writes the issue's spec (Goal, Edit surface, Oracle) and sets `intake: build`; for a large issue, files 2 to 6 parts, each with its own spec |
 | `close` | Marks the issue done, with the reason as `closed_why` |
-| `done` | Marks the issue done |
-| `ask` | Sets an Ask with a question and options; a check that only the host can run has the reason `host-check` |
+| `done` | Marks the issue done; the commit must be on main |
+| `ask` | Sets an Ask with a question and options |
 
-A malformed route or a failed run leaves the issue unchanged. After `ALEPH_TRIAGE_TRIES` (2) such runs, the issue gets an Ask with the reason `triage-failed`.
+Code then checks each spec: no empty section, no placeholder (`???`, `TBD`, `<name>`), each Edit surface path on main or marked new, an Oracle that names a command or a test file, no `bun test` path that bun reads as a name filter, each test file the Oracle names on main or in the Edit surface, part titles within the title rule, and `after` refs that exist. A failed check sends the run back once, in the same session, with the problems. A second failure sets an Ask with the reason `intake-failed`. A worker's follow-up whose Edit surface is only test files closes as a test-only follow-up.
+
+A run with no reply or a failed process leaves the issue unchanged. After `ALEPH_INTAKE_TRIES` (2) such runs, the issue gets an Ask with the reason `intake-failed`. The run's cost is in its state, as for the other roles.
 
 ### The worker run
 
@@ -92,7 +94,7 @@ A run is stuck when:
 - it made no commit;
 - a check fails after the fix rounds;
 - a check gives no verdict: a clock (`ALEPH_CHECK_TIMEOUT`) or a signal ended it. Its cause is `infra`, it is not a fix round, and the rescue checks the branch again once;
-- it reaches the time box (`ALEPH_JOB_TIMEOUT`, 30 minutes). The factory drops it and sends the issue to the planner to split, or asks you when it is a part or already split;
+- it reaches the time box (`ALEPH_JOB_TIMEOUT`, 30 minutes). The factory drops it and sends the issue to intake to split, or asks you when it is a part or already split;
 - its output file does not grow for `ALEPH_STALL_SECONDS` (600). The reason is `stalled: no output for 10 minutes`.
 
 A failed check sends the job back to its worker on the same branch, with a note that names the check and holds the last 80 lines of its log. This happens at most `ALEPH_FIX_ROUNDS` (2) times a job. After the last round, the run stays stuck as `<check> failed after <n> fix rounds`.
@@ -131,12 +133,12 @@ Each dispatch first does its steps: it starts the next steps a pause kept, rescu
 |---|---|
 | Pause | `aleph pause` (`~/.aleph/factory/paused`), until `aleph resume`. A paused dispatch does nothing, not even its steps |
 | Baseline | The last `aleph suite` run failed (kept in `~/.aleph/factory/baseline.json`). It holds until a later suite run passes, also after main moves. A main that no suite run has checked does not hold |
-| Not ready | The goal is done, waits on an issue in its `after` list, has an open job, or has a planner or spec check running |
+| Not ready | The goal is done, waits on an issue in its `after` list, or has an open job |
 | Live cap | `ALEPH_LIVE_CAP` runs are live |
 | Busy file | A file in the goal's Edit surface had 3 land conflicts in 7 days, and another open job names it |
 | Loop guard | The goal's last 3 runs made no commit, or it started 3 times in 60 minutes. The dispatch sets an Ask in place of a start |
 
-A goal that no gate holds goes to its spec check (a repo with `"author": true` in the registry) or the planner, and then starts. GitHub CI on main does not gate.
+A goal that no gate holds starts. GitHub CI on main does not gate.
 
 A stuck or failed run holds only its own goal, through its open job. The rescue takes a safe action on it once per goal per case, or sets a `rescue` Ask. A lost run (its process ended and wrote no end) is marked failed and its goal reruns once; a second lost run of the goal sets a `rescue` Ask.
 
@@ -146,11 +148,11 @@ The firefighter is code in the tick, every 5 minutes (`jobs/lib/firefighter.ts`)
 
 ## Asks and Always rules
 
-Whatever would wait for you is an Ask, of kind `input` or `approval`, with a reason, a question and options. Every new Ask goes to the director first, at once: the write that sets an Ask (a dispatch, a run's end, a triage, the corrections, the firefighter) starts `aleph director`. It is one read-only run of `claude-fable-5-1` per Ask, which decides it with actions that code checks and applies, or escalates it to you with its case text (situation, effects and recommendation). Code keeps an escalation list that the director cannot decide: a land that changes a security path or `bun.lock`, a memory proposal, a host check, a second run-cap or rescue Ask on the same goal, and closing or dropping an issue you filed. Each decision is a Director entry in the Gates page log. The Status page lists the Asks under "Awaiting you"; an Ask shows its buttons only once the director has escalated it. The Always button writes a rule to `~/.aleph/factory/always.json` that maps the reason to an action, and the next Ask with that reason takes the action without you. `aleph always` lists and changes the same rules.
+Whatever would wait for you is an Ask, of kind `input` or `approval`, with a reason, a question and options. Every new Ask goes to the director first, at once: the write that sets an Ask (a dispatch, a run's end, an intake, the corrections, the firefighter) starts `aleph director`. It is one read-only run of `claude-fable-5-1` per Ask, which decides it with actions that code checks and applies, or escalates it to you with its case text (situation, effects and recommendation). Code keeps an escalation list that the director cannot decide: a land that changes a security path or `bun.lock`, a memory proposal, a host check, a second run-cap or rescue Ask on the same goal, and closing or dropping an issue you filed. Each decision is a Director entry in the Gates page log. The Status page lists the Asks under "Awaiting you"; an Ask shows its buttons only once the director has escalated it. The Always button writes a rule to `~/.aleph/factory/always.json` that maps the reason to an action, and the next Ask with that reason takes the action without you. `aleph always` lists and changes the same rules.
 
 ## The tick
 
-The tick starts only periodic work, each step on its own due rule: the corrections and the monitor once a day, the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready goal with no run, an issue to triage, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep writes `missed: <key>` in `tick.log`, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
+The tick starts only periodic work, each step on its own due rule: the corrections and the monitor once a day, the episodes every 30 minutes, the CI read and the firefighter every 5 minutes, the smoke test and the sweep every tick. No transition waits for it. The sweep is the safety net: it records what could move and does not (a passed run with no land, a ready goal with no run, an issue for intake, an Ask with no director run, a job to rescue). Work it sees at two ticks in a row is missed: the sweep writes `missed: <key>` in `tick.log`, once per key, and starts a dispatch. A missed key is a bug in the transition that should have started it. When a main with a red record moves (a fix by hand), the sweep starts `aleph suite` once for the new commit. A tick that finds nothing due reads only local files.
 
 ## Flakes and health
 
@@ -175,10 +177,10 @@ The live cap is read from its variable first, then from `~/.aleph/factory/caps.j
 | `ALEPH_STALL_SECONDS` | 600 | Seconds without output before a run is stopped |
 | `ALEPH_FIX_ROUNDS` | 2 | Fix rounds per job |
 | `ALEPH_LAND_BATCH` | 8 | Runs one land may push together |
-| `ALEPH_TRIAGE_CAP` | 5 | Triage runs one dispatch starts |
-| `ALEPH_TRIAGE_TRIES` | 2 | Failed triage runs before an Ask |
+| `ALEPH_INTAKE_CAP` | 5 | Intake runs one dispatch starts |
+| `ALEPH_INTAKE_TRIES` | 2 | Intake runs with no reply before an Ask |
 | `ALEPH_DIRECTOR_CAP` | 3 | Director runs per `aleph director`, one per Ask |
 | `ALEPH_WORKER_CMD` | `claude` | The worker command |
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 
-For each agent role (`TRIAGE`, `PLAN`, `SPECCHECK`, `DIRECTOR`, `MONITOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.
+For each agent role (`INTAKE`, `DIRECTOR`, `MONITOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. Tests use these to put in a fake.

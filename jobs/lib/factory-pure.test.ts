@@ -54,7 +54,7 @@ test("a dispatch with checks, three factory repos and no open goals fetches the 
   const path = process.env.PATH;
   process.env.PATH = `${join(ctx.base, "bin")}:${path}`;
   try {
-    const out = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
+    const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
     expect(out.started).toEqual([]);
   } finally {
     process.env.PATH = path;

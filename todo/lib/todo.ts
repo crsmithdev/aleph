@@ -19,7 +19,7 @@ export interface Issue {
   sub?: number;
   title: string;
   fm: Frontmatter;
-  /** What was asked. Verbatim. Empty on a part the planner wrote. */
+  /** What was asked. Verbatim. Empty on a part intake wrote. */
   request: string;
   /** What a run builds: Markdown with the sections `## Goal`, `## Edit surface` and `## Oracle`. Verbatim. */
   spec: string;

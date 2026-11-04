@@ -17,7 +17,7 @@ import { firefight } from "./firefighter.ts";
 import { git } from "./git.ts";
 import { factoryLog } from "./layout.ts";
 import { allJobs, loadRegistry, type Entry, type Repo } from "./ledger.ts";
-import { suiteDetached, triageDetached } from "./launch.ts";
+import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "./monitor.ts";
 import { toRescue } from "./rescue.ts";
 import { smokeStep } from "./smoke.ts";
@@ -58,14 +58,14 @@ export function due(s: TickState, step: Periodic, now: number): boolean {
 export interface SweepPorts { dispatch(): Promise<unknown>; suite(): void }
 const sweepPorts: SweepPorts = { dispatch: runDispatch, suite: suiteDetached };
 
-/** A triage or director run of `on` that has not ended: the work is in hand. */
+/** An intake or director run of `on` that has not ended: the work is in hand. */
 const busy = (runs: Entry[], kind: string, on: string) => runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running");
 
 /**
  * The safety net. It records what could move now and does not, each key with the time a tick first saw it: `stalled`
  * (land, goal, ingest), an Ask with no case text and no director run (`ask:`), and a job to rescue (`rescue:`). A key
  * that a tick saw before is missed. Each missed key is logged once as `missed: <key>` and one dispatch starts them all:
- * its lands, rescues and goals, then the triage queue and the director. A red main that moved since its record (a fix
+ * its lands, rescues and goals, then the intake queue and the director. A red main that moved since its record (a fix
  * by hand) starts the suite once per commit. It reads the store and the repos as last fetched. Returns the missed keys.
  */
 export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPorts): Promise<string[]> {
@@ -76,7 +76,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);
   const seen = readStalls();
   writeStalls(Object.fromEntries(keys.map((k) => [k, seen[k] ?? new Date(now).toISOString()])));
-  const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && busy(runs, "triage", k.slice("ingest:".length))));
+  const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && busy(runs, "intake", k.slice("ingest:".length))));
   const missed = over.filter((k) => !s.missed.includes(k));
   s.missed = over;
   for (const k of missed) factoryLog(`missed: ${k}`);
@@ -94,9 +94,9 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   return missed;
 }
 
-/** What the tick starts besides the sweep's ports: the triage of an issue the firefighter filed. */
-export interface TickPorts extends SweepPorts { triage(repo: Repo, id: number): void }
-const tickPorts: TickPorts = { ...sweepPorts, triage: triageDetached };
+/** What the tick starts besides the sweep's ports: the intake of an issue the firefighter filed. */
+export interface TickPorts extends SweepPorts { intake(repo: Repo, id: number): void }
+const tickPorts: TickPorts = { ...sweepPorts, intake: intakeDetached };
 
 /** `aleph tick`: each step that is due at `now`. Returns what it did, for the tick's JSON. */
 export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promise<Record<string, unknown>> {
@@ -118,9 +118,9 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
   if (due(s, "firefight", now)) {
     s.last.firefight = at;
     const f = await firefight(undefined, now);
-    // A filed red is an issue to triage; a slow land's rescue Ask is the director's.
+    // A filed red is an issue for intake; a slow land's rescue Ask is the director's.
     const reg = loadRegistry();
-    for (const x of f?.filed ?? []) if ("filed" in x && reg[x.repo]) p.triage(reg[x.repo]!, x.filed);
+    for (const x of f?.filed ?? []) if ("filed" in x && reg[x.repo]) p.intake(reg[x.repo]!, x.filed);
     if (f?.asked.length) directIfNew();
     if (f && (f.filed.length || f.asked.length)) out.firefighter = f;
   }

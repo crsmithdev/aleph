@@ -20,10 +20,9 @@ import * as issues from "../todo/lib/todo.ts";
 import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
 import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
-import { behind, directorStep, planNow, report, runDispatch, setPaused, suiteStep, triageNow } from "./lib/factory.ts";
+import { behind, directorStep, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/factory.ts";
 import { runTick } from "./lib/tick.ts";
-import { dispatchDetached, triageDetached } from "./lib/launch.ts";
-import { runSpecCheck } from "./lib/spec-check.ts";
+import { dispatchDetached, intakeDetached } from "./lib/launch.ts";
 import { health } from "./lib/factory-status.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/monitor-table.ts";
 import { runMonitor, tableOf } from "./lib/monitor.ts";
@@ -158,7 +157,7 @@ function dispatchAfterGoal(repo: Repo, item: issues.Issue): void {
 /**
  * aleph issue <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
  * registry has a list in the work store. The verbs are todo/lib/issues.ts; this
- * parses argv, prints, and starts the dispatch or triage a write calls for.
+ * parses argv, prints, and starts the dispatch or intake a write calls for.
  */
 async function todoCmd(): Promise<void> {
   const [verb, repoKey, ...args] = positional;
@@ -198,7 +197,7 @@ async function todoCmd(): Promise<void> {
       out(a.result);
       dispatchAfterGoal(repo, a.item);
       const list = store.reader().list(repo.key);
-      if (list && !store.isSorted(list, a.item)) triageDetached(repo, a.item.id);
+      if (list && !store.isSorted(list, a.item, repo)) intakeDetached(repo, a.item.id);
       return;
     }
     case "list": {
@@ -226,15 +225,15 @@ async function todoCmd(): Promise<void> {
       const n = verbs.note(repo, id, text, verbs.isAnswer(text, jobId()));
       warn(n.follow);
       out(n.result);
-      if (n.answered) triageDetached(repo, n.result.id);
+      if (n.answered) intakeDetached(repo, n.result.id);
       return;
     }
     case "decide": {
       const d = verbs.decide(repo, id, text, fields);
       warn(d.follow);
       out(d.result);
-      // The note is Chris's answer: the triage that follows a note takes the issue from here.
-      triageDetached(repo, d.item.id);
+      // The note is Chris's answer: the intake that follows a note takes the issue from here.
+      intakeDetached(repo, d.item.id);
       return;
     }
     case "edit": {
@@ -291,25 +290,11 @@ function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { s
   for (const r of rows) { console.log(r.repo); printRows(r.items, r.repo, "  "); }
 }
 
-/** `aleph triage <repo>-<n>`: triage one issue now, under the dispatch's gates. */
-async function triageCmd(): Promise<void> {
-  const ref = issues.parseRef(rest[0] ?? "") ?? refuse("usage: aleph triage <repo>-<n>");
+/** `aleph intake <repo>-<n>`: take in one issue now, under the dispatch's gates. */
+async function intakeCmd(): Promise<void> {
+  const ref = issues.parseRef(rest[0] ?? "") ?? refuse("usage: aleph intake <repo>-<n>");
   const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
-  out(await triageNow(repo, ref.id));
-}
-
-/** `aleph plan <repo>-<n>`: plan one issue now, under the dispatch's gates. */
-async function planCmd(): Promise<void> {
-  const ref = issues.parseRef(rest[0] ?? "") ?? refuse("usage: aleph plan <repo>-<n> (an issue)");
-  const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
-  out(await planNow(repo, ref.id));
-}
-
-/** `aleph spec-check <repo>-<ref>`: the detached spec check the dispatch starts for a goal; it ends with a dispatch. */
-async function specCheckCmd(): Promise<void> {
-  const ref = issues.parseGoalRef(rest[0] ?? "") ?? refuse("usage: aleph spec-check <repo>-<ref> (a goal)");
-  const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
-  out(await runSpecCheck(repo, ref.id));
+  out(await intakeNow(repo, ref.id));
 }
 
 /** `aleph dispatch`: start every ready goal up to the live cap. A run's end and `aleph issue` call it. */
@@ -437,9 +422,7 @@ try {
       break;
     }
     case "dispatch": await dispatchCmd(); break;
-    case "triage": await triageCmd(); break;
-    case "plan": await planCmd(); break;
-    case "spec-check": await specCheckCmd(); break;
+    case "intake": await intakeCmd(); break;
     case "status": statusCmd(); break;
     case "report": reportCmd(); break;
     case "pause": setPaused(true); out({ paused: true }); break;

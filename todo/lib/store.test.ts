@@ -139,11 +139,11 @@ describe("the writes", () => {
     store.writeList(r, "ask", (doc) => { setAsk(issues.find(doc, 2)!, { kind: "input", reason: "host-check", question: "Check it.", options: [], why: [] }); return true; });
     store.close(r, 3, "x");
     const before = commits();
-    expect(store.sort(r, 2, "triage", () => { })).toBe(false);
-    expect(store.sort(r, 3, "triage", () => { })).toBe(false);
-    expect(store.sort(r, 9, "triage", () => { })).toBe(false);
+    expect(store.sort(r, 2, "intake", () => { })).toBe(false);
+    expect(store.sort(r, 3, "intake", () => { })).toBe(false);
+    expect(store.sort(r, 9, "intake", () => { })).toBe(false);
     expect(commits()).toBe(before);
-    expect(store.sort(r, 1, "triage", (i) => { i.spec = "Do it."; })).toBe(true);
+    expect(store.sort(r, 1, "intake", (i) => { i.spec = "Do it."; })).toBe(true);
     expect(item(r, 1).spec).toBe("Do it.");
   });
 });

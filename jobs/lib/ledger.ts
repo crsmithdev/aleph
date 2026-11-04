@@ -32,12 +32,15 @@ export interface TestRecord { ran: number; passed: number; failed: number; skipp
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
-  /** `firefighter` is read only: runs from before the firefighter became code (v6) keep it. */
-  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "director" | "explain" | "agent" | "monitor";
+  /**
+   * `firefighter` is read only: runs from before the firefighter became code (v6) keep it. `triage` and `plan` are read only
+   * too: runs from before intake took their work (4 Nov 2026) keep them.
+   */
+  kind: "build" | "plain" | "land" | "intake" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "director" | "explain" | "agent" | "monitor";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   condition: State; phase?: string;
   reason?: string; question?: string; say?: string;
-  /** A triage run: the route it applied to its issue. */
+  /** An intake run (a triage run before it): the route it applied to its issue. `plan` is a triage route only. */
   route?: "build" | "plan" | "close" | "done" | "ask";
   /** Why the run stopped: read it with `causeOf`. A drop replaces `reason` and keeps this. */
   cause?: Cause;
@@ -103,7 +106,7 @@ export interface Repo {
   sandbox: boolean;
   /** Globs a factory run may not change without Chris. */
   held: string[];
-  /** The spec check runs before each goal's first worker run. */
+  /** Intake also takes in an issue filed with a spec, before its first worker run. */
   author?: boolean;
   /** Globs of test files that every land runs, besides the tests its change reaches. */
   critical?: string[];

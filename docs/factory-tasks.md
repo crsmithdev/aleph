@@ -4,8 +4,7 @@ This table states what starts each factory task, what it does and what stops two
 
 | Task | Trigger | Does | Triggers next | Human re-enters | Stops duplicate work |
 |---|---|---|---|---|---|
-| Triage | Tick; an open issue with no goal | Read-only run gives one verdict | Goal, close, done or Ask | Ask, or 2 runs with no verdict | Lock `triage-<issue>` |
-| Plan | Dispatch; `needsPlan` says the goal is large | Read-only run splits it into 2-6 goals | The child goals | Goal runs as one worker after 2 bad replies | Lock `plan-<repo>-<id>` |
+| Intake | Tick, an issue write, or the dispatch for an issue with `plan`; an open issue that is not sorted | Code closes a done or flake issue; else a read-only run gives one route, with the spec or 2-6 parts, and code checks the spec | Goal(s), close, done or Ask | Ask after a second failed check, or 2 runs with no reply | Lock `intake-<issue>`; the issue is read again under it |
 | Build | Dispatch; a ready goal under the caps | Worker, checks, then review | Land, or a fix round | Ask after the fix rounds | Lock `goal-<name>`; the status is read again under it |
 | Review | Inside a build, after the checks | Reviewer reads the diff cold | Pass, or a send-back | Ask on a second no verdict | One per build, in the unit |
 | Land | A build passes, or `aleph land` | Merges main, checks, pushes | Nothing | Conflict that a rework cannot clear | Lock `land-start-<repo>-<name>` |
@@ -18,7 +17,7 @@ This table states what starts each factory task, what it does and what stops two
 
 | Source | Files | Stops the same ticket twice |
 |---|---|---|
-| Worker `FOLLOWUP:` line | An issue with source `worker` | `sameTopic` against open issues; a match is a note. Triage has its own duplicate check after that |
+| Worker `FOLLOWUP:` line | An issue with source `worker` | `sameTopic` against open issues; a match is a note. Intake has its own duplicate check after that |
 | Worker `FLAKE:` line | A note on the flake tracker, no issue | One open tracker per repo |
 | Corrections | A proposal per lesson | Lesson state |
 

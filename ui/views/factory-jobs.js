@@ -4,8 +4,8 @@ import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } fr
 
 export const STAGES = [
   ["lead", "Lead time", "From filing to the last land. The stages do not add up to it, because medians do not add."],
-  ["intake", "Triage", "From filing to the end of the first triage."],
-  ["queue", "Queue", "From triage to the first agent run. This includes waits for a slot or for another issue."],
+  ["intake", "Intake", "From filing to the end of the first intake."],
+  ["queue", "Queue", "From intake to the first agent run. This includes waits for a slot or for another issue."],
   ["implement", "Build", "From the first agent run to the last finish with work to land."],
   ["land", "Land", "From the finish to the land. This includes waits for a review or for Chris."],
 ];

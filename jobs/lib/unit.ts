@@ -699,7 +699,7 @@ export function sameTopic(a: string, b: string): boolean {
   return [...short].filter((w) => long.has(w)).length / short.size >= (shared ? 0.5 : 0.7);
 }
 
-/** A worker's `FLAKE:` lines become notes on the repo's flake tracker; they file no issue and start no triage. */
+/** A worker's `FLAKE:` lines become notes on the repo's flake tracker; they file no issue and start no intake. */
 function noteFlakes(repo: Repo, run: Run, lines: string[]): void {
   for (const line of lines) noteFlake(repo, `job ${run.name}: ${line}`);
 }

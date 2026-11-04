@@ -38,6 +38,7 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
     "no-commit": { reason: "no-commit", question: "ended with no commit, so the factory stopped" },
     "run-cap": { reason: "run-cap", question: "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it." },
     "spec-check": { reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" },
+    "intake-failed": { reason: "intake-failed", question: "Intake failed: the spec: the Oracle is empty" },
     "triage-failed": { reason: "triage-failed", question: "triage: no verdict in 2 runs: failed: x" },
     "part-dropped": { reason: "part-dropped", question: "A goal was dropped." },
     "acceptance-failed": { reason: "acceptance-failed", question: "acceptance: fail again" },

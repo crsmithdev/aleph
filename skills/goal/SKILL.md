@@ -3,13 +3,13 @@ name: goal
 description: >
   Turn a goal of one or two sentences into a goal issue for the factory: a
   short grill, then one issue with its spec in the work store. Use when Chris
-  runs /aleph:goal. It is optional: items also come from the browser, triage
+  runs /aleph:goal. It is optional: items also come from the browser, intake
   and the chat, without a grill.
   NOT for: a design tree (use /aleph:grill-me), a spec (use /aleph:to-spec).
 ---
 
 The factory (`docs/specs/2026-10-26-seed-factory.md`) runs one
-worker per open issue with a spec, with nobody to ask; a planner splits a large
+worker per open issue with a spec, with nobody to ask; intake checks the spec and splits a large
 goal first. The issue is all the worker gets, so it must say what done is and
 how to check it.
 
@@ -80,9 +80,9 @@ BODY
 ```
 
 The text on stdin is the spec; the command files the issue with it in one
-commit, and no triage run starts. When it runs after another, add
+commit, and intake takes it in before the first run. When it runs after another, add
 `--after <id>`. An existing issue takes a spec with
 `aleph issue edit <repo> <id> --spec -`.
 
-Then say the issue number (`<repo>-<n>`) and that the dispatch starts the run at once. `aleph report` at the next session start shows the result,
+Then say the issue number (`<repo>-<n>`) and that intake takes it in and the dispatch starts the run. `aleph report` at the next session start shows the result,
 and the worker's `DEFAULT:` lines show the questions it answered itself.

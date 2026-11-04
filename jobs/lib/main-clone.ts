@@ -1,6 +1,6 @@
 /**
  * The main clone: a fresh clone of the repo at `origin/<main>`, made just before a read-only agent run
- * (triage, the planner, the spec check) and removed after it. The repo's checkout can be behind
+ * (intake) and removed after it. The repo's checkout can be behind
  * `origin/<main>`; the clone is not, so the agent reads the code that is on main now.
  */
 import { mkdtempSync, rmSync } from "node:fs";

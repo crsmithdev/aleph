@@ -1,12 +1,12 @@
 /**
  * A goal's spec: the Markdown sections a goal issue must have, the paths of its Edit surface, and
- * its version. The spec check, the planner, the director, the rescue, the reviewer and the busy-file wait all
+ * its version. Intake, the director, the rescue, the reviewer and the busy-file wait all
  * read a spec through this module.
  */
 import { createHash } from "node:crypto";
 import { section, type Issue } from "../../todo/lib/todo.ts";
 
-/** The sections the spec check reads. A goal without one of them cannot be checked. */
+/** The sections a goal's spec has. */
 const REQUIRED = ["Goal", "Edit surface", "Oracle"] as const;
 
 /** The required sections that are absent or empty in `body`, in order. */
@@ -41,7 +41,7 @@ export const specVersion = (item: Issue): string => hash(textOf(item));
 
 /**
  * Whether `recorded`, a version written earlier, is the goal's version now. Notes and run folders
- * written before this module hold older forms: the spec check's hash of the trimmed spec, and the
+ * written before this module hold older forms: the old spec check's hash of the trimmed spec, and the
  * rescue's JSON text of the title, request and spec. Both still count.
  */
 export function isVersion(item: Issue, recorded: string): boolean {

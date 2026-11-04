@@ -6,13 +6,13 @@
  * `agentCall` is the other kind: a `claude` call that works in a git worktree (the worker and the reviewer).
  */
 import { NO_SKILLS } from "./role-skill.ts";
-import { closeSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { outcome, replyOf, type Outcome } from "./gate.ts";
 import { allRuns, lock, readRun, runsDir, nextStamp, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
 import { roleCmd, roleSeconds } from "./settings.ts";
 import { runFile } from "./run-files.ts";
-import { schemaFlags, structuredOf } from "./structured.ts";
+import { schemaFlags, sessionOf, structuredOf } from "./structured.ts";
 
 export interface Call {
   role: string;
@@ -35,7 +35,7 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
   try { process.kill(-pid, signal); } catch { try { process.kill(pid, signal); } catch {} }
 }
 
-async function spawn(c: Call, input: string): Promise<{ output: string; text: string; data?: unknown; cost?: number; failure?: string }> {
+async function spawn(c: Call, input: string): Promise<{ output: string; text: string; data?: unknown; cost?: number; session?: string; failure?: string }> {
   const role = c.role.toUpperCase();
   const argv = [roleCmd(role), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags, ...(c.schema ? schemaFlags(c.schema) : [])];
   // A process group of its own, so the time box ends the call's children too: one that kept the pipes open would hold the reads.
@@ -50,7 +50,7 @@ async function spawn(c: Call, input: string): Promise<{ output: string; text: st
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     const failure = timedOut ? `${c.who} timed out` : code !== 0 ? `${c.who} exited ${code}` : undefined;
-    return { output: out + err, ...replyOf(out), data: structuredOf(out), failure };
+    return { output: out + err, ...replyOf(out), data: structuredOf(out), session: sessionOf(out), failure };
   } finally {
     clearTimeout(timer);
     clearTimeout(kill);
@@ -66,7 +66,7 @@ export async function callAgent(c: Call, input: string): Promise<{ text: string;
 
 /** The ledger's line for a role's run. `job` defaults to the folder's own name. */
 export interface Opening extends Call {
-  role: "triage" | "plan" | "facts" | "director" | "monitor";
+  role: "intake" | "facts" | "director" | "monitor";
   name: string;
   /** The first line of command.txt. */
   command: string;
@@ -85,6 +85,11 @@ export interface AgentRun {
   ask(input: string, cwd?: string): Promise<string>;
   /** As `ask`, for an opening with a `schema`: the reply's structured output, or undefined when it has none. */
   askData(input: string, cwd?: string): Promise<unknown>;
+  /**
+   * As `askData`, a second turn after the last call: it resumes that call's session with `input`, or, when the
+   * reply named no session, sends the last input and `input` as a new call. prompt.md and output.log get it appended, and the run's cost is the sum.
+   */
+  askAgain(input: string, cwd?: string): Promise<unknown>;
   /** The run is `done`: a role's run has no land or drop, whatever its reply was. */
   end(reason: string, fields?: Partial<Run>): void;
 }
@@ -103,11 +108,18 @@ export function openRun(o: Opening): AgentRun {
   }
   writeRun(folder, { kind: o.role, job: o.job ?? folder.split("/").at(-1)!, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now() });
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
-  const call = async (input: string, cwd?: string) => {
-    writeFileSync(runFile(folder, "prompt.md"), input);
-    const r = await spawn(cwd === undefined ? o : { ...o, cwd }, input);
-    writeFileSync(runFile(folder, "output.log"), r.output);
-    if (r.cost !== undefined) updateRun(folder, { cost: r.cost });
+  let prev: { input: string; session?: string } | undefined;
+  let spent: number | undefined;
+  const call = async (input: string, cwd?: string, again = false) => {
+    const write = again ? appendFileSync : writeFileSync;
+    const resume = again ? prev?.session : undefined;
+    const sent = again && !resume ? `${prev?.input ?? ""}\n\n${input}` : input;
+    write(runFile(folder, "prompt.md"), again ? `\n\n---\n\n${sent}` : sent);
+    const c = resume ? { ...o, flags: [...o.flags, "--resume", resume] } : o;
+    const r = await spawn(cwd === undefined ? c : { ...c, cwd }, sent);
+    write(runFile(folder, "output.log"), r.output);
+    prev = { input: sent, session: r.session };
+    if (r.cost !== undefined) { spent = (spent ?? 0) + r.cost; updateRun(folder, { cost: spent }); }
     if (r.failure) throw new Error(r.failure);
     return r;
   };
@@ -115,6 +127,7 @@ export function openRun(o: Opening): AgentRun {
     folder,
     ask: async (input, cwd) => (await call(input, cwd)).text,
     askData: async (input, cwd) => (await call(input, cwd)).data,
+    askAgain: async (input, cwd) => (await call(input, cwd, true)).data,
     end: (reason, fields = {}) => endRun(folder, reason, fields),
   };
 }

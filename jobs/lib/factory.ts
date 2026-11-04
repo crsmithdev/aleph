@@ -11,7 +11,7 @@ import { fetchOrigin, git } from "./git.ts";
 import { askChris, askOf, needsOf, plainAsk } from "./ask.ts";
 import { factoryLog } from "./layout.ts";
 import { itemOnMain, repoStages } from "./status.ts";
-import { countsLine, triageIssue, type Counts } from "./triage.ts";
+import { countsLine, intakeIssue, type Counts } from "./intake.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, loadRegistry, lock, updateRun, type Entry, type Repo } from "./ledger.ts";
 import { isLive, isStarting } from "./process.ts";
 import { rescueStuck, type Rescue } from "./rescue.ts";
@@ -27,10 +27,8 @@ import { waitingToLand } from "./landing.ts";
 import { baselineChecks, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { startKept } from "./unit.ts";
-import { directorDetached, dispatchDetached, planDetached, specCheckDetached, triageDetached } from "./launch.ts";
-import { markLaunched, passNotes, recordedVerdict, specChecking } from "./spec-check.ts";
-import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
-import { route, type Tier } from "./route.ts";
+import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
+import type { Tier } from "./route.ts";
 import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
 export { setPaused };
 
@@ -38,7 +36,7 @@ import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from 
 
 /** A start refused because the live cap filled: the line `gates` gives for it. */
 const LIVE_REFUSAL = / agent runs are live/;
-import { TRIAGE_CAP, goalLockWaitMs, rescueOn } from "./settings.ts";
+import { INTAKE_CAP, goalLockWaitMs, rescueOn } from "./settings.ts";
 
 
 /** The buildable issues of each factory repo. */
@@ -77,17 +75,13 @@ type Land = (name: string) => Promise<string | null>;
  * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
  * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands and the close of parents whose parts are done.
  * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 7 gates of goalDecision in
- * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds goes to the
- * routing step (its spec check, or the planner) and then starts. Each start holds a lock on its goal and re-reads
- * the jobs under it, so two dispatches at once start a goal once. `start` dispatches the run; it
- * is `aleph job`, in-process (transitions.ts). With `rate`, a large goal's
- * first run is a planner run on its issue instead (plan.ts). It starts goals
- * only: an issue is closed as done once its goals are all done (`closeIssues`).
- * `plan` starts an issue's planner detached; the dispatch does not wait for it.
- * `specCheck` starts a goal's spec check detached (spec-check.ts), for a repo with `author` set: a goal
- * starts only once its spec version has a recorded verdict of pass or error.
+ * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds starts. Each start
+ * holds a lock on its goal and re-reads the jobs under it, so two dispatches at once start a goal once. `start`
+ * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts goals
+ * only: an issue is closed as done once its goals are all done (`closeIssues`). Intake (intake.ts) took each goal in
+ * before: an issue to plan (`plan` set) goes to an intake run, started detached by `intake`; the dispatch does not wait for it.
  */
-export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, rate?: Rate, plan: (repo: Repo, id: number) => void = planDetached, specCheck: (repo: Repo, ref: string) => void = specCheckDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
+export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, intake: (repo: Repo, id: number) => void = intakeDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
   if (gates({ only: ["pause"] })) {
     factoryLog("paused");
     return { started: [], skipped: [], paused: true };
@@ -111,15 +105,15 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   // A parent whose parts all landed closes without a green main.
   for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
   const goals = openGoals();
-  // The planner starts an agent run, so the baseline gate holds it as it holds a goal.
+  // An issue to plan goes to intake, which splits it. Intake starts an agent run, so the baseline gate holds it as it holds a goal.
   const planners: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
     if (redOf(repo)) continue;
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) if (planSet(item)) planners.push({ repo, item });
   }
   for (const { repo, item } of byPriority(planners)) {
-    if (issues.status(item) !== "open" || askOf(item) || pendingWaits(afterOf(item), done).length || await planning(repo, item.id)) continue;
-    plan(repo, item.id);
+    if (issues.status(item) !== "open" || askOf(item) || pendingWaits(afterOf(item), done).length) continue;
+    intake(repo, item.id);
     planned.push(issueJob(repo, item.id));
   }
   /** Records the hold and the skip line of a goal no start reached. */
@@ -145,9 +139,6 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         ...goalFacts(repo, item, jobs), done, red,
         // A pass that began before a pause must not start a run after it.
         ...factoryGates(jobs),
-        // A plan job and a spec check run detached: the goal gets no second one and no worker while either does.
-        planning: !open && await planning(repo, item.id),
-        checking: !open && !!repo.author && await specChecking(name),
       });
       if (d.kind !== "ready" && d.kind !== "loop-guard") { skip(name, d.kind, d.why); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
@@ -173,24 +164,8 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         }
         continue;
       }
-      // Routing: the spec check runs in a process of its own (it clones the repo and may take 900 s); the dispatch reads its
-      // verdict. With none for this spec version, the dispatch starts the check, and Not ready holds the goal while it runs.
-      // A pass or an error starts the goal. A hold sets the Ask, so the goal leaves the list until it is answered; a hold with
-      // no Ask left is one answered with a rerun and no edit, and it starts, as a checked version is not checked again.
-      if (repo.author) {
-        const v = recordedVerdict(latest);
-        if (!v) { markLaunched(name); specCheck(repo, issues.refOf(latest)); skip(name, "not-ready", "spec check running"); continue; }
-        if (v.verdict === "hold" && askOf(latest)) { skip(name, "not-ready", v.problems, "spec check held"); continue; }
-      }
-      const { spec, rerun } = goalBrief(item, name, jobs, repo.author ? passNotes(latest) : "");
-      let tier: Tier | null | undefined;
-      if (rate) {
-        const p = await needsPlan(repo, item, spec, rate);
-        if (paused()) { skip(name, "pause", "paused"); continue; }
-        if ("plan" in p) { plan(repo, item.id); planned.push(name); continue; }
-        tier = p.tier;
-      }
-      const why = await start(repo, name, ref, spec, tier);
+      const { spec, rerun } = goalBrief(item, name, jobs);
+      const why = await start(repo, name, ref, spec);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
       if (why) skip(name, LIVE_REFUSAL.test(why) ? "live-cap" : "not-ready", why);
       else { recordHold(name, "started", "started"); started.push(name); clearCap(name); if (rerun) clearRerun(name); }
@@ -266,30 +241,30 @@ export async function correctionsStep(now = Date.now()): Promise<{ signals: numb
   }
 }
 
-/** The detached starts that follow a write: a triage of one issue, and the director. Tests replace them. */
-export interface Starts { triage(repo: Repo, id: number): void; director(): void }
-const starts: Starts = { triage: triageDetached, director: directorDetached };
+/** The detached starts that follow a write: an intake of one issue, and the director. Tests replace them. */
+export interface Starts { intake(repo: Repo, id: number): void; director(): void }
+const starts: Starts = { intake: intakeDetached, director: directorDetached };
 
-/** A triage or director run of `on` that has not ended: its process holds the work, so nothing starts a second. */
+/** An intake or director run of `on` that has not ended: its process holds the work, so nothing starts a second. */
 const running = (runs: Entry[], kind: string, on: string) => runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running");
 
 /**
- * The triage queue: a triage for each open issue that is not sorted, oldest first, at most `ALEPH_TRIAGE_CAP`,
+ * The intake queue: an intake for each open issue that is not sorted, oldest first, at most `ALEPH_INTAKE_CAP`,
  * each detached. While the live cap binds it starts none: the dispatch at the end of the next run calls it again.
- * Returns the issues it started a triage for.
+ * Returns the issues it started an intake for.
  */
-export function triageQueued(start: (repo: Repo, id: number) => void = triageDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false })): string[] {
+export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false })): string[] {
   if (gates({ only: ["pause", "live-cap"], jobs: [runs] })) return [];
   const queue: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
     const doc = lists.list(repo.key);
-    for (const item of doc?.items ?? []) if (issues.status(item) === "open" && !isSorted(doc!, item)) queue.push({ repo, item });
+    for (const item of doc?.items ?? []) if (issues.status(item) === "open" && !isSorted(doc!, item, repo)) queue.push({ repo, item });
   }
   queue.sort((a, b) => String(a.item.fm.created ?? "").localeCompare(String(b.item.fm.created ?? "")) || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
-  for (const { repo, item } of queue.slice(0, TRIAGE_CAP())) {
+  for (const { repo, item } of queue.slice(0, INTAKE_CAP())) {
     const name = `${repo.key}-${item.id}`;
-    if (running(runs, "triage", name)) continue;
+    if (running(runs, "intake", name)) continue;
     start(repo, item.id);
     started.push(name);
   }
@@ -297,7 +272,7 @@ export function triageQueued(start: (repo: Repo, id: number) => void = triageDet
 }
 
 /**
- * Start the director at once when an Ask has no case text and no director run is on it. A dispatch, a triage, the
+ * Start the director at once when an Ask has no case text and no director run is on it. A dispatch, an intake, the
  * corrections and the firefighter call it after a write that can set an Ask, so no Ask waits for the tick.
  * Returns whether it started the director.
  */
@@ -400,8 +375,7 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
 
 /**
  * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
- * land live; a goal that can start with no agent or planner run live; an issue to triage or plan with no triage or
- * planner run live. The gates that stop each step leave its work out, because each gate has its own line.
+ * land live; a goal that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
  */
 export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()): string[] {
   if (gates({ only: ["pause"], jobs })) return [];
@@ -409,19 +383,19 @@ export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()
   const live = (kind: string) => runs.some((e) => e.run.kind === kind && isLive(e.folder));
   const redOf = mainRed();
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
-  if (!liveRuns(runs) && !live("plan")) {
+  if (!liveRuns(runs)) {
     for (const { repo, item } of openGoals(lists)) {
       const facts = goalFacts(repo, item, jobs);
       if (goalDecision({ ...facts, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
     }
   }
-  if (!live("triage") && !live("plan") && !gates({ only: ["live-cap"], jobs })) {
+  if (!live("intake") && !gates({ only: ["live-cap"], jobs })) {
     for (const repo of sandboxRepos()) {
       const doc = lists.list(repo.key);
       for (const item of doc?.items ?? []) {
         if (issues.status(item) !== "open") continue;
         const toPlan = planSet(item) && !askOf(item) && !pendingWaits(afterOf(item), done).length && !redOf(repo);
-        if (toPlan || !isSorted(doc!, item)) out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
+        if (toPlan || (!planSet(item) && !isSorted(doc!, item, repo))) out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
       }
     }
   }
@@ -544,44 +518,29 @@ function runLines(now: number): string[] {
 }
 
 /**
- * Triage one issue at once, as `aleph issue add`, a note that answers an Ask, a
- * worker's follow-ups and the triage queue do. The gate is the factory's pause. An issue
- * the live cap holds is started by the queue (`triageQueued`) when a run ends. A run of
- * this call that ended with no verdict starts the retry at once, while the issue is still
- * unsorted with no Ask (after `ALEPH_TRIAGE_TRIES` such runs, triage sets the Ask).
- * An Ask the triage set goes to the director at once.
+ * Take in one issue at once, as `aleph issue add`, a note that answers an Ask, a
+ * worker's follow-ups, the dispatch for an issue to plan and the intake queue do. The gate is the factory's pause. An
+ * issue the live cap holds is started by the queue (`intakeQueued`) when a run ends. A run of this call that ended
+ * with no reply starts the retry at once, while the issue is still unsorted with no Ask (after `ALEPH_INTAKE_TRIES`
+ * such runs, intake sets the Ask). An Ask that intake set goes to the director at once.
  */
-export async function triageNow(repo: Repo, id: number, p: Starts = starts): Promise<{ triaged: Counts; skipped: string[] }> {
-  if (gates({ only: ["pause"] })) return { triaged: {}, skipped: [] };
+export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Promise<{ counts: Counts; skipped: string[] }> {
+  if (gates({ only: ["pause"] })) return { counts: {}, skipped: [] };
   const name = `${repo.key}-${id}`;
-  const mine = () => allRuns().filter((e) => e.run.kind === "triage" && e.run.on === name);
+  const mine = () => allRuns().filter((e) => e.run.kind === "intake" && e.run.on === name);
   const before = new Set(mine().map((e) => e.id));
-  const t = await triageIssue(repo, id, doneChecker());
-  factoryLog(`triaged ${name}: ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
-  if (t.triaged.build || t.triaged.plan) dispatchDetached();
+  const t = await intakeIssue(repo, id);
+  factoryLog(`intake ${name}: ${countsLine(t.counts)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
+  if (t.counts.build) dispatchDetached();
   const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "no-answer");
   const doc = reader({ fetch: false }).list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
-  if (failed && item && issues.status(item) === "open" && !askOf(item) && !isSorted(doc!, item)) {
-    factoryLog(`triage ${name}: no verdict; triage again now`);
-    p.triage(repo, id);
+  if (failed && item && issues.status(item) === "open" && !askOf(item) && !isSorted(doc!, item, repo)) {
+    factoryLog(`intake ${name}: no reply; intake again now`);
+    p.intake(repo, id);
   }
   directIfNew(p.director);
   return t;
-}
-
-/**
- * Plan one goal at once, as `aleph plan` does, under the factory's gates: not paused, a factory repo. When it ends, the parts or the fallback worker start from
- * a dispatch of their own.
- */
-export async function planNow(repo: Repo, id: number): Promise<{ planned: string[] } | { why: string }> {
-  const gated = gates({ only: ["pause"] });
-  if (gated) return { why: gated.why };
-  if (!repo.sandbox) return { why: `${repo.key} is not a factory repo` };
-  const r = await runPlan(repo, id);
-  factoryLog(`plan ${repo.key}-${id}: ${"planned" in r ? `into ${r.planned.join(",")}` : r.why}`);
-  dispatchDetached();
-  return r;
 }
 
 /** The factory's ports onto the transitions, each in-process; each returns the refusal, or null. */
@@ -591,14 +550,14 @@ const dropGoal = (name: string, reason: string, fate?: Fate) => refusal(() => dr
 const recheckGoal = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
 
 /**
- * `aleph dispatch`: one dispatch of the ready goals, then the triage queue and the director for an Ask that the
- * dispatch or the run before it set. A run's end calls it, so a triage the live cap held starts when a slot frees.
+ * `aleph dispatch`: one dispatch of the ready goals, then the intake queue and the director for an Ask that the
+ * dispatch or the run before it set. A run's end calls it, so an intake the live cap held starts when a slot frees.
  */
-export async function runDispatch(p: Starts = starts): Promise<Awaited<ReturnType<typeof dispatchIssues>> & { triaging?: string[] }> {
+export async function runDispatch(p: Starts = starts): Promise<Awaited<ReturnType<typeof dispatchIssues>> & { intaking?: string[] }> {
   // `ALEPH_RESCUE=off` leaves a stuck or failed run as it is: its open job keeps its goal not ready.
-  const d = await dispatchIssues(startGoal, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);
+  const d = await dispatchIssues(startGoal, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal });
   if (d.paused) return d;
-  const triaging = triageQueued(p.triage);
+  const intaking = intakeQueued(p.intake);
   directIfNew(p.director);
-  return { ...d, ...(triaging.length ? { triaging } : {}) };
+  return { ...d, ...(intaking.length ? { intaking } : {}) };
 }

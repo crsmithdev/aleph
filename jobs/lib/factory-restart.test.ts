@@ -68,9 +68,9 @@ test("a goal whose run a host restart killed keeps its rerun: the next no commit
   killedRun(`fac-${id}`);
   const f = fakes();
   f.start = async () => null;
-  await dispatchIssues(f.start, f.land, f.rescue, undefined, undefined, undefined);
+  await dispatchIssues(f.start, f.land, f.rescue);
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
-  await dispatchIssues(f.start, f.land, f.rescue, undefined, undefined, undefined);
+  await dispatchIssues(f.start, f.land, f.rescue);
   expect(f.calls).toEqual([`drop fac-${id}`, `drop fac-${id}`]);
   expect(ask(id)).toBeNull();
 });

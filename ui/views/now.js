@@ -85,7 +85,7 @@ function statLines(stat) {
   return esc(kept.filter((l) => l.includes(" | ")).join("\n")) + `\n<b>+${files.length - STAT_FILES} more files</b>` + (summary.length ? "\n" + esc(summary.join("\n")) : "");
 }
 
-/** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
+/** The Running lane's rows: intake, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
 const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).length;
 
 /** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */

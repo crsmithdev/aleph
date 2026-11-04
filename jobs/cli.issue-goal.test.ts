@@ -4,7 +4,7 @@ import { aleph, base, dispatching, itemsRemote, jobsDir, sh, setup, teardown, un
 import { issueAdd, issueClose, issueShow } from "./inproc";
 
 // Acceptance criterion 14 at the CLI seam: `aleph issue add <repo> "<title>" --goal -` files the issue and its goal `.1`
-// in one store commit, with no triage, and starts the dispatch itself. The first case is the CLI test of
+// in one store commit, with no intake, and starts the dispatch itself. The first case is the CLI test of
 // `aleph issue add`; the others call the verb in-process.
 beforeAll(setup);
 afterAll(teardown);
@@ -14,10 +14,10 @@ const commits = () => Number(sh(base, "git", "--git-dir", itemsRemote, "rev-list
 const file = (name: string) => sh(base, "git", "--git-dir", itemsRemote, "show", `main:fac/backlog/tasks/${name}.md`);
 // A goal left open is one the next dispatch runs first: the dispatch test then waits on all of them.
 const dropIssue = (n: number) => issueClose("fac", n, "drop", "test over");
-const triageRuns = () => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((d) => d.endsWith("-triage")) : []);
+const intakeRuns = () => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((d) => d.includes("-intake-")) : []);
 
 describe("aleph issue add --spec -", () => {
-  test("files one issue with its spec in one commit, starts no triage, and show reports the spec", async () => {
+  test("files one issue with its spec in one commit, starts no intake, and show reports the spec", async () => {
     const before = commits();
     const r = await aleph(["issue", "add", "fac", "Add a line", "--spec", "-"], {}, GOAL);
     expect(r.code, r.stderr).toBe(0);
@@ -27,9 +27,9 @@ describe("aleph issue add --spec -", () => {
     expect(issue).toContain("source: chris");
     expect(issue).toContain(`<!-- spec -->\n${GOAL.trim()}`);
     expect(issue).not.toMatch(/^(labels|waiting_on|goals|status):/m);
-    // A triage would run as a detached `aleph triage`: wait until none is alive, then look for its run.
+    // An intake would run as a detached `aleph intake`: wait until none is alive, then look for its run.
     await until(() => !dispatching());
-    expect(triageRuns()).toEqual([]);
+    expect(intakeRuns()).toEqual([]);
     const shown = await aleph(["issue", "show", "fac", String(n), "--json"]);
     expect(shown.json).toMatchObject({ source: "chris", areas: [] });
     expect(shown.json.spec).toContain("## Oracle");

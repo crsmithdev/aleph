@@ -17,7 +17,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryLog, layout } from "./layout.ts";
-import { missingSections, specVersion } from "./goal-spec.ts";
+import { specVersion } from "./goal-spec.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { awaitsChris, parentOf, partsOf, writeList, type Place } from "../../todo/lib/store.ts";
 import type { Entry } from "./ledger.ts";
@@ -68,8 +68,11 @@ const REASONS = {
   "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question" },
   "no-commit": { kind: "input", name: "No commit", actions: ["rerun", "close"], always: "" },
   "part-dropped": { kind: "input", name: "Part dropped", actions: ["rerun", "close"], always: "" },
+  "intake-failed": { kind: "input", name: "Intake failed", actions: ["retry", "close"], always: "retry" },
+  // Read only: Asks from before intake (4 Nov 2026) keep them.
   "triage-failed": { kind: "input", name: "Triage failed", actions: ["retry", "close"], always: "retry" },
   "host-check": { kind: "input", name: "Manual check", actions: ["checked", "deny"], always: "" },
+  // Read only, as triage-failed.
   "spec-check": { kind: "input", name: "Spec check", actions: ["rerun", "close"], always: "" },
   "rescue": { kind: "input", name: "Question", actions: ["decide", "drop"], always: "recommended" },
   // Not Ask reasons of the spec; no new home is named for them.
@@ -383,13 +386,6 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
 
 // What clears an Ask.
 
-/**
- * Whether the director's edit of a goal's spec answers its Ask. Only a spec-check Ask is about the spec, and only a
- * body with Goal, Edit surface and Oracle. The goal's next first worker run checks the spec again, and holds again if
- * it still lacks something.
- */
-export const editAnswers = (ask: Ask | null, body: string | undefined): boolean =>
-  body !== undefined && ask?.reason === "spec-check" && missingSections(body).length === 0;
 
 /**
  * A decision clears the item's Ask; called in the write that notes the decision `said`. On the part-dropped Ask, the

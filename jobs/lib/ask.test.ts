@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, decideAsk, editAnswers, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, decideAsk, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "./goal-spec.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
@@ -152,17 +152,6 @@ test("may: Chris takes the actions the card offers, on a run and on an issue", (
   expect(may("chris", "rerun", plainAsk("spec-check", "x"))).toBeNull();
   expect(may("chris", "answer", { ...plain, reason: "nope" }, { run: true })).toBe("its nope Ask offers no answer");
   expect(may("chris", "answer", undefined, { run: true })).toBe("it has no Ask");
-});
-
-const full = "## Goal\ng\n\n## Edit surface\n- a.ts: x\n\n## Oracle\n- passes";
-
-test("editAnswers: only a full spec answers a spec-check Ask", () => {
-  const held = plainAsk("spec-check", "the spec has no Oracle");
-  expect(editAnswers(held, full)).toBe(true);
-  expect(editAnswers(held, "## Goal\ng")).toBe(false);
-  expect(editAnswers(held, undefined)).toBe(false);
-  expect(editAnswers(plainAsk("no-commit", "x"), full)).toBe(false);
-  expect(editAnswers(null, full)).toBe(false);
 });
 
 test("decideAsk clears the Ask; on part-dropped the plan option sets plan and any other answer closes the issue", () => {

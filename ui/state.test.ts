@@ -168,22 +168,21 @@ describe("a land that found the job lock busy", () => {
   });
 });
 
-describe("a planner run", () => {
-  test("counts as running and takes its goal out of waiting; triage does not; a done one does neither", () => {
+describe("an intake run", () => {
+  test("counts as running; triage does not; a done one does not", () => {
     const landing = state(now).landing;
     const ids = ["20261027-000050-a", "20261027-000051-a"];
-    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", condition: "running", on: "fac-2", started: ago(1) });
+    run(ids[0], { kind: "intake", job: "intake-fac-2", name: "intake-fac-2", condition: "running", on: "fac-2", started: ago(1) });
     run(ids[1], { kind: "triage", job: "triage-fac-2", name: "triage-fac-2", condition: "running", on: "fac-2", started: ago(1) });
     let s = state(now);
-    expect(s.running.map((j) => j.name)).toContain("plan-fac-2");
+    expect(s.running.map((j) => j.name)).toContain("intake-fac-2");
     expect(s.running.map((j) => j.name)).not.toContain("triage-fac-2");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([]);
     expect(runAsks(s).map((a) => a.id)).toEqual(["fac-1"]);
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
     expect(s.landing).toBe(landing);
-    run(ids[0], { kind: "plan", job: "plan-fac-2", name: "plan-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
+    run(ids[0], { kind: "intake", job: "intake-fac-2", name: "intake-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
-    expect(s.running.map((j) => j.name)).not.toContain("plan-fac-2");
+    expect(s.running.map((j) => j.name)).not.toContain("intake-fac-2");
     expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), why: "Starts at the next dispatch", kind: "ready" }]);
     for (const id of ids) rmSync(join(jobsDir, id), { recursive: true });
   });

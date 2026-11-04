@@ -478,9 +478,9 @@ const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" dat
   `<button type="submit" class="act">Add note</button> <span class="form-msg" role="status"></span></form>`;
 
 /** Machine note prefixes, matched after the `- ` and the stamp are removed. */
-const MACHINE = /^(?:triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
+const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
 /** The notes a person or a run needs to read, which stay visible. */
-const READ = /^(?:triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
+const READ = /^(?:intake: for Chris:|triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
 /** True when a note line is a machine line: the prefix at the start of the text after the `- ` and the stamp. */
 export const isMachineNote = (n) => {
   const t = String(n).replace(/^- /, "").replace(/^\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?: /, "");
@@ -585,7 +585,7 @@ function issueKpis(d, segments, now = Date.now()) {
 }
 
 /** Front-matter keys the page shows elsewhere, or that are the store's own. */
-const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
+const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
 
 /** The Issue page: the header and its pills, the KPI strip, the Timeline, the Description and the Spec, then Notes and Commits. Shared with views/issue.js. */
 export function renderIssue(d) {

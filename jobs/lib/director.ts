@@ -15,7 +15,7 @@ import { basename, dirname, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
-import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, editAnswers, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask } from "./ask.ts";
+import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask } from "./ask.ts";
 import { allRuns, isAgentRun, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "./ledger.ts";
 import { missingVerdict } from "./worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -26,7 +26,6 @@ import { git } from "./git.ts";
 import { securityChange } from "./gate.ts";
 import { missingSections } from "./goal-spec.ts";
 import { onMain, itemOnMain } from "./status.ts";
-import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
 import { writeRerun } from "./continuation.ts";
 import { explainLesson, proposals, type Lesson } from "./corrections.ts";
 import { factoryDir } from "./factory-status.ts";
@@ -42,16 +41,10 @@ export const DIRECTOR_MODEL = FABLE_MODEL;
 export const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */
 export const MAX_ACTIONS = 10;
-/**
- * How many times the director may edit one goal's spec on a spec-check Ask; then it closes the goal or escalates.
- * Each spec check starts a build run, so N edits mean N+1 starts; N+1 must not pass MAX_RUNS_PER_HOUR, or run-cap ends the loop first.
- */
-export const MAX_SPEC_EDITS = MAX_RUNS_PER_HOUR - 1;
 /** The reasons whose Ask the director decides once per goal: a second one on the same goal goes to Chris. */
 export const ONCE_PER_GOAL = ["run-cap", "rescue"];
 /** Changed files that put a run's land on the escalation list besides the security paths. */
 export const HELD_FILES = ["bun.lock"];
-const SPEC_EDIT = /^(director|firefighter): edited the spec/;
 const TAIL = 40;
 const MAX_FILE = 4000;
 const RECORD_LINES = 20;
@@ -296,8 +289,7 @@ Reply with the case text only. ${CASE_TEXT(acts)}
 # The rules
 
 - Decide when you can: answer the question, rerun the goal, drop the run, edit the spec or the goal, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
-- Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions; a spec edit past ${MAX_SPEC_EDITS} on one goal's spec check, after which you close the goal or escalate.
-- A spec-check Ask is answered by an edit-goal whose body has ## Goal, ## Edit surface and ## Oracle: the spec check reads it before the next worker run. Make the smallest edit: change only the clauses the hold names, and keep every other clause word for word. Add no design the hold did not ask for: no markup, CSS properties, thresholds or new requirements. The next spec check cannot hold the goal again: it passes, and the worker settles what is left.
+- Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions.
 - When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
 - A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this goal with edit-goal when it must wait for the fix.
@@ -503,7 +495,6 @@ export const defaultPorts: Ports = {
 /** The result of one action: applied (and whether it decides the Ask), or refused. */
 type Outcome = { applied: string; decides: boolean } | { refused: string };
 
-const specEditsOf = (item: issues.Issue): number => item.notes.filter((n) => SPEC_EDIT.test(n.replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, ""))).length;
 const done = (a: Action, decides = true): Outcome => ({ applied: describe(a), decides });
 const no = (a: Action, why: string): Outcome => ({ refused: `${describe(a)}: ${why}` });
 
@@ -603,17 +594,8 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
   // edit-goal
   const list = store.reader().list(repo.key);
   if (list && store.partsOf(list, item).length) return no(a, "it has parts");
-  const spec = c.ask.reason === "spec-check" && a.body !== undefined;
-  if (spec && specEditsOf(item) >= MAX_SPEC_EDITS) return no(a, `the spec of ${id} was edited ${MAX_SPEC_EDITS} times; close it or escalate`);
   const why = await refusal(async () => verbs.edit(repo, n!, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
-  if (why) return no(a, why);
-  if (spec) store.note(repo, n!, `director: edited the spec (${specEditsOf(item) + 1} of ${MAX_SPEC_EDITS})`);
-  if (spec && editAnswers(askOf(item), a.body)) {
-    const w = await refusal(async () => verbs.decide(repo, n!, "director edited the spec; the spec check runs again before the next worker run"));
-    if (w) return no(a, `the spec is edited, but the spec-check Ask stays: ${w}`);
-    return done(a);
-  }
-  return done(a, false);
+  return why ? no(a, why) : done(a, false);
 }
 
 /** Apply the reply's actions for the case in order, at most MAX_ACTIONS. Whether one of them decided the Ask. */

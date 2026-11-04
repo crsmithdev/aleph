@@ -30,7 +30,7 @@ test("a goal turned back into an issue while an earlier goal starts is not start
     calls.push(name);
     if (name === `fac-${first}`) await change(second, (item) => { item.spec = ""; });
     return null;
-  }, undefined, undefined, undefined, undefined, undefined);
+  }, undefined, undefined, undefined);
   expect(calls).toEqual([`fac-${first}`]);
   expect(out.started).toEqual([`fac-${first}`]);
   expect(out.skipped).toEqual([`fac-${second}: not a goal`]);

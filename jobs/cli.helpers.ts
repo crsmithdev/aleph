@@ -52,13 +52,13 @@ export const starting = (startLog: string): boolean => {
   return readdirSync(dir).some((f) => f.startsWith(name));
 };
 
-/** An `aleph dispatch` or `aleph triage` of this test file's factory is running, e.g. a detached one from a transition. */
+/** An `aleph dispatch` or `aleph intake` of this test file's factory is running, e.g. a detached one from a transition. */
 export const dispatching = (): boolean => {
   const mine = `ALEPH_FACTORY_DIR=${join(base, "factory")}\0`;
   return readdirSync("/proc").filter((p) => /^\d+$/.test(p)).some((p) => {
     try {
       const cmd = readFileSync(`/proc/${p}/cmdline`, "utf8").split("\0");
-      return cmd.includes(CLI) && ["dispatch", "triage"].includes(cmd[cmd.indexOf(CLI) + 1]) && readFileSync(`/proc/${p}/environ`, "utf8").includes(mine);
+      return cmd.includes(CLI) && ["dispatch", "intake"].includes(cmd[cmd.indexOf(CLI) + 1]) && readFileSync(`/proc/${p}/environ`, "utf8").includes(mine);
     } catch {
       return false;
     }
@@ -112,7 +112,7 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
     ALEPH_FACTORY_DIR: join(base, "factory"),
-    // No test reaches the live router: its tier for a seed varies, and `opus` sends the seed to a planner.
+    // No test reaches the live router: its tier for a seed varies, so a start does not rate it.
     ALEPH_JUDGE: "haiku",
     // The live cap's test starts six runs against a cap of five.
     ALEPH_LIVE_CAP: "5",
@@ -120,8 +120,8 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_DISPATCH: "off",
     // Nor does a tick start the monitor's reader; monitor.test.ts runs it with a fake.
     ALEPH_MONITOR: "off",
-    // The tick triages no issue unless a test sets a cap and a fake command.
-    ALEPH_TRIAGE_CAP: "0",
+    // The tick takes in no issue unless a test sets a cap and a fake command.
+    ALEPH_INTAKE_CAP: "0",
     // Nor does it start a director run on an Ask: no test reaches the live director.
     ALEPH_DIRECTOR_CAP: "0",
     // The title writer's model fails, so a follow-up or a check gets cutTitle's title and no test reaches Haiku.
@@ -388,7 +388,7 @@ export async function fjobFor(name: string, action: string, id: number) {
   return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--on", String(id)]);
 }
 
-/** Brings the test store's checkout up to origin/main. A detached dispatch or triage writing the store at the same moment can make one fetch find no ref, so it retries. */
+/** Brings the test store's checkout up to origin/main. A detached dispatch or intake writing the store at the same moment can make one fetch find no ref, so it retries. */
 function pullItems(): void {
   for (let attempt = 1; ; attempt++) {
     try { sh(items, "git", "pull", "-q", "--rebase", "origin", "main"); return; } catch (e) { if (attempt === 5) throw e; Bun.sleepSync(200 * attempt); }

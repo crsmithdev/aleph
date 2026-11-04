@@ -159,23 +159,6 @@ test("a run-cap Ask: the director reruns the goal once; the second run-cap Ask o
   expect(prompt()).toContain("This Ask is on the escalation list");
 });
 
-test("a spec-check Ask: a full spec edit answers it, at most MAX_SPEC_EDITS times; then the edit is refused", async () => {
-  const full = "## Goal\nShip.\n\n## Edit surface\n- a.ts: x\n\n## Oracle\n- it ships";
-  fresh([{ title: "goal", goal: true, ask: plainAsk("spec-check", "no Oracle") }]);
-  reply([{ do: "edit-goal", body: full }]);
-  for (const k of [1, 2]) {
-    const [d] = await direct();
-    expect(d).toMatchObject({ outcome: "decided", applied: ["edit-goal (spec)"] });
-    expect(prompt()).toContain("Make the smallest edit: change only the clauses the hold names");
-    expect(asked(1)).toBeNull();
-    expect(item(1).notes.some((x) => x.includes(`director: edited the spec (${k} of 2)`))).toBe(true);
-    writeList({ key }, "hold again", (doc) => { setAsk(issues.find(doc, 1)!, plainAsk("spec-check", `no Oracle ${k}`)); return true; });
-  }
-  const [d] = await direct();
-  expect(d).toMatchObject({ outcome: "escalated" });
-  expect(d.refused).toEqual([`edit-goal (spec): the spec of ${key}-1 was edited 2 times; close it or escalate`]);
-});
-
 test("a worker's question on a run: the director's answer drops the job with the answer as the next run's note", async () => {
   fresh([{ title: "goal", goal: true }]);
   run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });

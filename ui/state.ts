@@ -52,7 +52,7 @@ export interface Job {
   checks?: CheckResult[];
   /** Lands: the trailers of the land commit. Needs-you: the trailers the land will write. */
   trailers?: { key: string; value: string }[];
-  /** A triage run: its verdict as `goal`, `close`, `done` or `ask`; none while it runs or when it gave no verdict. */
+  /** An intake or triage run: its verdict as `build`, `close`, `done` or `ask`; none while it runs or when it gave no verdict. */
   outcome?: string;
   /** Stuck: the open issue this job waits on or its last run names; the row offers Wait instead of Re-check. */
   blocker?: Blocker;
@@ -104,21 +104,21 @@ export interface State {
   runningIssues: RunningIssue[];
   /** Land runs in progress. */
   landing: number;
-  /** Open issues in factory repos that are not goals and not yet triaged: the newest NEW_ISSUES. */
+  /** Open issues in factory repos that are not goals and not yet taken in: the newest NEW_ISSUES. */
   issues: NewIssue[];
   /** How many such issues there are in all. */
   newIssues: number;
   /** Every open issue in factory repos, whatever its labels: the count of the Issues metric card. */
   openIssues: number;
-  /** Done: the last 10 done issues, newest first, each with the triage and land jobs that belong to it. */
+  /** Done: the last 10 done issues, newest first, each with the intake and land jobs that belong to it. */
   done: DoneItem[];
   /** Incoming: the last 10 issues added, newest first, each with its current status. */
   incoming: IncomingItem[];
-  /** The planner's runs, the running ones first, then the latest finished. */
+  /** The intake runs (and planner runs from before intake), the running ones first, then the latest finished. */
   planner: Job[];
   /** The Always rules, with how many asks each reason hands to the firefighter. */
   always: { reason: string; action: string; at: string }[];
-  /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
+  /** Jobs landed and issues taken in (or triaged) in the last 24 hours, with the 7-day daily average. */
   velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
 
@@ -297,13 +297,13 @@ export function state(now = new Date()): State {
   const landRuns: Job[] = [];
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
-    // A running planner counts as running; it is not a live agent.
-    if (last.kind === "plan" && last.condition === "running") {
+    // A running intake (or planner) counts as running; it is not a live agent.
+    if ((last.kind === "intake" || last.kind === "plan") && last.condition === "running") {
       running.push(toJob(runs));
       continue;
     }
-    // A triage, planner or facts run sorts a goal and never lands; it shows only when it awaits you.
-    if (last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
+    // An intake, triage, planner or facts run sorts a goal and never lands; it shows only when it awaits you.
+    if (last.kind === "intake" || last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
       if (isOpen(runs) && isAwaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
       continue;
     }
@@ -350,7 +350,7 @@ export function state(now = new Date()): State {
     avg: times.filter((t) => t0 - t < 7 * DAY_MS).length / 7,
   });
   const landedAt = delivered.map((d) => d.at).filter((t) => t <= t0);
-  const triagedAt = runs.filter((e) => e.run.kind === "triage" && e.run.condition === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
+  const triagedAt = runs.filter((e) => (e.run.kind === "intake" || e.run.kind === "triage") && e.run.condition === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
 
   // The jobs of each issue, by `repo-id`: the open ones give its status, all of them its Done package.
   const ofItem = new Map<string, Runs[]>();
@@ -438,7 +438,7 @@ export function state(now = new Date()): State {
     jobs: runs.map((r: Runs) => toJob(r)),
   }));
   const planAt = (r: Runs) => Date.parse(r.at(-1)!.run.condition === "running" ? "9999-01-01" : r.at(-1)!.run.ended ?? r.at(-1)!.run.started);
-  const planner = jobs.filter((r) => r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
+  const planner = jobs.filter((r) => r.at(-1)!.run.kind === "intake" || r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
 
   fresh.sort((a, b) => b.created.localeCompare(a.created));
   const granted = readAlways();
@@ -467,7 +467,7 @@ export function state(now = new Date()): State {
     delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
       const red = redOf(repo);
-      // The stage already says when a planner run is going, so the lane does not take the plan lock.
+      // The stage already says when an issue is to plan.
       const w = goalDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
         ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}),

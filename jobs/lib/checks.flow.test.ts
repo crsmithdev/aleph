@@ -6,7 +6,6 @@ import { job } from "../inproc.ts";
 import { reportText } from "./flow.testkit.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
-// `aleph spec-check` keeps its CLI test in jobs/cli.factory-checks.test.ts.
 beforeAll(setup);
 afterAll(teardown);
 

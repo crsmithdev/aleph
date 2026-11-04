@@ -32,10 +32,6 @@ export interface GoalFacts {
   red?: string | null;
   /** The condition of the goal's open job. */
   open?: string | null;
-  /** A planner run is going on the goal. */
-  planning?: boolean;
-  /** A spec check is going on the goal. */
-  checking?: boolean;
   "live-cap"?: Bound | null;
   /** Why the goal waits for an open job on a busy file. */
   busy?: string | null;
@@ -67,15 +63,13 @@ export function pendingWaits(after: string[], done: (ref: string) => boolean): s
 export const refDone = (item: issues.Issue | undefined, listRead: boolean, stage: string | undefined): boolean =>
   (item !== undefined && issues.status(item) === "done") || stage === "done" || (listRead && item === undefined);
 
-/** Why the goal is not ready: it is done, waits on an `after` ref, has an open job, or a planner or spec check holds it; else null. */
+/** Why the goal is not ready: it is done, waits on an `after` ref, or has an open job; else null. */
 function notReady(f: GoalFacts): Extract<GoalDecision, { kind: "not-ready" }> | null {
   const not = (why: string, text: string) => ({ kind: "not-ready" as const, why, text });
   if (f.done(f.name)) return not("the item is already done", "The item is already done");
   const ids = pendingWaits(afterOf(f.item), f.done);
   if (ids.length) return { ...not(`after ${ids.join(",")}`, `Waits on ${ids.join(", ")}`), ids };
   if (f.open) return not(`its job is ${f.open}`, `Its job is ${f.open}`);
-  if (f.planning) return not("planning", "A planner run is splitting it");
-  if (f.checking) return not("spec check running", "Its spec check is running");
   return null;
 }
 

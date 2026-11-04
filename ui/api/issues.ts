@@ -242,7 +242,7 @@ async function decide(req: Request, params: Record<string, string>): Promise<Res
 }
 
 /**
- * An asking issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the label leaves; triage runs again at once),
+ * An asking issue's one-line answer, run as the CLI: `retriage` is `aleph issue note` (the Ask leaves; intake runs again at once),
  * `rerun` is `aleph issue decide`. `aleph issue note` takes the answer as its text, not as a flag.
  */
 /** `aleph issue edit` from the Issue page: the CLI stays the one writer. A body that opens with `## Request` keeps that heading. */
@@ -316,7 +316,7 @@ function answer(verb: "note" | "decide" | "done", text: string) {
 }
 
 export const routes: Routes = {
-  "POST /api/issues/:repo/:id/retriage": answer("note", "Chris: run triage again"),
+  "POST /api/issues/:repo/:id/retriage": answer("note", "Chris: run intake again"),
   "POST /api/issues/:repo/:id/rerun": answer("decide", "Chris: run it again"),
   "POST /api/issues/:repo/:id/checked": answer("done", "Chris: checked on the host"),
   "POST /api/issues/:repo/:id/unblock": (req, params) => unblock(req, params),

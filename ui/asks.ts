@@ -42,7 +42,7 @@ export function clean(text: unknown): string {
   const t = String(text ?? "")
     .replace(/<(task-notification|agent-message)\b[\s\S]*?(<\/\1>|$)/g, " ")
     .replace(/<[^>]*>/g, " ").replace(/[<>]/g, " ")
-    .replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*triage: (for Chris|a live check):\s*/i, "")
+    .replace(/^\s*-\s*/, "").replace(STAMP, "").replace(/^\s*(?:intake: for Chris|triage: (?:for Chris|a live check)):\s*/i, "")
     .replace(/\s+/g, " ").trim();
   return oneSentence(t);
 }
@@ -65,6 +65,7 @@ const CARDS: Record<string, { card: Card; tag: (c: Ctx) => string }> = {
   "part-dropped": { card: "decide", tag: () => "Part dropped" },
   "no-commit": { card: "unstick", tag: () => "No change" },
   "run-cap": { card: "unstick", tag: () => "Looping" },
+  "intake-failed": { card: "unstick", tag: () => "Can't take in" },
   "triage-failed": { card: "unstick", tag: () => "Can't sort" },
   "acceptance-failed": { card: "unstick", tag: () => "Failed final check" },
   rescue: { card: "unstick", tag: () => "Stalled" },
@@ -105,6 +106,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   "spec-check": (c) => `The spec check found that the spec of ${c.id} cannot be met as written: ${clean(c.issue?.question).replace(/\.$/, "")}.`,
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
   "run-cap": (c) => `The factory started ${c.id} 3 times in one hour, so it stopped starting it until you run it again.`,
+  "intake-failed": (c) => `Intake of ${c.id} failed: ${clean(unlead(c.issue?.question ?? "").replace(/^Intake failed:\s*/, "")).replace(/\.$/, "") || "it gave no verdict"}, so no one has decided what to do with this issue.`,
   "triage-failed": (c) => `Triage of ${c.id} failed twice: ${failure(c.issue?.question ?? "")}, so no one has decided what to do with this issue.`,
   "acceptance-failed": (c) => `${c.id} is the acceptance follow-up of a goal, and it also failed acceptance on main.`,
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
@@ -153,7 +155,7 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
         return c.run ? [a("drop", "Drop the job", "Discards the run's branch; the issue stays open.", run)]
           : [a("drop", "Drop the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
       case "rerun": return [rerun(reason, issue)];
-      case "retry": return [a("retriage", "Run triage again", "Removes the label; triage runs again at once.", issue)];
+      case "retry": return [a("retriage", "Run intake again", "Removes the Ask; intake runs again at once.", issue)];
       case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
       case "deny":
         if (reason === "proposal") return [a("deny", "Drop the proposal", "Marks the issue dropped; the work does not start.", issue)];

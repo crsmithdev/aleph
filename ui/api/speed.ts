@@ -26,7 +26,7 @@ function issueOf(r: Run): number | undefined {
 }
 
 export const MAX_RUN = 4 * HOUR;
-export const KINDS = ["agent", "land", "triage", "plan"] as const;
+export const KINDS = ["agent", "land", "intake", "triage", "plan"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
 /** A phase's `hist` counts times in 7 bins: under 1m, 1-5m, 5-15m, 15-30m, 30m-1h, 1-4h, over 4h (an edge falls in the upper bin). `worst` is the longest time in seconds. */
@@ -38,7 +38,7 @@ export interface Speed {
   /** Issues that landed in the window: one per issue, however many land runs it had. Land runs with no issue count as one. */
   done: number;
   kinds: Record<(typeof KINDS)[number], Pct>;
-  /** Intake: issue created to its first triage end. Queue: that end, or the filing with no triage, to the issue's first agent start. Implement: job's first agent start to its last finish. Land: finish to landed. Lead: issue created to its last land. Each counts in the window where it ends. */
+  /** Intake: issue created to its first intake (or triage) end. Queue: that end, or the filing with none, to the issue's first agent start. Implement: job's first agent start to its last finish. Land: finish to landed. Lead: issue created to its last land. Each counts in the window where it ends. */
   phases: Record<Phase, PhaseStat>;
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
@@ -292,7 +292,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     if (isAgentRun(r.kind)) {
       const a = Date.parse(r.started);
       if (a < (firstStart.get(key) ?? Infinity)) firstStart.set(key, a);
-    } else if (r.kind === "triage") {
+    } else if (r.kind === "intake" || r.kind === "triage") {
       const b = Date.parse(r.ended ?? "");
       if (b < (triaged.get(key) ?? Infinity)) triaged.set(key, b);
     } else if (r.kind === "land" && (r.condition === "landed" || r.condition === "done")) {
@@ -303,7 +303,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   for (const [key, started] of firstStart) {
     const created = issue.get(key), sorted = triaged.get(key);
     if (created != null && sorted != null && sorted >= created && sorted <= started && inWindow(sorted)) intake.push({ at: sorted, secs: (sorted - created) / 1000 });
-    // An issue filed with a spec skips triage: it queues from its filing.
+    // An issue filed with a spec in a repo without author skips intake: it queues from its filing.
     const queued = sorted != null && sorted <= started ? sorted : created;
     if (queued != null && started >= queued && inWindow(started)) queue.push({ at: started, secs: (started - queued) / 1000 });
   }
@@ -321,7 +321,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-export const AGENT_ROLES = [["worker", "Worker", "build"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
+export const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
 export type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
@@ -387,7 +387,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
   const startOf = (i: number) => (daily ? new Date(last.getFullYear(), last.getMonth(), last.getDate() - (n - 1 - i)) : new Date(last.getTime() - (n - 1 - i) * stepMs));
   const since = startOf(0);
   const slot = (t: number): number => (daily ? Math.round((new Date(t).setHours(0, 0, 0, 0) - since.getTime()) / DAY) : Math.floor((t - since.getTime()) / stepMs));
-  const times: Record<string, number[]> = { agent: [], land: [], triage: [], plan: [] };
+  const times: Record<string, number[]> = { agent: [], land: [], intake: [], triage: [], plan: [] };
   const checks = new Map<string, number[]>();
   const agents: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[] = [];
   const models = new Map<string, number[]>();

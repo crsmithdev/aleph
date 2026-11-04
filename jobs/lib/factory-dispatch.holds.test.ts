@@ -18,8 +18,8 @@ test("a goal that a red main holds gets one hold record; the suite runs main's c
   await suiteStep(red);
   await suiteStep(red);
   expect(checksRun).toBe(1);
-  const first = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
-  const second = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
+  const first = await dispatchIssues(async () => null, undefined, undefined, undefined);
+  const second = await dispatchIssues(async () => null, undefined, undefined, undefined);
   for (const out of [first, second]) {
     expect(out.started).toEqual([]);
     expect(out.skipped).toEqual([expect.stringMatching(new RegExp(`^fac-${id}: main is red at [0-9a-f]{7}: tests$`))]);
@@ -34,17 +34,17 @@ test("a red main holds goals after main moves, until a suite run on the new comm
   await suiteStep(async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "a fix");
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
-  const held = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
+  const held = await dispatchIssues(async () => null, undefined, undefined, undefined);
   expect(held.skipped).toEqual([expect.stringMatching(/main is red at/)]);
   expect(await suiteStep(async () => null)).toEqual({ fac: "green" });
-  const out = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
+  const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
   expect(out.started).toEqual([`fac-${id}`]);
 });
 
 test("a main that no suite run has checked, or whose checks gave no verdict, does not hold a goal", async () => {
   const id = goal();
   expect(await suiteStep(async () => ({ cause: "infra" as const, reason: "no runner" }))).toEqual({ fac: "main is unchecked: no runner" });
-  const out = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
+  const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
   expect(out.started).toEqual([`fac-${id}`]);
 });
 
@@ -60,7 +60,7 @@ describe("each skip in the goal loop gets one hold record", () => {
       return item;
     });
     try {
-      const out = await dispatchIssues(async () => null, undefined, undefined, undefined, undefined, undefined);
+      const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
       expect(out.skipped).toEqual([`${name}: the item is parked`]);
     } finally {
       spy.mockRestore();

@@ -3,7 +3,7 @@
  * arguments: a repo, an issue number, text and options. Each returns what
  * `aleph issue` prints as JSON and throws a `Refusal` when it refuses. No argv,
  * no stdout, no exit code: jobs/cli.ts parses, prints and exits, and starts the
- * detached dispatch and triage that follow a write. A store `follow` warning
+ * detached dispatch and intake that follow a write. A store `follow` warning
  * comes back in the result for the caller to print.
  */
 import { Refusal, refuse } from "../../jobs/lib/refusal.ts";
@@ -68,7 +68,7 @@ function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) 
 }
 
 /** Chris's answer to an issue with an Ask: not a worker's note (a job id) and not the factory's own. */
-export const isAnswer = (text: string, jobId: string | undefined): boolean => !jobId && !/^(triage|job \S+ landed)\b/.test(text);
+export const isAnswer = (text: string, jobId: string | undefined): boolean => !jobId && !/^(intake|triage|job \S+ landed)\b/.test(text);
 
 export interface Added { repo: string; added: number; title: string; commit: string; maybeSame?: { id: number; title: string }[] }
 
@@ -136,7 +136,7 @@ export function note(repo: store.Place, id: number | string, text: string, answe
 
 /**
  * Chris's answer to an issue that asks him something, in one write: the decision note, and the Ask cleared. The issue is
- * left to the triage that follows a note. `fields.after` (the UI's option that waits for an issue) sets `after`. On the
+ * left to the intake that follows a note. `fields.after` (the UI's option that waits for an issue) sets `after`. On the
  * part-dropped Ask, the plan option sets `plan` and the close option closes the issue.
  */
 export function decide(repo: store.Place, id: number | string, text: string, fields: Fields = {}) {

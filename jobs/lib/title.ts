@@ -37,9 +37,6 @@ export async function writeLine(system: string, input: string, max: number): Pro
 
 const system = (room: number) => `You turn one piece of text into an issue title. Reply with exactly one title: ${TITLE_RULE}.${room < TITLE ? ` It must fit in ${room} characters.` : ""} No quotes, no preamble.`;
 
-/** A part's leading `[Group] `, or "". */
-const GROUP = /^\[[^\]]*\] /;
-
 /** The source with each leading `<words>: ` removed, cut to `max` characters at a word boundary, with no final period. */
 export function cutTitle(source: string, max = TITLE): string {
   let t = source.trim();
@@ -62,9 +59,3 @@ async function fit(group: string, rest: string): Promise<string> {
 
 /** The model's title for `source`, less a final period, when `titleProblem` accepts it, else `cutTitle(source)`. It never throws. */
 export const writeTitle = (source: string): Promise<string> => fit("", source);
-
-/** As `writeTitle`, for a part: a leading `[Group] ` of the source stays at the front, and the model writes only the rest. */
-export function writePartTitle(source: string): Promise<string> {
-  const group = GROUP.exec(source.trim())?.[0] ?? "";
-  return fit(group, source.trim().slice(group.length));
-}

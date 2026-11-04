@@ -58,8 +58,8 @@ function cap(envName: string, key: string, dflt: number): number {
 export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.floor(availableParallelism() / 6)));
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
-export const TRIAGE_CAP = () => num("ALEPH_TRIAGE_CAP", 5);
-export const TRIAGE_TRIES = () => num("ALEPH_TRIAGE_TRIES", 2);
+export const INTAKE_CAP = () => num("ALEPH_INTAKE_CAP", 5);
+export const INTAKE_TRIES = () => num("ALEPH_INTAKE_TRIES", 2);
 /** How many signals make a lesson a proposal. */
 export const PROPOSE_AT = (): number => {
   const n = Number(process.env.ALEPH_PROPOSE_AT);

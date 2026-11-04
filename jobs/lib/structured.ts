@@ -17,5 +17,15 @@ export function structuredOf(stdout: string): unknown {
   return undefined;
 }
 
+/** The `session_id` of the last `result` event of a stream-json stdout, or undefined: `--resume` takes it. */
+export function sessionOf(stdout: string): string | undefined {
+  for (const line of stdout.trimEnd().split("\n").reverse()) {
+    let ev: any;
+    try { ev = JSON.parse(line); } catch { continue; }
+    if (ev?.type === "result") return typeof ev.session_id === "string" ? ev.session_id : undefined;
+  }
+  return undefined;
+}
+
 /** The reason a parser gives when the reply has no structured output. */
 export const NO_OUTPUT = "no structured output";

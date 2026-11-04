@@ -4,7 +4,7 @@ Every repo in `~/.aleph/repos.json` has an issue list in the work store, a priva
 
 ## Issues and goals
 
-An **issue** is what someone asks for: Chris, a worker or the correction memory. The request stays as written under `## Request`. Triage or the planner makes one or more **goals** from it, numbered under it (`aleph-577.1`). A goal never has parts, and an issue never has build runs.
+An **issue** is what someone asks for: Chris, a worker or the correction memory. The request stays as written under `## Request`. Intake makes one or more **goals** from it, numbered under it (`aleph-577.1`). A goal never has parts, and an issue never has build runs.
 
 Each is one file: `<repo>/backlog/tasks/<repo>-<n>.md`, or `<repo>-<n>.<k>.md` for a goal. A file holds a small frontmatter header, free prose, and a list of notes. Status is a field, never a folder: a finished issue stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
@@ -19,7 +19,7 @@ aleph issue note aleph 1057 "Reproduced on main at c26c10f"
 aleph issue done aleph 1057 "Landed in 84966d1"
 ```
 
-An issue added with `--spec -` is ready to build: the factory starts it without a triage run.
+An issue added with `--spec -` is ready to build in a repo without `"author": true`. In a repo with it, intake takes the issue in first and keeps or fixes the spec.
 
 ## Commands
 

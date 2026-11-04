@@ -12,7 +12,6 @@ jobs/lib/director.fixture.ts
 jobs/lib/factory.helpers.ts
 jobs/lib/landing.fixture.ts
 jobs/lib/ledger.test.ts
-jobs/lib/plan.test.ts
 jobs/lib/review.flow.test.ts
 jobs/lib/unit.flow.test.ts
 jobs/lib/unit.tz.test.ts

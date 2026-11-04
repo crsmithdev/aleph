@@ -42,13 +42,11 @@ test("Baseline lets the red-main fix through, and the later gates still bind on 
   expect(kind({ item: fix, red: "main is red at abc1234: tests", "live-cap": live })).toBe("live-cap");
 });
 
-test("Not ready covers a done goal, an after ref, an open job, a planner and a spec check, in that order", () => {
-  const all: Partial<GoalFacts> = { done: (r) => r === "fac-9", item: item({ after: ["fac-1"] }), open: "running", planning: true, checking: true };
+test("Not ready covers a done goal, an after ref and an open job, in that order", () => {
+  const all: Partial<GoalFacts> = { done: (r) => r === "fac-9", item: item({ after: ["fac-1"] }), open: "running" };
   expect(goalDecision(facts(all)).why).toBe("the item is already done");
   expect(goalDecision(facts({ ...all, done: () => false })).why).toBe("after fac-1");
   expect(goalDecision(facts({ ...all, done: () => false, item: item() })).why).toBe("its job is running");
-  expect(goalDecision(facts({ ...all, done: () => false, item: item(), open: null })).why).toBe("planning");
-  expect(goalDecision(facts({ checking: true }))).toMatchObject({ kind: "not-ready", why: "spec check running" });
 });
 
 test("the Queued lane reads the stops it once left out", () => {

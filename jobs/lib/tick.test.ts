@@ -8,7 +8,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
 import { plainAsk, setAsk } from "./ask.ts";
-import { runDispatch, triageNow, type Starts } from "./factory.ts";
+import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { setPaused, writeBaseline } from "./factory-status.ts";
 import { git } from "./git.ts";
 import { loadRegistry, writeRun, type Repo } from "./ledger.ts";
@@ -22,11 +22,11 @@ let n = 0;
 let key = "";
 const repo = (): Repo => loadRegistry()[key]!;
 
-// The fake triage: `VERDICT:ask` sets an Ask; anything else gives no verdict.
+// The fake intake: `VERDICT:ask` sets an Ask; anything else gives no reply.
 const FAKE = `#!/bin/bash
 prompt=$(cat)
 case $prompt in
-  *VERDICT:ask*) echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":{"route":"ask","question":"A or B?"}}}' ;;
+  *VERDICT:ask*) echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":{"route":"ask","reason":"a product choice","question":"A or B?"}}}' ;;
   *) exit 3 ;;
 esac
 `;
@@ -39,7 +39,7 @@ beforeAll(() => {
   chmodSync(join(base, "fake"), 0o755);
   Object.assign(process.env, {
     GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
-    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_TRIAGE_CMD: join(base, "fake"),
+    ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_INTAKE_CMD: join(base, "fake"),
     ALEPH_DISPATCH: "off", ALEPH_RESCUE: "off", XDG_RUNTIME_DIR: join(base, "run"),
   });
 });
@@ -52,7 +52,7 @@ beforeEach(() => {
   process.env.ALEPH_LIVE_CAP = "10";
 });
 
-/** Issues with a request and no spec: each is for triage, or waits for Chris with `ask`. */
+/** Issues with a request and no spec: each is for intake, or waits for Chris with `ask`. */
 function seed(items: { body: string; ask?: boolean }[]): void {
   writeList({ key }, "seed", (doc) => {
     for (const i of items) {
@@ -64,40 +64,40 @@ function seed(items: { body: string; ask?: boolean }[]): void {
 }
 
 /** The starts a transition makes, recorded. */
-function recorder(): Starts & { triaged: string[]; directors: number } {
-  const r = { triaged: [] as string[], directors: 0, triage: (rp: Repo, id: number) => { r.triaged.push(`${rp.key}-${id}`); }, director: () => { r.directors++; } };
+function recorder(): Starts & { taken: string[]; directors: number } {
+  const r = { taken: [] as string[], directors: 0, intake: (rp: Repo, id: number) => { r.taken.push(`${rp.key}-${id}`); }, director: () => { r.directors++; } };
   return r;
 }
 
 const tickLog = () => { try { return readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8"); } catch { return ""; } };
 
-test("a triage that sets an Ask starts the director at once, with no tick", async () => {
+test("an intake that sets an Ask starts the director at once, with no tick", async () => {
   seed([{ body: "VERDICT:ask" }]);
   const s = recorder();
-  await triageNow(repo(), 1, s);
+  await intakeNow(repo(), 1, s);
   expect(issues.find(readList({ key })!, 1)!.fm.ask).toBe("input");
   expect(s.directors).toBe(1);
-  expect(s.triaged).toEqual([]);
+  expect(s.taken).toEqual([]);
 });
 
-test("a triage with no verdict starts its retry at once; after the tries it sets the Ask, which goes to the director", async () => {
-  process.env.ALEPH_TRIAGE_TRIES = "2";
+test("an intake with no reply starts its retry at once; after the tries it sets the Ask, which goes to the director", async () => {
+  process.env.ALEPH_INTAKE_TRIES = "2";
   try {
     seed([{ body: "nothing" }]);
     const s = recorder();
-    await triageNow(repo(), 1, s);
-    expect(s.triaged).toEqual([`${key}-1`]);
+    await intakeNow(repo(), 1, s);
+    expect(s.taken).toEqual([`${key}-1`]);
     expect(s.directors).toBe(0);
-    await triageNow(repo(), 1, s);
-    expect(issues.find(readList({ key })!, 1)!.fm.reason).toBe("triage-failed");
-    expect(s.triaged).toEqual([`${key}-1`]);
+    await intakeNow(repo(), 1, s);
+    expect(issues.find(readList({ key })!, 1)!.fm.reason).toBe("intake-failed");
+    expect(s.taken).toEqual([`${key}-1`]);
     expect(s.directors).toBe(1);
   } finally {
-    delete process.env.ALEPH_TRIAGE_TRIES;
+    delete process.env.ALEPH_INTAKE_TRIES;
   }
 });
 
-test("a triage the live cap held starts at the dispatch that a run's end makes, with no tick", async () => {
+test("an intake the live cap held starts at the dispatch that a run's end makes, with no tick", async () => {
   process.env.ALEPH_LIVE_CAP = "1";
   seed([{ body: "nothing" }]);
   // A build run that holds the one live slot: made now, no pid yet.
@@ -105,14 +105,14 @@ test("a triage the live cap held starts at the dispatch that a run's end makes, 
   mkdirSync(folder, { recursive: true });
   writeRun(folder, { kind: "build", job: "busy", name: "busy", condition: "running", told: true, started: new Date(NOW).toISOString(), made: NOW });
   const s = recorder();
-  const held = await triageNow(repo(), 1, s);
-  expect(held.skipped).toEqual(["triage: 1 agent runs are live"]);
-  expect((await runDispatch(s)).triaging).toBeUndefined();
-  expect(s.triaged).toEqual([]);
+  const held = await intakeNow(repo(), 1, s);
+  expect(held.skipped).toEqual(["intake: 1 agent runs are live"]);
+  expect((await runDispatch(s)).intaking).toBeUndefined();
+  expect(s.taken).toEqual([]);
   // The run ends: its unit writes `exit`, then runs the dispatch.
   writeFileSync(join(folder, "exit"), "0\n");
-  expect((await runDispatch(s)).triaging).toEqual([`${key}-1`]);
-  expect(s.triaged).toEqual([`${key}-1`]);
+  expect((await runDispatch(s)).intaking).toEqual([`${key}-1`]);
+  expect(s.taken).toEqual([`${key}-1`]);
 });
 
 test("a dispatch after a write that set an Ask starts the director; an Ask with case text does not", async () => {

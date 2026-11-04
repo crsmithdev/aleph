@@ -2,7 +2,7 @@
  * The launcher: every place that starts `aleph <verb>` as a process of its
  * own goes through here. A run's unit and a held run's review get a transient
  * systemd unit (or, with `ALEPH_JOB_FOREGROUND=1`, a plain child); a dispatch
- * or triage after a transition is a unit of its own too. The transitions themselves run in-process: see transitions.ts.
+ * or intake after a transition is a unit of its own too. The transitions themselves run in-process: see transitions.ts.
  */
 import { closeSync, mkdirSync, openSync } from "node:fs";
 import { homedir } from "node:os";
@@ -112,10 +112,10 @@ export function dispatchDetached(): void {
   detached(["dispatch"], join(factoryDir(), "dispatch.log"));
 }
 
-/** Start `aleph triage <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
-export function triageDetached(repo: Repo, id: number): void {
+/** Start `aleph intake <repo>-<id>` detached, for a factory repo's issue; it never fails the caller. */
+export function intakeDetached(repo: Repo, id: number): void {
   if (!dispatchOn() || !repo.sandbox) return;
-  detached(["triage", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
+  detached(["intake", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
 }
 
 /** Start `aleph director` detached, for a new Ask: the director decides it now, not at a tick. It never fails the caller. */
@@ -128,17 +128,5 @@ export function directorDetached(): void {
 export function suiteDetached(): void {
   if (!dispatchOn()) return;
   detached(["suite"], join(factoryDir(), "dispatch.log"));
-}
-
-/** Start `aleph spec-check <repo>-<ref>` detached, for a goal whose spec version has no verdict; it never fails the caller. */
-export function specCheckDetached(repo: Repo, ref: string): void {
-  if (!dispatchOn() || !repo.sandbox) return;
-  detached(["spec-check", `${repo.key}-${ref}`], join(factoryDir(), "dispatch.log"));
-}
-
-/** Start `aleph plan <repo>-<id>` detached, for a large goal; it never fails the caller. */
-export function planDetached(repo: Repo, id: number): void {
-  if (!dispatchOn() || !repo.sandbox) return;
-  detached(["plan", `${repo.key}-${id}`], join(factoryDir(), "dispatch.log"));
 }
 

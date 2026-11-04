@@ -38,7 +38,7 @@ export interface RunView { kind: Run["kind"]; condition: State; open: boolean; a
 export interface Ctx {
   /** The ref's name on the page, for `why`. */
   main: string;
-  /** The repo is a factory repo (`sandbox: true`): triage reads it, so an issue with no spec gets sorted. */
+  /** The repo is a factory repo (`sandbox: true`): intake reads it, so an issue with no spec gets sorted. */
   sandbox: boolean;
   /** The not-reverted `Issue:` trailer commits on origin/<main>, by item number: `landedIndex`. */
   landed: Map<string, string[]>;
@@ -67,7 +67,7 @@ export function runViewOf(job: Job): RunView {
 
 /** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */
 const partOf = (ref: string): string | undefined => /-(\d+(?:\.\d+)?)$/.exec(ref)?.[1];
-const SORTING: Run["kind"][] = ["triage", "plan", "facts"];
+const SORTING: Run["kind"][] = ["intake", "triage", "plan", "facts"];
 
 /** The item is done: the store says so, or a not-reverted trailer commit on main names it. Returns the reason. */
 function doneWhy(item: Subject, ctx: Ctx): string | null {
@@ -101,7 +101,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const stuck = parts.find((p) => p.stage === "stuck");
   if (stuck) return out("stuck", `${stuck.id}: ${stuck.why}`);
   if (item.parts.length) {
-    if (item.plan || live.some((r) => r.kind === "plan")) return out("planning", "planning the rest");
+    if (item.plan) return out("planning", "intake plans the rest");
     const n = parts.filter((p) => p.stage === "done").length;
     return out("working", `${n} of ${item.parts.length} parts done`, { n, m: item.parts.length });
   }
@@ -113,9 +113,9 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
     return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s, ctx)));
   });
   if (blockers.length) return out("blocked", `after ${blockers.join(", ")}`);
-  if (item.plan || live.some((r) => r.kind === "plan")) return out("planning", "a plan run is needed or open");
+  if (item.plan) return out("planning", "intake splits it");
   if (item.tracker) return out("new", "the flake tracker: a note log");
   if (item.spec) return out("queued", "no job has started it");
-  if (live.some((r) => r.kind === "triage")) return out("new", "a triage run is open");
-  return out("new", ctx.sandbox ? "triage has not sorted it" : "the factory does not run for this repo, so nothing sorts it");
+  if (live.some((r) => r.kind === "intake")) return out("new", "an intake run is open");
+  return out("new", ctx.sandbox ? "intake has not taken it in" : "the factory does not run for this repo, so nothing sorts it");
 }

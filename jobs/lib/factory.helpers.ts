@@ -90,7 +90,7 @@ export function fakes() {
   const start = async (_r: unknown, name: string, _id: number | string, spec: string) => { calls.push(`start ${name}`); specs.push(spec); return null; };
   return { calls, rescue, land, specs, start };
 }
-export const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start, f.land, f.rescue, undefined, undefined, undefined);
+export const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start, f.land, f.rescue);
 
 
 // A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.
@@ -102,5 +102,5 @@ export const claimed = (name: string, result: string) => {
 /** A suite run with these checks, as `aleph suite` does, then a dispatch. */
 export const withChecks = async (f: ReturnType<typeof fakes>, checks: (repo: unknown, commit: string, logs: string) => Promise<ChecksStop | null>) => {
   await suiteStep(checks);
-  return dispatchIssues(f.start, f.land, f.rescue, undefined, undefined, undefined);
+  return dispatchIssues(f.start, f.land, f.rescue);
 };

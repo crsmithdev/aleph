@@ -2,8 +2,8 @@
  * The safe default actions for stuck and failed runs, taken by the dispatch that sees them: a duplicate
  * is dropped; a no-commit run whose worker says the goal is already met is checked on main, and closed when
  * the checks pass there; no commit and checks that fail after a land merge and a land that hits a merge conflict drop the run for one rerun
- * of the goal, with a note; a time box drops the run and sends the issue to the planner to split it, with no rerun, and an Ask
- * (input, rescue) instead when the issue is a part or the planner has already split it; an infrastructure failure is rechecked or landed again, once. Each action
+ * of the goal, with a note; a time box drops the run and sends the issue to intake to split it, with no rerun, and an Ask
+ * (input, rescue) instead when the issue is a part or has been split already; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
  * case hits one goal, sets an Ask (input, rescue) on the issue, which goes to the director. A run that a host
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
@@ -231,7 +231,7 @@ function hasWork({ r, repo }: Pick<Stuck, "r" | "repo">): boolean {
   return ahead.ok && Number(ahead.out) > 0;
 }
 
-/** Whether the planner cannot split this issue: it is a part (id `n.m`), has parts, or has had a planner run that split it. */
+/** Whether intake cannot split this issue: it is a part (id `n.m`), has parts, or had a planner run that split it before intake. */
 function splitAlready({ repo, issue }: Pick<Stuck, "repo" | "issue">): boolean {
   if (issue === undefined || typeof issue === "string") return true;
   const doc = reader().list(repo.key);
@@ -240,8 +240,8 @@ function splitAlready({ repo, issue }: Pick<Stuck, "repo" | "issue">): boolean {
   return allRuns().some((e) => e.run.kind === "plan" && e.run.on === `${repo.key}-${issue}` && e.run.reason === "planned");
 }
 
-/** Set `plan` on the issue, so the next dispatch starts the planner on it. Returns the refusal, or null. */
-function sendToPlanner(repo: Repo, issue: number): string | null {
+/** Set `plan` on the issue, so the next dispatch starts intake on it, which splits it. Returns the refusal, or null. */
+function sendToIntake(repo: Repo, issue: number): string | null {
   try {
     const w = writeList(repo, `time box: plan ${repo.key}-${issue}`, (doc) => {
       const item = issues.find(doc, issue);
@@ -355,13 +355,13 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     return take(duplicateStep(stuck, found?.onMain));
   }
   if (key === "time-box") {
-    // No rerun of the same goal: a plain issue goes to the planner to be split; a part, or an issue the planner has split, asks.
-    if (earlier || splitAlready(stuck)) return chris(`${name} ran out of its time box again, and it cannot be split further (${earlier ? "an earlier run hit the time box too" : "it is a part, or the planner has already split it"}). Drop it, or change the goal?`, choice(`${name} ran out of its time box and cannot be split: how should the factory go on?`, ["The planner cannot split it again"]));
+    // No rerun of the same goal: a plain issue goes to intake to be split; a part, or an issue split already, asks.
+    if (earlier || splitAlready(stuck)) return chris(`${name} ran out of its time box again, and it cannot be split further (${earlier ? "an earlier run hit the time box too" : "it is a part, or it has been split already"}). Drop it, or change the goal?`, choice(`${name} ran out of its time box and cannot be split: how should the factory go on?`, ["Intake cannot split it again"]));
     markRescued(last, key);
-    const why = await act.drop(name, `time box ran out in ${r.kind} run ${last.id}; the issue goes to the planner`);
-    const bad = why ?? sendToPlanner(repo, issue as number);
-    if (bad) return chris(`${name}: sending it to the planner failed (${bad}); ${reason}. What now?`, choice(`${name}: sending it to the planner failed: how should the factory go on?`, [`Failure: ${bad}`]));
-    const text = `${r.kind} run ${last.id}: the time box ran out; dropped, and the issue goes to the planner to split`;
+    const why = await act.drop(name, `time box ran out in ${r.kind} run ${last.id}; the issue goes to intake to split`);
+    const bad = why ?? sendToIntake(repo, issue as number);
+    if (bad) return chris(`${name}: sending it to intake failed (${bad}); ${reason}. What now?`, choice(`${name}: sending it to intake failed: how should the factory go on?`, [`Failure: ${bad}`]));
+    const text = `${r.kind} run ${last.id}: the time box ran out; dropped, and the issue goes to intake to split`;
     record(text);
     return void await say(text);
   }
