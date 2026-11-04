@@ -2,8 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { setPaused } from "./factory.ts";
-import { saveProbe } from "./factory-status.ts";
-import { gates, health } from "./factory-status.ts";
+import { gates } from "./factory-status.ts";
 import { waitingToLand } from "./landing.ts";
 import type { Run } from "./ledger.ts";
 import { startKept } from "./unit.ts";
@@ -15,22 +14,18 @@ afterEach(teardown);
 const entry = (kind: string, state: string, reason?: string): any =>
   ({ id: `x-${kind}-${state}`, folder: join(ctx.base, "none", `${kind}-${state}`), run: { kind, job: "j1", name: "n1", repo: "fac", condition: state, started: "2026-10-28T00:00:00Z", ...(reason ? { reason } : {}) } });
 
-test("gates returns the first factory gate, in the order pause, probe, live cap", () => {
+test("gates returns the first factory gate, in the order pause, live cap", () => {
   const order = () => gates({ jobs: [] })?.gate;
   process.env.ALEPH_LIVE_CAP = "0";
   setPaused(true);
-  saveProbe({ at: "2026-10-28T00:00:00Z", ok: false, failed: ["x"] });
   expect(order()).toBe("pause");
   setPaused(false);
-  expect(gates({ jobs: [] })).toMatchObject({ gate: "probe", why: "the sandbox probe at 2026-10-28T00:00:00Z failed: x" });
-  expect(health()).toContain("health: the sandbox probe at 2026-10-28T00:00:00Z failed: x");
-  saveProbe({ at: "2026-10-28T00:00:00Z", ok: true, failed: [] });
   expect(order()).toBe("live-cap");
   process.env.ALEPH_LIVE_CAP = "5";
   expect(gates({ jobs: [] })).toBeNull();
   // `only` leaves the others out.
   process.env.ALEPH_LIVE_CAP = "0";
-  expect(gates({ jobs: [], only: ["pause", "probe"] })).toBeNull();
+  expect(gates({ jobs: [], only: ["pause"] })).toBeNull();
   expect(gates({ jobs: [], only: ["live-cap"] })?.gate).toBe("live-cap");
 });
 

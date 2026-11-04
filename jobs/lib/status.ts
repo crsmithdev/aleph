@@ -1,25 +1,19 @@
 /**
  * Item stage (seed milestone 2): stage() over the `Issue:` trailers on
  * origin/<main>, the work store and the ledger. Nothing writes it back to the store.
- *
- * A factory run's bundle carries the store and ledger facts as a snapshot
- * commit at refs/aleph/facts, so `aleph status` inside the sandbox gives the
- * same answer as Chris's session from the same bundle.
  */
 import { readFetched, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { fetchOrigin, git, gitWith, jobCommit } from "./git.ts";
+import { fetchOrigin, git, jobCommit } from "./git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
 
-export const FACTS_REF = "refs/aleph/facts";
-
 /** What the store and the ledger say about a repo's items: what stage() needs of each. */
 export interface Facts {
   repo: string; main: string;
-  /** The repo has `sandbox: true`. Absent in a snapshot written before this field: then it is a sandbox, as before. */
-  sandbox?: boolean;
+  /** The repo has `sandbox: true`: it is a factory repo. */
+  sandbox: boolean;
   /** Item number to its status, kind, after, goals and ask kind. */
   items: Record<string, Subject>;
   /** Item number to its jobs, each as its last run: the open run state is in there. */
@@ -49,22 +43,6 @@ export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs:
   return { repo: repo.key, main: repo.main, sandbox: !!repo.sandbox, items, runs, open, touched: [...touched].sort((a, b) => a - b) };
 }
 
-/** A commit with no parent whose tree holds facts.json, at refs/aleph/facts. Returns the ref. */
-export function writeFacts(repo: Repo): string {
-  const blob = gitWith({ stdin: JSON.stringify(facts(repo), null, 2) + "\n" }, repo.path, "hash-object", "-w", "--stdin").out;
-  const tree = gitWith({ stdin: `100644 blob ${blob}\tfacts.json\n` }, repo.path, "mktree").out;
-  const commit = gitWith({ env: { GIT_AUTHOR_NAME: "aleph", GIT_AUTHOR_EMAIL: "aleph@aleph.invalid", GIT_COMMITTER_NAME: "aleph", GIT_COMMITTER_EMAIL: "aleph@aleph.invalid" } },
-    repo.path, "commit-tree", tree, "-m", "facts").out;
-  git(repo.path, "update-ref", FACTS_REF, commit);
-  return FACTS_REF;
-}
-
-/** The facts in a repo's snapshot ref, or null. */
-export function readFacts(cwd: string): Facts | null {
-  const r = git(cwd, "show", `${FACTS_REF}:facts.json`);
-  try { return r.ok ? JSON.parse(r.out) : null; } catch { return null; }
-}
-
 /**
  * The commits on `main` whose trailer block holds `Issue: <key>-<n>`, after the item's `since`, and that
  * no later commit reverts. Only trailer lines count: a subject or a body line that says `Issue:` does not.
@@ -83,7 +61,7 @@ const values = (v: string | undefined): string[] => (v ?? "").split(",").map((s)
 const revertedOn = (cwd: string, main: string): Set<string> =>
   new Set([...git(cwd, "log", main, "-E", "--grep=^This reverts commit [0-9a-f]{40}", "--format=%B").out.matchAll(/This reverts commit ([0-9a-f]{40})/g)].map((m) => m[1]));
 
-/** Each item's `since` as the store last fetched it. A sandbox has no store, and its facts pass `since` to `landedIndex`. */
+/** Each item's `since` as the store last fetched it. */
 function storedSince(key: string): (n: string) => string | undefined {
   let doc: issues.Doc | null = null;
   try { doc = readFetched({ key }); } catch {}
@@ -157,7 +135,7 @@ export function onMain(repo: { path: string; key: string; main: string } | undef
 export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo, (n) => f.items[n]?.since)): Stage[] {
   const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+(\.\d+)?$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
   const ctx: Ctx = {
-    main, landed, reverted: revertedIn(landed), sandbox: f.sandbox !== false,
+    main, landed, reverted: revertedIn(landed), sandbox: f.sandbox,
     item: (ref) => f.items[num(ref) ?? ""],
     runs: (ref) => f.runs[num(ref) ?? ""] ?? [],
   };

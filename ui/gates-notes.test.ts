@@ -28,13 +28,13 @@ beforeAll(() => {
   const factory = join(base, "factory");
   mkdirSync(factory);
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true } }));
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ALEPH_SANDBOX_DIR: join(base, "sandbox"), ...gitEnv });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => { const it = add(doc, "a task"); note(it, "Chris dropped: not needed"); return true; }, true);
 });
 afterAll(() => { restoreEnv(); rmSync(base, { recursive: true, force: true }); });
 
 test("log() shows an issue note `Chris dropped: <reason>` as a You entry on the issue", async () => {
-  const stub: any = { now: new Date().toISOString(), asks: [], factory: { paused: false, probe: null, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };
+  const stub: any = { now: new Date().toISOString(), asks: [], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };
   const d: any = JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
   expect(d.log.entries.find((x: any) => x.by === "You" && x.item === "fac-1")).toMatchObject({ what: "Chris dropped: not needed" });
 });

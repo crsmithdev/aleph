@@ -7,14 +7,14 @@ import { writeRun, type Entry, type Run } from "./ledger.ts";
 import { isRunning, markEnded, markStarted, processState, STARTING_MS, stop, unitAlive } from "./process.ts";
 
 let base: string;
-const kids: { kill: () => void }[] = [];
+const kids: { kill: (s?: NodeJS.Signals) => void }[] = [];
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "aleph-process-"));
   process.env.ALEPH_JOBS_DIR = join(base, "runs");
   mkdirSync(join(base, "runs"));
 });
 afterEach(() => {
-  for (const k of kids.splice(0)) k.kill();
+  for (const k of kids.splice(0)) k.kill("SIGKILL");
   delete process.env.ALEPH_JOBS_DIR;
   rmSync(base, { recursive: true, force: true });
 });
@@ -66,5 +66,16 @@ test("stop ends a live run's process", async () => {
   await liveIn(e.folder);
   expect(processState(e)).toBe("live");
   await stop(e, 5000);
+  expect(processState(e)).toBe("lost");
+});
+
+test("stop kills a process that ignores SIGTERM once the grace time is over, and returns only when it is gone", async () => {
+  const e = entry("a");
+  const p = Bun.spawn(["bash", "-c", `trap '' TERM; while :; do sleep 0.1; done; : ${e.folder}`]);
+  kids.push(p);
+  const named = () => { try { return readFileSync(`/proc/${p.pid}/cmdline`, "utf8").includes(e.folder); } catch { return false; } };
+  await waitFor(named, { timeout: 5000, every: 10 });
+  markStarted(e.folder, p.pid);
+  expect(await stop(e, 300)).toBe(true);
   expect(processState(e)).toBe("lost");
 });

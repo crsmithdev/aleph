@@ -1,6 +1,6 @@
 /**
  * The firefighter, as code: no agent runs. Each tick it reads the reds of the factory repos (a failed baseline in
- * baseline.json, a red GitHub CI on main in ci.json, a failed sandbox probe in probe.json) and files one critical
+ * baseline.json, a red GitHub CI on main in ci.json) and files one critical
  * issue per failing commit, with the tail of the failure's log in its request. The request names the commit
  * (`Failing commit: <sha>`), so a second tick, or a second source for the same commit, files nothing more. While the
  * repo has an open red-main issue, a new failing commit is one note on that issue, not a second issue. It also sets a
@@ -15,7 +15,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import { loadRegistry, type Repo } from "./ledger.ts";
 import { redCi, ciLine } from "./ci.ts";
-import { baselines, factoryDir, factoryRepos, gates, lastProbe, redLine } from "./factory-status.ts";
+import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import { askSlowLands } from "./rescue.ts";
 import { runFile } from "./run-files.ts";
@@ -26,8 +26,8 @@ export const LOG_CHARS = 8000;
 /** The most of a log that goes into a note: one line. */
 const NOTE_CHARS = 300;
 
-export type Source = "baseline" | "ci" | "probe";
-const SOURCE_NAME: Record<Source, string> = { baseline: "the baseline checks", ci: "GitHub CI on main", probe: "the sandbox probe" };
+export type Source = "baseline" | "ci";
+const SOURCE_NAME: Record<Source, string> = { baseline: "the baseline checks", ci: "GitHub CI on main" };
 
 /** One failure the firefighter files: the repo, the failing commit, what failed, and its log, read only when it is filed. */
 export interface Red { repo: string; commit: string; source: Source; line: string; log: () => string }
@@ -60,7 +60,7 @@ const oneLine = (text: string): string => {
   return t.length > NOTE_CHARS ? `…${t.slice(t.length - NOTE_CHARS + 1)}` : t;
 };
 
-/** Every red of the factory repos now: the failed baselines, the red CIs, and the last probe when it failed. */
+/** Every red of the factory repos now: the failed baselines and the red CIs. */
 export function reds(ports: Ports = defaultPorts): Red[] {
   const reg = loadRegistry();
   const keys = new Set(factoryRepos().map((r) => r.key));
@@ -73,13 +73,6 @@ export function reds(ports: Ports = defaultPorts): Red[] {
     if (!keys.has(c.repo) || !c.sha) continue;
     out.push({ repo: c.repo, commit: c.sha, source: "ci", line: ciLine(c), log: () => ports.ciLog(reg[c.repo], c.url) });
   }
-  const p = lastProbe();
-  const repo = p?.repo ?? factoryRepos()[0]?.key;
-  if (p && !p.ok && repo && keys.has(repo)) {
-    const log = () => [read(join(factoryDir(), "probe.log")), read(join(factoryDir(), "probe.log.stderr"))].filter((t) => t.trim()).join("\n");
-    // An older probe record has no commit: its time stands for it.
-    out.push({ repo, commit: p.commit ?? `probe at ${p.at}`, source: "probe", line: `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`, log });
-  }
   return out;
 }
 
@@ -88,7 +81,7 @@ const isRedMain = (i: issues.Issue) => store.areasOf(i).includes("red-main") || 
 /** The issue that holds this commit already: in its request, as filed, or in a note, as a later commit during an open fix. */
 const holds = (i: issues.Issue, commit: string) => isRedMain(i) && (i.request.includes(mark(commit)) || i.notes.some((n) => n.includes(mark(commit))));
 
-const TITLES: Record<Source, string> = { baseline: "Fix the red main at", ci: "Fix the red CI on main at", probe: "Fix the failed sandbox probe at" };
+const TITLES: Record<Source, string> = { baseline: "Fix the red main at", ci: "Fix the red CI on main at" };
 const titleOf = (r: Red) => (/^[0-9a-f]{7,}$/.test(r.commit) ? `${TITLES[r.source]} ${r.commit.slice(0, 7)}` : TITLES[r.source].replace(/ at$/, ""));
 
 export type Filed = { repo: string; commit: string; source: Source } & ({ filed: number } | { noted: number });

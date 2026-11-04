@@ -109,7 +109,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   "acceptance-failed": (c) => `${c.id} is the acceptance follow-up of a goal, and it also failed acceptance on main.`,
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
   proposal: () => "This work is a proposal, and it does not start until you approve it.",
-  "host-check": (c) => `A factory sandbox cannot run this check, so it must run on the host: ${noteOf(c) || "the check"}.`,
+  "host-check": (c) => `This check is against a live system, so you run it on this machine: ${noteOf(c) || "the check"}.`,
 };
 /** What a proposal changes and where, in the words of its buttons and hints. */
 function words(l: Lesson | undefined) {

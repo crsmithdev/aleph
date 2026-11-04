@@ -91,7 +91,7 @@ export interface Repo {
   setup: string[]; checks: Check[]; manual: { when: string[]; say: string }[]; note?: string;
   /** A passed agent run lands by itself. On unless the registry says false. */
   autoland: boolean;
-  /** Its agent runs are factory runs: the worker and the checks run under srt. */
+  /** Its agent runs are factory runs: the worker verdict, the checks and the reviewer decide the run. */
   sandbox: boolean;
   /** Globs a factory run may not change without Chris. */
   held: string[];

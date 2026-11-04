@@ -119,7 +119,6 @@ export function useDirectorFixture(): void {
       ALEPH_RULE_CMD: "false",
       XDG_RUNTIME_DIR: join(base, "run"),
       // Not the factory's ~/.aleph/sandbox: a concurrent copy of this file names its land folder the same in the same second, and removes it.
-      ALEPH_SANDBOX_DIR: join(base, "sandbox"),
     });
   });
   afterAll(() => { server.stop(true); rmSync(base, { recursive: true, force: true }); });

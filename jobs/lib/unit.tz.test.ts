@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Repo } from "./ledger.ts";
-import { checksInSandbox, runOnCommit } from "./checks.ts";
+import { checkEnv, checksAt, runOnCommit } from "./checks.ts";
 import { checkSlot } from "./ledger.ts";
 import { fixture } from "../../tests/git-fixture.ts";
-import { waitFor } from "../../tests/wait.ts";
 
-// The check path through checksInSandbox: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
+// The check path through checksAt: the check's environment must hold TZ=UTC, even when the parent process runs in another zone.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
@@ -24,20 +23,14 @@ const oneCommit = (path: string) => fixture("unit-tz", (dir) => {
   sh(dir, "git", "commit", "-q", "-m", "init");
 }, path);
 
-const KEYS =["ALEPH_SANDBOX_CMD", "TZ", "ALEPH_SANDBOX_DIR", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS"];
+const KEYS = ["TZ", "XDG_RUNTIME_DIR", "ALEPH_CHECK_SLOTS"];
 let base: string;
 let saved: Record<string, string | undefined>;
 
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), "unit-tz-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, {
-    ALEPH_SANDBOX_CMD: "/usr/bin/env",
-    TZ: "Asia/Tokyo",
-    ALEPH_SANDBOX_DIR: join(base, "runs"),
-    XDG_RUNTIME_DIR: join(base, "run"),
-    ALEPH_CHECK_SLOTS: "1",
-  });
+  Object.assign(process.env, { TZ: "Asia/Tokyo", XDG_RUNTIME_DIR: join(base, "run"), ALEPH_CHECK_SLOTS: "1" });
 });
 
 afterEach(() => {
@@ -48,52 +41,55 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("checksInSandbox hands each step's process to onSpawn, so a drop can kill a running check", async () => {
+/** A repo with one commit, its sha, and the repo's entry with these setup commands and checks. */
+function committed(setup: string[] = [], checks: { name: string; run: string }[] = []) {
   const path = join(base, "repo");
   oneCommit(path);
-  const dir = join(base, "sb");
-  for (const d of ["check", "checklog", "home", "tmp", "out"]) mkdirSync(join(dir, d), { recursive: true });
-  sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
-  const repo = { key: "r", path, setup: [], checks: [{ name: "slow", run: "sleep 60" }] } as unknown as Repo;
+  const repo = { key: "r", path, main: "main", setup, checks } as unknown as Repo;
+  return { repo, sha: sh(path, "git", "rev-parse", "HEAD") };
+}
+
+/** The repo's worktrees besides its main checkout. */
+const extraTrees = (path: string) => sh(path, "git", "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).length - 1;
+
+test("checksAt hands each check's process to onSpawn, so a drop can kill a running check", async () => {
+  const { repo, sha } = committed([], [{ name: "slow", run: "sleep 60" }]);
   const spawned: ReturnType<typeof Bun.spawn>[] = [];
-  const why = await checksInSandbox({
+  const why = await checksAt({
     folder: base, repo, changed: [], phase: () => {},
-    onSpawn: (p) => { spawned.push(p); if (spawned.length > 1) setTimeout(() => p.kill("SIGKILL"), 200); },
-  }, dir, "out/in.bundle", "refs/heads/main");
-  // The setup step, the check, and the check's rerun after the failure.
-  expect(spawned).toHaveLength(3);
-  // The rerun was killed: a check of `sleep 60` that ran out would pass the test's 20 s limit.
+    onSpawn: (p) => { spawned.push(p); setTimeout(() => p.kill("SIGKILL"), 200); },
+  }, sha, process.env);
+  // The check and its rerun after the failure.
+  expect(spawned).toHaveLength(2);
   expect(why).toMatchObject({ cause: "check", checkName: "slow", reason: "slow failed" });
+  expect(extraTrees(repo.path)).toBe(0);
 }, 20_000);
 
-/** A repo with one commit and a bundle of it in a fresh sandbox folder. */
-function sandboxed(setup: string[], checks: { name: string; run: string }[]) {
-  const path = join(base, "repo");
-  oneCommit(path);
-  const dir = join(base, "sb");
-  for (const d of ["check", "checklog", "home", "tmp", "out"]) mkdirSync(join(dir, d), { recursive: true });
-  sh(path, "git", "bundle", "create", join(dir, "out", "in.bundle"), "main");
-  return { dir, repo: { key: "r", path, setup, checks } as unknown as Repo };
-}
-
-test("checksInSandbox states a failed setup as the check `setup`", async () => {
-  const { dir, repo } = sandboxed(["false"], [{ name: "a", run: "true" }]);
-  const why = await checksInSandbox({ folder: base, repo, changed: [], phase: () => {} }, dir, "out/in.bundle", "refs/heads/main");
-  expect(why).toEqual({ cause: "check", checkName: "setup", reason: "setup failed" });
+test("checksAt runs the checks in a detached worktree at the commit, and checkEnv gives them TZ=UTC; the worktree goes after", async () => {
+  const { repo, sha } = committed([], [{ name: "a", run: "cat f.txt; echo tz=[$TZ]; git status --porcelain --branch | head -1; exit 3" }]);
+  const why = await checksAt({ folder: base, repo, changed: [], phase: () => {} }, sha, checkEnv());
+  expect(why).toEqual({ cause: "check", checkName: "a", reason: "a failed" });
+  const log = await Bun.file(join(base, "checks.log")).text();
+  expect(log).toContain("x\ntz=[UTC]\n## HEAD (no branch)");
+  expect(extraTrees(repo.path)).toBe(0);
 });
 
-/** A repo with one commit and its sha, for runOnCommit. */
-function committed(setup: string[] = []) {
-  const path = join(base, "repo");
-  oneCommit(path);
-  return { repo: { key: "r", path, main: "main", setup } as unknown as Repo, sha: sh(path, "git", "rev-parse", "HEAD") };
-}
+test("checksAt states a failed setup as the check `setup`", async () => {
+  const { repo, sha } = committed(["false"], [{ name: "a", run: "true" }]);
+  expect(await checksAt({ folder: base, repo, changed: [], phase: () => {} }, sha, process.env)).toEqual({ cause: "check", checkName: "setup", reason: "setup failed" });
+});
 
-test("runOnCommit runs the command on the commit in a clone, with TZ=UTC, and keeps its exit code and output", async () => {
+test("checksAt states a commit that git cannot check out as infra", async () => {
+  const { repo } = committed([], [{ name: "a", run: "true" }]);
+  expect(await checksAt({ folder: base, repo, changed: [], phase: () => {} }, "0".repeat(40), process.env)).toMatchObject({ cause: "infra" });
+});
+
+test("runOnCommit runs the command on the commit in a worktree, with TZ=UTC, and keeps its exit code and output", async () => {
   const { repo, sha } = committed(["true"]);
   expect(await runOnCommit(repo, sha, "cat f.txt; echo tz=[$TZ]")).toEqual({ code: 0, output: "x\ntz=[UTC]\n" });
   const bad = await runOnCommit(repo, sha, "echo boom; exit 3");
   expect(bad).toEqual({ code: 3, output: "boom\n" });
+  expect(extraTrees(repo.path)).toBe(0);
 });
 
 test("runOnCommit puts the hidden files in .hidden", async () => {
@@ -102,30 +98,27 @@ test("runOnCommit puts the hidden files in .hidden", async () => {
   expect((await runOnCommit(repo, sha, "ls -a")).output).not.toContain(".hidden");
 });
 
-test("runOnCommit: two runs for one repo at the same time do not remove each other's folder", async () => {
+test("runOnCommit: two runs for one repo at the same time do not remove each other's worktree", async () => {
   process.env.ALEPH_CHECK_SLOTS = "2";
   const { repo, sha } = committed();
-  const [a, b] = await Promise.all([runOnCommit(repo, sha, "true"), runOnCommit(repo, sha, "echo boom; exit 3")]);
-  expect([a.code, b.code]).toEqual([0, 3]);
-  expect(a.output + b.output).not.toContain("bundle failed");
+  const [a, b] = await Promise.all([runOnCommit(repo, sha, "sleep 0.3; cat f.txt"), runOnCommit(repo, sha, "cat f.txt; exit 3")]);
+  expect([a, b]).toEqual([{ code: 0, output: "x\n" }, { code: 3, output: "x\n" }]);
 });
 
-test("runOnCommit: a sandbox that ends before setup.code returns infra with its stdout tail", async () => {
-  const { repo, sha } = committed();
-  const fake = join(base, "fake-sandbox.sh");
-  writeFileSync(fake, "#!/bin/sh\necho sandbox-said-this\nexit 7\n");
-  chmodSync(fake, 0o755);
-  process.env.ALEPH_SANDBOX_CMD = fake;
-  const r = await runOnCommit(repo, sha, "true");
-  expect(r).toMatchObject({ code: 7, infra: true });
-  expect(r.output).toContain("the command did not start");
-  expect(r.output).toContain("sandbox-said-this");
+test("runOnCommit: a commit that git cannot check out returns infra", async () => {
+  const { repo } = committed();
+  const r = await runOnCommit(repo, "0".repeat(40), "true");
+  expect(r).toMatchObject({ code: 1, infra: true });
+  expect(r.output).toContain("worktree add failed");
 });
 
 test("runOnCommit: a failing setup returns infra with the setup log, and the command does not run", async () => {
   const { repo, sha } = committed(["echo KNOWN-SETUP-TEXT-716; false"]);
   const r = await runOnCommit(repo, sha, "echo boom; exit 3");
-  expect(r).toEqual({ code: 1, output: "setup failed\nKNOWN-SETUP-TEXT-716\n", infra: true });
+  expect(r).toMatchObject({ code: 1, infra: true });
+  expect(r.output).toStartWith("setup failed\n");
+  expect(r.output).toContain("KNOWN-SETUP-TEXT-716\n");
+  expect(r.output).not.toContain("boom");
 });
 
 test("runOnCommit waits for a check slot, and frees it after a run and after an infra result", async () => {
@@ -133,12 +126,10 @@ test("runOnCommit waits for a check slot, and frees it after a run and after an 
   const free = await checkSlot();
   let done = false;
   const p = runOnCommit(repo, sha, "echo boom; exit 3").then((r) => { done = true; return r; });
-  // The bundle is written just before the slot wait; the setup step, which writes setup.log, comes after it.
-  const runs = join(base, "runs");
-  const folder = () => (existsSync(runs) ? readdirSync(runs).find((d) => d.startsWith("accept-")) : undefined);
-  expect(await waitFor(() => { const f = folder(); return !!f && existsSync(join(runs, f, "out", "accept.bundle")); })).toBe(true);
+  await Bun.sleep(300);
   expect(done).toBe(false);
-  expect(existsSync(join(runs, folder()!, "checklog", "setup.log"))).toBe(false);
+  // No worktree before the slot.
+  expect(extraTrees(repo.path)).toBe(0);
   free();
   expect((await p).code).toBe(3);
   (await checkSlot())();

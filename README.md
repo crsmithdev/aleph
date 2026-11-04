@@ -1,6 +1,6 @@
 # aleph
 
-A personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin. It adds skills, hooks that guard and trace each session, a memory vault, an issue store, and a factory that builds issues in a sandbox and lands them on `main`.
+A personal [Claude Code](https://docs.anthropic.com/en/docs/claude-code) plugin. It adds skills, hooks that guard and trace each session, a memory vault, an issue store, and a factory that builds issues and lands them on `main`.
 
 It is one person's setup. You can install it as it is, or fork it and take the parts you want.
 
@@ -107,7 +107,7 @@ See [Issues](docs/issues.md).
 
 ### Factory
 
-A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. The factory triages its open issues, starts a sandboxed worker for each ready goal, checks and reviews the branch, and lands it on `main`.
+A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. The factory triages its open issues, starts a worker for each ready goal, checks and reviews the branch, and lands it on `main`.
 
 ```bash
 aleph dispatch       # start every ready goal, up to the caps

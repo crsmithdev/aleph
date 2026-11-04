@@ -88,7 +88,6 @@ export interface State {
     nextTick: string | null;
     /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
     tickInProgress: boolean;
-    probe: { at: string; ok: boolean; failed: string[] } | null;
     health: string[];
     /** The firefighter's factory log lines of the last 24 hours, newest last. */
     firefighter: { at: string; line: string }[];

@@ -24,8 +24,6 @@ export const factoryDir = () => layout().factory;
 
 const pauseFile = () => join(factoryDir(), "paused");
 
-export const probeFile = () => join(factoryDir(), "probe.json");
-
 export const holdsFile = () => join(factoryDir(), "holds.jsonl");
 
 /** One record of why a goal waits: `kind` is the gate that bound, or `started`. Records from before v6 name older kinds. */
@@ -124,24 +122,15 @@ export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((
 export const liveRuns = (runs?: Entry[]): number => liveEntries(runs).length;
 
 /** The gates of the whole factory, in the order of GATES: the others are each goal's own. */
-export const FACTORY_GATES = ["pause", "probe", "live-cap"] as const satisfies readonly Gate[];
+export const FACTORY_GATES = ["pause", "live-cap"] as const satisfies readonly Gate[];
 
 export type FactoryGate = (typeof FACTORY_GATES)[number];
 
-/** The probe gate: binds while the last sandbox probe failed. One file read. */
-export function probeGate(): Bound | null {
-  const p = lastProbe();
-  if (!p || p.ok) return null;
-  const why = `the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`;
-  return { why, text: why };
-}
-
-/** Each factory gate that binds now, or null: the pause, a failed probe, the live cap. `jobs`, when given, hold every run. */
+/** Each factory gate that binds now, or null: the pause, the live cap. `jobs`, when given, hold every run. */
 export function factoryGates(jobs?: Job[]): Record<FactoryGate, Bound | null> {
   const live = liveRuns(jobs?.flat());
   return {
     pause: paused() ? { why: "paused", text: "The factory is paused" } : null,
-    probe: probeGate(),
     "live-cap": live >= LIVE_CAP() ? { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)` } : null,
   };
 }
@@ -240,18 +229,6 @@ export function mainRed(): (repo: Repo) => string | null {
   };
 }
 
-/** `repo` and `commit` say what the probe ran on: origin/<main> of that repo. Older records lack them. */
-export interface Probe { at: string; ok: boolean; failed: string[]; repo?: string; commit?: string }
-
-export function saveProbe(p: Probe): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  writeFileSync(probeFile(), JSON.stringify(p, null, 2) + "\n");
-}
-
-export const lastProbe = (): Probe | null => {
-  try { return JSON.parse(readFileSync(probeFile(), "utf8")); } catch { return null; }
-};
-
 /** How long work may wait with nothing moving before it is stalled: three ticks. */
 const STALL_MS = 15 * 60_000;
 
@@ -307,7 +284,7 @@ export function suiteLines(runs: Entry[] = allRuns()): string[] {
 }
 
 /**
- * The factory's health lines: stalled work, a failed probe, a red main or CI and a slow
+ * The factory's health lines: stalled work, a red main or CI and a slow
  * full suite. The flake counts are the monitor's (monitor-table.ts). `jobs` is the
  * caller's, when it has read them already.
  */
@@ -317,8 +294,6 @@ export function health(now = Date.now(), o: { jobs?: Job[] } = {}): string[] {
   lines.push(...suiteLines(o.jobs?.flat()));
   const smoke = smokeLine();
   if (smoke) lines.push(smoke);
-  const p = lastProbe();
-  if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
   for (const r of redMains()) lines.push(`health: ${r.line}`);
   return lines;
 }
@@ -435,7 +410,6 @@ export function factorySnapshot(now: number, jobs: Job[]) {
     liveRuns: liveRuns(runs),
     runsToday: runsToday(now, runs).length,
     costToday: spentToday(now, runs),
-    probe: lastProbe(),
     health: health(now, { jobs }),
     firefighter: firefighterLines(now),
     gated: factoryGates(jobs),

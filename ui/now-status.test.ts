@@ -22,7 +22,6 @@ test("each error line says its alert, in red", () => {
   const cases: [object, string][] = [
     [{ health: [ciRed] }, "GitHub CI is broken"],
     [{ health: [mainRed] }, "the build is failing on main"],
-    [{ probe: { at: "x", ok: false, failed: ["no network"] } }, "the sandbox is broken"],
     [{ health: ["health: 2 passed runs did not land in 15 minutes"] }, "lands are stuck"],
     [{ health: ["health: the land run of aleph-5 is live for over 30 minutes"] }, "lands are stuck"],
     [{ health: ["health: 2 goals can start, but no run started in 15 minutes"] }, "queued jobs are not starting"],

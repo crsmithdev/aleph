@@ -1,15 +1,13 @@
 /**
  * `aleph doctor`: one command that checks the machine after an outage. Read-only
- * unless `fix` is set; `fix` makes the two safe repairs and nothing else.
+ * unless `fix` is set; `fix` starts the tick and nothing else.
  */
-import { existsSync, readdirSync, statSync, unlinkSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { git } from "./git.ts";
 import { allRuns, loadRegistry } from "./ledger.ts";
 import { isLost } from "./process.ts";
-import { lastProbe } from "./factory-status.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
-import { FACTS_REF, writeFacts } from "./status.ts";
 import { doctorClockMs, homeUrl, systemctlBin } from "./settings.ts";
 
 export interface Check { name: string; ok: boolean; detail: string }
@@ -17,7 +15,6 @@ export interface Check { name: string; ok: boolean; detail: string }
 const ok = (name: string, detail: string): Check => ({ name, ok: true, detail });
 const bad = (name: string, detail: string): Check => ({ name, ok: false, detail });
 
-const PROBE_STALE_MS = 26 * 3600_000;
 const CLOCK_WINDOW_MS = () => doctorClockMs();
 const HOME_URL = () => homeUrl();
 
@@ -67,13 +64,6 @@ function isPack(file: string): boolean {
 function looseId(file: string): string | null {
   const id = basename(dirname(file)) + basename(file);
   return /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(id) && basename(dirname(dirname(file))) === "objects" ? id : null;
-}
-
-/** Ids of everything the refs other than refs/aleph/facts reach (rev-list lists blobs without opening them), or null when that walk fails. */
-function realIds(path: string): Set<string> | null {
-  if (!git(path, "rev-parse", "--verify", "-q", FACTS_REF).ok) return null;
-  const r = git(path, "rev-list", "--objects", `--exclude=${FACTS_REF}`, "--all");
-  return r.ok ? new Set(r.out.split("\n").map((l) => l.split(" ")[0]!).filter(Boolean)) : null;
 }
 
 export async function clockChecks(): Promise<Check[]> {
@@ -133,14 +123,6 @@ export async function homeCheck(): Promise<Check> {
   }
 }
 
-export function probeCheck(now = Date.now()): Check {
-  const p = lastProbe();
-  if (!p) return bad("last probe", "none recorded");
-  if (!p.ok) return bad("last probe", `failed at ${p.at}: ${p.failed.join("; ")}`);
-  if (now - Date.parse(p.at) > PROBE_STALE_MS) return bad("last probe", `passed at ${p.at}, more than 26 hours ago`);
-  return ok("last probe", `passed at ${p.at}`);
-}
-
 export function lostCheck(): Check {
   const lost = allRuns().filter((e) => isLost(e.folder)).map((e) => e.id);
   return lost.length ? bad("lost runs", `${lost.length}: ${lost.join(", ")}`) : ok("lost runs", "none");
@@ -148,28 +130,12 @@ export function lostCheck(): Check {
 
 export async function doctor(): Promise<Check[]> {
   const [clock, home] = await Promise.all([clockChecks(), homeCheck()]);
-  return [...clock, ...gitChecks(), ...unitChecks(), home, probeCheck(), lostCheck()];
+  return [...clock, ...gitChecks(), ...unitChecks(), home, lostCheck()];
 }
 
-/**
- * The safe repairs. An empty object is removed only when every other ref still
- * walks clean, so the only thing behind it is refs/aleph/facts, which the
- * ledger and the store make again. Then the tick starts.
- */
+/** The safe repair: the tick starts. An empty object stays: `aleph doctor` names it, and Chris decides. */
 export function fix(): string[] {
   const said: string[] = [];
-  for (const repo of Object.values(loadRegistry())) {
-    const empties = emptyObjects(repo.path);
-    if (!empties.length) continue;
-    const real = realIds(repo.path);
-    const gone = real ? empties.filter((f) => { const id = looseId(f); return id !== null && !real.has(id); }) : [];
-    if (gone.length < empties.length) said.push(`${repo.key}: ${empties.length - gone.length} empty object(s) left: not only behind ${FACTS_REF}`);
-    if (!gone.length) continue;
-    for (const f of gone) unlinkSync(f);
-    git(repo.path, "update-ref", "-d", FACTS_REF);
-    const wrote = (() => { try { writeFacts(repo); return true; } catch { return false; } })();
-    said.push(`${repo.key}: removed ${gone.length} empty object(s); ${wrote ? `wrote ${FACTS_REF} again` : `${FACTS_REF} is gone and the next run writes it`}`);
-  }
   const t = systemctl("start", "--no-block", "aleph-tick.service");
   said.push(t.ok ? "started aleph-tick.service" : `could not start aleph-tick.service: ${t.out}`);
   return said;

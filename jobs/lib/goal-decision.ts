@@ -15,7 +15,7 @@ export const NO_COMMIT_LIMIT = 3;
 export const MAX_RUNS_PER_HOUR = 3;
 
 /** The dispatch's gates, in the order it asks them. Loop guard is last, so it counts only goals that would start. */
-export const GATES = ["pause", "baseline", "probe", "not-ready", "live-cap", "busy-file", "loop-guard"] as const;
+export const GATES = ["pause", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"] as const;
 
 export type Gate = (typeof GATES)[number];
 
@@ -30,7 +30,6 @@ export interface GoalFacts {
   pause?: Bound | null;
   /** The line of the repo's baseline when it is red, still running or unchecked. */
   red?: string | null;
-  probe?: Bound | null;
   /** The condition of the goal's open job. */
   open?: string | null;
   /** A planner run is going on the goal. */
@@ -49,7 +48,7 @@ export interface GoalFacts {
 
 /** `why` is the line in the dispatch's skipped list; `text` is the line Chris reads on the Queued lane. */
 export type GoalDecision = Bound & (
-  | { kind: "ready" | "pause" | "baseline" | "probe" | "live-cap" | "busy-file" }
+  | { kind: "ready" | "pause" | "baseline" | "live-cap" | "busy-file" }
   /** `ids`: the refs of `after` that are not done, when that is why. */
   | { kind: "not-ready"; ids?: string[] }
   /** `ask`: the Ask the dispatch sets in place of a start. */
@@ -86,7 +85,6 @@ export function goalDecision(f: GoalFacts): GoalDecision {
   // The fix of a red main is the one goal a red baseline lets through: it is how main gets green again.
   // `add` writes the label into `areas`; an older issue may carry it in `labels`, as the firefighter's isRedMain reads.
   if (f.red && !areasOf(f.item).includes("red-main") && !labels(f.item).includes("red-main")) return { kind: "baseline", why: f.red, text: f.red };
-  if (f.probe) return { kind: "probe", ...f.probe };
   const not = notReady(f);
   if (not) return not;
   if (f["live-cap"]) return { kind: "live-cap", ...f["live-cap"] };

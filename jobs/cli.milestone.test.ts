@@ -52,7 +52,7 @@ describe("milestone 2", () => {
     expect((await aleph(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);
 
-  test("aleph status inside the sandbox, from the bundle, says what it says outside", async () => {
+  test("aleph status inside a factory worker says what it says outside", async () => {
     const done = (await issueAdd("fac", "landed one")).json.added;
     pushFromOther(`landed\n\nIssue: fac-${done}`, "landed-one.txt");
     const open = (await issueAdd("fac", "open one")).json.added;

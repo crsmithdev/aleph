@@ -1,6 +1,6 @@
 /**
  * `GET /api/gates`: what the Gates page shows. The gates now, the Asks that wait for Chris, the host chores, one rule per
- * Ask reason, the held paths, the worker sandbox, and the log of who decided what. Each part comes from the module that
+ * Ask reason, the held paths, and the log of who decided what. Each part comes from the module that
  * owns it; this file only gathers them.
  * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
  * `POST /api/standing/:reason` (standing.ts).
@@ -51,8 +51,8 @@ export function rules() {
   });
 }
 
-/** The held paths and the worker sandbox, from ui/security-facts.ts in a process of its own: the server imports no security path. */
-export async function securityFacts(): Promise<{ held: string[]; sandbox: unknown }> {
+/** The held paths, from ui/security-facts.ts in a process of its own: the server imports no security path. */
+export async function securityFacts(): Promise<{ held: string[] }> {
   const p = Bun.spawn([process.execPath, join(import.meta.dir, "..", "security-facts.ts")], { stdout: "pipe", stderr: "pipe", env: process.env });
   const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
   if (code !== 0) throw new Error(`security-facts.ts exited ${code}: ${err.trim()}`);
@@ -145,12 +145,12 @@ export function repoHeld(): { repo: string; held: string[] }[] {
 }
 
 /** The page's data from the Status page's state (its factory snapshot, its asks and its Queued lane) and the security facts. */
-export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[]; sandbox: unknown }) {
+export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }) {
   const jobs = allJobs();
   const f = state.factory;
   return {
     now: state.now,
-    factory: { paused: f.paused, probe: f.probe, liveRuns: f.liveRuns, liveCap: f.liveCap, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP") } },
+    factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP") } },
     gated: gates({ jobs }),
     baseline: baselineGate(),
     goalGates: goalGates(state.queued ?? []),

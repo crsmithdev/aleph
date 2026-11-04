@@ -7,11 +7,10 @@ import { renderItem } from "../../todo/lib/todo.ts";
 import { config, storeDir } from "../../todo/lib/store.ts";
 import { runsDir } from "./ledger.ts";
 import { layout } from "./layout.ts";
-import { sandboxDir } from "./sandbox.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
-const VARS = ["ALEPH_ISSUES", "ALEPH_JOBS_DIR", "ALEPH_RUNS_DIR", "ALEPH_SANDBOX_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS"];
+const VARS = ["ALEPH_ISSUES", "ALEPH_JOBS_DIR", "ALEPH_RUNS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_REPOS"];
 let home: string, a: string;
 const saved: Record<string, string | undefined> = {};
 
@@ -61,9 +60,9 @@ afterAll(() => {
 });
 
 test("layout() names the new layout only, and the CLI reads the data there", async () => {
-  const fresh = { store: join(a, "issues"), ledger: join(a, "runs"), sandbox: join(a, "sandbox"), factory: join(a, "factory") };
+  const fresh = { store: join(a, "issues"), ledger: join(a, "runs"), factory: join(a, "factory") };
   expect(layout()).toEqual(fresh);
-  expect([storeDir(), runsDir(), sandboxDir()]).toEqual([fresh.store, fresh.ledger, fresh.sandbox]);
+  expect([storeDir(), runsDir()]).toEqual([fresh.store, fresh.ledger]);
 
   const list = await aleph("issue", "list", "aleph");
   expect(list.code).toBe(0);

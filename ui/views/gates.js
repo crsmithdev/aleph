@@ -26,7 +26,7 @@ export const REASONS = {
   "no-commit": ["Runs with no commit", "The last 3 runs of a goal ended with nothing committed."],
   "part-dropped": ["Dropped parts", "A part of an issue was dropped and no other part is open."],
   "triage-failed": ["Failed triage", "Triage of an issue failed twice."],
-  "host-check": ["Host checks", "A check that the sandbox cannot run; it runs on this machine."],
+  "host-check": ["Host checks", "A check against a live system on this machine, which Chris runs."],
   "spec-check": ["Spec checks", "The spec check found a spec that cannot be met as written."],
   rescue: ["Rescue of a stuck run", "A stuck run with more than one way out."],
   "run-cap": ["Run cap", "A goal started 3 times in one hour."],
@@ -46,7 +46,7 @@ export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Gates", { aside: "What can stop, hold or ask. Rules decide the routine; you see what is left." })}` +
     renderNow(d) + renderWaiting(d) + renderChores(d) + renderRules(d) +
-    `<div class="gates-two">${renderHeld(d)}${renderSandbox(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
+    `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
 const tone = (bad, warn = false) => (bad ? "stop" : warn ? "warn" : "ok");
@@ -67,14 +67,13 @@ function capForm(f, key, label, value) {
 /** A per-goal gate's tile: how many queued goals it holds now. */
 const goalTile = (name, n, note) => gtile(name, n ? `${n} held` : "none", note, tone(false, n > 0));
 
-/** The 7 gates, in the order the dispatch asks them, with the pause control. */
+/** The 6 gates, in the order the dispatch asks them, with the pause control. */
 export function renderNow(d) {
-  const f = d.factory, p = f.probe, base = d.baseline ?? [], g = d.goalGates ?? {};
+  const f = d.factory, base = d.baseline ?? [], g = d.goalGates ?? {};
   const red = base.filter((b) => b.state === "red"), held = g.baseline ? `; ${g.baseline} held` : "";
   const tilesHtml = [
     gtile("Pause", f.paused ? "paused" : "running", f.paused ? "no run starts or lands" : "not paused", tone(f.paused)),
     gtile("Baseline", red.length ? "red" : base.length ? "green" : "none", ((red.length ? red : base).map((b) => b.line).join(", ") || "no baseline yet") + held, tone(red.length > 0, !!g.baseline)),
-    gtile("Probe", !p ? "none" : p.ok ? "ok" : "failed", !p ? "no sandbox probe yet" : p.ok ? `sandbox probe ${when(p.at)}` : (p.failed ?? []).join("; "), tone(p && !p.ok, !p)),
     goalTile("Not ready", g["not-ready"], "done, waits on an issue, has an open job, or its planner or spec check runs"),
     gtile("Live cap", `${f.liveRuns} / ${f.liveCap}`, `cap ${f.liveCap} at once`, tone(f.liveRuns >= f.liveCap), capForm(f, "live", "Live cap", f.liveCap)),
     goalTile("Busy file", g["busy-file"], "an open job changes the same busy file"),
@@ -102,7 +101,7 @@ export function renderChores(d) {
     return `<div class="chore" data-id="${esc(i.id)}"><div class="chore-main">${repoIdLink(i.id, i.href, i.repo)} <span class="t">${esc(i.title)}</span><p class="quiet">${esc(i.problem)}</p></div><span class="quiet num">${esc(when(i.at))}</span><div class="actions">${btn}</div></div>`;
   }).join("");
   const all = rows ? `<button class="act" type="button" data-gates="all-done" data-label="Mark all done">Mark all done</button>` : "";
-  return `<section id="gates-chores" aria-label="Host chores">${sectionHead("Host chores", { count: d.chores.length, aside: `Steps on this machine that the sandbox cannot do. ${all}` })}` +
+  return `<section id="gates-chores" aria-label="Host chores">${sectionHead("Host chores", { count: d.chores.length, aside: `Checks against a live system on this machine. ${all}` })}` +
     (rows ? `<div class="chores">${rows}</div>` : empty("No host chore is open.")) + `</section>`;
 }
 
@@ -134,14 +133,6 @@ export function renderHeld(d) {
     : `<p class="quiet">No repo names held paths.</p>`;
   return card("Held paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
     `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`);
-}
-
-/** What a worker step may touch, from the profile sandbox.ts builds. Read-only. */
-export function renderSandbox(d) {
-  const s = d.sandbox;
-  const row = (k, v) => `<dt>${esc(k)}</dt><dd>${v.map((x) => `<code>${esc(x)}</code>`).join(", ") || "none"}</dd>`;
-  return card("Sandbox permissions", `<p class="quiet">What a worker step may touch. A run that needs more ends with a host chore.</p>` +
-    `<dl class="sbx">${row("Read", s.read)}${row("Write", s.write)}${row("Network", [...s.network.domains, ...(s.network.localBinding ? ["local ports"] : [])])}${row("Host", s.denied.map((p) => `no ${p}`))}</dl>`);
 }
 
 /** An item of the log as a link: an issue ref to its page, `rule` to the Rules. */

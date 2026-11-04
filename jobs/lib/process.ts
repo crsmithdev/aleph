@@ -77,13 +77,27 @@ export async function waitForPid(folder: string, ms: number, gone: () => boolean
   return existsSync(join(folder, "pid"));
 }
 
-/** Stop a live run: its systemd unit, else SIGTERM to its pid, then wait up to `ms` for the process to go. */
-export async function stop(e: Entry, ms = 35_000): Promise<void> {
+/** Wait up to `ms` for the run's process to go. True when it is gone. */
+async function gone(folder: string, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (isLive(folder) && Date.now() < deadline) await Bun.sleep(50);
+  return !isLive(folder);
+}
+
+/**
+ * Stop a live run and wait until its process is gone: its systemd unit (the whole cgroup), else SIGTERM to its process
+ * group and its pid; after `ms`, SIGKILL to both. False when the process still lives after that: the caller treats the
+ * run as stuck, never as failed.
+ */
+export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
   Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.id}`], { stdout: "ignore", stderr: "ignore" });
   const pid = pidOf(e.folder);
-  if (pid !== null && isLive(e.folder)) try { process.kill(pid, "SIGTERM"); } catch {}
-  const deadline = Date.now() + ms;
-  while (isLive(e.folder) && Date.now() < deadline) await Bun.sleep(50);
+  if (pid === null || !isLive(e.folder)) return true;
+  const signal = (s: NodeJS.Signals) => { for (const p of [-pid, pid]) try { process.kill(p, s); } catch {} };
+  signal("SIGTERM");
+  if (await gone(e.folder, ms)) return true;
+  signal("SIGKILL");
+  return gone(e.folder, 5_000);
 }
 
 /**

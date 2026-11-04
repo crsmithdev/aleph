@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { base, jobsDir, remote, sh, state, setup, teardown, seedItem } from "../cli.helpers";
 import { issueShow } from "../inproc.ts";
@@ -13,7 +13,6 @@ describe("a factory run", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   test("a tick starts one run per open goal, lands it, and then has nothing to start", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     const id = seedItem("fac", "ship the goal", { kind: "goal" }, "ACTION: commit goal.txt\n".trim());
     const t = await tick();
     expect(t.skipped).toEqual([]);

@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 /**
- * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|sandbox|status|judge>
+ * aleph <job|run|land|checked|recheck|drop|jobs|issue|unit|tick|report|pause|resume|status|judge>
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
  * See docs/specs/2026-09-24-agent-jobs.md.
  */
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
 import { isLive } from "./lib/process.ts";
 import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
@@ -22,20 +22,19 @@ import * as verbs from "../todo/lib/issues.ts";
 import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
 import { ciStep } from "./lib/ci.ts";
 import { firefight } from "./lib/firefighter.ts";
-import { behind, correctionsStep, directorStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
+import { behind, correctionsStep, directorStep, planNow, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
-import { factoryDir, factoryRepos, health, paused } from "./lib/factory-status.ts";
+import { factoryRepos, health } from "./lib/factory-status.ts";
 import { factoryLog } from "./lib/layout.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/monitor-table.ts";
 import { monitorStep, runMonitor, tableOf } from "./lib/monitor.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import type { Fate } from "./lib/outcome.ts";
 import { refuse, Refusal } from "./lib/refusal.ts";
-import { probe } from "./lib/probe.ts";
 import { smokeStep } from "./lib/smoke.ts";
 import * as doctor from "./lib/doctor.ts";
-import { facts, FACTS_REF, readFacts, repoStages, stages } from "./lib/status.ts";
+import { facts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
 import { jobId } from "./lib/settings.ts";
 
@@ -320,19 +319,10 @@ async function dispatchCmd(): Promise<void> {
 }
 
 /**
- * `aleph tick`, from the timer: the nightly probe when due, then a dispatch as the fallback for what
- * no run's end and no issue write has started. A failed probe starts no run. Last, the monitor's
- * daily report, which runs while paused.
+ * `aleph tick`, from the timer: a dispatch as the fallback for what no run's end and no issue write has
+ * started. Last, the monitor's daily report, which runs while paused.
  */
 async function tickCmd(): Promise<void> {
-  if (!paused() && probeDue()) {
-    const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
-    if (repo) {
-      mkdirSync(factoryDir(), { recursive: true });
-      const p = await probe(repo, join(factoryDir(), "probe.log"));
-      factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
-    }
-  }
   await correctionsStep();
   const d = await runDispatch();
   const t = await triageStep();
@@ -368,26 +358,15 @@ function reportCmd(): void {
   out({ systemMessage: msg, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: msg } });
 }
 
-/**
- * `aleph status <repo>-<n>[.<k>]`: the item's stage; with no issue, see statusRecent. In Chris's session the
- * facts come from the store and the ledger; in a sandbox, where neither is,
- * they come from the bundle's snapshot at refs/aleph/facts in the current repo.
- */
+/** `aleph status <repo>-<n>[.<k>]`: the item's stage, from the store and the ledger; with no issue, see statusRecent. */
 function statusCmd(): void {
   if (!positional[0]) return statusRecent();
   const m = (positional[0] ?? "").match(/^(.+)-(\d+(?:\.\d+)?)$/) ?? refuse("usage: aleph status [<repo>-<n>[.<k>]] [--json]");
   const [, key, n] = m!;
   const itemRef: number | string = n.includes(".") ? n : Number(n);
-  const repo = loadRegistry()[key];
+  const repo = loadRegistry()[key] ?? refuse(`no repo named ${key} in the registry`);
   let s: Stage | undefined;
-  if (repo) {
-    try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
-  } else {
-    const cwd = process.cwd();
-    const snap = readFacts(cwd);
-    if (!snap || snap.repo !== key) refuse(`no repo named ${key} in the registry, and no ${FACTS_REF} for it here`);
-    s = stages(cwd, `refs/remotes/origin/${snap!.main}`, snap!, [itemRef])[0];
-  }
+  try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (rest.includes("--json")) return out(s);
   console.log(issues.localRefs(key, `${s!.id} ${s!.stage}: ${s!.why}`));
@@ -493,16 +472,7 @@ try {
       out({ judge: judgeChoice() });
       break;
     }
-    case "sandbox": {
-      if (positional[0] !== "probe") refuse("usage: aleph sandbox probe");
-      const repo = Object.values(loadRegistry()).find((r) => r.sandbox) ?? refuse("no repo in the registry has sandbox: true");
-      mkdirSync(factoryDir(), { recursive: true });
-      const p = await probe(repo, join(factoryDir(), "probe.log"));
-      out(p);
-      if (!p.ok) process.exit(1);
-      break;
-    }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch|doctor|doc-claims|monitor> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|status|judge|dispatch|doctor|doc-claims|monitor> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

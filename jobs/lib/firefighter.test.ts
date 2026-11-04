@@ -1,4 +1,4 @@
-// The firefighter as code: one critical issue per failing commit, from a red baseline, a red CI or a failed probe,
+// The firefighter as code: one critical issue per failing commit, from a red baseline or a red CI,
 // and a rescue Ask on a land live past 30 minutes. No agent run starts.
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -8,7 +8,6 @@ import * as store from "../../todo/lib/store.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import { askOf } from "./ask.ts";
 import { ciStep, type GhRun } from "./ci.ts";
-import { saveProbe } from "./factory-status.ts";
 import { waitFor } from "../../tests/wait.ts";
 import { firefight, LOG_CHARS, type Ports } from "./firefighter.ts";
 import { loadRegistry } from "./ledger.ts";
@@ -60,18 +59,6 @@ test("a red CI on main, read through ciStep, files exactly one issue; the same c
   expect(reds()[0].notes).toEqual([]);
   // The log is read only for the write that files it.
   expect(ciCalls).toBe(1);
-});
-
-test("a failed probe files one critical issue with the probe log", async () => {
-  fresh([]);
-  saveProbe({ at: "2026-11-03T09:00:00Z", ok: false, failed: ["bun test"], repo: key, commit: C });
-  write("probe.log", "PASS read ~/.ssh: denied\nFAIL bun test: failed\n");
-  await firefight(ports());
-  await firefight(ports());
-  expect(reds().length).toBe(1);
-  expect(reds()[0].title).toBe(`Fix the failed sandbox probe at ${C.slice(0, 7)}`);
-  expect(reds()[0].fm.priority).toBe("critical");
-  expect(reds()[0].request).toContain("FAIL bun test: failed");
 });
 
 test("a second failing commit while the first issue is open is one note on it; once it is done, a new commit files a new issue", async () => {

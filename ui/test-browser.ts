@@ -6,13 +6,67 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { chromeArgv, Pipe } from "../jobs/lib/review-browser.ts";
 
 const CHROME = "/usr/bin/google-chrome";
 
+/** The argv that runs Chrome headless on a pipe (no debugging port), with a profile of its own. */
+function chromeArgv(profileDir: string): string[] {
+  return [CHROME, "--headless=new", "--remote-debugging-pipe", `--user-data-dir=${profileDir}`,
+    "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-sync", "--disable-background-networking",
+    "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-proxy-server", "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1", "about:blank"];
+}
+
+/** A CDP connection over Chrome's pipe: commands on fd 3, answers and events on fd 4, each message ended by a NUL. */
+class Pipe {
+  private next = 1;
+  private waiting = new Map<number, { ok: (v: any) => void; no: (e: Error) => void }>();
+  private listeners: ((m: any) => void)[] = [];
+  private buf = "";
+  closed = false;
+  constructor(private out: NodeJS.WritableStream, input: NodeJS.ReadableStream) {
+    // A write to a Chrome that has exited fails with EPIPE: the waiting commands fail, nothing throws.
+    out.on("error", () => this.close(new Error("Chrome closed its pipe")));
+    input.on("data", (d: Buffer) => {
+      this.buf += d.toString("utf8");
+      let i: number;
+      while ((i = this.buf.indexOf("\0")) >= 0) {
+        const raw = this.buf.slice(0, i);
+        this.buf = this.buf.slice(i + 1);
+        let m: any;
+        try { m = JSON.parse(raw); } catch { continue; }
+        if (m.id !== undefined && this.waiting.has(m.id)) {
+          const w = this.waiting.get(m.id)!;
+          this.waiting.delete(m.id);
+          m.error ? w.no(new Error(m.error.message ?? "CDP error")) : w.ok(m.result ?? {});
+        } else for (const l of this.listeners) l(m);
+      }
+    });
+    input.on("close", () => this.close(new Error("Chrome closed its pipe")));
+    input.on("error", () => this.close(new Error("Chrome closed its pipe")));
+  }
+  close(e: Error) {
+    this.closed = true;
+    for (const w of this.waiting.values()) w.no(e);
+    this.waiting.clear();
+  }
+  send(method: string, params: object = {}, sessionId?: string, ms = 15_000): Promise<any> {
+    if (this.closed) return Promise.reject(new Error("Chrome closed its pipe"));
+    const id = this.next++;
+    return new Promise((ok, no) => {
+      const t = setTimeout(() => { this.waiting.delete(id); no(new Error(`${method} timed out`)); }, ms);
+      this.waiting.set(id, { ok: (v) => { clearTimeout(t); ok(v); }, no: (e) => { clearTimeout(t); no(e); } });
+      this.out.write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + "\0");
+    });
+  }
+  on(l: (m: any) => void): () => void {
+    this.listeners.push(l);
+    return () => { this.listeners = this.listeners.filter((x) => x !== l); };
+  }
+}
+
 /**
  * The tests that start Chrome run only with ALEPH_BROWSER_TESTS=1: `bun run test:all`, CI and the factory's checks
- * set it, and a plain `bun run test` skips them. A check runs them under srt with Unix sockets allowed. CI must have one:
+ * set it, and a plain `bun run test` skips them. CI must have one:
  * there a missing Chrome fails, and does not skip.
  */
 export const chromeUsable = process.env.ALEPH_BROWSER_TESTS === "1" && (process.env.CI === "true" || (existsSync(CHROME) && Bun.spawnSync([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--dump-dom", "about:blank"], { stdout: "ignore", stderr: "ignore", timeout: 20_000, env: { ...process.env, HOME: tmpdir() } }).exitCode === 0));
@@ -47,12 +101,11 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
 
   const profile = join(base, "profile");
   mkdirSync(profile);
-  process.env.ALEPH_REVIEW_CHROME = CHROME;
   const argv = chromeArgv(profile);
-  const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"], // Under srt, Chrome's SingletonSocket needs the short ALEPH_CHROME_TMP: a socket path holds 108 characters.
-    env: { HOME: profile, TMPDIR: process.env.ALEPH_CHROME_TMP ?? profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
+  const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
+    env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
   const cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
-  // The first call waits for Chrome to start; 30 s as in shot.ts and review-browser.ts, since a busy CI runner took over 15 s (runs 41675736380, cc2f927ff).
+  // The first call waits for Chrome to start; 30 s, since a busy CI runner took over 15 s (runs 41675736380, cc2f927ff).
   await cdp.send("Browser.getVersion", {}, undefined, 30_000);
 
   const open = async (hash = "#/"): Promise<Page> => {

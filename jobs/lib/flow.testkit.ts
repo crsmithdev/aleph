@@ -3,22 +3,19 @@
  * report's text, a tick, an item's notes, the status line and the pause. Each runs under the CLI's environment
  * (`asCli`) and calls the library functions that jobs/cli.ts calls, in the same order.
  */
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
 import { base } from "../cli.helpers";
 import { asCli, call, issueShow, status, type Result } from "../inproc.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ciStep } from "./ci.ts";
 import { firefight } from "./firefighter.ts";
-import { behind, correctionsStep, episodeStep, directorStep, probeDue, report, runDispatch, stallStep, triageStep } from "./factory.ts";
-import { factoryDir, factoryRepos, health, paused, setPaused } from "./factory-status.ts";
+import { behind, correctionsStep, episodeStep, directorStep, report, runDispatch, stallStep, triageStep } from "./factory.ts";
+import { factoryRepos, health, setPaused } from "./factory-status.ts";
 import { fetchOrigin } from "./git.ts";
 import { factoryLog } from "./layout.ts";
 import { loadRegistry } from "./ledger.ts";
 import { flakeLines, reportLine } from "./monitor-table.ts";
 import { monitorStep } from "./monitor.ts";
 import type { Fate } from "./outcome.ts";
-import { probe } from "./probe.ts";
 import { smokeStep } from "./smoke.ts";
 import { drop as dropJob, startPlain } from "./transitions.ts";
 
@@ -48,14 +45,6 @@ export const reportText = (): Promise<string> => asCli({}, () => {
 
 /** `aleph tick`: its steps in the same order, and the JSON it prints. */
 export const tick = (extra: Record<string, string> = {}): Promise<any> => asCli(extra, async () => {
-  if (!paused() && probeDue()) {
-    const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
-    if (repo) {
-      mkdirSync(factoryDir(), { recursive: true });
-      const p = await probe(repo, join(factoryDir(), "probe.log"));
-      factoryLog(`probe ${p.ok ? "passed" : `failed: ${p.failed.join("; ")}`}`);
-    }
-  }
   await correctionsStep();
   const d: any = await runDispatch();
   const t = !d.held ? await triageStep() : { triaged: {}, skipped: [] };

@@ -51,7 +51,7 @@ function landSetup(file = "a.txt", held: string[] = []): string {
   return git(path, "rev-parse", "main").out;
 }
 const held = (base: string, review: () => Promise<{ reason: string | null }>, runner: Runner = async () => ({ code: 0, output: "" })) =>
-  workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, { ...branchPorts("j1-run", folder, base_run, repo, root, base, "work", { changed: [], runner, review: review as never }), checks: async () => ({ stop: null }) });
+  workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, { ...branchPorts(folder, base_run, repo, base, "work", { changed: [], runner, review: review as never }), checks: async () => ({ stop: null }) });
 const cleanup = () => { if (root) rmSync(root, { recursive: true, force: true }); root = ""; };
 
 test("gate failed Oracle command: the worker verdict gives condition stuck with checkName oracle and no review", async () => {
@@ -64,7 +64,7 @@ test("gate failed Oracle command: the worker verdict gives condition stuck with 
   } finally { cleanup(); }
 });
 
-test("gate held path: a branch that changes a path in repo.held is awaiting, and sandbox.ts is held path jobs/lib/sandbox.ts", async () => {
+test("gate held path: a branch that changes a path in repo.held is awaiting, and gate.ts is held path jobs/lib/gate.ts", async () => {
   try {
     const b = landSetup("held/x.txt", ["held/**"]);
     const r = await held(b, async () => ({ reason: null }));
@@ -72,8 +72,8 @@ test("gate held path: a branch that changes a path in repo.held is awaiting, and
     expect(r.outcome.ask).toMatchObject({ reason: "held-path" });
   } finally { cleanup(); }
   try {
-    const b = landSetup("jobs/lib/sandbox.ts");
+    const b = landSetup("jobs/lib/gate.ts");
     const r = await held(b, async () => ({ reason: null }));
-    expect(r.outcome).toMatchObject({ condition: "awaiting", reason: "held path jobs/lib/sandbox.ts" });
+    expect(r.outcome).toMatchObject({ condition: "awaiting", reason: "held path jobs/lib/gate.ts" });
   } finally { cleanup(); }
 });

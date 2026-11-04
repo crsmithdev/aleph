@@ -117,10 +117,10 @@ export function heldRule(cwd: string, held: string[], base: string, tip: string)
 }
 
 /**
- * What runs the sandbox, and the review and safety checks. A diff that changes one waits for Chris
+ * The review and safety checks. A diff that changes one waits for Chris
  * after the reviewer passes it, as a held path does; any other run that passes the reviewer lands by itself.
  */
-export const SECURITY_PATHS = ["hooks/", "jobs/lib/sandbox.ts", "jobs/lib/netns.ts", "jobs/lib/probe.ts", "jobs/lib/shot.ts", "jobs/lib/gate.ts", "jobs/lib/review-browser.ts", "package.json", "tsconfig.json", "bunfig.toml", "identity/CLAUDE.md"];
+export const SECURITY_PATHS = ["hooks/", "jobs/lib/gate.ts", "package.json", "tsconfig.json", "bunfig.toml", "identity/CLAUDE.md"];
 
 /** A security path the diff from `base` to `tip` changes that is not a test, or null. A rename counts both of its paths. */
 export function securityChange(cwd: string, base: string, tip: string): string | null {

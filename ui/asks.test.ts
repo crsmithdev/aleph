@@ -75,7 +75,7 @@ describe("asks", () => {
     try { h = CASES["host-check"]().flatMap((i) => i.actions).find((a) => a.act === "checked")!.hint; } finally { STORE = undefined; }
     expect(h).toContain("runs nothing");
     expect(h).toContain("Records that you ran this check yourself");
-    expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
+    expect(CASES["host-check"]()[0].problem).toBe("This check is against a live system, so you run it on this machine: On the host, run wsl.exe -l -q and put it in place of at.");
   });
 
   test("an issue with a reason the table does not name is a question", () => {

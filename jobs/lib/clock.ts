@@ -1,5 +1,5 @@
 /**
- * Clock checks shared by `aleph doctor` and the sandbox probe: the wall clock
+ * Clock checks of `aleph doctor`: the wall clock
  * against the monotonic clock, and WSL against Windows time. After the
  * 2026-10-30 power loss the wall clock stepped under a running suite.
  */

@@ -74,10 +74,8 @@ describe("run-folder files", () => {
 
 describe("the evidence of a delivery", () => {
   test("checkedBy names the checks that passed and the reviewers that left a file", () => {
-    const f = run("20261101-000001-a", "20261101-000001-a", { checks: [{ name: "tests", ok: true, seconds: 1 }, { name: "types", ok: false, seconds: 1 }] }, { "review.md": "land" });
-    mkdirSync(join(f, "browser"));
-    writeFileSync(join(f, "browser", "report.md"), "fine");
-    expect(checkedBy(allJobs()[0])).toEqual(["tests", "reviewer", "browser review"]);
+    run("20261101-000001-a", "20261101-000001-a", { checks: [{ name: "tests", ok: true, seconds: 1 }, { name: "types", ok: false, seconds: 1 }] }, { "review.md": "land" });
+    expect(checkedBy(allJobs()[0])).toEqual(["tests", "reviewer"]);
   });
   test("a job with nothing recorded has no evidence", () => {
     run("20261101-000002-b", "20261101-000002-b");

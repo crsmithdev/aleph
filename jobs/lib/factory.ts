@@ -1,7 +1,7 @@
 /**
  * The factory around the runs: the timer's tick, the dispatch and the report.
  * What it reads of its state is in factory-status.ts. Its state lives in
- * ~/.aleph/factory, which no sandbox can see. See docs/specs/2026-10-26-seed-factory.md.
+ * ~/.aleph/factory. See docs/specs/2026-10-26-seed-factory.md.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -31,10 +31,9 @@ import { dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
 import { markLaunched, passNotes, recordedVerdict, specChecking } from "./spec-check.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
-import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, probeGate, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
+import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
 export { setPaused };
 
-/** jobs/lib/probe.ts imports the type from here, and a security path stays as it is. */
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from "./goal-decision.ts";
 
 /** A start refused because the live cap filled: the line `gates` gives for it. */
@@ -123,9 +122,9 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
       goals = openGoals();
     }
   }
-  // The planner starts an agent run, so the baseline and probe gates hold it as they hold a goal.
+  // The planner starts an agent run, so the baseline gate holds it as it holds a goal.
   const planners: { repo: Repo; item: issues.Issue }[] = [];
-  for (const repo of probeGate() ? [] : sandboxRepos()) {
+  for (const repo of sandboxRepos()) {
     if (reds.get(repo.key)) continue;
     for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) if (planSet(item)) planners.push({ repo, item });
   }
@@ -140,8 +139,8 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = reds.get(repo.key);
-    // The cheap facts first: the pause was asked above, and the probe is one file.
-    const first = goalDecision({ name, item: listed, done, red, probe: probeGate() });
+    // The cheap facts first: the pause was asked above.
+    const first = goalDecision({ name, item: listed, done, red });
     if (first.kind !== "ready") { skip(name, first.kind, first.why); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
@@ -258,9 +257,9 @@ export function correctionsDue(now = Date.now()): boolean {
   return !at || Number.isNaN(t) || localDay(t) !== localDay(now);
 }
 
-/** The tick's daily correction mining (corrections.ts), under the pause and probe gates. An error is logged, never thrown. */
+/** The tick's daily correction mining (corrections.ts), under the pause gate. An error is logged, never thrown. */
 export async function correctionsStep(now = Date.now()): Promise<{ signals: number; lessons: number; proposed: number } | null> {
-  if (gates({ only: ["pause", "probe"] }) || !correctionsDue(now)) return null;
+  if (gates({ only: ["pause"] }) || !correctionsDue(now)) return null;
   try {
     const store = await mine(now);
     const r = {
@@ -280,7 +279,7 @@ export async function correctionsStep(now = Date.now()): Promise<{ signals: numb
  * The tick's triage of open issues that are not goals (triage.ts). Only the tick runs it: a dispatch does not wait on it.
  */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
-  if (gates({ only: ["pause", "probe"] })) return { triaged: {}, skipped: [] };
+  if (gates({ only: ["pause"] })) return { triaged: {}, skipped: [] };
   const t = await triageOpen(sandboxRepos(), doneChecker());
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.build || t.triaged.plan) dispatchDetached();
@@ -348,8 +347,6 @@ export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, 
   }
   return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
 }
-
-export const probeDue = (now = Date.now()) => { const p = lastProbe(); return !p || now - Date.parse(p.at) > 20 * 3600_000; };
 
 /**
  * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
@@ -504,11 +501,11 @@ function runLines(now: number): string[] {
 
 /**
  * Triage one issue at once, as `aleph issue add`, a note that answers an Ask, and a
- * worker's follow-ups do. The gates are the factory's: paused, a failed probe. A gated issue is
+ * worker's follow-ups do. The gate is the factory's pause. A gated issue is
  * left for the tick.
  */
 export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Counts; skipped: string[] }> {
-  if (gates({ only: ["pause", "probe"] })) return { triaged: {}, skipped: [] };
+  if (gates({ only: ["pause"] })) return { triaged: {}, skipped: [] };
   const t = await triageIssue(repo, id, doneChecker());
   factoryLog(`triaged ${repo.key}-${id}: ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.build || t.triaged.plan) dispatchDetached();
@@ -516,12 +513,11 @@ export async function triageNow(repo: Repo, id: number): Promise<{ triaged: Coun
 }
 
 /**
- * Plan one goal at once, as `aleph plan` does, under the factory's gates: not paused, no
- * failed probe, a factory repo. When it ends, the parts or the fallback worker start from
+ * Plan one goal at once, as `aleph plan` does, under the factory's gates: not paused, a factory repo. When it ends, the parts or the fallback worker start from
  * a dispatch of their own.
  */
 export async function planNow(repo: Repo, id: number): Promise<{ planned: string[] } | { why: string }> {
-  const gated = gates({ only: ["pause", "probe"] });
+  const gated = gates({ only: ["pause"] });
   if (gated) return { why: gated.why };
   if (!repo.sandbox) return { why: `${repo.key} is not a factory repo` };
   const r = await runPlan(repo, id);
@@ -536,7 +532,7 @@ const landGoal = (name: string) => refusal(async () => { await (await land(name,
 const dropGoal = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
 const recheckGoal = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
 
-/** `aleph dispatch`: one dispatch of the ready goals. A failed probe starts no goal: it is the third gate. */
+/** `aleph dispatch`: one dispatch of the ready goals. */
 export async function runDispatch() {
   // `ALEPH_RESCUE=off` leaves a stuck or failed run as it is: its open job keeps its goal not ready.
   return dispatchIssues(startGoal, baselineChecks, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal }, route);

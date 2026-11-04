@@ -44,7 +44,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 /** The worker verdict on `work` with the checks passed, the Oracle on `runner` and a reviewer that passes. */
 const verdict = (runner: Runner) => {
   const base = git(repo.path, "rev-parse", "main").out;
-  const ports = { ...branchPorts("j1-run", folder, run, repo, root, base, "work", { changed: ["job.txt"], runner, review: async () => ({ reason: null }) }), checks: async () => ({ stop: null }) };
+  const ports = { ...branchPorts(folder, run, repo, base, "work", { changed: ["job.txt"], runner, review: async () => ({ reason: null }) }), checks: async () => ({ stop: null }) };
   return workerVerdict({ earlier: [], rounds: 2, facts: {}, checked: {} }, ports);
 };
 

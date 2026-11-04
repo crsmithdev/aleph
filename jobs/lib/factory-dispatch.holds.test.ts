@@ -4,7 +4,7 @@ import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import { dispatchIssues } from "./factory.ts";
-import { readHolds, saveProbe } from "./factory-status.ts";
+import { readHolds } from "./factory-status.ts";
 import { lock } from "./ledger.ts";
 import { goal, setup, teardown } from "./factory.helpers.ts";
 
@@ -42,17 +42,6 @@ test("a main whose baseline is running or unchecked holds the goal at the Baseli
   const out = await dispatchIssues(async () => null, async () => ({ cause: "infra" as const, reason: "no runner" }), undefined, undefined, undefined, undefined, undefined);
   expect(out.skipped).toEqual([`${name}: main is unchecked: no runner`]);
   expect(readHolds([name]).map((r) => r.kind)).toEqual(["baseline", "baseline"]);
-});
-
-test("a failed probe holds each goal at the Probe gate, and starts nothing", async () => {
-  const id = goal();
-  const name = `fac-${id}`;
-  saveProbe({ at: "2026-11-03T00:00:00Z", ok: false, failed: ["no network"] });
-  const started: string[] = [];
-  const out = await dispatchIssues(async (_r, n) => { started.push(n); return null; }, async () => null, undefined, undefined, undefined, undefined, undefined);
-  expect(started).toEqual([]);
-  expect(out.skipped).toEqual([`${name}: the sandbox probe at 2026-11-03T00:00:00Z failed: no network`]);
-  expect(readHolds([name]).map((r) => r.kind)).toEqual(["probe"]);
 });
 
 describe("each skip in the goal loop gets one hold record", () => {

@@ -113,7 +113,7 @@ export function checkedBy(j: Job): string[] {
   const checks = j.findLast((e) => e.run.checks?.length)?.run.checks ?? [];
   const names = checks.filter((c) => c.ok).map((c) => c.name);
   const has = (f: string) => j.some((e) => existsSync(join(e.folder, f)));
-  return [...names, ...(has("review.md") ? ["reviewer"] : []), ...(has(join("browser", "report.md")) ? ["browser review"] : [])];
+  return [...names, ...(has("review.md") ? ["reviewer"] : [])];
 }
 
 /** Minutes a spot check of a delivery should take, an estimate: two, and one per 200 changed lines. */

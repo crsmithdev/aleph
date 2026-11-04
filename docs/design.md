@@ -21,7 +21,7 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui` and `--sum
 ## What could not be determined
 
 - **Earlier decisions.** Absolute time is `10/28 14:05` (mm/dd hh:mm, 24-hour): Chris chose it on 2026-11-04 for aleph-1163, the same format as the aleph-199 decision (vault note "Triage Questions Go To Chris And Times Read mm-dd hh-mm"). A chart axis can keep a short form. No other UI decision outranks the code here.
-- **Browser checks.** Chrome cannot start in the sandbox, so no page was rendered, in light or dark, at desktop or phone width. Responsive behaviour below is read from the media queries; chart empty and loading states, and whether a table scrolls or wraps at a phone width, are read from the code and not seen.
+- **Browser checks.** Chrome could not start in the sandbox of the run that wrote this page, so no page was rendered, in light or dark, at desktop or phone width. Responsive behaviour below is read from the media queries; chart empty and loading states, and whether a table scrolls or wraps at a phone width, are read from the code and not seen.
 - **Colour token uses.** The inventory has no `token-use` kind for colours: `var(--ink)` and the like are not counted, so a colour token has a definition count (three blocks) and no use count.
 - **Contrast.** Computed from the hex values in `ui/app.css` for the pairs below, not for every text and background pair that the CSS puts together. The pair `--muted` on `--rule-2` (4.41 light, 4.35 dark) was not traced to a use.
 - **Inventory false positives.** `ui/views/efficiency.js:113` is read as the colour literal `#eff`, but the line is `root.querySelector("#eff")`, an element id selector, not a colour. The inventory reads text, so it counts it in the colour literals.

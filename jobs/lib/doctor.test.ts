@@ -2,12 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { failedChecks } from "./probe.ts";
 import { wallStepSince } from "./clock.ts";
-import { emptyObjects, fix, gitChecks, homeCheck, lostCheck, probeCheck, unitChecks } from "./doctor.ts";
-import { FACTS_REF, writeFacts } from "./status.ts";
-import { loadRegistry, writeRun } from "./ledger.ts";
-import { saveProbe } from "./factory-status.ts";
+import { emptyObjects, fix, gitChecks, homeCheck, lostCheck, unitChecks } from "./doctor.ts";
+import { writeRun } from "./ledger.ts";
 import { mkdirSync } from "node:fs";
 
 let dir: string, repo: string;
@@ -42,33 +39,16 @@ describe("clock", () => {
     wall += 3600_000;
     expect(wallStepSince(start, c)).toBe(3600_000);
   });
-  test("a clock fault replaces a bun test failure, and nothing else", () => {
-    const r = [{ name: "claude -p", ok: true }, { name: "bun test", ok: false }];
-    expect(failedChecks(r, 2, null)).toEqual(["bun test"]);
-    expect(failedChecks(r, 2, "clock stepped 5 ms")).toEqual(["clock stepped 5 ms"]);
-    expect(failedChecks([{ name: "bun test", ok: true }], 1, "clock stepped 5 ms")).toEqual([]);
-    expect(failedChecks([{ name: "read ~/.ssh", ok: false }], 2, "clock stepped 5 ms")).toEqual(["read ~/.ssh", "1 checks gave no answer"]);
-  });
 });
 
 describe("git", () => {
-  test("--fix removes an empty object behind refs/aleph/facts and writes the ref again", () => {
-    writeFacts(loadRegistry().r);
-    const tree = sh(repo, `git rev-parse ${FACTS_REF}^{tree}`);
-    sh(repo, `p=.git/objects/${tree.slice(0, 2)}/${tree.slice(2)}; rm -f $p; : > $p`);
-    fakeCtl("exit 0");
-    expect(gitChecks()[1].ok).toBe(false);
-    expect(fix()).toContain("started aleph-tick.service");
-    expect(emptyObjects(repo)).toEqual([]);
-    expect(gitChecks().every((c) => c.ok)).toBe(true);
-  });
   test("a 0-byte git lock in objects is not an empty object", () => {
     const lock = join(repo, ".git/objects/maintenance.lock");
     sh(repo, `: > ${lock}`);
     expect(emptyObjects(repo)).toEqual([]);
     expect(gitChecks().find((c) => c.name === "empty objects")?.ok).toBe(true);
     fakeCtl("exit 0");
-    expect(fix().join("\n")).not.toContain("left");
+    expect(fix()).toEqual(["started aleph-tick.service"]);
   });
 });
 
@@ -90,14 +70,6 @@ test("aleph.home answers or does not", async () => {
   s.stop(true);
 });
 
-test("the last probe", () => {
-  expect(probeCheck().ok).toBe(false);
-  saveProbe({ at: new Date().toISOString(), ok: true, failed: [] });
-  expect(probeCheck().ok).toBe(true);
-  expect(probeCheck(Date.now() + 30 * 3600_000).ok).toBe(false);
-  saveProbe({ at: new Date().toISOString(), ok: false, failed: ["bun test"] });
-  expect(probeCheck().detail).toContain("bun test");
-});
 
 test("a run with a pid, no exit and no process is lost", () => {
   expect(lostCheck().ok).toBe(true);

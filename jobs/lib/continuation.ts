@@ -21,7 +21,6 @@ import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts"
 import { askOf, isAgentRun, isBuild, lastTagged, onOf, runsDir, TAG_FORMAT, type Check, type Entry, type Repo, type Run } from "./ledger.ts";
 import { causeOf, type Fate } from "./outcome.ts";
 import { jobSpec, runFile } from "./run-files.ts";
-import { uiGoal } from "./goal-spec.ts";
 
 // ---------------------------------------------------------------------------
 // The worker brief
@@ -32,8 +31,6 @@ export const FOREGROUND = "Run every command in the foreground and wait for it: 
 // The parsers read a tag on any line; this order keeps the worker's final text readable.
 const ENDING = "After the summary come your tag lines, and the `QUESTION:` line, when you have one, is the last line.";
 
-// A UI goal's worker runs with Unix sockets on (unit.ts), so Chrome starts; the repo's browser tests run in it.
-const CHROME = "Chrome runs in the sandbox, so the repo's browser tests run.";
 
 const FIXED = (run: Run) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`. Work
 only there. Commit every change on the branch; the run fails if anything is
@@ -51,9 +48,9 @@ function checksSentence(checks: Check[]): string {
   return `Run each of the repo's checks before you end, and fix what fails:${list}\n`;
 }
 
-const FACTORY = (run: Run, main: string, checks: Check[] = [], chrome = false) => `You are a worker on job \`${run.name}\`, on branch \`${run.branch}\` of a git repo in a
-sandbox. The network reaches only the Anthropic API and npm. Do the goal below.
-Commit every change on this branch: only its commits leave the sandbox.
+const FACTORY = (run: Run, main: string, checks: Check[] = []) => `You are a worker on job \`${run.name}\` in \`${run.worktree}\`, branch \`${run.branch}\`.
+Work only there. Do the goal below. Commit every change on this branch: only its commits count.
+Never merge, never push, never touch another branch.
 
 Nobody answers questions during the run. For a choice the Oracle does not settle, take
 the answer you would recommend and print \`DEFAULT: <question> -> <answer>\`. If you
@@ -75,9 +72,9 @@ and print exactly one line \`${ALREADY_MET}: <evidence>\`: the files, lines and 
 \`${main}\` that show it. If you cannot do the goal, make no commit and give the reason
 in your final text.
 
-${checksSentence(checks)} ${chrome ? CHROME : "Chrome cannot start in the sandbox."} For a screenshot of a page that
-your own server serves on \`http://127.0.0.1:<port>\`, run \`aleph-shot <url> <out.png> [--width 1440] [--height 900] [--scheme light|dark] [--click <css selector>] [--wait <ms>]\`;
-the PNG appears at that path inside the repo, and you commit it.
+${checksSentence(checks)} Chrome is at \`/usr/bin/google-chrome\`, so the repo's browser tests run. For a screenshot of a page that
+your own server serves on \`http://127.0.0.1:<port>\`, run \`google-chrome --headless=new --window-size=1440,900 --screenshot=<out.png> <url>\`
+with a path inside the repo, and commit the PNG.
 For each code change, follow the code-change method at the end of this brief. ${FOREGROUND}
 End with a summary of what you did and what you ran, each thing said once:
 at most 120 words of prose, plus a list only for separate items. ${ENDING}`;
@@ -89,7 +86,7 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
     const n = onOf(run);
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
-  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? [], uiGoal(jobSpec(folder, run))) : FIXED(run)), `## Spec\n\n${jobSpec(folder, run)}`];
+  const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${jobSpec(folder, run)}`];
   const runs = jobById(run.job) ?? [];
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];

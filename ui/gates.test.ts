@@ -42,7 +42,7 @@ beforeAll(async () => {
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho '{}'\nexit 0\n`);
   chmodSync(fake, 0o755);
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_SANDBOX_DIR: join(base, "sandbox"), ALEPH_CLI: fake });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake });
   ({ stop, at } = await withServer({ warm: false }));
 });
 afterAll(() => {
@@ -54,13 +54,13 @@ afterAll(() => {
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
 const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", why: "w", kind }) as any;
-const stub = { now: new Date().toISOString(), asks: [] as AskItem[], factory: { paused: false, probe: null, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
+const stub = { now: new Date().toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "chores", "factory", "gated", "goalGates", "held", "log", "now", "repoHeld", "rules", "sandbox"]);
-  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "probe"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "chores", "factory", "gated", "goalGates", "held", "log", "now", "repoHeld", "rules"]);
+  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
@@ -71,9 +71,6 @@ test("the body of /api/gates has every section, one rule per Ask reason with onl
   expect(by("proposal-claude-md").places).toEqual(["proposal-claude-md:global"]);
   expect(d.held).toEqual(SECURITY_PATHS);
   expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
-  expect(d.sandbox.write).toEqual(["<run>/home", "<run>/work", "<run>/tmp"]);
-  expect(d.sandbox.denied).toContain("/home");
-  expect(d.sandbox.network.domains).toContain("api.anthropic.com");
 });
 
 test("the log has the hold, the rules Chris set, and the Rule, Director and Firefighter lines, newest first, 7 days back", async () => {
@@ -110,7 +107,7 @@ test("splitAsks keeps every Ask and puts host checks in the chores", () => {
 
 const data = () => ({
   now: new Date().toISOString(),
-  factory: { paused: false, probe: { at: ago(10), ok: true, failed: [] }, liveRuns: 5, liveCap: 5, capEnv: { live: false } },
+  factory: { paused: false, liveRuns: 5, liveCap: 5, capEnv: { live: false } },
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
@@ -119,18 +116,17 @@ const data = () => ({
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
-  sandbox: { read: ["<run>/in.bundle"], write: ["<run>/work"], denied: ["/home"], network: { domains: ["api.anthropic.com"], localBinding: false } },
   log: { days: 7, max: 200, entries: [{ at: ago(1), by: "Rule", item: "r-5", what: "rescue: recommended" }, { at: ago(2), by: "You", item: "rule", what: "rescue: set to recommended" }] },
 });
 
 test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Gates now", "Waiting for you", "Host chores", "Rules", "Held paths", "Sandbox permissions", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
+  const order = ["Gates now", "Waiting for you", "Host chores", "Rules", "Held paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   expect(h).toContain("Closed at live-cap: Waiting for a slot (5 of 5 running).");
-  // The 7 gates, in the dispatch's order; no tile for the removed hold, day cap or awaiting cap.
+  // The 6 gates, in the dispatch's order; no tile for the removed hold, day cap or awaiting cap.
   const tiles = [...h.matchAll(/<div class="gt-head"><span>([^<]*)<\/span>/g)].map((m) => m[1]);
-  expect(tiles).toEqual(["Pause", "Baseline", "Probe", "Not ready", "Live cap", "Busy file", "Loop guard"]);
+  expect(tiles).toEqual(["Pause", "Baseline", "Not ready", "Live cap", "Busy file", "Loop guard"]);
   expect(h).toContain("<b>2 held</b>");
   expect(h).not.toContain('data-cap="day"');
   expect(h).not.toContain('data-cap="awaiting"');

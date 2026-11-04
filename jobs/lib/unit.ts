@@ -4,13 +4,13 @@
  * command. Both end with state.json, then `exit`, then the news.
  */
 import { NO_SKILLS, skillSection } from "./role-skill.ts";
-import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, reader } from "../../todo/lib/store.ts";
-import { OPUS_MODEL, q } from "./agent-call.ts";
-import { agentCall } from "./agent-run.ts";
+import { OPUS_MODEL } from "./agent-call.ts";
+import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "./git.ts";
 import { heldRule, parseReview, REVIEW_SCHEMA, securityChange, testFindings } from "./gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
@@ -19,21 +19,18 @@ import { tagged, isAgentRun, onOf, testParallel, allRuns, loadRegistry, lock, ne
 import { markEnded, markStarted } from "./process.ts";
 import type { Cause } from "./outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob } from "./job.ts";
-import { bridge, sandboxNetnsPid } from "./netns.ts";
-import { serveShots } from "./shot.ts";
-import { makeRunFolder, removeRunFolder, runPath, sandboxed, stallSeconds, workerToken } from "./sandbox.ts";
-import { changedSources, checksInSandbox, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, sandboxChecks, stopFields, worktreeChecks, type CheckExec, type CheckTask, type ChecksStop } from "./checks.ts";
+import { atCommit, changedSources, checkEnv as checksEnv, checksAt, keepGate, lastLines, newTests, runOnCommit, type Runner, runChecks, stopFields, type CheckExec, type CheckTask } from "./checks.ts";
 import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { buildChecks } from "./related.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "./continuation.ts";
-import { oracleCommands, outsideSurface, uiGoal } from "./goal-spec.ts";
+import { oracleCommands, outsideSurface } from "./goal-spec.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
 import { postTrace } from "./trace.ts";
-import { runLogged, startUnit } from "./launch.ts";
+import { runLogged, runPath, startUnit } from "./launch.ts";
 import { land as startLand, startJob } from "./transitions.ts";
-import { FACTS_REF, onMain, writeFacts } from "./status.ts";
+import { onMain } from "./status.ts";
 import { writeTitle } from "./title.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile, workerCmd } from "./settings.ts";
 import { jobSpec, jobSpecFile, runFile } from "./run-files.ts";
@@ -106,22 +103,16 @@ async function pullWaiting(repo: Repo, run: Run, room: number): Promise<void> {
   while (Date.now() < deadline && !jobsOf.every(queued)) await Bun.sleep(100);
 }
 
-/** The land's checks: in the sandbox for a sandbox repo, else in the worktree of a run that still has one. */
-function landPorts({ id, folder, run }: Entry, repo: Repo, env: Record<string, string | undefined>): LandPorts {
+/** The land's checks, in a detached worktree at the commit. */
+function landPorts({ folder, run }: Entry, repo: Repo, env: Record<string, string | undefined>): LandPorts {
   const phase = (p: string) => updateRun(folder, { phase: p });
   const logFile = runFile(folder, "checks.log");
   return {
     pull: (room) => pullWaiting(repo, run, room),
-    check: async (commit, runs, changed, only) => {
+    check: async (commit, _runs, changed, only) => {
       const on = only ? { ...repo, checks: only } : repo;
       const before = existsSync(logFile) ? readFileSync(logFile, "utf8").length : 0;
-      let why: ChecksStop | null;
-      if (repo.sandbox) {
-        why = await sandboxChecks(taskOf(folder, on, changed, phase), id, commit);
-      } else {
-        const owner = runs.find((r) => r.worktree && existsSync(r.worktree)) ?? runs[0];
-        why = await worktreeChecks(taskOf(folder, on, changed, phase), inWorktree(owner.worktree!, env), owner, commit);
-      }
+      const why = await checksAt(taskOf(folder, on, changed, phase), commit, env);
       return { why, checks: readRun(folder)?.checks, log: existsSync(logFile) ? readFileSync(logFile, "utf8").slice(before) : undefined };
     },
   };
@@ -148,8 +139,7 @@ function stampJob(wt: string, base: string, job: string): void {
 
 /**
  * The Stop gate's doc-claim check (hooks/lib/docclaims.ts) on a finished worker run: the run's transcript
- * (output.log, stream-json) against its final message. A sandboxed worker does not load the gate, so this
- * is where its final message gets the check. Null when the message makes no such claim or the transcript
+ * (output.log, stream-json) against its final message. A failure here goes back to the worker as a fix round. Null when the message makes no such claim or the transcript
  * backs it; else the reason, which also goes into checks.log for the next worker's fix note.
  */
 export function docClaims(folder: string, result: string): string | null {
@@ -186,7 +176,8 @@ export async function unit(folder: string): Promise<void> {
   delete env.ALEPH_RUN_ENV;
 
   // The job variables are for the worker: a check that runs aleph's own tests must not see them.
-  const checkEnv = { ...env, ALEPH_JOB_ID: undefined, ALEPH_JOB_RUN: undefined };
+  // A factory repo's checks also get TZ=UTC and the browser tests, as CI runs them.
+  const checkEnv = repo?.sandbox ? checksEnv(env) : { ...env, ALEPH_JOB_ID: undefined, ALEPH_JOB_RUN: undefined };
 
   let outcome: Outcome;
   let code = 0;
@@ -199,9 +190,7 @@ export async function unit(folder: string): Promise<void> {
       const entry = { id, folder, run };
       ({ outcome, code } = await land(entry, repo!, landPorts(entry, repo!, checkEnv)));
     } else if (run.kind === "recheck") {
-      ({ outcome, code } = await recheck(id, folder, run, repo!));
-    } else if (repo!.sandbox) {
-      ({ outcome, code } = await factoryAgent(id, folder, run, repo!));
+      ({ outcome, code } = await recheck(folder, run, repo!, env));
     } else {
       ({ outcome, code } = await agent(id, folder, run, repo!, env, checkEnv));
     }
@@ -284,6 +273,20 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   }
 }
 
+/** The env of an agent that works in a worktree: it cannot push to github or reach gh; see "No push, no gh" in the spec. */
+function agentEnv(env: Record<string, string | undefined>, folder: string): Record<string, string | undefined> {
+  const ghDir = runFile(folder, "gh");
+  mkdirSync(ghDir, { recursive: true });
+  return {
+    ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
+    GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
+  };
+}
+
+/**
+ * An agent run: the worker in the job's worktree on its branch. A factory repo's run then gets the worker verdict
+ * (factoryVerdict); another repo's run gets the state rule and its checks in that worktree.
+ */
 async function agent(id: string, folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>, checkEnv: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const wt = run.worktree!;
   const branch = run.branch!;
@@ -291,6 +294,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   const fail = (cause: Cause, reason: string) => ({ outcome: { condition: "failed" as const, cause, reason }, code: 1 });
 
   // A new job starts from origin/<main>, after it clears what an ended job of that name left.
+  // A later run whose worktree is gone gets it back on the job's branch.
   if (run.job === id || !existsSync(wt)) {
     phase("setup");
     // Units of one repo share its .git: a concurrent worktree add fails on the config lock, prune removes another's
@@ -303,17 +307,25 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
         appendFileSync(runFile(folder, "setup.log"), `## fetch: failed\n${fetched.out}\n`);
         return fail("infra", `fetch failed: ${fetched.out}`);
       }
-      // An ended job of this name is cleared below: its run folder keeps the diff first.
-      const old = allRuns().findLast((e) => e.id !== id && e.run.repo === repo.key && e.run.name === run.name && e.run.branch === branch);
-      if (old) keepDiff(repo, branch, old.folder);
-      const add = addWorktree(repo.path, wt, branch, `origin/${repo.main}`);
-      if (!add.ok) return fail("other", `worktree add failed: ${add.out}`);
+      const kept = run.job !== id && git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
+      if (kept) {
+        git(repo.path, "worktree", "prune");
+        const add = git(repo.path, "worktree", "add", "-q", wt, branch);
+        if (!add.ok) return fail("other", `worktree add failed: ${add.out}`);
+      } else {
+        // An ended job of this name is cleared below: its run folder keeps the diff first.
+        const old = allRuns().findLast((e) => e.id !== id && e.run.repo === repo.key && e.run.name === run.name && e.run.branch === branch);
+        if (old) keepDiff(repo, branch, old.folder);
+        const add = addWorktree(repo.path, wt, branch, `origin/${repo.main}`);
+        if (!add.ok) return fail("other", `worktree add failed: ${add.out}`);
+      }
     } finally {
       release();
     }
   }
 
-  const marker = join(git(wt, "rev-parse", "--absolute-git-dir").out, "aleph-setup");
+  const gitDir = git(wt, "rev-parse", "--absolute-git-dir").out;
+  const marker = join(gitDir, "aleph-setup");
   if (!existsSync(marker)) {
     phase("setup");
     for (const cmd of repo.setup) {
@@ -325,26 +337,25 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     writeFileSync(marker, "");
   }
 
-  // The worker cannot push to github or reach gh; see "No push, no gh" in the spec.
-  const ghDir = runFile(folder, "gh");
-  mkdirSync(ghDir, { recursive: true });
-  const workerEnv = {
-    ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "url.aleph-no-push:.pushInsteadOf", GIT_CONFIG_VALUE_0: "git@github.com:",
-    GH_CONFIG_DIR: ghDir, GH_TOKEN: undefined, GITHUB_TOKEN: undefined, CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
-  };
   const argv = [workerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : [])];
   const text = brief(id, folder, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
-  const w = await exec(argv, { cwd: wt, env: workerEnv, out: runFile(folder, "output.log"), limit: workSeconds(run), stdin: text });
+  const w = await agentCall("worker", argv, {
+    cwd: wt, env: agentEnv(env, folder), stdin: text, stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
+    limit: workSeconds(run), stall: stallSeconds(), onSpawn: (p) => { child = p; },
+  });
+  child = null;
+  if (repo.sandbox) return factoryVerdict(id, folder, run, repo, w, env);
   const result = resultText(readFileSync(runFile(folder, "output.log"), "utf8"));
   writeFileSync(runFile(folder, "result.md"), result);
 
   // The state rule: the first match wins.
-  if (w.timedOut) return fail("stalled", "timed out: worker");
-  if (w.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.code}` }, code: w.code };
+  if (w.step.stalled) return fail("stalled", stallReason());
+  if (w.step.timedOut) return fail("stalled", "timed out: worker");
+  if (w.step.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
   const question = questionOf(result);
   if (question !== undefined) return { outcome: { ...awaiting("question", question), question }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
@@ -370,96 +381,43 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 }
 
 /**
- * A factory run. The worker gets origin/<main>, and the job's branch when a
- * previous run left one, as a bundle; it runs under srt with an empty home
- * and the worker token as its only secret. A second srt call bundles the
- * branch, aleph fetches it, and a third runs the checks on a fresh clone.
- * The run folder goes when the verdict is known. See the seed spec's "Sandbox".
+ * A factory worker's run after its worker: the tags of its final message, then the worker verdict on its branch.
+ * Only the branch's commits count: what the worker left uncommitted is not checked.
  */
-async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): Promise<{ outcome: Outcome; code: number }> {
-  const branch = run.branch!;
+async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, w: Awaited<ReturnType<typeof agentCall>>, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
+  const tip = `refs/heads/${run.branch!}`;
   const main = `refs/remotes/origin/${repo.main}`;
-  const phase = (p: string) => updateRun(folder, { phase: p });
   const stuck = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, cause, reason, ...extra }, code: 1 });
-  phase("setup");
-  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`); }
-  const prev = git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${branch}`).ok;
-  const dir = makeRunFolder(id);
-  try {
-    // The store and ledger facts ride along, so `aleph status` inside answers as it does outside.
-    const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, writeFacts(repo), ...(prev ? [`refs/heads/${branch}`] : []));
-    if (!b.ok) return stuck("infra", `bundle failed: ${b.out}`);
-    const text = brief(id, folder, run, repo);
-    writeFileSync(runFile(folder, "prompt.md"), text);
-    const argv = [workerCmd(), "-p", "--strict-mcp-config", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", ...(run.model ? ["--model", run.model] : [])];
-    // Setup output goes to stderr, so the worker's own stdout ends the transcript.
-    const bundle = {
-      bundle: "../in.bundle", refs: [`+${main}:${main}`, `+${FACTS_REF}:${FACTS_REF}`, ...(prev ? [`+refs/heads/${branch}:refs/heads/${branch}`] : [])],
-      setup: [prev ? `git switch -q ${q(branch)}` : `git switch -q -c ${q(branch)} ${q(`origin/${repo.main}`)}`, ...repo.setup],
-    };
-    phase("worker");
-    // Chrome stays outside the sandbox: the worker's shot requests are served here, through a bridge into its network namespace.
-    const reach = async (url: string) => {
-      const pid = child ? sandboxNetnsPid(child.pid) : null;
-      if (pid === null) return { url, stop: async () => {} };
-      const u = new URL(url);
-      const b = await bridge(pid, Number(u.port));
-      return { url: new URL(u.pathname + u.search + u.hash, b.url).href, stop: b.stop, stderr: b.stderr };
-    };
-    const shots = serveShots(dir, { reach });
-    let w: Awaited<ReturnType<typeof agentCall>>;
-    try {
-      w = await agentCall("worker", dir, bundle, argv, {
-        read: ["in.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
-        env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-        stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"), limit: workSeconds(run),
-        stall: stallSeconds(), sockets: uiGoal(jobSpec(folder, run)),
-        onSpawn: (p) => { child = p; },
-      });
-    } finally { await shots.stop(); }
-    child = null;
-    const o = w.outcome;
-    writeFileSync(runFile(folder, "result.md"), o.result);
-    const facts: Partial<Outcome> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
-    await fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
-    noteFlakes(repo, run, tagged(o.result, "FLAKE"));
-    if (w.cause) return stuck(w.cause.kind, w.cause.reason, facts);
+  const o = w.outcome;
+  writeFileSync(runFile(folder, "result.md"), o.result);
+  const facts: Partial<Outcome> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
+  await fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
+  noteFlakes(repo, run, tagged(o.result, "FLAKE"));
+  if (w.cause) return stuck(w.cause.kind, w.cause.reason, facts);
+  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`, facts); }
+  if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return stuck("no-commit", "no commit", facts);
+  const base = git(repo.path, "merge-base", main, tip).out;
 
-    // The worker's processes are gone with its sandbox. Only this step reads work/.
-    phase("bundle");
-    const out = await sandboxed(dir, `git bundle create -q ../out/out.bundle ${q(`refs/heads/${branch}`)}`, {
-      read: ["work"], write: ["out"], cwd: "work", stdout: runFile(folder, "stderr.log"), stderr: runFile(folder, "stderr.log"),
-    });
-    if (out.code !== 0) return stuck("other", `no branch ${branch} to hand back`, facts);
-    // The one operation on the worker's data: a fetch of its branch from the bundle.
-    const f = git(repo.path, "fetch", "-q", join(dir, "out", "out.bundle"), `+refs/heads/${branch}:refs/heads/${branch}`);
-    if (!f.ok) return stuck("other", `fetch of the bundle failed: ${f.out}`, facts);
-    const base = git(repo.path, "merge-base", main, `refs/heads/${branch}`).out;
-    if (git(repo.path, "rev-list", "--count", `${main}..refs/heads/${branch}`).out === "0") return stuck("no-commit", "no commit", facts);
-
-    // Each earlier run of the job that a failed check sent back is a fix round.
-    const earlier = earlierRounds(jobById(run.job) ?? [], id);
-    if (earlier.length) facts.round = earlier.length;
-    const changed = git(repo.path, "diff", "--name-only", base, `refs/heads/${branch}`).out.split("\n").filter(Boolean);
-    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
-    const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", `refs/heads/${branch}`).out };
-    return await workerVerdict({ earlier: earlier.map((e) => e.run), rounds: fixRounds(), facts, checked }, branchPorts(id, folder, run, repo, dir, base, branch, { changed, earlier, result: o.result }));
-  } finally {
-    removeRunFolder(dir);
-  }
+  // Each earlier run of the job that a failed check sent back is a fix round.
+  const earlier = earlierRounds(jobById(run.job) ?? [], id);
+  if (earlier.length) facts.round = earlier.length;
+  const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
+  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
+  const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out };
+  return workerVerdict({ earlier: earlier.map((e) => e.run), rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, result: o.result, env }));
 }
 
 /**
- * The git and sandbox ports of the worker verdict for `branch` of a run, based on `base`, in the run folder
- * `dir` that holds out/out.bundle. `earlier` is the job's runs that were sent back, `result` the worker's
- * final message (a recheck has neither), and `runner` runs the Oracle's commands.
+ * The ports of the worker verdict for `branch` of a run, based on `base`. The checks and the reviewer each run in a
+ * detached worktree at the branch's tip. `earlier` is the job's runs that were sent back, `result` the worker's
+ * final message (a recheck has neither), `runner` runs the Oracle's commands, and `env` is the unit's env.
  */
-export function branchPorts(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; result?: string; runner?: Runner; review?: typeof review }): VerdictPorts {
+export function branchPorts(folder: string, run: Run, repo: Repo, base: string, branch: string, o: { changed: string[]; earlier?: Entry[]; result?: string; runner?: Runner; review?: typeof review; env?: Record<string, string | undefined> }): VerdictPorts {
   const phase = (p: string) => updateRun(folder, { phase: p });
   // Verify is one station: its checks, keep-gate and Oracle all show as the phase `verify`.
   const verify = () => phase("verify");
   const tip = `refs/heads/${branch}`;
+  const env = o.env ?? process.env;
   let findings: string[] | undefined;
   return {
     checks: async () => {
@@ -471,7 +429,8 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
         appendFileSync(runFile(folder, "checks.log"), `## ${name}: ${files.length} test file${files.length === 1 ? "" : "s"} that the change reaches\n${files.join("\n")}\n\n`);
         if (!files.length) record({ name, ok: true, seconds: 0 });
       }
-      const stop = await checksInSandbox({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: (p) => { child = p; } }, dir, "out/out.bundle", tip);
+      const sha = git(repo.path, "rev-parse", tip).out;
+      const stop = await checksAt({ folder, repo: { ...repo, checks: build.checks }, changed: o.changed, phase: verify, record, onSpawn: (p) => { child = p; } }, sha, checksEnv(env));
       return { stop, failed: readRun(folder)?.checks?.findLast((c) => !c.ok)?.name };
     },
     repeatedFailure: (check) => repeatedFailure(folder, check, o.earlier ?? []),
@@ -490,15 +449,15 @@ export function branchPorts(id: string, folder: string, run: Run, repo: Repo, di
     review: () => {
       phase("review");
       findings ??= testFindings(repo.path, base, tip);
-      return (o.review ?? review)(id, folder, run, repo, dir, base, branch, findings, o.changed);
+      return (o.review ?? review)(folder, run, repo, base, branch, findings, o.changed, env);
     },
   };
 }
 
 /**
- * The goal's Oracle commands, run on the branch in the sandbox, the last step of Verify.
+ * The goal's Oracle commands, run on the branch in a detached worktree, the last step of Verify.
  * A command the run's checks already ran is skipped; one that fails runs once more.
- * Returns the reason of the first that fails twice, or null. A sandbox fault is not a failure.
+ * Returns the reason of the first that fails twice, or null. A fault of the set-up (`infra`) is not a failure.
  * When a command ran, the run's `checks` gets one result `oracle` beside the repo's checks; checks.log gets each command's section.
  */
 async function oracleFailure(folder: string, run: Run, repo: Repo, branch: string, runner: Runner, phase: () => void): Promise<string | null> {
@@ -535,9 +494,9 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
 /**
  * A recheck: no worker. The run branch takes origin/<main> by a merge made in
  * memory (a conflict makes the run stuck and names the files), the checks run
- * in the sandbox on the result, then the held rule and the reviewer, as after a worker.
+ * on the result, then the held rule and the reviewer, as after a worker.
  */
-async function recheck(id: string, folder: string, run: Run, repo: Repo): Promise<{ outcome: Outcome; code: number }> {
+async function recheck(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const branch = run.branch!;
   const ref = `refs/heads/${branch}`;
   const main = `refs/remotes/origin/${repo.main}`;
@@ -558,20 +517,15 @@ async function recheck(id: string, folder: string, run: Run, repo: Repo): Promis
     }
     const c = git(repo.path, "commit-tree", lines[0], "-p", tip.out, "-p", upstream, "-m", `Merge ${repo.main} into ${branch}`);
     if (!c.ok || !git(repo.path, "update-ref", ref, c.out, tip.out).ok) return stuck("other", `merge failed: ${c.out}`);
+    // The job's worktree has the branch checked out: its files follow the moved branch.
+    if (run.worktree && existsSync(run.worktree)) git(run.worktree, "reset", "-q", "--hard");
   }
-  const dir = makeRunFolder(id);
-  try {
-    const b = git(repo.path, "bundle", "create", join(dir, "out", "out.bundle"), ref);
-    if (!b.ok) return stuck("infra", `bundle failed: ${b.out}`);
-    const base = git(repo.path, "merge-base", main, ref).out;
-    if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no-commit", "no commit");
-    const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
-    if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit");
-    const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out };
-    return await workerVerdict({ rounds: fixRounds(), facts: {}, checked }, branchPorts(id, folder, run, repo, dir, base, branch, { changed }));
-  } finally {
-    removeRunFolder(dir);
-  }
+  const base = git(repo.path, "merge-base", main, ref).out;
+  if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no-commit", "no commit");
+  const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
+  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit");
+  const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out };
+  return workerVerdict({ rounds: fixRounds(), facts: {}, checked }, branchPorts(folder, run, repo, base, branch, { changed, env }));
 }
 
 const REVIEW = `You are the reviewer of job \`%NAME%\`. The working directory is a clone of the
@@ -637,43 +591,38 @@ export function reviewDiff(cwd: string, range: { from: string; to: string; merge
 }
 
 /**
- * A fresh reviewer reads the passing run: `claude -p` on Opus 5.5 under srt,
- * with the worker's profile, in its own run folder with a clone of the branch.
- * Returns the reason to hold, or null on a pass, and the cost. Fails closed.
+ * A fresh reviewer reads the passing run: `claude -p` on Opus 5.5 in a detached worktree at the branch's tip,
+ * with the worker's env. Returns the reason to hold, or null on a pass, and the cost. Fails closed.
  */
-async function review(id: string, folder: string, run: Run, repo: Repo, dir: string, base: string, branch: string, findings: string[], changed: string[]): Promise<{ reason: string | null; cost?: number; none?: boolean }> {
-  const rdir = makeRunFolder(`${id}-review`);
+async function review(folder: string, run: Run, repo: Repo, base: string, branch: string, findings: string[], changed: string[], env: Record<string, string | undefined>): Promise<{ reason: string | null; cost?: number; none?: boolean }> {
+  const spec = jobSpec(folder, run);
+  const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
+  const diff = reviewDiff(repo.path, range, reviewDiffMax());
+  const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
+  writeFileSync(runFile(folder, "review-prompt.md"), text);
+  const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL, ...schemaFlags(REVIEW_SCHEMA)];
+  const log = runFile(folder, "review.log");
+  const err = runFile(folder, "review.err");
+  const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
   try {
-    copyFileSync(join(dir, "out", "out.bundle"), join(rdir, "out", "out.bundle"));
-    const spec = jobSpec(folder, run);
-    const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
-    const diff = reviewDiff(repo.path, range, reviewDiffMax());
-    const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
-    writeFileSync(runFile(folder, "review-prompt.md"), text);
-    const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-      "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL, ...schemaFlags(REVIEW_SCHEMA)];
-    const bundle = {
-      bundle: "../out/out.bundle", refs: [`+refs/heads/${branch}:refs/heads/${branch}`],
-      setup: [`git switch -q ${q(branch)}`],
-    };
-    const log = runFile(folder, "review.log");
-    const w = await agentCall("scenario reviewer", rdir, bundle, argv, {
-      read: ["out/out.bundle"], write: ["home", "work", "tmp"], cwd: "work", stdin: text,
-      env: { CLAUDE_CODE_OAUTH_TOKEN: workerToken(), CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1" },
-      stdout: log, stderr: runFile(folder, "review.err"), limit: reviewSeconds(), stall: stallSeconds(), sockets: true,
-      onSpawn: (p) => { child = p; },
+    return await atCommit(repo, tip, async (wt) => {
+      const w = await agentCall("reviewer", argv, {
+        cwd: wt, env: agentEnv(env, folder), stdin: text, stdout: log, stderr: err, limit: reviewSeconds(), stall: stallSeconds(),
+        onSpawn: (p) => { child = p; },
+      });
+      child = null;
+      const o = w.outcome;
+      const v = parseReview(structuredOf(existsSync(log) ? readFileSync(log, "utf8") : ""));
+      writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? o.result : v.text);
+      const cost = o.cost;
+      const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
+      if (w.cause) return none(w.cause.reason);
+      if (typeof v === "string") return none(v);
+      return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
     });
-    child = null;
-    const o = w.outcome;
-    const v = parseReview(structuredOf(existsSync(log) ? readFileSync(log, "utf8") : ""));
-    writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? o.result : v.text);
-    const cost = o.cost;
-    const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
-    if (w.cause) return none(w.cause.reason);
-    if (typeof v === "string") return none(v);
-    return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
-  } finally {
-    removeRunFolder(rdir);
+  } catch (e) {
+    return { reason: `reviewer: no verdict (${e instanceof Error ? e.message : e})`, none: true };
   }
 }
 

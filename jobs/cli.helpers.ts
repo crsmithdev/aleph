@@ -111,9 +111,7 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ...(process.env as Record<string, string>), CLAUDECODE: "", ...gitEnv,
     ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_JOB_FOREGROUND: "1",
     ALEPH_WORKER_CMD: fake, ALEPH_REVIEWER_CMD: reviewer, XDG_RUNTIME_DIR: join(base, "run"), FAKE_LOG: fakeLog, SETUP_LOG: setupLog,
-    ALEPH_SANDBOX_CMD: join(base, "pass"), ALEPH_SANDBOX_DIR: join(base, "runs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_WORKER_TOKEN: join(base, "token"),
-    // The "pass" sandbox runs the probe's script with no sandbox, so its denied checks would list ~/.claude and ~/.aleph.
-    ALEPH_PROBE_FAKE: "pass",
+    ALEPH_FACTORY_DIR: join(base, "factory"),
     // No test reaches the live router: its tier for a seed varies, and `opus` sends the seed to a planner.
     ALEPH_JUDGE: "haiku",
     // The live cap's test starts six runs against a cap of five.
@@ -325,9 +323,7 @@ export function setup(): void {
   reviewer = join(base, "fake-reviewer");
   writeFileSync(reviewer, REVIEWER, { mode: 0o755 });
   writeFileSync(fake, FAKE, { mode: 0o755 });
-  // The tests' stand-in for srt: the clean environment, and FAKE_LOG for the fake worker.
-  writeFileSync(join(base, "pass"), `#!/bin/bash\nshift\nexec env -i FAKE_LOG="$FAKE_LOG" "$@"\n`, { mode: 0o755 });
-  writeFileSync(join(base, "token"), "tok-123\n");
+  // A fake ssh, so that no test reaches a real host.
   writeFileSync(join(fakeLog, "ssh"), `#!/bin/sh\necho "$@" > "${join(base, "fake", "ssh.args")}"\nexit 1\n`, { mode: 0o755 });
 
   remote = join(base, "remote.git");
@@ -358,7 +354,7 @@ export function setup(): void {
     demo: { path: repo, setup: [`echo ran >> "$SETUP_LOG"`], checks, manual: [{ when: ["android/**"], say: "run it on the phone" }], autoland: false },
     auto: { path: repo, checks: [], manual: [{ when: ["android/**"], say: "run it on the phone" }] },
     other: { path: other, checks: [], autoland: false },
-    // The factory: the same clone, its runs under the stand-in sandbox.
+    // The factory: the same clone, its runs on the host.
     fac: {
       path: repo, sandbox: true, held: ["held/**"], autoland: false,
       checks: [gate, { name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}; while [ -f ${join(base, "slowbase")} ]; do sleep 0.1; done` }],

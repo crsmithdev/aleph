@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, fakeLog, file, repo, sh, state, told, setup, teardown } from "../cli.helpers";
+import { fakeLog, file, repo, sh, state, told, setup, teardown, worktree } from "../cli.helpers";
 import { actionJob, drop, issueAdd, issueClose, issueList, issueShow } from "../inproc.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
@@ -11,27 +11,28 @@ afterAll(teardown);
 describe("a factory run", () => {
   const fjob = (name: string, action: string) => actionJob(name, action, {}, "fac");
   const factoryBranch = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `factory/${name}`]).exitCode === 0;
-  const runsLeft = () => existsSync(join(base, "runs")) ? readdirSync(join(base, "runs")) : [];
+  /** The worktrees of the repo outside its .worktrees folder: the detached ones of the checks and the reviewer. */
+  const detached = () => sh(repo, "git", "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ") && !l.includes("/.worktrees/") && l !== `worktree ${repo}`);
 
-  test("the worker's branch comes back as a bundle; the run passes and its run folder is gone", async () => {
+  test("the worker commits on its branch in the job's worktree; the checks and the reviewer run in worktrees that go after", async () => {
     const r = await fjob("fpass", "commit fpass.txt");
     const s = state(r.json.run);
-    expect(s).toMatchObject({ kind: "build", condition: "passed", branch: "factory/fpass", cost: 0.01, defaults: [] });
-    expect(s.worktree).toBeUndefined();
+    expect(s).toMatchObject({ kind: "build", condition: "passed", branch: "factory/fpass", worktree: worktree("fpass"), cost: 0.01, defaults: [] });
     expect(factoryBranch("fpass")).toBe(true);
+    expect(sh(worktree("fpass"), "git", "symbolic-ref", "--short", "HEAD")).toBe("factory/fpass");
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
-    expect(runsLeft()).toEqual([]);
-    expect(file(r.json.run, "prompt.md")).toContain("of a git repo in a\nsandbox");
-    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--permission-mode bypassPermissions --disable-slash-commands --tools Read Write Edit Bash Grep Glob\n");
+    expect(detached()).toEqual([]);
+    expect(file(r.json.run, "prompt.md")).toContain(`in \`${worktree("fpass")}\`, branch \`factory/fpass\`.\nWork only there.`);
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--disable-slash-commands --tools Read Write Edit Bash Grep Glob");
     expect(s.checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
   });
 
-  test("the sandbox's environment holds the worker token and nothing of Chris's", () => {
+  test("the worker's environment cannot push to github or reach gh, and has no API key", () => {
     const env = readFileSync(join(fakeLog, "env"), "utf8");
-    expect(env).toContain("CLAUDE_CODE_OAUTH_TOKEN=tok-123");
-    expect(env).toMatch(/^HOME=.*\/runs\/.*\/home$/m);
-    expect(env).not.toMatch(/^(ALEPH_(?!TEST_PARALLEL=)[A-Z_]+|SIDETONE_[A-Z_]+|GIT_AUTHOR_NAME|XDG_RUNTIME_DIR)=/m);
+    expect(env).toContain("GIT_CONFIG_VALUE_0=git@github.com:\n");
+    expect(env).toMatch(/^GH_CONFIG_DIR=.*\/gh$/m);
+    expect(env).not.toMatch(/^(ANTHROPIC_API_KEY|GH_TOKEN|GITHUB_TOKEN|CLAUDECODE)=./m);
   });
 
   test("an error result, no result, a line after the result, or no commit ends stuck", async () => {

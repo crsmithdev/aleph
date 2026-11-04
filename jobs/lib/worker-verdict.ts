@@ -3,7 +3,7 @@
  * the doc claims, the keep-gate and the Oracle. Then the reviewer (a reviewer with
  * no verdict runs once more). A reviewer's pass on a diff that changes a security path or a held path waits
  * for Chris with a held-path Ask. A failure of a check, the keep-gate, the Oracle or the reviewer goes back to
- * the worker as a fix round while rounds are left. The ports run each step; unit.ts gives the git and sandbox
+ * the worker as a fix round while rounds are left. The ports run each step; unit.ts gives the git and worktree
  * ones. This module does no IO.
  */
 import { plainAsk, type AskReason } from "./ask.ts";

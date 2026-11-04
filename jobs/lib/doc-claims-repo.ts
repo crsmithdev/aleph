@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { docProblems, type Doc, type Truth } from "./doc-claims.ts";
 import * as s from "./settings.ts";
-import { stallSeconds } from "./sandbox.ts";
+import { stallSeconds } from "./agent-run.ts";
 import { JEV_PASS_BELOW } from "../../hooks/lib/judge.ts";
 
 export const ROOT = resolve(import.meta.dir, "..", "..");

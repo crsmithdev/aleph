@@ -73,7 +73,7 @@ describe("checks", () => {
 
   test("a keep-gate failure goes back as the check keep-gate, before the Oracle and the reviewer", async () => {
     const reason = "keep-gate: 1 new test passes on the base commit: a.test.ts > adds";
-    const { p, calls } = ports({ kept: reason, security: "jobs/lib/sandbox.ts" });
+    const { p, calls } = ports({ kept: reason, security: "jobs/lib/gate.ts" });
     expect((await workerVerdict(branch(), p)).outcome).toEqual({ condition: "stuck", cause: "check", checkName: "keep-gate", reason, failed: "keep-gate", round: 0 });
     expect(calls).toEqual(["checks", "docClaims", "keepGate"]);
     expect((await workerVerdict(branch({ earlier: two }), ports({ kept: reason }).p)).outcome.reason).toBe(`${reason} after 2 fix rounds`);
@@ -93,14 +93,14 @@ describe("after the checks", () => {
   });
 
   test("a security path runs Verify and the reviewer, then waits for Chris with a held-path Ask", async () => {
-    const { p, calls } = ports({ security: "jobs/lib/sandbox.ts" });
+    const { p, calls } = ports({ security: "jobs/lib/gate.ts" });
     const v = await workerVerdict(branch(), p);
-    expect(v).toMatchObject({ code: 0, outcome: { condition: "awaiting", reason: "held path jobs/lib/sandbox.ts", stat: " a.ts | 1 +", ask: { reason: "held-path" }, ...checked } });
+    expect(v).toMatchObject({ code: 0, outcome: { condition: "awaiting", reason: "held path jobs/lib/gate.ts", stat: " a.ts | 1 +", ask: { reason: "held-path" }, ...checked } });
     expect(calls).toEqual(["checks", "docClaims", "keepGate", "oracle", "review", "security"]);
   });
 
   test("a security path the reviewer holds is a fix round, not an Ask", async () => {
-    const v = await workerVerdict(branch(), ports({ security: "jobs/lib/sandbox.ts", reviews: [{ reason: "reviewer: no test" }] }).p);
+    const v = await workerVerdict(branch(), ports({ security: "jobs/lib/gate.ts", reviews: [{ reason: "reviewer: no test" }] }).p);
     expect(v.outcome).toMatchObject({ condition: "stuck", failed: "review", round: 0 });
     expect(v.outcome.ask).toBeUndefined();
   });

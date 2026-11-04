@@ -64,7 +64,7 @@ export interface ProseDefault { phrase: RegExp; file: string; code: RegExp; name
 
 /** Each prose phrase and the code constant it states. */
 export const PROSE_DEFAULTS: ProseDefault[] = [
-  { phrase: new RegExp(String.raw`\bno output for (\d[\d.]*\s+${UNIT})`, "g"), file: "jobs/lib/sandbox.ts", code: /\bstallSeconds\b[^\n]*?\?\?\s*([\d.]+)/, name: "stallSeconds" },
+  { phrase: new RegExp(String.raw`\bno output for (\d[\d.]*\s+${UNIT})`, "g"), file: "jobs/lib/agent-run.ts", code: /\bstallSeconds\b[^\n]*?\?\?\s*([\d.]+)/, name: "stallSeconds" },
   { phrase: /\babove (\d*\.\d+) of the threshold/g, file: "hooks/lib/context.ts", code: /\bDEFAULT_WARN\s*=\s*([\d.]+)/, name: "DEFAULT_WARN" },
 ];
 

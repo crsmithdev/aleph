@@ -109,7 +109,6 @@ const WARN_HEALTH = /full suite took/;
 const ALERTS = [
   [/ CI on main has failed/, "GitHub CI is broken"],
   [/main is red/, "the build is failing on main"],
-  [/sandbox probe/, "the sandbox is broken"],
   [/the factory tick has stopped/, "the factory tick has stopped"],
   // No line says this one: a stuck job adds it. It is here for its rank.
   [/(?!)/, JOBS_UNHEALTHY],
@@ -242,11 +241,10 @@ export function renderNeeds(s) {
 /** How long past due a next tick may be before the tick counts as dead: covers an old state and a late timer. */
 const TICK_GRACE_MS = 5 * 60_000;
 
-/** Lines of the factory's own trouble that are errors: health (a red main among them), a failed probe, a stopped tick; each once. */
+/** Lines of the factory's own trouble that are errors: health (a red main among them) and a stopped tick; each once. */
 function errorLines(s) {
   const f = s.factory;
   const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l) && !WARN_HEALTH.test(l));
-  if (f.probe && !f.probe.ok && !(f.health || []).some((l) => /probe/.test(l))) out.push(`the sandbox probe at ${f.probe.at} failed: ${(f.probe.failed || []).join("; ")}`);
   if (f.nextTick !== undefined && f.tickInProgress !== true) {
     if (f.nextTick === null) out.push("the factory tick has stopped: aleph-tick.timer has no next run");
     else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`the factory tick has stopped: aleph-tick.timer was due at ${f.nextTick}`);

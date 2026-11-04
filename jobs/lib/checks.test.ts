@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addedLines, cloneAndSetup, keepGate, mutants, newCases, runChecks, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { addedLines, keepGate, mutants, newCases, runChecks, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import { checkSlot } from "./ledger.ts";
 import type { CheckResult, Repo } from "./ledger.ts";
@@ -121,12 +121,6 @@ await runChecks({ folder: ${JSON.stringify(base)}, repo, changed: [], phase: () 
   expect(flakes().length).toBe(names.length * 25);
 });
 
-test("the check prelude carries both NO_SUBMODULES lines", async () => {
-  const { NO_SUBMODULES } = await import("./git.ts");
-  const lines = cloneAndSetup([], "b", "r").split("\n");
-  expect(lines.slice(1, 4)).toEqual(["git init -q .", ...NO_SUBMODULES]);
-});
-
 test("newCases: the names of the test and it cases on added lines only", () => {
   const diff = `--- a/x.test.ts\n+++ b/x.test.ts\n+test("adds one", () => {});\n+  it.skip('skips', () => {});\n-test("gone", () => {});\n test("kept", () => {});\n+expect(submit("no")).toBe(1);\n`;
   expect(newCases(diff)).toEqual(["adds one", "skips"]);
@@ -221,8 +215,3 @@ test("addedLines and mutants: the new-side lines of a diff, and one mutant a cha
   expect(mutants([{ path: "a.ts", lines: [2, 3, 4, 5, 6], text }], 2).map((m) => m.line)).toEqual([2, 4]);
 });
 
-test("cloneAndSetup: the clone steps and the setup group with its log and exit code", () => {
-  expect(cloneAndSetup(["a", "b c"], "out/x.bundle", "refs/h/it's")).toBe(
-    ["set -e", "git init -q .", "git config fetch.recurseSubmodules false", "git config submodule.recurse false", `git fetch -q ../out/x.bundle '+refs/h/it'\\''s:refs/heads/check'`, "git switch -q check", "set +e", "{ a && b c && true; } > ../checklog/setup.log 2>&1; echo $? > ../checklog/setup.code"].join("\n"),
-  );
-});

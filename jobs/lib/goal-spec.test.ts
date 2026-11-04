@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "bun:test";
-import { isVersion, missingSections, oracleCommands, specVersion, surfacePaths, uiGoal } from "./goal-spec.ts";
+import { isVersion, missingSections, oracleCommands, specVersion, surfacePaths } from "./goal-spec.ts";
 
 const SPEC = "## Goal\nShip it.\n\n## Edit surface (the files the run may change)\n- `jobs/lib/plan.ts` (new)\n- ui/views/now.js: the row.\n- README.md\n\n## Oracle\n- `bun test jobs/lib/plan.test.ts` passes.\n";
 const item = (over: { title?: string; request?: string; spec?: string } = {}) => ({ title: "T", request: "R", spec: SPEC, ...over }) as any;
@@ -36,16 +36,6 @@ test("isVersion takes the version now and the older forms, and refuses a version
   expect(isVersion(i, JSON.stringify(["T", "R", SPEC]))).toBe(true);
   expect(isVersion(i, specVersion(item({ request: "S" })))).toBe(false);
   expect(isVersion(i, JSON.stringify(["T", "S", SPEC]))).toBe(false);
-});
-
-const uiSpec = (surface: string) => `## Goal\n\nx\n\n## Edit surface\n\n${surface}\n\n## Oracle\n\n- y\n`;
-
-test("a UI goal names a page file or a path under ui/ in its Edit surface; other goals and a spec with no surface are not", () => {
-  expect(uiGoal(uiSpec("- ui/views/now.js\n- ui/app.css"))).toBe(true);
-  expect(uiGoal(uiSpec("- site/index.html"))).toBe(true);
-  expect(uiGoal(uiSpec("- web/App.tsx"))).toBe(true);
-  expect(uiGoal(uiSpec("- jobs/lib/probe.ts\n- docs/factory.md"))).toBe(false);
-  expect(uiGoal("## Goal\n\nx\n")).toBe(false);
 });
 
 test("a placeholder of more than one word is not runnable; a redirection with a space is", () => {

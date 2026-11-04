@@ -79,6 +79,19 @@ test("a run past its time box is killed and says it timed out", async () => {
   expect(existsSync(join(run.folder, "output.log"))).toBe(true);
 });
 
+test("the time box ends the call's children too, so a child that holds the output pipe does not hold the run", async () => {
+  fake(`sleep 30 & echo $! > ${join(base, "child")}; exec sleep 30`);
+  process.env.ALEPH_FACTS_TIMEOUT = "0.2";
+  const t0 = Date.now();
+  await expect(openRun(opening).ask("x")).rejects.toThrow("the reviewer timed out");
+  expect(Date.now() - t0).toBeLessThan(10_000);
+  const child = Number(readFileSync(join(base, "child"), "utf8"));
+  // The pipe closed, so the child is dead; its new parent may take a moment to reap it under load.
+  const alive = () => { try { process.kill(child, 0); return true; } catch { return false; } };
+  for (const end = Date.now() + 5_000; alive() && Date.now() < end;) await Bun.sleep(20);
+  expect(alive()).toBe(false);
+});
+
 test("a call with no run gives the text and the cost, and throws on a failure", async () => {
   fake(`echo '${JSON.stringify({ type: "result", is_error: false, total_cost_usd: 1, result: "t" })}'`);
   const call = { role: "facts", who: "the author", model: "m", seconds: 60, flags: [] };

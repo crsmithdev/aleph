@@ -14,7 +14,6 @@ describe("a factory run", () => {
   // `aleph tick` keeps its CLI test in jobs/cli.reviewer-sweep.test.ts.
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
     expect((await aleph(["pause"])).json).toEqual({ paused: true });
     const id = seedItem("fac", "while paused", { kind: "goal" }, "ACTION: commit paused.txt\n".trim());
     expect((await dispatch()).json).toMatchObject({ started: [], paused: true });

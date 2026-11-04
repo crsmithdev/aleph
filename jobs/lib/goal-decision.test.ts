@@ -15,10 +15,10 @@ test("Not ready names only the open after refs, in both lines", () => {
   expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "after fac-2,fac-3", text: "Waits on fac-2, fac-3" });
 });
 
-test("the 7 gates bind in the order of GATES, Loop guard last", () => {
-  expect([...GATES]).toEqual(["pause", "baseline", "probe", "not-ready", "live-cap", "busy-file", "loop-guard"]);
-  const all: Partial<GoalFacts> = { pause: { why: "paused", text: "The factory is paused" }, red: "main is red", probe: { why: "probe failed", text: "probe failed" }, open: "running", "live-cap": live, busy: "waits for fac-1: both change the busy file a.ts", noCommits: 3 };
-  const clear: Partial<GoalFacts>[] = [{ pause: null }, { red: null }, { probe: null }, { open: null }, { "live-cap": null }, { busy: null }, { noCommits: 0 }];
+test("the 6 gates bind in the order of GATES, Loop guard last", () => {
+  expect([...GATES]).toEqual(["pause", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"]);
+  const all: Partial<GoalFacts> = { pause: { why: "paused", text: "The factory is paused" }, red: "main is red", open: "running", "live-cap": live, busy: "waits for fac-1: both change the busy file a.ts", noCommits: 3 };
+  const clear: Partial<GoalFacts>[] = [{ pause: null }, { red: null }, { open: null }, { "live-cap": null }, { busy: null }, { noCommits: 0 }];
   let f = all;
   for (const [i, k] of GATES.entries()) {
     expect(kind(f)).toBe(k);
@@ -39,7 +39,7 @@ test("Baseline lets the red-main fix through, and the later gates still bind on 
   expect(kind({ item: fix, red: "main is red at abc1234: tests" })).toBe("ready");
   // The firefighter's `add` writes the label into `areas`, as aleph-1161 has it.
   expect(kind({ item: item({ areas: ["red-main"] }), red: "main is red at abc1234: tests" })).toBe("ready");
-  expect(kind({ item: fix, red: "main is red at abc1234: tests", probe: { why: "probe failed", text: "probe failed" } })).toBe("probe");
+  expect(kind({ item: fix, red: "main is red at abc1234: tests", "live-cap": live })).toBe("live-cap");
 });
 
 test("Not ready covers a done goal, an after ref, an open job, a planner and a spec check, in that order", () => {

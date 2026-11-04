@@ -1,6 +1,6 @@
 /**
- * A factory run as a Langfuse trace. The sandbox cannot reach Langfuse, so the
- * unit posts it from outside after the run, from the worker's stream-json.
+ * A factory run as one Langfuse trace, under the run's id: the unit posts it after the run, from the worker's
+ * and the reviewer's stream-json. episode.ts reads it back by that id.
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { langfuseConfig } from "../../hooks/lib/env.ts";

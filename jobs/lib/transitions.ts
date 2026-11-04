@@ -153,12 +153,11 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     const item = on ?? (open && issueOf(open));
     const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;
     if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
-    // A factory run has no worktree: its branch comes and goes as a bundle.
-    const worktree = repo.sandbox ? undefined : first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
+    const worktree = first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     // A follow-up without --on keeps the item the job started with.
     on ??= (open && issueOf(open));
     return await dispatch({
-      kind: "build", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, ...(worktree ? { worktree } : {}),
+      kind: "build", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, worktree,
       condition: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), ...(a.merge ? { merge: true as const } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
@@ -274,8 +273,10 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);
     if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
     const on = issueOf(runs);
+    // The recheck moves the branch, so it keeps the job's worktree in step, and a drop or a land removes that worktree.
+    const worktree = runs.findLast((e) => e.run.worktree)?.run.worktree;
     s = await dispatch({
-      kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, condition: "running", phase: "starting",
+      kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, ...(worktree ? { worktree } : {}), condition: "running", phase: "starting",
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, `${repo.key}-${name}`, repo.path, o.command ?? ["recheck", name], o.output, () => {});
   } finally {
@@ -301,7 +302,12 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     if (runs.some((e) => e.run.kind === "land" && isLive(e.folder))) refuse("landing");
     const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
     const live = runs.filter((e) => isLive(e.folder));
-    for (const e of live) await stop(e);
+    for (const e of live) {
+      if (await stop(e)) continue;
+      // A run whose process outlives the stop is stuck, not failed: nothing ended it.
+      updateRun(e.folder, { condition: "stuck", cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
+      refuse(`cannot stop ${e.id}: its process still runs`);
+    }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
     // Chris asked for the drop, so it is not news.
     for (const e of new Set([...live, last])) {

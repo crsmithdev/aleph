@@ -5,14 +5,21 @@
  * or triage after a transition is a unit of its own too. The transitions themselves run in-process: see transitions.ts.
  */
 import { closeSync, mkdirSync, openSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { factoryDir } from "./factory-status.ts";
 import { LOW, type Repo } from "./ledger.ts";
-import { runPath } from "./sandbox.ts";
 import { dispatchOn, jobForeground } from "./settings.ts";
 
 /** jobs/cli.ts, the `aleph` command. */
 export const CLI = join(import.meta.dir, "..", "cli.ts");
+
+/** The caller's PATH with ~/.local/bin and the directory of this bun added at the end when missing. */
+export function runPath(env: Record<string, string | undefined> = process.env): string {
+  const parts = (env.PATH ?? "").split(":").filter(Boolean);
+  for (const d of [join(process.env.HOME || homedir(), ".local", "bin"), dirname(process.execPath)]) if (!parts.includes(d)) parts.push(d);
+  return parts.join(":");
+}
 
 /** Units run in the foreground, as children: the tests, which have no systemd. */
 export const foreground = (): boolean => jobForeground();

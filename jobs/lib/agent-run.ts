@@ -3,14 +3,12 @@
  * the folder, the spawn, the time box, the cost, the ending, and the cleanup after a dead process.
  * `ALEPH_<ROLE>_CMD` replaces `claude`, which is how a test gives a fake, and
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
- * `agentCall` is the other kind: a sandboxed `claude` call (the worker and the reviewer) under srt.
+ * `agentCall` is the other kind: a `claude` call that works in a git worktree (the worker and the reviewer).
  */
 import { NO_SKILLS } from "./role-skill.ts";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { gitPrelude, q } from "./agent-call.ts";
 import { outcome, replyOf, type Outcome } from "./gate.ts";
-import { sandboxed, stallReason, type Step } from "./sandbox.ts";
 import { allRuns, lock, readRun, runsDir, nextStamp, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
 import { roleCmd, roleSeconds } from "./settings.ts";
 import { runFile } from "./run-files.ts";
@@ -29,18 +27,33 @@ export interface Call {
   schema?: object;
 }
 
+/** How long a call that the time box or the stall watch stopped gets after SIGTERM before SIGKILL. */
+const KILL_AFTER_MS = 30_000;
+
+/** Signal the process group that `pid` leads, and `pid` itself when the group is gone. */
+function killGroup(pid: number, signal: NodeJS.Signals): void {
+  try { process.kill(-pid, signal); } catch { try { process.kill(pid, signal); } catch {} }
+}
+
 async function spawn(c: Call, input: string): Promise<{ output: string; text: string; data?: unknown; cost?: number; failure?: string }> {
   const role = c.role.toUpperCase();
   const argv = [roleCmd(role), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags, ...(c.schema ? schemaFlags(c.schema) : [])];
-  const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe" });
+  // A process group of its own, so the time box ends the call's children too: one that kept the pipes open would hold the reads.
+  const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", detached: true });
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; p.kill(); }, roleSeconds(role, c.seconds) * 1000);
+  let kill: Timer | undefined;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    killGroup(p.pid, "SIGTERM");
+    kill = setTimeout(() => killGroup(p.pid, "SIGKILL"), KILL_AFTER_MS);
+  }, roleSeconds(role, c.seconds) * 1000);
   try {
     const [out, err, code] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text(), p.exited]);
     const failure = timedOut ? `${c.who} timed out` : code !== 0 ? `${c.who} exited ${code}` : undefined;
     return { output: out + err, ...replyOf(out), data: structuredOf(out), failure };
   } finally {
     clearTimeout(timer);
+    clearTimeout(kill);
   }
 }
 
@@ -130,26 +143,22 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
   }
 }
 
-/** The two sandboxed `claude` calls. */
-export type AgentRole = "worker" | "scenario reviewer";
+/** The two `claude` calls that work in a git worktree. */
+export type AgentRole = "worker" | "reviewer";
 
-/** A git bundle the script fetches `refs` from before the setup lines, which run with stdout on stderr. */
-export interface AgentBundle { bundle: string; refs: string[]; setup: string[] }
-
-/** Why a sandboxed call gave no usable reply, and its kind. */
+/** Why a call gave no usable reply, and its kind. */
 export interface AgentCause { kind: "stalled" | "time-box" | "other"; reason: string }
 
-export type AgentOptions = Parameters<typeof sandboxed>[2];
+/** How a call ended: its exit code, and whether the time box or the stall watch stopped it. */
+export interface Step { code: number; timedOut: boolean; stalled: boolean }
 
-/**
- * The call's script. With a bundle, setup output goes to stderr, so the agent's own stdout is the whole log;
- * without one, the script only runs the argv.
- */
-export function agentScript(argv: string[], bundle?: AgentBundle): string {
-  const run = `exec ${argv.map(q).join(" ")}`;
-  if (!bundle) return run;
-  return ["set -e", "exec 3>&1 1>&2", ...gitPrelude(bundle.bundle, bundle.refs), ...bundle.setup, "exec 1>&3 3>&-", run].join("\n");
-}
+/** How long an agent call may print nothing before the stall watch stops it. */
+export const stallSeconds = (): number => Number(process.env.ALEPH_STALL_SECONDS ?? 600);
+/** The reason of a call that the stall watch stopped. */
+export const stallReason = (): string => {
+  const s = stallSeconds();
+  return `stalled: no output for ${s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`}`;
+};
 
 /** The cause the call states: a stall, the time box, or a reply that is not ok; null when the reply is ok. */
 export function agentCause(r: Step, o: Outcome): AgentCause | null {
@@ -159,13 +168,46 @@ export function agentCause(r: Step, o: Outcome): AgentCause | null {
   return null;
 }
 
+/** Where and how an agent call runs: `limit` is the time box and `stall` the stall watch, both in seconds. */
+export interface AgentOptions {
+  cwd: string; env: Record<string, string | undefined>; stdin: string; stdout: string; stderr: string; limit: number; stall: number;
+  onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void;
+}
+
 /**
- * One sandboxed `claude` call in the run folder `dir`: it runs the script under srt and reads the stdout log,
- * or "" when the log is missing. The caller keeps its own paths, env, limits and writes.
+ * One `claude` call, `argv`, in `o.cwd` and a process group of its own, with stdout and stderr appended to their files.
+ * The time box, and the stall watch when stdout has not grown for `o.stall` seconds, stop the whole group: SIGTERM,
+ * then SIGKILL. It reads the stdout log for the outcome.
  */
-export async function agentCall(role: AgentRole, dir: string, bundle: AgentBundle | undefined, argv: string[], o: AgentOptions):
+export async function agentCall(role: AgentRole, argv: string[], o: AgentOptions):
   Promise<{ role: AgentRole; outcome: Outcome; step: Step; cause: AgentCause | null }> {
-  const step = await sandboxed(dir, agentScript(argv, bundle), o);
-  const out = outcome(existsSync(o.stdout) ? readFileSync(o.stdout, "utf8") : "");
-  return { role, outcome: out, step, cause: agentCause(step, out) };
+  const out = openSync(o.stdout, "a");
+  const err = o.stderr === o.stdout ? out : openSync(o.stderr, "a");
+  const p = Bun.spawn(argv, { cwd: o.cwd, env: o.env, stdin: new Blob([o.stdin]), stdout: out, stderr: err, detached: true });
+  o.onSpawn?.(p);
+  let timedOut = false, stalled = false;
+  const end = () => {
+    clearTimeout(box);
+    clearInterval(watch);
+    killGroup(p.pid, "SIGTERM");
+    setTimeout(() => killGroup(p.pid, "SIGKILL"), KILL_AFTER_MS).unref();
+  };
+  const box = setTimeout(() => { timedOut = true; end(); }, o.limit * 1000);
+  let size = statSync(o.stdout).size;
+  let last = performance.now();
+  const watch = setInterval(() => {
+    const now = statSync(o.stdout, { throwIfNoEntry: false })?.size;
+    if (now !== size) { size = now ?? 0; last = performance.now(); return; }
+    if (performance.now() - last < o.stall * 1000) return;
+    stalled = true;
+    end();
+  }, Math.min(1000, o.stall * 250));
+  const code = await p.exited;
+  clearTimeout(box);
+  clearInterval(watch);
+  closeSync(out);
+  if (err !== out) closeSync(err);
+  const step = { code, timedOut: timedOut && !stalled, stalled };
+  const res = outcome(readFileSync(o.stdout, "utf8"));
+  return { role, outcome: res, step, cause: agentCause(step, res) };
 }

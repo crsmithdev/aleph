@@ -8,7 +8,7 @@ description: >
   NOT for: a design tree (use /aleph:grill-me), a spec (use /aleph:to-spec).
 ---
 
-The factory (`docs/specs/2026-10-26-seed-factory.md`) runs one sandboxed
+The factory (`docs/specs/2026-10-26-seed-factory.md`) runs one
 worker per open issue with a spec, with nobody to ask; a planner splits a large
 goal first. The issue is all the worker gets, so it must say what done is and
 how to check it.
@@ -21,8 +21,8 @@ issues (`aleph issue list <repo>`). If the goal is an existing issue, read it
 with `aleph issue show <repo> <n>`: the run edits that issue, not a new one.
 
 Find facts yourself. When the oracle needs a fact from the web (a price, a
-version, an API's shape), fetch it now, in this session: the sandbox has no
-web. Put the value and its source URL in the recommended answer.
+version, an API's shape), fetch it now, in this session, so the worker does not
+guess it. Put the value and its source URL in the recommended answer.
 
 ## 2. Ask, with one AskUserQuestion call
 
@@ -35,21 +35,18 @@ reasonable check.
 
 - **Goal**: the end state, as Chris would check it.
 - **Edit surface**: the files or folders the run may change.
-- **Oracle**: acceptance runs only commands in backticks that start with
-  `bun test`, `bun run` or `bunx tsc`; any other Oracle is skipped on `main`.
-  So name one of those when the repo can. The check proves the end state. It
-  is stored on the issue, and the worker sees it and can run it: a command
-  whose output proves it, a test file stored with `aleph issue hidden <repo>
-  <n> <file>` (the factory runs it after the repo's checks), or a value with
-  its source URL. The Oracle does not ask for a new committed test. A
+- **Oracle**: the check that proves the end state. Verify runs only commands
+  in backticks that start with `bun test`, `bun run` or `bunx tsc`, so name
+  one of those when the repo can. The Oracle is stored on the issue, and the
+  worker sees it and can run it: a command whose output proves it, or a value
+  with its source URL. The Oracle does not ask for a new committed test. A
   committed test needs a lasting reason: a bug fix gets one regression test at
   the lowest layer; new lasting module behaviour gets a row in the module's
-  existing test file; a CLI end-to-end test is only for new command wiring. The factory runs the repo's checks from
-  `~/.aleph/repos.json` after every run, so an oracle names only real
-  commands, for example `bun test <file>`, never a command that does not
-  exist, such as `aleph check`. Acceptance does not run an Oracle command with a
-  placeholder such as `<file>`, so the Oracle names the real path. "The tests
-  pass" alone is not an oracle.
+  existing test file; a CLI end-to-end test is only for new command wiring. The
+  factory runs the repo's checks from `~/.aleph/repos.json` after every run, so
+  an Oracle names only real commands, for example `bun test <file>`, never a
+  command that does not exist, such as `aleph check`. Name the real path, not
+  a placeholder such as `<file>`. "The tests pass" alone is not an oracle.
 
 If Chris answers "use your defaults", take every recommended answer. Write
 no issue while a question is open.

@@ -3,8 +3,7 @@
  * work-model spec (docs/specs/2026-10-31-work-model.md). The CLI,
  * Incoming, the lanes and `aleph status` read it.
  *
- * It takes plain data, so the same call runs from the store and the ledger in
- * Chris's session and from the facts snapshot in a sandbox: `subjectOf` and
+ * It takes plain data from the store and the ledger: `subjectOf` and
  * `runViewOf` read the store's and the ledger's accessors, which give an old-shape
  * item or run and a new-shape one alike.
  */
