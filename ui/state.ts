@@ -5,6 +5,7 @@
  */
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { factorySnapshot, goalFacts, mainRed } from "../jobs/lib/factory-status.ts";
+import { monitorPanel } from "../jobs/lib/monitor-table.ts";
 import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type Repo } from "../jobs/lib/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
@@ -97,6 +98,8 @@ export interface State {
     hold: string | null;
     /** The firefighter's factory log lines of the last 24 hours, newest last. */
     firefighter: { at: string; line: string }[];
+    /** The monitor's newest daily report: the first metric, the reader's findings in rank order, and the table. Null before the first report. */
+    monitor: ReturnType<typeof monitorPanel>;
   };
   stuck: Job[]; running: Job[]; delivered: Job[];
   /** Everything that waits for Chris: one entry per awaiting run, issue, goal and proposal, with its kind (input or approval) and reason. */
@@ -449,7 +452,7 @@ export function state(now = new Date()): State {
 
   fresh.sort((a, b) => b.created.localeCompare(a.created));
   const granted = readAlways();
-  const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs, lists);
+  const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
   const att = attend({ runs: needs, issues: awaitingItems }, granted);
   // The run behind an ask: its live-run mark, its trailers and its notes.
   for (const a of att.items) {
@@ -465,7 +468,7 @@ export function state(now = new Date()): State {
   const redOf = mainRed();
   return {
     now: now.toISOString(),
-    factory: { ...factory, judge: judgeChoice(), ...tickTimer() },
+    factory: { ...factory, judge: judgeChoice(), ...tickTimer(), monitor: monitorPanel() },
     asks: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
     always: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
     stuck, running, runningIssues, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES),

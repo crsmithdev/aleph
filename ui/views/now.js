@@ -15,7 +15,7 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${pageHead("Status", { aside: filterBar([{ name: "window", value: w, options: WINDOWS }]) })}${renderStatusLine(s, outOfDateNow)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${pageHead("Status", { aside: filterBar([{ name: "window", value: w, options: WINDOWS }]) })}${renderStatusLine(s, outOfDateNow)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section>${renderMonitor(s)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".lede .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -41,6 +41,20 @@ export function renderCauses(d, win = d?.window ?? "week") {
   if (!cs.length) return `${title}<p>No agent time was lost in the last ${period({ window: win })}.</p>`;
   const sum = cs.reduce((a, x) => a + x.hours, 0), first = cs[0];
   return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p>${barList(cs.map((x, i) => causeRow(`<a href="${keep(EFFICIENCY, win)}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join(""))}`;
+}
+
+/**
+ * The monitor's newest daily report: the share of acceptance failures that led to a real fix, the reader's findings
+ * in rank order, and the whole table behind a fold. Nothing before the first report.
+ */
+export function renderMonitor(s) {
+  const m = s.factory?.monitor;
+  if (!m) return "";
+  const said = m.error ? `<p class="quiet">No reading: ${esc(m.error)}</p>`
+    : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ol>`
+    : `<p class="quiet">Nothing looks off.</p>`;
+  return `<section id="monitor" class="card" aria-labelledby="h-monitor"><h2 id="h-monitor">Monitor, ${esc(m.day)}</h2><p>${esc(m.headline)}</p>${said}` +
+    `<details class="more" data-keep="more:monitor"><summary>Table</summary><pre class="monitor-table">${esc(m.table)}</pre></details></section>`;
 }
 
 /** Fetch the window with its baseline in one request, then fill the scorecard and the causes. */

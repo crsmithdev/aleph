@@ -53,7 +53,7 @@ export function axisTimes(times, x, max = 5) {
 }
 
 const BAD = ["failed", "stuck", "dropped"];
-const AUX = ["triage", "plan", "facts", "explain", "firefighter"];
+const AUX = ["triage", "plan", "facts", "explain", "firefighter", "monitor"];
 /** A run's bar colour: bad for a run that failed, land, aux for a run that does not build, else build. */
 export const barTone = (r) => (BAD.includes(r.condition) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
 

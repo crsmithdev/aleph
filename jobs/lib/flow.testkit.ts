@@ -15,6 +15,8 @@ import { factoryDir, factoryRepos, health, hold, paused, setPaused } from "./fac
 import { fetchOrigin } from "./git.ts";
 import { factoryLog } from "./layout.ts";
 import { loadRegistry } from "./ledger.ts";
+import { flakeLines, reportLine } from "./monitor-table.ts";
+import { monitorStep } from "./monitor.ts";
 import type { Fate } from "./outcome.ts";
 import { probe } from "./probe.ts";
 import { smokeStep } from "./smoke.ts";
@@ -40,7 +42,9 @@ export const reportText = (): Promise<string> => asCli({}, () => {
   }
   const h = hold();
   if (h) lines.push(h.line);
-  lines.push(...health());
+  lines.push(...health(), ...flakeLines());
+  const m = reportLine();
+  if (m) lines.push(m);
   return lines.filter(Boolean).join("\n\n") || "nothing new";
 });
 
@@ -66,7 +70,8 @@ export const tick = (extra: Record<string, string> = {}): Promise<any> => asCli(
   try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }
   await smokeStep();
   const f = await firefighterStep();
-  return { ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f?.run ? { firefighter: f } : {}) };
+  const m = await monitorStep();
+  return { ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f?.run ? { firefighter: f } : {}), ...(m ? { monitor: m.day } : {}) };
 });
 
 /** `aleph pause` and `aleph resume`; the resume's dispatch is off in the tests (ALEPH_DISPATCH=off). */

@@ -124,6 +124,8 @@ export function env(extra: Record<string, string> = {}): Record<string, string> 
     ALEPH_LIVE_CAP: "5",
     // A run's end and `aleph issue` dispatch in production; the dispatch tests turn it on.
     ALEPH_DISPATCH: "off",
+    // Nor does a tick start the monitor's reader; monitor.test.ts runs it with a fake.
+    ALEPH_MONITOR: "off",
     // The tick triages no issue unless a test sets a cap and a fake command.
     ALEPH_TRIAGE_CAP: "0",
     // Nor does it explain an Ask: no test reaches the live explainer.

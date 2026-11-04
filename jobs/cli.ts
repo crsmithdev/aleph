@@ -26,6 +26,8 @@ import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
 import { factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
 import { factoryLog } from "./lib/layout.ts";
+import { addDays, flakeLines, renderTable, reportLine } from "./lib/monitor-table.ts";
+import { monitorStep, runMonitor, tableOf } from "./lib/monitor.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions.ts";
 import type { Fate } from "./lib/outcome.ts";
 import { refuse, Refusal } from "./lib/refusal.ts";
@@ -51,7 +53,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate"];
+const VALUED = ["--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day"];
 const FATES: Fate[] = ["duplicate", "already-met", "by-hand"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
@@ -337,7 +339,7 @@ async function dispatchCmd(): Promise<void> {
 /**
  * `aleph tick`, from the timer: the nightly probe when due, and the dependency sweep only after a
  * passing probe, then a dispatch as the fallback for what no run's end and no issue write has
- * started. A failed probe starts no run and no sweep.
+ * started. A failed probe starts no run and no sweep. Last, the monitor's daily report, which runs while paused.
  */
 async function tickCmd(): Promise<void> {
   if (!paused() && probeDue()) {
@@ -360,12 +362,14 @@ async function tickCmd(): Promise<void> {
   try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }
   await smokeStep();
   const f = await firefighterStep();
-  out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f?.run ? { firefighter: f } : {}) });
+  const m = await monitorStep();
+  out({ ...d, skipped: [...d.skipped, ...t.skipped], triaged: t.triaged, episodes, ...(f?.run ? { firefighter: f } : {}), ...(m ? { monitor: m.day } : {}) });
 }
 
 /**
  * `aleph report`: the runs not yet shown, how far each factory repo's
- * checkout is behind origin, and the health line. With --hook it prints the
+ * checkout is behind origin, and the health lines: the factory's alarms, then the
+ * monitor's flake counts and its newest report. With --hook it prints the
  * SessionStart hook's JSON, and nothing when there is nothing to say.
  */
 function reportCmd(): void {
@@ -376,7 +380,9 @@ function reportCmd(): void {
   }
   const h = hold();
   if (h) lines.push(h.line);
-  lines.push(...health());
+  lines.push(...health(), ...flakeLines());
+  const m = reportLine();
+  if (m) lines.push(m);
   const text = lines.filter(Boolean).join("\n\n");
   if (!rest.includes("--hook")) { console.log(text || "nothing new"); return; }
   if (!text) return;
@@ -495,6 +501,15 @@ try {
       break;
     }
     case "tick": await tickCmd(); break;
+    case "monitor": {
+      // `aleph monitor [--dry] [--day YYYY-MM-DD]`: the table of the day (yesterday by default) and its reading. --dry prints the table and writes nothing.
+      const day = flag("day") ?? addDays(issues.today(), -1);
+      if (!/^\d{4}-\d\d-\d\d$/.test(day)) refuse("usage: aleph monitor [--dry] [--day YYYY-MM-DD]");
+      if (rest.includes("--dry")) { process.stdout.write(renderTable(tableOf(day))); break; }
+      const r = await runMonitor(day) ?? refuse("another monitor run holds the lock");
+      out({ day: r.day, findings: r.findings, ...(r.error ? { error: r.error } : {}), run: r.run, note: r.note ?? r.noteError });
+      break;
+    }
     case "dispatch": await dispatchCmd(); break;
     case "triage": await triageCmd(); break;
     case "plan": await planCmd(); break;
@@ -529,7 +544,7 @@ try {
       if (!p.ok) process.exit(1);
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch|doctor|doc-claims> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|report|pause|resume|sandbox|status|judge|dispatch|doctor|doc-claims|monitor> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

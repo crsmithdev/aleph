@@ -13,7 +13,7 @@ import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 import { partsOf, readList } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter" | "explain"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "triage" | "plan" | "facts" | "firefighter" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 export interface LogFile { name: string; size: number }
 /** The log files the Job page serves, and no others. */
@@ -85,7 +85,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
 }
 
 const DAY = 24 * 3600_000;
-const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain" } as const;
+const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", explain: "explain", monitor: "monitor" } as const;
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e, i) => {

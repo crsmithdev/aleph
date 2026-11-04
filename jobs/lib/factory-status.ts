@@ -6,7 +6,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { flakeTracker, reader, type Reader } from "../../todo/lib/store.ts";
+import { reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
@@ -342,10 +342,13 @@ export function suiteLines(runs: Entry[] = allRuns()): string[] {
   return [...last].filter(([, s]) => s.seconds > budget).map(([repo, s]) => `health: ${repo} full suite took ${s.seconds} s; the budget is ${budget} s`);
 }
 
-/** The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, a slow full suite, a failed nightly acceptance run, and flakes. `jobs` and `lists` are the caller's, when it has read them already. */
-export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {}): string[] {
+/**
+ * The factory's health lines: stalled work, too many runs waiting for Chris, a failed probe, a red main or CI, a slow
+ * full suite and a failed nightly acceptance run. The flake counts are the monitor's (monitor-table.ts). `jobs` is the
+ * caller's, when it has read them already.
+ */
+export function health(now = Date.now(), o: { jobs?: Job[] } = {}): string[] {
   const lines: string[] = [];
-  const lists = o.lists ?? reader();
   lines.push(...stallLines(now, o.jobs));
   lines.push(...suiteLines(o.jobs?.flat()));
   const smoke = smokeLine();
@@ -357,39 +360,6 @@ export function health(now = Date.now(), o: { jobs?: Job[]; lists?: Reader } = {
   const p = lastProbe();
   if (p && !p.ok) lines.push(`health: the sandbox probe at ${p.at} failed: ${p.failed.join("; ")}`);
   for (const r of redMains()) lines.push(`health: ${r.line}`);
-  const counts = new Map<string, number>();
-  for (const f of flakes()) {
-    if (!(now - Date.parse(f.at) < 7 * DAY)) continue;
-    for (const { kind, name } of flakeNames(f)) {
-      const k = `${f.repo} ${kind} ${name}`;
-      counts.set(k, (counts.get(k) ?? 0) + 1);
-    }
-  }
-  [...counts].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).slice(0, 5)
-    .forEach(([k, n]) => lines.push(`health: ${k} passed on rerun ${n} times in 7 days`));
-  for (const repo of factoryRepos()) {
-    const doc = lists.list(repo.key);
-    const tracker = doc && flakeTracker(doc);
-    if (!tracker) continue;
-    const files = new Set<string>();
-    const tests = new Map<string, number>();
-    let k = 0;
-    for (const line of tracker.notes) {
-      const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (.*)$/.exec(line);
-      if (!m) continue;
-      const at = Date.parse(`${m[1]}T${m[2]}`);
-      if (!(now - at < 7 * DAY)) continue;
-      k++;
-      const cut = m[3].indexOf(" > ");
-      // The caller's prefix ("job x: ", "firefighter: ") is not part of the file name.
-      if (cut >= 0) files.add(m[3].slice(0, cut).split(": ").at(-1)!.trim());
-      const a = /^acceptance \S+: (.+?): failed/.exec(m[3]);
-      if (a) tests.set(a[1], (tests.get(a[1]) ?? 0) + 1);
-    }
-    if (k) lines.push(`health: ${repo.key}-${tracker.id} holds ${k} flake notes in 7 days, ${files.size} test files`);
-    const top = [...tests].sort((x, y) => y[1] - x[1])[0];
-    if (top) lines.push(`health: most flaked in acceptance in 7 days: ${top[0]} (${top[1]} times)`);
-  }
   return lines;
 }
 
@@ -497,7 +467,7 @@ function agentStartsInHour(repoKey: string, name: string, runs: Entry[], now: nu
 }
 
 /** What the Status page shows of the factory, and the gate and the baselines its Queued lane reads. */
-export function factorySnapshot(now: number, jobs: Job[], lists: Reader) {
+export function factorySnapshot(now: number, jobs: Job[]) {
   const runs = jobs.flat();
   return {
     paused: paused(),
@@ -508,7 +478,7 @@ export function factorySnapshot(now: number, jobs: Job[], lists: Reader) {
     runsToday: runsToday(now, runs).length,
     costToday: spentToday(now, runs),
     probe: lastProbe(),
-    health: health(now, { jobs, lists }),
+    health: health(now, { jobs }),
     hold: hold(jobs)?.line ?? null,
     firefighter: firefighterLines(now),
     gated: gates({ jobs }),

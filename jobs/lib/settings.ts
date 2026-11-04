@@ -90,6 +90,8 @@ export const quietLoad = () => Number(process.env.ALEPH_QUIET_LOAD) || available
 export const uiCacheMs = () => { const n = num("ALEPH_UI_CACHE_TTL", 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 
 export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
+/** The tick's daily monitor step; tests turn it off, as a tick there must not start the reader. */
+export const monitorOn = () => process.env.ALEPH_MONITOR !== "off";
 export const rescueOn = () => process.env.ALEPH_RESCUE !== "off";
 
 export const workerCmd = () => process.env.ALEPH_WORKER_CMD ?? "claude";

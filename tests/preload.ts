@@ -25,6 +25,8 @@ const vars: Record<string, string> = {
   ALEPH_CLAUDE_CREDENTIALS: join(dir, "credentials.json"), ALEPH_SPOOL: join(dir, "spool"),
   ALEPH_CLAUDE_SETTINGS: join(dir, "settings.json"), ALEPH_JUDGE_FILE: join(dir, "judge"),
   ALEPH_WORKER_TOKEN: join(dir, "worker-token"),
+  // No test reaches the live model through the monitor's reader: `false` fails, and a test that wants a reply gives a fake.
+  ALEPH_MONITOR_CMD: "false",
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
 
