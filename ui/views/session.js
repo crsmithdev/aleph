@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { chips, costHtml, crumb, durMs as dur, error, esc, filterBar, idLink, md, pageHead, shortModel, when } from "../lib.js";
+import { chips, costHtml, crumb, durMs as dur, error, esc, filterBar, idLink, md, pageHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -243,7 +243,7 @@ function obsRows(o, depth) {
     o.error ? `Error: ${esc(o.error)}` : "",
   ].filter(Boolean).join("; ");
   const fold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
-  return `<tr><td><span class="badge ${o.error ? "stuck" : "quiet"}">${esc(o.kind)}</span></td>` +
+  return `<tr><td>${tag(o.kind, o.error ? "stuck" : "quiet")}</td>` +
     `<td style="padding-left:${depth * 16}px"><strong>${esc(o.name)}</strong>${fold("Input", o.input)}${fold("Output", o.output)}</td>` +
     `<td>${detail}</td><td class="num">${esc(dur(o.durationMs))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }

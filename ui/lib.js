@@ -322,7 +322,7 @@ export const shortModel = (m) => String(m ?? "").replace(/^claude-/, "").replace
 /** An id as a link: mono, small, muted, underlined on hover. */
 /** What an issue waits on, one row each; a wait that never ends says so and offers to remove it. */
 export function blockersHtml(waits, repo, id) {
-  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(localId(b.id, repo))}</a>` : esc(localId(b.id, repo))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` <span class="badge stuck">${esc(b.dead)}</span>` : b.state ? ` <span class="badge quiet">${esc(b.state)}</span>` : ""}</div>`).join("");
+  const rows = waits.map((b) => `<div class="blocker">${b.href ? `<a href="${esc(safeHref(b.href))}">${esc(localId(b.id, repo))}</a>` : esc(localId(b.id, repo))}${b.title ? ` <span>${esc(b.title)}</span>` : ""}${b.dead ? ` ${tag(b.dead, "stuck")}` : b.state ? ` ${tag(b.state)}` : ""}</div>`).join("");
   const dead = waits.filter((b) => b.dead);
   if (!dead.length) return rows;
   const label = `Stop waiting on ${dead.map((b) => localId(b.id, repo)).join(", ")}`;
@@ -341,14 +341,17 @@ export const repoOf = (id) => /^(.+)-\d+(?:\.\d+)?$/.exec(String(id))?.[1] ?? ""
 /** An id in a view of more than one repo: the project in its own place, then the link with the short id. */
 export const repoIdLink = (id, href, repo = repoOf(id)) => `${repo ? `<span class="idp">${esc(repo)}</span> ` : ""}${idLink(localId(id, repo), href)}`;
 
+/** A small badge of any text in one of the badge tones, with an optional title. */
+export const tag = (text, tone = "quiet", title) => `<span class="badge ${esc(tone)}"${title === undefined ? "" : ` title="${esc(title)}"`}>${esc(text)}</span>`;
+
 /** A state as a badge, toned by `tone`. */
-export const badge = (state) => `<span class="badge ${tone(state)}">${esc(state)}</span>`;
+export const badge = (state) => tag(state, tone(state));
 
 /** A priority as a badge: critical is the alert tone, high the warning tone, medium quiet, low dim. Missing or unknown reads medium. */
 const PRIORITY_TONES = { critical: "stuck", high: "need", medium: "quiet", low: "quiet dim" };
 export function priorityBadge(p) {
   const k = Object.hasOwn(PRIORITY_TONES, p) ? p : "medium";
-  return `<span class="badge ${PRIORITY_TONES[k]}">${k}</span>`;
+  return tag(k, PRIORITY_TONES[k]);
 }
 
 /** Labels as small rounded chips; "" for none. */

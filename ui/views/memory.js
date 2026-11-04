@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -264,7 +264,7 @@ export function browseRows(rows, o, hits = []) {
 }
 
 const TONE = { use: "done", stale: "need", never: "quiet", lint: "stuck" };
-const pill = (s) => `<span class="badge ${TONE[s]}">${esc(STATUS[s])}</span>`;
+const pill = (s) => tag(STATUS[s], TONE[s]);
 
 function renderNoteTable(rows, o, hits) {
   const all = browseRows(rows, o, hits);

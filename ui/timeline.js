@@ -1,7 +1,7 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { dur, esc, money, shortModel, when } from "./lib.js";
+import { dur, esc, money, shortModel, tag, when } from "./lib.js";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -131,8 +131,6 @@ export function barsOf(runs, { cost = false } = {}) {
   });
 }
 
-/** An event's tag: a small badge in one of the badge tones. */
-export const tag = (text, tone = "quiet") => `<span class="badge ${esc(tone)}">${esc(text)}</span>`;
 
 const LEGEND = { wait: "waiting", chris: "awaiting you", aux: "triage, plan, facts", build: "build", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
 const pct = (f) => (f * 100).toFixed(3);

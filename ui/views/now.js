@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tile, when } from "../lib.js";
+import { barList, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
 import { causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -163,8 +163,7 @@ function details(s, j, extra = "") {
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
-const STATUS_TONE = { awaiting: "need", stuck: "stuck", working: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
-const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
+const statusBadge = (st) => tag(st, tone(st));
 
 /** "4m 05s", "1h 05m", "2d4h": the time from `since` to `to`, in the least room; "–" when the work was never picked up. */
 export function span(since, to) {
@@ -224,7 +223,7 @@ function runningLane(s) {
     const worker = run.kind === "agent" || run.kind === "build";
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
-    return laneCard("run-row", metaRow({ id: itemId(j), chips: `<span class="badge run" title="${esc(j.phase || kind)}">${esc(kind)}</span>` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now, why: over ? "past the time box" : "" }), j.item?.title || j.name, jobHref(j));
+    return laneCard("run-row", metaRow({ id: itemId(j), chips: `${tag(kind, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now, why: over ? "past the time box" : "" }), j.item?.title || j.name, jobHref(j));
   }).join("");
   return lane("running", "Running", s.factory.liveRuns ?? runningCount(s), rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }
@@ -283,7 +282,7 @@ const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
 /** The options, recommended mark and context of a decision with fields. */
 function decisionBody(d) {
   return `<p class="dq">${code(d.question)}</p>` +
-    `<ul class="opts">${d.options.map((o) => `<li${o.label === d.recommended ? ' class="rec"' : ""}><b>${code(o.label)}</b>${o.label === d.recommended ? ' <span class="badge run">Recommended</span>' : ""} <span class="line">${code(o.line)}</span></li>`).join("")}</ul>` +
+    `<ul class="opts">${d.options.map((o) => `<li${o.label === d.recommended ? ' class="rec"' : ""}><b>${code(o.label)}</b>${o.label === d.recommended ? ` ${tag("Recommended", "run")}` : ""} <span class="line">${code(o.line)}</span></li>`).join("")}</ul>` +
     (d.why?.length ? `<ul class="why">${d.why.map((w) => `<li>${code(w)}</li>`).join("")}</ul>` : "");
 }
 
@@ -319,7 +318,7 @@ const needHead = (kind, id, href, title, problem, repo = "", para = `<p class="p
 };
 /** One choice of a card: the button, what it does, and any input that belongs to it. */
 const choice = (button, hint, input = "", recommended = false) =>
-  `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ' <span class="badge run">Recommended</span>' : ""}${input}</div>${button}</div>`;
+  `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ` ${tag("Recommended", "run")}` : ""}${input}</div>${button}</div>`;
 
 /** The four kinds of Ask card and their labels. An item without a `card` reads as Approve for an approval, else Decide. */
 export const CARD_LABEL = { approve: "Approve", decide: "Decide", unstick: "Unstick", hand: "By hand" };
