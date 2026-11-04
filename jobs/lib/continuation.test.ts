@@ -186,6 +186,14 @@ describe("the goal's brief", () => {
     clearRerun("fac-7");
     expect(goalBrief(item, "fac-7", []).rerun).toBe(false);
   });
+
+  test("the spec check's notes go under their own heading and ask for a DEFAULT: line", () => {
+    const item = { title: "Do it", spec: "The spec.\n", notes: [] };
+    const b = goalBrief(item, "fac-7", [], "NOTE-ONE; NOTE-TWO").spec;
+    expect(b).toContain("## Spec check notes\n");
+    expect(b).toContain("print `DEFAULT:` for it.\n\nNOTE-ONE; NOTE-TWO\n");
+    expect(goalBrief(item, "fac-7", []).spec).not.toContain("## Spec check notes");
+  });
 });
 
 describe("the worker brief", () => {

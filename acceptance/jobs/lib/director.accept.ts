@@ -7,7 +7,7 @@ import * as issues from "../../../todo/lib/todo.ts";
 import { writeList } from "../../../todo/lib/store.ts";
 import { plainAsk, setAsk } from "../../../jobs/lib/ask.ts";
 import { MAX_RUNS_PER_HOUR } from "../../../jobs/lib/goal-decision.ts";
-import { checkSpec } from "../../../jobs/lib/spec-check.ts";
+import { checkSpec, passNotes } from "../../../jobs/lib/spec-check.ts";
 import { openRun } from "../../../jobs/lib/agent-run.ts";
 import { allRuns, loadRegistry, readRun } from "../../../jobs/lib/ledger.ts";
 import { liveEntries, runsToday } from "../../../jobs/lib/factory-status.ts";
@@ -117,7 +117,7 @@ test("an edit of only the dependencies, or one that still lacks Goal, Edit surfa
   }
 });
 
-test("a spec check that always holds is edited by the director at most MAX_SPEC_EDITS times; the next Ask goes to Chris", async () => {
+test("a spec check that always holds holds the goal once; after the director's edit it passes with the hold as notes", async () => {
   fresh([{ title: "goal", body: "Ship the thing.\n", goal: true }]);
   sh(repoPath(), "git", "update-ref", "refs/remotes/origin/main", "HEAD");
   const bin = join(base, "holds.sh");
@@ -127,27 +127,23 @@ test("a spec check that always holds is edited by the director at most MAX_SPEC_
   const old = process.env.ALEPH_SPECCHECK_CMD;
   process.env.ALEPH_SPECCHECK_CMD = bin;
   try {
-    let edits = 0;
-    for (let turn = 1; turn <= MAX_SPEC_EDITS + 3; turn++) {
-      const c = await checkSpec({ key, path: repoPath(), main: "main" } as any, 1);
-      expect(c.verdict).toBe("hold");
-      // As unit.ts does on a hold.
-      writeList({ key }, "spec check held", (doc) => {
-        const it = issues.find(doc, 1)!;
-        setAsk(it, plainAsk("spec-check", c.problems ?? ""));
-        return issues.note(it, `asks Chris: ${c.problems}`);
-      });
-      reply([{ do: "edit-goal", body: FULL(`Ship ${turn}.`) }]);
-      const [d] = await direct();
-      if (d.outcome === "escalated") break;
-      edits++;
-    }
-    expect(edits).toBe(MAX_SPEC_EDITS);
-    // The loop reaches Chris within the run-cap: one build start per check, edits + the last check.
+    const repo = { key, path: repoPath(), main: "main" } as any;
+    const c = await checkSpec(repo, 1);
+    expect(c.verdict).toBe("hold");
+    // As unit.ts does on a hold.
+    writeList({ key }, "spec check held", (doc) => {
+      const it = issues.find(doc, 1)!;
+      setAsk(it, plainAsk("spec-check", c.problems ?? ""));
+      return issues.note(it, `asks Chris: ${c.problems}`);
+    });
+    reply([{ do: "edit-goal", body: FULL("Ship 1.") }]);
+    const [d] = await direct();
+    expect(d.outcome).toBe("decided");
+    expect(asked(1)).toBeNull();
+    expect((await checkSpec(repo, 1)).verdict).toBe("pass");
+    expect(passNotes(item(1))).toBe('"the oracle": name a test');
+    expect(asked(1)).toBeNull();
     expect(MAX_SPEC_EDITS + 1).toBeLessThanOrEqual(MAX_RUNS_PER_HOUR);
-    expect(asked(1)?.reason).toBe("spec-check");
-    expect(asked(1)?.question).toBe('"the oracle": name a test');
-    expect(asked(1)?.situation).toBeTruthy();
   } finally {
     if (old === undefined) delete process.env.ALEPH_SPECCHECK_CMD; else process.env.ALEPH_SPECCHECK_CMD = old;
   }

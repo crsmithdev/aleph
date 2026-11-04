@@ -31,7 +31,7 @@ import { baselineChecks, runOnCommit, type ChecksStop, type Runner } from "./che
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { startKept } from "./unit.ts";
 import { acceptanceDetached, dispatchDetached, planDetached, specCheckDetached } from "./launch.ts";
-import { markLaunched, recordedVerdict, specChecking } from "./spec-check.ts";
+import { markLaunched, passNotes, recordedVerdict, specChecking } from "./spec-check.ts";
 import { needsPlan, planning, runPlan, type Rate } from "./plan.ts";
 import { route, type Tier } from "./route.ts";
 import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, writeStalls, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, lastProbe, liveRuns, paused, probeGate, readStalls, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
@@ -229,7 +229,7 @@ export async function dispatchIssues(start: Start, checks?: Checks, land?: Land,
         if (!v) { markLaunched(name); specCheck(repo, issues.refOf(latest)); skip(name, "not-ready", "spec check running"); continue; }
         if (v.verdict === "hold" && askOf(latest)) { skip(name, "not-ready", v.problems, "spec check held"); continue; }
       }
-      const { spec, rerun } = goalBrief(item, name, jobs);
+      const { spec, rerun } = goalBrief(item, name, jobs, repo.author ? passNotes(latest) : "");
       let tier: Tier | null | undefined;
       if (rate) {
         const p = await needsPlan(repo, item, spec, rate);

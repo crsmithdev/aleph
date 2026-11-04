@@ -143,6 +143,8 @@ Reply with one JSON object and nothing else, with one of these routes:
 - {"route": "live", "note": "<what to check>"}: it is a check against a live system the sandbox cannot reach.
 - {"route": "flake", "note": "<test file> > <test name>: <what was seen>"}: the issue reports a test that fails or times out now and then, or under load, and asks for no change to the product. Name the test file, the test name and what was seen. Do not return "build" for it: Chris picks from the tracker which flakes to fix, and files those himself. An issue that asks to fix a named test's own bug, with a cause, is still a "build".
 
+The spec stays close to the request. The request is the ground truth: the Goal says what it asks, in its words where they fit. A tentative word in the request ("perhaps", "maybe", "could") leaves that choice to the worker: say so, or leave it out; never make it a requirement. Write no claim about current code that you did not read: name what you read and leave the rest to the worker. The Oracle names test files and commands that exist and the behaviour to observe; it does not say how to build it (no markup, CSS or thresholds the request did not give).
+
 Done before build: before a "build" or "plan" route, read the commits listed above, and grep main for the names the issue gives (files, functions, test names). When a commit on main already makes the change, return "done" with that commit's sha and say what it holds. When you are unsure, return "build" as usual.
 
 Duplicates: when the issue asks for the same work as an open issue listed above, return "close" with the reason "duplicate of <repo>-<n>", naming that issue. When it only waits for that open issue, return "build" with "after" set to it.

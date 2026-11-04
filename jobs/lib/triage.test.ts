@@ -214,6 +214,13 @@ test("the prompt keeps how-to-build questions away from Chris and asks him in pl
   expect(p).toContain('"after": ["<optional <repo>-<n> or <repo>-<n>.<k>>"]');
 });
 
+test("the prompt keeps the spec close to the request: tentative words stay the worker's choice", () => {
+  const p = prompt(repo, { id: 1, title: "t", request: "", spec: "", notes: [], fm: {} } as unknown as issues.Issue);
+  expect(p).toContain("The request is the ground truth");
+  expect(p).toContain('("perhaps", "maybe", "could") leaves that choice to the worker');
+  expect(p).toContain("Write no claim about current code that you did not read");
+});
+
 describe("a goal whose work is already on main", () => {
   // The fake reads the commit list in the prompt: a line naming the file the issue asks for, with the file in its working directory, gives "done", else "build".
   const SMART = `#!/bin/bash

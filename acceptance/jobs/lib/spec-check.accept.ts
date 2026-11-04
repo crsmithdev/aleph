@@ -12,6 +12,6 @@ afterEach(() => {
 });
 
 test("the prompt holds the three parts of the spec and the verdict instruction", () => {
-  const p = specCheckPrompt({ title: "T", spec: SPEC } as any);
+  const p = specCheckPrompt({ title: "T", spec: SPEC, request: "" } as any);
   for (const s of ["GOALTEXT", "SURFACE", "ORACLETEXT", "VERDICT: pass", "VERDICT: hold"]) expect(p).toContain(s);
 });

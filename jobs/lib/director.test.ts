@@ -166,6 +166,7 @@ test("a spec-check Ask: a full spec edit answers it, at most MAX_SPEC_EDITS time
   for (const k of [1, 2]) {
     const [d] = await direct();
     expect(d).toMatchObject({ outcome: "decided", applied: ["edit-goal (spec)"] });
+    expect(prompt()).toContain("Make the smallest edit: change only the clauses the hold names");
     expect(asked(1)).toBeNull();
     expect(item(1).notes.some((x) => x.includes(`director: edited the spec (${k} of 2)`))).toBe(true);
     writeList({ key }, "hold again", (doc) => { setAsk(issues.find(doc, 1)!, plainAsk("spec-check", `no Oracle ${k}`)); return true; });

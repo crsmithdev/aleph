@@ -298,7 +298,7 @@ Reply with one JSON object and nothing else: {"escalate": ${CASE_TEXT(acts)}}
 
 - Decide when you can: answer the question, rerun the goal, drop the run, edit the spec or the goal, or file a fix job. Escalate only when you cannot tell what Chris would want, or when the choice costs Chris something he has not decided before.
 - Code refuses, whatever you reply: closing or dropping an issue Chris filed; landing a run that changes a security path or bun.lock, or a held run before the reviewer gave a verdict; more than ${MAX_ACTIONS} actions; a spec edit past ${MAX_SPEC_EDITS} on one goal's spec check, after which you close the goal or escalate.
-- A spec-check Ask is answered by an edit-goal whose body has ## Goal, ## Edit surface and ## Oracle: the spec check reads it before the next worker run.
+- A spec-check Ask is answered by an edit-goal whose body has ## Goal, ## Edit surface and ## Oracle: the spec check reads it before the next worker run. Make the smallest edit: change only the clauses the hold names, and keep every other clause word for word. Add no design the hold did not ask for: no markup, CSS properties, thresholds or new requirements. The next spec check cannot hold the goal again: it passes, and the worker settles what is left.
 - When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
 - A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this goal with edit-goal when it must wait for the fix.

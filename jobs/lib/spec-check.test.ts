@@ -5,7 +5,7 @@ import { readHidden, reader, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { change, ctx, notes, setup, teardown } from "./factory.helpers.ts";
 import { specVersion } from "./goal-spec.ts";
-import { checkSpec, specCheckPrompt, specVerdict } from "./spec-check.ts";
+import { checkSpec, passNotes, specCheckPrompt, specVerdict } from "./spec-check.ts";
 import { seal } from "./author.ts";
 import { setAside } from "./acceptance.ts";
 
@@ -58,11 +58,50 @@ const version = (id: number) => specVersion(reader().item("fac", id)!);
 const count = (calls: string) => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").length : 0);
 
 test("the prompt carries the spec-review method, with and without sealed scenarios", () => {
-  const item = { title: "T", spec: SPEC } as any;
+  const item = { title: "T", spec: SPEC, request: "" } as any;
   for (const p of [specCheckPrompt(item), specCheckPrompt(item, "1. A is seen.\n")]) {
     for (const s of ["Not observable", "Out of reach", "A name is not evidence", "When <trigger or input>", "Read the spec as the builder"]) expect(p).toContain(s);
   }
   expect(specCheckPrompt(item, "1. A is seen.\n")).toContain("SET-ASIDE: scenario <n>: <why>");
+});
+
+test("the prompt holds only on a block, carries the request, and with held it cannot hold", () => {
+  const item = { title: "T", spec: SPEC, request: "REQUESTTEXT" } as any;
+  const p = specCheckPrompt(item);
+  for (const s of ["## Request", "REQUESTTEXT", "## Block or note", "`VERDICT: pass <notes>`", "`VERDICT: hold <blocks>`"]) expect(p).toContain(s);
+  const h = specCheckPrompt(item, "", true);
+  expect(h).toContain("Do not hold it again");
+  expect(h).not.toContain("VERDICT: hold");
+  expect(specCheckPrompt({ ...item, request: "" })).not.toContain("## Request");
+});
+
+test("specVerdict reads a pass with notes", () => {
+  expect(specVerdict("VERDICT: pass \"a\"; say b")).toEqual({ pass: true, notes: "\"a\"; say b" });
+  expect(specVerdict("VERDICT: pass")).toEqual({ pass: true });
+});
+
+test("a pass with notes records them for the worker; a plain pass has none", async () => {
+  specStub("VERDICT: pass \"GOALTEXT\" is vague; say which page");
+  const id = add();
+  expect((await checkSpec(repo(), id)).verdict).toBe("pass");
+  expect(notes(id)).toContain(`spec check: ${version(id)} pass: "GOALTEXT" is vague; say which page`);
+  expect(passNotes(reader().item("fac", id)!)).toBe(`"GOALTEXT" is vague; say which page`);
+  specStub("VERDICT: pass");
+  const id2 = add("## Goal\nOther\n");
+  await checkSpec(repo(), id2);
+  expect(passNotes(reader().item("fac", id2)!)).toBe("");
+});
+
+test("a goal is held at most once: after an edit, a second hold passes with its problems as notes", async () => {
+  const input = specStub("VERDICT: hold \"ORACLETEXT\" names no command; name one");
+  const id = add();
+  expect((await checkSpec(repo(), id)).verdict).toBe("hold");
+  change(id, (item) => { item.spec = SPEC.replace("ORACLETEXT", "ORACLE TWO"); });
+  expect((await checkSpec(repo(), id)).verdict).toBe("pass");
+  expect(notes(id)).toContain(`spec check: ${version(id)} pass: "ORACLETEXT" names no command; name one`);
+  const prompts = readFileSync(input, "utf8").split("=====CALL");
+  expect(prompts[0]).not.toContain("Do not hold it again");
+  expect(prompts[1]).toContain("Do not hold it again");
 });
 
 test("specVerdict reads the last capital VERDICT line as lastTagged does: **VERDICT:** pass is pass", () => {

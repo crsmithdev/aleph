@@ -1,7 +1,9 @@
 /**
  * The spec check: before a goal's first worker run, one read-only `claude -p` run reads the whole
  * spec (Goal, Edit surface, Oracle) against a clone of `origin/<main>` and says whether the spec
- * can be met. A hold names each problem with a change to the spec. The check runs once for each
+ * can be met. It holds only on a problem that blocks the work, and names each with a change to the spec; it passes
+ * with every other problem as a note, which the worker reads (`passNotes`). A goal is held at most once: after a hold,
+ * the next check passes, with its problems as notes. The check runs once for each
  * version of the spec (goal-spec.ts): the issue's note carries the version, so an edit makes it run again.
  * With `"author": true`, the run first seals the version's acceptance scenarios (author.ts), and the check
  * judges them too: a scenario that does not follow from the Goal or cannot hold with the Oracle is set aside,
@@ -28,18 +30,21 @@ import { OPUS_MODEL } from "./agent-call.ts";
 export const SPEC_CHECK_MODEL = OPUS_MODEL;
 const NOTE = "spec check:";
 
-/** The sealed scenarios go in the prompt with a fourth question; with none, the check asks three. */
-export function specCheckPrompt(item: issues.Issue, scenarios = ""): string {
+/**
+ * The sealed scenarios go in the prompt with a fourth question; with none, the check asks three.
+ * `held`: the goal was held once already, so this check may only pass, with notes.
+ */
+export function specCheckPrompt(item: issues.Issue, scenarios = "", held = false): string {
   const part = (name: string) => section(item.spec, name) || "(none)";
   return `Check one spec before a builder starts on it. The code of the codebase is your working directory; read it with your tools.
 
-Read the spec as the builder who will build it alone: nobody answers questions, so each place where the builder must guess, and a wrong guess changes the result, is a problem. A choice the spec leaves to the builder on purpose, and a choice any good builder would make the same way, is not.
+Read the spec as the builder who will build it alone: nobody answers questions during the run. For a choice the spec does not settle, the builder takes the answer it recommends and says so. So most problems are notes for the builder, not reasons to stop the goal.
 
 ## Method
 1. Split the spec into clauses. One clause is one requirement: each sentence of the Goal and each Oracle item. Number every clause.
 2. Check each clause against the code. For each file, function, command or behaviour the clause names, open it. Record each named thing as found, with \`file:line\`, or as absent, with the searches you ran.
 3. Run the passes below over every clause.
-4. Filter the problems. Keep a problem only when a wrong guess on it would change what the builder builds or what the check observes. Name that change.
+4. Sort each problem into a block or a note, with the rule under "Block or note".
 
 ## Passes
 - **Vague.** A word with no measure ("fast", "robust", "clean", "handles errors", "works well"), or a placeholder (\`TODO\`, \`???\`, \`<...>\`).
@@ -50,6 +55,13 @@ Read the spec as the builder who will build it alone: nobody answers questions, 
 - **Out of reach.** An Oracle clause whose code lies outside the Edit surface.
 - **Not observable.** An Oracle clause that no check can see. A check counts when it runs normally and an assertion observes the changed output, state or error. These do not count: a read of the source text, "does not throw", a snapshot alone, a mock or log call, and a manual look.
 
+## Block or note
+A problem blocks the goal only when no builder could do the work as written:
+- the Goal contradicts itself, or contradicts the issue's request;
+- an Oracle clause names a command or test file that does not exist and cannot be made, or asks for something that nothing could observe;
+- the work lies outside this repo.
+Every other problem is a note: a vague word, an open choice, a scope edge, a false claim about the code, a clause outside the Edit surface. The builder reads the notes and settles each one with its own recommended answer.
+
 ## Evidence
 - **A name is not evidence.** A function named like the behaviour may not do it: read it before you say the code agrees with a clause.
 - **An absence must be earned.** Search for synonyms and callers, not only the spec's words, and record each search with its hit count.
@@ -58,10 +70,14 @@ Read the spec as the builder who will build it alone: nobody answers questions, 
 ## Problems and rewrites
 Each problem quotes its clause exactly and proposes replacement text. Write an Oracle rewrite as an observable rule in this form:
 \`When <trigger or input>, <the subject> <does the observable thing>.\`
-When no problem passes the filter, the spec passes.
 
 # Spec: ${item.title}
+${item.request.trim() ? `
+## Request
+What was asked, verbatim. The spec serves it.
 
+${item.request.trim()}
+` : ""}
 ## Goal
 ${part("Goal")}
 
@@ -81,15 +97,16 @@ Apply the method to every clause. Answer ${scenarios ? "four" : "three"} questio
 2. Does the Edit surface hold the code that each Oracle clause needs to change? Name each clause whose code is outside it.
 3. Does the Oracle ask for something that no check or reviewer can observe? Name each such clause.
 ${scenarios ? `4. Does each sealed scenario follow from the Goal, and can it be true together with the Oracle? For each one that does not, write one line \`SET-ASIDE: scenario <n>: <why>\`. A set-aside scenario is removed; it is not a problem of the spec, so do not hold for it.
-` : ""}
-Write each problem as its quoted clause, then its rewrite. End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. A hold is for problems in the Goal, the Edit surface and the Oracle only. The hold line is the only part of the reply that the factory keeps, so write each problem on it in full: its quoted clause and its rewrite, separated by \`; \`. Never name a problem there by a number or a label. ${TAG_FORMAT}`;
+` : ""}${held ? "\nThis goal was held once already and its spec was edited. Do not hold it again: write every problem as a note.\n" : ""}
+Write each problem as its quoted clause, then its rewrite. End the reply with one last line: \`VERDICT: pass\` when there is no problem; \`VERDICT: pass <notes>\` when there are notes only${held ? "" : "; \`VERDICT: hold <blocks>\` when one problem or more blocks the goal"}. The verdict line is the only part of the reply that the factory keeps, so write each problem on it in full: its quoted clause and its rewrite, separated by \`; \`. Never name a problem there by a number or a label.${held ? "" : " A hold line carries the blocks only; the notes are lost."} ${TAG_FORMAT}`;
 }
 
 /** The last `VERDICT:` line of a reply, or null when it has none. */
-export function specVerdict(reply: string): { pass: true } | { pass: false; problems: string } | null {
+export function specVerdict(reply: string): { pass: true; notes?: string } | { pass: false; problems: string } | null {
   const rest = lastTagged(reply, "VERDICT");
   if (rest === undefined) return null;
-  if (/^pass\b/i.test(rest)) return { pass: true };
+  const pass = rest.match(/^pass\b[:\s]*(.*)$/i);
+  if (pass) return pass[1].trim() ? { pass: true, notes: pass[1].trim() } : { pass: true };
   const hold = rest.match(/^hold\b[:\s]*(.*)$/i);
   return hold ? { pass: false, problems: hold[1].trim() } : null;
 }
@@ -117,7 +134,8 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
     let scenarios = "";
     if (repo.author) try { scenarios = readHidden(repo, `${repo.key}-${ref}`)[SCENARIOS] ?? ""; } catch {}
     if (!scenarioCount(scenarios)) scenarios = "";
-    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: dir }, specCheckPrompt(item, scenarios)));
+    const held = heldBefore(item);
+    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: dir }, specCheckPrompt(item, scenarios, held)));
     cost = sealCost === undefined && reply.cost === undefined ? undefined : (sealCost ?? 0) + (reply.cost ?? 0);
     const v = specVerdict(reply.text);
     if (!v) { say("error: the reply has no verdict line"); return { verdict: "error", cost }; }
@@ -127,7 +145,9 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
       writeHidden(repo, `${repo.key}-${ref}`, { [SCENARIOS]: withoutScenarios(scenarios, new Set(asides.map(([n]) => n))) });
       for (const [n, why] of asides) note(repo, ref, `sealed checks: ${version} the spec check set aside: scenario ${n}: ${why}`);
     }
-    if (v.pass) { say("pass"); return { verdict: "pass", cost }; }
+    // A goal is held at most once: a second hold passes, and its problems go to the worker as notes.
+    const notes = v.pass ? v.notes : held ? v.problems : undefined;
+    if (v.pass || held) { say(notes ? `pass: ${notes}` : "pass"); return { verdict: "pass", cost }; }
     say(`hold: ${v.problems}`);
     return { verdict: "hold", problems: v.problems, cost };
   } catch (e: any) {
@@ -136,14 +156,23 @@ export async function checkSpec(repo: Repo, id: number | string): Promise<{ verd
   }
 }
 
-export type Recorded = { verdict: "pass" } | { verdict: "hold"; problems: string } | { verdict: "error"; why: string };
+/** The notes of the pass recorded for the goal's current spec version, or "" when it has none. */
+export function passNotes(item: issues.Issue): string {
+  const v = recordedVerdict(item);
+  return v?.verdict === "pass" ? v.notes ?? "" : "";
+}
+
+/** Whether a spec check held this goal before, for any version of its spec. */
+export const heldBefore = (item: issues.Issue): boolean => item.notes.some((n) => /^(- \d{4}-\d\d-\d\d \d\d:\d\d: )?spec check: \S+ hold\b/.test(n));
+
+export type Recorded = { verdict: "pass"; notes?: string } | { verdict: "hold"; problems: string } | { verdict: "error"; why: string };
 
 /** The verdict `checkSpec` noted for the goal's current spec version, the last one when there are several; null when this version has none. */
 export function recordedVerdict(item: issues.Issue): Recorded | null {
   for (let i = item.notes.length - 1; i >= 0; i--) {
     const m = item.notes[i].replace(/^- \d{4}-\d\d-\d\d \d\d:\d\d: /, "").match(/^spec check: (\S+) (pass|hold|error)\b:?\s*(.*)$/s);
     if (!m || !isVersion(item, m[1])) continue;
-    if (m[2] === "pass") return { verdict: "pass" };
+    if (m[2] === "pass") return m[3].trim() ? { verdict: "pass", notes: m[3].trim() } : { verdict: "pass" };
     if (m[2] === "hold") return { verdict: "hold", problems: m[3].trim() };
     return { verdict: "error", why: m[3].trim() };
   }
