@@ -54,6 +54,7 @@ Read the spec as the builder who will build it alone: nobody answers questions d
 - **Wrong about the code.** A clause that names a file, function, flag or behaviour that does not exist or does not behave as the clause says.
 - **Out of reach.** An Oracle clause whose code lies outside the Edit surface.
 - **Not observable.** An Oracle clause that no check can see. A check counts when it runs normally and an assertion observes the changed output, state or error. These do not count: a read of the source text, "does not throw", a snapshot alone, a mock or log call, and a manual look.
+- **Bare bun test path.** An Oracle command bun test <path> whose path has no ./ prefix and whose file name has no .test or .spec: run by hand, bun reads it as a name filter that matches no test file, so it never passes (acceptance adds the ./ itself, but a worker or reader running the command as written does not). Name it and propose the ./ path.
 
 ## Block or note
 A problem blocks the goal only when no builder could do the work as written:

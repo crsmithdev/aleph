@@ -60,7 +60,7 @@ const count = (calls: string) => (existsSync(calls) ? readFileSync(calls, "utf8"
 test("the prompt carries the spec-review method, with and without sealed scenarios", () => {
   const item = { title: "T", spec: SPEC, request: "" } as any;
   for (const p of [specCheckPrompt(item), specCheckPrompt(item, "1. A is seen.\n")]) {
-    for (const s of ["Not observable", "Out of reach", "A name is not evidence", "When <trigger or input>", "Read the spec as the builder"]) expect(p).toContain(s);
+    for (const s of ["Not observable", "Out of reach", "Bare bun test path", "A name is not evidence", "When <trigger or input>", "Read the spec as the builder"]) expect(p).toContain(s);
   }
   expect(specCheckPrompt(item, "1. A is seen.\n")).toContain("SET-ASIDE: scenario <n>: <why>");
 });
