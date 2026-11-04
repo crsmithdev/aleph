@@ -26,7 +26,7 @@ test("the Pause or Resume button sits in the page head beside the time; no Contr
   expect(off).not.toContain('data-act="pause"');
   const page = view.view.render(state);
   expect(page).not.toContain('id="controls"');
-  expect(page.indexOf('data-act="pause"')).toBeGreaterThan(page.indexOf('class="lede"'));
+  expect(page.indexOf('data-act="pause"')).toBeGreaterThan(page.indexOf('class="shead'));
   expect(page.indexOf('data-act="pause"')).toBeGreaterThan(page.indexOf('class="asof"'));
   expect(page.indexOf('data-act="pause"')).toBeLessThan(page.indexOf('id="scorecard"'));
 });

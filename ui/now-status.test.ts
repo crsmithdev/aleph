@@ -96,7 +96,7 @@ test("a failed nightly acceptance run is a warning part, not an alert and not a 
 test("the page has no banner and the status line holds the alert", () => {
   const page = view.view.render(withFactory({ health: [mainRed] }));
   expect(page).not.toContain('class="banner"');
-  expect(page).toMatch(/<p class="lede">[^]*the build is failing on main/);
+  expect(page).toMatch(/<header class="ph shead">[^]*the build is failing on main/);
 });
 
 test("the most flaked line stays in the report and off the status sentence and the error rows", () => {
@@ -124,9 +124,9 @@ test("a held run asks for your attention once the director escalates it, and not
   expect(h).toContain('class="say warning"');
 });
 
-test("the status sentence wraps instead of clipping: .lede .say has no ellipsis or hidden overflow, and wraps", async () => {
+test("the status sentence wraps instead of clipping: .shead .say has no ellipsis or hidden overflow, and wraps", async () => {
   const html = await Bun.file(new URL("./app.css", import.meta.url)).text();
-  const say = [...html.matchAll(/\.lede \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
+  const say = [...html.matchAll(/\.shead \.say[^{}]*\{([^}]*)\}/g)].map((m) => m[1]).join("\n");
   expect(say).not.toContain("text-overflow: ellipsis");
   expect(say).not.toContain("overflow: hidden");
   expect(say).toContain("white-space: normal");

@@ -15,9 +15,9 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${pageHead("Status", { aside: filterBar([{ name: "window", value: w, options: WINDOWS }]) })}${renderStatusLine(s, outOfDateNow)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section>${renderMonitor(s)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section>${renderLanes(s)}<section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section>${renderMonitor(s)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
-  outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".lede .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
+  outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
 };
 
@@ -91,9 +91,10 @@ function statLines(stat) {
 /** The Running lane's rows: planner, land and agent runs. The flow card counts only the live agent runs, as the cap does. */
 const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).length;
 
-/** The status line: the time, the status sentence, Pause or Resume. */
-export function renderStatusLine(s, stale = false) {
-  return `<p class="lede"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}${renderControls(s)}</p>`;
+/** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
+export function renderStatusLine(s, stale = false, w = "day") {
+  const bar = filterBar([{ name: "window", value: w, options: WINDOWS }]).replace(/<\/div><\/div>$/, `${renderControls(s)}</div></div>`);
+  return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
 }
 
 export const FINE = "Everything is running smoothly";
