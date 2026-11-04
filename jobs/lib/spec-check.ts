@@ -82,7 +82,7 @@ Apply the method to every clause. Answer ${scenarios ? "four" : "three"} questio
 3. Does the Oracle ask for something that no check or reviewer can observe? Name each such clause.
 ${scenarios ? `4. Does each sealed scenario follow from the Goal, and can it be true together with the Oracle? For each one that does not, write one line \`SET-ASIDE: scenario <n>: <why>\`. A set-aside scenario is removed; it is not a problem of the spec, so do not hold for it.
 ` : ""}
-Write each problem as its quoted clause, then its rewrite. End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. A hold is for problems in the Goal, the Edit surface and the Oracle only. Each problem must quote the clause and propose a change to the spec. ${TAG_FORMAT}`;
+Write each problem as its quoted clause, then its rewrite. End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. A hold is for problems in the Goal, the Edit surface and the Oracle only. The hold line is the only part of the reply that the factory keeps, so write each problem on it in full: its quoted clause and its rewrite, separated by \`; \`. Never name a problem there by a number or a label. ${TAG_FORMAT}`;
 }
 
 /** The last `VERDICT:` line of a reply, or null when it has none. */
