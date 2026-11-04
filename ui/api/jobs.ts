@@ -6,7 +6,7 @@ import { git } from "../../jobs/lib/git.ts";
 import { OPUS_MODEL } from "../../jobs/lib/agent-call.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
 import { isAgentRun, isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
-import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, view } from "../../jobs/lib/job.ts";
+import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, readFile, view } from "../../jobs/lib/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
@@ -57,6 +57,8 @@ export function transcript(stream: string): Step[] {
 export interface JobDetail extends Job {
   blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
+  /** The reviewer's verdict, from the review.json beside review.md. */
+  verdict?: "pass" | "hold";
   trace?: string;
   /** What checked the job; a delivery's minutes to spot-check it, an estimate. */
   checkedBy?: string[]; look?: number;
@@ -166,9 +168,11 @@ export const routes: Routes = {
     if (rec) Object.assign(detail, { next: nextStep(rec), rounds: rec.rounds, events: rec.events });
     annotate([detail], fit);
     const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
-    const review = latestFile(runs, "review.md")?.text;
+    const review = latestFile(runs, "review.md");
     if (result !== undefined) detail.result = result;
-    if (review !== undefined) detail.review = review;
+    if (review) detail.review = review.text;
+    const rv = review && readFile(review.entry, "review.json");
+    if (rv) detail.verdict = JSON.parse(rv).verdict;
     const by = checkedBy(runs);
     if (by.length) detail.checkedBy = by;
     const landedIn = v.condition === "landed" && v.commit && v.repo ? loadRegistry()[v.repo] : undefined;

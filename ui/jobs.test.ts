@@ -71,7 +71,7 @@ beforeAll(() => {
   run("20261027-000001-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "failed", reason: "review held", started: ago(5), ended: ago(4), cost: 0.5, model: "claude-sonnet-5-5" },
     { "result.md": "first\nFOLLOWUP: tidy\n", "checks.log": "## test: exit 1\n" + Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n") + "\n", "stderr.log": "warn\n" });
   run("20261027-000002-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "passed", started: ago(3.5), ended: ago(3), cost: 0.25, defaults: ["a? -> b"] },
-    { "result.md": "fixed it\nFOLLOWUP: tidy\n", "review.md": "Looks right.\nVERDICT: pass\n" });
+    { "result.md": "fixed it\nFOLLOWUP: tidy\n", "review.md": "Looks right.\nVERDICT: hold quoted\n", "review.json": '{"verdict":"pass","summary":"Looks right.","failures":[]}' });
   run("20261027-000003-a", { job: "fac-9", name: "fac-9", kind: "land", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
   run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "stuck", started: ago(1) });
   run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", condition: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
@@ -153,6 +153,11 @@ describe("GET /api/jobs/:name", () => {
     expect((await get("/api/jobs/nope")).status).toBe(404);
     expect((await get("/api/jobs/fac-9?project=oth")).status).toBe(404);
     expect((await get("/api/jobs/fac-9?project=fac")).status).toBe(200);
+  });
+  test("the verdict comes from review.json beside review.md, not from review.md's text", async () => {
+    const j = await (await get("/api/jobs/fac-9")).json();
+    expect(j.review).toContain("VERDICT: hold quoted");
+    expect(j.verdict).toBe("pass");
   });
 });
 
@@ -257,14 +262,11 @@ describe("render", () => {
     expect(h).toContain('<p><code>a.test.ts</code> s &gt; &lt;one&gt; <span class="quiet">tests</span></p><pre class="trailers">Error: boom\n  at a.test.ts:3</pre>');
     expect(h).toContain("22 more failed tests of tests not recorded.");
   });
-  test("the Review tag is the last capital VERDICT line, not an earlier quote or a lowercase verdict", () => {
-    const h = (review: string) => v.renderJob({ ...job, review });
-    expect(h("The old call said VERDICT: hold x.\nAfter the fix:\nVERDICT: pass\n")).toContain('class="badge done">pass<');
-    expect(h("The old call said VERDICT: hold x.\nVERDICT: pass\n")).not.toContain(">hold<");
-    expect(h("**VERDICT:** land\n")).toContain('>land<');
-    expect(h("`VERDICT:` pass\n")).toContain('class="badge done">pass<');
-    expect(h("verdict: pass\n")).not.toContain('class="badge done">pass<');
-    expect(h("verdict: pass\n")).not.toContain('class="badge stuck">pass<');
+  test("the Review tag is the reviewer's JSON verdict, not a line of review.md", () => {
+    const h = (o: object) => v.renderJob({ ...job, review: "Text says VERDICT: hold x.", ...o });
+    expect(h({ verdict: "pass" })).toContain('class="badge done">pass<');
+    expect(h({ verdict: "hold" })).toContain('class="badge stuck">hold<');
+    expect(h({})).not.toContain(">hold<");
   });
   test("the list shows jobs with filters, and an empty state", () => {
     const h = v.renderJobs([job], { repo: "fac", condition: "landed" });

@@ -22,6 +22,7 @@ describe("a factory run", () => {
       const t = await job("fac", "rstall", "Goal: g\nACTION: commit rstall.txt\n", {}, { ALEPH_REVIEWER_CMD: silent, ALEPH_STALL_SECONDS: "2" });
       expect(state(t.json.run)).toMatchObject({ condition: "awaiting", reason: "reviewer: no verdict (stalled: no output for 2 seconds)" });
       expect(runsOf("rstall").length).toBe(1);
+      expect(existsSync(join(jobsDir, t.json.run, "review.json"))).toBe(false);
       await drop("rstall");
     }, 30_000);
 
@@ -48,6 +49,7 @@ describe("a factory run", () => {
       expect(s.next).toBeUndefined();
       expect(s.review).toBeUndefined();
       expect(calls()).toBe(n + 1);
+      expect(JSON.parse(readFileSync(join(jobsDir, r.json.run, "review.json"), "utf8"))).toMatchObject({ verdict: "pass" });
       noSecondReview(r.json.run);
       // One run, one Ask: no land run, and nothing on origin/main.
       expect(runsOf("rheld").map((x) => [x.kind, x.condition])).toEqual([["build", "awaiting"]]);

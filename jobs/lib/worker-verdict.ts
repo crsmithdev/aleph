@@ -8,7 +8,6 @@
  */
 import { plainAsk, type AskReason } from "./ask.ts";
 import { stopFields, type ChecksStop } from "./checks.ts";
-import { verdict as reviewVerdict } from "./gate.ts";
 import type { Run } from "./ledger.ts";
 
 /** The fields of the run that a verdict sets. */
@@ -142,7 +141,7 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   return { outcome: { ...awaiting("review", hold.reason, [stat]), cause: "reviewer", reason: hold.reason, stat, ...facts }, code: 0 };
 }
 
-/** Why a held run cannot land yet: the reviewer has given no verdict; null once it has (`review` is its review.md). */
+/** Why a held run cannot land yet: the reviewer has given no verdict; null once it has (`review` is its review.json). */
 export function missingVerdict(review: string | undefined): string | null {
-  return reviewVerdict(review ?? "") ? null : "the reviewer has no verdict yet";
+  return review && JSON.parse(review).verdict ? null : "the reviewer has no verdict yet";
 }

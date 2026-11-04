@@ -158,8 +158,8 @@ describe("the reviewer", () => {
 describe("missingVerdict", () => {
   test("a held run may land once the reviewer gave a verdict; no second review is read", () => {
     expect(missingVerdict(undefined)).toBe("the reviewer has no verdict yet");
-    expect(missingVerdict("Looks fine.")).toBe("the reviewer has no verdict yet");
-    expect(missingVerdict("VERDICT: pass")).toBeNull();
-    expect(missingVerdict("VERDICT: hold x")).toBeNull();
+    expect(missingVerdict('{"summary":"Looks fine."}')).toBe("the reviewer has no verdict yet");
+    expect(missingVerdict('{"verdict":"pass","summary":"s","failures":[]}')).toBeNull();
+    expect(missingVerdict('{"verdict":"hold","summary":"s","failures":[]}')).toBeNull();
   });
 });

@@ -3,7 +3,6 @@
  * needs Chris. See "Held paths" in docs/specs/2026-10-26-seed-factory.md.
  */
 import { git } from "./git.ts";
-import { lastTagged } from "./ledger.ts";
 import { NO_OUTPUT } from "./structured.ts";
 
 export interface Outcome { ok: boolean; line: string; result: string; cost?: number }
@@ -89,18 +88,6 @@ export function parseWorker(raw: any): WorkerReply | string {
   };
 }
 
-/**
- * The reviewer's verdict: the last `VERDICT:` line of its review.md. `pass`, or `hold` with
- * a reason; null when there is no such line or it says neither.
- */
-export function verdict(result: string): { pass: true } | { pass: false; reason: string } | null {
-  const v = lastTagged(result, "VERDICT");
-  if (v === undefined) return null;
-  if (v === "pass") return { pass: true };
-  if (v === "hold" || v.startsWith("hold ")) return { pass: false, reason: v.slice(4).trim() || "no reason given" };
-  return null;
-}
-
 /** The JSON schema of the reviewer's reply. */
 export const REVIEW_SCHEMA = {
   type: "object", additionalProperties: false, required: ["verdict", "summary", "failures"],
@@ -117,13 +104,16 @@ export const REVIEW_SCHEMA = {
   },
 };
 
-export interface Review { pass: boolean; reason: string; text: string }
+/** What review.json holds: the reviewer's reply, with its failures cleaned. */
+export interface ReviewJson { verdict: "pass" | "hold"; summary: string; failures: { clause: string; observed: string }[] }
+
+export interface Review { pass: boolean; reason: string; text: string; json: ReviewJson }
 
 const line = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
 
 /**
- * The reviewer's structured output, or why it does not do. `reason` names the failed clauses; `text` is review.md:
- * the summary, a `CHECK: fail` line for each failure, and the `VERDICT:` line `verdict` reads.
+ * The reviewer's structured output, or why it does not do. `reason` names the failed clauses; `json` is review.json,
+ * which code reads; `text` is review.md, for people: the summary, a `CHECK: fail` line for each failure, and a `VERDICT:` line.
  */
 export function parseReview(raw: any): Review | string {
   if (raw === undefined) return NO_OUTPUT;
@@ -132,12 +122,13 @@ export function parseReview(raw: any): Review | string {
   const pass = raw.verdict === "pass";
   const failures = (Array.isArray(raw.failures) ? raw.failures : []).map((f: any) => ({ clause: line(f?.clause), observed: line(f?.observed) })).filter((f: { clause: string }) => f.clause);
   const reason = pass ? "" : failures.map((f: { clause: string }) => f.clause).join("; ") || "no reason given";
+  const summary = typeof raw.summary === "string" ? raw.summary.trim() : "";
   const text = [
-    typeof raw.summary === "string" ? raw.summary.trim() : "", "",
+    summary, "",
     ...failures.map((f: { clause: string; observed: string }) => `CHECK: fail ${f.clause}: ${f.observed}`),
     `VERDICT: ${pass ? "pass" : `hold ${reason}`}`,
   ].join("\n");
-  return { pass, reason, text: `${text.trim()}\n` };
+  return { pass, reason, text: `${text.trim()}\n`, json: { verdict: raw.verdict, summary, failures } };
 }
 
 const TEST = /(^|\/)(tests?|__tests__)\/|\.(test|spec)\.[cm]?[jt]sx?$/;

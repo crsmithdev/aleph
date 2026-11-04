@@ -513,7 +513,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     if (c.ask.reason === "held-path") {
       const runs = openJob(c.entry.run.name);
       const agent = runs?.findLast((e) => isAgentRun(e.run.kind)) ?? c.entry;
-      const missing = missingVerdict(readFile(agent, "review.md"));
+      const missing = missingVerdict(readFile(agent, "review.json"));
       if (missing) return no(a, missing);
     }
     const why = await ports.land(c.entry.run.name);

@@ -208,12 +208,6 @@ function jobKpis(j, now = Date.now()) {
   ]);
 }
 
-/** The Review panel's tag: the word after the last capital `VERDICT:` line, as `parseVerdict` in jobs/lib/ledger.ts reads it. */
-const verdictOf = (review) => {
-  const lines = (review ?? "").split("\n").map((l) => /^\s*[`*]*VERDICT:(.*)$/.exec(l)?.[1]?.replace(/^[`*]+(?=\s)/, "")).filter((v) => v !== undefined);
-  return /^\s*(\w+)/.exec(lines.at(-1) ?? "")?.[1]?.toLowerCase();
-};
-
 /** The Job page: the header and its pills, the KPI strip, the Timeline, the Spec and the Result, then the Detail panels. */
 export function renderJob(j) {
   const id = localId(j.name, j.repo), p = j.parent;
@@ -233,7 +227,7 @@ export function renderJob(j) {
   const checks = j.checks?.length
     ? `<div class="dp-logs" data-logs>${dataTable('<th>Check</th><th>Result</th><th class="num">Ran</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Time</th><th>Log</th>', j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join(""))}${failures}<div class="logbody" hidden></div></div>`
     : "";
-  const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = verdictOf(j.review), c = change(j.stat);
+  const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   return `<div class="page dp-page">${crumb(p ? p.href : "#/jobs", back)}` +
     `<header class="ph"><h1>${esc(j.item?.title || j.name)}</h1>${nav ? `<div class="aside">${nav}</div>` : ""}</header>${pills}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +

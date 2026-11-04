@@ -659,6 +659,7 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
       const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
       if (w.cause) return none(w.cause.reason);
       if (typeof v === "string") return none(v);
+      writeFileSync(runFile(folder, "review.json"), JSON.stringify(v.json));
       return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
     });
   } catch (e) {

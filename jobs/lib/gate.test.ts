@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reviewPrompt } from "./unit.ts";
-import { heldRule, securityChange, testFindings, outcome, parseReview, parseWorker, replyOf, verdict } from "./gate.ts";
+import { heldRule, securityChange, testFindings, outcome, parseReview, parseWorker, replyOf } from "./gate.ts";
 
 let dir: string;
 const env = { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -96,13 +96,13 @@ test("replyOf reads the text and the cost of a result event; other stdout is the
   expect(replyOf('{"route":"close"}\n')).toEqual({ text: '{"route":"close"}\n' });
 });
 
-test("parseReview names the failed clauses as the reason and writes a review.md that verdict reads", () => {
+test("parseReview names the failed clauses as the reason, and gives review.json and review.md", () => {
   const hold = parseReview({ verdict: "hold", summary: "Two fail.", failures: [{ clause: "flag test", observed: "none" }, { clause: "doc line", observed: "exit 1" }] });
   expect(hold).toMatchObject({ pass: false, reason: "flag test; doc line" });
   const text = (hold as { text: string }).text;
   expect(text).toBe("Two fail.\n\nCHECK: fail flag test: none\nCHECK: fail doc line: exit 1\nVERDICT: hold flag test; doc line\n");
-  expect(verdict(text)).toEqual({ pass: false, reason: "flag test; doc line" });
-  expect(verdict((parseReview({ verdict: "pass", summary: "9 of 9 passed.", failures: [] }) as { text: string }).text)).toEqual({ pass: true });
+  expect((hold as { json: object }).json).toEqual({ verdict: "hold", summary: "Two fail.", failures: [{ clause: "flag test", observed: "none" }, { clause: "doc line", observed: "exit 1" }] });
+  expect(parseReview({ verdict: "pass", summary: "9 of 9 passed.", failures: [] })).toMatchObject({ pass: true, json: { verdict: "pass", summary: "9 of 9 passed.", failures: [] } });
   expect(parseReview(undefined)).toBe("no structured output");
   expect(parseReview({ verdict: "maybe" })).toBe('unknown verdict "maybe"');
 });
