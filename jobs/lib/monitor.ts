@@ -1,22 +1,17 @@
 /**
  * The monitor: once a day it measures the factory (monitor-table.ts), has one read-only agent name what looks off,
- * ranked, with the numbers, and keeps the report in <factory>/monitor/<day>.json and as a vault note. It surfaces and
+ * ranked, with the numbers, and keeps the report in <factory>/monitor/<day>.json. It surfaces and
  * never fixes: the reader has no tools, and nothing here files, answers or changes an item. It runs while the
  * factory is paused, since it only reads.
  */
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { OPUS_MODEL } from "./agent-call.ts";
 import { endLost, openRun } from "./agent-run.ts";
 import { lock } from "./ledger.ts";
 import { factoryLog } from "./layout.ts";
 import { acceptanceLine, addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "./monitor-table.ts";
 import { monitorOn } from "./settings.ts";
-import { vaultDir } from "../../vault/lib/vault.ts";
 import * as issues from "../../todo/lib/todo.ts";
-
-const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 
 /** The reader's time box, in seconds. */
 const SECONDS = 600;
@@ -47,51 +42,6 @@ export function readerPrompt(table: string): string {
 export const findingsOf = (text: string): string[] =>
   text.split("\n").flatMap((l) => { const m = /^\s*\d+[.)]\s+(.+)$/.exec(l); return m ? [m[1].trim()] : []; });
 
-/** The vault note's title for a day. */
-export const noteTitle = (day: string) => `Factory Monitor ${day}`;
-
-/**
- * The vault note of a report: a gotcha, the vault's kind for how the factory actually behaves, not indexed on Home.
- * It links the note of the day before when that note exists, so the days form a chain.
- */
-export function notePage(r: Report, today: string, before: boolean): string {
-  const n = r.findings.length;
-  const claim = r.error ? `the reader gave no reading (${r.error}), so only the table is here`
-    : n ? `the reader named ${n} ${n > 1 ? "things that look" : "thing that looks"} off; the first: ${r.findings[0]}`
-    : "the reader named nothing that looks off";
-  return [
-    "---", "kind: gotcha", "scope: aleph", "confidence: measured", `updated: ${today}`, "supersedes: []",
-    `sources: [${[r.run ? `run:${r.run.split("/").at(-1)}` : "", `~/.aleph/factory/monitor/${r.day}.json`].filter(Boolean).join(", ")}]`,
-    "written_by: factory", "tags: [monitor]", "---", "",
-    `**Claim.** On ${r.day} ${claim.replace(/\.$/, "")}, as of ${r.day}.`, "",
-    "## Details", "", ...(n ? r.findings.map((f, i) => `${i + 1}. ${f}`) : [r.text ?? "No reading."]), "",
-    renderTable(r.table).replace(/^# .*\n\n/, "").replace(/^## /gm, "### "),
-    "## Evidence", "", `- The table is computed in code by jobs/lib/monitor-table.ts from the ledger, the holds and spec-check files, the flake list, the work store and usage.jsonl.`,
-    ...(r.run ? [`- The reader's run: ${r.run}`] : []), "",
-    "## Related", "", before ? `- [[${noteTitle(addDays(r.day, -1))}]]` : "- The first monitor note.", "",
-  ].join("\n");
-}
-
-/** Write the report's note through the vault CLI. Returns the title, or why it was not written. */
-function writeNote(r: Report): { title: string } | { error: string } {
-  const dir = mkdtempSync(join(tmpdir(), "aleph-monitor-"));
-  try {
-    const title = noteTitle(r.day);
-    const before = existsSync(join(vaultDir(), "wiki", "gotchas", `${noteTitle(addDays(r.day, -1))}.md`));
-    const draft = join(dir, `${title}.md`);
-    writeFileSync(draft, notePage(r, issues.today(), before));
-    const env: Record<string, string | undefined> = { ...process.env };
-    delete env.CLAUDE_CODE_SESSION_ID;
-    const p = Bun.spawnSync(["bun", VAULT_CLI, "write", draft, "--why", `monitor report of ${r.day}`], { env, stdout: "pipe", stderr: "pipe" });
-    if (p.exitCode !== 0) return { error: (p.stderr.toString().trim() || `vault write exited ${p.exitCode}`).split("\n")[0] };
-    return { title };
-  } catch (e: any) {
-    return { error: String(e?.message ?? e) };
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 /** The table of `day`, read from disk now. */
 export function tableOf(day: string, now = Date.now()): Table {
   return measure(readSources(), day, now);
@@ -111,9 +61,6 @@ async function read(day: string, table: Table): Promise<Report> {
     run.end(`failed: ${r.error}`, { cause: "no-answer" });
   }
   mkdirSync(monitorDir(), { recursive: true });
-  writeFileSync(reportFile(day), JSON.stringify(r, null, 2) + "\n");
-  const w = writeNote(r);
-  if ("title" in w) r.note = w.title; else r.noteError = w.error;
   writeFileSync(reportFile(day), JSON.stringify(r, null, 2) + "\n");
   return r;
 }
@@ -137,7 +84,7 @@ export async function monitorStep(now = new Date()): Promise<Report | null> {
   if (!day) return null;
   try {
     const r = await runMonitor(day);
-    if (r) factoryLog(`monitor ${day}: ${r.error ? `no reading: ${r.error}` : `${r.findings.length} findings`}; ${acceptanceLine(r.table)}${r.noteError ? `; no vault note: ${r.noteError}` : ""}`);
+    if (r) factoryLog(`monitor ${day}: ${r.error ? `no reading: ${r.error}` : `${r.findings.length} findings`}; ${acceptanceLine(r.table)}`);
     return r;
   } catch (e: any) {
     factoryLog(`monitor ${day}: failed: ${e?.message ?? e}`);

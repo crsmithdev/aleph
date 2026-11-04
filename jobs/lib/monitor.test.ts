@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { findingsOf, monitorDue, monitorStep, notePage, readerPrompt } from "./monitor.ts";
+import { findingsOf, monitorDue, monitorStep, readerPrompt } from "./monitor.ts";
 import { monitorPanel, reportFile, reportLine, type Report } from "./monitor-table.ts";
 import { allRuns } from "./ledger.ts";
 import { setPaused } from "./factory-status.ts";
@@ -59,8 +59,8 @@ test("the tick's step reads yesterday's table with a tool-less reader once a day
   expect(runs[0].run).toMatchObject({ condition: "done", reason: "2 findings", name: "monitor-2026-10-20" });
   const kept: Report = JSON.parse(readFileSync(reportFile("2026-10-20"), "utf8"));
   expect(kept.findings).toEqual(r.findings);
-  expect(kept.note).toBe("Factory Monitor 2026-10-20");
-  expect(existsSync(join(base, "vault", "wiki", "gotchas", "Factory Monitor 2026-10-20.md"))).toBe(true);
+  expect(kept.note).toBeUndefined();
+  expect(existsSync(join(base, "vault", "wiki", "gotchas", "Factory Monitor 2026-10-20.md"))).toBe(false);
   // Once a day: the report of yesterday is there.
   expect(monitorDue(now)).toBeNull();
   expect(await monitorStep(now)).toBeNull();
@@ -73,8 +73,6 @@ test("a reader that fails leaves a report with the table and the error, and the 
   expect(r.error).toBe("the monitor reader exited 1");
   expect(r.findings).toEqual([]);
   expect(allRuns().find((e) => e.run.kind === "monitor")!.run).toMatchObject({ condition: "done", cause: "no-answer" });
-  // The vault here is not set up: the report says why it has no note.
-  expect(JSON.parse(readFileSync(reportFile("2026-10-20"), "utf8")).noteError).toBeTruthy();
   expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 has no reading: the monitor reader exited 1");
 });
 
@@ -105,13 +103,3 @@ test("the findings are the numbered lines of the reply; NOTHING gives none", () 
   expect(readerPrompt("TABLE")).toContain("You only read.");
 });
 
-test("the vault note links the day before when that note exists", () => {
-  const r = { day: "2026-10-20", findings: ["one"], table: undefined as any };
-  const fake = { ...r, table: JSON.parse(JSON.stringify({ day: "2026-10-20", made: "", today: win(), trailing: win(), acceptanceAll: acc(), flakes: { reruns: [], trackers: [] } })) };
-  expect(notePage(fake, "2026-10-21", true)).toContain("- [[Factory Monitor 2026-10-19]]");
-  expect(notePage(fake, "2026-10-21", false)).not.toContain("[[");
-  expect(notePage(fake, "2026-10-21", false)).toContain("**Claim.** On 2026-10-20 the reader named 1 thing that looks off; the first: one, as of 2026-10-20.");
-});
-
-const acc = () => ({ failures: 0, fixed: 0, notFixed: 0, pending: 0, closed: 0, open: 0 });
-const win = () => ({ from: "", to: "", stages: [], acceptance: acc(), asks: {}, holds: [], held: { goals: 0, seen: 0 }, setAside: { goals: 0, notes: 0, reviewed: 0 }, reopens: 0, quota: null });
