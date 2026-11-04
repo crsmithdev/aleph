@@ -23,5 +23,7 @@ test("selector hex is not a colour, real one is", () => {
 
 test("@media in a regex literal is not a media query, real one is", () => {
   expect(run("const M = /@media\\s*([^{]+)/g;").filter((x) => x[1] === "@media")).toEqual([]);
+  expect(run("matchAll(/(@media[^{]+)\\{|([^{}]+)\\{/g)").filter((x) => x[1] === "@media")).toEqual([]);
+  expect(run(".a{} @media (min-width: 1100px) {").filter((x) => x[1] === "@media")).toHaveLength(1);
   expect(run("@media (max-width: 720px) {").filter((x) => x[1] === "@media")).toHaveLength(1);
 });

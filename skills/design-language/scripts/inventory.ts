@@ -30,7 +30,8 @@ const CSS_SIZE = /\d(px|rem|em|%|vh|vw|ch)\b|var\(--/;
 const TYPE = /\b(font-family|font-weight|letter-spacing|text-transform|font-variant-numeric)\s*:\s*([^;"'}`]+)/g;
 const EFFECT = /\b(box-shadow|opacity|z-index|transition|animation)\s*:\s*([^;"'}`]+)/g;
 const FONT = /(?<![\w-])font\s*:\s*([^;"'}`]+)/g;
-const MEDIA = /@media\s*([^{]+)/g;
+// A media query starts a line or follows `}` or `;`; one after `/`, `(` or `|` is regex text.
+const MEDIA = /(?<![^\s};])@media\s*([^{]+)/g;
 const FORMAT = /\.toFixed\(|\.toLocale\w*\(|\bIntl\.\w+|\.get(?:Hours|Minutes|Seconds|Date|Month|FullYear)\(|\.padStart\(/g;
 const TOKEN_DEF = /^\s*(--[\w-]+)\s*:\s*([^;]+);/;
 
@@ -53,7 +54,7 @@ for (const f of roots.flatMap(files)) {
     }
     for (const m of line.matchAll(TYPE)) rows.push({ at, group: "type", prop: m[1], value: m[2].trim(), kind: kindOf(m[2]) });
     for (const m of line.matchAll(EFFECT)) rows.push({ at, group: "effect", prop: m[1], value: m[2].trim(), kind: kindOf(m[2]) });
-    for (const m of line.matchAll(MEDIA)) if (line[m.index! - 1] !== "/") rows.push({ at, group: "effect", prop: "@media", value: m[1].trim(), kind: "literal" });
+    for (const m of line.matchAll(MEDIA)) rows.push({ at, group: "effect", prop: "@media", value: m[1].trim(), kind: "literal" });
     for (const m of line.matchAll(FORMAT)) rows.push({ at, group: "format", prop: m[0].replace(/\($/, ""), value: line.trim().slice(0, 80), kind: "helper-bypass" });
   });
 }
