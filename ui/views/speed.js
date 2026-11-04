@@ -175,7 +175,7 @@ export function usageCard(s) {
   const cur = s.usage?.now;
   if (!cur) return statCard({ k: "Usage", v: "–", href: "#/factory/agents" });
   const gone = weekGone(cur.seven_day_resets_at, s.now);
-  const tip = gone === null ? "" : `${Math.round(gone)}% of the week gone`;
+  const tip = gone === null ? "" : `${pct(gone)} of the week gone`;
   const bar = `<div class="usebar"${tip ? ` title="${esc(tip)}" role="img" aria-label="${esc(tip)}"` : ""}><div style="width:${Math.min(100, cur.seven_day)}%"></div>${gone === null ? "" : `<i style="left:${gone}%"></i>`}</div>`;
-  return statCard({ k: "Usage", v: `${Math.round(cur.seven_day)}%`, extra: bar, href: "#/factory/agents" });
+  return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, href: "#/factory/agents" });
 }
