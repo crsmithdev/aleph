@@ -1,9 +1,9 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, afterEach, beforeAll, expect, setSystemTime, test } from "bun:test";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { callAgent, endLost, openRun, type Opening } from "./agent-run.ts";
-import { lock, readRun } from "./ledger.ts";
+import { allRuns, lock, readRun, runsDir, stamp, writeRun } from "./ledger.ts";
 
 let base: string;
 const saved = { ...process.env };
@@ -20,7 +20,7 @@ beforeAll(() => {
   process.env.ALEPH_JOBS_DIR = join(base, "jobs");
   process.env.XDG_RUNTIME_DIR = join(base, "run");
 });
-afterEach(() => { delete process.env.ALEPH_FACTS_CMD; delete process.env.ALEPH_FACTS_TIMEOUT; });
+afterEach(() => { setSystemTime(); delete process.env.ALEPH_FACTS_CMD; delete process.env.ALEPH_FACTS_TIMEOUT; });
 afterAll(() => { rmSync(base, { recursive: true, force: true }); process.env = saved; });
 
 test("a run holds its state, its prompt, its output and its ending", async () => {
@@ -41,6 +41,16 @@ test("a run holds its state, its prompt, its output and its ending", async () =>
   expect(r).toMatchObject({ condition: "done", reason: "ok", route: "close" });
   expect(r.phase).toBeUndefined();
   expect(typeof r.ended).toBe("string");
+});
+
+test("a role run that joins a job sorts after the job's earlier runs, even when the clock steps back", () => {
+  const later = stamp(new Date(Date.now() + 60_000));
+  const earlier = join(runsDir(), `${later}-step-build`);
+  mkdirSync(earlier, { recursive: true });
+  writeRun(earlier, { kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: new Date().toISOString() });
+  const run = openRun({ ...opening, name: "step", job: "step-job" });
+  const ids = allRuns().map((e) => e.folder);
+  expect(ids.indexOf(run.folder)).toBeGreaterThan(ids.indexOf(earlier));
 });
 
 test("a run records the cost of its result event, also when the command fails, and has none without one", async () => {

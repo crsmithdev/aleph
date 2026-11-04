@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { gitPrelude, q } from "./agent-call.ts";
 import { outcome, replyOf, type Outcome } from "./gate.ts";
 import { sandboxed, stallReason, type Step } from "./sandbox.ts";
-import { allRuns, lock, readRun, runsDir, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
+import { allRuns, lock, readRun, runsDir, nextStamp, stamp, updateRun, writeRun, type Run } from "./ledger.ts";
 import { roleCmd, roleSeconds } from "./settings.ts";
 import { runFile } from "./run-files.ts";
 
@@ -75,8 +75,12 @@ export interface AgentRun {
 export function openRun(o: Opening): AgentRun {
   mkdirSync(runsDir(), { recursive: true });
   let folder = "";
+  // Runs sort by folder name, so a run that joins a job stamps after the job's latest run: a clock stepped back would sort it before.
+  const now = stamp();
+  const last = o.job === undefined ? undefined : allRuns().filter((e) => e.run.job === o.job).map((e) => e.id.slice(0, 15)).sort().at(-1);
+  const at = last && last >= now ? nextStamp(last) : now;
   for (let n = 0; !folder; n++) {
-    const path = join(runsDir(), `${stamp()}-${o.name}${n ? `-${n}` : ""}-${o.role}`);
+    const path = join(runsDir(), `${at}-${o.name}${n ? `-${n}` : ""}-${o.role}`);
     try { mkdirSync(path); folder = path; } catch (e: any) { if (e.code !== "EEXIST") throw e; }
   }
   writeRun(folder, { kind: o.role, job: o.job ?? folder.split("/").at(-1)!, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now() });
