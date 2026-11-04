@@ -3,18 +3,22 @@
  * spec (Goal, Edit surface, Oracle) against a clone of `origin/<main>` and says whether the spec
  * can be met. A hold names each problem with a change to the spec. The check runs once for each
  * version of the spec (goal-spec.ts): the issue's note carries the version, so an edit makes it run again.
+ * With `"author": true`, the run first seals the version's acceptance scenarios (author.ts), and the check
+ * judges them too: a scenario that does not follow from the Goal or cannot hold with the Oracle is set aside,
+ * which removes it from the sealed file; it never holds the goal.
  * The dispatch never runs it inline: it reads the recorded verdict (`recordedVerdict`) and, when there is
  * none, starts `aleph spec-check` detached (`runSpecCheck`), which ends by starting a dispatch.
  */
 import { mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { note, reader } from "../../todo/lib/store.ts";
+import { note, readHidden, reader, writeHidden } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
 import { callAgent } from "./agent-run.ts";
 import { withMainClone } from "./main-clone.ts";
 import { isVersion, specVersion } from "./goal-spec.ts";
-import { lastTagged, lock, TAG_FORMAT, type Repo } from "./ledger.ts";
+import { lastTagged, lock, tagged, TAG_FORMAT, type Repo } from "./ledger.ts";
+import { SCENARIOS, scenarioCount, seal, withoutScenarios } from "./author.ts";
 import { askChris, plainAsk } from "./ask.ts";
 import { factoryDir, issueJob, recordHold, recordSpecCost } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
@@ -24,7 +28,8 @@ import { OPUS_MODEL } from "./agent-call.ts";
 export const SPEC_CHECK_MODEL = OPUS_MODEL;
 const NOTE = "spec check:";
 
-export function specCheckPrompt(item: issues.Issue): string {
+/** The sealed scenarios go in the prompt with a fourth question; with none, the check asks three. */
+export function specCheckPrompt(item: issues.Issue, scenarios = ""): string {
   const part = (name: string) => section(item.spec, name) || "(none)";
   return `Check one spec before a builder starts on it. The code of the codebase is your working directory; read it with your tools.
 
@@ -38,13 +43,19 @@ ${part("Edit surface")}
 
 ## Oracle
 ${part("Oracle")}
+${scenarios ? `
+## Sealed scenarios
+A separate author wrote these from the Goal alone; an evaluator checks each one on the finished work.
 
-Answer three questions:
+${scenarios.trim()}
+` : ""}
+Answer ${scenarios ? "four" : "three"} questions:
 1. Can every clause of the Goal and the Oracle be true at the same time in this codebase? Name each pair that cannot.
 2. Does the Edit surface hold the code that each Oracle clause needs to change? Name each clause whose code is outside it.
 3. Does the Oracle ask for something that no check or reviewer can observe? Name each such clause.
-
-End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. Each problem must quote the clause and propose a change to the spec. ${TAG_FORMAT}`;
+${scenarios ? `4. Does each sealed scenario follow from the Goal, and can it be true together with the Oracle? For each one that does not, write one line \`SET-ASIDE: scenario <n>: <why>\`. A set-aside scenario is removed; it is not a problem of the spec, so do not hold for it.
+` : ""}
+End the reply with one last line, either \`VERDICT: pass\` or \`VERDICT: hold <problems>\`. A hold is for problems in the Goal, the Edit surface and the Oracle only. Each problem must quote the clause and propose a change to the spec. ${TAG_FORMAT}`;
 }
 
 /** The last `VERDICT:` line of a reply, or null when it has none. */
@@ -56,18 +67,39 @@ export function specVerdict(reply: string): { pass: true } | { pass: false; prob
   return hold ? { pass: false, problems: hold[1].trim() } : null;
 }
 
+/** The scenario numbers and reasons of the `SET-ASIDE: scenario <n>: <why>` lines of a reply. */
+export function specAsides(reply: string): Map<number, string> {
+  const out = new Map<number, string>();
+  for (const line of tagged(reply, "SET-ASIDE")) {
+    const m = line.match(/^scenario\s+(\d+)\b[:\s]*(.*)$/i);
+    if (m && !out.has(Number(m[1]))) out.set(Number(m[1]), m[2].trim());
+  }
+  return out;
+}
+
 export async function checkSpec(repo: Repo, id: number | string): Promise<{ verdict: "pass" | "hold" | "skip" | "error"; problems?: string; cost?: number }> {
   const item = reader().item(repo.key, id);
   if (!item || !item.spec.trim()) return { verdict: "skip" };
   if (recordedVerdict(item)) return { verdict: "skip" };
   const version = specVersion(item);
-  const say = (text: string) => { note(repo, issues.refOf(item), `${NOTE} ${version} ${text}`); };
+  const ref = issues.refOf(item);
+  const say = (text: string) => { note(repo, ref, `${NOTE} ${version} ${text}`); };
   let cost: number | undefined;
   try {
-    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: dir }, specCheckPrompt(item)));
-    cost = reply.cost;
+    const sealCost = repo.author ? await seal(repo, id) : undefined;
+    let scenarios = "";
+    if (repo.author) try { scenarios = readHidden(repo, `${repo.key}-${ref}`)[SCENARIOS] ?? ""; } catch {}
+    if (!scenarioCount(scenarios)) scenarios = "";
+    const reply = await withMainClone(repo, "spec-check-", (dir) => callAgent({ role: "speccheck", who: "the spec check", model: SPEC_CHECK_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], cwd: dir }, specCheckPrompt(item, scenarios)));
+    cost = sealCost === undefined && reply.cost === undefined ? undefined : (sealCost ?? 0) + (reply.cost ?? 0);
     const v = specVerdict(reply.text);
     if (!v) { say("error: the reply has no verdict line"); return { verdict: "error", cost }; }
+    // A set-aside scenario leaves the sealed file; the others keep their numbers, so acceptance and the reviewer agree on them.
+    const asides = [...specAsides(reply.text)].filter(([n]) => scenarios && new RegExp(`^\\s*${n}[.)]\\s+\\S`, "m").test(scenarios));
+    if (asides.length) {
+      writeHidden(repo, `${repo.key}-${ref}`, { [SCENARIOS]: withoutScenarios(scenarios, new Set(asides.map(([n]) => n))) });
+      for (const [n, why] of asides) note(repo, ref, `sealed checks: ${version} the spec check set aside: scenario ${n}: ${why}`);
+    }
     if (v.pass) { say("pass"); return { verdict: "pass", cost }; }
     say(`hold: ${v.problems}`);
     return { verdict: "hold", problems: v.problems, cost };

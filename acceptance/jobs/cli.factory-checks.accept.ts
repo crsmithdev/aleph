@@ -39,6 +39,7 @@ describe("a factory run's checks", () => {
         const r = await fjob("spec1", "commit spec1.txt", { ALEPH_REPOS: reg(), ALEPH_AUTHOR_CMD: fakeAuthor("h", SCENES), ALEPH_SPECCHECK_CMD: fakeSpec("h", "VERDICT: hold vague") }, ["--on", String(id)]);
         expect(state(r.json.run).condition).toBe("passed");
         expect(calls("h")).toBe(0);
+        expect(existsSync(join(base, "author-h.in"))).toBe(false);
         expect(await notes(id)).not.toContain("spec check:");
       }, 60_000);
 

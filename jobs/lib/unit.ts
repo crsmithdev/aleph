@@ -3,7 +3,7 @@
  * An agent run is setup, the worker, then the state rule; a plain run is one
  * command. Both end with state.json, then `exit`, then the news.
  */
-import { SCENARIOS, seal } from "./author.ts";
+import { SCENARIOS } from "./author.ts";
 import { appendFileSync, closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -397,14 +397,8 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     // The store and ledger facts ride along, so `aleph status` inside answers as it does outside.
     const b = git(repo.path, "bundle", "create", join(dir, "in.bundle"), main, writeFacts(repo), ...(prev ? [`refs/heads/${branch}`] : []));
     if (!b.ok) return stuck("infra", `bundle failed: ${b.out}`);
-    const goalId = onOf(run);
     const text = brief(id, folder, run, repo);
     writeFileSync(runFile(folder, "prompt.md"), text);
-    let authorCost: number | undefined;
-    if (repo.author && !prev && goalId !== undefined) {
-      phase("scenarios");
-      authorCost = await seal(repo, goalId);
-    }
     const argv = [workerCmd(), "-p", "--strict-mcp-config", "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
       "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", ...(run.model ? ["--model", run.model] : [])];
     // Setup output goes to stderr, so the worker's own stdout ends the transcript.
@@ -436,8 +430,7 @@ async function factoryAgent(id: string, folder: string, run: Run, repo: Repo): P
     child = null;
     const o = w.outcome;
     writeFileSync(runFile(folder, "result.md"), o.result);
-    const spent = (o.cost ?? 0) + (authorCost ?? 0);
-    const facts: Partial<Outcome> = { ...(o.cost !== undefined || authorCost !== undefined ? { cost: spent } : {}), defaults: tagged(o.result, "DEFAULT") };
+    const facts: Partial<Outcome> = { ...(o.cost !== undefined ? { cost: o.cost } : {}), defaults: tagged(o.result, "DEFAULT") };
     await fileFollowups(repo, run, tagged(o.result, "FOLLOWUP"));
     noteFlakes(repo, run, tagged(o.result, "FLAKE"));
     if (w.cause) return stuck(w.cause.kind, w.cause.reason, facts);

@@ -38,3 +38,14 @@ test("setAside reads the scenario numbers that a set-aside note opens with, and 
   ] } as unknown as issues.Issue;
   expect([...setAside(item)].sort()).toEqual([2, 3, 4, 6, 7]);
 });
+
+test("setAside counts only the notes after the last seal: a new spec version's scenarios reuse the numbers", () => {
+  const item = { notes: [
+    "- 2026-11-01 10:00: sealed checks: 0123456789ab 3 scenarios from a fresh author",
+    "- 2026-11-01 11:00: sealed checks: the reviewer set aside: scenario 2: old",
+    "- 2026-11-02 10:00: sealed checks: ba9876543210 4 scenarios from a fresh author",
+    "- 2026-11-02 10:01: sealed checks: ba9876543210 the spec check set aside: scenario 1: not in the goal",
+    "- 2026-11-02 11:00: sealed checks: the reviewer set aside: scenario 3: new",
+  ] } as unknown as issues.Issue;
+  expect([...setAside(item)]).toEqual([3]);
+});

@@ -115,7 +115,7 @@ A change that deletes or renames a test, changes a `test`, `it`, `describe` or `
 An issue can have checks the worker never sees:
 
 - **Hidden test files**, in the work store at `<repo>/hidden/<id>/`, added with `aleph issue hidden`. After the repo's checks pass, aleph copies them into the check clone as `.hidden/` and runs `hiddenRun` from the registry (default `bun test ./.hidden`). A fix round gets the names of the failing tests, never their source.
-- **Sealed scenarios**, with `"author": true` in the registry. Before a goal's first worker run, a fresh `claude -p` with no tools reads the goal section only and writes 3 to 8 behaviours to `scenarios.md` among the hidden files. The reviewer checks each one on the branch.
+- **Sealed scenarios**, with `"author": true` in the registry. In the spec check of each spec version, a fresh `claude -p` with no tools reads the goal section only and writes 3 to 8 behaviours to `scenarios.md` among the hidden files; a new version's scenarios replace the old. The spec check then sets aside each scenario that does not follow from the goal or cannot hold with the Oracle: it leaves the file, and the note `sealed checks: <version> the spec check set aside: scenario <n>: <why>` says why. The reviewer checks each scenario left on the branch.
 
 ### Held paths
 

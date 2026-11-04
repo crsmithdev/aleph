@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { noteFlake } from "../../todo/lib/store.ts";
-import { base, items, fakeLog, file, seedItem, state, setup, teardown } from "../cli.helpers";
+import { aleph, base, items, fakeLog, file, seedItem, state, setup, teardown } from "../cli.helpers";
 import { job } from "../inproc.ts";
 import { issueNotes, reportText } from "./flow.testkit.ts";
 
@@ -36,19 +36,22 @@ describe("a factory run's checks", () => {
       const goalWith = (title: string) => seedItem("fac", title, { kind: "goal", issue: "fac-1", after: [] }, "## Goal\nEnd state one.\n\n## Oracle\nORACLE-TEXT\n");
       const notes = (id: number) => issueNotes("fac", id);
       const SCENES = "1. SECRET-SCENARIO one is seen.\n2. Another is seen.\n";
+      // The spec check seals the scenarios (spec-check.test.ts); the run then reads them.
+      const sealBy = (id: number, env: Record<string, string>) => aleph(["spec-check", `fac-${id}`], env);
 
       test("the scenarios reach the reviewer and not the worker, and no check runs them", async () => {
         const id = goalWith("sealed goal");
-        const r = await fjob("seal1", "commit sealed-a.txt", { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("a", SCENES) }, { on: id });
+        const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("a", SCENES) };
+        await sealBy(id, env);
+        expect(await notes(id)).toMatch(/sealed checks: [0-9a-f]{12} 2 scenarios from a fresh author/);
+        const r = await fjob("seal1", "commit sealed-a.txt", env, { on: id });
         expect(state(r.json.run).condition).toBe("passed");
         expect(state(r.json.run).checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
-        expect(state(r.json.run).cost).toBeGreaterThanOrEqual(0.25);
         expect(file(r.json.run, "prompt.md")).not.toContain("SECRET-SCENARIO");
         expect(readFileSync(join(fakeLog, "prompt"), "utf8")).not.toContain("SECRET-SCENARIO");
         const reviewed = readFileSync(join(fakeLog, "review-prompt"), "utf8");
         expect(reviewed).toContain("## Sealed scenarios");
         expect(reviewed).toContain("SECRET-SCENARIO one is seen.");
-        expect(await notes(id)).toContain("sealed checks: 2 scenarios from a fresh author");
         const asked = readFileSync(join(base, "author-a.in"), "utf8");
         expect(asked).toContain("End state one.");
         expect(asked).not.toContain("ORACLE-TEXT");
@@ -56,19 +59,19 @@ describe("a factory run's checks", () => {
 
       test("a scenario the reviewer sets aside goes on the issue's note", async () => {
         const id = goalWith("set aside goal");
-        await job("fac", "seal2", "Goal: seal2\nACTION: commit seal2.txt\nREVIEW:setaside\n", { on: String(id) }, { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("b", SCENES) });
+        const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("b", SCENES) };
+        await sealBy(id, env);
+        await job("fac", "seal2", "Goal: seal2\nACTION: commit seal2.txt\nREVIEW:setaside\n", { on: String(id) }, env);
         expect(await notes(id)).toContain("sealed checks: the reviewer set aside: scenario 2 asks for more than the goal");
       }, 60_000);
 
-      test("a reply with no scenario leaves its note, the review has no section, and a goal gets one attempt", async () => {
+      test("the unit seals nothing: a goal with no spec check runs with no scenarios", async () => {
         const id = goalWith("no scenario goal");
-        const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("d", "I cannot write these.") };
+        const env = { ALEPH_REPOS: reg(), ALEPH_SPECCHECK_CMD: PASS(), ALEPH_AUTHOR_CMD: fakeAuthor("d", SCENES) };
         await fjob("seal3", "commit seal3.txt", env, { on: id });
-        expect(await notes(id)).toContain("sealed checks: none: the author's reply has no numbered scenario");
-        expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).not.toContain("## Sealed scenarios");
-        rmSync(join(base, "author-d.in"));
-        await fjob("seal4", "commit seal4.txt", env, { on: id });
         expect(existsSync(join(base, "author-d.in"))).toBe(false);
+        expect(await notes(id)).not.toContain("sealed checks:");
+        expect(readFileSync(join(fakeLog, "review-prompt"), "utf8")).not.toContain("## Sealed scenarios");
       }, 60_000);
     });
   });

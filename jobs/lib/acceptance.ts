@@ -19,7 +19,7 @@ import { note, noteFlake, readHidden, reopen as storeReopen, writeList } from ".
 import { cutTitle } from "./title.ts";
 import { lastLines, runOnCommit, type Ran, type Runner } from "./checks.ts";
 import { fetchOrigin, followMain, git, treeWithFiles } from "./git.ts";
-import { SCENARIOS } from "./author.ts";
+import { isSealNote, SCENARIOS } from "./author.ts";
 import { gitPrelude, OPUS_MODEL, q } from "./agent-call.ts";
 import { outcome as agentOutcome } from "./gate.ts";
 import { checkSlot, TAG_FORMAT, tagged, tell, type Repo } from "./ledger.ts";
@@ -165,10 +165,12 @@ const SET_ASIDE = "sealed checks: the reviewer set aside: ";
 /**
  * The scenario numbers the build reviewer set aside, from the item's notes (`unit.ts` writes them). A note counts
  * only when it opens with `scenario <n>` or `scenarios <n>, <m> and <k>`; a note on part of a scenario does not.
+ * Only the notes after the last seal count: a new spec version's scenarios reuse the numbers.
  */
 export function setAside(item: issues.Issue): Set<number> {
   const out = new Set<number>();
   for (const line of item.notes) {
+    if (isSealNote(line)) out.clear();
     const at = line.indexOf(SET_ASIDE);
     if (at < 0) continue;
     const m = /^scenarios?\s+(\d+(?:\s*(?:,|&|and|,\s*and)\s*\d+)*)/i.exec(line.slice(at + SET_ASIDE.length));
