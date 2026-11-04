@@ -51,8 +51,8 @@ export function loginPage(): string {
 <link rel="stylesheet" href="/app.css">
 <style>
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font:var(--fs-md)/1.5 var(--sans)}
-form{display:flex;flex-direction:column;gap:12px;width:260px}
-input,button{padding:10px 12px;border-radius:var(--r-ctl);border:1px solid var(--rule);background:var(--sunk);color:inherit;font:inherit}
+form{display:flex;flex-direction:column;gap:var(--sp-12);width:260px}
+input,button{padding:var(--sp-10) var(--sp-12);border-radius:var(--r-ctl);border:1px solid var(--rule);background:var(--sunk);color:inherit;font:inherit}
 button{background:var(--run);border-color:var(--run);color:var(--on-fill);cursor:pointer}
 #err{color:var(--stuck);min-height:1.2em}
 </style></head><body>

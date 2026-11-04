@@ -81,6 +81,13 @@ Type, size and effect tokens (`ui/app.css:47-55`):
 | `--r-tag` | 4px | badges, code blocks | 20, and 1 in a mixed shorthand |
 | `--r-hair` | 2px | bars, marks, thin rules | 11, and 1 in a mixed shorthand |
 | `--r-pill` | 999px | chips, pills | 3 |
+| `--sp-2` | 2px | `gap`, `padding`, `margin` | 36, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
+| `--sp-4` | 4px | `gap`, `padding`, `margin` | 59, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
+| `--sp-6` | 6px | `gap`, `padding`, `margin` | 56, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
+| `--sp-8` | 8px | `gap`, `padding`, `margin` | 83, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
+| `--sp-10` | 10px | `gap`, `padding`, `margin` | 49, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
+| `--sp-12` | 12px | `gap`, `padding`, `margin` | 46, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
+| `--sp-16` | 16px | `gap`, `padding`, `margin` | 20, in `ui/app.css`, `ui/index.html` and `ui/auth.ts` |
 | `--gap-in` | 16px | between tiles and side-by-side cards | 7 |
 | `--gap` | 24px | between page blocks | 1 |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles | `--mono` 10, `--num` 2, `--sans` 1, `--display` 1 as `font-family` |
@@ -89,7 +96,7 @@ Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers
 
 Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 10 times, `(max-width: 1100px)` 3 and `(min-width: 721px)` 1.
 
-Spacing has no tokens. The most common literals are `gap: 8px` (22), `gap: 6px` (16), `gap: 4px` (10), `gap: 10px` (10) and `margin-top: 4px` (9); `margin: 0 0 8px` has 8, `gap: 12px` 7, `gap: 2px` 7 and `padding: 10px 12px` 6. The scale in use is 2, 4, 6, 8, 10, 12, 16 px.
+Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. Widths and heights stay literal.
 
 Radii: the five `--r-*` tokens; one literal is left, `6px` on the login page (`ui/auth.ts:54`). Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` has 4 literal uses (1, 2, 2, 50). Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:414`).
 
@@ -97,7 +104,6 @@ Rules taken from the audit of 2026-11-04 (`docs/findings/2026-11-04-ui-design-au
 
 | Rule | Value | Uses | Token to come |
 |---|---|---|---|
-| Spacing | a step of 2, 4, 6, 8, 10, 12 or 16 px for `gap`, `padding` and `margin` | 337 rows | spacing tokens (fixes item 12) |
 | Dimmed control | `opacity: .6` | 3 (`ui/app.css:322`, `343`, `963`) | `--dim` |
 | Display type tracking | `letter-spacing: -0.01em` on the brand mark, page title and display text | 4 (`ui/app.css:165`, `190`, `191`, `479`) | none; a rule |
 | Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:564`) and `.08em` (`ui/app.css:722`) | 2 | none; pick one when a third key comes |
@@ -263,7 +269,7 @@ Use:
 - `when()`, `day()`, `hourLabel()`, `clock()`, `dur()`, `durMs()`, `money()`, `count()`, `pct()` for times, durations, costs, counts and percents;
 - `dataTable()` with `heads()` or `sortHead()` for a table, `empty()` for an empty state, and `badge()` for a state;
 - the column order id or name, title, state, project, labels, numbers, time;
-- the spacing steps, `opacity: .6` for a dimmed control, 28px for a control and 10px for a bar, as listed under Tokens, until their tokens land.
+- `--sp-*` for `gap`, `padding` and `margin`, and, until their tokens land, `opacity: .6` for a dimmed control, 28px for a control and 10px for a bar, as listed under Tokens.
 
 Never hard-code: a hex colour or shadow in CSS or in a view, a font size, radius or `z-index` in a literal, a breakpoint other than 720px and one wide width, or a date, number or duration format written inline.
 
