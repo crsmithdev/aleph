@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, count, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -37,7 +37,7 @@ export function renderHealth(m) {
     (warn.length ? `<h3>Warnings<span class="count">${warn.length}</span></h3><ul>${warn.map(f).join("")}</ul>` : "") +
     (!refuse.length && !warn.length ? empty("Lint finds nothing.") : "") +
     (med ? `<h3>Recall misses, ${esc(med.days)} days</h3>` + table([
-      ["Recalls", med.recalls], ["Empty", `${med.empty} (${Math.round(med.empty_share * 100)}%)`],
+      ["Recalls", med.recalls], ["Empty", `${med.empty} (${pct(med.empty_share * 100)})`],
       ["Reformulated", med.reformulated], ["Reads not offered", med.unoffered_reads]]) : "");
 }
 
@@ -104,7 +104,7 @@ function renderRetrieval(r) {
   if (!r.stats) return none("No recall data.", "<code>vault misses</code> reads Langfuse; set its keys to fill this.");
   const s = r.stats;
   const rows = r.missed.length ? fold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : `<p class="quiet">No query missed.</p>`;
-  return `<div class="kinds">${sub(`Recalls, ${s.days} days`, s.recalls, table([["Empty", `${s.empty} (${Math.round(s.empty_share * 100)}%)`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest misses", r.missed.length, rows)}</div>`;
+  return `<div class="kinds">${sub(`Recalls, ${s.days} days`, s.recalls, table([["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest misses", r.missed.length, rows)}</div>`;
 }
 
 function renderProspective(p) {
@@ -176,10 +176,10 @@ export function typeTiles(m, rows) {
   const hooks = t.procedural.hooks.length;
   return [
     { id: "working", name: "Working", n: t.working.total, unit: "handoffs", status: t.working.current ? "One current" : "None current", tone: "", write: t.working.last },
-    { id: "semantic", name: "Semantic", n: m.exists ? known.length : 0, unit: "notes", status: `${kept}% returned, ${100 - kept}% never`, tone: kept < 50 ? "warn" : "good", write: t.semantic.last, use: newest(known.map((n) => n.read)) },
+    { id: "semantic", name: "Semantic", n: m.exists ? known.length : 0, unit: "notes", status: `${pct(kept)} returned, ${pct(100 - kept)} never`, tone: kept < 50 ? "warn" : "good", write: t.semantic.last, use: newest(known.map((n) => n.read)) },
     { id: "episodic", name: "Episodic", n: m.byKind?.episode ?? eps.length, unit: `episodes, ${t.episodic.daily.total} daily pages`, status: `${eps.filter((n) => n.read).length} returned by recall`, tone: "", write: t.episodic.last, use: newest(eps.map((n) => n.read)) },
     { id: "procedural", name: "Procedural", n: t.procedural.skills.length, unit: `skills, ${hooks} hooks`, status: t.procedural.claudeMd ? `${t.procedural.claudeMd.lines} lines of rules` : "No rules file", tone: "", write: t.procedural.last },
-    { id: "retrieval", name: "Retrieval", n: stats ? stats.recalls : "–", unit: "recalls, 7 days", status: stats ? `${Math.round(stats.empty_share * 100)}% empty` : "No data", tone: stats && stats.empty_share > 0.2 ? "warn" : "", write: t.retrieval.last },
+    { id: "retrieval", name: "Retrieval", n: stats ? stats.recalls : "–", unit: "recalls, 7 days", status: stats ? `${pct(stats.empty_share * 100)} empty` : "No data", tone: stats && stats.empty_share > 0.2 ? "warn" : "", write: t.retrieval.last },
     { id: "prospective", name: "Prospective", n: t.prospective.issues.length, unit: "waiting", status: t.prospective.issues.length ? "Waiting" : "Empty", tone: "" },
     { id: "parametric", name: "Parametric", n: "–", unit: "not stored", status: "By design", tone: "", write: "" },
   ];

@@ -1,5 +1,5 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
 import { cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, pctText, period, plural, statCard, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
@@ -40,7 +40,7 @@ function scorecard(d, key) {
 function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
   if (!(total > 0)) return `<p>No agent run of an issue ended in the ${lastPeriod(d)}.</p>`;
-  const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${Math.round((c.hours / total) * 100)}%</span></button>`;
+  const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${esc(pct((c.hours / total) * 100))}</span></button>`;
   return `<div class="obar" role="group" aria-label="Agent time by outcome">${cs.map(seg).join("")}</div>`;
 }
 
