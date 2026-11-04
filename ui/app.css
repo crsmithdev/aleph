@@ -56,6 +56,7 @@
   --fs-sm: 13px;          /* table cells, secondary text */
   --fs-md: 14px;          /* body */
   --fs-lg: 15px;          /* section headings */
+  --fs-2xl: 20px;         /* brand mark, detail figure, mono tile figure */
   --fs-xl: 26px;          /* page title, in --display */
   --fs-metric: 32px;      /* the figure on a tile, in --metric */
   /* Radii and gaps. */
@@ -179,7 +180,7 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-tag); }
 
 /* The sidebar's mark and title. The title stays in Merriweather when the font picker changes --display. */
-.mark { display: flex; align-items: center; gap: var(--sp-8); text-decoration: none; font: 700 20px/1 var(--brand); letter-spacing: -0.01em; margin-right: var(--sp-4); }
+.mark { display: flex; align-items: center; gap: var(--sp-8); text-decoration: none; font: 700 var(--fs-2xl)/1 var(--brand); letter-spacing: -0.01em; margin-right: var(--sp-4); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
 /* ---------- Now: flow strip and lanes ---------- */
@@ -834,7 +835,7 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-kpi:first-child { border-left: 0; }
 .dp-k, .dp-sub { font-size: var(--fs-xs); color: var(--muted); }
 .dp-sub .bad { color: var(--stuck); }
-.dp-v { font: var(--fw-text) 22px/1.15 var(--metric); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.dp-v { font: var(--fw-text) var(--fs-2xl)/1.15 var(--metric); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .dp-v.text { font: var(--fw-text) var(--fs-lg)/1.4 var(--sans); padding-top: var(--sp-4); }
 .dp-key { display: flex; flex-wrap: wrap; gap: var(--sp-4) 14px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--muted); }
 .dp-key li { display: inline-flex; align-items: center; gap: var(--sp-6); }
@@ -975,7 +976,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .gtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); gap: var(--sp-10); margin-bottom: var(--sp-12); }
 .gtile { display: flex; flex-direction: column; gap: var(--sp-6); min-width: 0; padding: var(--sp-12) 14px; border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); }
 .gtile .gt-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); font-size: var(--fs-sm); color: var(--ink-2); }
-.gtile b { font: var(--fw-mid) 18px/1.2 var(--mono); color: var(--ink); }
+.gtile b { font: var(--fw-mid) var(--fs-2xl)/1.2 var(--mono); color: var(--ink); }
 .gtile small { font-size: var(--fs-xs); color: var(--muted); overflow-wrap: anywhere; }
 .gdot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--done); }
 .gdot.warn { background: var(--need); }

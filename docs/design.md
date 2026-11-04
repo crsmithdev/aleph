@@ -71,6 +71,7 @@ Type, size and effect tokens (`ui/app.css:47-55`):
 | `--fs-sm` | 13px | table cells, secondary text | 54 |
 | `--fs-md` | 14px | body | 6 |
 | `--fs-lg` | 15px | section headings | 7 |
+| `--fs-2xl` | 20px | brand mark, detail figure, tile figure in `--mono` | not counted, used in shorthand `font:` |
 | `--fs-xl` | 26px | page title, in `--display` | not counted, used in shorthand `font:` |
 | `--fs-metric` | 32px | the figure on a tile | not counted, used in shorthand `font:` |
 | `--fw-text` | 400 | text | not counted, used in shorthand `font:` |
