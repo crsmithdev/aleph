@@ -200,4 +200,15 @@ describe("the worker brief", () => {
     expect(sandboxed).not.toContain("Skill tool");
     expect(brief("rb1", f, r, repo)).not.toContain("code-change");
   });
+
+  test("a UI goal's brief says Chrome runs in the sandbox; any other goal's brief says it cannot start", () => {
+    const r = (job: string) => run({ job, worktree: "/w", branch: "factory/fac-1" });
+    folder("ju", { "spec.md": "# Spec\n\n## Edit surface\n\n- ui/views/issues.js\n" });
+    folder("jo", { "spec.md": "# Spec\n\n## Edit surface\n\n- jobs/lib/unit.ts\n" });
+    const ui = brief("rb2", folder("rb2"), r("ju"), { ...repo, sandbox: true } as Repo);
+    expect(ui).toContain("Chrome runs in the sandbox, so the repo's browser tests run.");
+    expect(ui).not.toContain("Chrome cannot start");
+    const other = brief("rb3", folder("rb3"), r("jo"), { ...repo, sandbox: true } as Repo);
+    expect(other).toContain("Chrome cannot start in the sandbox.");
+  });
 });
