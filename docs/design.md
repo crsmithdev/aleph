@@ -89,6 +89,17 @@ Spacing has no tokens. The most common literals are `gap: 8px` (22), `gap: 6px` 
 
 Radii: the five `--r-*` tokens; one literal is left, `6px` on the login page (`ui/auth.ts:54`). Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` has 4 literal uses (1, 2, 2, 50). Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:413`).
 
+Rules taken from the audit of 2026-11-04 (`docs/findings/2026-11-04-ui-design-audit.md`). Each pattern has 3 or more uses and no token yet. Until its token lands, use the value given here.
+
+| Rule | Value | Uses | Token to come |
+|---|---|---|---|
+| Spacing | a step of 2, 4, 6, 8, 10, 12 or 16 px for `gap`, `padding` and `margin` | 337 rows | spacing tokens (fixes item 12) |
+| Dimmed control | `opacity: .6` | 3 (`ui/app.css:321`, `343`, `963`) | `--dim` |
+| Display type tracking | `letter-spacing: -0.01em` on the brand mark, page title and display text | 4 (`ui/app.css:164`, `190`, `191`, `479`) | none; a rule |
+| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:563`) and `.08em` (`ui/app.css:721`) | 2 | none; pick one when a third key comes |
+| Control height | 28px | 9 (`min-height` 6, `height` 3) | `--ctl-h` |
+| Bar and meter height | 10px | 8 | `--bar-h` |
+
 ## Formats
 
 One format per kind of value. The helpers are in `ui/lib.js` unless named.
@@ -106,6 +117,9 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 | Count | thousands separators | 12,345 | `count()` (`ui/lib.js:19`) | none |
 | Ids | mono, muted, `500 var(--fs-xs)` | aleph-52 | `idLink()`, `repoIdLink()` | none |
 | Model | name without `claude-` and the version | opus | `shortModel()` | empty string |
+| Bytes | `B`, `KiB`, `MiB`, one decimal | 1.5 KiB | `kb()` (`ui/views/jobs.js:127`); move to `ui/lib.js` as `bytes()` at a second use | none |
+| Mean | one decimal | 2.4 | `toFixed(1)` (`ui/views/factory-agents.js:19`, `36`) | `–` |
+| Countdown | `m:ss` | 4:05 | `ui/index.html:221` | none |
 
 Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()`, `ui/views/speed.js:23`). The `format` group has 77 `helper-bypass` rows; the audit marks each one (`docs/findings/2026-11-04-ui-design-audit.md`).
 
@@ -244,7 +258,8 @@ Use:
 - `--fs-xs`, `--fs-sm`, `--fs-md`, `--fs-lg` for font sizes, and `--r-card`, `--r-ctl`, `--r-tag` for radii;
 - `when()`, `day()`, `hourLabel()`, `clock()`, `dur()`, `durMs()`, `money()`, `count()`, `pct()` for times, durations, costs, counts and percents;
 - `dataTable()` with `heads()` or `sortHead()` for a table, `empty()` for an empty state, and `badge()` for a state;
-- the column order id or name, title, state, project, labels, numbers, time.
+- the column order id or name, title, state, project, labels, numbers, time;
+- the spacing steps, `opacity: .6` for a dimmed control, 28px for a control and 10px for a bar, as listed under Tokens, until their tokens land.
 
 Never hard-code: a hex colour or shadow in CSS or in a view, a font size, radius or `z-index` in a literal, a breakpoint other than 720px and one wide width, or a date, number or duration format written inline.
 
