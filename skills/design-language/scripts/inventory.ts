@@ -29,6 +29,7 @@ const SIZE = new RegExp(`(?<![\\w-])(${SIZE_PROPS})\\s*:\\s*([^;"'}\`,]+)`, "g")
 const CSS_SIZE = /\d(px|rem|em|%|vh|vw|ch)\b|var\(--/;
 const TYPE = /\b(font-family|font-weight|letter-spacing|text-transform|font-variant-numeric)\s*:\s*([^;"'}`]+)/g;
 const EFFECT = /\b(box-shadow|opacity|z-index|transition|animation)\s*:\s*([^;"'}`]+)/g;
+const FONT = /(?<![\w-])font\s*:\s*([^;"'}`]+)/g;
 const MEDIA = /@media\s*([^{]+)/g;
 const FORMAT = /\.toFixed\(|\.toLocale\w*\(|\bIntl\.\w+|\.get(?:Hours|Minutes|Seconds|Date|Month|FullYear)\(|\.padStart\(/g;
 const TOKEN_DEF = /^\s*(--[\w-]+)\s*:\s*([^;]+);/;
@@ -43,11 +44,16 @@ for (const f of roots.flatMap(files)) {
     const at = `${f}:${i + 1}`;
     const def = line.match(TOKEN_DEF);
     if (def) { rows.push({ at, group: COLOUR.test(def[2]) ? "colour" : /\d/.test(def[2]) ? "size" : "type", prop: def[1], value: def[2].trim(), kind: "token-def" }); COLOUR.lastIndex = 0; return; }
-    for (const m of line.matchAll(COLOUR)) rows.push({ at, group: "colour", prop: "", value: m[0], kind: "literal" });
+    for (const m of line.matchAll(COLOUR)) if (!/\b(?:querySelector(?:All)?|closest|matches)\(\s*["'`][^"'`]*$/.test(line.slice(0, m.index))) rows.push({ at, group: "colour", prop: "", value: m[0], kind: "literal" });
     if (!/@media/.test(line)) for (const m of line.matchAll(SIZE)) if (CSS_SIZE.test(m[2])) rows.push({ at, group: "size", prop: m[1], value: m[2].trim(), kind: kindOf(m[2]) });
+    for (const m of line.matchAll(FONT)) {
+      const size = m[1].match(/\d*\.?\d+(?:px|rem|em|pt|%)(?=[\s\/]|$)/), weight = m[1].match(/(?<![\w.-])(?:\d{3}|bold(?:er)?|lighter)(?![\w.%])/);
+      if (weight) rows.push({ at, group: "type", prop: "font", value: weight[0], kind: "literal" });
+      if (size) rows.push({ at, group: "size", prop: "font", value: size[0], kind: "literal" });
+    }
     for (const m of line.matchAll(TYPE)) rows.push({ at, group: "type", prop: m[1], value: m[2].trim(), kind: kindOf(m[2]) });
     for (const m of line.matchAll(EFFECT)) rows.push({ at, group: "effect", prop: m[1], value: m[2].trim(), kind: kindOf(m[2]) });
-    for (const m of line.matchAll(MEDIA)) rows.push({ at, group: "effect", prop: "@media", value: m[1].trim(), kind: "literal" });
+    for (const m of line.matchAll(MEDIA)) if (line[m.index! - 1] !== "/") rows.push({ at, group: "effect", prop: "@media", value: m[1].trim(), kind: "literal" });
     for (const m of line.matchAll(FORMAT)) rows.push({ at, group: "format", prop: m[0].replace(/\($/, ""), value: line.trim().slice(0, 80), kind: "helper-bypass" });
   });
 }
