@@ -59,6 +59,7 @@ All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), 
 | `--approve`, `--decide`, `--unstick`, `--hand` | see `ui/app.css:29-32` | see `ui/app.css:111-114` | the four Ask cards, each with `-bg` and `-ring` |
 | `--seg-landed`, `-fixed`, `-nothing`, `-restarted`, `-dropped` | `ui/app.css:34` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #1BAF7A, #EDA100, #E87BA4 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
+| `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #C792EA, #89DDFF | extra chart series |
 | `--lift` | `0 1px 3px` and `0 2px 8px` shadows | heavier black shadows | the top Status card; 1 `token-use` |
 
 Type, size and effect tokens (`ui/app.css:46-55`):
@@ -162,7 +163,7 @@ Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Writte
 
 Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:159`, `ui/lib.js:184`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:174`) and redraws on a colour-scheme change.
 
-- **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `#C792EA` and `#89DDFF` set in code (`ui/lib.js:153`); agent roles use `--series-1` to `--series-5`.
+- **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
 - **Bars:** `barsOption()` (`ui/lib.js:480`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `ui/views/factory-agents.js:33`, `ui/views/issues.js:312`, `ui/views/issues.js:313`, `ui/views/factory-jobs.js:21`.
 - **Lines:** `lineOption()` (`ui/lib.js:480`) for one series over time, filled at 15% opacity, or as a step area (85%) for live counts. Uses: `ui/views/factory-agents.js:37`, `ui/views/factory-agents.js:49`, `ui/views/skills.js:33`.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:23`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.

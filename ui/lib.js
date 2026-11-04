@@ -150,16 +150,14 @@ export function mountView(view, root, data, query) {
   return true;
 }
 
-const PALETTE_EXTRA = ["#C792EA", "#89DDFF"];
-
 /**
  * The ECharts theme for a token map ({bg, surface, ink, rule, run, done, need, stuck, sans}).
- * Series colours run, done, need, stuck, then purple and cyan.
+ * Series colours run, done, need, stuck, then `chart-6` and `chart-7`.
  */
 export function chartTheme(t) {
   const axis = { axisLine: { lineStyle: { color: t.rule } }, axisTick: { lineStyle: { color: t.rule } }, axisLabel: { color: t.ink, fontSize: 12 * (Number(t["chart-scale"]) || 1), fontWeight: Number(t["chart-weight"]) || 400 }, splitLine: { lineStyle: { color: t.rule } }, nameTextStyle: { color: t.ink } };
   return {
-    color: [t.run, t.done, t.need, t.stuck, ...PALETTE_EXTRA],
+    color: [t.run, t.done, t.need, t.stuck, t["chart-6"], t["chart-7"]],
     backgroundColor: "transparent",
     textStyle: { color: t.ink, fontFamily: t.chart || t.sans },
     title: { textStyle: { color: t.ink }, subtextStyle: { color: t.ink } },
@@ -169,7 +167,7 @@ export function chartTheme(t) {
   };
 }
 
-const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "hot", "muted", "focus", "sans", "mono", "chart", "chart-scale", "chart-weight", "series-1", "series-2", "series-3", "series-4", "series-5"];
+const TOKENS = ["bg", "surface", "ink", "rule", "run", "done", "need", "stuck", "hot", "muted", "focus", "sans", "mono", "chart", "chart-scale", "chart-weight", "series-1", "series-2", "series-3", "series-4", "series-5", "chart-6", "chart-7"];
 /** Read the page tokens off :root into a token map. */
 export const readTokens = (el = document.documentElement) => {
   const cs = getComputedStyle(el);

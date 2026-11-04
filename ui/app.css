@@ -21,6 +21,7 @@
   --done-bg: #EDF2E8;
   --run: #3B5FC8;         /* running: blue */
   --series-1: #2A78D6; --series-2: #EB6834; --series-3: #1BAF7A; --series-4: #EDA100; --series-5: #E87BA4;  /* agent roles in charts */
+  --chart-6: #7E57C2; --chart-7: #0E7C9E;  /* extra chart series */
   --run-bg: #EBEFFA;
   --add: #437018;
   --del: #C0304C;
@@ -108,6 +109,7 @@
     --done-bg: #3B4347;
     --run: #82AAFF;
     --series-1: #3987E5; --series-2: #D95926; --series-3: #199E70; --series-4: #C98500; --series-5: #D55181;
+    --chart-6: #C792EA; --chart-7: #89DDFF;
     --run-bg: #353E59;
     --add: #A9C77D;
     --del: #F07178;
@@ -142,6 +144,7 @@
     --done-bg: #3B4347;
     --run: #82AAFF;
     --series-1: #3987E5; --series-2: #D95926; --series-3: #199E70; --series-4: #C98500; --series-5: #D55181;
+    --chart-6: #C792EA; --chart-7: #89DDFF;
     --run-bg: #353E59;
     --add: #A9C77D;
     --del: #F07178;

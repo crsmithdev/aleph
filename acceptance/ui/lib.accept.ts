@@ -4,9 +4,9 @@ import { expect, test } from "bun:test";
 import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, mountView, recordState, restoreState, span, tone, searchBox } from "../../ui/lib.js";
 
 test("chartTheme holds the token colours in the order given", () => {
-  const t = { bg: "#111", surface: "#222", ink: "#eee", rule: "#444", run: "#1", done: "#2", need: "#3", stuck: "#4", sans: "X" };
+  const t = { bg: "#111", surface: "#222", ink: "#eee", rule: "#444", run: "#1", done: "#2", need: "#3", stuck: "#4", "chart-6": "#6", "chart-7": "#7", sans: "X" };
   const th = chartTheme(t);
-  expect(th.color).toEqual(["#1", "#2", "#3", "#4", "#C792EA", "#89DDFF"]);
+  expect(th.color).toEqual(["#1", "#2", "#3", "#4", "#6", "#7"]);
   expect(th.textStyle.color).toBe("#eee");
   expect(th.valueAxis.splitLine.lineStyle.color).toBe("#444");
   expect(th.tooltip.backgroundColor).toBe("#222");
