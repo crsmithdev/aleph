@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, loadingLine, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -321,7 +321,7 @@ async function inspect(title) {
   const box = live?.root.querySelector("#mem-inspector");
   if (!box || !title) return;
   const row = live.rows.find((n) => n.title === title);
-  box.innerHTML = `<p class="quiet" role="status">Loading the note…</p>`;
+  box.innerHTML = loadingLine("the note");
   try {
     const res = await fetch(`/api/memory/note?title=${encodeURIComponent(title)}`, { cache: "no-store" });
     const n = await res.json();

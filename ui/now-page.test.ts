@@ -53,7 +53,7 @@ test("the causes merge across the lost classes, largest first, and leave out the
   expect(h).toContain("3.0h · 4 runs");
   expect(h).toContain("The first cause is 50% of the loss: Issue had landed, 4 runs.");
   expect(h.match(/class="barrow top"/g)?.length).toBe(1);
-  expect(view.renderCauses(null)).toContain("Loading");
+  expect(view.renderCauses(null)).toContain(`<p class="quiet" role="status">Loading the causes…</p>`);
   expect(view.renderCauses({ error: "no <data>" })).toContain("no &lt;data&gt;");
   expect(view.renderCauses({ classes: [] })).toContain("No agent time was lost");
 });

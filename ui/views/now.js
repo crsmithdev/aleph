@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
+import { barList, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
 import { causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -35,7 +35,7 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
 /** The ranked causes of lost time, largest first. `d` is null while it loads, `{ error }` on a failed load. */
 export function renderCauses(d, win = d?.window ?? "week") {
   const title = `<h2>Causes of lost time, largest first</h2>`;
-  if (!d) return `${title}<p role="status">Loading\u2026</p>`;
+  if (!d) return `${title}${loadingLine("the causes")}`;
   if (d.error) return `${title}<p>${esc(d.error)}</p>`;
   const cs = mergeCauses(d);
   if (!cs.length) return `${title}<p>No agent time was lost in the last ${period({ window: win })}.</p>`;

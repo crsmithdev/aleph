@@ -40,7 +40,7 @@ test("the tiles come from the state and the agents", () => {
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {
   const h = renderFactoryAgents({ ...S, usage: undefined }, null);
   expect(h).toContain("usage unknown");
-  expect(h).toContain("Loading");
+  expect(h).toContain(`<p class="quiet" role="status">Loading the agents…</p>`);
   expect(renderFactoryAgents(S, { error: "no data" })).toContain("no data");
 });
 

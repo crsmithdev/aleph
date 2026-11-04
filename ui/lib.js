@@ -79,6 +79,8 @@ export function failMessage(url, status, body) {
   return `${head}: ${msg}`;
 }
 
+/** An inline loading line: "Loading <what>…". */
+export const loadingLine = (what) => `<p class="quiet" role="status">Loading ${esc(what)}…</p>`;
 /** The first-load state of a view, shown until its API answers. */
 export const loading = (title) => `<div class="page"><p class="quiet loading" role="status">Loading ${esc(title)}…</p></div>`;
 

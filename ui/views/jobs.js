@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, chip, tag, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
+import { blockersHtml, bytes, chip, tag, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, loadingLine, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -249,7 +249,7 @@ export function renderJob(j) {
     `<div class="dp-detail"><h2>Detail</h2>` +
     (j.review ? fold("Review", verdict ? tag(verdict, verdict === "pass" ? "done" : "stuck") : "", `<div class="md">${md(j.review)}</div>`) : "") +
     (checks ? fold("Checks", tag(`${passed} / ${j.checks.length}`, passed === j.checks.length ? "done" : "stuck"), checks) : "") +
-    fold("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<pre class="diff" id="diff" data-job="${esc(j.name)}">Loading the diff…</pre>`) +
+    fold("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<pre class="diff" id="diff" data-job="${esc(j.name)}">${loadingLine("the diff")}</pre>`) +
     `</div></div>`;
 }
 
@@ -280,7 +280,7 @@ if (typeof document !== "undefined") {
     const out = b.closest("[data-logs]").querySelector(".logbody");
     const q = b.dataset.as ? `?as=${b.dataset.as}` : "";
     out.hidden = false;
-    out.textContent = "Loading…";
+    out.innerHTML = loadingLine("the log");
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(b.dataset.job)}/runs/${encodeURIComponent(b.dataset.log)}/logs/${encodeURIComponent(b.dataset.file)}${q}`);
       if (!res.ok) out.textContent = `The log failed to load (${res.status}).`;

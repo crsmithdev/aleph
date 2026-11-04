@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, mean, money, onTile, pageHead, pct, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, loadingLine, mean, money, onTile, pageHead, pct, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
 import { hours, lastPeriod, loadSpeed, usable, usageTile, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
@@ -50,7 +50,7 @@ export const usageOption = (series) => lineOption(series.map((p) => when(p.at)),
 /** The page body. `d` is /api/speed for the window, or null while it loads; `key` is the selected tile. */
 export function renderFactoryAgents(s, d, key = "live", window = "week") {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null, cur = DETAILS[key] ? key : "live";
-  const wait = `<p role="status">${esc(d?.error ?? "Loading…")}</p>`;
+  const wait = d?.error ? `<p>${esc(d.error)}</p>` : loadingLine("the agents");
   const scope = filterBar([{ name: "window", value: win, options: WINDOWS }]);
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, cur, w))}` +
     card(DETAILS[cur].title, a ? `<div class="chartbox" role="img" aria-label="${esc(DETAILS[cur].title)}"></div>` : wait) +
