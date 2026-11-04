@@ -145,7 +145,7 @@ export function statusCards(s, d, { efficiency, performance }) {
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
   const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours) }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
   const lead = statCard({ k: "Completion", v: cardDur(f?.leadP50), v2: cardDur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
-  const landed = statCard({ k: "Landed", v: f?.landed == null ? "–" : String(f.landed), v2: cardPct(f?.firstPass), q: ["issues", "clean"], trend: t("landed", { kind: "relative", lowerIsGood: false, format: String }), href: efficiency });
+  const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: `${Math.round(f.firstPass * f.landed)} of ${f.landed}` }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
   const queue = statCard({ k: "Queue wait", v: cardDur(f?.queueP50), v2: cardDur(f?.queueP90), q: ["p50", "p90"], trend: t("queueP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
   return lost + lead + landed + queue + usageCard(s);
 }

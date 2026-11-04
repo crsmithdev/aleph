@@ -47,6 +47,13 @@ test("the scorecard before the data arrives: dashes, and usage unknown with no u
   expect(h).not.toContain('class="tr');
 });
 
+test("the Landed card shows the clean share, then the clean count, and trends on the clean share", () => {
+  const d = { ...WEEK, done: 49, issues: { ...WEEK.issues, landed: 49, firstPass: Math.round((38 / 49) * 1e4) / 1e4 }, baseline: BASE };
+  const h = view.renderTiles({ ...state, usage: undefined }, d);
+  expect(h).toContain("<b>78%<em> / 38 of 49</em></b>");
+  expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
+});
+
 test("the causes merge across the lost classes, largest first, and leave out the classes that reached main", () => {
   const h = view.renderCauses(WEEK);
   expect([...h.matchAll(/efficiency">([^<]+)</g)].map((m) => m[1])).toEqual(["Issue had landed", "No commit"]);
