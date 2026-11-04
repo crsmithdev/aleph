@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "./ask.ts";
-import { askOf, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
+import { allRuns, askOf, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "./ledger.ts";
 import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "./process.ts";
 import { causeOf, failedCheckOf, type Fate } from "./outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "./job.ts";
@@ -81,8 +81,9 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     mkdirSync(folder);
     writeFileSync(runFile(folder, "command.txt"), quote(["aleph", ...command]) + "\n");
     prep(folder);
-    // `made` orders the land queue: folder names sort by name within a second.
-    writeRun(folder, { ...run, job: run.job ?? id, made: Date.now() } as Run);
+    // `made` orders the land queue: never below an earlier run's, so a clock stepped back keeps the order.
+    const made = Math.max(Date.now(), ...allRuns().map((e) => (e.run.made ?? 0) + 1));
+    writeRun(folder, { ...run, job: run.job ?? id, made } as Run);
 
     // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
     const factory = isBuild(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;

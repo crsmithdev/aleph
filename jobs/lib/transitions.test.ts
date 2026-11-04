@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeRun, type Run } from "./ledger.ts";
+import { allRuns, writeRun, type Run } from "./ledger.ts";
 import { STARTING_MS } from "./process.ts";
 import { startJob } from "./transitions.ts";
 import { Refusal } from "./refusal.ts";
@@ -62,6 +62,17 @@ describe("startJob", () => {
     mkdirSync(folder, { recursive: true });
     writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: new Date().toISOString(), made: Date.now() - STARTING_MS - 1000 } as Run);
     expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).not.toContain("is running as");
+  });
+
+  test("a start made after the clock stepped back still gets a later made", async () => {
+    const job = "20261103-000003-fac-y-agent";
+    const folder = join(base, "jobs", job);
+    mkdirSync(folder, { recursive: true });
+    const ahead = Date.now() + 700;
+    writeRun(folder, { kind: "build", job, name: "y", repo: "fac", branch: "factory/y", condition: "failed", phase: "starting", told: false, started: new Date().toISOString(), made: ahead } as Run);
+    await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }));
+    const second = allRuns().find((e) => e.id !== job);
+    expect(second?.run.made).toBeGreaterThan(ahead);
   });
 });
 
