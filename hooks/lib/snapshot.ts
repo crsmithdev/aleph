@@ -1,11 +1,15 @@
 /**
  * A fingerprint of a repo and every worktree it lists, except subagent
- * worktrees under .claude/worktrees: HEAD, status, and a hash of the diff.
- * Two equal fingerprints mean the turn changed nothing.
+ * worktrees under .claude/worktrees: HEAD, and a hash of each dirty file
+ * (changed against HEAD, or untracked and not ignored). Two fingerprints
+ * give the files the turn changed.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+
+/** Key `<tree>\0HEAD` holds the HEAD sha; key `<tree>\0<path>` holds a hash of that dirty file. */
+export type Snapshot = Record<string, string>;
 
 function git(cwd: string, ...args: string[]): string | null {
   const proc = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -22,33 +26,48 @@ function worktreesOf(cwd: string): string[] {
   return own.length ? own : [top];
 }
 
-/** Hash of the bytes of every untracked, non-ignored file. A file that vanishes or cannot be read counts as missing. */
-function untrackedContents(tree: string): string {
-  const names = (git(tree, "ls-files", "--others", "--exclude-standard", "-z") ?? "").split("\0").filter(Boolean).sort();
-  const hash = createHash("sha256");
-  for (const name of names) {
-    let body = "";
-    try {
-      body = createHash("sha256").update(readFileSync(join(tree, name))).digest("hex");
-    } catch {
-      body = "unreadable";
-    }
-    hash.update(name).update("\0").update(body).update("\0");
+/** A file that vanishes or cannot be read hashes as "missing". */
+function fileHash(path: string): string {
+  try {
+    return createHash("sha256").update(readFileSync(path)).digest("hex");
+  } catch {
+    return "missing";
   }
-  return hash.digest("hex");
 }
 
+const names = (out: string | null) => (out ?? "").split("\0").filter(Boolean);
+
 /** null when cwd is not inside a git repo. */
-export function snapshot(cwd: string): string | null {
+export function snapshot(cwd: string): Snapshot | null {
   const trees = worktreesOf(cwd);
   if (trees.length === 0) return null;
-  const hash = createHash("sha256");
+  const snap: Snapshot = {};
   for (const tree of trees) {
-    hash.update(tree).update("\0");
-    hash.update(git(tree, "rev-parse", "HEAD") ?? "").update("\0");
-    hash.update(git(tree, "status", "--porcelain=v2", "--untracked-files=all") ?? "").update("\0");
-    hash.update(git(tree, "diff", "HEAD") ?? "").update("\0");
-    hash.update(untrackedContents(tree)).update("\0");
+    snap[`${tree}\0HEAD`] = git(tree, "rev-parse", "HEAD")?.trim() ?? "";
+    const dirty = [...names(git(tree, "diff", "HEAD", "--name-only", "-z")), ...names(git(tree, "ls-files", "--others", "--exclude-standard", "-z"))];
+    for (const name of dirty) snap[`${tree}\0${name}`] = fileHash(join(tree, name));
   }
-  return hash.digest("hex");
+  return snap;
 }
+
+/**
+ * The files, as absolute paths, that differ between two snapshots: dirty files that changed, and files in
+ * the commits a HEAD gained that no HEAD in `before` reaches. That covers a worktree the turn created.
+ */
+export function changedFiles(before: Snapshot, after: Snapshot): string[] {
+  const out = new Set<string>();
+  const heads = Object.entries(before).filter(([k, v]) => k.endsWith("\0HEAD") && v).map(([, v]) => v);
+  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    if (before[key] === after[key]) continue;
+    const [tree, name] = key.split("\0");
+    if (name !== "HEAD") { out.add(join(tree, name)); continue; }
+    const to = after[key];
+    if (!to) continue;
+    const log = git(tree, "-c", "core.quotepath=off", "log", "--name-only", "--format=", to, "--not", ...heads) ?? "";
+    for (const f of log.split("\n").filter(Boolean)) out.add(join(tree, f));
+  }
+  return [...out];
+}
+
+/** A doc is not code: changing only docs does not wake the gate. */
+export const isCode = (path: string) => !/\.mdx?$/i.test(path);

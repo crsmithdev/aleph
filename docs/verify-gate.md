@@ -8,8 +8,8 @@ which changed code is honest about what it verified.
 | # | Decision | Reason |
 |---|---|---|
 | 1 | The gate judges **substance**, not shape. A fast model reads the final message and a digest of the turn's tool calls. | The old `[verify]` block was shape-only and, by its own header, a fabricated block passed. |
-| 2 | **Rule:** every claim of completion or correctness must be traceable to something run and observed in this turn, after the last edit. A plain statement of what was *not* verified passes on that point. Edits are evidence for edit claims; runs are evidence for behavior claims. | Without the honest-gap escape the model learns never to admit gaps. Without "after the last edit" a run before a later edit counts as proof. |
-| 3 | **Trigger:** the turn changed the tree. Snapshot at `UserPromptSubmit`: for the cwd repo and every worktree it lists, except subagent worktrees under `.claude/worktrees/` other than the cwd's own, `HEAD` + `git status --porcelain` + a hash of `git diff HEAD`. Compare at `Stop`. Outside git, fall back to an `Edit|Write` marker. | An `Edit|Write` marker misses Bash edits (sed, heredocs), which auto mode encourages. Worktrees are invisible to `git status` in the main tree. A subagent's worktree changes while the turn runs without any change from the turn itself. |
+| 2 | **Rule:** every claim of completion or correctness about code changed this turn must be traceable to something run and observed in this turn, after the last edit. A plain statement of what was *not* verified passes on that point. Edits are evidence for edit claims; runs are evidence for behavior claims. | Without the honest-gap escape the model learns never to admit gaps. Without "after the last edit" a run before a later edit counts as proof. |
+| 3 | **Trigger:** the turn changed a code file, that is a file that is not `.md` or `.mdx`. Snapshot at `UserPromptSubmit`: for the cwd repo and every worktree it lists, except subagent worktrees under `.claude/worktrees/` other than the cwd's own, `HEAD` and a hash of each dirty file (changed against `HEAD`, or untracked and not ignored). At `Stop`, the changed files are the dirty files whose hash differs, and the files in commits a `HEAD` gained that no earlier `HEAD` reaches. Outside git, fall back to an `Edit|Write` of a code file. **3 Nov 2026:** a change to docs only, an artifact in the scratchpad, and a turn that only answers in chat no longer wake the gate. | An `Edit|Write` marker misses Bash edits (sed, heredocs), which auto mode encourages. Worktrees are invisible to `git status` in the main tree. A subagent's worktree changes while the turn runs without any change from the turn itself. |
 | 4 | **On deny:** `permissionDecision: deny` with a reason naming the unbacked claim and what would back it. Cap at two denials per `prompt_id`; the third Stop passes as a *forced pass*. `skip verify` in the latest **user** message passes the turn. | Uncapped denial is a stuck turn burning tokens. A model-authored skip is no gate. |
 | 5 | **Judge call:** command hook. Bun parses `transcript_path` for this prompt, builds the digest, runs `claude -p --model haiku --setting-sources ""`. **2 Nov 2026:** Jev now screens first by default, so Haiku is not the only judge. `aleph judge` prints the current choice, `jev` (the default) or `haiku`; `aleph judge haiku` and `aleph judge jev` set it, the choice is kept in `~/.aleph/judge`, and `ALEPH_JUDGE` overrides that file. Jev is `typesafe/jev-1.13`, TypeSafe's decision model, called through OpenRouter. It screens out turns whose final message makes no completion claim; a turn passes on Jev alone only below `ALEPH_JEV_PASS_BELOW` (default 0.05). Haiku is still the judge for every other turn and the only one that can deny. See [Jev screen](#jev-screen-on-by-default-since-27-oct-2026). | Measured 2.5 s wall clock. No settings means no hooks and no plugins in the nested call: no recursion, no self-traces. Subscription-billed. A prompt-type hook cannot see the transcript. |
 | 6 | **Scope:** main agent `Stop` only. `SubagentStop` stays observability-only. | Subagents report to the main agent, whose Stop is gated. |
@@ -24,7 +24,7 @@ which changed code is honest about what it verified.
 UserPromptSubmit  verify-gate.ts snapshot → ~/.aleph/spool/snap:<prompt_id>
 Stop              verify-gate.ts
                     stop_hook_active or not → judge anyway (a retry is still a turn)
-                    snapshot unchanged (outside git: no edits in the transcript) → pass, no span
+                    no code file changed (outside git: no code edit in the transcript) → pass, no span
                     "skip verify" in latest user message → pass, span notes skip
                     denials for prompt_id ≥ 2 → forced pass, score 0.5
                     digest = transcript entries for this prompt_id:
@@ -51,6 +51,9 @@ System: you are checking one turn of a coding assistant. Given the digest and
 the final message, decide whether every claim of completion or correctness is
 backed by a run whose result appears in the digest after the last edit, or is
 explicitly marked unverified. Edits alone back only claims about edits.
+Only claims about code changed this turn count. Claims about an artifact, a doc,
+an issue, a memory note, git bookkeeping (pushed, merged, worktree removed) or
+how existing code behaves are out of scope.
 Answer with JSON `{"verdict":"pass"|"deny","reason":"…"}`. On deny, the reason
 names the claim and the concrete run that would back it, in two sentences.
 

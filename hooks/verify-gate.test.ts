@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { digest, userGrantedSkip } from "./lib/digest.ts";
-import { snapshot } from "./lib/snapshot.ts";
+import { changedFiles, isCode, snapshot, type Snapshot } from "./lib/snapshot.ts";
 
 const HOOKS = import.meta.dir;
 const run = (cwd: string, ...args: string[]) => { const p = Bun.spawnSync(["git", "-c", "user.email=t@t", "-c", "user.name=t", ...args], { cwd, stdout: "ignore", stderr: "pipe" }); if (p.exitCode !== 0) throw new Error(p.stderr.toString()); };
@@ -14,30 +14,40 @@ describe("snapshot", () => {
     root = mkdtempSync(join(tmpdir(), "aleph-snap-"));
     run(root, "init", "-q", "-b", "main");
     writeFileSync(join(root, "a.txt"), "a");
-    run(root, "add", "a.txt"); run(root, "commit", "-q", "-m", "init");
+    writeFileSync(join(root, ".gitignore"), ".worktrees/\n.claude/\n"); // as in aleph
+    run(root, "add", "a.txt", ".gitignore"); run(root, "commit", "-q", "-m", "init");
     run(root, "worktree", "add", "-q", join(root, ".worktrees", "w"), "-b", "feature/w");
   });
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
-  test("is stable, changes on an edit, and sees worktrees", () => {
+  const diff = (a: Snapshot | null, b: Snapshot | null) => changedFiles(a!, b!).sort();
+
+  test("is stable, names an edited file, and sees worktrees", () => {
+    const w = join(root, ".worktrees", "w");
     const s0 = snapshot(root);
-    expect(s0).toMatch(/^[0-9a-f]{64}$/);
-    expect(snapshot(root)).toBe(s0);
-    writeFileSync(join(root, ".worktrees", "w", "b.txt"), "b");
+    expect(diff(s0, snapshot(root))).toEqual([]);
+    writeFileSync(join(w, "b.txt"), "b");
     const s1 = snapshot(root);
-    expect(s1).not.toBe(s0);
-    run(join(root, ".worktrees", "w"), "add", "b.txt"); run(join(root, ".worktrees", "w"), "commit", "-q", "-m", "b");
-    expect(snapshot(root)).not.toBe(s1);
-    expect(snapshot(join(root, ".worktrees", "w"))).toBe(snapshot(root));
+    expect(diff(s0, s1)).toEqual([join(w, "b.txt")]);
+    run(w, "add", "b.txt"); run(w, "commit", "-q", "-m", "b");
+    expect(diff(s1, snapshot(root))).toEqual([join(w, "b.txt")]);
+    expect(snapshot(w)).toEqual(snapshot(root));
   });
-  test("changes when the contents of an untracked file change", () => {
+  test("names an untracked file whose contents change, and not one that stays the same", () => {
     const w = join(root, ".worktrees", "w");
     writeFileSync(join(w, "u.txt"), "one");
+    writeFileSync(join(w, "same.txt"), "same");
     const s0 = snapshot(w);
     writeFileSync(join(w, "u.txt"), "two");
-    const s1 = snapshot(w);
-    expect(s1).not.toBe(s0);
-    expect(snapshot(w)).toBe(s1);
+    expect(diff(s0, snapshot(w))).toEqual([join(w, "u.txt")]);
+  });
+  test("names the files a worktree created this turn commits", () => {
+    const s0 = snapshot(root);
+    const n = join(root, ".worktrees", "n");
+    run(root, "worktree", "add", "-q", n, "-b", "feature/n");
+    expect(diff(s0, snapshot(root))).toEqual([]);
+    writeFileSync(join(n, "n.ts"), "n"); run(n, "add", "n.ts"); run(n, "commit", "-q", "-m", "n");
+    expect(diff(s0, snapshot(root))).toEqual([join(n, "n.ts")]);
   });
   test("leaves out a subagent's worktree under .claude/worktrees, except from inside it", () => {
     const agent = join(root, ".claude", "worktrees", "agent-x");
@@ -45,8 +55,12 @@ describe("snapshot", () => {
     const s0 = snapshot(root);
     const inside0 = snapshot(agent);
     writeFileSync(join(agent, "c.txt"), "c");
-    expect(snapshot(root)).toBe(s0);
-    expect(snapshot(agent)).not.toBe(inside0);
+    expect(diff(s0, snapshot(root))).toEqual([]);
+    expect(diff(inside0, snapshot(agent))).toEqual([join(agent, "c.txt")]);
+  });
+  test("a doc is not code", () => {
+    expect(isCode("/r/docs/verify-gate.md")).toBe(false);
+    expect(isCode("/r/hooks/verify-gate.ts")).toBe(true);
   });
   test("is null outside a repo", () => {
     const plain = mkdtempSync(join(tmpdir(), "aleph-plain-"));
@@ -140,6 +154,17 @@ describe("verify-gate hook", () => {
     await fire("UserPromptSubmit", "p1");
     const before = posted.length;
     const r = await fire("Stop", "p1", { last_assistant_message: "hi" });
+    expect(r.stdout).toBe("");
+    expect(posted.length).toBe(before);
+  });
+
+  test("a change to docs only: passes silently, posts nothing", async () => {
+    transcript(transcriptPath, "p0", [user("write a note"), toolUse("t1", "Write", { file_path: join(root, "notes.md") }), toolResult("t1", "ok"), say("Published the page, version 3.")]);
+    await fire("UserPromptSubmit", "p0");
+    writeFileSync(join(root, "notes.md"), "a doc");
+    writeFileSync(verdictFile, '{"verdict":"deny","reason":"should not be consulted"}');
+    const before = posted.length;
+    const r = await fire("Stop", "p0", { last_assistant_message: "Published the page, version 3." });
     expect(r.stdout).toBe("");
     expect(posted.length).toBe(before);
   });

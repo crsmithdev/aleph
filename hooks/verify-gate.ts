@@ -16,7 +16,7 @@ import { backing, unbackedHashes } from "./lib/hashes.ts";
 import { peek, put, take } from "./lib/handshake.ts";
 import { judge } from "./lib/judge.ts";
 import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type Span } from "./lib/otlp.ts";
-import { snapshot } from "./lib/snapshot.ts";
+import { changedFiles, isCode, snapshot, type Snapshot } from "./lib/snapshot.ts";
 
 const input = JSON.parse(await Bun.stdin.text());
 const event: string = input.hook_event_name;
@@ -35,18 +35,19 @@ if (event === "UserPromptSubmit") {
 if (event !== "Stop") process.exit(0);
 
 const started = Date.now();
-const before = peek(`snap:${promptId}`)?.input as string | undefined;
+const before = peek(`snap:${promptId}`)?.input as Snapshot | undefined;
 const after = snapshot(cwd);
 const d = digest(input.transcript_path ?? "", promptId, input.last_assistant_message ?? "");
-const treeChanged = before !== undefined && after !== undefined && after !== null && before !== after;
-const changed = treeChanged || (after === null && d.edits.length > 0);
+// Only a change to code wakes the gate: docs, artifacts outside the repo and chat answers do not.
+const codeChanged = typeof before === "object" && after !== null && changedFiles(before, after).some(isCode);
+const changed = codeChanged || (after === null && d.edits.some(isCode));
 const unbacked = (message: string, transcript: string | undefined, id: string) => unbackedHashes(message, backing(readEntries(transcript ?? "", id)));
 
 type Outcome = { verdict: "pass" | "deny"; kind: "unchanged" | "skip" | "forced" | "hash" | "doc-claim" | "judged" | "fail-open"; reason: string; score?: number; judgeMs?: number; by?: string; jevClaim?: number | null };
 let outcome: Outcome;
 
 if (!changed) {
-  outcome = { verdict: "pass", kind: "unchanged", reason: "no change to the tree this turn" };
+  outcome = { verdict: "pass", kind: "unchanged", reason: "no change to code this turn" };
 } else if (userGrantedSkip(d.prompt)) {
   outcome = { verdict: "pass", kind: "skip", reason: "user said skip verify", score: 1 };
 } else {
