@@ -150,7 +150,7 @@ function detail(params: Record<string, string>, url: URL): Response {
     if (q) c.question = q;
     if (stored.options.length) c.decision = stored;
     c.ask = stored; c.reason = stored.reason; c.askKind = stored.kind;
-    ask = attend({ runs: [], issues: [c] }, {}, []).items[0];
+    ask = attend({ runs: [], issues: [c] }, []).items[0];
   }
 
   return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });

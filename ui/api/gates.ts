@@ -6,7 +6,7 @@
  * `POST /api/standing/:reason` (standing.ts).
  */
 import { join } from "node:path";
-import { ASK_REASONS, readAlways, routeOf } from "../../jobs/lib/ask.ts";
+import { ASK_REASONS, readAlways } from "../../jobs/lib/ask.ts";
 import { allHolds, baselines, factoryRepos, gates, redMains, waiting } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
 import { readFactoryLog } from "../../jobs/lib/layout.ts";
@@ -26,13 +26,12 @@ const DAY = 86_400_000;
 /** The Ask reasons whose Asks are host chores: a step on this machine that Chris marks checked. */
 const CHORES = new Set(["host-check"]);
 
-export type By = "You" | "Rule" | "Firefighter" | "Gate";
+export type By = "You" | "Rule" | "Director" | "Firefighter" | "Gate";
 export interface LogEntry { at: string; by: By; item: string; what: string; count?: number; first?: string }
 
-/** The Asks routed to Chris, split into the ones to decide and the host chores. */
+/** The Asks, split into the ones to decide and the host chores. One the director still holds shows with no action (asks.ts). */
 export function splitAsks(items: AskItem[]): { asks: AskItem[]; chores: AskItem[] } {
-  const mine = items.filter((a) => routeOf(a.reason) === "chris");
-  return { asks: mine.filter((a) => !CHORES.has(a.reason)), chores: mine.filter((a) => CHORES.has(a.reason)) };
+  return { asks: items.filter((a) => !CHORES.has(a.reason)), chores: items.filter((a) => CHORES.has(a.reason)) };
 }
 
 /**
@@ -62,7 +61,10 @@ export async function securityFacts(): Promise<{ held: string[]; sandbox: unknow
 
 const REF = /\b[a-z][\w.]*?-\d+(?:\.\d+)?\b/i;
 
-/** The Rule and Firefighter lines of tick.log: the Always actions (`always:`, `<name>: always:`, `standing:`) and the firefighter's lines. */
+/**
+ * The Rule, Director and Firefighter lines of tick.log: the Always actions (`always:`, `<name>: always:`, `standing:`),
+ * the director's decisions (`director: <ref>: <reason>: decided|escalated: …`, director.ts) and the firefighter's lines.
+ */
 function tickEntries(): LogEntry[] {
   const raw = readFactoryLog();
   const out: LogEntry[] = [];
@@ -75,6 +77,7 @@ function tickEntries(): LogEntry[] {
     else if ((e = /^always: (\S+): (\S+) on (\S+)$/.exec(line))) out.push({ at, by: "Rule", item: e[3], what: `${e[1]}: ${e[2]}` });
     else if ((e = /^(\S+): always: (.*)$/.exec(line))) out.push({ at, by: "Rule", item: e[1], what: e[2] });
     else if ((e = /^standing: (.*)$/.exec(line))) out.push({ at, by: "Rule", item: REF.exec(e[1])?.[0] ?? "", what: e[1] });
+    else if ((e = /^director: (\S+): (.*)$/.exec(line))) out.push({ at, by: "Director", item: e[1], what: e[2] });
     else if ((e = /^firefighter[: ] ?(.*)$/.exec(line))) out.push({ at, by: "Firefighter", item: REF.exec(e[1])?.[0] ?? "", what: e[1] });
   }
   return out;
@@ -111,7 +114,7 @@ function collapse(entries: LogEntry[]): LogEntry[] {
   return out;
 }
 
-/** The log: the gate holds, the Always rules Chris set, the Rule and Firefighter lines and his answers; the last LOG_DAYS days, newest first, LOG_MAX of each actor at most, so a busy actor does not push the others out. */
+/** The log: the gate holds, the Always rules Chris set, the Rule, Director and Firefighter lines and his answers; the last LOG_DAYS days, newest first, LOG_MAX of each actor at most, so a busy actor does not push the others out. */
 export function log(now = Date.now()): LogEntry[] {
   const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h): LogEntry => ({ at: h.at, by: "Gate", item: h.name, what: `${h.kind}: ${h.text}` })));
   const seen: Record<string, number> = {};

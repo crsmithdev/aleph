@@ -21,7 +21,7 @@ export interface CheckResult { name: string; ok: boolean; seconds: number; passe
 export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
 
 export interface Run {
-  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "explain" | "agent" | "monitor";
+  kind: "build" | "plain" | "land" | "triage" | "recheck" | "plan" | "facts" | "firefighter" | "director" | "explain" | "agent" | "monitor";
   job: string; name: string; repo?: string; branch?: string; worktree?: string;
   condition: State; phase?: string;
   reason?: string; question?: string; say?: string;
@@ -79,7 +79,7 @@ export interface Run {
   /** A land of a held run: the commit gets `Held-by: <lander>`. */
   held?: boolean;
   /** Who landed a held run: absent (a run from before this field) means Chris. */
-  lander?: "Chris" | "firefighter";
+  lander?: "Chris" | "firefighter" | "director";
   /** Sidetone's flag: the news line went out. `shown` is the report's. */
   told: boolean; shown?: boolean; started: string; ended?: string;
   /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */

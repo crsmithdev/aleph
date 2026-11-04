@@ -124,7 +124,7 @@ export interface State {
   /** The planner's runs, the running ones first, then the latest finished. */
   planner: Job[];
   /** The Always rules, with how many asks each reason hands to the firefighter. */
-  always: { reason: string; action: string; at: string; handed: number }[];
+  always: { reason: string; action: string; at: string }[];
   /** Jobs landed and issues triaged in the last 24 hours, with the 7-day daily average. */
   velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
@@ -453,7 +453,7 @@ export function state(now = new Date()): State {
   fresh.sort((a, b) => b.created.localeCompare(a.created));
   const granted = readAlways();
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
-  const att = attend({ runs: needs, issues: awaitingItems }, granted);
+  const att = attend({ runs: needs, issues: awaitingItems });
   // The run behind an ask: its live-run mark, its trailers and its notes.
   for (const a of att.items) {
     const j = a.key.startsWith("run:") ? needs.find((x) => `run:${x.name}` === a.key) : undefined;
@@ -470,7 +470,7 @@ export function state(now = new Date()): State {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...tickTimer(), monitor: monitorPanel() },
     asks: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
-    always: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at, handed: att.handed[reason] ?? 0 })),
+    always: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at })),
     stuck, running, runningIssues, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES),
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
     // Lands: land runs in progress first, then the latest landed, DELIVERED in all.

@@ -14,7 +14,7 @@ test("issues that wait for triage are not rows and not in the status line: triag
 
 test("an old prose note gets a Problem with no tag or lead, Approve recommendation and Deny", () => {
   const note = "triage: for Chris: Should `ui/x.ts` use A or B?\nA is simpler. My recommendation is A, because it is simpler. Then more words.";
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: note }]), stuck: [], issues: [], factory: { ...state.factory, health: [] } };
+  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: note, ask: { kind: "input", reason: "question", question: note, options: [], why: [], situation: "Should ui/x.ts use A or B?" } }]), stuck: [], issues: [], factory: { ...state.factory, health: [] } };
   const [row] = rows(withAttn(s));
   expect(problem(row)).not.toContain("triage: for Chris");
   expect(row).toContain('data-label="Approve recommendation"');
@@ -24,9 +24,11 @@ test("an old prose note gets a Problem with no tag or lead, Approve recommendati
   expect(row.match(/<details class="more"/g)?.length).toBe(1);
 });
 
+/** The case text the director writes when it escalates: until then, the row offers no action. */
+const CASE = { situation: "The director sent it to you." };
 const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } => {
-  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", condition: "awaiting", ask: { kind: why === "held-path" || why === "review" ? "approval" : "input", reason: why }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
-  const iss = (o: object) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o }], lessons: [] as any[] });
+  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", condition: "awaiting", ask: { kind: why === "held-path" || why === "review" ? "approval" : "input", reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
+  const iss = (o: any) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o, ask: { kind: "input", reason: o.reason, question: o.question, options: [], why: [], ...CASE } }], lessons: [] as any[] });
   if (["held-path", "review"].includes(reason)) return run(reason, reason === "review" ? { reviewCall: { call: "ask", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
   if (reason.startsWith("proposal-")) return { runs: [] as any[], issues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
@@ -40,7 +42,6 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
     "part-dropped": { reason: "part-dropped", question: "A goal was dropped." },
     "acceptance-failed": { reason: "acceptance-failed", question: "acceptance: fail again" },
     rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", kind: "input" as const, reason: "question", why: [] } },
-    firefighter: { reason: "firefighter", question: "x changes y.ts, a held security path" },
   };
   return iss(q[reason]);
 };
@@ -48,7 +49,7 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
 test("the deny and answer inputs render hidden", () => {
   for (const reason of ["question", "host-check"]) {
     const sm = sample(reason);
-    const row = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: attend(sm, {}, sm.lessons).items }).match(/<article [^]*?<\/article>/)![0];
+    const row = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: attend(sm, sm.lessons).items }).match(/<article [^]*?<\/article>/)![0];
     const inputs = row.match(/<input [^>]*>/g) ?? [];
     expect(inputs.length).toBeGreaterThan(0);
     for (const i of inputs) expect(i).toMatch(/\shidden/);

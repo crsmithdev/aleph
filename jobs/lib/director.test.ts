@@ -1,0 +1,193 @@
+// The director: every new Ask goes to it; it decides with actions code applies, or escalates with case text. The escalation
+// list, the action bound, the once-per-goal rerun and the record are code's, whatever the fake replies.
+import { expect, test } from "bun:test";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import * as issues from "../../todo/lib/todo.ts";
+import { awaitsChris, writeList } from "../../todo/lib/store.ts";
+import { plainAsk, setAsk } from "./ask.ts";
+import { directAll, MAX_ACTIONS, pendingCases, readRecord } from "./director.ts";
+import { directorStep } from "./factory.ts";
+import { allRuns, loadRegistry, readRun } from "./ledger.ts";
+import { setPaused } from "./factory-status.ts";
+import { readStore } from "./corrections.ts";
+import { asked, base, branch, calls, choice, dropped, fresh, item, key, landed, log, n, plain, ports, reply, replyWith, run, useFirefighterFixture } from "./firefighter.fixture.ts";
+
+useFirefighterFixture();
+
+const repo = () => loadRegistry()[key];
+const direct = () => directAll([repo()], ports());
+const directorRuns = () => allRuns().filter((e) => e.run.kind === "director");
+const prompt = () => readFileSync(join(base, "prompt.md"), "utf8");
+const TEXT = { situation: "The goal asks for page A or B.", effects: [{ action: "decide:A", text: "Builds page A." }, { action: "decide:B", text: "Builds page B." }, { action: "deny", text: "Closes the question." }], recommend: { action: "decide:A", why: "Chris chose A before." } };
+
+test("a decided Ask: code applies the answer, clears the Ask, and logs a Director decision and its record", async () => {
+  fresh([{ title: "product", ask: choice() }]);
+  writeFileSync(join(base, "needs-you-log.md"), "- 2026-11-01: NEEDS-MARK Chris chose A\n");
+  reply([{ do: "answer", option: "A", note: "page A, as before" }]);
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "decided", ref: `${key}-1`, reason: "question", applied: ["answer: A: page A, as before"] });
+  expect(asked(1)).toBeNull();
+  expect(item(1).notes.at(-1)).toContain("director decided: A: page A. page A, as before");
+  expect(log()).toContain(`director: ${key}-1: question: decided: answer: A: page A, as before`);
+  expect(readRecord()).toEqual([expect.objectContaining({ ref: `${key}-1`, outcome: "decided" })]);
+  const [r] = directorRuns();
+  expect(r.run).toMatchObject({ condition: "done", model: "claude-fable-5-1", on: `${key}-1` });
+  // The prompt names the vault decisions and the needs-you log under the test's base, never ~/.aleph.
+  expect(prompt()).toContain(join(base, "vault", "wiki", "decisions"));
+  expect(prompt()).toContain(join(base, "needs-you-log.md"));
+  expect(prompt()).toContain("NEEDS-MARK Chris chose A");
+  // Decided: the next sweep opens no run.
+  await direct();
+  expect(calls()).toBe(1);
+});
+
+test("an escalated Ask gets the director's case text and stays with Chris", async () => {
+  fresh([{ title: "product", ask: choice() }]);
+  replyWith({ escalate: TEXT });
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "escalated", why: "the director did not decide" });
+  const a = asked(1)!;
+  expect(a.situation).toBe(TEXT.situation);
+  expect(a.recommend).toEqual(TEXT.recommend);
+  expect(awaitsChris(item(1))).toBe(true);
+  expect(log()).toContain(`director: ${key}-1: question: escalated: the director did not decide`);
+  // Escalated once: no second run.
+  await direct();
+  expect(calls()).toBe(1);
+  expect(pendingCases([repo()])).toEqual([]);
+});
+
+test("a failed run or a malformed reply sends the Ask to Chris with a fallback case text", async () => {
+  fresh([{ title: "q", ask: plain() }, { title: "r", ask: plain("which test?") }]);
+  replyWith("not json");
+  const out = await direct();
+  expect(out.map((d) => d.outcome)).toEqual(["escalated", "escalated"]);
+  expect(asked(1)!.situation).toStartWith("The director did not decide this Ask: its reply was malformed");
+  expect(asked(2)!.situation).toStartWith("The director did not decide this Ask");
+});
+
+test("actions that leave the Ask open send it to Chris when the run ends", async () => {
+  fresh([{ title: "q", ask: plain() }]);
+  reply([{ do: "note", text: "looked at it" }]);
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "escalated", applied: ["note: looked at it"] });
+  expect(asked(1)!.situation).toContain("its actions left the Ask open");
+});
+
+test("the escalation list: a land on a security path and a host check get case text and no action", async () => {
+  fresh([{ title: "held", goal: true }, { title: "check", ask: plainAsk("host-check", "look at the dashboard") }]);
+  branch(`b${n}`, "hooks/x.ts");
+  const folder = run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "Land it?", options: [], why: [] }, branch: `b${n}` });
+  reply([{ do: "land" }, { do: "answer", note: "checked" }]);
+  const out = await direct();
+  expect(out.map((d) => [d.ref, d.outcome, d.why])).toEqual([
+    [`${key}-2`, "escalated", "a host check is Chris's while host access is off"],
+    [`${key}-1`, "escalated", "the run changes hooks/x.ts, a security path or bun.lock, so its land is Chris's"],
+  ]);
+  expect(out.every((d) => d.applied.length === 0 && d.refused.every((r) => r.endsWith("the Ask is on the escalation list")))).toBe(true);
+  expect(landed).toEqual([]);
+  expect(awaitsChris(item(2))).toBe(true);
+  expect(readRun(folder)!.ask!.situation).toStartWith("The director did not decide this Ask");
+  expect(prompt()).toContain("This Ask is on the escalation list");
+});
+
+test("a review Ask on a run that changes bun.lock or a security path is Chris's; one that changes neither the director lands", async () => {
+  fresh([{ title: "lock", goal: true }]);
+  branch(`lock${n}`, "bun.lock");
+  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "review", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
+  reply([{ do: "land" }]);
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "escalated", why: "the run changes bun.lock, a security path or bun.lock, so its land is Chris's" });
+  expect(landed).toEqual([]);
+
+  fresh([{ title: "plain", goal: true }]);
+  branch(`ok${n}`, "src/a.ts");
+  const folder = run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "review", question: "Land?", options: [], why: [] }, branch: `ok${n}` });
+  const [e] = await direct();
+  expect(e).toMatchObject({ outcome: "decided", applied: ["land"] });
+  expect(landed).toEqual([`${key}-1`]);
+  // The land runs in its own unit and the run still awaits: the Ask gets no "with you" text, so Chris sees no buttons on a landing run.
+  expect(readRun(folder)!.condition).toBe("awaiting");
+  expect(readRun(folder)!.ask!.situation ?? "").toBe("");
+});
+
+test("a memory proposal is on the escalation list: the director's case text goes on the lesson, and no action is taken", async () => {
+  fresh();
+  mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
+  const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", title: "Check x.ts", signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "you forgot x.ts", link: "" }] };
+  writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "corrections.json"), JSON.stringify({ minedAt: "", lessons: [lesson] }));
+  replyWith({ escalate: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files a goal." }, { action: "decline", text: "Drops it." }], recommend: { action: "decline", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
+  const [d] = await direct();
+  expect(d).toMatchObject({ ref: "l-1", reason: "proposal-claude-md", outcome: "escalated", why: "a memory proposal is Chris's", applied: [] });
+  const l = readStore().lessons[0];
+  expect(l.situation).toBe("The lesson says to check x.ts.");
+  expect(l.recommend).toEqual({ action: "decline", why: "Too vague." });
+  expect(l.state).toBe("proposed");
+});
+
+test("closing or dropping an issue Chris filed is refused; the same on an agent's issue is applied", async () => {
+  fresh([{ title: "mine", goal: true, ask: plainAsk("no-commit", "3 runs, no commit") }, { title: "agent's", goal: true, source: "agent", ask: plainAsk("no-commit", "3 runs, no commit") }]);
+  reply([{ do: "close", note: "met on main" }]);
+  const [a, b] = await direct();
+  expect(a).toMatchObject({ ref: `${key}-1`, outcome: "escalated" });
+  expect(a.refused).toEqual([`close: met on main: ${key}-1 was filed by Chris, so closing or dropping it is his`]);
+  expect(issues.status(item(1))).toBe("open");
+  expect(b).toMatchObject({ ref: `${key}-2`, outcome: "decided", applied: ["close: met on main"] });
+  expect(issues.status(item(2))).toBe("done");
+});
+
+test(`at most ${MAX_ACTIONS} actions: the 11th is refused`, async () => {
+  fresh([{ title: "q", ask: plain() }]);
+  reply([...Array.from({ length: 10 }, (_, i) => ({ do: "note", text: `note ${i + 1}` })), { do: "rerun" }]);
+  const [d] = await direct();
+  expect(d.applied.length).toBe(10);
+  expect(d.refused).toEqual(["rerun: more than 10 actions in one run"]);
+  expect(awaitsChris(item(1))).toBe(true);
+});
+
+test("a run-cap Ask: the director reruns the goal once; the second run-cap Ask on it goes to Chris", async () => {
+  fresh([{ title: "loops", goal: true, ask: plainAsk("run-cap", "3 starts in an hour") }]);
+  reply([{ do: "rerun" }]);
+  const [first] = await direct();
+  expect(first).toMatchObject({ outcome: "decided", applied: ["rerun"] });
+  expect(asked(1)).toBeNull();
+  writeList({ key }, "again", (doc) => { setAsk(issues.find(doc, 1)!, plainAsk("run-cap", "3 starts in an hour, again")); return true; });
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "escalated", why: `the director already decided a run-cap Ask on ${key}-1; the second goes to Chris` });
+  expect(awaitsChris(item(1))).toBe(true);
+  expect(prompt()).toContain("This Ask is on the escalation list");
+});
+
+test("a spec-check Ask: a full spec edit answers it, at most MAX_SPEC_EDITS times; then the edit is refused", async () => {
+  const full = "## Goal\nShip.\n\n## Edit surface\n- a.ts: x\n\n## Oracle\n- it ships";
+  fresh([{ title: "goal", goal: true, ask: plainAsk("spec-check", "no Oracle") }]);
+  reply([{ do: "edit-goal", body: full }]);
+  for (const k of [1, 2]) {
+    const [d] = await direct();
+    expect(d).toMatchObject({ outcome: "decided", applied: ["edit-goal (spec)"] });
+    expect(asked(1)).toBeNull();
+    expect(item(1).notes.some((x) => x.includes(`director: edited the spec (${k} of 2)`))).toBe(true);
+    writeList({ key }, "hold again", (doc) => { setAsk(issues.find(doc, 1)!, plainAsk("spec-check", `no Oracle ${k}`)); return true; });
+  }
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "escalated" });
+  expect(d.refused).toEqual([`edit-goal (spec): the spec of ${key}-1 was edited 2 times; close it or escalate`]);
+});
+
+test("a worker's question on a run: the director's answer drops the job with the answer as the next run's note", async () => {
+  fresh([{ title: "goal", goal: true }]);
+  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  reply([{ do: "answer", note: "use ask.ts" }]);
+  const [d] = await direct();
+  expect(d).toMatchObject({ outcome: "decided" });
+  expect(dropped).toEqual([{ name: `${key}-1`, reason: `The director answered the worker's question "which module?": use ask.ts` }]);
+  expect(existsSync(join(process.env.ALEPH_FACTORY_DIR!, "rerun", `${key}-1.md`))).toBe(true);
+});
+
+test("a paused factory starts no director run", async () => {
+  fresh([{ title: "q", ask: plain() }]);
+  setPaused(true);
+  try { expect(await directorStep(ports())).toEqual([]); } finally { setPaused(false); }
+  expect(calls()).toBe(0);
+});

@@ -1,6 +1,6 @@
 // Archived goal tests from ui/asks-live.test.ts: `bun run accept` runs them, `bun run test` does not.
 /**
- * The whole path of an Ask's case text: a host-check Ask raised the way triage raises it, the explainer sweep with a fake
+ * The whole path of an Ask's case text: a host-check Ask raised the way triage raises it, the director's sweep with a fake
  * `claude`, the API, and the page in Chrome (Awaiting you on Status, and the Issue page). Two screenshots are written to `ALEPH_SHOTS_DIR`, or a folder in the system temp dir, outside the temp dir, so they outlive the test and can be committed.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -10,7 +10,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import { askOf, plainAsk, setAsk } from "../../jobs/lib/ask.ts";
-import { explainStep } from "../../jobs/lib/explain.ts";
+import { directAll } from "../../jobs/lib/director.ts";
 import { chromeUsable, startRig, type Page, type Rig } from "../../ui/test-browser.ts";
 
 /** Not under the test's temp dir: afterAll deletes that, and the screenshots are for review. `ui/shots` is tracked, so a run writes there only when asked. */
@@ -19,11 +19,11 @@ const FILES = ["vault/Notes/plan.md", "vault/Notes/people.md"];
 const FAKE = `#!/bin/bash
 prompt=$(cat)
 case $prompt in *"vault/Notes/plan.md"*) ;; *) echo "not the vault case" >&2; exit 3 ;; esac
-echo '{"situation":"The run left two untracked vault notes, vault/Notes/plan.md and vault/Notes/people.md, that only the host can check.","effects":[{"action":"checked","text":"Records a claim that you looked at vault/Notes/plan.md and vault/Notes/people.md; it runs nothing."},{"action":"deny","text":"Drops the check, so vault/Notes/plan.md and vault/Notes/people.md stay unchecked."}],"recommend":{"action":"checked","why":"the notes are only on the host"}}'
+echo '{"escalate":{"situation":"The run left two untracked vault notes, vault/Notes/plan.md and vault/Notes/people.md, that only the host can check.","effects":[{"action":"checked","text":"Records a claim that you looked at vault/Notes/plan.md and vault/Notes/people.md; it runs nothing."},{"action":"deny","text":"Drops the check, so vault/Notes/plan.md and vault/Notes/people.md stay unchecked."}],"recommend":{"action":"checked","why":"the notes are only on the host"}}}'
 `;
 const FIXED = "It runs nothing and tests nothing.";
 
-describe.skipIf(!chromeUsable)("an explained Ask, from the store to the page", () => {
+describe.skipIf(!chromeUsable)("an Ask the director escalated, from the store to the page", () => {
   let rig: Rig, page: Page, tmp: string, ref = "", shots: string[] = [];
   const saved = { ...process.env };
   beforeAll(async () => {
@@ -33,7 +33,8 @@ describe.skipIf(!chromeUsable)("an explained Ask, from the store to the page", (
     rig = await startRig(async (env) => {
       Object.assign(process.env, env, {
         GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t",
-        ALEPH_EXPLAIN_CMD: join(tmp, "fake"), ALEPH_FACTORY_DIR: join(tmp, "factory"), ALEPH_DISPATCH: "off", ALEPH_EXPLAIN_CAP: "50", XDG_RUNTIME_DIR: join(tmp, "run"),
+        ALEPH_DIRECTOR_CMD: join(tmp, "fake"), ALEPH_FACTORY_DIR: join(tmp, "factory"), ALEPH_DISPATCH: "off", ALEPH_DIRECTOR_CAP: "50", XDG_RUNTIME_DIR: join(tmp, "run"),
+        ALEPH_VAULT: join(tmp, "vault"), ALEPH_NEEDS_YOU_LOG: join(tmp, "needs-you-log.md"),
       });
       let id = 0;
       writeList({ key: "demo" }, "asks-live", (doc) => {
@@ -43,9 +44,9 @@ describe.skipIf(!chromeUsable)("an explained Ask, from the store to the page", (
         return true;
       }, true);
       ref = `demo-${id}`;
-      const lines = await explainStep();
-      // The fixture has other Asks without text; the fake leaves them as they are (it exits 3), so only this one is explained.
-      expect(lines).toContain(`${ref}: explained`);
+      const decisions = await directAll();
+      // A host check is on the escalation list. The fixture has other Asks without text; the fake fails on them (it exits 3), so they get the fallback text.
+      expect(decisions.find((d) => d.ref === ref)).toMatchObject({ outcome: "escalated", why: "a host check is Chris's while host access is off" });
     });
     page = await rig.open();
   }, 120_000);

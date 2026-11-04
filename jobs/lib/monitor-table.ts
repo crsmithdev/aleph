@@ -103,7 +103,7 @@ export const LEFT_OUT = [
 const NOT_HELD = new Set(["open", "started", "start", "done"]);
 
 /** The table's stage order; a stage with no run is left out. */
-const STAGES = ["triage", "plan", "spec-check", "build", "review", "recheck", "land", "facts", "explain", "firefighter", "monitor"];
+const STAGES = ["triage", "plan", "spec-check", "build", "review", "recheck", "land", "facts", "explain", "firefighter", "director", "monitor"];
 
 /** Local midnight of `day` (YYYY-MM-DD), in ms. */
 export const dayStart = (day: string): number => new Date(`${day}T00:00:00`).getTime();
@@ -408,7 +408,7 @@ export function readSources(): Sources {
   const lists = reader({ fetch: false });
   const items = keys.flatMap((key) => (lists.list(key)?.items ?? []).map((item) => ({ name: `${key}-${issues.refOf(item)}`, item })));
   return {
-    // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, monitor) is.
+    // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, director, monitor) is.
     runs: allRuns().filter((e) => !e.run.repo || set.has(e.run.repo)),
     holds: allHolds(),
     specChecks: readJsonl(join(layout().factory, "spec-checks.jsonl")),

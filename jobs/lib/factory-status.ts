@@ -105,10 +105,10 @@ function specSpent(now: number): number {
   return sum;
 }
 
-/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and explain runs, which the day cap does not count, and the spec checks. An explain run has no repo (its `on` is an item ref or a run folder), so it is not filtered by one, as a firefighter run is not. */
+/** The dollars of the runs started in the last 24 hours: `runsToday`, and the facts, firefighter and director runs (and the explain runs from before the director), which the day cap does not count, and the spec checks. A director run has no repo (its `on` is an item ref, a run folder or a lesson id), so it is not filtered by one, as a firefighter run is not. */
 export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number {
   const keys = new Set(sandboxRepos().map((r) => r.key));
-  const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "explain" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
+  const others = runs.filter((e) => (e.run.kind === "firefighter" || e.run.kind === "director" || e.run.kind === "explain" || (e.run.kind === "facts" && e.run.repo && keys.has(e.run.repo))) && now - Date.parse(e.run.started) < DAY);
   return [...runsToday(now, runs), ...others].reduce((a, e) => a + (e.run.cost ?? 0), 0) + specSpent(now);
 }
 

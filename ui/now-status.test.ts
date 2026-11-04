@@ -107,16 +107,18 @@ test("the most flaked line stays in the report and off the status sentence and t
 
 test("the status line says your attention is needed when the Issues section has an item", () => {
   const calm = { ...state, asks: [], stuck: [], issues: [], factory: { ...state.factory, health: [], hold: undefined, paused: false } };
-  for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q" }]) }]) {
+  for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { kind: "input", reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {
     const h = view.renderLede({ ...calm, ...o });
     expect(h).toContain("your attention is needed");
     expect(h).not.toContain("Awaiting");
   }
 });
 
-test("a held run that waits for the firefighter still asks for your attention", () => {
+test("a held run asks for your attention once the director escalates it, and not while the director holds it", () => {
   const calm = { ...state, stuck: [], factory: { ...state.factory, health: [] } };
-  const asks = attend({ runs: [held], issues: [] }, { "held-path": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } }, []).items;
+  const withDirector = attend({ runs: [held], issues: [] }, []).items;
+  expect(view.renderLede({ ...calm, asks: withDirector })).not.toContain("your attention is needed");
+  const asks = attend({ runs: [{ ...held, ask: { ...held.ask, situation: "It changes hooks/lib/digest.ts." } }], issues: [] }, []).items;
   const h = view.renderLede({ ...calm, asks });
   expect(h).toContain("your attention is needed");
   expect(h).toContain('class="say warning"');

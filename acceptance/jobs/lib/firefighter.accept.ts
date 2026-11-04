@@ -54,6 +54,6 @@ test("prompt lists after in the drop and edit-goal lines, and says a note alone 
   const lines = p.split("\n");
   expect(lines.find((l) => l.startsWith('- {"do": "drop"'))).toContain('"after"');
   expect(lines.find((l) => l.startsWith('- {"do": "edit-goal"'))).toContain('"after"');
-  expect(lines.find((l) => l.startsWith('- {"do": "answer"'))).toContain('"after"');
+  expect(lines.find((l) => l.startsWith('- {"do": "answer"'))).toBeUndefined();
   expect(p).toContain("A note or a drop reason alone does not stop a rerun.");
 });

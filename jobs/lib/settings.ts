@@ -59,8 +59,8 @@ export const DAY_CAP = () => cap("ALEPH_DAY_CAP", "day", 12);
 export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", 10);
 /** The most open jobs awaiting Chris before no new run starts. */
 export const AWAITING_CAP = () => cap("ALEPH_AWAITING_CAP", "awaiting", 5);
-export const EXPLAIN_CAP = () => num("ALEPH_EXPLAIN_CAP", 3);
-export const EXPLAIN_TRIES = () => num("ALEPH_EXPLAIN_TRIES", 2);
+/** The most director runs one tick starts, one per Ask. */
+export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 /** Goals failing acceptance at one commit, at which none of them reopens. */
 export const acceptanceFailCap = () => { const n = Math.floor(Number(process.env.ALEPH_ACCEPTANCE_FAIL_CAP)); return n >= 1 ? n : 5; };
 export const TRIAGE_CAP = () => num("ALEPH_TRIAGE_CAP", 5);
@@ -100,6 +100,8 @@ export const reviewerCmd = () => process.env.ALEPH_REVIEWER_CMD ?? workerCmd();
 /** The vault folder. */
 export function vaultDir(): string { return process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault"); }
 /** The handoffs folder: beside the vault (the link, not its target) unless the environment names it. */
+/** Chris's log of what reached him and why: the director reads it, and code does not. */
+export const needsYouLog = (): string => process.env.ALEPH_NEEDS_YOU_LOG ?? join(dirname(resolve(vaultDir())), "needs-you-log.md");
 export const handoffsDir = (): string => process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), "handoffs");
 
 /** The id of the job this process runs for, if any. */

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
-import { applyActions } from "./firefighter.ts";
+import { applyActions, pendingCases } from "./director.ts";
+import { loadRegistry } from "./ledger.ts";
 import { askOf } from "./ask.ts";
 import { goal, mk, ask, fakes, setup, teardown } from "./factory.helpers.ts";
 
@@ -30,15 +31,17 @@ test("a QUESTION run waits for a spec edit: the Ask says so, and an edit drops t
   expect(f.specs.length).toBe(1);
 });
 
-test("a spec QUESTION run, then the firefighter's answer: the job keeps its Ask or is started again, never open with neither", async () => {
+test("a spec QUESTION run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {
   const id = goal();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": "Stopped.\nQUESTION: which wins?" });
   const f = fakes();
   // The real rescue path sets the plain question Ask and writes asked-spec.
   await dispatchIssues(f.start, undefined, undefined, f.rescue);
   expect(ask(id)?.options).toEqual([]);
-  const r = await applyActions([{ do: "answer", repo: "fac", n: id, note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, tell: async () => true, scenarios: async () => ({ state: "none" }) });
-  // The next dispatch: the firefighter's answer must not leave the goal open with no Ask and no run.
+  const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `fac-${id}`)!;
+  if (c.at === "lesson") throw new Error("not an item case");
+  const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, scenarios: async () => ({ state: "none" }) });
+  // The next dispatch: the director's answer must not leave the goal open with no Ask and no run.
   await dispatchIssues(f.start, undefined, undefined, f.rescue);
   const hasAsk = ask(id) !== null;
   const started = f.specs.length > 0;

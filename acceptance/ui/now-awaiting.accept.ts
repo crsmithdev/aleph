@@ -2,9 +2,9 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "../../ui/views/now.js";
-import { attend } from "../../ui/asks.ts";
 import { job, state } from "../../ui/fixtures/status-state.ts";
 import { withAttn, issue, full, prop } from "../../ui/test-now.ts";
+import { sentAsks } from "./escalated.ts";
 
 test("Needs you groups needs you, then stuck or failed; the lanes hold running and queued; every card is compact", () => {
   const h = view.renderNeeds(full);
@@ -43,7 +43,7 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
 
 test("a question ask renders the Answer button with a text input in the same row", () => {
   const sm = sample("question");
-  const items = attend(sm, {}, sm.lessons).items;
+  const items = sentAsks(sm.runs, sm.issues, sm.lessons);
   const h = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: items });
   const row = h.match(/<article class="job-card small issue-row question"[^]*?<\/article>/)![0];
   expect(row).toMatch(/data-act="answer"[^>]*data-name="aleph-27"|data-name="aleph-27"[^>]*data-act="answer"/);

@@ -1,4 +1,4 @@
-// The firefighter's tick: when it starts a run, loops, drops and closes, a pause, and the action limit.
+// The firefighter's tick: when it starts a run, loops, drops and closes, and the action limit.
 import { openRun } from "./agent-run.ts";
 import { beforeAll, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { firefighterStep } from "./factory.ts";
 import { snapshot } from "./firefighter.ts";
 import { readRun } from "./ledger.ts";
-import { dropped, fresh, item, key, plain, ports, reply, repoPath, run, setSealed, sh, useFirefighterFixture } from "./firefighter.fixture.ts";
+import { dropped, fresh, item, key, ports, reply, repoPath, run, setSealed, sh, useFirefighterFixture } from "./firefighter.fixture.ts";
 
 useFirefighterFixture();
 // The repo has an origin/main, as the earlier land test left it when these tests shared one file. With no origin/main,
@@ -62,7 +62,8 @@ test("a close of an item with a failing sealed scenario does not mark it done", 
 });
 
 test("an 11th action in one reply is not applied", async () => {
-  fresh([{ title: "q", ask: plain("which helper?") }]);
+  fresh([{ title: "q", goal: true }]);
+  run({ name: `${key}-1`, condition: "stuck", reason: "no commit", on: `${key}-1` }, {}, 2);
   reply(Array.from({ length: 11 }, (_, i) => ({ do: "note", repo: key, n: 1, text: `note ${i + 1}` })));
   const f = await firefighterStep(ports());
   expect(f?.applied.length).toBe(10);

@@ -10,7 +10,7 @@ import { asCli, call, issueShow, status, type Result } from "../inproc.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { ciStep } from "./ci.ts";
 import { sweep } from "./deps.ts";
-import { behind, correctionsStep, episodeStep, firefighterStep, probeDue, report, runDispatch, stallStep, triageStep } from "./factory.ts";
+import { behind, correctionsStep, episodeStep, directorStep, firefighterStep, probeDue, report, runDispatch, stallStep, triageStep } from "./factory.ts";
 import { factoryDir, factoryRepos, health, hold, paused, setPaused } from "./factory-status.ts";
 import { fetchOrigin } from "./git.ts";
 import { factoryLog } from "./layout.ts";
@@ -65,6 +65,7 @@ export const tick = (extra: Record<string, string> = {}): Promise<any> => asCli(
   await correctionsStep();
   const d: any = await runDispatch();
   const t = !d.held ? await triageStep() : { triaged: {}, skipped: [] };
+  await directorStep();
   const episodes = await episodeStep();
   try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
   try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }

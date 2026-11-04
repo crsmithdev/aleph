@@ -72,7 +72,7 @@ test("a critical item shows the priority badge in Queued, Running and Latest don
 });
 
 test("an ask and a stuck card start their meta row with the id, then the kind mark, the priority, the date and the duration, and keep the choices below the face", () => {
-  const row = view.askRow({ key: "issue:aleph-7", reason: "question", kind: "input", id: "aleph-7", href: "#/issues/aleph/7", title: "Which?", problem: "p", situation: "s", explained: true, repo: "aleph", priority: "high",
+  const row = view.askRow({ key: "issue:aleph-7", reason: "question", kind: "input", id: "aleph-7", href: "#/issues/aleph/7", title: "Which?", problem: "p", situation: "s", escalated: true, repo: "aleph", priority: "high",
     at: "2026-10-27T10:05:00", since: "2026-10-27T09:00:00", part: { n: 1, m: 2, parent: "aleph-6", href: "#/issues/aleph/6" },
     actions: [{ act: "answer", label: "Answer", hint: "h", primary: true, args: {}, recommended: false }], details: {} } as any, "2026-10-27T11:05:00");
   const head = row.match(/<div class="ih">[^]*?<\/div>/)![0];

@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../todo/lib/todo.ts";
-import { always, ASK_REASONS, askNote, askOf, clearAsk, grant, logAlways, readAlways, revoke, routeOf, setAsk, type Ask } from "../../../jobs/lib/ask.ts";
+import { always, ASK_REASONS, askNote, askOf, clearAsk, grant, logAlways, readAlways, revoke, setAsk, type Ask } from "../../../jobs/lib/ask.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
 const ask: Ask = { kind: "approval", reason: "held-path", question: "A or B?", options: [{ label: "A", line: "do a", after: "fac-2.1" }, { label: "B", line: "do b" }], recommended: "B", why: ["w"] };
@@ -90,23 +90,24 @@ test("grant accepts proposal-<kind>:<place> only", () => {
 });
 
 test("ASK_REASONS names every reason with actions and an always", () => {
-  expect(Object.keys(ASK_REASONS).sort()).toEqual(["acceptance-failed", "firefighter", "held-path", "host-check", "no-commit", "part-dropped", "proposal", "proposal-check", "proposal-claude-md", "proposal-skill", "question", "rescue", "review", "run-cap", "spec-check", "triage-failed"]);
+  expect(Object.keys(ASK_REASONS).sort()).toEqual(["acceptance-failed", "held-path", "host-check", "no-commit", "part-dropped", "proposal", "proposal-check", "proposal-claude-md", "proposal-skill", "question", "rescue", "review", "run-cap", "spec-check", "triage-failed"]);
   for (const r of Object.values(ASK_REASONS)) {
     expect(r.actions.length).toBeGreaterThan(0);
-    expect([...r.actions, "firefighter", "recommended", ""]).toContain(r.always);
+    expect([...r.actions, "recommended", ""]).toContain(r.always);
     expect(new Set(r.actions).size).toBe(r.actions.length);
   }
   expect(ASK_REASONS.question.always).toBe("recommended");
   expect(ASK_REASONS["triage-failed"].always).toBe("retry");
   expect(ASK_REASONS.proposal.always).toBe("start");
   expect(ASK_REASONS["host-check"].always).toBe("");
+  // No reason hands its Ask to the firefighter: the director takes every Ask first.
+  for (const r of Object.values(ASK_REASONS)) expect(r.always).not.toBe("firefighter");
 });
 
 test("readAlways reads always.json only; a bad file is empty and a write goes to always.json", () => {
   expect(readAlways()).toEqual({});
-  writeFileSync(join(dir, "always.json"), JSON.stringify({ "held-path": { action: "firefighter", at: "t" } }));
+  writeFileSync(join(dir, "always.json"), JSON.stringify({ "held-path": { action: "land", at: "t" } }));
   expect(Object.keys(readAlways())).toEqual(["held-path"]);
-  expect(routeOf("held-path")).toBe("firefighter");
   expect(grant("rescue", "recommended")).toBeNull();
   expect(Object.keys(readAlways()).sort()).toEqual(["held-path", "rescue"]);
   writeFileSync(join(dir, "always.json"), "not json");
@@ -119,11 +120,11 @@ const cli = (...args: string[]) => {
   return { code: p.exitCode, out: p.stdout.toString(), err: p.stderr.toString() };
 };
 
-test("aleph always grant refuses an unknown reason and takes held-path", () => {
-  const bad = cli("always", "grant", "held", "firefighter");
+test("aleph always grant refuses an unknown reason and the firefighter, and takes held-path", () => {
+  const bad = cli("always", "grant", "held", "land");
   expect(bad.code).toBe(1);
   expect(existsSync(join(dir, "always.json"))).toBe(false);
-  expect(cli("always", "grant", "held-path", "firefighter").code).toBe(0);
+  expect(cli("always", "grant", "held-path", "firefighter").code).toBe(1);
   expect(cli("always", "grant", "held-path", "land").code).toBe(0);
   expect(JSON.parse(readFileSync(join(dir, "always.json"), "utf8"))["held-path"].action).toBe("land");
   expect(JSON.parse(cli("always", "list").out)["held-path"].action).toBe("land");

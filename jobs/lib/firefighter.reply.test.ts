@@ -7,7 +7,7 @@ import { fresh, key, log, ports, reply, useFirefighterFixture } from "./firefigh
 useFirefighterFixture();
 
 test("parseReply reads each action, and names a malformed one", () => {
-  expect(parseReply('Here: {"actions":[{"do":"tell","text":"hi"},{"do":"land"}]}')).toEqual([{ do: "tell", text: "hi" }, "land without a job"]);
+  expect(parseReply('Here: {"actions":[{"do":"tell","text":"hi"},{"do":"land"}]}')).toEqual([{ do: "tell", text: "hi" }, "unknown action \"land\""]);
   expect(parseReply("nothing")).toBe("no JSON object with an actions list");
 });
 

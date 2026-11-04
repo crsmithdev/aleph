@@ -18,9 +18,12 @@ import { routes as proposalRoutes } from "./api/proposals.ts";
 import { storeRepos } from "../tests/git-fixture.ts";
 
 test("the lede says proposals need your attention", () => {
-  const s = { ...state, asks: asksOf([], [], [prop]), stuck: [], factory: { ...state.factory, health: [] } };
+  // A proposal reaches Chris once the director wrote its case text.
+  const sent = { ...prop, situation: "The memory proposes a check." };
+  const s = { ...state, asks: asksOf([], [], [sent]), stuck: [], factory: { ...state.factory, health: [] } };
   expect(view.renderLede(s)).toContain("<a href=\"#awaiting\">your attention is needed</a>.");
-  expect(view.renderLede({ ...s, asks: asksOf([], [], [prop, prop]) })).toContain("your attention is needed");
+  expect(view.renderLede({ ...s, asks: asksOf([], [], [sent, sent]) })).toContain("your attention is needed");
+  expect(view.renderLede({ ...s, asks: asksOf([], [], [prop]) })).not.toContain("your attention is needed");
 });
 
 test("approve and decline handlers", async () => {

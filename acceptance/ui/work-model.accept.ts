@@ -60,7 +60,7 @@ beforeAll(async () => {
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
     setAsk(g, { kind: "approval", reason: "proposal", question: "Update left-pad?", options: [], why: [] });
     const three = add(doc, "A part was dropped", { request: "Plan it.\n" });
-    setAsk(three, { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
+    setAsk(three, { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [], situation: "The director sent the dropped goal to you." });
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);
@@ -88,7 +88,9 @@ describe("/api/state on a work-model store", () => {
     expect(by["run:triage-fac-5"]).toMatchObject({ kind: "input", reason: "triage-failed" });
     // A goal with an Ask, and an issue with an Ask.
     expect(by["issue:fac-2.1"]).toMatchObject({ kind: "approval", reason: "proposal", href: "#/issues/fac/2.1" });
-    expect(by["issue:fac-3"]).toMatchObject({ kind: "input", reason: "part-dropped" });
+    // The director escalated it with its case text, so it has its buttons; the proposal is still with the director and has none.
+    expect(by["issue:fac-3"]).toMatchObject({ kind: "input", reason: "part-dropped", escalated: true });
+    expect(by["issue:fac-2.1"]).toMatchObject({ escalated: false, actions: [] });
     expect(by["issue:fac-3"].actions.map((a: any) => a.label)).toEqual(["Approve Close with what landed", "Approve Plan the missing part", "Close the issue"]);
     // One entry each, and no other.
     expect(s.asks).toHaveLength(4);

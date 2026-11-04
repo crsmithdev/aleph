@@ -18,8 +18,8 @@ const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format fir
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "input" as const, reason: "question", why: ["w"] };
 const RUN_CAP = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it.";
 
-const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, {}, []);
-const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, {}, []);
+const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, []);
+const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, []);
 
 const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
@@ -33,11 +33,10 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "acceptance-failed": () => ofIssues(issue({ reason: "acceptance-failed", question: "acceptance: fail again at abc: x | the Oracle command `bun test` still fails" })),
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
   proposal: () => ofIssues(issue({ title: "Update left-pad 1.2.0 to 1.3.0", reason: "proposal", askKind: "approval", question: "Update left-pad 1.2.0 to 1.3.0" })),
-  "proposal-check": () => asks({ runs: [], issues: [] }, {}, [lesson("check")]),
-  "proposal-claude-md": () => asks({ runs: [], issues: [] }, {}, [lesson("claude-md")]),
-  "proposal-skill": () => asks({ runs: [], issues: [] }, {}, [lesson("skill")]),
+  "proposal-check": () => asks({ runs: [], issues: [] }, [lesson("check")]),
+  "proposal-claude-md": () => asks({ runs: [], issues: [] }, [lesson("claude-md")]),
+  "proposal-skill": () => asks({ runs: [], issues: [] }, [lesson("skill")]),
   "host-check": () => ofIssues(issue({ reason: "host-check", question: "On the host, run `wsl.exe -l -q` and put it in place of `<distro>` at README.md:176." })),
-  firefighter: () => ofIssues(issue({ id: "aleph-30", reason: "firefighter", question: "aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." })),
 };
 
 describe("asks", () => {
@@ -45,29 +44,37 @@ describe("asks", () => {
 
   const key = (a: { act: string; args: Record<string, string> }) => (a.act === "decide" && a.args.option ? `decide:${a.args.option}` : a.act);
   for (const reason of Object.keys(ASK_REASONS)) {
-    test(`${reason}: stored situation, effects and recommend reach the entry; none stored keeps the fixed text`, () => {
+    /** The case's first entry once the director escalated it with this case text. */
+    const escalated = (text: Partial<Ask>) => { STORE = text; try { return CASES[reason]()[0]; } finally { STORE = undefined; } };
+    test(`${reason}: with no case text the Ask is with the director and offers no action; the director's case text brings the actions`, () => {
       const [plain] = CASES[reason]();
-      expect(plain.explained).toBe(false);
+      expect(plain.escalated).toBe(false);
       expect(plain.situation).toBe(plain.problem);
-      expect(plain.actions.some((a) => a.recommended)).toBe(false);
-      STORE = { situation: "Stored situation.", effects: plain.actions.map((a) => ({ action: key(a), text: `Effect of ${key(a)}.` })), recommend: { action: key(plain.actions[0]), why: "it is safest" } };
+      expect(plain.actions).toEqual([]);
+      expect(plain.always).toBeUndefined();
+      const bare = escalated({ situation: "Stored situation." });
+      expect(bare.actions.length).toBeGreaterThan(0);
+      expect(bare.actions.some((a) => a.recommended)).toBe(false);
+      STORE = { situation: "Stored situation.", effects: bare.actions.map((a) => ({ action: key(a), text: `Effect of ${key(a)}.` })), recommend: { action: key(bare.actions[0]), why: "it is safest" } };
       try {
         const [it] = CASES[reason]();
         expect(it.situation).toBe("Stored situation.");
-        expect(it.explained).toBe(true);
-        expect(it.actions.map((a) => a.act)).toEqual(plain.actions.map((a) => a.act));
+        expect(it.escalated).toBe(true);
+        expect(it.actions.map((a) => a.act)).toEqual(bare.actions.map((a) => a.act));
         expect(it.actions.filter((a) => a.recommended).length).toBe(1);
         for (const a of it.actions) {
           if (a.recommended) expect(a.hint).toBe(`Effect of ${key(a)}. It is safest.`);
           else expect(a.hint).toBe(`Effect of ${key(a)}.`);
         }
-        expect(it.always?.hint).toBe(plain.always?.hint);
+        expect(it.always?.hint).toBe(bare.always?.hint);
       } finally { STORE = undefined; }
     });
   }
 
   test("the checked hint of host-check says it runs nothing", () => {
-    const h = CASES["host-check"]().flatMap((i) => i.actions).find((a) => a.act === "checked")!.hint;
+    STORE = { situation: "Escalated." };
+    let h: string;
+    try { h = CASES["host-check"]().flatMap((i) => i.actions).find((a) => a.act === "checked")!.hint; } finally { STORE = undefined; }
     expect(h).toContain("runs nothing");
     expect(h).toContain("Records that you ran this check yourself");
     expect(CASES["host-check"]()[0].problem).toBe("A factory sandbox cannot run this check, so it must run on the host: On the host, run wsl.exe -l -q and put it in place of at.");
@@ -80,8 +87,6 @@ describe("asks", () => {
   test("an old note's timestamp is not part of the detail or the Problem", () => {
     expect(clean("- 2026-10-27 12:34: which helper?")).toBe("which helper?");
     expect(clean("- 2026-10-27 12:34:56: triage: for Chris: pick one")).toBe("pick one");
-    const [f] = ofIssues(issue({ id: "aleph-30", reason: "firefighter", question: "- 2026-10-27 12:34: aleph-30 changes hooks/x.ts, a held security path, so it needs your review." }));
-    expect(f.problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
     const [t] = ofIssues(issue({ reason: "triage-failed", question: "- 2026-10-27 12:34: triage: no verdict in 2 runs: failed: its process ended before a verdict" }));
     expect(t.problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
     const [q] = ofIssues(issue({ reason: "triage-failed", question: "Triage gave no route in 2 runs: failed: its process ended before a verdict" }));

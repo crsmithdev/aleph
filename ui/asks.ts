@@ -12,8 +12,9 @@ import type { Job, NewIssue } from "./state.ts";
 export interface Action { act: string; label: string; hint: string; primary: boolean; args: Record<string, string>; /** The Ask's recommend names this action. */ recommended: boolean }
 export interface AskItem {
   key: string; reason: string; /** The reason's display name, the kind on the card's title line. */ name?: string; /** What the answer is: your input or your approval. */ kind: "input" | "approval"; id: string; href: string; title: string; problem: string;
-  /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string; /** True when `situation` and the hints are the stored text. */ explained: boolean;
-  actions: Action[]; /** What the limits moved out of the card's text, and the explainer's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
+  /** The stored situation when the Ask holds one, else the fixed problem text. */ situation: string;
+  /** True once the director escalated the Ask: `situation` and the hints are its case text. Until then the row offers no action. */ escalated: boolean;
+  actions: Action[]; /** What the limits moved out of the card's text, and the director's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
   /** The priority of the issue, goal or run's item it is about; none for a proposal. */
@@ -86,12 +87,6 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
   proposal: () => "This work is a proposal, and it does not start until you approve it.",
   "host-check": (c) => `A factory sandbox cannot run this check, so it must run on the host: ${noteOf(c) || "the check"}.`,
-  firefighter: (c) => {
-    const note = unlead(String(c.issue?.question ?? ""));
-    const m = /^(\S+) changes (\S+?),? a held security path/.exec(note);
-    return m ? `The firefighter would land ${c.id}, but it changes ${m[2]}, a held security path, so it needs your review.`
-      : `The firefighter would land ${c.id}, but it changes a held security path, so it needs your review.`;
-  },
 };
 /** What a proposal changes and where, in the words of its buttons and hints. */
 function words(l: Lesson | undefined) {
@@ -216,7 +211,6 @@ function alwaysFor(reason: string, action: string, first: string | undefined): A
   if (!action) return undefined;
   const label = `${first ?? action} [auto-yes]`;
   const revoke = `Revoke with \`aleph always revoke ${reason}\`.`;
-  if (action === "firefighter") return { label, action, hint: `Does this one now. From now on, the firefighter decides these cards without asking you. ${revoke}` };
   if (action === "recommended") return { label, action, hint: `Does this one now. From now on, the factory takes the recommended option of every decision without asking you. ${revoke}` };
   if (reason === "proposal" && action === "start") return { label, action, hint: `Does this one now. From now on, a dependency update within the same major version starts without asking you; a major version jump still asks. ${revoke}` };
   return { label, action, hint: `Does this one now. From now on, the factory does this without asking you. ${revoke}` };
@@ -230,20 +224,25 @@ function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
   };
 }
 
+/**
+ * One row. An Ask with no case text is still with the director (jobs/lib/director.ts): the row shows the fixed problem
+ * text and offers no action and no auto-yes until the director escalates it with its case text.
+ */
 function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string, priority?: string): AskItem {
   const more: string[] = [];
   const stored0 = askIn(c)?.situation;
   const said = stored0 ? limitText(stored0, LIMITS.situation) : null;
   if (said?.rest) more.push(said.rest);
-  const actions = actionsFor(reason, c, more);
+  const escalated = !!said?.kept;
+  const actions = escalated ? actionsFor(reason, c, more) : [];
   const extra = askIn(c)?.details?.trim();
   if (extra) more.push(extra);
   const r = ASK_REASONS[reason];
   const problem = PROBLEM[reason](c);
   const stored = said?.kept;
   return {
-    key, reason, name: r.name, kind: kindOf(reason, kind), id: c.id, href, title, problem, situation: stored || problem, explained: !!stored, actions, ...(more.length ? { more } : {}),
-    ...(c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
+    key, reason, name: r.name, kind: kindOf(reason, kind), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
+    ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };
 }
@@ -251,15 +250,10 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
 /**
  * The asks: runs that await, then issues and goals that await, then proposals. `runs` are the awaiting runs, each with its `ask`;
  * `issues` the issues and goals that hold an Ask.
- * Every entry stays, with its actions; one whose reason Chris handed to the firefighter is also counted in the Always list's `handed`.
  */
-export function attend(s: { runs: Job[]; issues: NewIssue[] }, always: Always = {}, lessons: Lesson[] = openProposals()): { items: AskItem[]; handed: Record<string, number> } {
-  const handed: Record<string, number> = {};
+export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[] = openProposals()): { items: AskItem[] } {
   const out: AskItem[] = [];
-  const add = (it: AskItem) => {
-    if (always[it.reason]?.action === "firefighter") handed[it.reason] = (handed[it.reason] ?? 0) + 1;
-    out.push(it);
-  };
+  const add = (it: AskItem) => out.push(it);
   const rank: Record<string, number> = { "held-path": 0, review: 1 };
   const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => (rank[a.ask!.reason] ?? 2) - (rank[b.ask!.reason] ?? 2));
   for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo, j.ask!.kind, j.item?.priority));
@@ -268,11 +262,11 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, always: Always = 
     const reason = `proposal-${l.kind ?? "skill"}`;
     if (ASK_REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));
   }
-  return { items: out, handed };
+  return { items: out };
 }
 
 /** The asks alone. */
-export const asks = (s: { runs: Job[]; issues: NewIssue[] }, always: Always = {}, lessons?: Lesson[]): AskItem[] => attend(s, always, lessons).items;
+export const asks = (s: { runs: Job[]; issues: NewIssue[] }, lessons?: Lesson[]): AskItem[] => attend(s, lessons).items;
 
 /** The open issue a stuck job cannot succeed before: the goal's own first `after`, else one its last run's reason names. */
 export interface Blocker { id: string; title: string; href: string }

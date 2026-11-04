@@ -1,4 +1,5 @@
-// The shared setup of the firefighter.*.test.ts files: one work store, one repo and a fake firefighter per file, and a new repo key per test.
+// The shared setup of the firefighter.*.test.ts and director.*.test.ts files: one work store, one repo and a fake agent per file (the firefighter's
+// and the director's command), and a new repo key per test.
 import { afterAll, beforeAll, beforeEach } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,7 +8,7 @@ import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import type { Ask } from "./ask.ts";
 import type { Sealed } from "./acceptance.ts";
-import type { Ports } from "./firefighter.ts";
+import type { Ports } from "./director.ts";
 import { stamp, writeRun, type Run } from "./ledger.ts";
 import { askOf, setAsk } from "./ask.ts";
 
@@ -22,7 +23,7 @@ export function sh(cwd: string, ...args: string[]): string {
   return p.stdout.toString().trim();
 }
 
-// The fake firefighter: it counts its calls, keeps the prompt, and prints the reply the test wrote.
+// The fake agent: it counts its calls, keeps the prompt, and prints the reply the test wrote.
 const FAKE = `#!/bin/bash
 cat > "$FF_DIR/prompt.md"
 echo x >> "$FF_DIR/calls"
@@ -34,14 +35,14 @@ export let key = "";
 export const repoPath = () => join(base, "repo");
 
 /** A new repo key, ledger and factory directory, with these items in its list. */
-export function fresh(items: { title: string; body?: string; goal?: boolean; notes?: string[]; ask?: Ask }[] = []): void {
+export function fresh(items: { title: string; body?: string; goal?: boolean; notes?: string[]; ask?: Ask; source?: issues.Source }[] = []): void {
   key = `ff${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
-      const it = issues.add(doc, i.title, i.goal ? { spec: i.body ?? "Ship the thing." } : { request: i.body });
+      const it = issues.add(doc, i.title, { ...(i.goal ? { spec: i.body ?? "Ship the thing." } : { request: i.body }), ...(i.source ? { source: i.source } : {}) });
       for (const note of i.notes ?? []) issues.note(it, note);
       if (i.ask) setAsk(it, i.ask);
     }
@@ -55,6 +56,8 @@ export const plain = (question = "which module?"): Ask => ({ kind: "input", reas
 export const asked = (id: number) => askOf(item(id));
 export const item = (id: number) => issues.find(readList({ key })!, id)!;
 export const reply = (actions: object[]) => writeFileSync(join(base, "reply.json"), JSON.stringify({ actions }));
+/** The fake's whole reply, such as `{ escalate: {...} }` for the director. */
+export const replyWith = (o: object | string) => writeFileSync(join(base, "reply.json"), typeof o === "string" ? o : JSON.stringify(o));
 export const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
 export const log = () => readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8");
 
@@ -93,7 +96,6 @@ export const ports = (): Ports => ({
   scenarios: async () => sealed,
   land: async (name) => { landed.push(name); return null; },
   drop: async (name, reason, fate) => { dropped.push({ name, reason, fate }); return null; },
-  tell: (line) => fetch(`http://127.0.0.1:${server.port}/tell`, { method: "POST", body: JSON.stringify({ text: line }) }).then((r) => r.ok),
 });
 
 /** Registers the hooks: the store, the repo, the fake and the tell server for the file, and clean fakes for each test. */
@@ -112,7 +114,9 @@ export function useFirefighterFixture(): void {
     chmodSync(join(base, "fake"), 0o755);
     server = Bun.serve({ port: 0, fetch: async (req) => { told.push(await req.text()); return new Response("ok"); } });
     Object.assign(process.env, gitEnv, {
-      ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_FIREFIGHTER_CMD: join(base, "fake"), FF_DIR: base,
+      ALEPH_ISSUES: join(base, "items"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_FIREFIGHTER_CMD: join(base, "fake"), ALEPH_DIRECTOR_CMD: join(base, "fake"), FF_DIR: base,
+      // The director's prompt names the vault and the needs-you log; both are under base, never ~/.aleph.
+      ALEPH_VAULT: join(base, "vault"), ALEPH_NEEDS_YOU_LOG: join(base, "needs-you-log.md"),
       ALEPH_DISPATCH: "off", SIDETONE_TELL_URL: `http://127.0.0.1:${server.port}/tell`,
       // The title writer's model fails, so a red-main add gets cutTitle's title.
       ALEPH_RULE_CMD: "false",
@@ -132,7 +136,6 @@ export const alwaysFile = (s: object) => {
   mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
   writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "always.json"), JSON.stringify(s));
 };
-export const FIREFIGHTER = { action: "firefighter", at: "2026-10-28T00:00:00.000Z" };
 
 /** Goal `.1` under issue `id`, as `fresh` files none: the goal a drop or an answer can wait for. */
 export const addGoal = (id: number) => writeList({ key }, "a goal", (doc) => { issues.addPart(doc, issues.find(doc, id)!, { title: "blocker goal", spec: "Do it." }); return true; });

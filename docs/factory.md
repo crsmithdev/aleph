@@ -149,7 +149,7 @@ The hold stops new runs and lands, but runs already working finish and `aleph la
 
 ## Asks and Always rules
 
-Whatever waits for you is an Ask, of kind `input` or `approval`, with a reason, a question and options. The Status page lists them under "Awaiting you". The Always button writes a rule to `~/.aleph/factory/always.json` that maps the reason to an action, and the next Ask with that reason takes the action without you. `aleph always` lists and changes the same rules.
+Whatever would wait for you is an Ask, of kind `input` or `approval`, with a reason, a question and options. Every new Ask goes to the director first: one read-only run of `claude-fable-5-1` per Ask, which decides it with actions that code checks and applies, or escalates it to you with its case text (situation, effects and recommendation). Code keeps an escalation list that the director cannot decide: a land that changes a security path or `bun.lock`, a memory proposal, a host check, a second run-cap or rescue Ask on the same goal, and closing or dropping an issue you filed. Each decision is a Director entry in the Gates page log. The Status page lists the Asks under "Awaiting you"; an Ask shows its buttons only once the director has escalated it. The Always button writes a rule to `~/.aleph/factory/always.json` that maps the reason to an action, and the next Ask with that reason takes the action without you. `aleph always` lists and changes the same rules.
 
 ## Flakes and health
 
@@ -177,7 +177,8 @@ Each cap is read from its variable first, then from `~/.aleph/factory/caps.json`
 | `ALEPH_LAND_BATCH` | 8 | Runs one land may push together |
 | `ALEPH_TRIAGE_CAP` | 5 | Triage runs per tick |
 | `ALEPH_TRIAGE_TRIES` | 2 | Failed triage runs before an Ask |
+| `ALEPH_DIRECTOR_CAP` | 3 | Director runs per tick, one per Ask |
 | `ALEPH_WORKER_CMD` | `claude` | The worker command |
 | `ALEPH_REVIEWER_CMD` | the worker command | The reviewer command |
 
-For each agent role (`TRIAGE`, `PLAN`, `AUTHOR`, `FACTS`, `FIREFIGHTER`, `EXPLAIN`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. `ALEPH_OUTDATED_CMD` replaces `bun outdated`. Tests use these to put in a fake.
+For each agent role (`TRIAGE`, `PLAN`, `AUTHOR`, `FACTS`, `FIREFIGHTER`, `DIRECTOR`), `ALEPH_<ROLE>_CMD` replaces `claude` and `ALEPH_<ROLE>_TIMEOUT` sets the time-out in seconds. `ALEPH_OUTDATED_CMD` replaces `bun outdated`. Tests use these to put in a fake.

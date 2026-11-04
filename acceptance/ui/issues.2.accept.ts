@@ -226,7 +226,7 @@ describe("the Issue page shows the ask row", () => {
     const n = seed(true);
     const d = await getJson(`/api/issues/fac/${n}`);
     expect(d.ask.situation).toBe("Two ways to go.");
-    expect(d.ask.explained).toBe(true);
+    expect(d.ask.escalated).toBe(true);
     expect(d.ask.actions.length).toBeGreaterThan(0);
     expect((await getJson("/api/issues/fac/1")).ask).toBeUndefined();
   });

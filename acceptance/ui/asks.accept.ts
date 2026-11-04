@@ -19,8 +19,8 @@ const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format fir
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "input" as const, reason: "question", why: ["w"] };
 const RUN_CAP = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it.";
 
-const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, {}, []);
-const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, {}, []);
+const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, []);
+const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, []);
 
 const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
@@ -34,19 +34,20 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "acceptance-failed": () => ofIssues(issue({ reason: "acceptance-failed", question: "acceptance: fail again at abc: x | the Oracle command `bun test` still fails" })),
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
   proposal: () => ofIssues(issue({ title: "Update left-pad 1.2.0 to 1.3.0", reason: "proposal", askKind: "approval", question: "Update left-pad 1.2.0 to 1.3.0" })),
-  "proposal-check": () => asks({ runs: [], issues: [] }, {}, [lesson("check")]),
-  "proposal-claude-md": () => asks({ runs: [], issues: [] }, {}, [lesson("claude-md")]),
-  "proposal-skill": () => asks({ runs: [], issues: [] }, {}, [lesson("skill")]),
+  "proposal-check": () => asks({ runs: [], issues: [] }, [lesson("check")]),
+  "proposal-claude-md": () => asks({ runs: [], issues: [] }, [lesson("claude-md")]),
+  "proposal-skill": () => asks({ runs: [], issues: [] }, [lesson("skill")]),
   "host-check": () => ofIssues(issue({ reason: "host-check", question: "On the host, run `wsl.exe -l -q` and put it in place of `<distro>` at README.md:176." })),
-  firefighter: () => ofIssues(issue({ id: "aleph-30", reason: "firefighter", question: "aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." })),
 };
+/** The case's entries once the director escalated it: with case text, the row has its actions. */
+const sent = (reason: string) => { STORE = { situation: "Escalated." }; try { return CASES[reason](); } finally { STORE = undefined; } };
 
 describe("asks", () => {
   test("every reason code has a case", () => expect(Object.keys(CASES).sort()).toEqual(Object.keys(ASK_REASONS).sort()));
 
   for (const reason of Object.keys(ASK_REASONS)) {
     test(`${reason}: one clean sentence, labelled actions with hints, an Always label, a kind of input or approval`, () => {
-      const [it] = CASES[reason]();
+      const [it] = sent(reason);
       expect(it.reason).toBe(reason);
       expect(it.problem).not.toMatch(/<task-notification|<agent-message|[<]/);
       expect(it.problem.match(/[.?!](\s|$)/g)?.length ?? 0).toBeLessThanOrEqual(1);
@@ -63,7 +64,7 @@ describe("asks", () => {
   }
 
   test("spec-check: the problems of the issue's question, rerun then close with its hint, no auto-yes", () => {
-    const items = ofIssues(issue({ reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" }));
+    const items = sent("spec-check");
     expect(items.length).toBe(1);
     const [it] = items;
     expect(it.reason).toBe("spec-check");
@@ -72,7 +73,7 @@ describe("asks", () => {
     expect(it.actions.map((a) => a.act)).toEqual(["rerun", "close"]);
     expect(it.actions[0].label).toBe("Start the goal");
     expect(it.actions[0].hint).toBe("Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first.");
-    expect(it.always).toMatchObject({ action: "firefighter" });
+    expect(it.always).toBeUndefined();
   });
 
   test("a card carries the reason's name, and every reason has one", () => {

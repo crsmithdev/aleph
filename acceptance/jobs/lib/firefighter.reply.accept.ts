@@ -19,10 +19,9 @@ test("the firefighter prompt limits the Goal of a spec it writes to 3 sentences 
   expect(p).toContain("no claim about code on main that you did not read");
 });
 
-test("answer keeps after in parse, and leaves it out when absent", () => {
-  const a = { do: "answer" as const, repo: "ff", n: 1, note: "x" };
-  expect(parseReply(JSON.stringify({ actions: [{ ...a, after: ["ff-2.1"] }] }))).toEqual([{ ...a, after: ["ff-2.1"] }]);
-  expect(parseReply(JSON.stringify({ actions: [a] }))).toEqual([a]);
+test("the firefighter has no answer or land action: Asks are the director's", () => {
+  expect(parseReply(JSON.stringify({ actions: [{ do: "answer", repo: "ff", n: 1, note: "x" }, { do: "land", job: "ff-1" }] }))).toEqual(['unknown action "answer"', 'unknown action "land"']);
+  expect(prompt([])).toContain("Asks (runs and issues that wait for Chris) are the director's");
 });
 
 test("prompt names the flake action and offers add only with a red event", () => {

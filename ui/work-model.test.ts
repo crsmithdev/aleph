@@ -90,7 +90,7 @@ describe("/api/state on a work-model store", () => {
   test("the Always list is always.json under the new reasons", () => {
     writeFileSync(join(factory, "always.json"), JSON.stringify({ "triage-failed": { action: "retry", at: "2026-10-30T00:00:00.000Z" } }));
     try {
-      expect((state(now) as any).always).toEqual([{ reason: "triage-failed", action: "retry", at: "2026-10-30T00:00:00.000Z", handed: 0 }]);
+      expect((state(now) as any).always).toEqual([{ reason: "triage-failed", action: "retry", at: "2026-10-30T00:00:00.000Z" }]);
     } finally { rmSync(join(factory, "always.json")); }
   });
 });

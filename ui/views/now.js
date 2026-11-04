@@ -127,7 +127,8 @@ export function renderLede(s, stale = false) {
   const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
   if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
   const said = [...alerts].sort((a, b) => alertRank(a) - alertRank(b)).map((t) => [t, t === JOBS_UNHEALTHY && s.stuck.length ? "#jobs-stuck" : "#awaiting"]);
-  const asks = s.asks ?? [];
+  // An Ask still with the director does not need Chris yet.
+  const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
   if (asks.length) said.push(["your attention is needed", "#awaiting"]);
   const alert = alerts.size > 0;
   if (f.paused && alert) said.push(["the factory is paused", ""]);
@@ -343,7 +344,7 @@ export function askRow(i, now = new Date().toISOString(), folded = false) {
   const choices = acts.map((a) => choice(actionButton(a), a.hint, inputFor(a), !!a.recommended));
   if (i.always) choices.splice(acts.length ? 1 : 0, 0, choice(`<button class="act always" type="button" data-act="always" data-reason="${esc(i.always.reason ?? i.reason)}" data-action="${esc(i.always.action)}" data-first="${esc(acts[0]?.act ?? "")}" data-label="${esc(i.always.label)}">${esc(i.always.label)}</button>`, i.always.hint));
   return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-reason="${esc(i.reason)}">` +
-    needHead(i.kind, i.id, i.href, i.name ? `${i.name}: ${i.title}` : i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.explained === false ? ' <span class="muted">The case text is missing; this is the fixed text for this reason.</span>' : ""}</p>`, i.priority, { at: i.at, since: i.since, now, part: i.part }) +
+    needHead(i.kind, i.id, i.href, i.name ? `${i.name}: ${i.title}` : i.title, i.problem, i.repo, `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}</p>`, i.priority, { at: i.at, since: i.since, now, part: i.part }) +
     (folded ? choiceFold : (_k, body) => body)(i.key ?? i.id, `<div class="actions choices">${choices.join("")}${i.key?.startsWith("run:") ? actMsg(i.id) : ""}</div>` + askDetails(i)) + `</article>`;
 }
 

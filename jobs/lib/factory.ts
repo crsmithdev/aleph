@@ -24,7 +24,7 @@ import { accept, final, reaccept, reopenedByAcceptance, sandboxScenarios, unshow
 import { mine, proposals, readStore } from "./corrections.ts";
 import { endLost } from "./agent-run.ts";
 import { factsGate } from "./facts.ts";
-import { explainStep } from "./explain.ts";
+import { directAll, type Decision, type Ports as DirectorPorts } from "./director.ts";
 import { writeEpisodes } from "./episode.ts";
 import { vaultDir } from "../../vault/lib/vault.ts";
 import { readdirSync } from "node:fs";
@@ -394,16 +394,25 @@ export async function correctionsStep(now = Date.now()): Promise<{ signals: numb
 }
 
 /**
- * The tick's triage of open issues that are not goals (triage.ts), and then the explainer (explain.ts), which writes the case
- * text of every Ask with none, those triage just raised among them. Only the tick runs them: a dispatch does not wait on them.
+ * The tick's triage of open issues that are not goals (triage.ts). Only the tick runs it: a dispatch does not wait on it.
  */
 export async function triageStep(): Promise<{ triaged: Counts; skipped: string[] }> {
   if (gates({ only: ["pause", "hold", "probe"] })) return { triaged: {}, skipped: [] };
   const t = await triageOpen(sandboxRepos(), doneChecker());
   factoryLog(`triaged ${countsLine(t.triaged)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.triaged.build || t.triaged.plan) dispatchDetached();
-  await explainStep(sandboxRepos());
   return t;
+}
+
+/**
+ * The tick's director (director.ts): one run for each new Ask, those triage just raised among them. Under the pause
+ * alone, as the firefighter: a decision can clear a hold. An error is logged, never thrown.
+ */
+export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
+  if (gates({ only: ["pause"] })) return [];
+  const d = await directAll(sandboxRepos(), ports);
+  if (d.some((x) => x.outcome === "decided")) dispatchDetached();
+  return d;
 }
 
 /**
@@ -414,7 +423,7 @@ export async function firefighterStep(ports?: Ports): Promise<Fired | null> {
   if (gates({ only: ["pause"] })) return null;
   try {
     const f = await firefight(ports);
-    if (f.run) factoryLog(`firefighter ${f.run}: ${f.events.length} new events; ${f.applied.length} applied, ${f.refused.length} refused, ${f.chris.length} to Chris`);
+    if (f.run) factoryLog(`firefighter ${f.run}: ${f.events.length} new events; ${f.applied.length} applied, ${f.refused.length} refused`);
     if (f.applied.length) dispatchDetached();
     return f;
   } catch (e: any) {

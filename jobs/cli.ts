@@ -21,7 +21,7 @@ import * as store from "../todo/lib/store.ts";
 import * as verbs from "../todo/lib/issues.ts";
 import { askOf, grant, readAlways, revoke } from "./lib/ask.ts";
 import { ciStep } from "./lib/ci.ts";
-import { acceptanceStep, behind, correctionsStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
+import { acceptanceStep, behind, correctionsStep, directorStep, firefighterStep, planNow, probeDue, report, runDispatch, setPaused, stallStep, triageNow, triageStep, episodeStep, reacceptReopened } from "./lib/factory.ts";
 import { dispatchDetached, triageDetached } from "./lib/launch.ts";
 import { runSpecCheck } from "./lib/spec-check.ts";
 import { factoryDir, factoryRepos, health, hold, paused } from "./lib/factory-status.ts";
@@ -357,6 +357,7 @@ async function tickCmd(): Promise<void> {
   await correctionsStep();
   const d = await runDispatch();
   const t = !d.held ? await triageStep() : { triaged: {}, skipped: [] };
+  await directorStep();
   const episodes = await episodeStep();
   try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
   try { stallStep(); } catch (e: any) { factoryLog(`stalls: failed: ${e?.message ?? e}`); }

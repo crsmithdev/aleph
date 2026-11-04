@@ -1,7 +1,7 @@
 /**
  * The Ask module: what a run, an issue or a goal needs from Chris, and its whole lifecycle. It holds the reasons and
- * what each one offers, sets an Ask on an issue, routes it to Chris or the firefighter, says which actor may take which
- * action on it, and says what clears it. Callers do not read the Ask fields or test reason names for these rules.
+ * what each one offers, sets an Ask on an issue, says which actor (Chris or the director) may take which action on it,
+ * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches Chris when the director escalates it. Callers do not read the Ask fields or test reason names for these rules.
  *
  * A run keeps its Ask whole in `ask` of its state.json. An issue or goal keeps it as flat fields next to its prose note:
  * `ask` (`input` or `approval`), `reason`, `question`, `options` (each `label :: line`, with `:: after <goal id>`
@@ -31,7 +31,7 @@ export interface Ask {
   why: string[];
   /** Plain sentences on what this item is about and why it waits for Chris. */
   situation?: string;
-  /** What the case text left out, or what the explainer put apart: shown under Details. */
+  /** What the case text left out, or what the director put apart: shown under Details. */
   details?: string;
   /** One per action of the reason. For a decision with options, `action` may be `decide:<option label>`. */
   effects?: { action: string; text: string }[];
@@ -55,26 +55,23 @@ const proposal: Reason = { kind: "approval", name: "Lesson", actions: ["approve"
 
 /**
  * Every reason the factory asks Chris. The first group is the spec's Ask reasons. The second group is kept as it was,
- * because the spec names no new home for it: run-cap, acceptance-failed, firefighter and the `proposal-<kind>:<place>` keys.
- * No Ask has the reason firefighter: it is only an Always rule. With `land` granted, the firefighter lands runs that change
- * a held security path (firefighter.ts).
+ * because the spec names no new home for it: run-cap, acceptance-failed and the `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
-  "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "firefighter", needs: "held" },
-  "review": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "firefighter", needs: "review" },
+  "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "held" },
+  "review": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "review" },
   "proposal": { kind: "approval", name: "Proposal", actions: ["start", "deny"], always: "start" },
-  // Was `decision` (decide, deny; recommended) and `question` (answer, drop; firefighter): one reason now, so it lists both.
-  "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny", "firefighter"], always: "recommended", needs: "question" },
-  "no-commit": { kind: "input", name: "No commit", actions: ["rerun", "close"], always: "firefighter" },
+  // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
+  "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question" },
+  "no-commit": { kind: "input", name: "No commit", actions: ["rerun", "close"], always: "" },
   "part-dropped": { kind: "input", name: "Part dropped", actions: ["rerun", "close"], always: "" },
   "triage-failed": { kind: "input", name: "Triage failed", actions: ["retry", "close"], always: "retry" },
   "host-check": { kind: "input", name: "Manual check", actions: ["checked", "deny"], always: "" },
-  "spec-check": { kind: "input", name: "Spec check", actions: ["rerun", "close"], always: "firefighter" },
+  "spec-check": { kind: "input", name: "Spec check", actions: ["rerun", "close"], always: "" },
   "rescue": { kind: "input", name: "Question", actions: ["decide", "drop"], always: "recommended" },
   // Not Ask reasons of the spec; no new home is named for them.
-  "run-cap": { kind: "input", name: "Run cap", actions: ["rerun", "close"], always: "firefighter" },
-  "acceptance-failed": { kind: "input", name: "Acceptance failed", actions: ["rerun", "close"], always: "firefighter" },
-  "firefighter": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "land" },
+  "run-cap": { kind: "input", name: "Run cap", actions: ["rerun", "close"], always: "" },
+  "acceptance-failed": { kind: "input", name: "Acceptance failed", actions: ["rerun", "close"], always: "" },
   "proposal-check": proposal,
   "proposal-claude-md": proposal,
   "proposal-skill": proposal,
@@ -352,19 +349,16 @@ export function askPartDropped(issue: issues.Issue, question: string): void {
   issue.fm.updated = issues.today();
 }
 
-// Routing and actions.
+// Actions.
 
-/** Who decides an Ask. */
-export type Actor = "chris" | "firefighter";
-
-/** Who an Ask of this reason goes to: the firefighter when Chris handed the reason to it (Always: firefighter), else Chris. */
-export const routeOf = (reason: string): Actor => (always(reason)?.action === "firefighter" ? "firefighter" : "chris");
+/** Who decides an Ask: the director first, and Chris when it escalates. */
+export type Actor = "chris" | "director";
 
 /**
  * Why `actor` may not take `action` on `ask`, or null when it may. Chris may take the actions the card offers (`on.run`
- * for a run's Ask). The firefighter may not answer a product choice (a question with options) unless Chris handed its
- * reason to it, nor an Ask whose run waits for a spec edit (`on.waiting`, that run's name): clearing it would leave
- * the job open with no Ask and no run.
+ * for a run's Ask). The director may not answer an Ask whose run waits for a spec edit (`on.waiting`, that run's name):
+ * clearing it would leave the job open with no Ask and no run. What the director may not decide at all is the
+ * escalation list in director.ts.
  */
 export function may(actor: Actor, action: string, ask: Ask | null | undefined, on: { run?: boolean; waiting?: string } = {}): string | null {
   if (!ask) return "it has no Ask";
@@ -373,7 +367,6 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
     return offered.includes(action) ? null : `its ${ask.reason} Ask offers no ${action}`;
   }
   if (action !== "answer") return null;
-  if (ask.options.length && routeOf(ask.reason) !== "firefighter") return "its question is a product choice, which is Chris's";
   if (on.waiting) return `the run ${on.waiting} asked about the spec and waits for a spec edit; use edit, or drop it`;
   return null;
 }
@@ -381,12 +374,12 @@ export function may(actor: Actor, action: string, ask: Ask | null | undefined, o
 // What clears an Ask.
 
 /**
- * Whether the firefighter's edit of a goal's spec answers its Ask. Only a spec-check Ask is about the spec, only when
- * Chris handed spec-check to the firefighter, and only a body with Goal, Edit surface and Oracle. The goal's next first
- * worker run checks the spec again, and holds again if it still lacks something.
+ * Whether the director's edit of a goal's spec answers its Ask. Only a spec-check Ask is about the spec, and only a
+ * body with Goal, Edit surface and Oracle. The goal's next first worker run checks the spec again, and holds again if
+ * it still lacks something.
  */
 export const editAnswers = (ask: Ask | null, body: string | undefined): boolean =>
-  body !== undefined && ask?.reason === "spec-check" && routeOf(ask.reason) === "firefighter" && missingSections(body).length === 0;
+  body !== undefined && ask?.reason === "spec-check" && missingSections(body).length === 0;
 
 /**
  * A decision clears the item's Ask; called in the write that notes the decision `said`. On the part-dropped Ask, the

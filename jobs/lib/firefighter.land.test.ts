@@ -1,37 +1,12 @@
-// The firefighter's land and drop of a held run: the security paths, the land standing, and a real land and drop on a repo with an origin.
+// The firefighter's drop on a repo with an origin: the fate it writes.
 import { expect, test } from "bun:test";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { firefighterStep } from "./factory.ts";
 import { defaultPorts } from "./firefighter.ts";
 import { readRun } from "./ledger.ts";
-import { alwaysFile, base, branch, fresh, held, key, landed, log, n, ports, reply, repoPath, run, sh, told, useFirefighterFixture } from "./firefighter.fixture.ts";
+import { base, fresh, key, n, reply, repoPath, run, sh, useFirefighterFixture } from "./firefighter.fixture.ts";
 
 useFirefighterFixture();
-
-test("a diff that changes REVIEW_SANDBOX in jobs/lib/review.ts is not landed", async () => {
-  fresh([{ title: "held", goal: true }]);
-  branch(`b${n}`, "jobs/lib/review.ts", "export const REVIEW_SANDBOX = {};\n");
-  held(`b${n}`);
-  reply([{ do: "land", job: `${key}-1` }]);
-  await firefighterStep(ports());
-  expect(landed).toEqual([]);
-  expect(told.length).toBe(1);
-});
-
-test("a firefighter land standing lets the firefighter land a held run on a security path, and logs it", async () => {
-  fresh([{ title: "held", goal: true }]);
-  branch(`b${n}`, "hooks/x.ts");
-  const folder = held(`b${n}`);
-  alwaysFile({ firefighter: { action: "land", at: "2026-10-28T00:00:00.000Z" } });
-  reply([{ do: "land", job: `${key}-1` }]);
-  const f = await firefighterStep(ports());
-  expect(landed).toEqual([`${key}-1`]);
-  expect(f?.chris).toEqual([]);
-  expect(existsSync(join(folder, "asked"))).toBe(false);
-  expect(told).toEqual([]);
-  expect(log()).toContain("always: firefighter: land");
-});
 
 test("a firefighter drop of a run whose goal is on main writes fate already-met to the run's state", async () => {
   fresh([{ title: "met", goal: true }]);

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, decideAsk, editAnswers, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, routeOf, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
+import { actionsOn, always, ASK_REASONS, askFromRun, askIfPartDropped, askOf, askPartDropped, asked, askChris, decideAsk, editAnswers, grant, kindOf, needsOf, may, normalizeAsk, PLAN_REST, plainAsk, readAlways, reasonOf, revoke, setAsk, waitOf, waitsForSpecEdit, type Ask } from "./ask.ts";
 import { specVersion } from "./goal-spec.ts";
 
 const item = (fm: Record<string, unknown> = {}): issues.Issue => ({ id: 1, title: "t", fm: fm as any, request: "", spec: "", notes: [] });
@@ -97,9 +97,6 @@ test("grant then always round-trips; revoke removes it", () => {
   expect(always("held-path")).toBeNull();
   expect(grant("held-path", "land")).toBeNull();
   expect(always("held-path")?.action).toBe("land");
-  expect(routeOf("held-path")).toBe("chris");
-  expect(grant("held-path", "firefighter")).toBeNull();
-  expect(routeOf("held-path")).toBe("firefighter");
   revoke("held-path");
   expect(always("held-path")).toBeNull();
   expect(readAlways()).toEqual({});
@@ -124,35 +121,26 @@ test("aleph always grant, list and revoke work on always.json", () => {
   expect(cli("always", "list").out).not.toContain("rescue");
 });
 
-// The lifecycle: routing, who may act, what clears an Ask, and the marks a run leaves.
+// The lifecycle: who may act, what clears an Ask, and the marks a run leaves.
 
-test("routeOf sends each reason to Chris, and to the firefighter only once Chris hands it over", () => {
-  const handable: string[] = [];
-  for (const reason of Object.keys(ASK_REASONS)) {
-    expect(routeOf(reason)).toBe("chris");
-    if (grant(reason, "firefighter") === null) handable.push(reason);
-    expect(routeOf(reason)).toBe(handable.includes(reason) ? "firefighter" : "chris");
-  }
-  expect(handable.sort()).toEqual(["acceptance-failed", "held-path", "no-commit", "question", "review", "run-cap", "spec-check"]);
-  grant("spec-check", "rerun");
-  expect(routeOf("spec-check")).toBe("chris");
+test("no reason can be handed to the firefighter: an Ask is the director's, then Chris's", () => {
+  for (const reason of Object.keys(ASK_REASONS)) expect(grant(reason, "firefighter")).not.toBeNull();
+  expect(readAlways()).toEqual({});
 });
 
 const choice: Ask = { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], why: [] };
 const plain = plainAsk("question", "Which module?");
 
-test("may: the firefighter answers a plain question, but not a product choice until Chris hands its reason over", () => {
-  expect(may("firefighter", "answer", null)).toBe("it has no Ask");
-  expect(may("firefighter", "answer", plain)).toBeNull();
-  expect(may("firefighter", "answer", choice)).toBe("its question is a product choice, which is Chris's");
-  grant("question", "firefighter");
-  expect(may("firefighter", "answer", choice)).toBeNull();
+test("may: the director answers a plain question and a product choice alike", () => {
+  expect(may("director", "answer", null)).toBe("it has no Ask");
+  expect(may("director", "answer", plain)).toBeNull();
+  expect(may("director", "answer", choice)).toBeNull();
 });
 
-test("may: the firefighter does not answer an Ask whose run waits for a spec edit", () => {
-  expect(may("firefighter", "answer", plain, { waiting: "fac-3" })).toBe("the run fac-3 asked about the spec and waits for a spec edit; use edit, or drop it");
-  expect(may("firefighter", "edit-goal", plain, { waiting: "fac-3" })).toBeNull();
-  expect(may("firefighter", "close", choice)).toBeNull();
+test("may: the director does not answer an Ask whose run waits for a spec edit", () => {
+  expect(may("director", "answer", plain, { waiting: "fac-3" })).toBe("the run fac-3 asked about the spec and waits for a spec edit; use edit, or drop it");
+  expect(may("director", "edit-goal", plain, { waiting: "fac-3" })).toBeNull();
+  expect(may("director", "close", choice)).toBeNull();
 });
 
 test("may: Chris takes the actions the card offers, on a run and on an issue", () => {
@@ -168,14 +156,11 @@ test("may: Chris takes the actions the card offers, on a run and on an issue", (
 
 const full = "## Goal\ng\n\n## Edit surface\n- a.ts: x\n\n## Oracle\n- passes";
 
-test("editAnswers: only a full spec answers a spec-check Ask, and only once spec-check is handed to the firefighter", () => {
+test("editAnswers: only a full spec answers a spec-check Ask", () => {
   const held = plainAsk("spec-check", "the spec has no Oracle");
-  expect(editAnswers(held, full)).toBe(false);
-  grant("spec-check", "firefighter");
   expect(editAnswers(held, full)).toBe(true);
   expect(editAnswers(held, "## Goal\ng")).toBe(false);
   expect(editAnswers(held, undefined)).toBe(false);
-  grant("no-commit", "firefighter");
   expect(editAnswers(plainAsk("no-commit", "x"), full)).toBe(false);
   expect(editAnswers(null, full)).toBe(false);
 });

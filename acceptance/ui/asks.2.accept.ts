@@ -5,22 +5,23 @@ import { kindOf, type Ask } from "../../jobs/lib/ask.ts";
 import type { Lesson } from "../../jobs/lib/corrections.ts";
 import type { Job, NewIssue } from "../../ui/state.ts";
 
-/** Stored case text the fixtures put on their Ask while a test sets it. */
+/** Stored case text the fixtures put on their Ask while a test sets it; by default the director's escalation text, so the row has its actions. `{}` is an Ask still with the director. */
+const SENT: Partial<Ask> = { situation: "Escalated." };
 let STORE: Partial<Ask> | undefined;
 const run = (reason: string, extra: Partial<Job> = {}): Job => ({
   name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, condition: "awaiting", started: "2026-10-28T00:00:00Z",
-  ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason, ...STORE },
+  ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason, ...(STORE ?? SENT) },
   run: { kind: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
 const issue = (extra: Partial<NewIssue> = {}): NewIssue => ({ id: "aleph-387", title: "t", status: "open", href: "#/issues/aleph/387", labels: [], notes: 1, created: "", updated: "", ...extra,
-  ...(STORE ? { ask: { kind: "input", reason: extra.reason ?? "question", question: "q", options: [], why: [], ...STORE } as Ask } : {}) });
+  ask: { kind: "input", reason: extra.reason ?? "question", question: "q", options: [], why: [], ...(STORE ?? SENT) } as Ask });
 const TARGET = { check: "aleph checks", "claude-md": "identity/CLAUDE.md", skill: "skills/tdd/SKILL.md" } as const;
-const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }], ...(STORE && { situation: STORE.situation, effects: STORE.effects, recommend: STORE.recommend }) });
+const lesson = (kind: Lesson["kind"]): Lesson => ({ id: "L1", title: "Format first", target: TARGET[kind!], sentence: "Run the formatter before landing", state: "proposed", kind, count: 3, signals: [{ id: "s", source: "chris", at: "2026-10-27", quote: "format it", link: "" }], situation: (STORE ?? SENT).situation, effects: (STORE ?? SENT).effects, recommend: (STORE ?? SENT).recommend });
 const decision = { question: "Should it be A or B?", options: [{ label: "A", line: "do a" }, { label: "B", line: "do b" }], recommended: "B", kind: "input" as const, reason: "question", why: ["w"] };
 const RUN_CAP = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it.";
 
-const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, {}, []);
-const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, {}, []);
+const ofRuns = (...runs: Job[]) => asks({ runs, issues: [] }, []);
+const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, []);
 
 const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
@@ -34,18 +35,17 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "acceptance-failed": () => ofIssues(issue({ reason: "acceptance-failed", question: "acceptance: fail again at abc: x | the Oracle command `bun test` still fails" })),
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
   proposal: () => ofIssues(issue({ title: "Update left-pad 1.2.0 to 1.3.0", reason: "proposal", askKind: "approval", question: "Update left-pad 1.2.0 to 1.3.0" })),
-  "proposal-check": () => asks({ runs: [], issues: [] }, {}, [lesson("check")]),
-  "proposal-claude-md": () => asks({ runs: [], issues: [] }, {}, [lesson("claude-md")]),
-  "proposal-skill": () => asks({ runs: [], issues: [] }, {}, [lesson("skill")]),
+  "proposal-check": () => asks({ runs: [], issues: [] }, [lesson("check")]),
+  "proposal-claude-md": () => asks({ runs: [], issues: [] }, [lesson("claude-md")]),
+  "proposal-skill": () => asks({ runs: [], issues: [] }, [lesson("skill")]),
   "host-check": () => ofIssues(issue({ reason: "host-check", question: "On the host, run `wsl.exe -l -q` and put it in place of `<distro>` at README.md:176." })),
-  firefighter: () => ofIssues(issue({ id: "aleph-30", reason: "firefighter", question: "aleph-30 changes hooks/x.ts, a held security path, so it needs your review before it lands." })),
 };
 const QUESTION_ISSUE = () => ofIssues(issue({ reason: "question", decision, question: "Should it be A or B?" }));
 
 describe("asks", () => {
 
-  test("the kind: approval for review, held-path, proposal and firefighter; input for the rest; an Ask's own kind wins", () => {
-    for (const r of ["review", "held-path", "proposal", "firefighter", "proposal-skill"]) expect(kindOf(r), r).toBe("approval");
+  test("the kind: approval for review, held-path and proposal; input for the rest; an Ask's own kind wins", () => {
+    for (const r of ["review", "held-path", "proposal", "proposal-skill"]) expect(kindOf(r), r).toBe("approval");
     for (const r of ["question", "no-commit", "part-dropped", "triage-failed", "host-check", "rescue", "run-cap", "acceptance-failed", "spec-check"]) expect(kindOf(r), r).toBe("input");
     expect(kindOf("question", "approval")).toBe("approval");
     expect(CASES["held-path"]()[0].kind).toBe("approval");
@@ -90,8 +90,7 @@ describe("asks", () => {
     expect(sk.problem).toContain("a change to the tdd skill:");
     expect(sk.actions[0].hint).toBe("Files the goal that changes the tdd skill.");
     expect(CASES["proposal-check"]()[0].actions[0].args).toEqual({ id: "L1" });
-    expect(CASES.firefighter()[0].problem).toBe("The firefighter would land aleph-30, but it changes hooks/x.ts, a held security path, so it needs your review.");
-    expect(CASES["held-path"]()[0].always).toMatchObject({ label: "Land it [auto-yes]", action: "firefighter" });
+    expect(CASES["held-path"]()[0].always).toBeUndefined();
     expect(CASES["triage-failed"]()[0].always!.label).toBe("Run triage again [auto-yes]");
     expect(QUESTION_ISSUE()[0].always).toMatchObject({ label: "Approve B [auto-yes]", action: "recommended" });
     expect(QUESTION_ISSUE()[0].always!.hint).toContain("`aleph always revoke question`");
@@ -141,16 +140,18 @@ describe("asks", () => {
     expect(d.problem).not.toContain("<");
   });
 
-  test("a firefighter Always rule keeps the ask and counts it in handed", () => {
-    const s = { runs: [], issues: [issue({ reason: "triage-failed", question: "triage: no verdict in 2 runs: x" }), issue({ id: "aleph-5", reason: "question", decision })] };
-    const r = attend(s, { "triage-failed": { action: "firefighter", at: "2026-10-28T00:00:00Z" } }, []);
-    expect(r.items.map((i) => i.id)).toEqual(["aleph-387", "aleph-5"]);
-    expect(r.items[0].actions.length).toBeGreaterThan(0);
-    expect(r.handed).toEqual({ "triage-failed": 1 });
+  test("an Ask the director still holds stays in the list with no action and no auto-yes; an escalated one has both", () => {
+    STORE = {};
+    let held;
+    try { held = attend({ runs: [], issues: [issue({ reason: "triage-failed", question: "triage: no verdict in 2 runs: x" })] }, []); } finally { STORE = undefined; }
+    expect(held.items.map((i) => [i.id, i.escalated, i.actions.length, i.always])).toEqual([["aleph-387", false, 0, undefined]]);
+    const sent = attend({ runs: [], issues: [issue({ reason: "triage-failed", question: "triage: no verdict in 2 runs: x" }), issue({ id: "aleph-5", reason: "question", decision })] }, []);
+    expect(sent.items.map((i) => i.id)).toEqual(["aleph-387", "aleph-5"]);
+    expect(sent.items.every((i) => i.escalated && i.actions.length > 0 && i.always)).toBe(true);
   });
 
   test("the order is held-path, review, other runs, issues, proposals", () => {
-    const items = asks({ runs: [run("question", { name: "q" }), run("review", { name: "r" }), run("held-path", { name: "h" })], issues: [issue({ reason: "question" })] }, {}, [lesson("skill")]);
+    const items = asks({ runs: [run("question", { name: "q" }), run("review", { name: "r" }), run("held-path", { name: "h" })], issues: [issue({ reason: "question" })] }, [lesson("skill")]);
     expect(items.map((i) => i.reason)).toEqual(["held-path", "review", "question", "question", "proposal-skill"]);
   });
 });

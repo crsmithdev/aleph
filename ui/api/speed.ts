@@ -322,7 +322,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-export const AGENT_ROLES = [["worker", "Worker", "build"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["facts", "Fact checker", "facts"], ["firefighter", "Firefighter", "firefighter"], ["explainer", "Explainer", "explain"]] as const;
+export const AGENT_ROLES = [["worker", "Worker", "build"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["facts", "Fact checker", "facts"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
 export type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */

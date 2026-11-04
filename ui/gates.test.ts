@@ -34,6 +34,7 @@ beforeAll(async () => {
   writeFileSync(join(factory, "tick.log"), [
     `${ago(3)} always: rescue: recommended on r-5`,
     `${ago(2)} firefighter: did answer r-6: picked the plain option`,
+    `${ago(2.5)} director: r-8: run-cap: decided: rerun: the cause is fixed`,
     `${ago(1)} landed r-7`,
   ].join("\n") + "\n");
   calls = join(base, "calls");
@@ -71,12 +72,13 @@ test("the body of /api/gates has every section, one rule per Ask reason with onl
   expect(d.sandbox.network.domains).toContain("api.anthropic.com");
 });
 
-test("the log has the hold, the rules Chris set, and the Rule and Firefighter lines, newest first, 7 days back", async () => {
+test("the log has the hold, the rules Chris set, and the Rule, Director and Firefighter lines, newest first, 7 days back", async () => {
   const d: any = await body();
   const e = d.log.entries;
   expect(d.log.days).toBe(7);
   expect(e.map((x: any) => `${x.by} ${x.item} ${x.what}`)).toEqual([
     "Firefighter r-6 did answer r-6: picked the plain option",
+    "Director r-8 run-cap: decided: rerun: the cause is fixed",
     "Rule r-5 rescue: recommended",
     "Gate r-3 gate: 5 agent runs are live",
     "You rule rescue: set to recommended",
@@ -93,11 +95,10 @@ test("POST /api/gates/revoke/:reason runs `aleph always revoke`, and refuses a r
   expect(existsSync(calls) && readFileSync(calls, "utf8").length).toBe(n);
 });
 
-const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, explained: false,
+const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
   actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, args: { repo: "r", id: id.split("-")[1] }, recommended: false }], details: {}, repo: "r" });
 
-test("splitAsks keeps the Asks routed to Chris and puts host checks in the chores", () => {
-  // run-cap is not handed to the firefighter in the fixture's always.json, so it stays Chris's.
+test("splitAsks keeps every Ask and puts host checks in the chores", () => {
   const { asks, chores } = splitAsks([askItem("run-cap", "r-1"), askItem("host-check", "r-2")]);
   expect(asks.map((a) => a.id)).toEqual(["r-1"]);
   expect(chores.map((a) => a.id)).toEqual(["r-2"]);

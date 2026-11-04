@@ -31,18 +31,17 @@ export const REASONS = {
   rescue: ["Rescue of a stuck run", "A stuck run with more than one way out."],
   "run-cap": ["Run cap", "A goal started 3 times in one hour."],
   "acceptance-failed": ["Failed acceptance", "The Oracle still fails on main after a rerun."],
-  firefighter: ["Firefighter lands on security paths", "The firefighter would land a run that changes a held security path."],
   "proposal-check": ["Proposed checks", "The correction memory proposes a check for a repo."],
   "proposal-claude-md": ["Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."],
   "proposal-skill": ["Proposed skill changes", "The correction memory proposes a change to a skill."],
 };
 
 /** The label of an automatic mode: what it does. */
-export const MODES = { firefighter: "Firefighter", recommended: "Recommended", retry: "Retry", start: "Start", land: "Land", approve: "Approve" };
+export const MODES = { recommended: "Recommended", retry: "Retry", start: "Start", land: "Land", approve: "Approve" };
 const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 
 /** The log's actors, in filter order, with the badge tone of each. */
-export const BY = { You: "need", Rule: "done", Firefighter: "stuck", Gate: "run" };
+export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: "stuck", Gate: "run" };
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Gates", { aside: "What can stop, hold or ask. Rules decide the routine; you see what is left." })}` +

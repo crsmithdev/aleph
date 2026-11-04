@@ -4,11 +4,12 @@ import { expect, test } from "bun:test";
 import * as view from "../../ui/views/now.js";
 import { attend } from "../../ui/asks.ts";
 import { awaitingHeld, held, job, state } from "../../ui/fixtures/status-state.ts";
-import { asksOf, withAttn, issue, full, section, rows, problem, prop } from "../../ui/test-now.ts";
+import { withAttn, issue, full, section, rows, problem, prop } from "../../ui/test-now.ts";
+import { sentAsks, sentState } from "./escalated.ts";
 
 test("a held run, a stuck run, an asking issue and a red main are one row each, with the id, title, Problem and buttons", () => {
   const asking = [{ ...issue(7), title: "Which tier?", question: "Haiku or Sonnet for the digest?" }];
-  const s = { ...full, asks: asksOf([{ ...held, reviewCall: { call: "ask", reason: "touches hooks" } }], asking), stuck: [job({ name: "aleph-30", condition: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
+  const s = { ...full, asks: sentAsks([{ ...held, reviewCall: { call: "ask", reason: "touches hooks" } }], asking), stuck: [job({ name: "aleph-30", condition: "stuck", reason: "no commit", item: { id: 30, title: "Fix it" } })], issues: [], factory: { ...full.factory, health: ["health: aleph main is red at abc1234: tests"], hold: "Held: aleph-30 is stuck (no commit). No run starts or lands until it is cleared." } };
   const page = view.view.render(s);
   const top = section(page, "needs");
   const rs = rows(top);
@@ -37,7 +38,7 @@ test("a held run, a stuck run, an asking issue and a red main are one row each, 
 });
 
 test("a held run's details carry the hold note and the reviewer's verdict", () => {
-  const why = (call: any) => rows(withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: asksOf([{ ...held, reviewCall: call }]) }))[0];
+  const why = (call: any) => rows(withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: sentAsks([{ ...held, reviewCall: call }]) }))[0];
   expect(why({ call: "back", reason: "lost an assertion" })).toContain("Reviewer: back: lost an assertion");
   expect(why({ call: "error" })).toContain("Reviewer: error");
   expect(why(undefined)).not.toContain("Reviewer:");
@@ -45,7 +46,7 @@ test("a held run's details carry the hold note and the reviewer's verdict", () =
 });
 
 test("Issues holds the held runs before the stuck and failed ones, and none says whether an agent works", () => {
-  const s = { ...state, running: [], stuck: [job({ name: "aleph-30", condition: "failed", agent: true }), job({ name: "aleph-31", condition: "stuck" })], asks: asksOf([{ ...held, agent: false }]) };
+  const s = { ...state, running: [], stuck: [job({ name: "aleph-30", condition: "failed", agent: true }), job({ name: "aleph-31", condition: "stuck" })], asks: sentAsks([{ ...held, agent: false }]) };
   const h = withAttn(s);
   expect(h).toContain(">Awaiting you<");
   expect(h.indexOf("aleph-27")).toBeLessThan(h.indexOf("aleph-30"));
@@ -60,7 +61,7 @@ test("Issues holds the held runs before the stuck and failed ones, and none says
 });
 
 test("text from the state is escaped", () => {
-  const bad = { ...state, asks: asksOf([awaitingHeld({ name: "x", item: { id: 1, title: "<script>alert(1)</script>" } })]), queued: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
+  const bad = { ...state, asks: sentAsks([awaitingHeld({ name: "x", item: { id: 1, title: "<script>alert(1)</script>" } })]), queued: [{ repo: "a", id: 1, title: "<script>w</script>" }] };
   for (const h of [withAttn(bad), withAttn(bad)]) {
     expect(h).not.toContain("<script>");
     expect(h).toContain("&lt;script&gt;");
@@ -68,7 +69,7 @@ test("text from the state is escaped", () => {
 });
 
 test("an awaiting entry has Diff, Land and Drop buttons", () => {
-  const h = withAttn(state);
+  const h = withAttn(sentState);
   for (const v of ["diff", "land", "drop"]) expect(h).toContain(`data-act="${v}" data-name="aleph-27"`);
   expect(h).toContain("diff-panel");
 });
@@ -81,23 +82,23 @@ test("a stuck job shows its reason, the failed check and its seconds, and Re-che
 
 test("many awaiting jobs all render as rows, each with its details folded and its buttons", () => {
   const runs = [1, 2, 3, 4].map((i) => awaitingHeld({ name: `aleph-${i}`, reason: "Held path", item: { id: i, title: `t${i}` } }));
-  const h = withAttn({ ...state, asks: asksOf(runs) });
+  const h = withAttn({ ...state, asks: sentAsks(runs) });
   expect(h.match(/class="job-card small issue-row held-path"/g)?.length).toBe(4);
   expect(h.match(/<details class="more" data-keep="more:[^"]*">/g)?.length).toBe(4 + 1);
   for (const i of [1, 2, 3, 4]) expect(h).toContain(`data-act="land" data-name="aleph-${i}"`);
 });
 
 test("a held row shows the call verdict and its reason in Details", () => {
-  const withReview = (call: object) => ({ ...state, asks: asksOf([{ ...held, reviewCall: call }]) });
+  const withReview = (call: object) => ({ ...state, asks: sentAsks([{ ...held, reviewCall: call }]) });
   const h = withAttn(withReview({ call: "back", reason: "a test lost <an> assertion" }));
   expect(h).toContain("Reviewer: back: a test lost &lt;an&gt; assertion");
   expect(h.indexOf("Reviewer: back")).toBeGreaterThan(h.indexOf("<details"));
-  expect(withAttn(state)).not.toContain("Reviewer:");
+  expect(withAttn(sentState)).not.toContain("Reviewer:");
 });
 
 test("an asking issue with fields shows the question, the options, the recommended mark, the context and the buttons in the row", () => {
   const decision = { question: "Haiku or Sonnet for the `digest`?", options: [{ label: "Haiku", line: "Cheaper, `fast`" }, { label: "Sonnet", line: "Better summaries" }], recommended: "Sonnet", kind: "input" as const, reason: "question", why: ["Digests run daily", "Quality matters more"] };
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which tier?", question: "prose", decision }]), stuck: [], issues: [], factory: { ...state.factory, health: [] } };
+  const s = { ...state, asks: sentAsks([], [{ ...issue(152), title: "Which tier?", question: "prose", decision }]), stuck: [], issues: [], factory: { ...state.factory, health: [] } };
   const [row] = rows(withAttn(s));
   expect(row).toContain('<p class="dq">Haiku or Sonnet for the <code>digest</code>?</p>');
   expect(row).toContain("<code>fast</code>");
@@ -132,7 +133,6 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
     "part-dropped": { reason: "part-dropped", question: "A goal was dropped." },
     "acceptance-failed": { reason: "acceptance-failed", question: "acceptance: fail again" },
     rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", kind: "input" as const, reason: "question", why: [] } },
-    firefighter: { reason: "firefighter", question: "x changes y.ts, a held security path" },
   };
   return iss(q[reason]);
 };
@@ -140,7 +140,7 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
 for (const reason of Object.keys(ASK_REASONS)) {
   test(`ask row for ${reason}: Problem, named buttons, a hint each, and Always`, () => {
     const sm = sample(reason);
-    const items = attend(sm, {}, sm.lessons).items;
+    const items = sentAsks(sm.runs, sm.issues, sm.lessons);
     expect(items.map((i) => i.reason)).toEqual([reason]);
     const h = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: items });
     const row = h.match(new RegExp(`<article class="job-card small issue-row ${reason}"[^]*?</article>`))![0];
@@ -168,7 +168,7 @@ for (const reason of Object.keys(ASK_REASONS)) {
 
 test("the Awaiting-you group is one list; its articles are the asks plus the error lines", () => {
   const sm = sample("rescue");
-  const items = [...attend({ runs: [held], issues: sm.issues }, {}, [prop as any]).items];
+  const items = [...sentAsks([held], sm.issues, [prop as any])];
   const s = { ...state, asks: items, stuck: [], factory: { ...state.factory, health: ["health: aleph main is red at abc1234: tests"] } };
   const h = withAttn(s);
   const grp = h.match(/<div class="grp" id="awaiting">[^]*?<\/section>/)![0];
@@ -182,32 +182,34 @@ test("the Awaiting-you group is one list; its articles are the asks plus the err
   expect(view.view.render(s)).toContain('<span class="count">4</span>');
 });
 
-test("an ask with stored text shows the situation and each effect; one without shows the fixed text and the missing-text span", () => {
+test("an ask with stored text shows the situation and each effect; one still with the director shows the fixed text, the director span and no button", () => {
   const sm = sample("proposal");
-  const [base] = attend(sm, {}, sm.lessons).items;
-  const stored = { ...base, situation: "First sentence. Second sentence, longer than one.", explained: true, actions: base.actions.map((a, n) => ({ ...a, hint: `Effect ${n}.`, recommended: n === 0 })) };
+  const [base] = sentAsks(sm.runs, sm.issues, sm.lessons);
+  const stored = { ...base, situation: "First sentence. Second sentence, longer than one.", escalated: true, actions: base.actions.map((a, n) => ({ ...a, hint: `Effect ${n}.`, recommended: n === 0 })) };
   const render = (i: any) => withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: [i] }).match(/<article class="job-card small issue-row proposal"[^]*?<\/article>/)![0];
   const row = render(stored);
   expect(row).toContain('<p class="situation">First sentence. Second sentence, longer than one.</p>');
   expect(row).not.toContain('class="problem"');
-  expect(row).not.toContain("case text is missing");
+  expect(row).not.toContain("With the director");
   stored.actions.forEach((_, n) => expect(row).toContain(`Effect ${n}.`));
   expect(row.match(/Recommended<\/span>/g)?.length).toBe(1);
-  const plain = render({ ...base, explained: false });
+  const [plainAsk] = attend(sm, sm.lessons).items;
+  const plain = render(plainAsk);
   expect(plain).toContain(base.problem.slice(0, 20));
-  expect(plain).toContain("The case text is missing; this is the fixed text for this reason.");
+  expect(plain).toContain("With the director: it decides this Ask or sends it to you with its case text.");
   expect(plain).not.toContain("Recommended");
+  expect(plain).not.toContain("<button");
 });
 
 test("an ask card and a stuck card for a critical item show the priority badge", () => {
   const badge = '<span class="badge stuck">critical</span>';
-  expect(asksOf([], [{ ...issue(7), question: "Which?", priority: "critical" }]).map((a) => view.askRow(a)).join("")).toContain(badge);
+  expect(sentAsks([], [{ ...issue(7), question: "Which?", priority: "critical" }]).map((a) => view.askRow(a)).join("")).toContain(badge);
   const stuck = { ...state, asks: [], stuck: [job({ name: "aleph-30", condition: "stuck", repo: "aleph", item: { id: 30, title: "t", priority: "critical" } })] };
   expect(view.renderNeeds(stuck)).toContain(badge);
 });
 
 test("an ask card and a stuck card keep their choices in a closed fold, and the head and the problem outside it", () => {
-  const h = withAttn({ ...state, asks: asksOf([held]) });
+  const h = withAttn({ ...state, asks: sentAsks([held]) });
   for (const row of rows(h)) {
     if (!row.includes("choices")) continue;
     const open = row.indexOf('<details class="cfold"');
@@ -223,7 +225,7 @@ test("an ask card and a stuck card keep their choices in a closed fold, and the 
 test("a spec-check card's title line starts with its kind; an old 9-sentence situation shows 3 and the rest sits in the closed Details fold", () => {
   const nine = Array.from({ length: 9 }, (_, i) => `Sentence ${i + 1}.`).join(" ");
   const ask = { kind: "input", reason: "spec-check", question: "q", options: [], why: [], situation: nine };
-  const h = withAttn({ ...state, asks: asksOf([], [{ ...issue(5), title: "Fix it", reason: "spec-check", question: "spec check: x hold: y", ask }]) });
+  const h = withAttn({ ...state, asks: sentAsks([], [{ ...issue(5), title: "Fix it", reason: "spec-check", question: "spec check: x hold: y", ask }]) });
   const row = h.match(/<article class="job-card small issue-row spec-check"[^]*?<\/article>/)![0];
   expect(row).toContain('<span class="t">Spec check: Fix it</span>');
   expect(problem(row)).toBe("Sentence 1. Sentence 2. Sentence 3.");

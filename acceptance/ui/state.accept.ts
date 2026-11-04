@@ -102,18 +102,18 @@ describe("state", () => {
   test("an awaiting run's whole Ask reaches the state and the entry", () => {
     const j = state(now).asks[0];
     expect(j.situation).toBe("The run changes hooks/x.ts.");
-    expect(j.explained).toBe(true);
+    expect(j.escalated).toBe(true);
     expect(j.actions.map((a) => [a.act, a.hint, a.recommended])).toEqual([["land", "Merges it.", false], ["drop", "Throws it away. The path is held.", true]]);
   });
 
-  test("asks lists the held run with its kind and reason, and always shows a rule with its handed count", () => {
+  test("asks lists the held run with its kind and reason, and always shows a rule; a rule hands no Ask to anyone", () => {
     let s = state(now);
     expect(s.asks.map((a) => [a.kind, a.reason, a.id])).toEqual([["approval", "held-path", "fac-1"]]);
     expect(s.always).toEqual([]);
-    writeFileSync(join(factory, "always.json"), JSON.stringify({ "held-path": { action: "firefighter", at: "2026-10-28T00:00:00.000Z" } }));
+    writeFileSync(join(factory, "always.json"), JSON.stringify({ "held-path": { action: "land", at: "2026-10-28T00:00:00.000Z" } }));
     try {
       s = state(now);
-      expect(s.always).toEqual([{ reason: "held-path", action: "firefighter", at: "2026-10-28T00:00:00.000Z", handed: 1 }]);
+      expect(s.always).toEqual([{ reason: "held-path", action: "land", at: "2026-10-28T00:00:00.000Z" }]);
       expect(s.asks.map((a) => [a.reason, a.id])).toEqual([["held-path", "fac-1"]]);
       expect(s.asks[0].actions.some((a) => a.act === "land")).toBe(true);
     } finally { rmSync(join(factory, "always.json")); }
@@ -341,7 +341,7 @@ describe("an awaiting issue with the three flat fields", () => {
       return true;
     });
     const a = state(now).asks.find((x) => x.id === `fac-${goalId}`)!;
-    expect(a.explained).toBe(true);
+    expect(a.escalated).toBe(true);
     expect(a.situation).toBe("Three runs ended with no commit.");
     expect(a.actions.map((x) => [x.act, x.hint, x.recommended])).toEqual([["rerun", "Starts the goal again. The goal is clear.", true], ["close", "Closes the goal.", false]]);
   });

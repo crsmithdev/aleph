@@ -3,10 +3,11 @@ import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "../../ui/views/now.js";
 import { held, state } from "../../ui/fixtures/status-state.ts";
-import { asksOf, withAttn, problem, prop } from "../../ui/test-now.ts";
+import { withAttn, problem, prop } from "../../ui/test-now.ts";
+import { sentAsks } from "./escalated.ts";
 
 test("a proposal is a row with Yes-like buttons and its signals folded", () => {
-  const h = withAttn({ ...state, asks: asksOf([held], [], [prop]) });
+  const h = withAttn({ ...state, asks: sentAsks([held], [], [prop]) });
   const row = h.match(/<article class="job-card small issue-row proposal-check"[^]*?<\/article>/)![0];
   expect(problem(row)).toContain("Do not mock the db");
   expect(row).toContain('<span class="t">Lesson: No db mocks</span>');
