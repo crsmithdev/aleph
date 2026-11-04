@@ -37,7 +37,7 @@ test("a spec QUESTION run, then the firefighter's answer: the job keeps its Ask 
   // The real rescue path sets the plain question Ask and writes asked-spec.
   await dispatchIssues(f.start, undefined, undefined, f.rescue);
   expect(ask(id)?.options).toEqual([]);
-  const r = await applyActions([{ do: "answer", repo: "fac", n: id, note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, tell: async () => true });
+  const r = await applyActions([{ do: "answer", repo: "fac", n: id, note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop, tell: async () => true, scenarios: async () => ({ state: "none" }) });
   // The next dispatch: the firefighter's answer must not leave the goal open with no Ask and no run.
   await dispatchIssues(f.start, undefined, undefined, f.rescue);
   const hasAsk = ask(id) !== null;

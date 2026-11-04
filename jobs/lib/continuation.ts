@@ -320,9 +320,16 @@ export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
   return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
 }
 
-/** The step for a worker's claim that the goal is met, by `red`, the red line of main. */
-export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null): Step {
+/** The rerun note for failed sealed scenarios: their numbers only, never their text. */
+export const sealedNote = (failed: number[], main: string): string =>
+  `The last run said the goal is already met, but sealed scenario${failed.length > 1 ? "s" : ""} ${failed.join(", ")} fail${failed.length > 1 ? "" : "s"} on origin/${main}. Make the change the goal asks for.`;
+
+/** The step for a worker's claim that the goal is met, by `red`, the red line of main, and `failed`, the failed sealed scenario numbers. */
+export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failed: number[] = []): Step {
   const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
+  if (!red && failed.length) {
+    return { action: "drop", rerun: sealedNote(failed, repo.main), noted: `${said}, but sealed scenario${failed.length > 1 ? "s" : ""} ${failed.join(", ")} fail${failed.length > 1 ? "" : "s"} on origin/${repo.main}; dropped, and the goal reruns once` };
+  }
   if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "already-met" };
   return {
     action: "drop",

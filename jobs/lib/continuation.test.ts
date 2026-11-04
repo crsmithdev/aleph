@@ -140,6 +140,11 @@ describe("rescue of a stuck or failed run", () => {
     const red = claimStep(s, "foo.ts:3", "tests fail");
     expect(red.rerun).toContain("but the checks do not pass on origin/main (tests fail)");
     expect(red.done).toBeUndefined();
+    // A green main with a failing sealed scenario does not close the item: the goal reruns with the number only.
+    const sealed = claimStep(s, "foo.ts:3", null, [2, 4]);
+    expect(sealed.done).toBeUndefined();
+    expect(sealed.action).toBe("drop");
+    expect(sealed.rerun).toContain("sealed scenarios 2, 4 fail on origin/main");
   });
 
   test("the other safe cases, and none for the rest", () => {

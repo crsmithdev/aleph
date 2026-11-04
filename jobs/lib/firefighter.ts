@@ -21,7 +21,8 @@ import { landBlock } from "./worker-verdict.ts";
 import { git } from "./git.ts";
 import { itemOnMain, onMain } from "./status.ts";
 import { MAX_RUNS_PER_HOUR } from "./goal-decision.ts";
-import { writeRerun } from "./continuation.ts";
+import { sealedNote, writeRerun } from "./continuation.ts";
+import { sealedVerdict, type Sealed } from "./acceptance.ts";
 import { factoryDir, factoryRepos, redMains } from "./factory-status.ts";
 import { factoryLog } from "./layout.ts";
 import type { Fate } from "./outcome.ts";
@@ -257,11 +258,14 @@ export function securityPath(repo: Repo, branch: string | undefined): string | n
 export interface Ports {
   land: (name: string) => Promise<string | null>;
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
+  /** The item's sealed scenarios, checked against origin/<main>. */
+  scenarios: (repo: Repo, name: string) => Promise<Sealed>;
   tell: (line: string) => Promise<boolean>;
 }
 export const defaultPorts: Ports = {
   land: (name) => refusal(async () => { await (await landJob(name, { lander: "firefighter" }, { output: "ignore" })).child?.exited; }),
   drop: (name, reason, fate) => refusal(() => dropJob(name, { reason, quiet: true, fate })),
+  scenarios: (repo, name) => sealedVerdict(repo, name),
   tell,
 };
 
@@ -335,6 +339,20 @@ async function applyOne(a: Action, ports: Ports): Promise<Outcome> {
   const item = store.reader().item(repo.key, a.n);
   if (!item || issues.status(item) !== "open") return { refused: `${describe(a)}: no open issue ${repo.key}-${a.n}` };
   if (a.do === "close") {
+    // The sealed scenarios, if any, pass on origin/<main> before the item closes as already met.
+    const sealed = await ports.scenarios(repo, `${repo.key}-${a.n}`);
+    if (sealed.state === "infra") return { refused: `${describe(a)}: the sealed scenario check failed: ${sealed.fault}; the issue stays open` };
+    const open0 = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n);
+    if (sealed.state === "fail") {
+      const text = sealedNote(sealed.failed, repo.main);
+      if (open0) {
+        const why = await ports.drop(open0[0].run.name, text);
+        if (why) return { refused: `${describe(a)}: sealed scenarios ${sealed.failed.join(", ")} fail: ${why}` };
+        writeRerun(open0[0].run.name, text);
+      }
+      const bad = open0 ? null : store.note(repo, a.n, `firefighter: close refused: ${text}`);
+      return { refused: `${describe(a)}: sealed scenario${sealed.failed.length > 1 ? "s" : ""} ${sealed.failed.join(", ")} fail${sealed.failed.length > 1 ? "" : "s"}; ${open0 ? "dropped the job with a rerun note" : "noted on the issue"}${bad ? ` (no issue note: ${bad})` : ""}` };
+    }
     const open = allJobs().find((j) => isOpen(j) && j[0].run.repo === repo.key && issueOf(j) === a.n);
     if (open) {
       const why = await ports.drop(open[0].run.name, `closed by the firefighter: ${a.note}`, "already-met");

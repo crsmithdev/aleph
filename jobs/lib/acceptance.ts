@@ -382,6 +382,27 @@ export async function accept(repo: Repo, item: issues.Issue, run: Runner = runOn
   return `${name}: acceptance passed at ${sha}${seen}${archived(repo, name)}${bad ? ` (no issue note: ${bad})` : ""}`;
 }
 
+/** The sealed scenarios of item `name` checked against origin/<main>: none (no scenarios), pass, fail (with the failed numbers), or an infra fault. */
+export type Sealed = { state: "none" | "pass" } | { state: "fail"; failed: number[] } | { state: "infra"; fault: string };
+
+/** Check the item's sealed scenarios, if it has any, against origin/<main>; used before an already-met close. */
+export async function sealedVerdict(repo: Repo, name: string, check: ScenarioCheck = sandboxScenarios): Promise<Sealed> {
+  let scenarios = "";
+  try { scenarios = readHidden(repo, name)[SCENARIOS] ?? ""; } catch (e: any) { return { state: "infra", fault: `the sealed scenarios are unreadable: ${e?.message ?? e}` }; }
+  const numbers = scenarioNumbers(scenarios);
+  if (!numbers.length) return { state: "none" };
+  const full = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
+  if (!full) return { state: "infra", fault: `no origin/${repo.main}` };
+  let got: Checked;
+  try { got = await check(repo, full, scenarios); } catch (e: any) { got = { output: String(e?.message ?? e), infra: true }; }
+  if (got.infra) return { state: "infra", fault: `the scenario check: ${lastLines(got.output)}` };
+  const marks = scenarioMarks(got.output);
+  const missing = numbers.filter((n) => !marks.has(n));
+  if (missing.length) return { state: "infra", fault: `the scenario check gave no CHECK line for scenario ${missing.join(", ")}` };
+  const failed = numbers.filter((n) => marks.get(n) === "fail");
+  return failed.length ? { state: "fail", failed } : { state: "pass" };
+}
+
 /** The archive of accepted goals' tests on main, which `bun run accept` runs and `bun run test` does not. */
 export const ARCHIVE = "acceptance";
 const PUSHES = 3;

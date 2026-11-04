@@ -6,6 +6,7 @@ import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { readList, writeList } from "../../todo/lib/store.ts";
 import type { Ask } from "./ask.ts";
+import type { Sealed } from "./acceptance.ts";
 import type { Ports } from "./firefighter.ts";
 import { stamp, writeRun, type Run } from "./ledger.ts";
 import { askOf, setAsk } from "./ask.ts";
@@ -85,7 +86,11 @@ export const held = (b: string, review = "Looks right.\nVERDICT: land\n") =>
 
 export let landed: string[] = [];
 export let dropped: { name: string; reason: string; fate?: string }[] = [];
+/** The fake scenario check's answer; a test sets it, and every test starts with no sealed scenarios. */
+export let sealed: Sealed = { state: "none" };
+export const setSealed = (s: Sealed) => { sealed = s; };
 export const ports = (): Ports => ({
+  scenarios: async () => sealed,
   land: async (name) => { landed.push(name); return null; },
   drop: async (name, reason, fate) => { dropped.push({ name, reason, fate }); return null; },
   tell: (line) => fetch(`http://127.0.0.1:${server.port}/tell`, { method: "POST", body: JSON.stringify({ text: line }) }).then((r) => r.ok),
@@ -117,7 +122,7 @@ export function useFirefighterFixture(): void {
     });
   });
   afterAll(() => { server.stop(true); rmSync(base, { recursive: true, force: true }); });
-  beforeEach(() => { rmSync(join(base, "calls"), { force: true }); landed = []; dropped = []; told = []; reply([]); });
+  beforeEach(() => { rmSync(join(base, "calls"), { force: true }); landed = []; dropped = []; told = []; sealed = { state: "none" }; reply([]); });
 }
 
 export const firefighterRuns = () => existsSync(process.env.ALEPH_JOBS_DIR!) ? readdirSync(process.env.ALEPH_JOBS_DIR!).filter((d) => d.endsWith("-firefighter")) : [];
