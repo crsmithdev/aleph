@@ -124,7 +124,7 @@ export function wfRows(turns) {
   return rows;
 }
 
-const axisTick = (ms) => (ms <= 0 ? "0 s" : dur(Math.round(ms)));
+const axisTick = (ms) => (ms <= 0 ? "0s" : dur(Math.round(ms)));
 
 /** Wall time, summed tool time, the 3 longest calls (links that select their row) and the error count. */
 export function wfSummary(rows) {
@@ -134,8 +134,8 @@ export function wfSummary(rows) {
   const modelMs = calls.filter((r) => r.kind === "generation").reduce((n, r) => n + (r.durationMs ?? 0), 0);
   const longest = calls.filter((r) => r.kind !== "generation").sort((a, b) => (b.durationMs ?? 0) - (a.durationMs ?? 0)).slice(0, 3).filter((r) => r.durationMs);
   const errors = calls.filter((r) => r.error).length;
-  return `<p class="wf-sum">Wall time <strong>${esc(dur(Math.round(wall)) || "0 ms")}</strong><span class="dot">·</span>Tool time <strong>${esc(dur(Math.round(toolMs)) || "0 ms")}</strong>` +
-    `<span class="dot">·</span>Model time <strong>${esc(dur(Math.round(modelMs)) || "0 ms")}</strong><span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<a href="#" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</a>`).join(", ") : "none"}` +
+  return `<p class="wf-sum">Wall time <strong>${esc(dur(Math.round(wall)) || "0ms")}</strong><span class="dot">·</span>Tool time <strong>${esc(dur(Math.round(toolMs)) || "0ms")}</strong>` +
+    `<span class="dot">·</span>Model time <strong>${esc(dur(Math.round(modelMs)) || "0ms")}</strong><span class="dot">·</span>Longest ${longest.length ? longest.map((r) => `<a href="#" data-select="${esc(r.id)}">${esc(r.name)}${r.args ? `(${esc(r.args.slice(0, 30))})` : ""} ${esc(dur(r.durationMs))}</a>`).join(", ") : "none"}` +
     `<span class="dot">·</span>${errors ? `<strong class="terr">${errors} error${errors === 1 ? "" : "s"}</strong>` : "No errors"}</p>`;
 }
 

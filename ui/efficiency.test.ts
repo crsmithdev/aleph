@@ -69,9 +69,9 @@ test("the tiles and the head come from the data", () => {
   expect(h).toContain('<b>30%<em> / 6.0h</em></b>');
   expect(h).toContain('<header class="ph"><h1>Efficiency</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
   expect(h).not.toContain("vs 30-day average");
-  expect(h).not.toContain("in the last 24 h");
+  expect(h).not.toContain("in the last 24h");
   expect(h).toContain("&lt;0.1%");
-  expect(h).toContain("20 h counted · 11 runs, 0.4 h, have no outcome yet");
+  expect(h).toContain("20h counted · 11 runs, 0.4h, have no outcome yet");
   expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, "all")).toContain("needs 6 hours of usage snapshots");
 });
 
@@ -116,7 +116,7 @@ test("File an issue posts the first cause as the title, with the runs and reason
   expect(b.title).not.toContain(": ");
   expect(b.kind).toBe("task");
   expect(b.repo).toBe("aleph");
-  expect(b.body).toContain("fx-1: 2.0 h, 6 runs. already met");
+  expect(b.body).toContain("fx-1: 2.0h, 6 runs. already met");
   expect(issueFor({ ...D, classes: [] }, "all")).toBeNull();
   await expect(fileIssue(D, "nothing", async () => ({ ok: false, status: 422, json: async () => ({ error: "no" }) }) as any)).rejects.toThrow("no");
 });

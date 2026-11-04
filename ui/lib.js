@@ -1,7 +1,7 @@
 // Shared helpers for the factory UI's views: escaping, time and money formats,
 // the empty and error states, the copy-command button, and a small Markdown
 // renderer. Plain JS with no DOM, so the page and the tests both import it.
-// View goals may add to this file but not change what is here.
+// View goals may add to this file but not change what is here (the 2026-11-04 format goal did: a unit follows a number with no space).
 
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -17,6 +17,12 @@ export const clock = (iso) => {
 export const labelName = (l) => l;
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
 export const count = (n) => Number(n).toLocaleString("en-US");
+/** A mean or other average: one decimal; "–" for none. */
+export const mean = (v) => (v == null ? "–" : Number(v).toFixed(1));
+/** Hours as "3.2h": one decimal under 10, whole from 10. */
+export const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)}h`;
+/** A byte count as "512B", "1.5KiB" or "2.0MiB". */
+export const bytes = (n) => (n < 1024 ? `${n}B` : n < 1048576 ? `${(n / 1024).toFixed(1)}KiB` : `${(n / 1048576).toFixed(1)}MiB`);
 
 /** `≈1.4% wk` for a job's or session's estimated share of the weekly plan limit; "" without one. */
 /** A percent (0 to 100) as text: whole from 1%, one decimal from 0.05 to 1%, "<0.1%" above 0 and below 0.05, "–" for none. */
@@ -48,8 +54,8 @@ export function dur(s) {
   return m < 60 ? `${m}m ${pad(s % 60)}s` : `${Math.floor(m / 60)}h ${pad(m % 60)}m`;
 }
 
-/** Milliseconds, for a span that can be under a second: "850 ms", "1.5s", then as `dur`; "" for none. */
-export const durMs = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : dur(ms / 1000));
+/** Milliseconds, for a span that can be under a second: "850ms", "1.5s", then as `dur`; "" for none. */
+export const durMs = (ms) => (ms == null ? "" : ms < 1000 ? `${ms}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : dur(ms / 1000));
 
 /** The time from `from` to `to` (ISO strings) as `dur` writes it; "" for a bad pair. */
 export function span(from, to) {

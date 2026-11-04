@@ -11,10 +11,10 @@ const D: any = {
   models: [{ model: "unset", count: 2, p50: 480 }, { model: "opus", count: 1, p50: 700 }],
 };
 
-test("five stage tiles come from the data, with the last 24 h", () => {
+test("five stage tiles come from the data, with the last 24h", () => {
   const h = renderFactoryJobs(D, { phases: { ...D.phases, lead: P(1, 1484, 1484) } }, "lead");
   expect([...h.matchAll(/data-tile="(\w+)"/g)].map((m) => m[1])).toEqual(["lead", "intake", "queue", "implement", "land"]);
-  expect(h).toContain("<b>26m</b><small>p90 4h 36m</small><small>24m 44s in the last 24 h</small>");
+  expect(h).toContain("<b>26m</b><small>p90 4h 36m</small><small>24m 44s in the last 24h</small>");
   expect(h).toContain('data-tile="lead" aria-pressed="true"');
 });
 
@@ -25,7 +25,7 @@ test("picking a stage changes the histogram and the day rows", () => {
   expect(lead).toContain('<span class="bv">16m 40s</span>');
   expect(queue).toContain('<span class="bv">3m 20s</span>');
   expect(queue).toContain("Longest: 13m 20s.");
-  expect(lead).toContain("2 of 3 took over 4 h in the last 7 days.");
+  expect(lead).toContain("2 of 3 took over 4h in the last 7 days.");
 });
 
 test("the 1–4h and over-4h bins take the slow colour, the others do not", () => {
@@ -37,7 +37,7 @@ test("empty phases show dashes and no error", () => {
   const none = P(0, 0, 0, [0, 0, 0, 0, 0, 0, 0], 0);
   const d = { ...D, phases: { lead: none, intake: none, queue: none, implement: none, land: none }, buckets: [{ at: D.buckets[0].at, lead: null }], checks: [], models: [] };
   const h = renderFactoryJobs(d, null, "lead");
-  expect(h).toContain("<b>–</b><small>p90 –</small><small>none in the last 24 h</small>");
+  expect(h).toContain("<b>–</b><small>p90 –</small><small>none in the last 24h</small>");
   expect(h).not.toMatch(/NaN|undefined|Infinity/);
 });
 

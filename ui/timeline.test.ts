@@ -16,7 +16,7 @@ const rowsOf = (d: object, now?: number) => issueSegments(issue(d), now).flatMap
 describe("the waits", () => {
   test("a wait fills each gap over a minute: the factory's between runs, yours after a run that awaits you", () => {
     const w = gaps(spans(held()), Date.parse("2026-11-01T10:00:00Z"), NaN);
-    expect(w.map((x: any) => [lifespan(x.end - x.start), x.chris])).toEqual([["28 min", false], ["4 h 20 min", true]]);
+    expect(w.map((x: any) => [lifespan(x.end - x.start), x.chris])).toEqual([["28min", false], ["4h 20min", true]]);
   });
 
   test("a gap of a minute or less is no wait; a wait runs on to `to`", () => {
@@ -68,7 +68,7 @@ describe("the issue timeline", () => {
     expect(one.head).toContain('href="#/jobs/fac-1.1"');
     expect(two.head).toContain('href="#/issues/fac/1.2"');
     // fac-1.2 waited from the split to its run: 10 min.
-    expect(two.waits.map((w: any) => lifespan(w.end - w.start))).toEqual(["10 min"]);
+    expect(two.waits.map((w: any) => lifespan(w.end - w.start))).toEqual(["10min"]);
     expect(after.marks.map((m: any) => m.tone)).toEqual(["done"]);
     expect(after.events.map((e: any) => e.tag)).toEqual(["Waiting", "note"]);
   });
@@ -119,10 +119,10 @@ describe("the timeline panel", () => {
   });
 
   test("the formats", () => {
-    expect(lifespan(42_000)).toBe("42 s");
-    expect(lifespan(12 * 60_000)).toBe("12 min");
-    expect(lifespan(185 * 60_000)).toBe("3 h 5 min");
-    expect(lifespan(50 * 3_600_000)).toBe("2 d 2 h");
+    expect(lifespan(42_000)).toBe("42s");
+    expect(lifespan(12 * 60_000)).toBe("12min");
+    expect(lifespan(185 * 60_000)).toBe("3h 5min");
+    expect(lifespan(50 * 3_600_000)).toBe("2d 2h");
     expect(noteEvent("- 2026-11-01 08:06: done it")).toEqual({ at: Date.parse("2026-11-01T08:06"), text: "done it" });
     expect(noteEvent("no stamp")).toBeNull();
   });
@@ -134,13 +134,13 @@ describe("waitEvent", () => {
   const iso = (m: number) => new Date(t0 + m * min).toISOString();
   test("ends a hold at a started record", () => {
     const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "held", text: "x" }, { at: iso(3), name: "a", kind: "started", text: "" }]);
-    expect(e.html).toBe("Waited 9 min: 3 min because x.");
+    expect(e.html).toBe("Waited 9min: 3min because x.");
   });
   test("reads Waited N min. with no records", () => {
-    expect(waitEvent(w).html).toBe("Waited 9 min.");
-    expect(waitEvent(w, []).html).toBe("Waited 9 min.");
+    expect(waitEvent(w).html).toBe("Waited 9min.");
+    expect(waitEvent(w, []).html).toBe("Waited 9min.");
     const mapped: any[] = ([w] as any[]).map(waitEvent as any);
-    expect(mapped[0].html).toBe("Waited 9 min.");
+    expect(mapped[0].html).toBe("Waited 9min.");
   });
 });
 

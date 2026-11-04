@@ -50,7 +50,7 @@ test("the scorecard before the data arrives: dashes, and usage unknown with no u
 test("the causes merge across the lost classes, largest first, and leave out the classes that reached main", () => {
   const h = view.renderCauses(WEEK);
   expect([...h.matchAll(/efficiency">([^<]+)</g)].map((m) => m[1])).toEqual(["Issue had landed", "No commit"]);
-  expect(h).toContain("3.0 h · 4 runs");
+  expect(h).toContain("3.0h · 4 runs");
   expect(h).toContain("The first cause is 50% of the loss: Issue had landed, 4 runs.");
   expect(h.match(/class="barrow top"/g)?.length).toBe(1);
   expect(view.renderCauses(null)).toContain("Loading");

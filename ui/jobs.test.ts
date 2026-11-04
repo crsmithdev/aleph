@@ -277,7 +277,7 @@ describe("render", () => {
     expect(ev).toContain('<span class="badge stuck">Failed</span>');
     expect(ev).toContain("Build · opus: checks failed in <code>a.ts</code>");
     expect(ev).toContain('data-log="1" data-job="fac-9" data-file="output.log" data-as="transcript"');
-    expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0 KiB">checks</button>');
+    expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0KiB">checks</button>');
     expect(h).toContain("$1.03");
   });
 });

@@ -274,7 +274,7 @@ describe("views", () => {
     expect(first("runs")).toBe("a");
     expect(first("cost")).toBe("b");
     expect(first("age")).toBe("a");
-    expect(v.ageText({ status: "done", created: "2026-10-01", closed: "2026-10-11" })).toBe("10 d");
+    expect(v.ageText({ status: "done", created: "2026-10-01", closed: "2026-10-11" })).toBe("10d");
     expect(v.dateText("2026-10-20", new Date("2026-11-01T12:00"))).toBe("Oct 20");
     expect(v.dateText("2025-10-20", new Date("2026-11-01T12:00"))).toBe("2025-10-20");
   });
@@ -593,7 +593,7 @@ describe("the Issue timeline names why a wait waited", () => {
   const html = (x: any) => v.issueSegments(x).flatMap((s: any) => s.rows).flatMap((r: any) => r.events).map((e: any) => e.html).join("\n");
   test("a wait with hold records of the issue's job in its span says the reason and its minutes", () => {
     const holds = [{ at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "held", text: "main checks are red" }, { at: "2026-11-01T10:06:00Z", name: "fac-2", kind: "held", text: "other job" }];
-    expect(html(d(holds))).toContain("Waited 28 min: 25 min because main checks are red.");
+    expect(html(d(holds))).toContain("Waited 28min: 25min because main checks are red.");
     expect(html(d(holds))).not.toContain("other job");
   });
 });

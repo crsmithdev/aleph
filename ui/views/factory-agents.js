@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, onTile, pageHead, pct, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, mean, money, onTile, pageHead, pct, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
 import { hours, lastPeriod, loadSpeed, usable, usageTile, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
@@ -14,9 +14,9 @@ export function roleRows(a) {
 function scorecard(s, a, key, w) {
   const f = s.factory, live = a && totals(a), on = (k) => ({ key: k, on: key === k });
   return usageTile(s, on("usage"), small("live, not the window")) +
-    tile({ k: "Runs today", v: String(f.runsToday), body: small(`$${(f.costToday ?? 0).toFixed(2)} recorded cost`) + small("live, not the window"), ...on("runs") }) +
+    tile({ k: "Runs today", v: String(f.runsToday), body: small(`${money(f.costToday)} recorded cost`) + small("live, not the window"), ...on("runs") }) +
     tile({ k: "Worker slots", vHtml: `${f.liveRuns ?? 0} <em>of ${f.liveCap}</em>`, body: small("live, in use now"), ...on("slots") }) +
-    tile({ k: "Agents live", v: a ? a.mean.toFixed(1) : "–", body: a ? small(`mean, all roles, peak ${a.peak}, ${lastPeriod(w)}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"), ...on("live") });
+    tile({ k: "Agents live", v: a ? mean(a.mean) : "–", body: a ? small(`mean, all roles, peak ${a.peak}, ${lastPeriod(w)}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : small("Loading…"), ...on("live") });
 }
 
 function roles(a) {
@@ -33,8 +33,7 @@ export const DETAILS = {
   runs: { title: "Runs started", option: (_s, d) => barsOption(d.buckets.map((b) => xLabel(b.at, d.window)), [{ name: "Runs", data: d.buckets.map((b) => b.runs ?? 0) }]) },
 };
 
-const fixed = (v) => (v == null ? "–" : Number(v).toFixed(1));
-const stepOption = (d, name, vals) => lineOption(d.agents.points.map((p) => xLabel(p.at, d.window)), name, vals, { step: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(when(d.agents.points[q.dataIndex].at))}<br>${esc(fixed(q.value))} ${esc(name.toLowerCase())}`; } });
+const stepOption = (d, name, vals) => lineOption(d.agents.points.map((p) => xLabel(p.at, d.window)), name, vals, { step: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(when(d.agents.points[q.dataIndex].at))}<br>${esc(mean(q.value))} ${esc(name.toLowerCase())}`; } });
 
 /** The chart option: one area of total agents live. */
 export const liveOption = (d) => stepOption(d, "Live", totals(d.agents));

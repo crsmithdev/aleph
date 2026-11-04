@@ -1,10 +1,10 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { barRow, day, dur, hourLabel, esc, pct, small, tile, when } from "../lib.js";
+import { barRow, day, dur, hourLabel, esc, hours, mean, pct, small, tile, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
 export const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
-export const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)} h`;
+export { hours };
 export const pctText = (w) => pct((w || 0) * 100);
 /** A percent of the weekly limit: one decimal, but a small nonzero value shows "<0.1%" rather than "0.0%". */
 export const weekText = (v) => pct(v);
@@ -63,12 +63,12 @@ export function mergeCauses(d) {
 export const causeRow = (name, x, max, top) =>
   barRow(name, max > 0 ? (x.hours / max) * 100 : 0, `${esc(hours(x.hours))} · ${esc(plural(x.runs, "run"))}`, { top });
 
-/** The last 24 h against the window: the arrow gives the direction, the colour whether that is good. */
+/** The last 24h against the window: the arrow gives the direction, the colour whether that is good. */
 export function trend(week, day, format, lowerIsGood = true) {
-  if (day === null || day === undefined) return small("none in the last 24 h");
-  if (week === null || week === undefined || day === week) return small(`${format(day)} in the last 24 h`);
+  if (day === null || day === undefined) return small("none in the last 24h");
+  if (week === null || week === undefined || day === week) return small(`${format(day)} in the last 24h`);
   const down = day < week;
-  return `<span class="${down === lowerIsGood ? "good" : "warn"}">${down ? "▼" : "▲"} ${esc(format(day))} in the last 24 h</span>`;
+  return `<span class="${down === lowerIsGood ? "good" : "warn"}">${down ? "▼" : "▲"} ${esc(format(day))} in the last 24h</span>`;
 }
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
@@ -102,16 +102,9 @@ export function usageTile(s, link = {}, extra = "") {
 }
 
 /** A time on a Status card: "45s", "20m", "1h35m". */
-export function cardDur(s) {
-  if (s === null || s === undefined || Number.isNaN(s)) return "–";
-  s = Math.round(s);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m`;
-  return `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, "0") + "m" : ""}`;
-}
+export const cardDur = (s) => (s != null && Math.round(s) >= 60 && Math.round(s) < 3600 ? `${Math.floor(Math.round(s) / 60)}m` : dur(s));
 export const cardPct = (v) => (v == null ? "–" : pct(v * 100));
-export const cardHours = (h) => (h === null || h === undefined ? "–" : `${h.toFixed(1)}h`);
+export const cardHours = (h) => (h === null || h === undefined ? "–" : `${mean(h)}h`);
 
 /**
  * The trend of a card: an arrow and a percent, green when good and amber when bad, with the previous value and the baseline in the tooltip.

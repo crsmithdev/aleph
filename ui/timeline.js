@@ -6,15 +6,15 @@ import { dur, esc, money, shortModel, when } from "./lib.js";
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
 
-/** "42 s", "12 min", "3 h 5 min", "4 d 2 h". */
+/** "42s", "12min", "3h 5min", "4d 2h". */
 export function lifespan(ms) {
   const s = Math.round(ms / 1000);
-  if (s < 60) return `${s} s`;
+  if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m} min`;
+  if (m < 60) return `${m}min`;
   const h = Math.floor(m / 60);
-  if (h < 24) return m % 60 ? `${h} h ${m % 60} min` : `${h} h`;
-  return h % 24 ? `${Math.floor(h / 24)} d ${h % 24} h` : `${Math.floor(h / 24)} d`;
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}min` : `${h}h`;
+  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`;
 }
 
 /** A store date or a note's stamp as ms in local time, as the CLI writes them; NaN for neither. */

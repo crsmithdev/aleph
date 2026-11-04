@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
+import { blockersHtml, bytes, costHtml, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, tag, timeText, waitEvent } from "../timeline.js";
 
 
@@ -124,12 +124,11 @@ export function mountJobs(root, jobs) {
   root.oninput = (e) => { if (e.target.matches?.('[data-ui="jobs-search"]')) { setQuery({ q: e.target.value, limit: "" }); redraw(); } };
 }
 
-const kb = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KiB` : `${(n / 1048576).toFixed(1)} MiB`;
 const TRANSCRIPT = new Set(["output.log", "review.log"]);
 /** A run's log files as buttons, with a place beneath for the one that loads. "" for a run with no logs. */
 export function logButtons(job, r) {
   if (!r.logs?.length) return "";
-  const buttons = r.logs.map((l) => `<button class="link" type="button" data-log="${esc(r.id)}" data-job="${esc(job)}" data-file="${esc(l.name)}"${TRANSCRIPT.has(l.name) ? ' data-as="transcript"' : ""} title="${esc(`${l.name}, ${kb(l.size)}`)}">${esc(l.name.replace(/\.log$/, ""))}</button>`).join(" · ");
+  const buttons = r.logs.map((l) => `<button class="link" type="button" data-log="${esc(r.id)}" data-job="${esc(job)}" data-file="${esc(l.name)}"${TRANSCRIPT.has(l.name) ? ' data-as="transcript"' : ""} title="${esc(`${l.name}, ${bytes(l.size)}`)}">${esc(l.name.replace(/\.log$/, ""))}</button>`).join(" · ");
   return `<div class="dp-logs" data-logs><span class="quiet">logs:</span> ${buttons}<div class="logbody" hidden></div></div>`;
 }
 
@@ -140,7 +139,7 @@ export function renderTranscript(steps) {
     if (s.kind === "text") return `<div class="md">${md(s.text)}</div>`;
     const input = typeof s.input === "string" ? s.input : JSON.stringify(s.input, null, 2);
     const out = s.output === undefined ? "" : s.output.length > CUT || s.output.split("\n").length > 12
-      ? `<details><summary>${s.error ? "error, " : ""}result (${esc(kb(s.output.length))})</summary><pre class="trailers">${esc(s.output)}</pre></details>`
+      ? `<details><summary>${s.error ? "error, " : ""}result (${esc(bytes(s.output.length))})</summary><pre class="trailers">${esc(s.output)}</pre></details>`
       : `<pre class="trailers">${esc(s.output)}</pre>`;
     return `<div class="step"><b>${esc(s.name)}</b><pre class="trailers">${esc(input ?? "")}</pre>${out}</div>`;
   }).join("") || `<p class="quiet">Nothing to show.</p>`;
@@ -217,7 +216,7 @@ function jobKpis(j, now = Date.now()) {
     { k: "Elapsed", v: esc(runs.length ? lifespan(end - runs[0].start) : "–"), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
     { k: "Cost", v: j.cost !== undefined ? esc(money(j.cost)) : "–", sub: j.wk ? esc(wkText(j.wk)) : "" },
     { k: "Change", v: esc(c?.lines ?? "–"), sub: [c ? esc(c.files) : "", j.commit ? shortSha(j) : ""].filter(Boolean).join(", ") },
-    { k: "Checked by", v: esc(j.checkedBy?.join(", ") || "–"), text: !!j.checkedBy?.length, sub: j.look ? esc(`look: about ${j.look} min`) : "" },
+    { k: "Checked by", v: esc(j.checkedBy?.join(", ") || "–"), text: !!j.checkedBy?.length, sub: j.look ? esc(`look: about ${j.look}min`) : "" },
   ]);
 }
 

@@ -119,22 +119,35 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 
 | Kind | Format | Example | Helper | Missing |
 |---|---|---|---|---|
-| Absolute time | mm/dd hh:mm, 24-hour; `YYYY-MM-DD` in another year | 10/28 14:05 | `when()` (`ui/lib.js:294`) | empty string |
-| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:309`), `dateText()` (`ui/views/issues.js:206`) | empty string |
-| Axis hour | 12-hour, `a` or `p` | 4a, 1:36p | `hourLabel()` (`ui/lib.js:303`), for a chart axis only | none |
+| Absolute time | mm/dd hh:mm, 24-hour; `YYYY-MM-DD` in another year | 10/28 14:05 | `when()` (`ui/lib.js:298`) | empty string |
+| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:313`), `dateText()` (`ui/views/issues.js:206`) | empty string |
+| Axis hour | 12-hour, `a` or `p` | 4a, 1:36p | `hourLabel()` (`ui/lib.js:307`), for a chart axis only | none |
 | Clock | 24-hour time | 14:05 | `clock()` | empty string |
-| Duration | seconds, minutes, hours | 43s, 4m 05s, 1h 02m | `dur()`, `durMs()`, `span()`, `elapsed()` | `–` from `dur()`, empty from `durMs()` |
-| Cost | dollars, 2 decimals, `<$0.01` under half a cent | $1.25 | `money()` (`ui/lib.js:18`) | `$0.00` |
-| Weekly share | `≈1.4% wk` | ≈1.4% wk | `wkText()` (`ui/lib.js:21`), `costHtml()` | empty string |
-| Percent | whole number from 1%, one decimal below, `<0.1%` under 0.05% | 12%, 0.4% | `pct()` (`ui/lib.js:23`) | `–` |
+| Duration | seconds, minutes, hours; `durMs()` writes `850ms` under a second; `span()` in `ui/views/now.js` writes `2d4h` from 24 hours, a form `dur()` has no day for | 43s, 4m 05s, 1h 02m, 850ms | `dur()`, `durMs()`, `span()`, `elapsed()`; `lifespan()` (`ui/timeline.js:10`) for the timeline | `–` from `dur()`, empty from `durMs()` |
+| Cost | dollars, 2 decimals, `<$0.01` under half a cent | $1.25 | `money()` (`ui/lib.js:18`), also for the Runs today cost | `$0.00` |
+| Weekly share | `≈1.4% wk` | ≈1.4% wk | `wkText()` (`ui/lib.js:30`), `costHtml()` | empty string |
+| Percent | whole number from 1%, one decimal below, `<0.1%` under 0.05% | 12%, 0.4% | `pct()` (`ui/lib.js:29`) | `–` |
 | Count | thousands separators | 12,345 | `count()` (`ui/lib.js:19`) | none |
 | Ids | mono, muted, `500 var(--fs-xs)` | aleph-52 | `idLink()`, `repoIdLink()` | none |
 | Model | name without `claude-` and the version | opus | `shortModel()` | empty string |
-| Bytes | `B`, `KiB`, `MiB`, one decimal | 1.5 KiB | `kb()` (`ui/views/jobs.js:127`); move to `ui/lib.js` as `bytes()` at a second use | none |
-| Mean | one decimal | 2.4 | `toFixed(1)` (`ui/views/factory-agents.js:19`, `36`) | `–` |
-| Countdown | `m:ss` | 4:05 | `ui/index.html:221` | none |
+| Bytes | `B`, `KiB`, `MiB`, one decimal | 1.5KiB | `bytes()` (`ui/lib.js:25`) | none |
+| Mean | one decimal | 2.4 | `mean()` (`ui/lib.js:21`) | `–` |
+| Hours | one decimal under 10, whole from 10, then `h` | 3.2h, 12h | `hours()` (`ui/lib.js:23`) | none |
+| Countdown | `m:ss` | 4:05 | `elapsed()`, ticked by `ui/index.html:221` | `0:00` |
 
-Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()`, `ui/views/speed.js:23`). The `format` group has 77 `helper-bypass` rows; the audit marks each one (`docs/findings/2026-11-04-ui-design-audit.md`).
+**A unit follows its number with no space**: `850ms`, `3.2h`, `1.5KiB`, `12min`, `10d`. `dur()` puts a space only between two groups (`4m 05s`). Server log lines and health text from the factory keep their own form (`135 s`); they are not UI formats.
+
+Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()`, `ui/views/speed.js:23`). The `format` group has 71 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`. Each stays for one of these reasons:
+
+| Rows | Reason it stays |
+|---|---|
+| `ui/lib.js` (`pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `dur`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
+| `ui/api/activity.ts:20`, `ui/api/speed.ts:387-388` | Local-day date arithmetic for bucket starts, not display. |
+| `ui/views/issues.js:167`, `255`, `288`, `291`, `302` | Local-day date arithmetic for windows and age bins, not display. |
+| `ui/views/jobs.js:11` | Rounds a window length to a stable number, not display. |
+| `ui/views/memory.js:198`, `236`, `ui/views/sessions.js:74`, `ui/views/session.js:148`, `ui/timeline.js:138`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
+| `ui/api/skills.ts:92` | A server log line. |
+| `ui/api/speed.ts:136`, `491` | Hand-built labels, not shown by any view: the bucket `label` and its `pad` stay: `acceptance/ui/speed.accept.ts:77`, `78` and `88` read `label`. No view does; remove both with those assertions. |
 
 ## Tables
 

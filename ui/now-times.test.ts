@@ -14,7 +14,7 @@ test("a build run is a worker and is past the time box after 40 minutes", () => 
 });
 
 test("an awaiting row does not show checks as facts", () => {
-  expect(withAttn(state)).not.toContain(" s ✓");
+  expect(withAttn(state)).not.toContain("s ✓");
 });
 
 test("the Pause or Resume button sits in the page head beside the time; no Controls panel", () => {

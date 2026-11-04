@@ -209,11 +209,11 @@ export function dateText(s, now = new Date()) {
   return day(new Date(t), now);
 }
 
-/** The days since a store date, as "12 d"; a closed issue counts to its closing. "" for none. */
+/** The days since a store date, as "12d"; a closed issue counts to its closing. "" for none. */
 export function ageText(r, now = Date.now()) {
   const from = dayMs(r.created);
   if (!from) return "";
-  return `${Math.max(0, Math.floor(((r.status === "open" ? now : dayMs(r.closed) || now) - from) / DAY))} d`;
+  return `${Math.max(0, Math.floor(((r.status === "open" ? now : dayMs(r.closed) || now) - from) / DAY))}d`;
 }
 
 /** The request an issue row's X sends, or null for a row that is not an open issue. */
@@ -279,7 +279,7 @@ export function renderTiles(s, key = "open") {
     tile({ k: "Open", v: String(s.open), body: small(`of ${s.total} in the store`) + (stages ? small(stages) : ""), ...on("open") }) +
     tile({ k: "Filed, 7 days", v: String(s.filed), body: change(s.filed, s.filedBefore), ...on("filed") }) +
     tile({ k: "Closed, 7 days", v: String(s.closed), body: small(`${s.done} done, ${s.dropped} dropped`) + change(s.closed, s.closedBefore), ...on("closed") }) +
-    tile({ k: "Median open age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)} d`, body: s.oldest === null ? "" : small(`oldest ${Math.round(s.oldest)} d`), ...on("age") }) +
+    tile({ k: "Median open age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)}d`, body: s.oldest === null ? "" : small(`oldest ${Math.round(s.oldest)}d`), ...on("age") }) +
     tile({ k: "Runs", v: String(s.runs), body: small(`${money(s.cost)} recorded`), ...on("runs") }));
 }
 
@@ -296,7 +296,7 @@ export function flow(rows, days = 14, now = new Date()) {
   return out;
 }
 
-const AGES = [["Under 1 d", 1], ["1–3 d", 3], ["3–7 d", 7], ["1–2 wk", 14], ["2–4 wk", 28], ["Over 4 wk", Infinity]];
+const AGES = [["Under 1d", 1], ["1–3d", 3], ["3–7d", 7], ["1–2wk", 14], ["2–4wk", 28], ["Over 4wk", Infinity]];
 /** The open rows counted into age bins. */
 export function ageBins(rows, now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

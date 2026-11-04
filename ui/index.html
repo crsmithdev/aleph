@@ -54,7 +54,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { actMessages, denyReasons, diffHtml, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
+  import { actMessages, denyReasons, diffHtml, elapsed, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
@@ -217,8 +217,7 @@
   setInterval(() => {
     checkOut();
     document.querySelectorAll("#view .elapsed[data-since]").forEach((el) => {
-      const t = Math.max(0, Math.floor((Date.now() - Date.parse(el.dataset.since)) / 1000));
-      el.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+      el.textContent = elapsed(el.dataset.since, new Date().toISOString());
     });
   }, 1000);
 

@@ -14,7 +14,7 @@ const SLOW_BINS = 5;
 
 const stageTile = ([key, name], d, day, on) => {
   const c = d.phases[key], dc = day?.phases?.[key], none = !c.count;
-  return tile({ k: name, v: none ? "–" : durShort(c.p50), body: small(`p90 ${none ? "–" : dur(c.p90)}`) + (trendOn(d) ? small(dc?.count ? `${dur(dc.p50)} in the last 24 h` : "none in the last 24 h") : ""), key, on });
+  return tile({ k: name, v: none ? "–" : durShort(c.p50), body: small(`p90 ${none ? "–" : dur(c.p90)}`) + (trendOn(d) ? small(dc?.count ? `${dur(dc.p50)} in the last 24h` : "none in the last 24h") : ""), key, on });
 };
 
 /** The ECharts option for a stage's times. The slowest bins take the hot colour. */
@@ -29,14 +29,14 @@ function days(d, key) {
 
 const table = (labels, num, rows) => dataTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`).join(""));
 
-/** The page body for a stage. `day` is /api/speed for the last 24 h, or null. */
+/** The page body for a stage. `day` is /api/speed for the last 24h, or null. */
 export function renderFactoryJobs(d, day, stage = "lead") {
   const [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0], c = d.phases[key];
   const over = (c.hist ?? [])[6] ?? 0;
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: `<a href="#/jobs?window=${esc(d.window ?? "week")}">All jobs</a> ${scope}` })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
-    `<div class="split">${card(`${name}: how long it took`, `<p>${esc(text)} ${over} of ${c.count} took over 4 h in the ${lastPeriod(d)}.</p><div class="chartbox" role="img" aria-label="${esc(histLabel(c, name))}"></div>`)}` +
+    `<div class="split">${card(`${name}: how long it took`, `<p>${esc(text)} ${over} of ${c.count} took over 4h in the ${lastPeriod(d)}.</p><div class="chartbox" role="img" aria-label="${esc(histLabel(c, name))}"></div>`)}` +
     card(`Median by ${bucketOf(d)}`, days(d, key) + `<p>Longest: ${esc(c.count ? dur(c.worst) : "–")}.</p>`) + `</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Runs", "p50", "p90"], ["Runs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
     card("Build time by model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)]))) + `</div></div>`;

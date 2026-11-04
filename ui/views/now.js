@@ -153,7 +153,7 @@ const more = (key, body) => `<details class="more" data-keep="more:${esc(key)}">
 function details(s, j, extra = "") {
   const parts = extra + (j.question ? `<p class="quiet q">${esc(j.question)}</p>` : "") +
     `<dl class="facts">${fact("Started", esc(when(j.started, new Date(s.now))))}${j.phase ? fact("Phase", esc(j.phase)) : ""}${j.cost !== undefined ? fact("Cost", costHtml(j.cost, j.wk)) : ""}${j.model ? fact("Model", esc(shortModel(j.model))) : ""}${checkFacts(j)}</dl>` +
-    (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)} s</p>` : "") +
+    (failed(j) ? `<p class="quiet q">Last check that failed: <b>${esc(failed(j).name)}</b>, ${esc(failed(j).seconds)}s</p>` : "") +
     (j.stat ? `<div class="ev one"><div><h4>Diff</h4><pre class="stat">${statLines(j.stat)}</pre></div></div>` : "") +
     trailerLine(j, s.now) +
     (j.defaults.length ? `<h4>Defaults taken</h4><ul>${j.defaults.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>` : "") +
@@ -166,13 +166,12 @@ const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 const STATUS_TONE = { awaiting: "need", stuck: "stuck", working: "run", landing: "run", planning: "run", queued: "run", blocked: "quiet", triaged: "quiet", new: "quiet", landed: "done", done: "done" };
 const statusBadge = (st) => `<span class="badge ${STATUS_TONE[st] ?? "quiet"}">${esc(st)}</span>`;
 
-/** "4m", "1h05m", "2d4h": the time from `since` to `to`, in the least room; "–" when the work was never picked up. */
+/** "4m 05s", "1h 05m", "2d4h": the time from `since` to `to`, in the least room; "–" when the work was never picked up. */
 export function span(since, to) {
   const ms = Date.parse(to) - Date.parse(since);
   if (!since || !(ms >= 0)) return "–";
-  const m = Math.floor(ms / 60_000), h = Math.floor(m / 60);
-  if (h >= 24) return `${Math.floor(h / 24)}d${h % 24}h`;
-  return h ? `${h}h${String(m % 60).padStart(2, "0")}m` : `${m}m`;
+  const h = Math.floor(ms / 3_600_000);
+  return h >= 24 ? `${Math.floor(h / 24)}d${h % 24}h` : dur(ms / 1000);
 }
 
 /** The "3/4" link of a part to its parent; "" for a card that is no part. */
