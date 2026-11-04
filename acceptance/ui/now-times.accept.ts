@@ -7,10 +7,10 @@ import { awaitingHeld, job, state } from "../../ui/fixtures/status-state.ts";
 import { actMessages, openDiffs } from "../../ui/lib.js";
 import { asksOf, withAttn, trailerLine } from "../../ui/test-now.ts";
 
-test("the as-of line is h:mm am or pm, no date", () => {
-  expect(view.renderAsOf({ now: new Date(2026, 9, 28, 9, 5).toISOString() })).toBe("9:05 am");
-  expect(view.renderAsOf({ now: new Date(2026, 9, 28, 21, 5).toISOString() })).toBe("9:05 pm");
-  expect(view.renderAsOf(state)).toMatch(/^\d{1,2}:\d{2} (am|pm)$/);
+test("the as-of line is mm/dd hh:mm", () => {
+  expect(view.renderAsOf({ now: new Date(2026, 9, 28, 9, 5).toISOString() })).toBe("10/28 09:05");
+  expect(view.renderAsOf({ now: new Date(2026, 9, 28, 21, 5).toISOString() })).toBe("10/28 21:05");
+  expect(view.renderAsOf(state)).toMatch(/^\d{2}\/\d{2} \d{2}:\d{2}$/);
 });
 
 test("a running job past 40 minutes says so", () => {
@@ -53,9 +53,9 @@ test("the Job trailer is parsed into run kind and start, linked to the job page 
   const id = "20261028-042822-aleph-aleph-240-agent";
   const land = job({ name: "aleph-240", condition: "landed", trailers: [{ key: "Item", value: "aleph-240" }, { key: "Job", value: id }] });
   const h = trailerLine(land, state.now);
-  expect(h).toContain(`<p class="trailers-line">aleph-240 \u00b7 <a href="#/jobs/aleph-240" title="${id}">agent run, Oct 28 04:28</a></p>`);
+  expect(h).toContain(`<p class="trailers-line">aleph-240 \u00b7 <a href="#/jobs/aleph-240" title="${id}">agent run, 10/28 04:28</a></p>`);
   expect(h.replace(/title="[^"]*"/, "")).not.toContain(id);
-  expect(trailerLine({ ...land, trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }, state.now)).toContain(">land, Oct 28 13:45<");
+  expect(trailerLine({ ...land, trailers: [{ key: "Job", value: id.replace("agent", "land").replace("042822", "134500") }] }, state.now)).toContain(">land, 10/28 13:45<");
 });
 
 const two: any = { ...state, asks: asksOf([awaitingHeld({ name: "job-a" }), awaitingHeld({ name: "job-b" })]) };

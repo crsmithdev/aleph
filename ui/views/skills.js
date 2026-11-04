@@ -1,6 +1,6 @@
 // One skill: how often it ran, from Langfuse. `renderSkill` takes /api/skills/:name and does not touch the DOM.
 // The shell takes one view per module, so the route is declared in skill.js. The list of skills is in sessions.js.
-import { card, chart, crumb, dataTable, empty, esc, idLink, pageHead, span, when } from "../lib.js";
+import { card, chart, crumb, dataTable, empty, esc, idLink, day, pageHead, span, when } from "../lib.js";
 
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
 
@@ -10,7 +10,7 @@ export const bars = (key, label = "Uses per day") => `<div class="perday chartbo
 /** The ECharts option for per-day counts: one bar per day, the days counted on from `since` (YYYY-MM-DD). */
 export function perDayOption(counts, since) {
   const t0 = Date.parse(since);
-  const days = counts.map((_, i) => (Number.isNaN(t0) ? String(i + 1) : new Date(t0 + i * 864e5).toISOString().slice(0, 10)));
+  const days = counts.map((_, i) => (Number.isNaN(t0) ? String(i + 1) : day(t0 + i * 864e5)));
   return {
     grid: { left: 2, right: 2, top: 2, bottom: 2 },
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" }, confine: true, formatter: (p) => { const q = [].concat(p)[0]; return `${esc(q.name)}<br>${q.value} ${q.value === 1 ? "use" : "uses"}`; } },

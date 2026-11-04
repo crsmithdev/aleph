@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import { axisTimes, compactScale, gaps, lifespan, noteEvent, renderTimeline, spans, waitEvent } from "./timeline.js";
+import { axisTimes, compactScale, gaps, fromTo, lifespan, noteEvent, renderTimeline, spans, waitEvent } from "./timeline.js";
 // @ts-ignore
 import { issueSegments, renderIssue } from "./views/issues.js";
 
@@ -156,4 +156,8 @@ describe("the issue page's tidy-up", () => {
     expect(seg("word ".repeat(60))).toContain('class="dp-txt clamp"');
     expect(seg("short")).not.toContain("dp-more");
   });
+});
+
+test("fromTo shows mm/dd hh:mm for two times on one day", () => {
+  expect(fromTo(new Date(2026, 9, 28, 14, 5), new Date(2026, 9, 28, 15, 7))).toBe("10/28 14:05 to 10/28 15:07");
 });

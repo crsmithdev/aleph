@@ -360,11 +360,8 @@ export function askRow(i, now = new Date().toISOString()) {
 /** An error line as a card: the head alone, because the page has no action that fixes it. */
 const errorRow = (l) => `<article class="job-card small issue-row error" data-kind="error">${needHead("error", "", "", "", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`)}</article>`;
 
-/** "12:49 pm": the time of the state. */
-export function renderAsOf(s) {
-  const d = new Date(s.now), h = d.getHours();
-  return `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
-}
+/** "10/28 14:05": the time of the state. */
+export const renderAsOf = (s) => when(s.now);
 
 /** The Pause or Resume button of the page head. */
 export function renderControls(s) {

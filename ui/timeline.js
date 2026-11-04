@@ -1,7 +1,7 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { clock, dur, esc, money, shortModel, when } from "./lib.js";
+import { dur, esc, money, shortModel, when } from "./lib.js";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -136,8 +136,8 @@ export const tag = (text, tone = "quiet") => `<span class="badge ${esc(tone)}">$
 
 const LEGEND = { wait: "waiting", chris: "awaiting you", aux: "triage, plan, facts", build: "build", bad: "failed or stuck", land: "land", made: "filed", done: "closed or accepted" };
 const pct = (f) => (f * 100).toFixed(3);
-/** The time on the page: "08:11" when the whole timeline is one day, else "Nov 02 08:11". */
-const timeOf = (at, oneDay) => (Number.isFinite(at) ? (oneDay ? clock(new Date(at)) : when(new Date(at))) : "");
+/** The time on the page: "11/02 08:11". */
+const timeOf = (at) => (Number.isFinite(at) ? when(new Date(at)) : "");
 
 /**
  * The Timeline panel. `segments` is `[{ title, aside?, rows }]`; a row is
@@ -148,12 +148,11 @@ export function renderTimeline(segments) {
   const rows = segments.flatMap((s) => s.rows);
   const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
   if (!rows.length) return "";
-  const x = compactScale(times), lo = Math.min(...times), hi = Math.max(...times);
-  const oneDay = new Date(lo).toDateString() === new Date(hi).toDateString();
+  const x = compactScale(times);
   const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.chris ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
   const key = Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => `<li class="t-${k}"><i></i>${esc(v)}</li>`).join("");
   // A tick near the end ends at its time, so it stays inside the axis.
-  const ticks = axisTimes(times, x).map((t) => `<span${x(t) > 0.9 ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t, oneDay))}</span>`).join("");
+  const ticks = axisTimes(times, x).map((t) => `<span${x(t) > 0.9 ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t))}</span>`).join("");
   const at = (a, b) => `left:${pct(x(a))}%;width:${pct(Math.max(0.004, x(b) - x(a)))}%`;
   // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
   const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
@@ -167,7 +166,7 @@ export function renderTimeline(segments) {
     : `<div class="dp-evt">${html}</div>`);
   const events = (evs) => {
     const list = [...(evs ?? [])].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
-    return list.length ? `<div class="dp-evs">${list.map((e) => `<div class="dp-ev"><span class="dp-at">${esc(timeOf(e.at, oneDay))}</span><span>${tag(e.tag, e.tone)}</span>${evt(e.html)}</div>`).join("")}</div>` : "";
+    return list.length ? `<div class="dp-evs">${list.map((e) => `<div class="dp-ev"><span class="dp-at">${esc(timeOf(e.at))}</span><span>${tag(e.tag, e.tone)}</span>${evt(e.html)}</div>`).join("")}</div>` : "";
   };
   const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
   return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2><ul class="dp-key">${key}</ul></div>` +
@@ -190,7 +189,7 @@ export const costText = (n) => (n ? money(n) : "–");
 /** A span in ms as `dur` writes it, or "–". */
 export const timeText = (ms) => (ms > 0 ? dur(ms / 1000) : "–");
 /** "08:11 to 08:39" for a span in one day, else with the dates. */
-export const fromTo = (a, b) => (new Date(a).toDateString() === new Date(b).toDateString() ? `${clock(new Date(a))} to ${clock(new Date(b))}` : `${when(new Date(a))} to ${when(new Date(b))}`);
+export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 
 if (typeof document !== "undefined") {
   document.addEventListener("click", (e) => {
