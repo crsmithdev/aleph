@@ -1,14 +1,14 @@
 ---
-name: branch-review
+name: code-review
 description: >
-  Branch review: judge a finished branch against its goal, with findings
+  Code review: judge a finished branch against its goal, with findings
   that are real, introduced by the branch and proved by evidence. Use when you
   review a worker's branch or diff before it lands.
 ---
 
 Adapted from the review rubric of openai/codex (@f2b94ef8, Apache-2.0), the gate-integrity catalog and review checklist of garrytan/gstack (@46c9f612, MIT), the task reviewer of obra/superpowers (@22f0b463, MIT) and the spec-to-code-compliance checker of trailofbits/skills (@711af095, CC-BY-SA-4.0, ideas only).
 
-# Branch review
+# Code review
 
 A review is **sceptical**: the worker's summary, commit messages and its own tests are claims, and the code and your runs are the evidence. A rationale the worker wrote ("kept it simple on purpose") never lowers a finding.
 
