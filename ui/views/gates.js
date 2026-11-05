@@ -5,16 +5,22 @@ import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink
 import { askRow } from "./now.js";
 
 export const view = {
-  path: "/gates",
-  title: "Gates",
+  path: "/automation",
+  title: "Automation",
   // Next to Status in the sidebar: both say what holds the factory now.
-  group: "work",
-  order: 0.5,
+  group: "factory",
+  order: -2,
   icon: "shield-halved",
   api: "/api/gates",
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
   mount: (root) => mount(root),
+};
+
+/** `#/gates` (with or without a query) is now `#/automation`. */
+export const redirect = (hash) => {
+  const [path, qs] = String(hash ?? "").split("?");
+  return path === "#/gates" ? `#/automation${qs ? `?${qs}` : ""}` : null;
 };
 
 /** The name and the one line of each Ask reason. A reason not listed shows its key. */
@@ -45,7 +51,7 @@ const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: "stuck", Gate: "run" };
 
 export function renderGates(d, q = new URLSearchParams()) {
-  return `<div class="page gates">${pageHead("Gates", { aside: "What can stop, hold or ask. Rules decide the routine; you see what is left." })}` +
+  return `<div class="page gates">${pageHead("Automation", { aside: "What can stop, hold or ask. Rules decide the routine; you see what is left." })}` +
     renderNow(d) + renderWaiting(d) + renderChores(d) + renderRules(d) +
     `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
@@ -146,7 +152,7 @@ function itemLink(item) {
 /** The log, newest first, filtered by `by` (you, rule, firefighter, gate) from the address. */
 export function renderLog(d, by) {
   const pick = Object.keys(BY).find((k) => k.toLowerCase() === by) ?? "All";
-  const chips = ["All", ...Object.keys(BY)].map((k) => `<a class="fchip" href="#/gates${k === "All" ? "" : `?by=${k.toLowerCase()}`}"${k === pick ? ' aria-current="true"' : ""}>${esc(k)}</a>`).join("");
+  const chips = ["All", ...Object.keys(BY)].map((k) => `<a class="fchip" href="#/automation${k === "All" ? "" : `?by=${k.toLowerCase()}`}"${k === pick ? ' aria-current="true"' : ""}>${esc(k)}</a>`).join("");
   const entries = d.log.entries.filter((e) => pick === "All" || e.by === pick);
   const rows = entries.map((e) => `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td class="what">${esc(e.what)}${e.count ? ` <span class="quiet">×${e.count}</span>` : ""}</td></tr>`).join("");
   return `<section id="gates-log" aria-label="Log">${sectionHead("Log", { aside: `The last ${d.log.days} days, at most ${d.log.max} entries of each actor.` })}` +

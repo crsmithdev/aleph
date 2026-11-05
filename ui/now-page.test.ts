@@ -139,3 +139,8 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   expect(outcome.innerHTML.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
   resetSpeed();
 });
+
+test("the Status view is at / in the Factory group", () => {
+  expect(view.view.path).toBe("/");
+  expect(view.view.group).toBe("factory");
+});

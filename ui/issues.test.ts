@@ -165,7 +165,7 @@ describe("views", () => {
   test("the view is Issues at #/issues; #/inventory and #/projects redirect, the detail routes do not", () => {
     expect(v.view.path).toBe("/issues");
     expect(v.view.title).toBe("Issues");
-    expect(v.view.group).toBe("work");
+    expect(v.view.group).toBe("factory");
     expect(v.redirect("#/inventory")).toBe("#/issues");
     expect(v.redirect("#/inventory?status=open")).toBe("#/issues?status=open");
     expect(v.redirect("#/projects")).toBe("#/issues");

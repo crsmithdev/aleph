@@ -9,8 +9,8 @@ import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } 
 export const view = {
   path: "/",
   title: "Status",
-  group: "work",
-  order: 0,
+  group: "factory",
+  order: -3,
   icon: "gauge-high",
   api: "/api/state",
   refresh: 60,

@@ -221,3 +221,17 @@ test("a cap post writes the live cap only and leaves the old day and awaiting ke
   expect(await r.json()).toEqual({ live: 3 });
   expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ day: 999, awaiting: 5, live: 3 });
 });
+
+test("the view is Automation at #/automation in the Factory group; #/gates redirects; the chips link to #/automation", () => {
+  expect(gates.view.path).toBe("/automation");
+  expect(gates.view.title).toBe("Automation");
+  expect(gates.view.group).toBe("factory");
+  const h = gates.renderGates(data());
+  expect(h).toContain("<h1>Automation</h1>");
+  expect(h).not.toContain("<h1>Gates</h1>");
+  expect(h).toContain('href="#/automation?by=');
+  expect(h).not.toContain("#/gates");
+  expect(gates.redirect("#/gates")).toBe("#/automation");
+  expect(gates.redirect("#/gates?by=director")).toBe("#/automation?by=director");
+  expect(gates.redirect("#/automation")).toBeNull();
+});
