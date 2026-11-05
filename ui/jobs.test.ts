@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
@@ -263,6 +263,13 @@ describe("render", () => {
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
     expect(h).toContain('<pre class="diff" id="diff" data-job="fac-9"><p class="quiet" role="status">Loading the diff…</p></pre>');
+  });
+  test("the Detail head is a sectionHead inside the dp-detail block", () => {
+    const h = v.renderJob(job);
+    expect(h.slice(h.indexOf('<div class="dp-detail">'))).toStartWith('<div class="dp-detail"><div class="sh"><h2>Detail</h2></div>');
+    const css = readFileSync(join(import.meta.dir, "app.css"), "utf8");
+    expect(css).not.toContain(".dp-detail > h2");
+    expect(css).toContain(".dp-detail > .sh { margin: var(--sp-8) 0 0; }");
   });
   test("a job on an issue links to it above the Timeline, and its crumb goes through the issue", () => {
     const h = v.renderJob(job), href = "#/issues/fac/9";
