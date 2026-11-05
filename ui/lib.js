@@ -37,21 +37,15 @@ export const costHtml = (cost, wk) => {
   return `<span class="wk" title="${esc(tip)}">${esc(wkText(wk))}</span>${dollars ? ` <span class="quiet">${dollars}</span>` : ""}`;
 };
 
-/** "4:12": minutes and seconds from `from` to `to` (ISO strings); minutes may pass 59. */
-export function elapsed(from, to) {
-  const ms = Date.parse(to) - Date.parse(from);
-  if (!(ms >= 0)) return "0:00";
-  const t = Math.floor(ms / 1000);
-  return `${Math.floor(t / 60)}:${pad(t % 60)}`;
-}
-
-/** Seconds as "43s", "4m 05s" or "1h 02m"; "–" for none. Every duration on the page has this form. */
+/** Seconds as "43s", "4m 05s", "1h 02m" or "2d 04h"; "–" for none. Every duration on the page has this form. */
 export function dur(s) {
   if (s === null || s === undefined || Number.isNaN(s)) return "–";
   s = Math.round(s);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  return m < 60 ? `${m}m ${pad(s % 60)}s` : `${Math.floor(m / 60)}h ${pad(m % 60)}m`;
+  if (m < 60) return `${m}m ${pad(s % 60)}s`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h ${pad(m % 60)}m` : `${Math.floor(h / 24)}d ${pad(h % 24)}h`;
 }
 
 /** Milliseconds, for a span that can be under a second: "850ms", "1.5s", then as `dur`; "" for none. */

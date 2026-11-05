@@ -34,7 +34,7 @@ test("with no time for the stage the trend, strip and slowest boxes give way to 
 test("five stage tiles come from the data, with the last 24h", () => {
   const h = renderFactoryJobs(D, { phases: { ...D.phases, lead: P(1, 1484, 1484) } }, "lead");
   expect([...h.matchAll(/data-tile="(\w+)"/g)].map((m) => m[1])).toEqual(["lead", "intake", "queue", "implement", "land"]);
-  expect(h).toContain('<span class="tr good" title="24m 44s in the last 24h, against 26m 10s over the window">▼ 5%</span></span><b>26m<em> / 4h 36m</em></b>');
+  expect(h).toContain('<span class="tr good" title="24m 44s in the last 24h, against 26m 10s over the window">▼ 5%</span></span><b>26m 10s<em> / 4h 36m</em></b>');
   expect(h).toContain('data-tile="lead" aria-pressed="true"');
 });
 

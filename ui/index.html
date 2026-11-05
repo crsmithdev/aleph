@@ -55,7 +55,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { actMessages, denyReasons, loadDiff, elapsed, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
+  import { actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
@@ -215,13 +215,7 @@
     if (m.view.refresh) timer = setInterval(() => { if (!$("view").querySelector("button.act.ask")) load(m, false); }, m.view.refresh * 1000);
   }
 
-  // Elapsed times tick every second between refreshes: m:ss since the element's data-since.
-  setInterval(() => {
-    checkOut();
-    document.querySelectorAll("#view .elapsed[data-since]").forEach((el) => {
-      el.textContent = elapsed(el.dataset.since, new Date().toISOString());
-    });
-  }, 1000);
+  setInterval(checkOut, 1000);
 
   // In-page anchors (#needs) scroll to their element instead of routing.
   document.addEventListener("click", (e) => {

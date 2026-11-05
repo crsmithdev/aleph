@@ -2,7 +2,7 @@
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
 import { pageHead, sectionHead, blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
-import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
+import { barLabel, barsOf, costText, fold, fromTo, gaps, panel, renderKpis, renderTimeline, spans, waitEvent } from "../timeline.js";
 
 
 /** The days of the list: the window, or an old `?days=` address that has no window; else the stored window. */
@@ -150,13 +150,14 @@ export function jobSegments(j, now = Date.now()) {
   const events = work.map((x) => { seen[x.r.kind] = (seen[x.r.kind] ?? 0) + 1; return runEvent(j.name, x, count[x.r.kind] > 1 ? seen[x.r.kind] : 0, j); });
   const waits = work.length ? gaps(work, work[0].start, NaN) : [];
   const builds = count.worker ?? 0, lands = count.land ?? 0;
+  const took = work.length ? Math.max(...work.map((x) => x.end)) - work[0].start : 0;
   const segments = [];
   if (work.length) segments.push({
     title: "Work", aside: j.condition === "landed" ? "to the land" : "",
     rows: [{
       head: `<span class="quiet">${esc([builds ? plural(builds, "build") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "run"))}</span>`,
       bars: barsOf(work, { cost: true }), waits, marks: [], result: badge(j.condition),
-      time: timeText(Math.max(...work.map((x) => x.end)) - work[0].start), cost: costText(work.reduce((n, x) => n + (x.r.cost ?? 0), 0)),
+      time: took > 0 ? dur(took / 1000) : "–", cost: costText(work.reduce((n, x) => n + (x.r.cost ?? 0), 0)),
       events: [...waits.map((w) => waitEvent(w, j.holds ?? [])), ...events,
         ...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: inline(d) })),
         ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: inline(f) }))],
@@ -172,7 +173,7 @@ function jobKpis(j, now = Date.now()) {
   const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
   return renderKpis([
     { k: "Builds", v: esc(builds.length), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "awaiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
-    { k: "Elapsed", v: esc(runs.length ? lifespan(end - runs[0].start) : "–"), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
+    { k: "Elapsed", v: esc(runs.length ? dur((end - runs[0].start) / 1000) : "–"), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
     { k: "Cost", v: j.cost !== undefined ? esc(money(j.cost)) : "–", sub: j.wk ? esc(wkText(j.wk)) : "" },
     { k: "Change", v: esc(c?.lines ?? "–"), sub: [c ? esc(c.files) : "", j.commit ? shortSha(j) : ""].filter(Boolean).join(", ") },
     { k: "Checked by", v: esc(j.checkedBy?.join(", ") || "–"), text: !!j.checkedBy?.length, sub: j.look ? esc(`look: about ${j.look}min`) : "" },

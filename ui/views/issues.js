@@ -4,7 +4,7 @@
 import { xLabel } from "./speed.js";
 import { count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
-import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
+import { barsOf, costText, fold, fromTo, gaps, localMs, noteEvent, renderKpis, renderTimeline, spans, waitEvent } from "../timeline.js";
 
 export const view = {
   path: "/issues",
@@ -536,7 +536,8 @@ const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "bui
 function laneRow({ head, runs, from = NaN, to = NaN, marks = [], result, events = [], holds = [] }) {
   const waits = gaps(runs, from, to), bars = barsOf(runs);
   const times = [from, to, ...runs.flatMap((x) => [x.start, x.end]), ...marks.map((m) => m.at)].filter(Number.isFinite);
-  return { head, bars, waits, marks, result, time: timeText(times.length ? Math.max(...times) - Math.min(...times) : 0), cost: costText(sum(runs)), events: [...laneEvents(runs, waits, bars, holds), ...events] };
+  const took = times.length ? Math.max(...times) - Math.min(...times) : 0;
+  return { head, bars, waits, marks, result, time: took > 0 ? dur(took / 1000) : "–", cost: costText(sum(runs)), events: [...laneEvents(runs, waits, bars, holds), ...events] };
 }
 
 /**
@@ -594,8 +595,8 @@ function issueKpis(d, segments, now = Date.now()) {
   return renderKpis([
     goals.length ? { k: "Parts done", v: esc(`${done} of ${goals.length}`), sub: esc(goals.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
       : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
-    { k: open ? "Open for" : "Elapsed", v: esc(times.length ? lifespan(hi - lo) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
-    { k: "Waiting", v: esc(times.length ? lifespan(waited) : "–"), sub: chris ? esc(`${lifespan(chris)} for your answer`) : "" },
+    { k: open ? "Open for" : "Elapsed", v: esc(times.length ? dur((hi - lo) / 1000) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
+    { k: "Waiting", v: esc(times.length ? dur(waited / 1000) : "–"), sub: chris ? esc(`${dur(chris / 1000)} for your answer`) : "" },
     { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 run" : `${runs} runs`) },
     { k: "Commits", v: commits.length ? commits.slice(0, 3).map(sha).join(" ") : "–", text: commits.length > 0, sub: commits.length > 3 ? esc(`${commits.length} on main`) : commits.length ? "on main" : "" },
   ]);

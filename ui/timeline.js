@@ -6,17 +6,6 @@ import { legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
 
-/** "42s", "12min", "3h 5min", "4d 2h". */
-export function lifespan(ms) {
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}min`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return m % 60 ? `${h}h ${m % 60}min` : `${h}h`;
-  return h % 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${Math.floor(h / 24)}d`;
-}
-
 /** A store date or a note's stamp as ms in local time, as the CLI writes them; NaN for neither. */
 export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^\d{4}-\d\d-\d\d$/.test(String(s ?? "")) ? "T00:00" : ""));
 
@@ -110,8 +99,8 @@ function holdTimes(w, holds) {
 /** A wait's event: its length, whose it is and, from `holds`, why. */
 export function waitEvent(w, holds = []) {
   const reasons = Array.isArray(holds) ? holdTimes(w, holds) : []; // `waits.map(waitEvent)` passes an index
-  const why = reasons.length ? `: ${reasons.map(([text, ms]) => `${lifespan(ms)} because ${text}`).join("; ")}` : "";
-  return { at: w.start, tag: w.chris ? "Awaiting you" : "Waiting", tone: "need", html: esc(`Waited ${lifespan(w.end - w.start)}${w.chris ? " for your answer" : ""}${why}.`) };
+  const why = reasons.length ? `: ${reasons.map(([text, ms]) => `${dur(ms / 1000)} because ${text}`).join("; ")}` : "";
+  return { at: w.start, tag: w.chris ? "Awaiting you" : "Waiting", tone: "need", html: esc(`Waited ${dur((w.end - w.start) / 1000)}${w.chris ? " for your answer" : ""}${why}.`) };
 }
 
 /** A label: the kind, a number when the lane has more than one of that kind, the model (not on a bar) and, with `cost`, the cost. */
@@ -127,7 +116,7 @@ export function barsOf(runs, { cost = false } = {}) {
   return runs.map(({ r, start, end }) => {
     seen[r.kind] = (seen[r.kind] ?? 0) + 1;
     const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost, model: false });
-    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${lifespan(end - start)}${r.reason ? ` · ${r.reason}` : ""}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
+    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${dur((end - start) / 1000)}${r.reason ? ` · ${r.reason}` : ""}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
   });
 }
 
@@ -155,7 +144,7 @@ export function renderTimeline(segments) {
   // A bar too narrow for its label (about 600px of lane, 7px a letter) shows the first letter, as the land bar's clip did.
   const short = (b) => ((x(b.end) - x(b.start)) * 600 < b.label.length * 7 + 8 ? b.label.slice(0, 1) : b.label);
   const lane = (r) => `<div class="dp-lane">` +
-    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting you" : "Waiting"} · ${lifespan(w.end - w.start)}`)}"></span>`).join("") +
+    r.waits.map((w) => `<span class="dp-wait${w.chris ? " t-chris" : ""}" style="${at(w.start, w.end)}" title="${esc(`${w.chris ? "Awaiting you" : "Waiting"} · ${dur((w.end - w.start) / 1000)}`)}"></span>`).join("") +
     r.bars.map((b) => { const t = b.href ? "a" : "span"; return `<${t} class="dp-bar t-${b.tone}"${b.href ? ` href="${esc(b.href)}"` : ""} style="${at(b.start, b.end)}" title="${esc(b.tip ?? b.label)}">${esc(short(b))}</${t}>`; }).join("") +
     (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
   // An event of more than about 3 lines (and with no log opening inside it) is clamped, with a button to read the rest.
@@ -184,8 +173,6 @@ export const panel = (id, title, body, aside = "") => `<section class="dp-panel 
 
 /** "$1.11", or "–" for none. */
 export const costText = (n) => (n ? money(n) : "–");
-/** A span in ms as `dur` writes it, or "–". */
-export const timeText = (ms) => (ms > 0 ? dur(ms / 1000) : "–");
 /** "08:11 to 08:39" for a span in one day, else with the dates. */
 export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 

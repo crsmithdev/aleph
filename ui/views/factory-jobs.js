@@ -1,7 +1,7 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
 import { card, chartBox, mountCharts, day, sentence, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, legend, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
-import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
+import { bucketOf, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
 export const STAGES = [
   ["lead", "Lead Time", "From filing to the last land."],
@@ -16,10 +16,10 @@ const PARTS = [["intake", "Intake"], ["queue", "Queue"], ["implement", "Build"],
 const stageTile = ([key, name], d, day, on) => {
   const c = d.phases[key], dc = day?.phases?.[key], none = !c.count;
   const tr = trendOn(d) && dc?.count && !none ? cardTrend(dc.p50, c.p50, null, { kind: "relative", lowerIsGood: true, tip: `${dur(dc.p50)} in the last 24h, against ${dur(c.p50)} over the window` }) : "";
-  return statCard({ k: name, v: none ? "–" : durShort(c.p50), v2: none ? "–" : durShort(c.p90), q: ["p50", "p90"], trend: tr, key, on });
+  return statCard({ k: name, v: none ? "–" : dur(c.p50), v2: none ? "–" : dur(c.p90), q: ["p50", "p90"], trend: tr, key, on });
 };
 
-const axis = { axisLabel: { formatter: (v) => durShort(v) } };
+const axis = { axisLabel: { formatter: (v) => dur(v) } };
 
 /** The p50 and p90 of a stage by bucket, two areas; a bucket with no time is 0. The p90 is drawn first, so the p50 sits on top. */
 export const trendOption = (d, key, t) => ({
@@ -45,7 +45,7 @@ export const stripOption = (d, key, t) => ({
   grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
   legend,
   tooltip: { confine: true, formatter: (p) => `${esc(p.data.id)}: ${esc(dur(p.value[0]))}, filed ${esc(when(p.value[1]))}` },
-  xAxis: { type: "log", logBase: 60, min: (v) => (v.min >= 60 ? 60 : 1), max: (v) => v.max * 1.5, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
+  xAxis: { type: "log", logBase: 60, min: (v) => (v.min >= 60 ? 60 : 1), max: (v) => v.max * 1.5, axisLabel: { formatter: (v) => dur(v), hideOverlap: true } },
   yAxis: { type: "time", axisLabel: { formatter: (v) => (d.window === "week" || d.window === "month" ? xLabel(v, d.window) : `${day(v)} ${xLabel(v, d.window)}`), hideOverlap: true } },
   series: [["landed", t.done], ["unlanded", t.need]].map(([outcome, color]) => ({
     type: "scatter", name: outcome, color, symbolSize: 9,
@@ -73,7 +73,7 @@ export const slowestOption = (d, key) => {
     grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
     legend,
     tooltip: { trigger: "item", confine: true, formatter: (p) => `${esc(p.name)}: ${esc(dur(p.value))}` },
-    xAxis: { type: "value", splitNumber: 3, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
+    xAxis: { type: "value", splitNumber: 3, axisLabel: { formatter: (v) => dur(v), hideOverlap: true } },
     yAxis: { type: "category", inverse: true, data: top.map((r) => r.label), axisTick: { show: false }, axisLabel: { interval: 0 }, triggerEvent: true },
     series: parts.map(([k, name]) => ({ type: "bar", stack: "one", name, barMaxWidth: 20, cursor: "pointer", data: top.map((r) => (r.k === k ? { value: r.secs, href: r.href } : null)) })),
   };

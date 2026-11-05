@@ -1,8 +1,6 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
 import { count, cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, projectNow, statCard, when } from "../lib.js";
 
-/** Seconds for a big number: "59s", "26m" or "4h 36m". */
-export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
 export const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 export { hours };
 /** A percent of the weekly limit: one decimal, but a small nonzero value shows "<0.1%" rather than "0.0%". */
@@ -77,10 +75,8 @@ export function usageAge(s) {
   const cur = s.usage?.now;
   if (!cur || !s.usage.stale) return "";
   const sec = Math.max(0, (Date.parse(s.now) - Date.parse(cur.at)) / 1000);
-  return Number.isNaN(sec) ? "" : `as of ${durShort(sec)} ago`;
+  return Number.isNaN(sec) ? "" : `as of ${dur(sec)} ago`;
 }
-/** A time on a Status card: "45s", "20m", "1h35m". */
-export const cardDur = (s) => (s != null && Math.round(s) >= 60 && Math.round(s) < 3600 ? `${Math.floor(Math.round(s) / 60)}m` : dur(s));
 export const cardPct = (v) => (v == null ? "–" : pct(v * 100));
 export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
 
@@ -97,7 +93,7 @@ export function statusCards(s, d, { efficiency, performance }) {
   const f = d && !d.error ? figuresOf(d) : null;
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
   const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
-  const lead = statCard({ k: "Completion", v: cardDur(f?.leadP50), v2: cardDur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
+  const lead = statCard({ k: "Completion", v: dur(f?.leadP50), v2: dur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance });
   const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
   const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : count(f.asks), ...(f ? { v2: count(d.asks?.manual ?? 0) } : {}), q: ["All", "Manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: String }), href: performance });
   return lost + lead + landed + asks + usageCard(s);

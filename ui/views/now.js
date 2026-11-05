@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -214,12 +214,11 @@ function details(s, j, extra = "") {
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
-/** "4m 05s", "1h 05m", "2d4h": the time from `since` to `to`, in the least room; "–" when the work was never picked up. */
+/** The time from `since` to `to` as `dur` writes it; "–" when the work was never picked up. */
 export function span(since, to) {
   const ms = Date.parse(to) - Date.parse(since);
   if (!since || !(ms >= 0)) return "–";
-  const h = Math.floor(ms / 3_600_000);
-  return h >= 24 ? `${Math.floor(h / 24)}d${h % 24}h` : dur(ms / 1000);
+  return dur(ms / 1000);
 }
 
 /** The "3/4" link of a part to its parent; "" for a card that is no part. */
