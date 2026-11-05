@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { plainAsk, setAsk, awaitsChris } from "./ask.ts";
-import { directAll, MAX_ACTIONS, pendingCases, readRecord } from "./director.ts";
+import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "./factory.ts";
 import { allRuns, loadRegistry, readRun } from "./ledger.ts";
 import { setPaused } from "./factory-status.ts";
@@ -44,7 +44,7 @@ test("a decided Ask: code applies the answer, clears the Ask, and logs a Directo
 
 test("an escalated Ask gets the director's case text and stays with Chris", async () => {
   fresh([{ title: "product", ask: choice() }]);
-  replyWith({ escalate: TEXT });
+  replyWith({ case: TEXT });
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "escalated", why: "the director did not decide" });
   const a = asked(1)!;
@@ -65,14 +65,28 @@ test("a failed run or a malformed reply sends the Ask to Chris with a fallback c
   expect(out.map((d) => d.outcome)).toEqual(["escalated", "escalated"]);
   expect(asked(1)!.situation).toStartWith("The director did not decide this Ask: its reply was malformed");
   expect(asked(2)!.situation).toStartWith("The director did not decide this Ask");
+  fresh([{ title: "q", ask: choice() }]);
+  const cmd = process.env.ALEPH_DIRECTOR_CMD;
+  process.env.ALEPH_DIRECTOR_CMD = "false";
+  try { await direct(); } finally { process.env.ALEPH_DIRECTOR_CMD = cmd; }
+  expect(asked(1)!.situation).toStartWith("The director did not decide this Ask: its run failed");
 });
 
-test("actions that leave the Ask open send it to Chris when the run ends", async () => {
-  fresh([{ title: "q", ask: plain() }]);
-  reply([{ do: "note", text: "looked at it" }]);
+test("actions that leave the Ask open send it to Chris with the director's case text and what it did and could not do", async () => {
+  fresh([{ title: "q", ask: choice() }]);
+  reply([{ do: "note", text: "looked at it" }, { do: "close", note: "met on main" }], TEXT);
   const [d] = await direct();
   expect(d).toMatchObject({ outcome: "escalated", applied: ["note: looked at it"] });
-  expect(asked(1)!.situation).toContain("its actions left the Ask open");
+  const a = asked(1)!;
+  expect(a.situation).toBe(TEXT.situation);
+  expect(a.recommend).toEqual(TEXT.recommend);
+  expect(a.details).toContain("It did: note: looked at it.");
+  expect(a.details).toContain(`It could not: close: met on main: ${key}-1 was filed by Chris`);
+});
+
+test("the schema requires the case text with actions, and parseReply returns it with the actions", () => {
+  expect(DIRECTOR_SCHEMA.required).toEqual(["case"]);
+  expect(parseReply({ actions: [{ do: "rerun" }], case: TEXT }, ["decide:A", "decide:B", "deny"])).toEqual({ actions: [{ do: "rerun" }], text: TEXT });
 });
 
 test("the escalation list: a land on a security path gets case text and no action; a stored host-check Ask is not on it", async () => {
@@ -118,7 +132,7 @@ test("a memory proposal is on the escalation list: the director's case text goes
   mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
   const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", title: "Check x.ts", signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "you forgot x.ts", link: "" }] };
   writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "corrections.json"), JSON.stringify({ minedAt: "", lessons: [lesson] }));
-  replyWith({ escalate: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files a goal." }, { action: "decline", text: "Drops it." }], recommend: { action: "decline", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
+  replyWith({ case: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files a goal." }, { action: "decline", text: "Drops it." }], recommend: { action: "decline", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
   const [d] = await direct();
   expect(d).toMatchObject({ ref: "l-1", reason: "proposal-claude-md", outcome: "escalated", why: "a memory proposal is Chris's", applied: [] });
   const l = readStore().lessons[0];

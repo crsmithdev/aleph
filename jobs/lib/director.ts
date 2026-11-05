@@ -1,13 +1,14 @@
 /**
  * The director: every new Ask goes to it first. An Ask is new while it has no case text (`situation`): on an open store
  * item that awaits Chris, on an awaiting run's `ask` in the ledger, or on a proposed lesson. Each one gets one read-only
- * `claude -p` run, kind `director`, in the repo's checkout. The run either decides, with typed actions that code checks
- * and applies for that Ask only, or escalates, with the case text (situation, effects, recommendation) that Chris reads
- * on the Ask's card. The card shows no buttons until the case text is there (ui/asks.ts).
+ * `claude -p` run, kind `director`, in the repo's checkout. Every reply carries the case text (situation, effects,
+ * recommendation) that Chris reads on the Ask's card. With typed actions the run decides: code checks and applies them
+ * for that Ask only. With no actions it escalates. The card shows no buttons until the case text is there (ui/asks.ts).
  *
  * Code, not the model, holds the escalation list: those Asks get the director's case text and recommendation, and no
  * action. An Ask the director did not decide goes to Chris when its run ends: a failed run, a bad reply, or actions that
- * leave the Ask open all write case text. Each outcome is a `director:` line in tick.log (the Gates page log) and a
+ * leave the Ask open all write case text. Actions that leave the Ask open write the director's case text and one line on
+ * what it did and could not do; a failed run or a malformed reply writes the fallback. Each outcome is a `director:` line in tick.log (the Gates page log) and a
  * `director` event in the job record of its item, the record that later runs read.
  */
 import { existsSync, readFileSync } from "node:fs";
@@ -248,7 +249,7 @@ ${section("Request", item.request)}${section("Spec", item.spec)}${section("Notes
 ${run.run.branch ? `\nBranch: ${run.run.branch}\n` : ""}${run.run.reason ? `Reason it stopped: ${run.run.reason}\n` : ""}${section("Tail of prompt.md", tail(run.folder, "prompt.md"))}${section("Tail of result.md", tail(run.folder, "result.md"))}${section("review.md", existsSync(join(run.folder, "review.md")) ? clip(readFileSync(join(run.folder, "review.md"), "utf8")) : null)}${section("Tail of checks.log", tail(run.folder, "checks.log"))}${section("git diff --stat of its branch", diffStat(c.repo, run.run))}` : ""}`;
 }
 
-const CASE_TEXT = (acts: string[]): string => `The case text is "escalate": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if Chris takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;
+const CASE_TEXT = (acts: string[]): string => `The case text is "case": its "headline" is a noun phrase of at most ${LIMITS.headline} words, lowercase first, that names what the card is about, as in: the TypeScript 5.9 to 7.0 upgrade. Its "situation" is plain sentences: what this work is, what stopped it, why only Chris can answer, and the risk. Its "effects" has one entry for each action (${acts.join(", ")}): the "action" and a "text" of 1 or 2 short sentences that says what happens in this case if Chris takes it. Its "recommend" is an action and a one-sentence "why", or null. Its "details", optional, holds risks, gaps and technical facts.`;
 
 /** The past decisions the prompt shows: the last RECORD_LINES, each with its outcome. */
 const pastLines = (rec: Decision[]): string =>
@@ -288,7 +289,7 @@ Reply with the case text only. ${CASE_TEXT(acts)}
 - When a run cannot pass until another open goal lands, drop it or edit the goal with \`after\` set to that goal. A note alone does not stop a rerun.
 - The \`## Goal\` of a spec you write is the behaviour in at most 3 sentences, with no implementation design and no claim about code on main that you did not read.
 - A fix job is an \`add\` whose body has ## Goal, ## Edit surface and ## Oracle; set \`after\` on this goal with edit-goal when it must wait for the fix.
-- Either decide (actions) or escalate (case text), not both. An Ask that your actions leave open goes to Chris.
+- Every reply has the case text. Add actions to decide; with no actions the Ask goes to Chris. An Ask that your actions leave open goes to Chris with your case text.
 
 ${caseText(c)}
 
@@ -298,7 +299,7 @@ ${pastLines(rec)}
 
 ${reply}
 
-Reply with "actions" to decide, or with "escalate" to send it to Chris. ${CASE_TEXT(acts)}
+Reply with "case" and "actions" to decide, or with "case" alone to send it to Chris. ${CASE_TEXT(acts)}
 
 Each action applies to this Ask's ${onRun ? "run and its item" : "item"}. Its "do" is one of these; an "after" lists issues as \`<repo>-<n>\` or \`<repo>-<n>.<k>\`:
 ${onRun ? `- land: land the run's branch
@@ -334,9 +335,9 @@ const shape = (name: string, fields: Record<string, object> = {}, required: stri
   type: "object", additionalProperties: false, required: ["do", ...required], properties: { do: { const: name }, ...fields },
 });
 
-/** The JSON schema of the director's reply: `actions` to decide, or `escalate` with the case text. */
+/** The JSON schema of the director's reply: the case text, always, and `actions` to decide. */
 export const DIRECTOR_SCHEMA = {
-  type: "object", additionalProperties: false,
+  type: "object", additionalProperties: false, required: ["case"],
   properties: {
     actions: {
       type: "array",
@@ -354,7 +355,7 @@ export const DIRECTOR_SCHEMA = {
         ],
       },
     },
-    escalate: {
+    case: {
       type: "object", additionalProperties: false, required: ["situation", "effects", "recommend"],
       properties: {
         headline: { type: "string" },
@@ -427,15 +428,19 @@ export function parseCaseText(raw: any, actions: string[]): Text | string {
   return { ...(headline ? { headline } : {}), situation, ...(details ? { details } : {}), effects: actions.map((a) => effects.find((e) => e.action === a)!), ...(recommend ? { recommend } : {}) };
 }
 
-export type Reply = { actions: (Action | string)[] } | { escalate: Text | string };
+export type Reply = { actions: (Action | string)[]; text: Text | string } | { escalate: Text | string };
 
-/** The reply in the run's structured output: the actions, each parsed or why not, or the case text; a string when it is neither. */
+/**
+ * The reply in the run's structured output: the actions, each parsed or why not, with the case text; or the case text
+ * alone, to escalate; a string when it is neither. The case text is the parsed text or why it does not do.
+ */
 export function parseReply(raw: any, actions: string[]): Reply | string {
   if (raw === undefined) return NO_OUTPUT;
   if (!raw || typeof raw !== "object") return "not an object";
-  if (raw.escalate !== undefined && raw.escalate !== null) return { escalate: parseCaseText(raw.escalate, actions) };
-  if (!Array.isArray(raw.actions)) return "no actions list and no escalate";
-  return { actions: raw.actions.map(parseAction) };
+  const text = parseCaseText(raw.case, actions);
+  if (Array.isArray(raw.actions) && raw.actions.length) return { actions: raw.actions.map(parseAction), text };
+  if (raw.case === undefined || raw.case === null) return "no case text and no actions";
+  return { escalate: text };
 }
 
 // Writing the case text.
@@ -650,12 +655,16 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
     }
     if (listed || c.at === "lesson") {
       run.end("escalated: the Ask is on the escalation list");
-      return escalate(c, { ...at, refused: reply.actions.map((a) => `${typeof a === "string" ? a : describe(a)}: the Ask is on the escalation list`) }, undefined, listed ?? "a memory proposal is Chris's");
+      return escalate(c, { ...at, refused: reply.actions.map((a) => `${typeof a === "string" ? a : describe(a)}: the Ask is on the escalation list`) }, reply.text, listed ?? "a memory proposal is Chris's");
     }
     const r = await applyActions(c, reply.actions, ports);
     const decided = r.decided || !stillOpen(c);
     run.end(`${r.applied.length} applied, ${r.refused.length} refused, ${decided ? "decided" : "escalated"}`);
-    if (!decided) return escalate(c, { ...at, applied: r.applied, refused: r.refused }, undefined, r.refused.length ? `its actions left the Ask open (refused: ${r.refused.join("; ")})` : "its actions left the Ask open");
+    if (!decided) {
+      const did = `It did: ${r.applied.join("; ") || "nothing"}. It could not: ${r.refused.join("; ") || "nothing"}.`;
+      const text = typeof reply.text === "string" ? reply.text : { ...reply.text, details: [did, reply.text.details].filter(Boolean).join(" ") };
+      return escalate(c, { ...at, applied: r.applied, refused: r.refused }, text, r.refused.length ? `its actions left the Ask open (refused: ${r.refused.join("; ")})` : "its actions left the Ask open");
+    }
     const d: Decision = { ...at, outcome: "decided", applied: r.applied, refused: r.refused };
     // A decision whose effect has not cleared the Ask yet (a land still running, say) still ends this Ask's one run: Chris sees it with the text.
     // A land runs in its own unit and settles the Ask when it ends, so a started land leaves no text: a failed land raises its own Ask.
