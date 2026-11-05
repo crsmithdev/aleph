@@ -11,6 +11,7 @@ import { serializeFrontmatter } from "./frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./git.ts";
 import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
+import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
 import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../jobs/lib/settings.ts";
@@ -142,7 +143,6 @@ async function init(): Promise<void> {
 }
 
 // ---------------------------------------------------------------- write
-const claimLine = (n: Note) => (n.body.trim().split(/\n\s*\n/)[0] ?? "").replace(/\s+/g, " ").trim();
 
 async function write(): Promise<void> {
   requireVault();
@@ -260,20 +260,11 @@ async function recall(): Promise<void> {
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
   // about cloudchamber" is a real question, and ranking every note by one word
   // could not answer it.
-  const scoped = (n: Note) => scope === undefined || String(n.fm.scope) === scope;
-  const rank = (n: Note): number => {
-    const aliases = (Array.isArray(n.fm.aliases) ? n.fm.aliases : []).map((a) => a.toLowerCase());
-    const title = n.title.toLowerCase();
-    if (title === q) return 0;
-    if (aliases.includes(q)) return 1;
-    if (title.includes(q) || aliases.some((a) => a.includes(q))) return 2;
-    if (n.body.toLowerCase().includes(q)) return 3;
-    return -1;
-  };
-  const all = wikiNotes(await loadVault(root));
-  const notes = all;
-  const hits = notes.filter(scoped).map((n) => ({ n, r: q ? rank(n) : 4 })).filter((x) => x.r >= 0)
-    .sort((a, b) => a.r - b.r || a.n.title.localeCompare(b.n.title));
+  const notes = wikiNotes(await loadVault(root));
+  const scoped = notes.filter((n) => scope === undefined || String(n.fm.scope) === scope);
+  const hits = q
+    ? rankNotes(openIndex(root, notes), scoped, q, scope).map(({ note, rank }) => ({ n: note, r: rank }))
+    : scoped.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
   noteRead(hits.map(({ n }) => n.title));
   // A scope nobody uses is almost always a misspelling of one that exists, and
   // the vault has five names for one project. Say so rather than return [].

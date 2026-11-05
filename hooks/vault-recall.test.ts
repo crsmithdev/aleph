@@ -59,28 +59,44 @@ test("with ALEPH_JUDGE=haiku: no output and Jev is not asked", async () => {
   expect(asked).toEqual([]);
 });
 
-test("60 matching notes: at most 40 questions, at most 3 injected", async () => {
+test("60 matching notes: at most 20 questions, at most 3 injected", async () => {
   const big = mkdtempSync(join(tmpdir(), "aleph-recall-big-"));
   for (let i = 0; i < 60; i++) note(big, `Jev Screen Number ${i}`, `Claim ${i}.`);
   const r = await run(big);
   rmSync(big, { recursive: true, force: true });
-  expect(Object.keys(asked[0].questions).length).toBe(40);
+  expect(Object.keys(asked[0].questions).length).toBe(20);
   expect(JSON.parse(r.out).hookSpecificOutput.additionalContext.split("\n").length).toBe(4);
 });
 
 const spansOf = () => posts.flatMap((p) => p.resourceSpans.flatMap((r: any) => r.scopeSpans.flatMap((x: any) => x.spans)));
 const meta = (sp: any) => Object.fromEntries(sp.attributes.filter((a: any) => a.key.startsWith("langfuse.observation.metadata.")).map((a: any) => [a.key.split(".").pop(), a.value.intValue !== undefined ? Number(a.value.intValue) : (a.value.boolValue ?? a.value.stringValue)]));
-const turn = { prompt_id: "p-1", session_id: "s-1" };
+let n = 0;
+const turn = () => ({ prompt_id: `p-${++n}`, session_id: `s-${n}` });
 
 test("no matching note: a span with candidates 0 and no Jev request", async () => {
-  const r = await run(dir, "completely unrelated zebra pasture question", {}, turn);
+  const r = await run(dir, "completely unrelated zebra pasture grazing", {}, turn());
   expect(r.out).toBe("");
   expect(asked).toEqual([]);
   expect(meta(spansOf()[0])).toMatchObject({ candidates: 0, asked: 0, kept: 0, capped: false });
 });
 
 test("a failing Langfuse changes nothing the hook prints", async () => {
-  const r = await run(dir, PROMPT, { LANGFUSE_BASE_URL: "http://127.0.0.1:1" }, turn);
+  const r = await run(dir, PROMPT, { LANGFUSE_BASE_URL: "http://127.0.0.1:1" }, turn());
   expect(r.code).toBe(0);
   expect(JSON.parse(r.out).hookSpecificOutput.additionalContext).toContain("Jev Screens Bounded Judgments");
+});
+
+const injected = (out: string) => out ? JSON.parse(out).hookSpecificOutput.additionalContext : "";
+
+test("a note whose words are only in its body is a candidate", async () => {
+  const r = await run(dir, "what do those collections cite, then?", {}, turn());
+  expect(Object.values(asked[0].questions).map((q: any) => q.instructions).join("\n")).toContain("Koan Cases Are First Attested");
+  expect(injected(r.out)).toContain("Koan Cases Are First Attested");
+});
+
+test("a note injected once is not injected again in the same session", async () => {
+  const t = turn();
+  expect(injected((await run(dir, PROMPT, {}, t)).out)).toContain("Jev Screens Bounded Judgments");
+  expect(injected((await run(dir, PROMPT, {}, { ...t, prompt_id: "again" })).out)).not.toContain("Jev Screens Bounded Judgments");
+  expect(injected((await run(dir, PROMPT, {}, turn())).out)).toContain("Jev Screens Bounded Judgments");
 });

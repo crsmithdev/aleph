@@ -9,8 +9,8 @@
  * ends with a pointer to the rest.
  */
 import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
-import { FOLDERS, HOME_KINDS, vaultDir, type Kind } from "../vault/lib/vault.ts";
+import { join } from "node:path";
+import { FOLDERS, HOME_KINDS, repoScope, vaultDir, type Kind } from "../vault/lib/vault.ts";
 
 const BUDGET = 6000;
 
@@ -19,10 +19,7 @@ const root = vaultDir();
 const home = join(root, "Home.md");
 if (!existsSync(home)) process.exit(0);
 
-// A worktree at <repo>/.worktrees/<name> takes the scope of <repo>.
-const cwd: string = input.cwd ?? process.cwd();
-const git = Bun.spawnSync(["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"], { stdout: "pipe", stderr: "ignore" });
-const scope = git.exitCode === 0 ? basename(dirname(git.stdout.toString().trim())) : basename(cwd);
+const scope = repoScope(input.cwd ?? process.cwd());
 
 function noteScope(title: string): string | undefined {
   for (const kind of HOME_KINDS) {

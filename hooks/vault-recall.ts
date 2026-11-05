@@ -4,42 +4,37 @@
  * prompt and they are injected as additionalContext. Silent when the prompt is
  * short, nothing matches, no note reaches 0.7, Jev fails, or `aleph judge haiku`.
  */
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { decide, judgeChoice, type Question } from "./lib/jev.ts";
 import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { peek } from "./lib/handshake.ts";
 import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
-import { loadWiki, vaultDir, type Note } from "../vault/lib/vault.ts";
+import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
+import { loadWiki, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
 
 const MIN_PROMPT = 20;
-const MAX_ASKED = 40;
+// Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout.
+const MAX_ASKED = 20;
 const MAX_INJECTED = 3;
 const CUT = 0.7;
 const JEV_TIMEOUT_MS = 1500;
-const STOP = new Set("about after also been before being could does doing from have here into just like make more most much must only other over really should some such than that their them then there these they this those very want were what when where which while will with would your".split(" "));
+const SEEN_DAYS = 7;
 
-const words = (s: string) => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w));
+/** The notes this session's hook already injected, in `<vault>/.index/seen/<session>.json`. */
+const seenFile = (root: string, session: string) => join(root, ".index", "seen", `${session.replace(/[^\w-]/g, "_")}.json`);
 
-export function claimLine(n: Note): string {
-  return (n.body.trim().split(/\n\s*\n/)[0] ?? "").replace(/\s+/g, " ").trim();
+function readSeen(root: string, session: string | undefined): Set<string> {
+  if (!session) return new Set();
+  try { return new Set(JSON.parse(readFileSync(seenFile(root, session), "utf8"))); } catch { return new Set(); }
 }
 
-export function rank(notes: Note[], prompt: string): Note[] {
-  return rankAll(notes, prompt).slice(0, MAX_ASKED);
-}
-
-/** Every note with a word hit, best first, before the cap. */
-export function rankAll(notes: Note[], prompt: string): Note[] {
-  const want = new Set(words(prompt));
-  return notes
-    .map((n) => {
-      const aliases = n.fm.aliases;
-      const have = new Set(words([n.title, ...(Array.isArray(aliases) ? aliases : aliases ? [aliases] : [])].join(" ")));
-      return { n, hits: [...want].filter((w) => have.has(w)).length };
-    })
-    .filter((x) => x.hits > 0)
-    .sort((a, b) => b.hits - a.hits)
-    .map((x) => x.n);
+/** Add `rels` to the session's list, and delete the lists older than SEEN_DAYS. */
+function writeSeen(root: string, session: string | undefined, seen: Set<string>, rels: string[]) {
+  const dir = join(root, ".index", "seen");
+  mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(dir)) if (statSync(join(dir, f)).mtimeMs < Date.now() - SEEN_DAYS * 86400_000) rmSync(join(dir, f), { force: true });
+  if (session) writeFileSync(seenFile(root, session), JSON.stringify([...seen, ...rels]));
 }
 
 /** One `vault-recall` span on the turn's trace. A failed post changes nothing. */
@@ -82,7 +77,9 @@ async function main() {
   if (prompt.length < MIN_PROMPT || judgeChoice() === "haiku") return;
   const start = Date.now();
   const root = vaultDir();
-  const all = rankAll(await loadWiki(root), prompt);
+  const notes = await loadWiki(root);
+  const seen = readSeen(root, input.session_id);
+  const all = rankNotes(openIndex(root, notes), notes, prompt, repoScope(input.cwd ?? process.cwd())).map((r) => r.note).filter((n) => !seen.has(n.rel));
   const candidates = all.slice(0, MAX_ASKED);
   const meta = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
   if (!candidates.length) { await postSpan(input, start, meta, [], ""); return; }
@@ -105,6 +102,7 @@ async function main() {
   const additionalContext = picked.length ? ["Vault notes that may bear on this prompt (Jev):", ...lines].join("\n") : "";
   await postSpan(input, start, meta, picked.map(({ n }) => n.rel), additionalContext);
   if (!picked.length) return;
+  writeSeen(root, input.session_id, seen, picked.map(({ n }) => n.rel));
   console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } }));
 }
 

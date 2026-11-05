@@ -520,3 +520,9 @@ export function renameScope(notes: Note[], from: string, to: string): { note: No
   }
   return out.sort((a, b) => a.note.rel.localeCompare(b.note.rel));
 }
+
+/** The scope of a session in `cwd`: the main checkout's folder name, so a worktree at `<repo>/.worktrees/<name>` takes the scope of `<repo>`. */
+export function repoScope(cwd: string): string {
+  const git = Bun.spawnSync(["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"], { stdout: "pipe", stderr: "ignore" });
+  return git.exitCode === 0 ? basename(dirname(git.stdout.toString().trim())) : basename(cwd);
+}
