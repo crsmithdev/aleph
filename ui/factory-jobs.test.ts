@@ -74,7 +74,7 @@ test("the page lists the jobs with the search, the State filter and the Project 
   expect(h).toContain('data-ui="jobs-search"');
   expect(h).toContain('data-name="condition"');
   expect(h).toContain('data-value="landed" aria-pressed="true"');
-  expect(h).toContain('<select name="repo"');
+  expect(h).toContain('<select name="project"');
   expect(h).not.toContain('href="#/jobs?');
   expect(h.match(/<tr class="rowlink"/g)).toHaveLength(1);
   expect(h).toContain('<table class="tbl">');

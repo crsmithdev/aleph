@@ -1,5 +1,5 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { card, statCard, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { card, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope } from "../lib.js";
 import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
@@ -47,7 +47,7 @@ const usageTable = (rows) => dataTable(heads(["Issue", "Usage", "Runs"], ["Usage
 
 function usagePage(d, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
-  const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
+  const scope = scopeBar(projectNow(), d.window ?? "week");
   return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
     card("Usage per issue, largest first", s.top.length ? usageTable(s.top) : "<p>No issue to show.</p>") + `</div>`;
@@ -57,7 +57,7 @@ function usagePage(d, key) {
 export function renderEfficiency(d, key = ALL) {
   if (key === USAGE) return usagePage(d, key);
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
-  const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
+  const scope = scopeBar(projectNow(), d.window ?? "week");
   return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
     `<div class="pair">${card(`${s.title} causes`, s.causes.length ? causeBars(s) : "<p>No cause to show.</p>")}` +
@@ -75,11 +75,12 @@ export const view = {
   group: "factory",
   order: 1,
   icon: "chart-pie",
-  api: (_params, q = new URLSearchParams()) => `/api/speed?window=${windowOf(q)}&baseline=1`,
+  api: (_params, q = new URLSearchParams()) => withProject(`/api/speed?window=${windowOf(q)}&baseline=1`, q),
   refresh: 60,
   render: (d, _params, q) => renderEfficiency(d, q?.get("tile") ?? ALL),
   mount: async (root, d) => {
     keepWindow(d.window ?? windowOf(hashQuery()));
+    keepProject(projectNow());
     const draw = () => { root.innerHTML = renderEfficiency(d, picked()); wire(); };
     const wire = () => {
       const page = root.querySelector("#eff");

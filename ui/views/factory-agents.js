@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, cardTrend, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, loadingLine, mean, money, onTile, pageHead, pct, setQuery, statCard, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { barsOption, card, cardTrend, chart, dataTable, dur, esc, hashQuery, heads, keepProject, keepWindow, lineOption, loadingLine, mean, money, onTile, pageHead, pct, projectNow, scopeBar, setQuery, statCard, tiles, when, windowOf, wireScope, withProject } from "../lib.js";
 import { hours, lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
@@ -71,7 +71,7 @@ function models(m) {
 export function renderFactoryAgents(s, d, key = "live", window = "week", m = null) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null, cur = DETAILS[key] ? key : "live";
   const wait = d?.error ? `<p>${esc(d.error)}</p>` : loadingLine("the agents");
-  const scope = filterBar([{ name: "window", value: win, options: WINDOWS }]);
+  const scope = scopeBar(projectNow(), win);
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, cur, w))}` +
     card(DETAILS[cur].title, a ? `<div class="chartbox" role="img" aria-label="${esc(DETAILS[cur].title)}"></div>` : wait) +
     models(m) + card("Roles", a ? roles(a) : wait) + `</div>`;
@@ -91,7 +91,7 @@ export const view = {
   group: "factory",
   order: 2,
   icon: "robot",
-  api: "/api/state",
+  api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   render: (s, _params, q) => renderFactoryAgents(s, usable(windowOf(q)), q?.get("tile") ?? "live", windowOf(q)),
   mount: async (root, s) => {
@@ -111,6 +111,7 @@ export const view = {
       if (res.ok) { modelsNow = await res.json(); draw(usable(windowNow())); }
     };
     keepWindow(windowNow());
+    keepProject(projectNow());
     draw(usable(windowNow()));
     modelsNow = await fetch("/api/models").then((r) => r.json()).catch(() => null);
     draw(usable(windowNow()));

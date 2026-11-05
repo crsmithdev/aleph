@@ -416,7 +416,16 @@ export function wireScope(root) {
     const b = e.target.closest?.(".seg button");
     if (b) { if (b.parentElement.dataset.name === "window") storeWindow(b.dataset.value); goQuery({ [b.parentElement.dataset.name]: b.dataset.value }); }
   });
-  ph.addEventListener("change", (e) => { if (e.target.matches?.("select")) goQuery({ [e.target.name]: e.target.value }); });
+  ph.addEventListener("change", (e) => {
+    if (!e.target.matches?.("select")) return;
+    if (e.target.name === "project") storeProject(e.target.value);
+    goQuery({ [e.target.name]: e.target.value });
+  });
+  const select = ph.querySelector?.('select[name="project"]');
+  if (select && !projectKeys.length) fetch("/api/projects/keys").then((r) => (r.ok ? r.json() : [])).then((keys) => {
+    projectKeys = keys;
+    select.innerHTML = [{ value: "", label: "All" }, ...projectChoices(select.value)].map((o) => `<option value="${esc(o.value)}"${o.value === select.value ? " selected" : ""}>${esc(o.label)}</option>`).join("");
+  }).catch(() => {});
 }
 
 /** The windows of the Factory pages, and the /api/jobs `days` of each. */
@@ -438,6 +447,32 @@ export function keepWindow(w) {
   storeWindow(w);
   if (w !== "week" && hashQuery().get("window") !== w) setQuery({ window: w });
 }
+
+const PROJECT_KEY = "aleph.project";
+let projectKeys = [];
+const projectChoices = (cur, more = []) => [...new Set([...projectKeys, ...more, cur].filter(Boolean))].sort().map((p) => ({ value: p, label: p }));
+/** Remember the project across the pages; "" is All. */
+export function storeProject(p) { try { localStorage.setItem(PROJECT_KEY, p || ""); } catch { /* no storage: the address still holds it */ } }
+/** The project of a page: the address first, then the last one chosen, else "" for All. */
+export function projectOf(q) {
+  const p = q?.get?.("project");
+  if (p) return p;
+  try { return localStorage.getItem(PROJECT_KEY) || ""; } catch { return ""; }
+}
+/** Keep the project in storage and in the address (replaced in place, with no reload). */
+export function keepProject(p) {
+  storeProject(p);
+  if (p && hashQuery().get("project") !== p) setQuery({ project: p });
+}
+/** The project of the address now, for a request made outside a route call. */
+export const projectNow = () => (typeof location === "undefined" ? "" : projectOf(hashQuery()));
+/** A request URL with the page's project added, when there is one. */
+export const withProject = (url, q) => { const p = projectOf(q); return p ? `${url}${url.includes("?") ? "&" : "?"}project=${encodeURIComponent(p)}` : url; };
+/** The head's scope: the Project select, then the window control. `more` adds project names the page knows. */
+export const scopeBar = (project, win, more = []) => filterBar([
+  { label: "Project", name: "project", data: true, value: project, options: [{ value: "", label: "All" }, ...projectChoices(project, more)] },
+  { name: "window", value: win, options: WINDOWS },
+]);
 
 // ---------- the blocks of a page: tile, card, table, bar list ----------
 

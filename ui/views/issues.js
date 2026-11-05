@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -65,7 +65,7 @@ const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STA
 export function hashOptions(q = new URLSearchParams()) {
   return {
     limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
-    status: statusOf(q.get("status")), project: q.get("project") ?? "", stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: windowOf(q),
+    status: statusOf(q.get("status")), project: projectOf(q), stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: windowOf(q),
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
 }
@@ -697,7 +697,7 @@ if (typeof document !== "undefined") {
   });
   document.addEventListener("change", (e) => {
     const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
-    if (f) setQuery({ [f.name]: f.value, limit: "" });
+    if (f) { if (f.name === "project") storeProject(f.value); setQuery({ [f.name]: f.value, limit: "" }); }
   });
   let typing = 0;
   document.addEventListener("input", (e) => {

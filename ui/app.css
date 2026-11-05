@@ -211,7 +211,7 @@ main { min-width: 0; }
 .shead .fbar { flex-wrap: nowrap; gap: var(--sp-8); }
 .shead .fbar .act { min-height: 28px; box-sizing: border-box; padding: 0 var(--sp-12); font: var(--fs-sm) var(--sans); border-radius: var(--r-ctl); border: 1px solid var(--rule); background: none; color: var(--muted); }
 .shead .fbar .act:hover { color: var(--ink); border-color: var(--rule); }
-.shead .fbar .act.ask { background: var(--need-bg); color: var(--need); border-color: var(--need); }
+.shead .fbar .act.ask, .shead .fbar .act.warn { background: var(--need-bg); color: var(--need); border-color: var(--need); }
 .shead .say.error, .shead .say.error a { color: var(--stuck); }
 .shead .say.warning, .shead .say.warning a { color: var(--need); }
 .rows { display: grid; gap: var(--sp-8); }
@@ -544,7 +544,8 @@ details.fold > summary > .sh { flex: 1 1 auto; margin: 0; }
 @media (max-width: 720px) {
   .lanes { grid-template-columns: minmax(0, 1fr); }
   .shead .say { flex-basis: 100%; order: 3; }
-  .shead .aside { order: 4; margin-left: 0; }
+  .shead .aside { order: 4; margin-left: 0; max-width: 100%; }
+  .shead .fbar { flex-wrap: wrap; }
   .page { padding: 20px var(--sp-16) 48px; }
   .ev { grid-template-columns: minmax(0, 1fr); }
   .ev > div { border-left: 0; border-top: 1px solid var(--rule-2); }

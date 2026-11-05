@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, chip, tag, costHtml, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, loadingLine, localId, md, money, pager, priorityBadge, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wkText } from "../lib.js";
+import { blockersHtml, bytes, chip, tag, costHtml, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, setQuery, shortModel, sortHead, span, WINDOW_DAYS, windowOf, when, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -20,6 +20,7 @@ export function windowShown(f = {}) {
 export const listUrl = (_params, q = new URLSearchParams()) => {
   const out = new URLSearchParams();
   for (const k of ["repo", "condition", "role"]) if (q.get(k)) out.set(k, q.get(k));
+  if (projectOf(q)) out.set("project", projectOf(q));
   const days = daysOf(q);
   if (Number(days) !== 7) out.set("days", String(days));
   const s = out.toString();
@@ -46,10 +47,7 @@ const PAGE = 50;
 /** What scopes the page and goes to the API: the project and the window. */
 export function renderScope(jobs, f = {}) {
   const repos = [...new Set([...jobs.map((j) => j.repo), f.repo].filter(Boolean))].sort();
-  return filterBar([
-    { label: "Project", name: "repo", data: true, value: f.repo || "", options: [{ value: "", label: "All" }, ...repos] },
-    { label: "Window", name: "window", value: windowShown(f), options: WINDOWS },
-  ]);
+  return scopeBar(projectOf({ get: (k) => f[k] }), windowShown(f), repos);
 }
 
 const ROLES = ["worker", "intake", "triage", "planner", "firefighter", "director", "reviewer"];

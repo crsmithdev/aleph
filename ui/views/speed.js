@@ -1,5 +1,5 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { barRow, cardTrend, day, dur, hourLabel, esc, hours, mean, pct, statCard, when } from "../lib.js";
+import { barRow, cardTrend, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
@@ -27,15 +27,17 @@ export function xLabel(at, window) {
 }
 
 const got = new Map();
+let loadedFor = ""; // the project of the cached answers
 /** The last answer for a window, or null; a failed load is `{ error }`. */
 export const speedOf = (window) => got.get(window) ?? null;
 export const resetSpeed = () => got.clear();
 /** A usable answer for a window, or null. */
 export const usable = (window) => { const d = speedOf(window); return d && !d.error ? d : null; };
-/** Fetch a window into the cache. A failed reload keeps the last good answer. */
-export async function loadSpeed(window, fetcher = fetch, baseline = false) {
+/** Fetch a window of a project (the address's, by default) into the cache. A failed reload keeps the last good answer. */
+export async function loadSpeed(window, fetcher = fetch, baseline = false, project = projectNow()) {
+  if (project !== loadedFor) { got.clear(); loadedFor = project; }
   try {
-    const res = await fetcher(`/api/speed?window=${window}${baseline ? "&baseline=1" : ""}`, { cache: "no-store" });
+    const res = await fetcher(`/api/speed?window=${window}${baseline ? "&baseline=1" : ""}${project ? `&project=${encodeURIComponent(project)}` : ""}`, { cache: "no-store" });
     if (!res.ok) throw new Error(`Could not load speed (${res.status}).`);
     // With `baseline=1` the answer carries the window's trend baseline (`d.baseline`): one request per window.
     const { others, ...d } = await res.json();

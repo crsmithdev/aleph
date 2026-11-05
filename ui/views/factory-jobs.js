@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chart, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, keepWindow, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chart, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
@@ -101,11 +101,12 @@ export const view = {
   group: "factory",
   order: 0,
   icon: "stopwatch",
-  api: (_params, q = new URLSearchParams()) => `/api/speed?window=${windowOf(q)}`,
+  api: (_params, q = new URLSearchParams()) => withProject(`/api/speed?window=${windowOf(q)}`, q),
   refresh: 60,
   render: (d, _params, q) => renderFactoryJobs(d, usable("day"), q?.get("stage") ?? "lead", jobsNow(q ?? new URLSearchParams()), Object.fromEntries(q ?? [])),
   mount: async (root, d) => {
     keepWindow(windowShown(Object.fromEntries(hashQuery())) || d.window || windowOf(hashQuery()));
+    keepProject(projectNow());
     const draw = (k) => renderFactoryJobs(d, usable("day"), k, jobsNow(hashQuery()), Object.fromEntries(hashQuery()));
     const wire = () => {
       const stage = hashQuery().get("stage") ?? "lead", [key] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];

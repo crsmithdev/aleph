@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, tag, tone, when } from "../lib.js";
+import { card, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, tag, tone, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -12,7 +12,7 @@ export const view = {
   group: "factory",
   order: -3,
   icon: "gauge-high",
-  api: "/api/state",
+  api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
   render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="stages" class="card" aria-label="Stages">${renderStages(s)}</section><section id="holds" class="card" aria-label="Holds">${renderHolds(s)}</section>${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
@@ -112,6 +112,7 @@ export function renderMonitor(s) {
 export async function mountStatus(root, s, fetcher = fetch, q) {
   const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
   keepWindow(w);
+  keepProject(projectNow());
   wireScope(root);
   wireSorts(root, s);
   await loadSpeed(w, fetcher, true);
@@ -144,7 +145,7 @@ const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).l
 
 /** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
 export function renderStatusLine(s, stale = false, w = "day") {
-  const bar = filterBar([{ name: "window", value: w, options: WINDOWS }]).replace(/<\/div><\/div>$/, `${renderControls(s)}</div></div>`);
+  const bar = scopeBar(projectNow(), w).replace(/<\/div><\/div>$/, `</div><div class="fg">${renderControls(s)}</div></div>`);
   return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
 }
 
@@ -419,4 +420,4 @@ export function renderControls(s) {
   return s.factory.paused ? ctl("resume", "Resume") : ctl("pause", "Pause");
 }
 const ctl = (verb, label) =>
-  `<button class="act" type="button" data-act="${verb}" data-label="${esc(label)}">${esc(label)}</button>`;
+  `<button class="act warn" type="button" data-act="${verb}" data-label="${esc(label)}">${esc(label)}</button>`;

@@ -374,6 +374,8 @@ describe("views", () => {
     expect(head).toContain('data-name="window"');
     for (const w of ["Hour", "Day", "Week", "Month"]) expect(head).toContain(`>${w}</button>`);
     expect(head).toContain('<select name="project"');
+    expect(head.indexOf('<select name="project"')).toBeLessThan(head.indexOf('data-name="window"'));
+    expect(head).not.toContain('data-act="pause"');
     expect(page.indexOf('<details class="new">')).toBeLessThan(page.indexOf('id="issues-table"'));
   });
 

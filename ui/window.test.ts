@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { loadSpeed } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
-import { goQuery, parseHash, storeWindow, windowOf, wireScope } from "./lib.js";
+import { goQuery, parseHash, projectOf, storeWindow, windowOf, wireScope } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import * as eff from "./views/efficiency.js";
 // @ts-ignore plain JS shared with the page
@@ -35,9 +35,9 @@ const PAGES: Record<string, { path: string; view: any; render: (w: string) => st
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
 };
-// Agents loads /api/state, then the speed of the window the mount asks for.
+// Status and Agents load /api/state, then the speed of the window the mount asks for: the request is the speed one.
 const request = (p: { view: any }, q: URLSearchParams): string => {
-  if (typeof p.view.api === "function") return p.view.api(null, q);
+  if (typeof p.view.api === "function" && p.view !== now.view && p.view !== agents.view) return p.view.api(null, q);
   let url = "";
   void loadSpeed(windowOf(q), async (u: string) => { url = u; return { ok: true, json: async () => ({}) } as any; });
   return url;
@@ -97,4 +97,31 @@ test("the route of #?window=day is Status, on the day window", () => {
   expect(windowOf(query)).toBe("day");
   expect(parseHash("")).toEqual({ path: "/", query: new URLSearchParams() });
   expect(parseHash("#/jobs/a?x=1").path).toBe("/jobs/a");
+});
+
+test("each head has the Project select before the window control, and only Status has Pause", () => {
+  for (const [name, p] of Object.entries(PAGES)) {
+    const h = p.render("week");
+    expect(h.indexOf('<select name="project"'), name).toBeGreaterThan(-1);
+    expect(h.indexOf('<select name="project"'), name).toBeLessThan(h.indexOf('data-name="window"'));
+    expect(h.includes('data-act="pause"'), name).toBe(name === "status");
+  }
+});
+
+test("a chosen project is in the address, in each request, and on the next page", () => {
+  for (const [name, p] of Object.entries(PAGES)) {
+    g.location.hash = p.path;
+    let change: any;
+    wireScope({ querySelector: () => ({ addEventListener: (t: string, f: unknown) => { if (t === "change") change = f; } }) });
+    change({ target: { name: "project", value: "alpha", matches: () => true } });
+    expect(query().get("project"), name).toBe("alpha");
+    expect(request(p, query()), name).toContain("project=alpha");
+    expect(request(p, query()), name).toContain(`window=${windowOf(query())}`);
+    g.location.hash = "#/other";
+    expect(request(p, new URLSearchParams()), name).toContain("project=alpha");
+    change({ target: { name: "project", value: "", matches: () => true } });
+    expect(request(p, new URLSearchParams()), name).not.toContain("project=");
+  }
+  expect(projectOf(new URLSearchParams("project=beta"))).toBe("beta");
+  expect(PAGES.status.view.api(null, new URLSearchParams("project=alpha"))).toBe("/api/state?project=alpha");
 });
