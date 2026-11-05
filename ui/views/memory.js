@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { moreFold, badge, legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
+import { facts, localMs, moreFold, badge, legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -131,13 +131,13 @@ const EMPTY_TYPES = {
 const DAY = 86_400_000, STEP = 50;
 const KNOWLEDGE = ["decision", "gotcha", "project", "entity", "concept"];
 const STATUS = { use: "in use", stale: "stale", never: "never read", lint: "lint problem" };
-const shortDay = (s) => day(`${String(s).slice(0, 10)}T00:00`);
+const shortDay = (s) => day(localMs(String(s).slice(0, 10)));
 
 /** A note's status: a refusal first; else in use when recall returned it in the last 7 days, stale when earlier, never when it never did. */
 export function noteStatus(n, now = Date.now()) {
   if (n.problems?.length) return "lint";
   if (!n.read) return "never";
-  return now - Date.parse(`${n.read}T00:00`) <= 7 * DAY ? "use" : "stale";
+  return now - localMs(n.read) <= 7 * DAY ? "use" : "stale";
 }
 
 /** The note rows with their status. */
@@ -266,10 +266,9 @@ export function renderInspector(n, row) {
   if (!n) return `<p class="quiet">Select a note to see its claim, sources and links.</p>`;
   const fm = n.frontmatter ?? {}, sources = [].concat(fm.sources ?? []);
   const list = (title, xs, item) => (xs.length ? `<h4>${title}</h4><ul>${xs.map((x) => `<li>${item(x)}</li>`).join("")}</ul>` : "");
-  const fact = (k, v) => (v ? `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>` : "");
   return (row ? pill(row.status) : "") + `<h3>${esc(n.title)}</h3>` +
     (row?.problems?.length ? `<div class="warnbox">${row.problems.map((p) => esc(`${p.rule}: ${p.detail}`)).join("<br>")}</div>` : "") +
-    `<dl class="facts">${fact("Kind", [fm.kind, fm.scope].filter(Boolean).join(", "))}${fact("Confidence", fm.confidence)}${fact("Written", fm.updated && shortDay(fm.updated))}${fact("Last read", row ? (row.read ? shortDay(row.read) : "never") : "")}</dl>` +
+    facts([["Kind", esc([fm.kind, fm.scope].filter(Boolean).join(", "))], ["Confidence", esc(fm.confidence)], ["Written", fm.updated && esc(shortDay(fm.updated))], ["Last read", row && esc(row.read ? shortDay(row.read) : "never")]]) +
     `<article class="note">${md(n.body)}</article>` +
     list("Sources", sources, (s) => `<code>${esc(s)}</code>`) + list("Links to", n.links ?? [], (l) => link(l.title)) + list("Linked From", n.backlinks ?? [], (l) => link(l.title)) +
     `<p class="hint"><code>${esc(n.path)}</code> · ${`<a href="#/memory/${encodeURIComponent(n.title)}">Open the page</a>`}</p>`;

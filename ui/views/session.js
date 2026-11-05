@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { clamp, say, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, when } from "../lib.js";
+import { clamp, say, facts, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -160,11 +160,10 @@ export function waterfall(rows, sel = null) {
 export function wfDetail(r) {
   if (!r) return `<p class="quiet">Select a row to see its input and output.</p>`;
   const io = (label, text) => (text ? `<h4>${label}</h4>${clip(text, `<pre>${esc(text)}</pre>`)}` : "");
-  const f = (k, v) => (v ? `<div><dt>${k}</dt><dd>${v}</dd></div>` : "");
-  return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3><dl class="facts">` +
-    f("Kind", esc(r.kind)) + f("Start", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`) + f("Duration", esc(dur(r.durationMs))) +
-    f("Model", r.model ? esc(shortModel(r.model)) : "") + f("Cost", r.cost ? costHtml(r.cost, r.wk) : "") +
-    f("Tokens", r.inputTokens != null || r.outputTokens != null ? `${esc(r.inputTokens ?? "–")} in, ${esc(r.outputTokens ?? "–")} out` : "") + `</dl>` +
+  return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3>` +
+    facts([["Kind", esc(r.kind)], ["Start", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`], ["Duration", esc(dur(r.durationMs))],
+      ["Model", r.model ? esc(shortModel(r.model)) : ""], ["Cost", r.cost ? costHtml(r.cost, r.wk) : ""],
+      ["Tokens", r.inputTokens != null || r.outputTokens != null ? `${esc(r.inputTokens ?? "–")} in, ${esc(r.outputTokens ?? "–")} out` : ""]]) +
     io("Input", r.input) + (r.error ? io("Error", r.error) : "") + io("Output", r.output);
 }
 
@@ -253,7 +252,7 @@ export function renderTurn(d) {
   const nav = (n, label) => (n >= 1 && n <= d.total ? `<a href="${esc(href(`/sessions/${sid}/turns/${n}`))}">${label}</a>` : "");
   return `<div class="page">${crumb(`#/sessions/${sid}`, [["sessions", "#/sessions"], [d.id.slice(0, 8), `#/sessions/${sid}`], [`turn ${d.n}`]])}` +
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
-    `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${costHtml(d.cost, d.wk)}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
+    facts([["Started", esc(when(d.start))], ["Cost", costHtml(d.cost, d.wk)], ["Duration", esc(dur(d.durationMs))]]) +
     `${sectionHead("Prompt")}<pre>${esc(d.prompt)}</pre>${sectionHead("Output")}<pre>${esc(d.output)}</pre>${sectionHead("Observations")}` +
     `<div id="obs-table">${obsTable(d)}</div></div>`;
 }

@@ -6,10 +6,9 @@ export const itemId = (j) => repoIdLink(j.name, j.href || `#/jobs/${encodeURICom
 export const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
 export const actMsg = (name) => (actMessages.has(name) ? `<span class="act-msg" role="alert">${esc(actMessages.get(name))}</span>` : "");
 export const act = (verb, name, label, primary = false) => actButton(label, { act: verb, name, label }, { primary });
-export const fact = (k, v) => `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>`;
-/** The checks of a run as facts: `Tests 71s ✓`. */
+/** The checks of a run as fact rows: `Tests 71s ✓`. */
 export const checkFacts = (j) =>
-  (j.checks || []).map((c) => fact(c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(dur(c.seconds))} ${c.ok ? "✓" : "✗"}`)).join("");
+  (j.checks || []).map((c) => [c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(dur(c.seconds))} ${c.ok ? "✓" : "✗"}`]);
 /** "Oct 28 04:28" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time, as `when` shows it. */
 const idStart = (m, now) => when(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])), new Date(now));
 const KINDS = { agent: "agent run", land: "land", intake: "intake", triage: "triage", plan: "planner", firefighter: "firefighter", director: "director", explain: "explainer" };

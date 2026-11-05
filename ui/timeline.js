@@ -1,13 +1,10 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { clamp, legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
+import { clamp, codeText, legendHtml, dur, esc, localMs, money, shortModel, tag, when } from "./lib.js";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
-
-/** A store date or a note's stamp as ms in local time, as the CLI writes them; NaN for neither. */
-export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^\d{4}-\d\d-\d\d$/.test(String(s ?? "")) ? "T00:00" : ""));
 
 /** The time and text of a note line `- 2026-11-01 08:06: text`; null for one with no stamp. */
 export function noteEvent(line) {
@@ -169,9 +166,33 @@ export const renderKpis = (items) => `<section class="dp-panel dp-kpis" aria-lab
 export const detailPanel = (title, aside, body) => `<details class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
 
 /** A panel with a heading: the Spec, the Result, the Description. `body` is HTML; `aside` is HTML. */
-export const panel = (id, title, body, aside = "") => `<section class="dp-panel dp-prose" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
+export const panel = (id, title, body, aside = "", cls = "") => `<section class="dp-panel dp-prose${cls}" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
 
 /** "$1.11", or "–" for none. */
 export const costText = (n) => (n ? money(n) : "–");
 /** "08:11 to 08:39" for a span in one day, else with the dates. */
 export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
+
+const RUN_TAG = { stuck: ["Stuck", "stuck"], failed: ["Failed", "stuck"], dropped: ["Dropped", "quiet"], passed: ["Passed", "done"], landed: ["Landed", "done"], done: ["Done", "done"], awaiting: ["Awaiting you", "need"], running: ["Running", "run"] };
+/** The event of one run: its condition as the tag, then `name` and its reason, or `what` in their place. */
+export function runEvent(x, name, what = null) {
+  const [text, tone] = RUN_TAG[x.r.condition] ?? [x.r.condition, "quiet"], cap = esc(name[0].toUpperCase() + name.slice(1));
+  return { at: x.end, tag: text, tone, html: what ?? `${cap}${x.r.reason ? `: ${codeText(x.r.reason)}` : "."}` };
+}
+/** The events of a lane: each run that stopped or asks, with its reason. */
+const laneEvents = (runs, bars) => runs.flatMap((x, i) => {
+  // A run that awaits you shows only with its question; the wait after it already shows.
+  if (!["stuck", "failed", "dropped", "awaiting"].includes(x.r.condition) || (x.r.condition === "awaiting" && !x.r.reason)) return [];
+  return [runEvent(x, bars[i].label)];
+});
+
+/**
+ * One timeline row: the runs as bars, the waits from `from` to `to`, then the events of the runs (`runEvents(bars)`,
+ * by default the runs that stopped or ask) and `events`.
+ */
+export function laneRow({ head, runs, from = NaN, to = NaN, marks = [], result, events = [], holds = [], cost = false, runEvents = (bars) => laneEvents(runs, bars) }) {
+  const waits = gaps(runs, from, to), bars = barsOf(runs, { cost });
+  const times = [from, to, ...runs.flatMap((x) => [x.start, x.end]), ...marks.map((m) => m.at)].filter(Number.isFinite);
+  const took = times.length ? Math.max(...times) - Math.min(...times) : 0;
+  return { head, bars, waits, marks, result, time: took > 0 ? dur(took / 1000) : "–", cost: costText(runs.reduce((n, x) => n + (x.r.cost ?? 0), 0)), events: [...waits.map((w) => waitEvent(w, holds)), ...runEvents(bars), ...events] };
+}

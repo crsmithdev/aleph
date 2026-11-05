@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+// @ts-ignore lib.js is plain JS, shared with the page
+import * as lib from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -399,4 +401,19 @@ test("postJson posts the JSON body with the UI header and throws the error text 
 test("actButton makes an .act button with the data attributes and label, and primary when asked", () => {
   expect(actButton("Land <it>", { act: "land", name: "a&b" })).toBe('<button class="act" type="button" data-act="land" data-name="a&amp;b">Land &lt;it&gt;</button>');
   expect(actButton("Save", {}, { primary: true, type: "submit" })).toBe('<button class="act primary" type="submit">Save</button>');
+});
+
+test("codeText sets a backtick span as a code element and escapes an ampersand", () => {
+  expect(lib.codeText("run `a & b` now")).toBe("run <code>a &amp; b</code> now");
+});
+
+test("localMs reads a bare date as local midnight, not UTC midnight", () => {
+  const tz = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    expect(lib.localMs("2026-11-05")).toBe(new Date(2026, 10, 5).getTime());
+  } finally {
+    if (tz === undefined) delete process.env.TZ;
+    else process.env.TZ = tz;
+  }
 });

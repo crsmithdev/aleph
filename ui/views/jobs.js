@@ -1,8 +1,8 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { pageHead, sectionHead, blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
-import { barLabel, barsOf, costText, detailPanel, fromTo, gaps, panel, renderKpis, renderTimeline, spans, waitEvent } from "../timeline.js";
+import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
+import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 
 
 /** The days of the list: the window, or an old `?days=` address that has no window; else the stored window. */
@@ -116,20 +116,14 @@ export function renderTranscript(steps) {
   }).join("") || empty("Nothing to show.");
 }
 
-/** Text with its `code` spans set as code, escaped. */
-export const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
-
-const RUN_TAG = { stuck: ["Stuck", "stuck"], failed: ["Failed", "stuck"], dropped: ["Dropped", "quiet"], passed: ["Passed", "done"], landed: ["Landed", "done"], done: ["Done", "done"], awaiting: ["Awaiting you", "need"], running: ["Running", "run"] };
 const shortSha = (j) => (j.commitUrl ? idLink(j.commit.slice(0, 7), j.commitUrl) : `<code>${esc(j.commit.slice(0, 7))}</code>`);
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** The event of one run: its condition as the tag, then its reason, the commit of a land, and its log buttons. */
-function runEvent(job, x, nth, j) {
-  const r = x.r, [text, tone] = RUN_TAG[r.condition] ?? [r.condition, "quiet"];
-  const name = barLabel(r, nth);
-  const what = r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name[0].toUpperCase() + name.slice(1))} as ${shortSha(j)}.`
-    : r.reason ? `${esc(name[0].toUpperCase() + name.slice(1))}: ${inline(r.reason)}` : `${esc(name[0].toUpperCase() + name.slice(1))}.`;
-  return { at: x.end, tag: text, tone, html: what + logButtons(job, r) };
+function jobEvent(job, x, nth, j) {
+  const r = x.r, name = barLabel(r, nth);
+  const e = runEvent(x, name, r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name[0].toUpperCase() + name.slice(1))} as ${shortSha(j)}.` : null);
+  return { ...e, html: e.html + logButtons(job, r) };
 }
 
 /** "+23 −2" and "2 files" from a diff stat's last line; null for none. */
@@ -147,21 +141,17 @@ export function jobSegments(j, now = Date.now()) {
   const count = {};
   for (const x of work) count[x.r.kind] = (count[x.r.kind] ?? 0) + 1;
   const seen = {};
-  const events = work.map((x) => { seen[x.r.kind] = (seen[x.r.kind] ?? 0) + 1; return runEvent(j.name, x, count[x.r.kind] > 1 ? seen[x.r.kind] : 0, j); });
-  const waits = work.length ? gaps(work, work[0].start, NaN) : [];
+  const events = work.map((x) => { seen[x.r.kind] = (seen[x.r.kind] ?? 0) + 1; return jobEvent(j.name, x, count[x.r.kind] > 1 ? seen[x.r.kind] : 0, j); });
   const builds = count.worker ?? 0, lands = count.land ?? 0;
-  const took = work.length ? Math.max(...work.map((x) => x.end)) - work[0].start : 0;
   const segments = [];
   if (work.length) segments.push({
     title: "Work", aside: j.condition === "landed" ? "to the land" : "",
-    rows: [{
+    rows: [laneRow({
       head: `<span class="quiet">${esc([builds ? plural(builds, "build") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "run"))}</span>`,
-      bars: barsOf(work, { cost: true }), waits, marks: [], result: badge(j.condition),
-      time: took > 0 ? dur(took / 1000) : "–", cost: costText(work.reduce((n, x) => n + (x.r.cost ?? 0), 0)),
-      events: [...waits.map((w) => waitEvent(w, j.holds ?? [])), ...events,
-        ...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: inline(d) })),
-        ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: inline(f) }))],
-    }],
+      runs: work, from: work[0].start, result: badge(j.condition), cost: true, holds: j.holds ?? [], runEvents: () => events,
+      events: [...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: codeText(d) })),
+        ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: codeText(f) }))],
+    })],
   });
   return segments;
 }

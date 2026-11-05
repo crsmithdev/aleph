@@ -161,7 +161,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 
 ### Form messages
 
-- A result line after an action, or inside a form, is `<span class="act-msg">` (`ui/app.css:333`). `say()` in `ui/lib.js:721` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:682`, `694`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
+- A result line after an action, or inside a form, is `<span class="act-msg">` (`ui/app.css:333`). `say()` in `ui/lib.js:721` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:662`, `674`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
 
 ### Two-click confirm
 
@@ -234,14 +234,14 @@ Columns of the main tables:
 | Sessions | Started, Last Turn, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:117`) |
 | Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:251`) |
 | Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Took (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
-| Observations | Kind, Name, Detail, Took (num) | `dataTable()` (`ui/views/session.js:264`) |
+| Observations | Kind, Name, Detail, Took (num) | `dataTable()` (`ui/views/session.js:263`) |
 | Gates log | Logged, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:169`) |
 | Hooks | Last Call, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
 | Denials | Denied, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:55`) |
-| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:202`) |
-| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:635`) |
+| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:192`) |
+| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:615`) |
 
 Gaps: a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:495`) over the table.
 
@@ -297,7 +297,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:340`).
 - **Active:** `.cmd:active` (`ui/app.css:319`) moves 1px down.
 - **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`, `ui/app.css:977`); the open state of each is kept across a redraw by `recordState()` (`ui/lib.js:229`) and `restoreState()` (`ui/lib.js:242`).
-- **Page-head controls:** the heads of Status, Jobs, Efficiency, Agents and Issues hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()`, `ui/lib.js:494`). The Sessions head is the one page with its own window: `scopeBar()` draws a Project select and then 7 / 30 / 90 days (`days`), which stays out of the shared `aleph.window` storage because the API takes only those values. The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as the `act warn` classes (`ui/views/now.js:413`): it is an action with consequences, not a plain button.
+- **Page-head controls:** the heads of Status, Jobs, Efficiency, Agents and Issues hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()`, `ui/lib.js:494`). The Sessions head is the one page with its own window: `scopeBar()` draws a Project select and then 7 / 30 / 90 days (`days`), which stays out of the shared `aleph.window` storage because the API takes only those values. The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as the `act warn` classes (`ui/views/now.js:411`): it is an action with consequences, not a plain button.
 - **Motion:** `.15s ease-out` on borders and backgrounds; no animation.
 
 ## Content

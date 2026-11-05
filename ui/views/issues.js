@@ -2,9 +2,9 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { actButton, postJson, say, count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { actButton, postJson, say, count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
-import { barsOf, costText, detailPanel, fromTo, gaps, localMs, noteEvent, renderKpis, renderTimeline, spans, waitEvent } from "../timeline.js";
+import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
 export const view = {
   path: "/issues",
@@ -51,7 +51,7 @@ export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
 const DAY = 86_400_000;
 const ms = (s) => Date.parse(s) || 0;
 /** A store date `YYYY-MM-DD` as local midnight in ms, as the CLI writes it; 0 for none. */
-const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? Date.parse(`${String(s).slice(0, 10)}T00:00`) : 0);
+const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? localMs(String(s).slice(0, 10)) : 0);
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
@@ -517,28 +517,8 @@ function filedAt(d, runs) {
   return d.timeline?.filed ?? (created >= 0 && !sameDay ? created : runs[0]?.start ?? NaN);
 }
 
-const RUN_TAG = { stuck: ["Stuck", "stuck"], failed: ["Failed", "stuck"], dropped: ["Dropped", "quiet"], awaiting: ["Awaiting you", "need"] };
-/** The events of a lane: each wait, and each run that stopped or asks, with its reason. */
-const laneEvents = (runs, waits, bars, holds = []) => [...waits.map((w) => waitEvent(w, holds)), ...runs.flatMap((x, i) => {
-  // A run that awaits you shows only with its question; the wait after it already shows.
-  if (!RUN_TAG[x.r.condition] || (x.r.condition === "awaiting" && !x.r.reason)) return [];
-  const [text, tone] = RUN_TAG[x.r.condition], name = bars[i].label;
-  return [{ at: x.end, tag: text, tone, html: `${esc(name[0].toUpperCase() + name.slice(1))}${x.r.reason ? `: ${inline(x.r.reason)}` : "."}` }];
-})];
-
-/** Text with its `code` spans set as code, escaped. */
-const inline = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
 const ends = (runs) => (runs.length ? Math.max(...runs.map((x) => x.end)) : NaN);
-const sum = (runs) => runs.reduce((n, x) => n + (x.r.cost ?? 0), 0);
 const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "build" : x.r.kind)))].join(", ");
-
-/** One timeline row: the runs as bars, the waits from `from` to `to`, and their events with `events`. */
-function laneRow({ head, runs, from = NaN, to = NaN, marks = [], result, events = [], holds = [] }) {
-  const waits = gaps(runs, from, to), bars = barsOf(runs);
-  const times = [from, to, ...runs.flatMap((x) => [x.start, x.end]), ...marks.map((m) => m.at)].filter(Number.isFinite);
-  const took = times.length ? Math.max(...times) - Math.min(...times) : 0;
-  return { head, bars, waits, marks, result, time: took > 0 ? dur(took / 1000) : "–", cost: costText(sum(runs)), events: [...laneEvents(runs, waits, bars, holds), ...events] };
-}
 
 /**
  * The Timeline's segments for an issue. With parts: Before the split (the issue's own runs before its parts start),
@@ -621,7 +601,7 @@ export function renderIssue(d) {
   const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
   const goals = d.goals ?? [];
   const part = (id, title, name, text) => (text || !goals.length
-    ? `<section class="dp-panel dp-prose${text ? "" : " edit-only"}" aria-labelledby="h-${id}"><div class="dp-ph"><h2 id="h-${id}">${title}</h2></div><div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea></section>`
+    ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");
   const noteRow = (n) => {
     const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(n.replace(/^- /, "")) };

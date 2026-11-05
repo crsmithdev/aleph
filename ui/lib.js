@@ -728,3 +728,14 @@ export function say(el, text) {
 export const actButton = (label, data = {}, o = {}) =>
   `<button class="act${o.primary ? " primary" : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
   Object.entries(data).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("") + `>${esc(label)}</button>`;
+
+/** Text with its `code` spans set as code, escaped. */
+export const codeText = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
+
+/** A store date or a note's stamp as ms in local time, as the CLI writes them; NaN for neither. */
+export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^\d{4}-\d\d-\d\d$/.test(String(s ?? "")) ? "T00:00" : ""));
+
+/** One fact of a facts list; "" for an empty value. `v` is HTML. */
+export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : "");
+/** The facts list of `[label, html]` pairs. */
+export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
