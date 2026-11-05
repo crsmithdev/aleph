@@ -277,17 +277,17 @@ export function stats(rows, now = new Date(), days = 7) {
   };
 }
 
-/** The change from the period before, muted: a count that can go either way has no good or bad colour. */
-const change = (now, before, w) => cardTrend(now, before, before, { kind: "relative", lowerIsGood: null, tip: `${before} the ${w} before` });
+/** The change from the period before: more closed is good, more filed is warn. */
+const change = (now, before, w, lowerIsGood) => cardTrend(now, before, before, { kind: "relative", lowerIsGood, tip: `${before} the ${w} before` });
 
 export function renderTiles(s, key = "open", win = "week") {
   const w = win in WINDOW_DAYS ? win : "week";
   const on = (k) => ({ key: k, on: key === k });
   return tiles("Issue numbers",
-    statCard({ k: "Open", v: String(s.open), v2: String(s.total), q: ["open", "in the store"], ...on("open") }) +
-    statCard({ k: `Filed, last ${w}`, v: String(s.filed), trend: change(s.filed, s.filedBefore, w), note: `${s.filedBefore} the ${w} before`, ...on("filed") }) +
-    statCard({ k: `Closed, last ${w}`, v: String(s.closed), v2: String(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w), ...on("closed") }) +
-    statCard({ k: "Median open age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)}d`, ...(s.oldest === null ? {} : { v2: `${Math.round(s.oldest)}d`, q: ["median", "oldest"] }), ...on("age") }) +
+    statCard({ k: "Open", v: String(s.open), v2: String(s.total), q: ["open", "in store"], ...on("open") }) +
+    statCard({ k: "Filed", v: String(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${s.filedBefore} the ${w} before`, ...on("filed") }) +
+    statCard({ k: "Closed", v: String(s.closed), v2: String(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w, false), ...on("closed") }) +
+    statCard({ k: "Open Age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)}d`, ...(s.oldest === null ? {} : { v2: `${Math.round(s.oldest)}d`, q: ["open age", "oldest"] }), ...on("age") }) +
     statCard({ k: "Runs", v: String(s.runs), v2: money(s.cost), q: ["runs", "recorded cost"], ...on("runs") }));
 }
 

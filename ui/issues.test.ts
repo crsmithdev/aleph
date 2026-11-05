@@ -376,7 +376,13 @@ describe("views", () => {
       expect(v.filterRows(recent, { tile, window: "week" })).toHaveLength(2);
     }
     const html = v.renderTiles(v.stats(rows, now, 1), "open", "day");
-    expect(html).toContain("Filed, last day");
+    for (const k of ["Filed", "Closed", "Open Age"]) expect(html).toContain(`>${k}<`);
+    for (const k of ["Filed, last", "Closed, last", "Median open age"]) expect(html).not.toContain(k);
+    expect(html).toContain("<span>open</span><span class=\"m\"> / in store</span>");
+    const up = v.renderTiles({ ...v.stats(rows, now, 1), filed: 3, filedBefore: 1, closed: 3, closedBefore: 1, medianAge: 2, oldest: 5 }, "open", "day");
+    expect(up).toContain("<span>open age</span><span class=\"m\"> / oldest</span>");
+    expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Closed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bgood\b/);
+    expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Filed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bwarn\b/);
     expect(html).not.toContain("7 days");
     const open = html.match(/<button[^>]*class="tile sc"[\s\S]*?<\/button>/)![0];
     expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
