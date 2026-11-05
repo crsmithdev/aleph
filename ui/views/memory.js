@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when } from "../lib.js";
+import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -236,7 +236,7 @@ function renderBroad(m) {
 /** The browser's state from the route's query: ?type=semantic&status=never&kind=gotcha&scope=aleph&q=text&sort=read&dir=desc&note=Title&limit=100. */
 export function options(q = new URLSearchParams()) {
   return { type: q.get("type") || "semantic", status: q.get("status") ?? "", kind: q.get("kind") ?? "", scope: q.get("scope") ?? "", q: q.get("q") ?? "", note: q.get("note") ?? "",
-    sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null, limit: Math.max(STEP, Number.parseInt(q.get("limit"), 10) || STEP) };
+    sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null, limit: limitOf(q, STEP) };
 }
 
 /** The kind filter: empty is the knowledge notes. */
@@ -247,12 +247,8 @@ const SORT = { title: (n) => n.title, kind: (n) => n.kind, scope: (n) => n.scope
 export function browseRows(rows, o, hits = []) {
   const q = o.q.trim().toLowerCase(), rank = new Map(hits.map((t, i) => [t, i]));
   const out = ofKind(rows, o.kind).filter((n) => (!o.status || n.status === o.status) && (!o.scope || n.scope === o.scope) && (!q || rank.has(n.title) || n.title.toLowerCase().includes(q)));
-  if (o.sort) {
-    const f = SORT[o.sort.key] ?? SORT.updated;
-    return out.sort((a, b) => String(f(a)).localeCompare(String(f(b))) * o.sort.dir || a.title.localeCompare(b.title));
-  }
-  if (q) return out.sort((a, b) => (rank.get(a.title) ?? Infinity) - (rank.get(b.title) ?? Infinity) || a.title.localeCompare(b.title));
-  return out.sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title));
+  const sort = o.sort && SORT[o.sort.key] ? o.sort : o.sort ? { ...o.sort, key: "updated" } : q ? { key: "rank", dir: 1 } : { key: "updated", dir: -1 };
+  return sortRows(sortRows(out, SORT, { key: "title", dir: 1 }), { ...SORT, rank: (n) => rank.get(n.title) ?? hits.length }, sort);
 }
 
 const TONE = { use: "done", stale: "need", never: "quiet", lint: "stuck" };
@@ -334,7 +330,10 @@ async function search(q) {
 }
 
 function mount(root, m) {
-  live = { root, m, rows: noteRows(m), hits: [] };
+  live = { root, m, rows: noteRows(m), hits: [], searched: here().q };
+  const notes = root.querySelector("#mem-notes");
+  if (notes) wireTable(notes, { search: "mem-search", sortOf: () => here().sort, downFirst: new Set(["read", "updated"]), page: STEP,
+    redraw: () => { const q = here().q; if (q === live.searched) return redrawNotes(); live.searched = q; search(q); } });
   onTile(root.querySelector("#mem-board"), (type) => {
     setQuery({ type });
     root.querySelector("#mem-board .tiles").outerHTML = renderTiles(m, live.rows, type);
@@ -352,14 +351,6 @@ if (typeof document !== "undefined") {
     if (!t?.closest(".page.memory") || !live) return;
         const seg = t.closest("#mem-filters .seg button");
     if (seg) { setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" }); return redrawNotes(); }
-    const sort = t.closest("#mem-table button[data-sort]");
-    if (sort) {
-      const key = sort.dataset.sort, cur = here().sort;
-      setQuery({ sort: key, dir: (cur?.key === key ? -cur.dir : key === "read" || key === "updated" ? -1 : 1) > 0 ? "asc" : "desc" });
-      return redrawNotes();
-    }
-    const more = t.closest("#mem-table button[data-more]");
-    if (more) { setQuery({ limit: String(here().limit + Number(more.dataset.more)) }); return redrawNotes(); }
     const page = t.closest(".mem-page button[data-more]");
     if (page) {
       const box = page.closest(".mem-page"), rows = [...box.querySelectorAll("tbody tr")], n = rows.filter((r) => !r.hidden).length + Number(page.dataset.more);
@@ -381,12 +372,6 @@ if (typeof document !== "undefined") {
   document.addEventListener("change", (e) => {
     const f = e.target.closest?.("#mem-filters select");
     if (f) { setQuery({ [f.name]: f.value, limit: "" }); redrawNotes(); }
-  });
-  let typing = 0;
-  document.addEventListener("input", (e) => {
-    if (!e.target.matches?.('[data-ui="mem-search"]')) return;
-    clearTimeout(typing);
-    typing = setTimeout(() => { setQuery({ q: e.target.value, limit: "" }); search(e.target.value); }, 200);
   });
 }
 

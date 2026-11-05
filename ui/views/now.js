@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, tag, tone, when } from "../lib.js";
+import { card, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -51,12 +51,11 @@ const pairCell = (p, f, max, tip) =>
 
 /** The rows by `sort` ({key, dir}), at most 10. `cols` maps a sort key to the row's value. */
 function sorted(rows, cols, sort) {
-  const val = (r) => { const v = cols[sort.key](r); return v?.day === undefined ? v : (v.day ?? -1); };
-  return [...rows].sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * sort.dir).slice(0, MONITOR_ROWS);
+  return sortRows(rows, cols, sort).slice(0, MONITOR_ROWS);
 }
 
-const STAGE_COLS = { stage: (r) => r.stage, runs: (r) => r.runsPerItem, unusable: (r) => r.unusable };
-const HOLD_COLS = { kind: (r) => r.kind, goals: (r) => r.goals, hours: (r) => r.hours };
+const STAGE_COLS = { stage: (r) => r.stage, runs: (r) => r.runsPerItem.day ?? -1, unusable: (r) => r.unusable.day ?? -1 };
+const HOLD_COLS = { kind: (r) => r.kind, goals: (r) => r.goals.day ?? -1, hours: (r) => r.hours.day ?? -1 };
 const SORTS = { stages: { key: "runs", dir: -1 }, holds: { key: "goals", dir: -1 } };
 
 /** The monitor's Stages table: the day's value with a bar for runs per item; the trailing 7 days is in each cell's tooltip. At most 10 rows. */
@@ -87,7 +86,7 @@ function wireSorts(root, s) {
     const b = e.target.closest?.("#stages button[data-sort], #holds button[data-sort]");
     if (!b) return;
     const id = b.closest("section").id, key = b.dataset.sort, cur = SORTS[id];
-    SORTS[id] = { key, dir: cur.key === key ? -cur.dir : key === "stage" || key === "kind" ? 1 : -1 };
+    SORTS[id] = nextSort(cur, key, new Set(["runs", "unusable", "goals", "hours"]));
     root.querySelector(`#${id}`).innerHTML = (id === "stages" ? renderStages : renderHolds)(s, SORTS[id]);
   });
 }

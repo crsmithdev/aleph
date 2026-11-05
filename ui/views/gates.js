@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, keepProject, keepWindow, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -49,7 +49,7 @@ const PAGE = 50;
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days`, aside: scopeBar(projectNow(), windowOf(q)) })}` +
     renderNow(d) + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
-    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), Number(q.get("limit")) || PAGE) + `</div>`;
+    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE)) + `</div>`;
 }
 
 /** The environment variable that overrides each cap in caps.json. */
@@ -210,7 +210,7 @@ export function mount(root) {
     if (seg) return goQuery({ by: seg.dataset.value, limit: "" });
     const more = e.target.closest?.("#gates-log button[data-more]");
     if (more) {
-      setQuery({ limit: String((Number(hashQuery().get("limit")) || PAGE) + Number(more.dataset.more)) });
+      setQuery({ limit: String(limitOf(hashQuery(), PAGE) + Number(more.dataset.more)) });
       return redraw(root);
     }
     const txt = e.target.closest?.("#gates-log .dp-txt");
