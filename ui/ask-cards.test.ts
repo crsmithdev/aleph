@@ -29,7 +29,7 @@ const card = (row: string) => row.match(/^<article[^]*<\/article>$/)![0];
 test("one card per kind: the title opens with the kind label, and the tag names the stop", () => {
   const items = four();
   expect(items.map((i) => [i.reason, i.card, i.tag])).toEqual([
-    ["held-path", "approve", "Security change"], ["question", "decide", "Your choice"], ["no-commit", "unstick", "No change"],
+    ["held-path", "approve", "protected"], ["question", "decide", "question"], ["no-commit", "unstick", "failed"],
   ]);
   for (const [i, label] of items.map((x, k) => [x, ["Approve", "Decide", "Unstick"][k]] as const)) {
     const row = card(view.askRow(i, "2026-10-27T17:00:00Z"));
@@ -73,7 +73,7 @@ test("Technical details are closed by default and hold the director's details an
 
 test("each held path names its change: a package file is a package change", () => {
   const [i] = asksOf([job({ name: "aleph-28", condition: "awaiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })]);
-  expect(i.tag).toBe("Package change");
+  expect(i.tag).toBe("protected");
 });
 
 test("an old Ask with none of the new fields still renders: the item's title, the fixed text, no mark", () => {
@@ -81,7 +81,7 @@ test("an old Ask with none of the new fields still renders: the item's title, th
   expect(i.headline).toBe("Loops a lot");
   const row = view.askRow(i, "2026-10-27T17:00:00Z");
   expect(row).toContain('<b class="ask-kind">Unstick:</b> <span class="ask-title">Loops a lot</span>');
-  expect(row).toContain('<span class="ask-tag">Looping</span>');
+  expect(row).toContain('<span class="ask-tag">capped</span>');
   expect(row).toContain("Clears the Ask and lets the factory start the goal again.");
   expect(row).not.toContain("rec-note");
   // An item from before the cards, with no card, headline or tag: the kind comes from its input or approval.

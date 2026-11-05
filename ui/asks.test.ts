@@ -67,9 +67,9 @@ describe("asks", () => {
 
   test("an Ask the director still holds is tagged as its call; once escalated it has the reason's tag", () => {
     const held = ofIssues(issue({ reason: "question", question: "what now?", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } as Ask }))[0];
-    expect(held.tag).toBe("Director's call");
+    expect(held.tag).toBe("director");
     STORE = { situation: "The port is taken, so pick one." };
-    try { expect(ofIssues(issue({ reason: "question", question: "what now?" }))[0].tag).toBe("Your choice"); } finally { STORE = undefined; }
+    try { expect(ofIssues(issue({ reason: "question", question: "what now?" }))[0].tag).toBe("question"); } finally { STORE = undefined; }
   });
 
   test("an issue with a reason the table does not name is a question", () => {

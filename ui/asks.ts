@@ -4,7 +4,7 @@
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
 import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Granted } from "../jobs/lib/asks/ask.ts";
-// @ts-ignore plain JS, shared with the page
+import { word } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
 import type { Job, NewIssue } from "./state.ts";
@@ -52,19 +52,19 @@ type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
 
 /** The three kinds of card. Approve: finished work that waits for an OK. Decide: a choice only Chris can make. Unstick: work that stopped and needs a direction. */
 export type Card = "approve" | "decide" | "unstick";
-/** Each reason's kind of card and the tag that names its stop, as in the approved mock of 3 Nov. */
-const CARDS: Record<string, { card: Card; tag: (c: Ctx) => string }> = {
-  "held-path": { card: "approve", tag: (c) => (/\b(bun\.lock|package\.json)\b/.test(c.run?.reason ?? "") ? "Package change" : "Security change") },
-  review: { card: "approve", tag: () => "Review stuck" },
-  "proposal-check": { card: "approve", tag: () => "Memory: check" },
-  "proposal-claude-md": { card: "approve", tag: () => "Memory: instructions" },
-  "proposal-skill": { card: "approve", tag: () => "Memory: skill" },
-  question: { card: "decide", tag: (c) => (c.run ? "Builder's question" : "Your choice") },
-  "part-dropped": { card: "decide", tag: () => "Part dropped" },
-  "no-commit": { card: "unstick", tag: () => "No change" },
-  "run-cap": { card: "unstick", tag: () => "Looping" },
-  "intake-failed": { card: "unstick", tag: () => "Can't take in" },
-  rescue: { card: "unstick", tag: () => "Stalled" },
+/** Each reason's kind of card. */
+const CARDS: Record<string, { card: Card }> = {
+  "held-path": { card: "approve" },
+  review: { card: "approve" },
+  "proposal-check": { card: "approve" },
+  "proposal-claude-md": { card: "approve" },
+  "proposal-skill": { card: "approve" },
+  question: { card: "decide" },
+  "part-dropped": { card: "decide" },
+  "no-commit": { card: "unstick" },
+  "run-cap": { card: "unstick" },
+  "intake-failed": { card: "unstick" },
+  rescue: { card: "unstick" },
 };
 /** The text a row shows: the Ask of its run or issue, else the stored text of its lesson. */
 const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend"> | undefined => {
@@ -237,7 +237,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const card = CARDS[reason];
   const headline = (escalated && askIn(c)?.headline?.trim()) || title;
   return {
-    key, reason, kind: kindOf(reason, kind), card: card.card, headline, tag: escalated ? card.tag(c) : "Director's call", id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
+    key, reason, kind: kindOf(reason, kind), card: card.card, headline, tag: escalated ? word("ask", reason) : word("actor", "Director"), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
     ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };
