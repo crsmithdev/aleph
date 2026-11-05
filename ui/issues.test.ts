@@ -3,6 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
+import { setCodes } from "../lib/naming.ts";
 import { add, addPart, setStatus, type Doc } from "../issues/lib/todo.ts";
 import * as todos from "../issues/lib/todo.ts";
 import { askOf, setAsk, refIn } from "../jobs/lib/asks/ask.ts";
@@ -475,7 +476,7 @@ describe("views", () => {
 
   test("the header sorts: a query key and direction order the rows", async () => {
     const d = await getJson("/api/contents");
-    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1]);
+    const ids = (q: string) => [...v.view.render(d, {}, new URLSearchParams(q + "&type=issue&status=any")).matchAll(/class="idl" href="[^"]*">([^<]+)</g)].map((m) => m[1].replace(/^\D+/, ""));
     expect(ids("sort=id&dir=asc")).toEqual([...ids("sort=id&dir=asc")].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
     expect(ids("sort=id&dir=desc")).toEqual(ids("sort=id&dir=asc").reverse());
     expect(v.view.render(d, {}, new URLSearchParams("sort=title&dir=asc"))).toContain('aria-sort="ascending"');
@@ -840,4 +841,16 @@ describe("the Updated time", () => {
     todos.note(i, "hi", new Date(2026, 10, 5, 9, 7));
     expect([i.fm.updated, i.fm.updated_time]).toEqual(["2026-11-05", "2026-11-05 09:07"]);
   });
+});
+
+test("the Issues row, the issue's id and its Work head show the short id, and the links keep the full id", () => {
+  setCodes({ fac: "f" });
+  try {
+    expect(v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "medium", labels: [] })).toContain('<a class="idl" href="#/issues/fac/1">f1</a>');
+    const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { runs: [] } };
+    expect(v.renderIssue(d)).toContain('<span class="idp">f1</span></div>');
+    expect(v.issueSegments(d)[0].rows[0].head).toContain('<span class="idp">f1</span>');
+  } finally {
+    setCodes({});
+  }
 });

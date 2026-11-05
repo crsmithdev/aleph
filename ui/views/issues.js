@@ -195,7 +195,7 @@ export function ageText(r, now = Date.now()) {
 
 /** One issue row; a part is indented under its parent. */
 export function renderRow(r) {
-  return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(r.n, r.href)}</td>` +
+  return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(localId(`${r.repo}-${r.n}`, r.repo), r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
     `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td></tr>`;
@@ -534,7 +534,7 @@ export function issueSegments(d, now = Date.now()) {
   const marks = [...(Number.isFinite(filed) ? [{ at: filed, tone: "made", tip: "filed" }] : []), ...(Number.isFinite(closed) ? [{ at: closed, tone: "done", tip: d.status }] : [])];
   // The issue's own job, when one has its name, is where its id links.
   const job = (d.jobs ?? []).find((j) => j.name === id);
-  const headOf = (text) => `${job ? idLink(id, `#/jobs/${encodeURIComponent(job.name)}`) : `<span class="idp">${esc(id)}</span>`}<span class="quiet t">${esc(text)}</span>`;
+  const headOf = (text) => `${job ? idLink(localId(id, d.repo), `#/jobs/${encodeURIComponent(job.name)}`) : `<span class="idp">${esc(localId(id, d.repo))}</span>`}<span class="quiet t">${esc(text)}</span>`;
   const state = d.derived?.stage ?? d.status;
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
@@ -594,7 +594,7 @@ export function renderIssue(d) {
   const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   // Front matter the page shows nowhere else: a chip each.
   const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.map(labelName).join(", ") : v}`)).join("");
-  const pills = `<div class="status-row">${d.derived ? badge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(`${d.repo}-${ref}`)}</span></div>`;
+  const pills = `<div class="status-row">${d.derived ? badge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(localId(`${d.repo}-${ref}`, d.repo))}</span></div>`;
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
     `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;

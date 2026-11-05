@@ -2,7 +2,7 @@
 import { actButton, actMessages, dur, esc, repoIdLink, when } from "../lib.js";
 
 /** A job's id, linking to its page. */
-export const itemId = (j) => repoIdLink(j.name, j.href || `#/jobs/${encodeURIComponent(j.name)}`, j.repo ?? "");
+export const itemId = (j) => repoIdLink(j.name, j.href || `#/jobs/${encodeURIComponent(j.name)}`);
 export const title = (j) => `<h3>${esc(j.item?.title || j.name)}</h3>`;
 export const actMsg = (name) => (actMessages.has(name) ? `<span class="act-msg" role="alert">${esc(actMessages.get(name))}</span>` : "");
 export const act = (verb, name, label, primary = false) => actButton(label, { act: verb, name, label }, { primary });

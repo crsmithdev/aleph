@@ -1,19 +1,23 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
+import { setCodes } from "../lib/naming.ts";
 import { job, state } from "./fixtures/status-state.ts";
 import { full, section } from "./test-now.ts";
 
+afterEach(() => setCodes({}));
+
 test("a Queued card names a dead blocker and offers to remove only that wait", () => {
+  setCodes({ aleph: "a" });
   const q = view.renderLanes({ ...state, queued: [{ repo: "aleph", id: 964, title: "t", why: "x", kind: "waits_on", waits: [
     { id: "aleph-963", href: "#/issues/aleph/963", title: "Old <work>", state: "dropped", dead: "dropped" },
     { id: "aleph-970", href: "#/issues/aleph/970", title: "Live", state: "working", dead: null },
   ] }] });
-  expect(q).toContain('<a href="#/issues/aleph/963">963</a> <span>Old &lt;work&gt;</span> <span class="badge stuck">dropped</span>');
+  expect(q).toContain('<a href="#/issues/aleph/963">a963</a> <span>Old &lt;work&gt;</span> <span class="badge stuck">dropped</span>');
   expect(q).not.toContain("Live");
   expect(q).toContain("this wait never ends");
   expect(q).toContain('data-act="unblock" data-repo="aleph" data-id="964"');
-  expect(q).toContain(">Stop waiting on 963</button>");
+  expect(q).toContain(">Stop waiting on a963</button>");
 });
 
 const WEEK = {

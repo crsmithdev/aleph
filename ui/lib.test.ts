@@ -1,3 +1,4 @@
+import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
 import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
@@ -146,16 +147,16 @@ test("chips gives labels as chips, nothing for none", () => {
   expect(chips(["<b>"])).toContain("&lt;b&gt;");
 });
 
-test("localId and repoIdLink show the short id and keep the project apart", () => {
-  expect(localId("aleph-578.1", "aleph")).toBe("578.1");
-  expect(localId("Waits on aleph-12 and sidetone-5, see aleph-tick", "aleph")).toBe("Waits on 12 and sidetone-5, see aleph-tick");
+test("localId and repoIdLink show the short id", () => {
+  setCodes({ aleph: "a" });
+  expect(localId("aleph-578.1", "aleph")).toBe("a578.1");
+  expect(localId("Waits on aleph-12 and sidetone-5", "sidetone")).toBe("Waits on a12 and sidetone-5");
   expect(localId("triage-aleph-3", "aleph")).toBe("triage-aleph-3");
-  expect(localId("aleph-3", "")).toBe("aleph-3");
   expect(repoOf("my-repo-5.1")).toBe("my-repo");
   expect(repoOf("wt")).toBe("");
-  expect(repoIdLink("aleph-5", "#/x")).toBe('<span class="idp">aleph</span> <a class="idl" href="#/x">5</a>');
-  expect(repoIdLink("triage-aleph-3", "#/x", "aleph")).toBe('<span class="idp">aleph</span> <a class="idl" href="#/x">triage-aleph-3</a>');
+  expect(repoIdLink("aleph-5", "#/x")).toBe('<a class="idl" href="#/x">a5</a>');
   expect(repoIdLink("wt", "#/x")).toBe('<a class="idl" href="#/x">wt</a>');
+  setCodes({});
 });
 
 test("idLink and pageHead", () => {

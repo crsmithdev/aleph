@@ -343,12 +343,12 @@ export const idLink = (id, href, { title } = {}) => `<a class="idl"${title === u
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
 export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
 
-/** The text with each `<repo>-<n>` of this repo as `<n>`. An id of another repo, and a name such as `intake-<repo>-<n>`, stay whole. */
-export const localId = (text, repo) => (repo ? String(text ?? "").replace(new RegExp(`(^|[^\\w-])${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(?=\\d)`, "g"), "$1") : String(text ?? ""));
+/** The text with each full issue ID as its short ID. `repo` stays for the callers. */
+export const localId = (text, repo) => shortText(text);
 /** The repo of an id `<repo>-<n>[.<k>]`, or "" for any other name. */
 export const repoOf = (id) => /^(.+)-\d+(?:\.\d+)?$/.exec(String(id))?.[1] ?? "";
-/** An id in a view of more than one repo: the project in its own place, then the link with the short id. */
-export const repoIdLink = (id, href, repo = repoOf(id)) => `${repo ? `<span class="idp">${esc(repo)}</span> ` : ""}${idLink(localId(id, repo), href)}`;
+/** An id as a link with its short id. */
+export const repoIdLink = (id, href) => idLink(shortId(id), href);
 
 /** A small badge of any text in one of the badge tones, with an optional title. */
 export const tag = (text, tone = "quiet", title) => `<span class="badge ${esc(tone)}"${title === undefined ? "" : ` title="${esc(title)}"`}>${esc(text)}</span>`;
@@ -739,3 +739,4 @@ export const localMs = (s) => Date.parse(String(s ?? "").replace(" ", "T") + (/^
 export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` : "");
 /** The facts list of `[label, html]` pairs. */
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
+import { shortId, shortText } from "../lib/naming.ts";

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
+import { setCodes } from "../lib/naming.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { routes } from "./api/jobs.ts";
 import { withEnv } from "./test-server.ts";
@@ -381,4 +382,13 @@ test("the job check-log table is empty() with no checks and pages at 50", () => 
   const h = v.renderJob({ ...j, checks: c });
   expect(h).toContain("50 of 51");
   expect(h).toContain('<th class="num">Ran</th>');
+});
+
+test("the Job page's id pill shows the short id", () => {
+  setCodes({ fac: "f" });
+  try {
+    expect(v.renderJob({ name: "fac-1", repo: "fac", condition: "passed", runs: [] })).toContain('<span class="idp">f1</span></div>');
+  } finally {
+    setCodes({});
+  }
 });

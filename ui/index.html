@@ -55,7 +55,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
+  import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
@@ -346,6 +346,7 @@
   });
 
   async function start() {
+    setCodes(await fetch("/api/projects/codes", { cache: "no-store" }).then((r) => r.json()).catch(() => ({})));
     const names = await fetch("/api/views", { cache: "no-store" }).then((r) => r.json()).catch(() => []);
     const mods = await Promise.all(names.map((n) => import(`/views/${n}`).then((m) => (typeof m.redirect === "function" && redirects.push(m.redirect), m.view), (e) => { console.error(n, e); return null; })));
     views = mods.filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
