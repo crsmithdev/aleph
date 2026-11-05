@@ -347,7 +347,8 @@ describe("views", () => {
     expect(v.closeTimes(rows, "month", now).p50[1]).toBe(3);
     const d = await getJson("/api/contents");
     const page = v.view.render(d, {}, new URLSearchParams("window=week"));
-    expect(page).toContain("Open Backlog, Filed and Closed, Last Week");
+    expect(page).toContain("<h2>Open Backlog, Filed and Closed</h2>");
+    expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><span class="count">last week<\/span>/);
     expect(page).toContain("<h2>Time to Close</h2>");
     for (const l of ["Open backlog, filed and closed, last week", "Time to close"]) expect(page).toContain(`aria-label="${l}"`);
     expect(page).not.toContain("30 days");
@@ -395,7 +396,7 @@ describe("views", () => {
     expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
     const page = v.view.render(await getJson("/api/contents"), {}, new URLSearchParams("window=day"));
     const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
-    expect(page).toContain("Open Backlog, Filed and Closed, Last Day");
+    expect(head).toContain('<span class="count">last day</span>');
     expect(page).not.toContain("Filed and closed per");
     const t = new Date(2026, 10, 4, 16, 0), tr = [{ status: "done", created: "2026-11-04", createdTime: "2026-11-04 15:30", closed: "2026-11-04", closedTime: "2026-11-04 15:45" }, { status: "open", created: "2026-11-04", createdTime: "2026-11-04 09:10" }];
     const fh = v.flow(tr, "hour", t), fd = v.flow(tr, "day", t);

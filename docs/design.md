@@ -185,7 +185,7 @@ Columns of the main tables:
 | Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:201`) |
-| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:638`) |
+| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:641`) |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. No table has a row action column. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
 

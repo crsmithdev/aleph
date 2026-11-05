@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
+import { sectionHead, blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -208,7 +208,7 @@ export function renderJob(j) {
     jobKpis(j) + renderTimeline(jobSegments(j)) +
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +
     (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") +
-    `<div class="dp-detail"><h2>Detail</h2>` +
+    `<div class="dp-detail">${sectionHead("Detail")}` +
     (j.review ? fold("Review", verdict ? tag(verdict, verdict === "pass" ? "done" : "stuck") : "", `<div class="md">${md(j.review)}</div>`) : "") +
     (checks ? fold("Checks", tag(`${passed} / ${j.checks.length}`, passed === j.checks.length ? "done" : "stuck"), checks) : "") +
     fold("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<pre class="diff" id="diff" data-job="${esc(j.name)}">${loadingLine("the diff")}</pre>`) +

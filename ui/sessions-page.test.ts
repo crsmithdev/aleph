@@ -44,7 +44,7 @@ describe("the Sessions page", () => {
 
   test("the page holds the old pages' content: tools, skills, unused, hooks, denials, sessions", () => {
     const h = v.renderSessions(data(), opts());
-    expect(h).toContain('<header class="ph"><h1>Sessions</h1><div class="aside"><div class="fbar">');
+    expect(h).toContain('<header class="ph"><h1>Sessions</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
     expect(h).toContain('data-tile="tool:Bash"');
@@ -52,12 +52,14 @@ describe("the Sessions page", () => {
     const at = heads.indexOf("Started");
     expect(heads.slice(at, at + 3)).toEqual(["Started", "Last", "Session"]);
     expect(h).toContain(`<tr><td class="time">${when("2026-10-31T00:00:00Z")}</td><td class="time">${when("2026-10-31T01:00:00Z")}</td><td>`);
+    const skills = h.slice(h.indexOf('aria-label="Skills"'), h.indexOf("</div>", h.indexOf('aria-label="Skills"')));
+    expect(skills).not.toContain("days");
     for (const s of ["<h2>Verify-Gate Denials</h2>", 'aria-label="Verify-gate denials"', '<button type="button" data-sort="prompt">First Prompt<']) expect(h).toContain(s);
   });
 
   test("a selection is pressed, titles the list, and offers the way back and the skill's page", () => {
     const h = v.renderSessions(data(), opts("pick=skill:aleph:handoff"));
-    expect(h).toContain("<h2>Sessions That Used aleph:handoff</h2>");
+    expect(h).toContain("<h2 id=\"h-ag-sess\">Sessions That Used aleph:handoff</h2>");
     expect(h).toContain('data-tile="skill:aleph:handoff" aria-pressed="true"');
     expect(h).toContain("Show all sessions");
     expect(h).toContain('href="#/skills/aleph%3Ahandoff"');

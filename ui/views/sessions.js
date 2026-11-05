@@ -76,7 +76,7 @@ function ranked(kind, rows, o) {
 const sum = (rows, f) => rows.reduce((n, r) => n + f(r), 0);
 
 function toolsCard(d, o) {
-  const a = d.activity ?? {}, opts = { count: `${o.days} days` };
+  const a = d.activity ?? {}, opts = {};
   if (a.langfuse === "off") return card("Tools", empty("Langfuse is not configured.", "Set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in <code>~/.aleph/.env</code>."), opts);
   if (a.langfuse === "error") return card("Tools", error(`Langfuse failed: ${a.error}`, "Check that Langfuse is running, then reload."), opts);
   const t = toolsOf(d);
@@ -85,12 +85,12 @@ function toolsCard(d, o) {
 }
 
 function skillsCard(d, o) {
-  const opts = { count: `${o.days} days` };
+  const opts = {};
   if (d.skills?.error) return card("Skills", error(`Skills failed: ${d.skills.error}`, "Check that Langfuse is running, then reload."), opts);
   const s = skillsOf(d), unused = d.skills?.unused ?? [];
   return card("Skills", `<p>${count(sum(s, (x) => x.uses))} uses, ${count(sum(s, (x) => x.errors))} errors.${d.skills?.failed ? ` The last reload failed: ${esc(d.skills.failed)}.` : ""}</p>` +
     (s.length ? ranked("skill", s.map((x) => ({ name: x.name, n: x.uses, errors: x.errors })), o) : empty(`No skill was used in the last ${o.days} days.`, "A use is a Skill tool call or a slash command.")) +
-    (unused.length ? `<h3>Unused <span class="count">${unused.length}</span></h3><div class="unused">${unused.map((n) => `<a href="${esc(skillHref(n))}">${esc(n)}</a>`).join("")}</div>` : ""), opts);
+    (unused.length ? sectionHead("Unused", { count: unused.length, level: 3 }) + `<div class="unused">${unused.map((n) => `<a href="${esc(skillHref(n))}">${esc(n)}</a>`).join("")}</div>` : ""), opts);
 }
 
 function hooksCard(d) {
@@ -121,7 +121,7 @@ function sessionsHead(d, o) {
   const name = o.pick.slice(o.pick.indexOf(":") + 1), n = shownSessions(d, o).length;
   const title = o.pick ? `Sessions That Used ${name}` : "Sessions";
   const open = o.pick.startsWith("skill:") ? `<a href="${esc(skillHref(name))}">Open the skill</a>` : "";
-  return sectionHead(title, { count: count(n), aside: `${open}${o.pick ? `<button type="button" class="act" data-tile="">Show all sessions</button>` : ""}` });
+  return { count: count(n), aside: `${open}${o.pick ? `<button type="button" class="act" data-tile="">Show all sessions</button>` : ""}`, id: "ag-sess", title };
 }
 
 const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
@@ -133,12 +133,15 @@ export function renderSessions(d, o = options()) {
     { label: "Project", name: "project", data: true, value: projects.includes(o.project) ? o.project : "", options: [{ value: "", label: "All" }, ...projects] },
     { label: "Window", name: "days", value: o.days, options: DAYS },
   ]);
-  return `<div class="page sp agents">${pageHead("Sessions", { aside: scope })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
+  return `<div class="page sp agents">${pageHead("Sessions", { count: `last ${o.days} days`, aside: scope })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
     `<p class="hint">${esc(money(total))} recorded across these sessions.</p></div>`;
 }
 
-const renderLive = (d, o) => renderFails(d, o) + `<div class="pair">${toolsCard(d, o)}${skillsCard(d, o)}</div>` +
-  `<section class="card" aria-label="Sessions"><div id="ag-sess-head">${sessionsHead(d, o)}</div>${searchBox("ag-search", o.q, "Search the sessions")}<div id="ag-sessions">${renderSessionsTable(d, o)}</div></section>` + hooksCard(d);
+const renderLive = (d, o) => {
+  const h = sessionsHead(d, o);
+  return renderFails(d, o) + `<div class="pair">${toolsCard(d, o)}${skillsCard(d, o)}</div>` +
+    card(h.title, `${searchBox("ag-search", o.q, "Search the sessions")}<div id="ag-sessions">${renderSessionsTable(d, o)}</div>`, { ...h, label: "Sessions" }) + hooksCard(d);
+};
 
 let live = null;
 const here = () => options(hashQuery());
@@ -157,5 +160,5 @@ function redraw(all) {
   if (!live?.root.isConnected) return;
   const o = here();
   if (all) live.root.querySelector("#ag-live").innerHTML = renderLive(live.d, o);
-  else { live.root.querySelector("#ag-sess-head").innerHTML = sessionsHead(live.d, o); live.root.querySelector("#ag-sessions").innerHTML = renderSessionsTable(live.d, o); }
+  else { const h = sessionsHead(live.d, o); live.root.querySelector("#ag-sess > .sh").outerHTML = sectionHead(h.title, h); live.root.querySelector("#ag-sessions").innerHTML = renderSessionsTable(live.d, o); }
 }

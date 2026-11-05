@@ -355,7 +355,7 @@ function renderDetail(rows, o) {
 }
 
 /** The two charts under the tiles, on every tile. */
-const renderCharts = (o) => `<div class="trio">${card(`Open Backlog, Filed and Closed, Last ${o.window in WINDOW_DAYS ? o.window[0].toUpperCase() + o.window.slice(1) : "Week"}`, '<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p><div class="chartbox" data-chart="backlog"></div>', { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
+const renderCharts = (o) => `<div class="trio">${card("Open Backlog, Filed and Closed", '<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p><div class="chartbox" data-chart="backlog"></div>', { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
   `${card("Time to Close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>', { label: "Time to close" })}` +
   `${card("Tests", '<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p><div class="chartbox" data-chart="tests"></div>', { cls: "wide" })}</div>`;
 
@@ -390,7 +390,8 @@ function renderLive(projects, rows, o) {
     filters: renderFilters(rows, o),
     numbers: renderTiles(stats(scoped, new Date(), WINDOW_DAYS[o.window] ?? 7), o.tile, o.window),
     detail: renderCharts(o) + renderDetail(scoped, o),
-    count: sectionHead("Issues", { count: shown }),
+    count: shown,
+    window: `last ${o.window in WINDOW_DAYS ? o.window : "week"}`,
     table: renderTable(rows, o),
   };
 }
@@ -426,7 +427,9 @@ function refill() {
   const root = live?.root;
   if (!root?.isConnected) return;
   const parts = renderLive(live.projects, live.rows, live.o());
-  for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["inv-count", parts.count], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
+  for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
+  root.querySelector("header.ph .count").textContent = parts.window;
+  root.querySelector('section[aria-label="Issues"] .sh .count').textContent = parts.count;
   draw(root);
 }
 
@@ -466,12 +469,12 @@ export function renderForm(rows, o = {}) {
 
 export function renderIssues(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
-  return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
+  return `<div class="page sp contents">${pageHead("Issues", { count: parts.window, aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
     renderForm(d?.issues ?? [], o) +
-    `<section class="card" aria-label="Issues"><div id="inv-count">${parts.count}</div>${searchBox("inv-search", o.q, "Search titles, ids, projects, labels")}` +
+    `${card("Issues", `${searchBox("inv-search", o.q, "Search titles, ids, projects, labels")}` +
     `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
-    `<div id="issues-table">${parts.table}</div></section></div>`;
+    `<div id="issues-table">${parts.table}</div>`, { count: parts.count })}</div>`;
 }
 
 /** The body as the page shows it: the `## Request` heading goes, because the section has its own heading. */
