@@ -248,6 +248,19 @@ describe("an issue that acceptance failed twice", () => {
   });
 });
 
+describe("a stuck job whose last run failed a check", () => {
+  test("carries the failed check's name, so its card line can name the check", () => {
+    run("20261027-000070-a", { job: "fac-70", name: "fac-70", condition: "failed", cause: "check", checkName: "tests", reason: "tests failed", started: ago(2) });
+    try {
+      const j = state(now).stuck.find((x) => x.name === "fac-70")!;
+      expect(j.cause).toBe("check");
+      expect(j.checkName).toBe("tests");
+    } finally {
+      (rmSync(join(jobsDir, "20261027-000070-a"), { recursive: true }), removeRun("20261027-000070-a"));
+    }
+  });
+});
+
 describe("factory.nextTick and tickInProgress read systemctl show and is-active", () => {
   function withSystemctl(script: string) {
     const dir = mkdtempSync(join(tmpdir(), "aleph-ui-systemctl-"));

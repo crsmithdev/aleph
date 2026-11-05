@@ -75,6 +75,13 @@ test("a failed job's situation line is its state and cause, and its reason sente
   expect(inside).toContain("the run hit its time box after 40m");
 });
 
+test("a stuck job whose cause is a failed check names that check in its situation line, as the news lines do", () => {
+  const card = stuckCard({ name: "aleph-30", condition: "failed", cause: "check", checkName: "tests", reason: "tests failed" });
+  expect(problem(card)).toBe("failed check → tests");
+  // No name on the run: the line stays the state and cause.
+  expect(problem(stuckCard({ name: "aleph-31", condition: "failed", cause: "check", reason: "a check failed" }))).toBe("failed check");
+});
+
 test("a stuck job with a blocker shows the hold action and the blocker id, and the blocker title only in Details", () => {
   setCodes({ aleph: "a" });
   const card = stuckCard({ name: "aleph-30", condition: "failed", cause: "check", reason: "its checks failed", item: { id: 30, title: "T" },

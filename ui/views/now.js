@@ -330,7 +330,9 @@ const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =>
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
-  const hold = b ? holdLine({ action: "after", on: [b.id] }) : [j.condition, j.cause].filter(Boolean).join(" ");
+  // A failed check names the check, as the news lines do; any other cause stays the state and cause.
+  const check = j.cause === "check" && contentText({ file: j.checkName });
+  const hold = b ? holdLine({ action: "after", on: [b.id] }) : [j.condition, j.cause, check].filter(Boolean).join(" ");
   const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : act("recheck", j.name, "Re-check");
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;

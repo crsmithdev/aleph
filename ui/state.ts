@@ -9,7 +9,7 @@ import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { askOf as runAsk, isWaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
-import { causeOf, type Cause } from "../jobs/lib/records/outcome.ts";
+import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
@@ -59,6 +59,8 @@ export interface Job {
   blocker?: Blocker;
   /** Stuck or failed: why its last run stopped, the sub word the card shows beside its state. */
   cause?: Cause;
+  /** Stuck or failed: the check that stopped its last run, when a check did; the card's line names it after the cause. */
+  checkName?: string;
 }
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
@@ -235,8 +237,12 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       if (url) job.commitUrl = url;
     }
     if (v.condition === "waiting" && v.stat) job.stat = v.stat;
-    // A stuck or failed job's card shows the word of what stopped its last run.
-    if (v.condition === "returned" || v.condition === "failed") job.cause = causeOf(lastReal(runs).run);
+    // A stuck or failed job's card shows the word of what stopped its last run, and the failed check's name.
+    if (v.condition === "returned" || v.condition === "failed") {
+      const run = lastReal(runs).run;
+      job.cause = causeOf(run);
+      job.checkName = failedCheckOf(run);
+    }
     // A waiting run with no ask of its own asks a question, as stage() reads it.
     const stored = isWaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) : undefined;
     const asked = isWaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
