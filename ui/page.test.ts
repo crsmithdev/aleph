@@ -27,3 +27,14 @@ test("the sidebar: every group has a page, paths are unique, and each page has a
   expect(all.some((v) => v.path === "/jobs")).toBe(false);
   expect(all.some((v) => v.path === "/jobs/:name")).toBe(true);
 });
+
+test("the style sheet defines the dim, control, bar and spacing tokens and uses no literal for them", () => {
+  const css = readFileSync(new URL("./app.css", import.meta.url), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const root = css.match(/:root\s*\{[^}]*\}/)![0];
+  for (const [name, val] of Object.entries({ dim: ".6", "ctl-h": "28px", "bar-h": "10px", "sp-14": "14px", "sp-18": "18px", "sp-20": "20px", "sp-24": "24px", "sp-28": "28px" })) {
+    expect(root).toContain(`--${name}: ${val};`);
+  }
+  const rest = css.replace(root, "");
+  expect(rest).not.toMatch(/opacity:\s*\.6\b|(?:min-)?height:\s*28px/);
+  expect(rest).not.toMatch(/(?<![\w-])(?:(?:row-|column-)?gap|padding[\w-]*|margin[\w-]*):[^;}]*\b(?:14|18|20|24|28)px/);
+});

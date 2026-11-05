@@ -91,7 +91,15 @@ Type, size and effect tokens (`ui/app.css:47-71`):
 | `--sp-8` | 8px | `gap`, `padding`, `margin` |
 | `--sp-10` | 10px | `gap`, `padding`, `margin` |
 | `--sp-12` | 12px | `gap`, `padding`, `margin` |
+| `--sp-14` | 14px | `gap`, `padding`, `margin` |
 | `--sp-16` | 16px | `gap`, `padding`, `margin` |
+| `--sp-18` | 18px | `gap`, `padding`, `margin` |
+| `--sp-20` | 20px | `gap`, `padding`, `margin` |
+| `--sp-24` | 24px | `gap`, `padding`, `margin` |
+| `--sp-28` | 28px | `gap`, `padding`, `margin` |
+| `--dim` | .6 | `opacity` of a dimmed control |
+| `--ctl-h` | 28px | `height` and `min-height` of a control |
+| `--bar-h` | 10px | `height` of `.meter` and `.wf-bar` |
 | `--z-rowlink` | 1 | `tr.rowlink` links above the row link |
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
 | `--z-overlay` | 50 | font picker |
@@ -104,7 +112,7 @@ Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers
 
 Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 11 times, `(max-width: 1100px)` 4 and `(min-width: 721px)` 1.
 
-Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. The steps 14px and 18px are not tokens; see Patterns. List indent is the token `--indent-list` (18px), used for every indented list. Widths and heights stay literal.
+Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12`, `--sp-14`, `--sp-16`, `--sp-18`, `--sp-20`, `--sp-24` and `--sp-28` are 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 24 and 28px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`.  List indent is the token `--indent-list` (18px), used for every indented list. Widths and heights stay literal.
 
 Radii: the five `--r-*` tokens. Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` is tokens, `--z-rowlink` < `--z-sticky` < `--z-overlay`. Motion: 2 `transition` literals (`.15s ease-out`) and no CSS animation. The ECharts options set `animation: false` (8 rows).
 
@@ -114,10 +122,6 @@ These values repeat in the code with no token. Until a token lands, write the va
 
 | Proposed token | Value | Uses | Where |
 |---|---|---|---|
-| `--dim` | `opacity: .6` | 3 rows | `ui/app.css:340`, `362`, `953` |
-| `--ctl-h` | 28px control height | 9 rows (`min-height` 6, `height` 3) | see Patterns |
-| `--bar-h` | 10px bar and meter height | 4 rows | `ui/app.css:678`, `760`, `768`, `987` |
-| `--sp-14`, `--sp-18` | 14px and 18px spacing steps | 33 and 23 rows | see Patterns |
 | `--ls-display` | `letter-spacing: -0.01em` | 4 rows | `ui/app.css:185`, `211`, `212`, `484` |
 | `--ls-caps` | one tracking for uppercase keys | 2 rows (`.06em`, `.08em`) | `ui/app.css:567`, `727` |
 
@@ -127,22 +131,11 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 
 | Rule | Value | Uses | Token to come |
 |---|---|---|---|
-| Dimmed control | `opacity: .6` | 3 rows (`ui/app.css:340`, `362`, `953`) | `--dim` |
 | Display type tracking | `letter-spacing: -0.01em` on the brand mark, the shead text, the page title and display text | 4 rows (`ui/app.css:185`, `211`, `212`, `484`) | `--ls-display` |
 | Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:567`) and `.08em` (`ui/app.css:727`) | 2 rows | none; pick one when a third key comes |
-| Control height | 28px | 9 rows (`min-height` 6, `height` 3) | `--ctl-h` |
-| Bar and meter height | 10px | 4 rows (`ui/app.css:678`, `760`, `768`, `987`) | `--bar-h` |
-| Spacing step | 14px | 33 rows in `gap`, `padding` and `margin` | `--sp-14` |
-| Spacing step | 18px | 23 rows in `gap`, `padding` and `margin` | `--sp-18` |
 | Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
 | Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`ui/lib.js:572`, `585`, `597`, `ui/views/factory-jobs.js:31`) | none; a rule |
 | Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
-
-### Spacing steps 14px and 18px
-
-- 14px and 18px are padding and gap steps for a card, a tile, a panel and a fact list. They do not change a page block, which uses `--gap`.
-- A new padding or gap uses `--sp-*` first. Use 14px or 18px only where the same value already sits on that component.
-- Counts are the inventory rows whose property is `gap`, `padding` or `margin` (or a side of one) and whose value contains the step.
 
 ### Focus offset
 
@@ -288,7 +281,7 @@ A card has 3 rows and nothing else:
 - **Trend:** `cardTrend()` (`ui/lib.js:488`) only. `▲` or `▼` and the change from `pct()`, or `▬ 0%` for no change. `kind: "points"` compares shares in percentage points; `"relative"` compares times and counts by relative change. The tone is `good` (`--good`) or `warn` (`--need`) from `lowerIsGood`. Each card states which direction is good. A neutral (`--muted`) trend (`lowerIsGood: null`) is only for a card where neither direction is good. The tooltip gives the previous value and the baseline, or a `tip` that says what the trend compares. No trend when there is no baseline.
 - **Bar:** an optional bar (`extra`) between rows 2 and 3, as on the Usage card (`meter()` with a mark, 10px).
 - **Link or selector:** with `href` the card is a link to the page that explains the number; with `key` it is a button that selects the detail below the cards (`data-tile`, `aria-pressed`, `onTile()`). Hover sets a `--run` border; a selected card is `--raised` with a `--run` border. The key has no arrow.
-- **Box:** `--surface`, a 1px `--rule` border, `--r-card`, `--sp-12` by 14px padding, a `--sp-4` gap between rows; `--gap-in` between cards. The 14px padding is the spacing step (see Patterns).
+- **Box:** `--surface`, a 1px `--rule` border, `--r-card`, `--sp-12` by `--sp-14` padding, a `--sp-4` gap between rows; `--gap-in` between cards.
 - **Window:** the page head states the window (`pageHead(..., { count })`), so a card does not repeat it.
 - **More than 3 rows:** what does not fit goes in the card or chart below the cards, not in the card.
 
@@ -390,7 +383,7 @@ Use:
 - `when()`, `day()`, `hourLabel()`, `clock()`, `dur()`, `durMs()`, `money()`, `count()`, `pct()` for times, durations, costs, counts and percents;
 - `dataTable()` with `heads()` or `sortHead()` for a table, `empty()` for an empty state, and `badge()` for a state;
 - the column order time (first in Issues and Jobs), id or name, title, state, project, labels, numbers;
-- `--sp-*` for `gap`, `padding` and `margin`; the steps in Patterns for 14px and 18px; and, until their tokens land, `opacity: .6` for a dimmed control, 28px for a control and 10px for a bar, as listed under Missing tokens.
+- `--sp-*` for `gap`, `padding` and `margin`; `--dim` for a dimmed control, `--ctl-h` for a control height and `--bar-h` for a bar height.
 
 Never hard-code: a hex colour or shadow in CSS or in a view (except the allowed literals under Tokens), a font size, radius or `z-index` in a literal, a breakpoint other than 720px and one wide width, or a date, number or duration format written inline.
 
