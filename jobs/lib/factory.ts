@@ -3,7 +3,7 @@
  * What it reads of its state is in factory-status.ts. Its state lives in
  * ~/.aleph/factory. See docs/specs/2026-10-26-seed-factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
 import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
@@ -467,15 +467,18 @@ export function report(now = Date.now()): string {
 
 const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
 
-/** The episode page titles under `<factoryDir()>/episodes/` that no report has listed; each is then appended to the seen file. */
+/**
+ * The episode page titles under `<factoryDir()>/episodes/` that no report has listed. The seen file is then
+ * rewritten as the titles on disk, so a page deleted after KEEP_DAYS (episode.ts) leaves it too.
+ */
 function newEpisodes(): string[] {
   let titles: string[] = [];
   try { titles = readdirSync(episodesDir()).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).sort(); } catch { return []; }
   const seen = new Set(existsSync(episodesSeenFile()) ? readFileSync(episodesSeenFile(), "utf8").split("\n").filter(Boolean) : []);
   const fresh = titles.filter((t) => !seen.has(t));
-  if (fresh.length) {
+  if (fresh.length || seen.size !== titles.length - fresh.length) {
     mkdirSync(factoryDir(), { recursive: true });
-    appendFileSync(episodesSeenFile(), fresh.join("\n") + "\n");
+    writeFileSync(episodesSeenFile(), titles.map((t) => t + "\n").join(""));
   }
   return fresh;
 }

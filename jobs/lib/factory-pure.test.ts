@@ -30,6 +30,20 @@ test("report lists each new episode page once, and nothing without an episodes f
   expect(second).not.toContain("fac-2 Other");
 });
 
+test("a deleted episode page leaves the seen file, and a page still on disk is not listed again", () => {
+  const dir = join(ctx.base, "factory", "episodes");
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "fac-3 Old.md"), "x\n");
+  writeFileSync(join(dir, "fac-4 Kept.md"), "x\n");
+  report();
+  rmSync(join(dir, "fac-3 Old.md"));
+  expect(report()).not.toContain("episodes:");
+  const seen = readFileSync(join(ctx.base, "factory", "episodes-seen"), "utf8");
+  expect(seen).not.toContain("fac-3 Old");
+  expect(seen).toContain("fac-4 Kept");
+});
+
 test("a dispatch with checks, three factory repos and no open goals fetches the work store at most twice", async () => {
   const items = join(ctx.base, "items");
   writeFileSync(join(ctx.base, "repos.json"), JSON.stringify(Object.fromEntries(["fac", "fac2", "fac3"].map((k) => [k, { path: join(ctx.base, "repo"), sandbox: true, autoland: false }]))));
