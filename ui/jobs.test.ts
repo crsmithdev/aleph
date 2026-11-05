@@ -311,6 +311,15 @@ describe("render", () => {
       setCodes({});
     }
   });
+  test("the next step sits under the pills, and a job with no next step shows no next line", () => {
+    const next = { step: "wait", action: "passed", to: "human", text: "passed → human" };
+    const h = v.renderJob({ ...job, next });
+    expect(h).toContain(`<span class="quiet">Next</span> ${next.text}`);
+    expect(h.indexOf(">Next<")).toBeGreaterThan(h.indexOf('class="status-row"'));
+    expect(h.indexOf(">Next<")).toBeLessThan(h.indexOf("dp-kpis"));
+    expect(v.renderJob({ ...job, next: { ...next, text: "a <b> → c" } })).toContain("a &lt;b&gt; → c");
+    expect(v.renderJob(job)).not.toContain(">Next<");
+  });
   test("the Detail head is a sectionHead inside the dp-detail block", () => {
     const h = v.renderJob(job);
     expect(h.slice(h.indexOf('<div class="dp-detail">'))).toStartWith('<div class="dp-detail"><div class="sh"><h2>Detail</h2></div>');
