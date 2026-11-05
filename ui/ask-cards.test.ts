@@ -1,4 +1,4 @@
-// The Ask cards of v6 phase 5: four kinds, a compact face (title and buttons) and an open one (description, what each
+// The Ask cards of v6 phase 5: three kinds, a compact face (title and buttons) and an open one (description, what each
 // button does, the recommended mark, Technical details closed).
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";

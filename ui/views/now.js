@@ -339,8 +339,8 @@ const needHead = (kind, id, href, title, problem, repo = "", para = `<p class="p
 const choice = (button, hint, input = "", recommended = false) =>
   `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ` ${tag("Recommended", "run")}` : ""}${input}</div>${button}</div>`;
 
-/** The four kinds of Ask card and their labels. An item without a `card` reads as Approve for an approval, else Decide. */
-export const CARD_LABEL = { approve: "Approve", decide: "Decide", unstick: "Unstick", hand: "By hand" };
+/** The three kinds of Ask card and their labels. An item without a `card` reads as Approve for an approval, else Decide. */
+export const CARD_LABEL = { approve: "Approve", decide: "Decide", unstick: "Unstick" };
 const cardOf = (i) => (CARD_LABEL[i.card] ? i.card : i.kind === "approval" ? "approve" : "decide");
 
 /** One choice of an Ask card: the button, then what it does and the recommended mark, shown when the card is open. */

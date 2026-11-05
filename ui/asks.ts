@@ -50,8 +50,8 @@ const sentence = (s: string) => (/[.?!]$/.test(s) ? s : `${s}.`);
 
 type Ctx = { id: string; run?: Job; issue?: NewIssue; lesson?: Lesson };
 
-/** The four kinds of card. Approve: finished work that waits for an OK. Decide: a choice only Chris can make. Unstick: work that stopped and needs a direction. By hand: a step only Chris can do on his machine. */
-export type Card = "approve" | "decide" | "unstick" | "hand";
+/** The three kinds of card. Approve: finished work that waits for an OK. Decide: a choice only Chris can make. Unstick: work that stopped and needs a direction. */
+export type Card = "approve" | "decide" | "unstick";
 /** Each reason's kind of card and the tag that names its stop, as in the approved mock of 3 Nov. */
 const CARDS: Record<string, { card: Card; tag: (c: Ctx) => string }> = {
   "held-path": { card: "approve", tag: (c) => (/\b(bun\.lock|package\.json)\b/.test(c.run?.reason ?? "") ? "Package change" : "Security change") },

@@ -56,7 +56,7 @@ All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), 
 | `--focus` | #7E57C2 | #C792EA | focus ring |
 | `--good`, `--hot` | #437018, #C2521F | #C3E88D, #F78C6C | a trend that improves; the largest cause |
 | `--raised` | #ECEAF6 | #32374D | a selected tile |
-| `--approve`, `--decide`, `--unstick`, `--hand` | see `ui/app.css:30-32` | see `ui/app.css:112-114` | the four Ask cards, each with `-bg` and `-ring` |
+| `--approve`, `--decide`, `--unstick` | see `ui/app.css:30-32` | see `ui/app.css:112-114` | the three Ask cards, each with `-bg` and `-ring` |
 | `--seg-landed`, `-fixed`, `-nothing`, `-restarted`, `-dropped` | `ui/app.css:35` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #1BAF7A, #EDA100, #E87BA4 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #C792EA, #89DDFF | extra chart series |
