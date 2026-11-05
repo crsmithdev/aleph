@@ -149,7 +149,7 @@ Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec versio
 |---|---|
 | `kind` | `build`, `plain`, `land`, `intake`, `recheck`, `director`, `monitor`, `agent`, … |
 | `condition` | `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` |
-| `cause` (`outcome.ts`) | `no-commit`, `timeout`, `stalled`, `infra`, `locked`, `check`, `conflict`, `moved`, `review`, `unanswered`, `other` |
+| `cause` (`outcome.ts`) | `no-commit`, `timeout`, `stalled`, `infra`, `locked`, `credit`, `check`, `conflict`, `moved`, `review`, `unanswered`, `other` |
 | `fate` | `duplicate`, `met`, `manual` |
 | `checks[]` | `{name, ok, seconds, tests?: {ran, passed, failed, skipped, failures[]}, rerun?, noVerdict?}` |
 

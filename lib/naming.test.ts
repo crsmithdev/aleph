@@ -52,6 +52,9 @@ describe("words", () => {
     expect(n.word("gate", "credit-wait")).toBe("credit");
     expect(n.event({ by: "gate", subject: "aleph-1", action: "credit" }).action).toBe("credit");
   });
+  test("credit is a sub", () => {
+    expect(n.event({ by: "gate", subject: "aleph-1", action: "failed", sub: "credit" }).sub).toBe("credit");
+  });
   test("a sent-back stuck job is returned, any other stuck job failed", () => {
     expect(n.jobState("stuck", "review")).toBe("returned");
     expect(n.jobState("stuck", "test")).toBe("returned");

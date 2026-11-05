@@ -75,7 +75,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Issue status | yes | open, parked, done, dropped |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
 | Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered |
-| Sub | yes | no-commit, timeout, stalled, infra, locked, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, other |
+| Sub | yes | no-commit, timeout, stalled, infra, locked, credit, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, other |
 | Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter |
 | Kind | yes, never shown | build, recheck, land, intake, director, monitor |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
