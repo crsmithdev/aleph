@@ -27,7 +27,7 @@ describe("a factory run", () => {
     slot("local");
     const local = await aleph(["job", "fac", "flocal", "--spec", "-", "--model", "sonnet"], { ALEPH_FIX_ROUNDS: "0" }, spec("flocal"));
     expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--model gpt-oss-20b");
-    expect(readFileSync(join(fakeLog, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8081");
+    expect(readFileSync(join(fakeLog, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8012");
     expect(state(local.json.run)).toMatchObject({ model: "gpt-oss-20b", cost: 0 });
     slot("claude");
     const claude = await aleph(["job", "fac", "fclaude", "--spec", "-", "--model", "sonnet"], { ALEPH_FIX_ROUNDS: "0" }, spec("fclaude"));

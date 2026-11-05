@@ -24,5 +24,5 @@ test("a slot set to local reads back local and the others stay claude", () => {
 
 test("the local entry names gpt-oss-20b and the base URL", () => {
   expect(LOCAL.model).toBe("gpt-oss-20b");
-  expect(LOCAL.baseUrl).toBe("http://127.0.0.1:8081");
+  expect(LOCAL.baseUrl).toBe("http://127.0.0.1:8012");
 });

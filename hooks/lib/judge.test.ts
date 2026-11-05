@@ -87,7 +87,7 @@ test("a judge slot set to local runs claude on gpt-oss-20b at the local base URL
     expect(setModel("judge", "local")).toBeNull();
     await judge("TURN: x", "x");
     expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model gpt-oss-20b");
-    expect(readFileSync(join(dir, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8081");
+    expect(readFileSync(join(dir, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8012");
     expect(setModel("judge", "claude")).toBeNull();
     await judge("TURN: x", "x");
     expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model haiku");

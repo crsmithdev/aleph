@@ -12,7 +12,7 @@ export type Slot = (typeof SLOTS)[number];
 export type Backend = (typeof BACKENDS)[number];
 
 /** The llama-server of aleph-1282. */
-export const LOCAL = { baseUrl: "http://127.0.0.1:8081", model: "gpt-oss-20b" };
+export const LOCAL = { baseUrl: "http://127.0.0.1:8012", model: "gpt-oss-20b" };
 
 const file = (): string => join(layout().factory, "models.json");
 
