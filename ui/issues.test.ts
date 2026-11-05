@@ -245,6 +245,8 @@ describe("views", () => {
     const counts = (o: object) => v.renderProjects(d.projects, rows, o);
     const n = rows.filter((r: any) => r.project === "oth" && r.status === "open").length;
     expect(counts({ status: "open" })).toContain(`<option value="oth">oth (${n})</option>`);
+    expect(counts({})).toContain('aria-label="Window" data-name="window"');
+    expect(counts({})).not.toContain('class="fl">Window');
     expect(v.hashOptions(new URLSearchParams("type=project"))).not.toHaveProperty("type");
     expect(v.filterRows(rows, { status: "done" }).every((r: any) => r.status === "done")).toBe(true);
     expect(v.filterRows(rows, { project: "oth" }).every((r: any) => r.project === "oth")).toBe(true);

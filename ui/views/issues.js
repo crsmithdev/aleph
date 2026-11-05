@@ -366,7 +366,7 @@ const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medi
 /** The project filter scopes the tiles too: a select in the page head, each option with the count the other filters leave. */
 export function renderProjects(projects, rows, o = {}) {
   const left = filterRows(rows, o, ["project"]);
-  return filterBar([{ label: "Project", name: "project", data: true, value: o.project ?? "", options: [{ value: "", label: `All (${left.length})` }, ...projects.map((p) => ({ value: p, label: `${p} (${left.filter((r) => r.project === p).length})` }))] }, { name: "window", value: o.window ?? "week", options: WINDOWS }]);
+  return filterBar([{ label: "Project", name: "project", data: true, value: o.project ?? "", options: [{ value: "", label: `All (${left.length})` }, ...projects.map((p) => ({ value: p, label: `${p} (${left.filter((r) => r.project === p).length})` }))] }, { label: "Window", bare: true, name: "window", value: o.window ?? "week", options: WINDOWS }]);
 }
 
 export function renderFilters(rows, o = {}) {
