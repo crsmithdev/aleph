@@ -72,14 +72,14 @@ afterAll(() => {
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
 const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", kind }) as any;
-const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runCap: 3, runStarts: 0, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
+const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runCap: 3, runStarts: 0, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("credit-wait"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
   expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "codes", "factory", "gated", "goalGates", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
-  expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
+  expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0, "credit-wait": 1 });
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);

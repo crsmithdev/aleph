@@ -246,6 +246,7 @@ const issueGates = (queued: State["queued"]) => ({
   "not-ready": queued.filter((q) => q.kind === "not-ready").length,
   "busy-file": queued.filter((q) => q.kind === "busy-file").length,
   "loop-guard": queued.filter((q) => q.kind === "loop-guard").length,
+  "credit-wait": queued.filter((q) => q.kind === "credit-wait").length,
 });
 
 /** The held globs each factory repo names in the registry (`repo.held`), repos with at least one, sorted by repo key. */
