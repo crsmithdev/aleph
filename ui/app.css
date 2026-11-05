@@ -874,14 +874,14 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
 }
 .spark { display: flex; align-items: flex-end; gap: var(--sp-2); height: 32px; }
 .spark i { flex: 1; background: var(--muted); border-radius: var(--r-tag) var(--r-tag) 0 0; }
-.obar { display: flex; }
+.obar { display: flex; --obk-lh: 1.33; }
 .ogrp { display: flex; flex-direction: column; gap: var(--sp-2); min-width: max-content; }
-.obk { border-top: 1px solid var(--rule); color: var(--muted); text-align: center; padding-top: var(--sp-2); line-height: 1.33; }
+.obk { border-top: 1px solid var(--rule); color: var(--muted); text-align: center; padding-top: var(--sp-2); line-height: var(--obk-lh); }
 .osegs { display: flex; gap: var(--sp-2); }
 .osegs > * { display: flex; flex-direction: column; justify-content: center; min-width: max-content; min-height: 56px; padding: var(--sp-8) var(--sp-10); overflow: hidden; border: 0; color: var(--on-fill); font: inherit; font-size: var(--fs-sm); text-align: left; }
 .osegs > :first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); }
 .osegs > :last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
-.osep { flex: none; width: 2px; margin: calc(1px + 2 * var(--sp-2) + 16px) var(--sp-8) 0; background: var(--ink-2); }
+.osep { flex: none; width: 2px; margin: calc(1px + 2 * var(--sp-2) + var(--obk-lh) * var(--fs-xs)) var(--sp-8) 0; background: var(--ink-2); }
 .obar span { font-size: var(--fs-xs); white-space: nowrap; }
 .obar button { cursor: pointer; }
 .obar button[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }

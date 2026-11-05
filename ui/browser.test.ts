@@ -356,18 +356,25 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
   test("the outcome bar mark is as tall as the segments", async () => {
     await page.width(1100);
     await page.go("#/");
-    const m = await page.ev<{ sep: number[]; segs: number[][] }>(`import("/views/speed.js").then((v) => {
+    const m = await page.ev<{ sep: number[]; segs: number[][] }[]>(`import("/views/speed.js").then((v) => {
       const host = document.createElement("div");
       host.id = "obar-probe";
       document.querySelector("#view").prepend(host);
       host.innerHTML = v.bar({ classes: [{ key: "landed", name: "Landed", hours: 5, text: "" }, { key: "dropped", name: "Dropped", hours: 3, text: "" }] }, "");
       const r = (e) => e.getBoundingClientRect();
-      const sep = r(host.querySelector(".osep"));
-      return { sep: [sep.top, sep.bottom], segs: [...host.querySelectorAll(".osegs")].map((e) => [r(e).top, r(e).bottom]) };
+      const at = () => { const sep = r(host.querySelector(".osep")); return { sep: [sep.top, sep.bottom], segs: [...host.querySelectorAll(".osegs")].map((e) => [r(e).top, r(e).bottom]) }; };
+      const out = [at()];
+      // A bigger label font grows the label line box, so a fixed offset shows here as a gap of 10px.
+      document.documentElement.style.setProperty("--fs-xs", "20px");
+      out.push(at());
+      document.documentElement.style.removeProperty("--fs-xs");
+      return out;
     })`);
-    for (const [top, bottom] of m.segs) {
-      expect(Math.abs(m.sep[0]! - top!)).toBeLessThanOrEqual(1);
-      expect(Math.abs(m.sep[1]! - bottom!)).toBeLessThanOrEqual(1);
+    for (const { sep, segs } of m) {
+      for (const [top, bottom] of segs) {
+        expect(Math.abs(sep[0]! - top!)).toBeLessThanOrEqual(0.1);
+        expect(Math.abs(sep[1]! - bottom!)).toBeLessThanOrEqual(0.1);
+      }
     }
     await page.ev('document.querySelector("#obar-probe").remove()');
   }, 30_000);
