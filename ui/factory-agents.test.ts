@@ -131,7 +131,7 @@ test("the Roles table carries the model choice: no Models card, a select per tie
   expect(row("Worker medium")).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
   expect(row("Worker medium")).toContain('<option value="gpt-oss-20b" selected>');
   for (const n of ["Merge", "Title", "Judge"]) { expect(row(n)).toContain("<select"); expect(row(n)).not.toContain("checkbox"); }
-  for (const [n, model] of [["Intake", "opus"], ["Review", "opus"], ["Director", "fable"]]) { expect(row(n)).toContain(`<td>${model}</td>`); expect(row(n)).not.toContain("<select"); }
+  for (const [n, model] of [["Intake", "opus"], ["Review", "opus"], ["Director", "opus"]]) { expect(row(n)).toContain(`<td>${model}</td>`); expect(row(n)).not.toContain("<select"); }
   expect(html).not.toContain(">Succeeded<");
   expect(html).not.toContain(">Failed<");
 });
@@ -190,7 +190,7 @@ test("a Roles count goes through count()", () => {
 
 test("a Roles row with no outcome shows a dash in every cell, with num on the number cells", () => {
   const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(html).toContain(`<tr><td>Director</td><td>fable</td>${'<td class="num">–</td>'.repeat(8)}<td>–</td></tr>`);
+  expect(html).toContain(`<tr><td>Director</td><td>opus</td>${'<td class="num">–</td>'.repeat(8)}<td>–</td></tr>`);
 });
 
 test("an empty Roles table shows the empty line", () => {

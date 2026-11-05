@@ -10,8 +10,8 @@ This page states which model or command does each piece of work, with which tool
 | Worker | The routed tier, else the CLI default | Read, Write, Edit, Bash, Grep, Glob | `<repo>/.worktrees/job-<name>` | `ALEPH_JOB_TIMEOUT` (1800 s) | `WORKER_SCHEMA` |
 | Merge worker | `haiku`, or the local `merge` tier | As the worker | As the worker | 600 s | `WORKER_SCHEMA` |
 | Reviewer | `claude-opus-5-5` | Read, Grep, Glob, Bash | A detached worktree at the branch tip | `ALEPH_REVIEW_TIMEOUT` (600 s) | `REVIEW_SCHEMA`: `pass` or `hold` |
-| Director | `claude-fable-5-1` | Read, Grep, Glob; read-only `git`, `ls`, `aleph jobs`, `aleph issue show\|list` | The repo's main checkout, plus the vault's decisions | 900 s | `DIRECTOR_SCHEMA`: actions and case text |
-| Monitor | `claude-opus-5-5` | None | | 600 s | Numbered findings |
+| Director | `claude-opus-5-5` | Read, Grep, Glob; read-only `git`, `ls`, `aleph jobs`, `aleph issue show\|list` | The repo's main checkout, plus the vault's decisions | 900 s | `DIRECTOR_SCHEMA`: actions and case text |
+| Monitor | `deepseek-v4.1-flash` | None | | 600 s | Numbered findings |
 | Title and rule writer | `haiku`, or the local `title` tier | None, 1 turn | | 30 s | One line |
 | Judge | Jev, then `haiku` or the local `judge` tier | None, 1 turn | | 30 s | `{verdict, reason}` |
 

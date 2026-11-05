@@ -20,7 +20,7 @@ export const WARN_RATE = 0.7;
 /** Each tier's name; the models it offers come from /api/models. */
 const TIERS = { "worker-low": "Worker low", "worker-medium": "Worker medium", merge: "Merge", title: "Title", judge: "Judge" };
 /** The roles whose model is fixed, and that model. */
-const FIXED = [["Intake", "opus"], ["Review", "opus"], ["Monitor", "opus"], ["Director", "fable"]];
+const FIXED = [["Intake", "opus"], ["Review", "opus"], ["Monitor", "deepseek-v4.1-flash"], ["Director", "opus"]];
 
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "Cost", "First Pass", "Reviewer Pass", "Pass", "Fail"];

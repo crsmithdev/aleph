@@ -34,7 +34,7 @@ test("a decided Ask: code applies the answer, clears the Ask, and logs a Directo
   expect(events()).toContainEqual(expect.objectContaining({ by: "director", subject: `${key}-1`, action: "answered", sub: "question", note: "A: page A, as before" }));
   expect(readRecord()).toEqual([expect.objectContaining({ ref: `${key}-1`, outcome: "decided" })]);
   const [r] = directorRuns();
-  expect(r.run).toMatchObject({ condition: "done", model: "claude-fable-5-1", on: `${key}-1` });
+  expect(r.run).toMatchObject({ condition: "done", model: "claude-opus-5-5", on: `${key}-1` });
   // The prompt names the vault decisions and the needs-you log under the test's base, never ~/.aleph.
   expect(prompt()).toContain(join(base, "vault", "wiki", "decisions"));
   expect(prompt()).toContain(join(base, "needs-you-log.md"));

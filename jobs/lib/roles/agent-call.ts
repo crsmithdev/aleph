@@ -4,4 +4,3 @@ export const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 export const OPUS_MODEL = "claude-opus-5-5";
 /** The director's model (director.ts). */
-export const FABLE_MODEL = "claude-fable-5-1";
