@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gate.ts";
-import { gatesBody, log, securityFacts, splitAsks } from "./api/gates.ts";
+import { gatesBody, log, rules, securityFacts, splitAsks } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -68,6 +68,8 @@ afterAll(() => {
 
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
+/** The Ask reasons that code outside tests raises: all but the read-only and the unraised. */
+const raised = Object.keys(ASK_REASONS).filter((k) => !["acceptance-failed", "triage-failed", "spec-check", "host-check", "proposal"].includes(k));
 const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", why: "w", kind }) as any;
 const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
@@ -78,11 +80,10 @@ test("the body of /api/gates has every section, one rule per Ask reason with onl
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
-  expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
+  expect(d.rules.map((r: any) => r.reason)).toEqual(raised);
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
   const by = (k: string) => d.rules.find((r: any) => r.reason === k);
   expect(by("rescue").granted.action).toBe("recommended");
-  expect(by("host-check").mode).toBe("");
   expect(by("proposal-claude-md").places).toEqual(["proposal-claude-md:global"]);
   expect(d.held).toEqual(SECURITY_PATHS);
   expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
@@ -128,7 +129,7 @@ const data = () => ({
   goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
   asks: [askItem("run-cap", "r-1")],
   chores: [askItem("host-check", "r-2")],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
+  rules: Object.entries(ASK_REASONS).filter(([reason]) => raised.includes(reason)).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   log: { days: 7, max: 200, entries: [{ at: ago(1), by: "Rule", item: "r-5", what: "rescue: recommended" }, { at: ago(2), by: "You", item: "rule", what: "rescue: set to recommended" }] },
@@ -145,10 +146,9 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(h).toContain("<b>2 held</b>");
   expect(h).not.toContain('data-cap="day"');
   expect(h).not.toContain('data-cap="awaiting"');
-  expect(h).toContain('data-act="pause"');
   expect(h).not.toContain("Edit caps");
-  for (const [reason, r] of Object.entries(ASK_REASONS)) {
-    const row = h.slice(h.indexOf(`<div class="rule" data-reason="${reason}">`)).split('<div class="rule" ')[1];
+  for (const [reason, r] of Object.entries(ASK_REASONS).filter(([k]) => raised.includes(k))) {
+    const row = h.slice(h.indexOf(`<tr class="rule" data-reason="${reason}">`)).split("</tr>")[0];
     const modes = [...row.matchAll(/data-mode="([^"]*)"/g)].map((m) => m[1]);
     if (reason.startsWith("proposal-")) expect(modes).toEqual([]);
     else expect(modes).toEqual(r.always ? ["", r.always] : [""]);
@@ -234,4 +234,26 @@ test("the view is Automation at #/automation in the Factory group; #/gates redir
   expect(gates.redirect("#/gates")).toBe("#/automation");
   expect(gates.redirect("#/gates?by=director")).toBe("#/automation?by=director");
   expect(gates.redirect("#/automation")).toBeNull();
+});
+
+test("the Automation page has no explaining aside, and the Pause button sits in the page header before the gates", () => {
+  for (const paused of [false, true]) {
+    const h = gates.renderGates({ ...data(), gated: null, factory: { ...data().factory, paused } });
+    const head = h.slice(h.indexOf('<header class="ph">'), h.indexOf("</header>"));
+    expect(head).toContain(`data-act="${paused ? "resume" : "pause"}"`);
+    expect(head).toContain("<h1>Automation</h1>");
+    expect(h.indexOf(`data-act="${paused ? "resume" : "pause"}"`)).toBeLessThan(h.indexOf('id="gates-now"'));
+    expect(h.match(/data-act="(pause|resume)"/g)!.length).toBe(1);
+  }
+  const h = gates.renderGates(data());
+  for (const t of ["What can stop, hold or ask", "Every goal passes these in order", "Who decides each kind of Ask"]) expect(h).not.toContain(t);
+});
+
+test("rules() leaves out the Ask reasons nothing raises and keeps the raised ones; renderRules is one table with a row per rule", () => {
+  const r = rules().map((x) => x.reason);
+  for (const k of ["acceptance-failed", "triage-failed", "spec-check", "host-check", "proposal"]) expect(r).not.toContain(k);
+  for (const k of ["proposal-check", "proposal-claude-md", "proposal-skill", "question", "held-path"]) expect(r).toContain(k);
+  const h = gates.renderRules({ rules: rules() });
+  expect(h.match(/<table/g)!.length).toBe(1);
+  expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
 });

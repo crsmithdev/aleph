@@ -34,13 +34,16 @@ export function splitAsks(items: AskItem[]): { asks: AskItem[]; chores: AskItem[
   return { asks: items.filter((a) => !CHORES.has(a.reason)), chores: items.filter((a) => CHORES.has(a.reason)) };
 }
 
+/** The Ask reasons that no code outside tests raises: ask.ts marks triage-failed and spec-check read-only, and a search finds no raise site for the rest. */
+const UNRAISED = new Set(["acceptance-failed", "triage-failed", "spec-check", "host-check", "proposal"]);
+
 /**
- * One row per Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what always.json grants.
+ * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what always.json grants.
  * A `proposal-<kind>` reason is granted per place (`proposal-<kind>:<place>`); its row lists those keys.
  */
 export function rules() {
   const granted = readAlways();
-  return Object.entries(ASK_REASONS).map(([reason, r]) => {
+  return Object.entries(ASK_REASONS).filter(([reason]) => !UNRAISED.has(reason)).map(([reason, r]) => {
     const perPlace = reason.startsWith("proposal-");
     const g = granted[reason];
     return {

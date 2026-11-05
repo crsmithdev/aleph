@@ -51,7 +51,10 @@ const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: "stuck", Gate: "run" };
 
 export function renderGates(d, q = new URLSearchParams()) {
-  return `<div class="page gates">${pageHead("Automation", { aside: "What can stop, hold or ask. Rules decide the routine; you see what is left." })}` +
+  const ctl = d.factory.paused
+    ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
+    : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
+  return `<div class="page gates">${pageHead("Automation", { aside: ctl })}` +
     renderNow(d) + renderWaiting(d) + renderChores(d) + renderRules(d) +
     `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
@@ -86,17 +89,14 @@ export function renderNow(d) {
     goalTile("Busy file", g["busy-file"], "an open job changes the same busy file"),
     goalTile("Loop guard", g["loop-guard"], "3 runs with no commit, or 3 starts in an hour: an Ask"),
   ].join("");
-  const line = d.gated ? `Closed at ${d.gated.gate}: ${d.gated.text}.` : "Every goal passes these in order. All open.";
-  const ctl = f.paused
-    ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
-    : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
-  return `<section id="gates-now" aria-label="Gates now">${sectionHead("Gates now", { aside: esc(line) })}<div class="gtiles">${tilesHtml}</div><div class="actions">${ctl}</div></section>`;
+  const line = d.gated ? `Closed at ${d.gated.gate}: ${d.gated.text}.` : "";
+  return `<section id="gates-now" aria-label="Gates now">${sectionHead("Gates now", { aside: esc(line) })}<div class="gtiles">${tilesHtml}</div></section>`;
 }
 
 /** The Asks routed to Chris, as the Status page's cards. Host chores are in their own section. */
 export function renderWaiting(d) {
   const rows = d.asks.map((i) => askRow(i, d.now)).join("");
-  return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for you", { count: d.asks.length, aside: "Asks whose rule is Ask me." })}` +
+  return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for you", { count: d.asks.length })}` +
     (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;
 }
 
@@ -108,7 +108,7 @@ export function renderChores(d) {
     return `<div class="chore" data-id="${esc(i.id)}"><div class="chore-main">${repoIdLink(i.id, i.href, i.repo)} <span class="t">${esc(i.title)}</span><p class="quiet">${esc(i.problem)}</p></div><span class="quiet num">${esc(when(i.at))}</span><div class="actions">${btn}</div></div>`;
   }).join("");
   const all = rows ? `<button class="act" type="button" data-gates="all-done" data-label="Mark all done">Mark all done</button>` : "";
-  return `<section id="gates-chores" aria-label="Host chores">${sectionHead("Host chores", { count: d.chores.length, aside: `Checks against a live system on this machine. ${all}` })}` +
+  return `<section id="gates-chores" aria-label="Host chores">${sectionHead("Host chores", { count: d.chores.length, aside: all })}` +
     (rows ? `<div class="chores">${rows}</div>` : empty("No host chore is open.")) + `</section>`;
 }
 
@@ -120,16 +120,16 @@ export function renderRules(d) {
     let control = "", hint = "";
     if (r.places) {
       hint = r.places.length ? `Granted for ${r.places.join(", ")}.` : "";
-      control = `<p class="quiet note">Set for each target from a proposal's [auto-yes] button.</p>`;
+      control = `<p class="quiet note">Set per target from the proposal.</p>`;
     } else {
       const seg = (mode, label, on) => `<button type="button" data-rule="${esc(r.reason)}" data-mode="${esc(mode)}" aria-pressed="${on}">${esc(label)}</button>`;
       control = `<div class="seg" role="group" aria-label="Who decides ${esc(name)}">${seg("", "Ask me", !g)}${r.mode ? seg(r.mode, modeLabel(r.mode), g?.action === r.mode) : ""}</div>`;
-      if (!r.mode) hint = "No automatic mode: aleph has no rule that acts on this reason.";
+      if (!r.mode) hint = "No automatic mode.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }
-    return `<div class="rule" data-reason="${esc(r.reason)}"><div class="rule-main"><div><b>${esc(name)}</b> <code>${esc(r.reason)}</code></div>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</div>${control}</div>`;
+    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td></tr>`;
   }).join("");
-  return `<section id="rules" aria-label="Rules">${sectionHead("Rules", { aside: "Who decides each kind of Ask. Ask me puts it in Waiting for you; the other mode acts and writes a Rule line in the log." })}<div class="rules">${rows}</div></section>`;
+  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who decides"]), rows, { id: "rules-table" })}</section>`;
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
@@ -155,7 +155,7 @@ export function renderLog(d, by) {
   const chips = ["All", ...Object.keys(BY)].map((k) => `<a class="fchip" href="#/automation${k === "All" ? "" : `?by=${k.toLowerCase()}`}"${k === pick ? ' aria-current="true"' : ""}>${esc(k)}</a>`).join("");
   const entries = d.log.entries.filter((e) => pick === "All" || e.by === pick);
   const rows = entries.map((e) => `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td class="what">${esc(e.what)}${e.count ? ` <span class="quiet">×${e.count}</span>` : ""}</td></tr>`).join("");
-  return `<section id="gates-log" aria-label="Log">${sectionHead("Log", { aside: `The last ${d.log.days} days, at most ${d.log.max} entries of each actor.` })}` +
+  return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}` +
     `<nav class="fchips" aria-label="Filter the log">${chips}</nav>` +
     (rows ? dataTable(heads(["When", "By", "Item", "What"]), rows) : empty("No entry in this window.")) + `</section>`;
 }
