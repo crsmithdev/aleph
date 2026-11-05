@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { allRuns, writeRun, type Run } from "../records/ledger.ts";
 import { STARTING_MS } from "../infra/process.ts";
-import { recheck, startJob } from "./transitions.ts";
+import { recheck, startJob, type Start } from "./transitions.ts";
 import { Refusal } from "./refusal.ts";
 
 let base: string;
@@ -32,10 +32,11 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-/** The refusal a transition throws, or "" when it goes through. */
+/** The refusal a transition throws, or "" when it goes through: a started unit is waited for, so it ends before afterEach removes the store. */
 async function refused(f: () => unknown): Promise<string> {
   try {
-    await f();
+    const s = (await f()) as Start | undefined;
+    await s?.child?.exited;
     return "";
   } catch (e) {
     expect(e).toBeInstanceOf(Refusal);
