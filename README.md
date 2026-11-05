@@ -15,9 +15,9 @@
   </picture>
 </p>
 
-I use aleph every day. It loads into each Claude Code session and adds memory, tracing and a few checks. It also runs a factory: it takes an open issue, writes a spec, builds the change in a worktree, tests it, reviews it and lands it on `main`. When it cannot decide something, it asks me.
+Aleph loads into each Claude Code session and adds memory, tracing and a few checks. It also runs a factory: it takes an open issue, writes a spec, builds the change in a worktree, tests it, reviews it and lands it on `main`. When it cannot decide something, it asks.
 
-It is built for my machine and my habits. Use it as it is, or take the parts you want.
+It is built for one person on one machine. Use it as it is, or take the parts you want.
 
 ## Features
 
@@ -28,7 +28,7 @@ It is built for my machine and my habits. Use it as it is, or take the parts you
 - **Tracing.** Each turn is one Langfuse trace, with each tool call, subagent and model call and what it cost. [Langfuse](docs/langfuse.md)
 - **Issues.** One list per repo, kept in a private git repo. Only `aleph issue` writes to it. [Issues](docs/issues.md)
 - **Factory.** Intake writes a spec with a test that proves it. A worker builds it. Checks and a fresh reviewer decide if it lands. A failure goes back to the worker to fix. [Workflow](docs/workflow.md)
-- **Director.** An agent answers the factory's questions when it can, and passes the rest to me with a short case. An "Always" button turns an answer into a rule.
+- **Director.** An agent answers the factory's questions when it can, and passes the rest on with a short case. An "Always" button turns an answer into a rule.
 - **Model routing.** Small changes go to Haiku or Sonnet, larger ones to Opus. Small tiers can run on a local model instead. [Routing](docs/routing.md)
 - **Web UI.** Status, issues, jobs, cost, agents, sessions and memory, in light and dark. [UI](docs/ui.md)
 - **Skills.** 23 skills: grill a plan, red-team it, write a spec, test first, debug, review a branch, clean up a repo, write docs, hand off a session. Run one with `/aleph:<name>`.
@@ -48,7 +48,7 @@ ln -s ~/aleph/bin/aleph ~/aleph/bin/aleph-ui ~/.local/bin/
 Start a Claude Code session in any repo, then try:
 
 ```bash
-/aleph:grill-me I want to move the cache from Redis to SQLite        # in the session
+/aleph:grill-me move the cache from Redis to SQLite        # in the session
 
 aleph issue add aleph "The Status page shows the wrong weekly usage" --priority high
 aleph issue list aleph --status open
