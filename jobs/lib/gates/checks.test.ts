@@ -248,6 +248,13 @@ describe("the keep-gate", () => {
       expect((await gate(code, twin)).commands.map((c) => c.split(":")[0])).toEqual(["head", "base"]);
     }, 30_000);
 
+    test("of more than 10 mutants, the ones run are on the lines the new cases cover, which the even spread of 10 does not pick", async () => {
+      const many = "export const other = 1;\n" + Array.from({ length: 12 }, (_, k) => `export function f${k}() {\n  return ${k};\n}\n`).join("");
+      const manySources = [{ path: "m.ts", lines: Array.from({ length: 12 }, (_, k) => 3 + 3 * k), text: many }];
+      const both = `import { expect, test } from "bun:test";\nimport { f5, f11 } from "../m.ts";\ntest("new", () => expect(f5() + f11()).toBe(16));\ntest("fixed", () => expect(f5() + f11()).toBe(16));\n`;
+      expect((await gate({ base: "export const other = 1;\n", head: many }, both, manySources)).result).toBeNull();
+    }, 30_000);
+
     test("with no mutant of the changed lines, a case that runs a changed line stays even when another case runs it; one that runs none goes back", async () => {
       const flat = "export const other = 1;\nexport function m(x: number) {\n  return x;\n}\n";
       const flatSources = [{ path: "m.ts", lines: [3], text: flat }];

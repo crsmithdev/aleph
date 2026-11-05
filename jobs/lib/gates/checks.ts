@@ -395,12 +395,12 @@ let earnScript: string | undefined;
 /**
  * The keep-gate's second stage. A case that fails on the base because its file does not load there shows only
  * that the file needs the change: it must also cover a changed line of `sources` that the other cases of the test
- * files do not cover, or fail on a mutant of a changed line. keep-earn.ts runs it on `tip`, with at most 10 mutants.
+ * files do not cover, or fail on a mutant of a changed line. keep-earn.ts runs it on `tip`, with at most 10 mutants of the changed lines that the new cases cover.
  * A branch with no changed source line has nothing to earn against, so it passes.
  */
 async function earnKeep(repo: Repo, tip: string, tests: NewTests[], cases: Plan["cases"], sources: Source[], runner: Runner): Promise<{ reason: string; log: string; noVerdict?: true } | null> {
   if (!cases.length || !sources.length) return null;
-  const plan: Plan = { cases, files: tests.map((t) => t.path), changed: Object.fromEntries(sources.map((s) => [s.path, s.lines])), mutants: mutants(sources) };
+  const plan: Plan = { cases, files: tests.map((t) => t.path), changed: Object.fromEntries(sources.map((s) => [s.path, s.lines])), mutants: mutants(sources, Infinity) };
   earnScript ??= readFileSync(join(import.meta.dir, "keep-earn.ts"), "utf8");
   const r = await runner(repo, tip, "bun .hidden/earn.ts .hidden/plan.json", { "earn.ts": earnScript, "plan.json": JSON.stringify(plan) });
   if (r.infra) return noVerdict("the coverage and mutant run did not finish", r);
