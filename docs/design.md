@@ -151,7 +151,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:488`) with `heads()` or `sortHead()` (`ui/lib.js:491`, `ui/lib.js:572`), styled by `table.tbl` (`ui/app.css:454`). Every table goes through `dataTable()`.
+The one table is `dataTable()` (`ui/lib.js:488`) with `heads()` (`ui/lib.js:491`) or `sortHead()` (`ui/lib.js:572`), styled by `table.tbl` (`ui/app.css:454`). Every table goes through `dataTable()`.
 
 Rules, as the code states them (`ui/lib.js:488`, `ui/app.css:454`):
 
@@ -188,7 +188,7 @@ Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Writte
 
 ## Charts and data displays
 
-Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:165`, `ui/lib.js:190`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:180`) and redraws on a colour-scheme change.
+Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `chart()` (`ui/lib.js:190`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:180`) and redraws on a colour-scheme change.
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
 - **Bars:** `barsOption()` (`ui/lib.js:506`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `ui/views/factory-agents.js:37`.
@@ -198,8 +198,8 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 - **Gap lines:** `gapLinesOption()` (`ui/lib.js`) for two counts over time: two lines, with the area between them shaded by a `custom` series. Use: filed and closed per day in `ui/views/issues.js`.
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: a p50 and p90 line per bucket, a log-time strip with one dot per issue linking to the issue, and the 10 slowest issues as stacked bars of intake, queue, build and land. Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:23`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
-- **Bar lists:** `barRow()` and `barList()` (`ui/lib.js:497`, `ui/lib.js:503`): label, bar, value on one grid.
-- **Badges and chips:** `badge()` and `priorityBadge()` (`ui/lib.js:350`, `ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
+- **Bar lists:** `barRow()` (`ui/lib.js:497`) and `barList()` (`ui/lib.js:503`): label, bar, value on one grid.
+- **Badges and chips:** `badge()` (`ui/lib.js:350`) and `priorityBadge()` (`ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
 - **Efficiency bar:** `.obar`, in the five `--seg-*` colours under white text.
 - **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:57`. Units and legends are not set in one place; each option names its series.
 
@@ -234,14 +234,14 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Pressed:** a selector (metric card, segmented button, bar row) sets `aria-pressed="true"`, drawn with `--raised`, `--rule-2` or `--sunk`.
 - **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:338`).
 - **Active:** `.cmd:active` moves 1px down.
-- **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`); the open state of each is kept across a redraw by `recordState()` and `restoreState()` (`ui/lib.js:235`, `ui/lib.js:248`).
+- **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`); the open state of each is kept across a redraw by `recordState()` (`ui/lib.js:235`) and `restoreState()` (`ui/lib.js:248`).
 - **Motion:** `.15s ease-out` on borders and backgrounds; the one animation (`pulse`) stops under `prefers-reduced-motion` (`ui/app.css:430`).
 
 ## Content
 
 - **Markdown:** `md()` (`ui/lib.js:118`) renders into `.md`; headings are `600 var(--fs-lg)` in the sans face.
 - **Code:** `pre` and `code` use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:731`) or scroll (`.md pre`, `ui/app.css:605`).
-- **Diffs:** `.diff-panel` on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`ui/app.css:340`).
+- **Diffs:** `.diff-panel` on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`ui/app.css:345`).
 - **Command box:** `cmd()` (`ui/lib.js:92`) renders `.cmd`, a mono button that copies on click with a `.cp` control; `primary` inverts it.
 - **Not determined:** the wrap rule of every long-text view was not traced.
 
@@ -258,7 +258,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Layout and responsive
 
-- **Shell:** a sidebar (`#nav`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:19`); the sidebar collapses to 48px on desktop (`ui/app.css:591`) and its state is kept in `localStorage`.
+- **Shell:** a sidebar (`#nav`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:30`); the sidebar collapses to 48px on desktop (`ui/app.css:591`) and its state is kept in `localStorage`.
 - **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:204`, `ui/app.css:548`).
 - **Skeleton:** `pageHead()` (`ui/lib.js:295`) with the serif title and a muted count, then `card()` sections with a `sectionHead()`; Status has its own `.shead`. A detail page starts with `crumb()` (`ui/lib.js:337`).
 - **Grid:** `.tiles` holds the metric cards (see Metric cards); `.lanes` is 3 columns, 2 at 1100px and below, 1 at 720px and below.
@@ -283,7 +283,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring is visible on all controls. Motion stops under `prefers-reduced-motion`. Sort headers set `aria-sort` (`ui/lib.js:572`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring is visible on all controls. Motion stops under `prefers-reduced-motion`. Sort headers set `aria-sort` (`ui/lib.js:574`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
 
 ## Components
 

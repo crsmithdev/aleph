@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { docProblems, type Truth } from "./doc-claims.ts";
@@ -27,6 +27,21 @@ describe("a doc that does not match fails, quoting the claim", () => {
     expect(one("`dispatchIssues` in `jobs/lib/factory.ts` and `noSuchFunction()` in `jobs/lib/factory.ts`; `jobs/lib/settings.ts`'s `nothingHere`")).toEqual([
       'docs/x.md:1: "`noSuchFunction()` in `jobs/lib/factory.ts`": jobs/lib/factory.ts has no noSuchFunction',
       'docs/x.md:1: "`jobs/lib/settings.ts`\'s `nothingHere`": jobs/lib/settings.ts has no nothingHere',
+    ]);
+  });
+
+  test("a name paired with a line that does not hold it", () => {
+    const f = readFileSync(join(ROOT, "jobs/lib/doc-claims.ts"), "utf8").split("\n");
+    const at = f.findIndex((l) => l.includes("export function docProblems")) + 1;
+    const p = "jobs/lib/doc-claims.ts";
+    expect(one(`\`docProblems()\` (\`${p}:1\`)`)).toEqual([`docs/x.md:1: "\`docProblems()\` (\`${p}:1\`)": docProblems is at line ${at} of ${p}`]);
+    expect(one(`\`docProblems\` in \`${p}:1\``)).toEqual([`docs/x.md:1: "\`docProblems\` in \`${p}:1\`": docProblems is at line ${at} of ${p}`]);
+    expect(one(`\`docProblems()\` (\`${p}:${at}\`), \`docProblems\` in \`${p}:${at - 2}-${at + 2}\`, \`${p}:1\``)).toEqual([]);
+  });
+
+  test("a name paired with a line of a file that has no such name", () => {
+    expect(one("`noSuchFunction()` (`jobs/lib/settings.ts:1`)")).toEqual([
+      'docs/x.md:1: "`noSuchFunction()` (`jobs/lib/settings.ts:1`)": jobs/lib/settings.ts has no noSuchFunction',
     ]);
   });
 
