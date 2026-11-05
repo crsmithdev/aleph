@@ -74,7 +74,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "now", "repoHeld", "rules"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "now", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
@@ -115,6 +115,7 @@ const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, 
 
 const data = () => ({
   now: new Date(NOW).toISOString(),
+  schedules: [{ name: "tick", last: null, result: null }],
   factory: { paused: false, liveRuns: 5, liveCap: 5, runCap: 3, runStarts: 2, capEnv: { live: false, run: false } },
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
@@ -264,4 +265,27 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
   const h = gates.renderRules({ rules: rules() });
   expect(h.match(/<table/g)!.length).toBe(1);
   expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
+});
+
+test("the body has the tick, the suite and the monitor with their last run from tick.json and tick.log; with no record each has not run", async () => {
+  const dir = process.env.ALEPH_FACTORY_DIR!, logPath = join(dir, "tick.log"), was = readFileSync(logPath, "utf8");
+  const none: any = (await body()).schedules;
+  expect(none).toEqual([{ name: "tick", last: null, result: null }, { name: "suite", last: null, result: null }, { name: "monitor", last: null, result: null }]);
+  const h = gates.renderSchedules({ ...(await body()), schedules: none });
+  expect(h).toContain("<h2>Schedules</h2>");
+  expect(h.match(/has not run/g)).toHaveLength(3);
+  writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {} }));
+  writeFileSync(logPath, was + [`${ago(70)} suite plain: red`, `${ago(11)} suite plain: green`, `${ago(10)} suite held: green`, `${ago(50)} monitor 2026-11-03: 7 findings`].join("\n") + "\n");
+  try {
+    const d: any = (await body()).schedules;
+    expect(d).toEqual([
+      { name: "tick", last: ago(2), result: "1 missed" },
+      { name: "suite", last: ago(10), result: "held: green; plain: green" },
+      { name: "monitor", last: ago(50), result: "7 findings" },
+    ]);
+    expect(gates.renderSchedules({ ...(await body()), schedules: d })).not.toContain("has not run");
+  } finally {
+    rmSync(join(dir, "tick.json"));
+    writeFileSync(logPath, was);
+  }
 });

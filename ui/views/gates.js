@@ -50,7 +50,7 @@ export function renderGates(d, q = new URLSearchParams()) {
     ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
     : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
   return `<div class="page gates">${pageHead("Automation", { aside: ctl })}` +
-    renderNow(d) + renderCaps(d) + renderWaiting(d) + renderRules(d) +
+    renderNow(d) + renderCaps(d) + renderSchedules(d) + renderWaiting(d) + renderRules(d) +
     `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
@@ -95,6 +95,12 @@ export function renderCaps(d) {
   return `<section id="gates-caps" aria-label="Caps">${sectionHead("Caps")}<div class="caps">` +
     row("live", "Live cap", f.liveRuns, f.liveCap, "live runs against the cap") +
     row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div></section>`;
+}
+
+/** The tick, the suite and the monitor: when each last ran and what came of it. */
+export function renderSchedules(d) {
+  const rows = d.schedules.map((s) => [esc(s.name), s.last ? when(s.last) : "has not run", s.result ? esc(s.result) : ""]);
+  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${dataTable(heads(["Schedule", "Last run", "Result"]), rows)}</section>`;
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */

@@ -5,11 +5,12 @@
  * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
  * `POST /api/standing/:reason` (standing.ts).
  */
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/ask.ts";
 import { allHolds, baselines, factoryRepos, gates, redLine } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
-import { readFactoryLog } from "../../jobs/lib/layout.ts";
+import { layout, readFactoryLog } from "../../jobs/lib/layout.ts";
 import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
 import { reader } from "../../todo/lib/store.ts";
 
@@ -136,6 +137,33 @@ export function repoHeld(): { repo: string; held: string[] }[] {
   return factoryRepos().filter((r) => r.held.length > 0).map((r) => ({ repo: r.key, held: [...r.held] })).sort((a, b) => (a.repo < b.repo ? -1 : a.repo > b.repo ? 1 : 0));
 }
 
+/**
+ * The tick, the hourly suite and the daily monitor, each with the time and result of its last run: the tick from
+ * tick.json (its newest step time; the result is its missed keys), the suite from the newest `suite <repo>:` line of
+ * tick.log for each repo, the monitor from the newest `monitor <day>:` line. A step with no record has null for both.
+ */
+export function schedules(): { name: string; last: string | null; result: string | null }[] {
+  // tick.ts is not read here: it loads the factory's actions, which the server must not.
+  let t: { last?: Record<string, string>; missed?: string[] } = {};
+  try { t = JSON.parse(readFileSync(join(layout().factory, "tick.json"), "utf8")); } catch {}
+  const missed = t.missed ?? [];
+  const times = Object.values(t.last ?? {}).map((x) => Date.parse(x!)).filter((x) => !Number.isNaN(x));
+  const suite: Record<string, { at: string; result: string }> = {};
+  let monitor: { at: string; result: string } | null = null;
+  for (const l of readFactoryLog().split("\n")) {
+    const m = /^(\S+) (suite (\S+)|monitor \S+): (.*)$/.exec(l);
+    if (!m) continue;
+    if (m[3]) suite[m[3]] = { at: m[1], result: m[4] };
+    else monitor = { at: m[1], result: m[4] };
+  }
+  const runs = Object.entries(suite).sort(([a], [b]) => (a < b ? -1 : 1));
+  return [
+    { name: "tick", last: times.length ? new Date(Math.max(...times)).toISOString() : null, result: times.length ? (missed.length ? `${missed.length} missed` : "no key missed") : null },
+    { name: "suite", last: runs.map(([, r]) => r.at).sort().at(-1) ?? null, result: runs.length ? runs.map(([k, r]) => `${k}: ${r.result}`).join("; ") : null },
+    { name: "monitor", last: monitor?.at ?? null, result: monitor?.result ?? null },
+  ];
+}
+
 /** The page's data from the Status page's state (its factory snapshot, its asks and its Queued lane) and the security facts. */
 export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }) {
   const jobs = allJobs();
@@ -143,6 +171,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
   return {
     now: state.now,
     factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP"), run: capEnvSet("ALEPH_RUN_CAP") } },
+    schedules: schedules(),
     gated: gates({ jobs }),
     baseline: baselineGate(),
     goalGates: goalGates(state.queued ?? []),
