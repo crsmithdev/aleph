@@ -214,7 +214,7 @@ function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
   const key = standingKey(l);
   return {
     label: `${words(l).approve} [auto-yes]`, action: "approve", reason: key,
-    hint: `From now on, the factory files every ${words(l).every} without asking you. Revoke with \`aleph always revoke ${key}\`.`,
+    hint: `From now on, the factory reopens the issue for every ${words(l).every} without asking you. Revoke with \`aleph always revoke ${key}\`.`,
   };
 }
 

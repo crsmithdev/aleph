@@ -90,6 +90,10 @@ describe("asks", () => {
         expect(`${a.label} ${a.hint}`).toMatch(/[Rr]eopen/);
         expect(`${a.label} ${a.hint}`).not.toMatch(/File|files|goal/);
       }
+      const always = CASES["proposal-check"]()[0].always!;
+      expect(always.hint).toMatch(/[Rr]eopen/);
+      expect(always.hint).not.toMatch(/File|files|goal/);
+      expect(always.hint).toContain("aleph always revoke");
       const reruns = [
         ...CASES["no-commit"]()[0].actions.filter((a) => a.act === "rerun"),
         ...CASES["run-cap"]()[0].actions.filter((a) => a.act === "rerun"),
