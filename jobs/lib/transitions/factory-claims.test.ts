@@ -150,7 +150,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
   expect(f.calls).toContain(`drop fac-${id}`);
   expect(ask(id)).toBeNull();
   expect(notes(id)).toContain("always: Rerun");
-  expect(readFileSync(join(ctx.base, "factory", "tick.log"), "utf8")).toContain(`always: rescue: recommended on fac-${id}`);
+  expect(readFileSync(join(ctx.base, "factory", "tick.log"), "utf8")).toContain(`"by":"rule","subject":"fac-${id}","action":"reran","sub":"rescue","on":["fac-${id}#1"],"result":"dropped"`);
 });
 
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {

@@ -10,7 +10,7 @@ export const STATUSES = ["open", "parked", "done", "dropped"];
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"];
 export const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked"];
 export const ASKS = ["protected", "question", "incomplete", "capped", "proposal"];
-export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "filed", "escalated", "changed"];
+export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "filed", "escalated", "changed", "answered"];
 export const SUBS = [
   "no-commit", "timeout", "stalled", "infra", "locked", "check", "conflict", "moved", "review", "unanswered",
   "duplicate", "met", "manual", "protected", "question", "intake", "capped", "override", "error", "rescue",
@@ -41,6 +41,10 @@ export const OLD: Record<string, Record<string, string>> = {
   speed: { fixed: "returned", nothing: "failed", restarted: "reran" },
   actor: { You: "human", Rule: "rule", Gate: "gate", Director: "director", Firefighter: "firefighter", triage: "intake", planner: "intake" },
   kind: { agent: "build", triage: "intake", plan: "intake", facts: "intake", explain: "director", firefighter: "director" },
+  act: {
+    land: "landed", drop: "dropped", "drop-issue": "dropped", decline: "dropped", rerun: "reran", retry: "reran", add: "filed",
+    approve: "filed", answer: "answered", recommended: "answered", close: "done", "edit-goal": "changed",
+  },
 };
 
 /** The new word for `w` in set `set`; an `ask` reason `proposal-*` is `proposal`. */
@@ -119,9 +123,14 @@ export function event({ at, by, subject, action, sub, on, file, count, result, t
 }
 
 const base = (p: string) => String(p).split("/").at(-1);
+/** An ID as the page shows it: a job ID `a1421#6`, an issue ID `a1421`; anything else unchanged. */
+export const shownId = (s: unknown): string => {
+  const j = String(s ?? "").includes("#") ? parseJob(s) : null;
+  return j ? jobId(j.subject, j.n) : shortId(s);
+};
 /** The content of an event as text: `a1372 → issues.js`, `a1421#6 → dropped`, `3 / 1h`, `docclaims.ts → human`. */
 export function contentText(e: Partial<Event>): string {
-  const on = [e.on ?? []].flat().map((x) => (parseJob(x) && String(x).includes("#") ? x : shortId(x))).join(" ");
+  const on = [e.on ?? []].flat().map(shownId).join(" ");
   return [on, e.count, e.result && `→ ${e.result}`, e.file && `${on ? "→ " : ""}${base(e.file)}`, e.to && `→ ${e.to}`]
     .filter(Boolean).join(" ");
 }

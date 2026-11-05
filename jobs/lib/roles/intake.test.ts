@@ -328,7 +328,7 @@ describe("a run with no reply", () => {
     const n = calls().length;
     await run();
     expect(calls().length).toBe(n + 1);
-    expect(tickLog()).toContain("always: intake-failed: retry");
+    expect(tickLog()).toContain(`"by":"rule","subject":"${repo.key}-1","action":"reran","sub":"intake"`);
   });
 
   test("close: the item is done with the note", async () => {

@@ -298,12 +298,12 @@ function standingProposals(made: Lesson[]): void {
       const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
       if (!repo) { factoryLog(`standing: ${reason}: approve on ${l.id} failed: no sandboxed repo in the registry`); continue; }
       const ref = approve(l.id, repo);
-      if (ref.startsWith(`${repo.key}-`)) logAlways(reason, "approve", ref);
+      if (ref.startsWith(`${repo.key}-`)) logAlways(reason, ref, "filed", { note: `${reason}: approved ${l.id}` });
       else factoryLog(`standing: ${reason}: approve on ${l.id} failed: ${ref}`);
     } else if (action === "decline") {
       const refusal = decline(l.id);
       if (refusal) factoryLog(`standing: ${reason}: decline on ${l.id} failed: ${refusal}`);
-      else logAlways(reason, "decline", l.id);
+      else logAlways(reason, l.id, "dropped", { note: `${reason}: declined` });
     }
   }
 }

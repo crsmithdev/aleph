@@ -8,8 +8,8 @@
  * Code, not the model, holds the escalation list: those Asks get the director's case text and recommendation, and no
  * action. An Ask the director did not decide goes to Chris when its run ends: a failed run, a bad reply, or actions that
  * leave the Ask open all write case text. Actions that leave the Ask open write the director's case text and one line on
- * what it did and could not do; a failed run or a malformed reply writes the fallback. Each outcome is a `director:` line in tick.log (the Gates page log) and a
- * `director` event in the job record of its item, the record that later runs read.
+ * what it did and could not do; a failed run or a malformed reply writes the fallback. Each outcome is a `director` event in the job record of its item,
+ * the record that later runs read, and log events in tick.log (the Gates page log): one `escalated`, or one per applied action.
  */
 import { existsSync, readFileSync } from "node:fs";
 import * as jobRecord from "../records/record.ts";
@@ -18,7 +18,7 @@ import { dispatchDetached } from "../transitions/launch.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as verbs from "../../../issues/lib/issues.ts";
-import { ASK_REASONS, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
+import { ASK_REASONS, askSub, LIMITS, PLAN_REST, actionsOn, askOf, limitText, may, reasonOf, setAsk, waitsForSpecEdit, wordsOf, type Ask, refIn } from "../asks/ask.ts";
 import { allRuns, isAgentRun, loadRegistry, lock, readRun, updateRun, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
@@ -31,7 +31,9 @@ import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { factoryLog, logEvent } from "../infra/layout.ts";
+import { refs as idsIn, word } from "../../../lib/naming.ts";
+import type { Hold } from "../gates/issue-decision.ts";
 import { DIRECTOR_CAP, needsYouLog, vaultDir } from "../infra/settings.ts";
 import { FABLE_MODEL } from "./agent-call.ts";
 import type { Fate } from "../records/outcome.ts";
@@ -130,12 +132,17 @@ export function readRecord(): Decision[] {
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-function record(d: Decision, c: Case): void {
+/**
+ * Keeps the decision in the job record of the case's subject and writes its log events, all at one time. `evs` are the applied actions' events:
+ * one with no action adds its note to the first. A refusal goes to the note too.
+ */
+function record(d: Decision, c: Case, evs: Hold[]): void {
   jobRecord.addEvent(subjectOfCase(c), { at: d.at, kind: "director", what: `${d.reason}: ${d.outcome}`, data: d });
-  const what = d.outcome === "decided"
-    ? `decided: ${d.applied.join("; ") || "no action"}${d.refused.length ? `; refused ${d.refused.join("; ")}` : ""}`
-    : `escalated: ${d.why ?? "undecided"}${d.refused.length ? `; refused ${d.refused.join("; ")}` : ""}`;
-  factoryLog(`director: ${d.ref}: ${d.reason}: ${what}`);
+  const notes = [...evs.filter((e) => !e.action).map((e) => e.note), ...d.refused.map((x) => `refused ${x}`)].filter(Boolean).join("; ");
+  const acts = evs.filter((e) => e.action);
+  const out = acts.length ? acts : [{ action: "answered", sub: askSub(d.reason) }];
+  const at = new Date().toISOString();
+  out.forEach((e, i) => logEvent({ at, by: "director", subject: d.ref, ...e, note: [e.note, i === 0 ? notes : ""].filter(Boolean).join("; ") || undefined }));
 }
 
 /**
@@ -178,15 +185,15 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
  * cannot be read), and a second run-cap or rescue Ask on a goal the director already
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
-export function escalation(c: Case, rec: Decision[] = readRecord()): string | null {
-  if (c.at === "lesson" || c.ask.reason.startsWith("proposal-")) return "a memory proposal is Chris's";
+export function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
+  if (c.at === "lesson" || c.ask.reason.startsWith("proposal-")) return { why: "a memory proposal is Chris's" };
   if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
-    return `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris`;
+    return { why: `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris` };
   const b = actionsOf(c).includes("land") ? branchOf(c) : null;
   if (b) {
     const held = heldChange(b.repo, b.branch);
-    if (held === "unknown" && c.ask.reason === "held-path") return "the held run's branch cannot be read for security paths, so its land is Chris's";
-    if (held && held !== "unknown") return `the run changes ${held}, a security path or bun.lock, so its land is Chris's`;
+    if (held === "unknown" && c.ask.reason === "held-path") return { why: "the held run's branch cannot be read for security paths, so its land is Chris's" };
+    if (held && held !== "unknown") return { why: `the run changes ${held}, a security path or bun.lock, so its land is Chris's`, file: held };
   }
   return null;
 }
@@ -493,10 +500,10 @@ export const defaultPorts: Ports = {
   dispatch: dispatchDetached,
 };
 
-/** The result of one action: applied (and whether it decides the Ask), or refused. */
-type Outcome = { applied: string; decides: boolean } | { refused: string };
+/** The result of one action: applied (whether it decides the Ask, and its log event), or refused. */
+type Outcome = { applied: string; decides: boolean; ev: Hold } | { refused: string };
 
-const done = (a: Action, decides = true): Outcome => ({ applied: describe(a), decides });
+const done = (a: Action, ev: Hold, decides = true): Outcome => ({ applied: describe(a), decides, ev });
 const no = (a: Action, why: string): Outcome => ({ refused: `${describe(a)}: ${why}` });
 
 /** The open job of the case: its own run's job, else the open job of its item. */
@@ -508,6 +515,7 @@ function jobOf(c: Exclude<Case, { at: "lesson" }>, n: number | string | undefine
 /** Check one action against the rules and apply it, for the case's Ask only. */
 async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Ports): Promise<Outcome> {
   const repo = c.repo;
+  const sub = askSub(c.ask.reason);
   if (!repo) return no(a, "the Ask is not in a factory repo");
   const item0 = c.item;
   const n = item0 ? idOf(item0) : undefined;
@@ -525,7 +533,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       if (missing) return no(a, missing);
     }
     const why = await ports.land(c.entry.run.name);
-    return why ? no(a, why) : done(a);
+    return why ? no(a, why) : done(a, { action: "landed", sub: c.ask.reason === "review" ? "override" : sub });
   }
   if (a.do === "drop" || (a.do === "answer" && c.at === "run")) {
     const name = jobOf(c, n);
@@ -548,13 +556,15 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     const waits = a.do === "drop" && a.after && issue !== undefined ? await refusal(async () => verbs.edit(repo, issue, { after: a.after })) : null;
     if (issue !== undefined) store.note(repo, issue, `director: dropped ${name}: ${reason}${a.do === "drop" && a.after ? `; after ${a.after.join(", ")}` : ""}`);
     // A run's Ask goes with its run; an item's Ask stays when its job is dropped.
-    return waits ? no(a, `dropped, but after not set: ${waits}`) : done(a, c.at === "run");
+    const ev: Hold = a.do === "answer" ? { action: "answered", sub, note: a.note }
+      : { action: "dropped", sub: fate ? word("sub", fate) : sub, on: fate === "duplicate" ? idsIn(a.reason).filter((x) => x !== `${repo.key}-${issue}`) : undefined, note: a.reason };
+    return waits ? no(a, `dropped, but after not set: ${waits}`) : done(a, ev, c.at === "run");
   }
   if (!item || issues.status(item) !== "open") return no(a, `no open issue ${c.at === "run" ? c.entry.run.on ?? "for the run" : c.on}`);
   const id = `${repo.key}-${n}`;
   if (a.do === "note") {
     const why = store.note(repo, n!, `director: ${a.text}`);
-    return why ? no(a, why) : done(a, false);
+    return why ? no(a, why) : done(a, { note: a.text } as Hold, false);
   }
   if (a.do === "add") {
     const missing = missingSections(a.body);
@@ -563,7 +573,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     const w = store.writeList(repo, `todo: a fix job for ${id}`, (doc) => issues.add(doc, title, { spec: a.body, source: "agent" }).id, true);
     if (!w) return no(a, "no issue written");
     store.note(repo, n!, `director: filed ${repo.key}-${w.value} as a fix job: ${title}`);
-    return { applied: `${describe(a)} (${repo.key}-${w.value})`, decides: false };
+    return { applied: `${describe(a)} (${repo.key}-${w.value})`, decides: false, ev: { action: "filed", on: [`${repo.key}-${w.value}`], note: title } };
   }
   if (a.do === "close" || a.do === "drop-issue") {
     if (chrisOwns(item)) return no(a, `${id} was filed by Chris, so closing or dropping it is his`);
@@ -571,12 +581,12 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       const open = jobOf(c, n);
       if (open) { const why = await ports.drop(open, `dropped by the director: ${a.reason}`); if (why) return no(a, why); }
       const why = await refusal(async () => verbs.close(repo, n!, "drop", `director: dropped: ${a.reason}`));
-      return why ? no(a, why) : done(a);
+      return why ? no(a, why) : done(a, { action: "dropped", sub, note: a.reason });
     }
     const open = jobOf(c, n);
     if (open) { const why = await ports.drop(open, `closed by the director: ${a.note}`, "met"); if (why) return no(a, why); }
     const why = store.note(repo, n!, `director: closed: ${a.note}`, { done: true });
-    return why ? no(a, why) : done(a);
+    return why ? no(a, why) : done(a, { action: "done", sub, note: a.note });
   }
   if (a.do === "answer" || a.do === "rerun") {
     const ask = askOf(refIn(repo.key, item));
@@ -590,19 +600,19 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     if (ask?.reason === "part-dropped" && !said.includes(PLAN_REST) && chrisOwns(item)) return no(a, `${id} was filed by Chris, and this answer closes it`);
     const after = a.do === "answer" ? a.after ?? (option?.after ? [option.after] : undefined) : undefined;
     const why = await refusal(async () => verbs.decide(repo, n!, said, after ? { after } : {}));
-    return why ? no(a, why) : done(a);
+    return why ? no(a, why) : done(a, { action: a.do === "rerun" ? "reran" : "answered", sub, note: a.do === "rerun" ? a.note : option ? `${option.label}: ${a.note}` : a.note });
   }
   // edit-goal
   const list = store.reader().list(repo.key);
   if (list && store.partsOf(list, item).length) return no(a, "it has parts");
   const why = await refusal(async () => verbs.edit(repo, n!, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
   if (!why && a.body !== undefined) ports.dispatch?.();
-  return why ? no(a, why) : done(a, false);
+  return why ? no(a, why) : done(a, { action: "changed", sub, on: a.after, note: a.body !== undefined ? "the spec" : undefined }, false);
 }
 
 /** Apply the reply's actions for the case in order, at most MAX_ACTIONS. Whether one of them decided the Ask. */
-export async function applyActions(c: Exclude<Case, { at: "lesson" }>, actions: (Action | string)[], ports: Ports = defaultPorts): Promise<{ applied: string[]; refused: string[]; decided: boolean }> {
-  const out = { applied: [] as string[], refused: [] as string[], decided: false };
+export async function applyActions(c: Exclude<Case, { at: "lesson" }>, actions: (Action | string)[], ports: Ports = defaultPorts): Promise<{ applied: string[]; refused: string[]; decided: boolean; events: Hold[] }> {
+  const out = { applied: [] as string[], refused: [] as string[], decided: false, events: [] as Hold[] };
   for (const [i, a] of actions.entries()) {
     let o: Outcome;
     if (i >= MAX_ACTIONS) o = { refused: `${typeof a === "string" ? a : describe(a)}: more than ${MAX_ACTIONS} actions in one run` };
@@ -610,7 +620,7 @@ export async function applyActions(c: Exclude<Case, { at: "lesson" }>, actions: 
     else {
       try { o = await applyOne(c, a, ports); } catch (e: any) { o = { refused: `${describe(a)}: ${e?.message ?? e}` }; }
     }
-    if ("applied" in o) { out.applied.push(o.applied); out.decided ||= o.decides; } else out.refused.push(o.refused);
+    if ("applied" in o) { out.applied.push(o.applied); out.decided ||= o.decides; out.events.push(o.ev); } else out.refused.push(o.refused);
   }
   return out;
 }
@@ -622,12 +632,12 @@ const lockName = (on: string) => `director-${on}`;
 export const subjectOfCase = (c: Case): string => (c.at === "run" ? c.entry.run.on ?? c.on : c.on);
 const lockOf = (run: Run): string | null => (run.on ? lockName(run.on) : null);
 
-/** Send the Ask to Chris: the case text (the director's, else the fallback) on it, and the record. */
-function escalate(c: Case, base: Omit<Decision, "outcome">, text: Text | string | undefined, why: string): Decision {
+/** Send the Ask to Chris: the case text (the director's, else the fallback) on it, and the record. `ev` sets the event's sub and file. */
+function escalate(c: Case, base: Omit<Decision, "outcome">, text: Text | string | undefined, why: string, ev: Pick<Hold, "sub" | "file"> = {}): Decision {
   const t = text && typeof text !== "string" ? text : fallback(typeof text === "string" ? `${why}; its case text had ${text}` : why);
   if (!writeCaseText(c, t) && stillOpen(c)) factoryLog(`director: ${base.ref}: the case text was not written`);
   const d: Decision = { ...base, outcome: "escalated", why };
-  record(d, c);
+  record(d, c, [{ action: "escalated", sub: askSub(base.reason), ...ev, to: "human", note: why }]);
   return d;
 }
 
@@ -651,18 +661,20 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
     updateRun(run.folder, { question: questionOf(c) });
     const at = { ...base, run: run.folder.split("/").at(-1)! };
     let reply: Reply | string;
-    try { reply = parseReply(await run.askData(prompt(c, listed, rec)), actionsOf(c)); } catch (e: any) {
+    // An Ask listed for a held path is the sub `protected`, with the path.
+    const held = listed?.file ? { sub: "protected", file: listed.file } : {};
+    try { reply = parseReply(await run.askData(prompt(c, listed?.why ?? null, rec)), actionsOf(c)); } catch (e: any) {
       run.end(`failed: ${e?.message ?? e}`);
-      return escalate(c, at, undefined, `its run failed: ${e?.message ?? e}`);
+      return escalate(c, at, undefined, `its run failed: ${e?.message ?? e}`, { sub: "error" });
     }
-    if (typeof reply === "string") { run.end(`malformed reply: ${reply}`); return escalate(c, at, undefined, `its reply was malformed: ${reply}`); }
+    if (typeof reply === "string") { run.end(`malformed reply: ${reply}`); return escalate(c, at, undefined, `its reply was malformed: ${reply}`, { sub: "error" }); }
     if ("escalate" in reply) {
       run.end("escalated");
-      return escalate(c, at, reply.escalate, listed ?? "the director did not decide");
+      return escalate(c, at, reply.escalate, listed?.why ?? "the director did not decide", held);
     }
     if (listed || c.at === "lesson") {
       run.end("escalated: the Ask is on the escalation list");
-      return escalate(c, { ...at, refused: reply.actions.map((a) => `${typeof a === "string" ? a : describe(a)}: the Ask is on the escalation list`) }, reply.text, listed ?? "a memory proposal is Chris's");
+      return escalate(c, { ...at, refused: reply.actions.map((a) => `${typeof a === "string" ? a : describe(a)}: the Ask is on the escalation list`) }, reply.text, listed?.why ?? "a memory proposal is Chris's", held);
     }
     const r = await applyActions(c, reply.actions, ports);
     const decided = r.decided || !stillOpen(c);
@@ -676,7 +688,7 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
     // A decision whose effect has not cleared the Ask yet (a land still running, say) still ends this Ask's one run: Chris sees it with the text.
     // A land runs in its own unit and settles the Ask when it ends, so a started land leaves no text: a failed land raises its own Ask.
     if (!r.applied.includes("land") && stillOpen(c)) writeCaseText(c, { situation: `The director decided: ${r.applied.join("; ")}. The Ask is still open, so it is with you.` });
-    record(d, c);
+    record(d, c, r.events);
     return d;
   } finally {
     release();

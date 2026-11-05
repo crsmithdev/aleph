@@ -235,7 +235,7 @@ Columns of the main tables:
 | Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:251`) |
 | Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Took (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
 | Observations | Kind, Name, Detail, Took (num) | `dataTable()` (`ui/views/session.js:263`) |
-| Gates log | Logged, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:169`) |
+| Gates log | Logged, By, Subject, Action, Sub, Content, Times (num) | `dataTable()` (`ui/views/gates.js` `renderLog`) |
 | Hooks | Last Call, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
 | Denials | Denied, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |

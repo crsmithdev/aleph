@@ -21,8 +21,8 @@ import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "../gates/factory-st
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allJobs, isOpen, issue as issueOf, lastReal, stepOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
-import { factoryLog } from "../infra/layout.ts";
-import { allRuns, isAgentRun, loadRegistry, lock, tell, updateRun, type Repo } from "../records/ledger.ts";
+import { factoryLog, logEvent } from "../infra/layout.ts";
+import { allRuns, isAgentRun, jobIdOf, loadRegistry, lock, tell, updateRun, type Repo } from "../records/ledger.ts";
 import { isLive, isLost, isStarting, markEnded } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import type { Baseline } from "../transitions/factory.ts";
@@ -134,7 +134,7 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
       const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { kind: "input", reason: "rescue" })!;
       const why = askFromRun(last, repo, issueOf(runs), ask, question);
       if (why) { factoryLog(`firefighter: ${name}: no rescue Ask for its slow land: ${why}`); continue; }
-      factoryLog(`firefighter: ${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director`);
+      logEvent({ by: "firefighter", subject: name, action: "waiting", sub: "rescue", on: [jobIdOf(runs[0])], to: "director", note: `${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director` });
       out.push(name);
     } finally {
       release();
@@ -283,9 +283,9 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     if (!specQuestion && ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
       const why = await act.drop(name, question);
       if (!why) {
-        logAlways("rescue", "recommended", `${repo.key}-${issue ?? name}`);
+        logAlways("rescue", `${repo.key}-${issue ?? name}`, "reran", { on: [jobIdOf(runs[0])], result: "dropped" });
         record("always: Rerun");
-        await say(`always: Rerun; dropped, and the goal reruns`);
+        await tell(`${repo.key}/${name}: always: Rerun; dropped, and the goal reruns`);
         return;
       }
       factoryLog(`${name}: always Rerun failed (${why})`);

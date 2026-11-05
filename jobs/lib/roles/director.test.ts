@@ -13,7 +13,7 @@ import { jobId } from "../../../lib/naming.ts";
 import { setPaused } from "../gates/factory-status.ts";
 import { readStore } from "../learning/corrections.ts";
 import { lastEvent, read as readJobRecord } from "../records/record.ts";
-import { asked, base, branch, calls, choice, dropped, fresh, item, key, landed, log, n, plain, ports, reply, replyWith, run, useDirectorFixture } from "./director.fixture.ts";
+import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, run, useDirectorFixture } from "./director.fixture.ts";
 
 useDirectorFixture();
 
@@ -31,7 +31,7 @@ test("a decided Ask: code applies the answer, clears the Ask, and logs a Directo
   expect(d).toMatchObject({ outcome: "decided", ref: `${key}-1`, reason: "question", applied: ["answer: A: page A, as before"] });
   expect(asked(1)).toBeNull();
   expect(item(1).notes.at(-1)).toContain("director decided: A: page A. page A, as before");
-  expect(log()).toContain(`director: ${key}-1: question: decided: answer: A: page A, as before`);
+  expect(events()).toContainEqual(expect.objectContaining({ by: "director", subject: `${key}-1`, action: "answered", sub: "question", note: "A: page A, as before" }));
   expect(readRecord()).toEqual([expect.objectContaining({ ref: `${key}-1`, outcome: "decided" })]);
   const [r] = directorRuns();
   expect(r.run).toMatchObject({ condition: "done", model: "claude-fable-5-1", on: `${key}-1` });
@@ -53,7 +53,7 @@ test("an escalated Ask gets the director's case text and stays with Chris", asyn
   expect(a.situation).toBe(TEXT.situation);
   expect(a.recommend).toEqual(TEXT.recommend);
   expect(awaitsChris(`${key}-1`)).toBe(true);
-  expect(log()).toContain(`director: ${key}-1: question: escalated: the director did not decide`);
+  expect(events()).toContainEqual(expect.objectContaining({ by: "director", subject: `${key}-1`, action: "escalated", sub: "question", to: "human", note: "the director did not decide" }));
   // Escalated once: no second run.
   await direct();
   expect(calls()).toBe(1);

@@ -151,7 +151,7 @@ describe("standing proposals", () => {
     const [item] = readList(repo)!.items;
     expect(item.fm.kind).toBe("proposal");
     expect(titleProblem(item.title)).toBeNull();
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("always: proposal-check:fac: approve on fac-1");
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain('"by":"rule","subject":"fac-1","action":"filed","note":"proposal-check:fac: approved ');
   });
 
   test("decline marks it declined", async () => {
@@ -159,7 +159,7 @@ describe("standing proposals", () => {
     pickFirst = true;
     await mine(NOW);
     expect(stored().lessons[0].state).toBe("declined");
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain("always: proposal-check:fac: decline on");
+    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain('"action":"dropped","note":"proposal-check:fac: declined"');
   });
 });
 

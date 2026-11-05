@@ -15,12 +15,12 @@ test("a goal with no fact against it is ready, and a fact not read stops nothing
 
 test("Not ready names only the open after refs, in both lines", () => {
   const d = issueDecision(facts({ item: item({ after: ["fac-1", "fac-2", "fac-3"] }), done: (r) => r === "fac-1" }));
-  expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "after fac-2,fac-3", text: "Waits on fac-2, fac-3" });
+  expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "after fac-2,fac-3", text: "Waits on fac-2, fac-3", ev: { action: "after", on: ["fac-2", "fac-3"] } });
 });
 
 test("the 6 gates bind in the order of GATES, Loop guard last", () => {
   expect([...GATES]).toEqual(["pause", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"]);
-  const all: Partial<IssueFacts> = { pause: { why: "paused", text: "The factory is paused" }, red: "main is red", open: "running", "live-cap": live, busy: "waits for fac-1: both change the busy file a.ts", noCommits: 3 };
+  const all: Partial<IssueFacts> = { pause: { why: "paused", text: "The factory is paused" }, red: "main is red", open: "running", "live-cap": live, busy: { why: "waits for fac-1: both change the busy file a.ts", on: "fac-1", file: "a.ts" }, noCommits: 3 };
   const clear: Partial<IssueFacts>[] = [{ pause: null }, { red: null }, { open: null }, { "live-cap": null }, { busy: null }, { noCommits: 0 }];
   let f = all;
   for (const [i, k] of GATES.entries()) {
@@ -32,7 +32,7 @@ test("the 6 gates bind in the order of GATES, Loop guard last", () => {
 
 test("Baseline binds on each line the dispatch gives for a main that is not green: red, running and unchecked", () => {
   for (const red of ["main is red at abc1234: tests", "main baseline running", "main is unchecked: fetch failed"]) {
-    expect(issueDecision(facts({ red }))).toEqual({ kind: "baseline", why: red, text: red });
+    expect(issueDecision(facts({ red }))).toEqual({ kind: "baseline", why: red, text: red, ev: { action: "red" } });
   }
   expect(kind({ red: null })).toBe("ready");
 });
@@ -53,8 +53,8 @@ test("Not ready covers a done goal, an after ref and an open job, in that order"
 });
 
 test("the Queued lane reads the stops it once left out", () => {
-  expect(issueDecision(facts({ busy: "waits for fac-1: both change the busy file a.ts" })).text).toBe("Waits for fac-1: both change the busy file a.ts");
-  expect(issueDecision(facts({ busy: "waits for fac-1: both change the busy file a.ts" }))).toMatchObject({ kind: "busy-file", on: "fac-1" });
+  expect(issueDecision(facts({ busy: { why: "waits for fac-1: both change the busy file a.ts", on: "fac-1", file: "a.ts" } })).text).toBe("Waits for fac-1: both change the busy file a.ts");
+  expect(issueDecision(facts({ busy: { why: "waits for fac-1: both change the busy file a.ts", on: "fac-1", file: "a.ts" } }))).toMatchObject({ kind: "busy-file", on: "fac-1" });
   expect(issueDecision(facts({ noCommits: 3 }))).toMatchObject({ kind: "loop-guard", ask: "no-commit", why: "3 runs in a row with no commit" });
   expect(issueDecision(facts({ startsInHour: 4 }))).toMatchObject({ kind: "loop-guard", ask: "run-cap", starts: 4, why: "4 runs in the last hour" });
 });

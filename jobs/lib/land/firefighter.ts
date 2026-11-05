@@ -20,7 +20,7 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "../gates/ci.ts";
 import { baselines, factoryDir, factoryRepos, gates, redLine } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { factoryLog, logEvent } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { askSlowLands } from "./rescue.ts";
 import { runFile } from "../records/run-files.ts";
@@ -193,7 +193,9 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
       const f = fileRed(r);
       if (!f) continue;
       filed.push(f);
-      factoryLog("filed" in f ? `firefighter: filed ${f.repo}-${f.filed} (critical) for ${r.line}` : `firefighter: noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}`);
+      logEvent("filed" in f
+        ? { by: "firefighter", subject: `${f.repo}-${f.filed}`, action: "filed", note: `filed ${f.repo}-${f.filed} (critical) for ${r.line}` }
+        : { by: "firefighter", subject: `${f.repo}-${f.noted}`, action: "red", on: [r.commit.slice(0, 7)], note: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
     } catch (e: any) {
       factoryLog(`firefighter: ${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}`);
     }

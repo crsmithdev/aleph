@@ -32,7 +32,7 @@ import { route, TIER_MODEL, TIERS, type Tier } from "../routing/route.ts";
 import { appendSuiteHistory, mainRed, writeBaseline, clearCap, issueFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
-import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from "../gates/issue-decision.ts";
+import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
 
 /** A start refused because the live cap filled: the line `gates` gives for it. */
 const LIVE_REFUSAL = / agent runs are live/;
@@ -121,7 +121,12 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     planned.push(issueJob(repo, item.id));
   }
   /** Records the hold and the skip line of a goal no start reached. */
-  const skip = (name: string, kind: Gate, why: string, line = why) => { recordHold(name, kind, why); skipped.push(`${name}: ${line}`); };
+  const skip = (name: string, kind: Gate, why: string, ev: Hold) => { recordHold(name, kind, why, ev); skipped.push(`${name}: ${why}`); };
+  /** Skips a goal that a gate holds; a red main's event names its commit, and the note its failed checks. */
+  const held = (name: string, repo: Repo, d: IssueDecision) => {
+    const b = d.kind === "baseline" ? baselines()[repo.key] : undefined;
+    skip(name, d.kind as Gate, d.why, b ? { action: "red", on: [b.commit.slice(0, 7)], note: b.failed } : d.ev!);
+  };
   for (const { repo, item: listed } of ready) {
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
@@ -134,17 +139,17 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     }
     // The cheap facts first: the pause was asked above.
     const first = issueDecision({ name, item: listed, done, red });
-    if (first.kind !== "ready") { skip(name, first.kind, first.why); continue; }
+    if (first.kind !== "ready") { held(name, repo, first); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
     const release = await lock(`goal-${name}`, issueLockWaitMs());
-    if (!release) { skip(name, "not-ready", "another dispatch is starting it"); continue; }
+    if (!release) { skip(name, "not-ready", "another dispatch is starting it", { action: "starting" }); continue; }
     try {
       const jobs = allJobs();
       const open = openJob(name, null, jobs);
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : buildableIssue(repo, ref);
-      if (!item) { skip(name, "not-ready", "not a goal"); continue; }
+      if (!item) { skip(name, "not-ready", "not a goal", { action: "parent" }); continue; }
       const facts = { ...issueFacts(repo, item, jobs), done, red };
       // A pass that began before a pause must not start a run after it.
       let d = issueDecision({ ...facts, ...factoryGates(jobs) });
@@ -154,16 +159,17 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         tier = await route(issueBrief(item, name, jobs).spec);
         if (tier) d = issueDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
       }
-      if (d.kind !== "ready" && d.kind !== "loop-guard") { skip(name, d.kind, d.why); continue; }
+      if (d.kind !== "ready" && d.kind !== "loop-guard") { held(name, repo, d); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
       if (!latest || issues.status(latest) !== "open") {
-        skip(name, "not-ready", `the item is ${latest ? (issues.status(latest) === "parked" ? "parked" : issues.status(latest)) : "gone"}`);
+        const status = latest ? issues.status(latest) : "dropped";
+        skip(name, "not-ready", `the item is ${latest ? status : "gone"}`, { action: status });
         continue;
       }
       if (d.kind === "loop-guard") {
         // The Ask goes to the director, as every Ask does.
-        recordHold(name, d.kind, d.why);
+        recordHold(name, d.kind, d.why, d.ev);
         skipped.push(`${name}: ${d.why}`);
         if (d.ask === "no-commit") {
           markStreak(name);
@@ -181,7 +187,8 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       const { spec, rerun } = issueBrief(item, name, jobs);
       const why = await start(repo, name, ref, spec, tier);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
-      if (why) skip(name, LIVE_REFUSAL.test(why) ? "live-cap" : "not-ready", why);
+      // The refusal is text from the start: the live cap, an item already landed, or a job already running.
+      if (why) skip(name, LIVE_REFUSAL.test(why) ? "live-cap" : "not-ready", why, { action: LIVE_REFUSAL.test(why) ? "full" : / already landed as /.test(why) ? "done" : "running", note: why });
       else { recordHold(name, "started", "started"); started.push(name); clearCap(name); if (rerun) clearRerun(name); }
     } finally {
       release();

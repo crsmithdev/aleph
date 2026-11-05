@@ -378,7 +378,7 @@ function apply(repo: Repo, id: number, v: Route): Applied | null {
     }
   });
   if (ok && v.route === "ask" && !standing) setAsk(ref, v.ask);
-  if (ok && standing) logAlways("question", "recommended", ref);
+  if (ok && standing) logAlways("question", ref, "answered", { note: "the recommended answer" });
   return ok ? v.route : null;
 }
 
@@ -412,7 +412,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   if (grant === "retry") {
     mkdirSync(join(factoryDir(), "standing-retry"), { recursive: true });
     writeFileSync(mark, JSON.stringify([...before, ...runs.map((e) => e.id)]));
-    logAlways("intake-failed", "retry", ref);
+    logAlways("intake-failed", ref, "reran");
     return `${ref}: no verdict in ${n} intake runs; standing: intake again next tick`;
   }
   if (grant === "close") {
@@ -420,7 +420,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
       issues.setStatus(item, "done");
       issues.note(item, `intake: no verdict in ${n} runs; standing: closed`);
     });
-    if (closed) logAlways("intake-failed", "close", ref);
+    if (closed) logAlways("intake-failed", ref, "done");
     return closed ? `${ref}: no verdict in ${n} intake runs; standing: closed` : null;
   }
   return askFailed(repo, id, `no verdict in ${n} runs: ${reason}`);

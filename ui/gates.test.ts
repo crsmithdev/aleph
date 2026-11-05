@@ -12,7 +12,10 @@ import { pct, when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
 import * as record from "../jobs/lib/records/record.ts";
-import { allHolds, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
+import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
+import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
+import { logEvent } from "../jobs/lib/infra/layout.ts";
+import { contentText, setCodes } from "../lib/naming.ts";
 
 /** Make `rows` the only hold records: each goal's `hold` and `started` events in its job record. */
 function setHolds(rows: HoldRecord[]): void {
@@ -74,7 +77,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "codes", "factory", "gated", "goalGates", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
@@ -87,19 +90,49 @@ test("the body of /api/gates has every section, one rule per Ask reason with onl
   expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
 });
 
-test("the log has the hold, the rules Chris set, and the Rule, Director and Firefighter lines, newest first, 7 days back", async () => {
+/** An entry as one line: by, subject, action, sub, content and note. */
+const line = (x: any) => [x.by, x.subject, x.action, x.sub ?? "-", contentText(x) || "-", x.note ?? "-"].join(" | ");
+
+test("the log reads the hold, the rules Chris set, and the old rule, director and firefighter lines as events, newest first, 7 days back", async () => {
   const d: any = await body();
   const e = d.log.entries;
   expect(d.log.days).toBe(7);
-  expect(e.map((x: any) => `${x.by} ${x.item} ${x.what}`)).toEqual([
-    "Firefighter r-6 did answer r-6: picked the plain option",
-    "Director r-8 run-cap: decided: rerun: the cause is fixed",
-    "Rule r-5 rescue: recommended",
-    "Gate r-3 gate: 5 agent runs are live",
-    "You rule rescue: set to recommended",
-    "You rule run-cap: set to rerun",
-    "You rule proposal-claude-md:global: set to approve",
+  expect(e.map(line)).toEqual([
+    "firefighter | r-6 | answered | - | - | r-6: picked the plain option",
+    "director | r-8 | reran | capped | - | the cause is fixed",
+    "rule | r-5 | reran | rescue | → dropped | -",
+    "gate | r-3 | full | - | - | -",
+    "human | rescue | changed | rescue | - | set to recommended",
+    "human | run-cap | changed | capped | - | set to rerun",
+    "human | proposal-claude-md:global | changed | - | - | set to approve",
   ]);
+});
+
+test("a hold writes its event, and the log shows it as busy with the job and the file's base name", () => {
+  const was = allHolds();
+  try {
+    const d = issueDecision({ name: "aleph-1420", item: { id: 1420, notes: [], spec: "", fm: {} } as any, done: () => false, busy: { why: "waits for aleph-1372: both change the busy file ui/views/issues.js", on: "aleph-1372", file: "ui/views/issues.js" } });
+    recordHold("aleph-1420", d.kind as any, d.why, d.ev);
+    const e = log().find((x) => x.subject === "aleph-1420")!;
+    expect(e).toMatchObject({ by: "gate", action: "busy", on: ["aleph-1372"], file: "ui/views/issues.js" });
+    // The registry of this test has no code: the page gets the codes with the body.
+    setCodes({ aleph: "a" });
+    expect(contentText(e)).toBe("a1372 → issues.js");
+    const h = gates.renderLog({ log: { entries: [e] }, codes: { aleph: "a" } });
+    expect(h).toContain('<td><a class="idl" title="aleph-1420" href="#/issues/aleph/1420">a1420</a></td><td>busy</td><td></td><td class="what"><a class="idl" title="aleph-1372" href="#/issues/aleph/1372">a1372</a> → <code title="ui/views/issues.js">issues.js</code></td>');
+  } finally { setHolds(was); }
+});
+
+test("a director decision shows its action and sub, and its long note only behind the row's button", () => {
+  const note = `Director: landed over the reviewer hold. ${"word ".repeat(60)}`.trim();
+  const logPath = join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), was = readFileSync(logPath, "utf8");
+  try {
+    logEvent({ by: "director", subject: "r-12", action: "landed", sub: "override", note });
+    const e = log().find((x) => x.subject === "r-12")!;
+    expect(line(e)).toBe(`director | r-12 | landed | override | - | ${note}`);
+    const h = gates.renderLog({ log: { entries: [e] } });
+    expect(h).toContain(`<td>landed</td><td>override</td><td class="what"><div class="clamp">${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
+  } finally { writeFileSync(logPath, was); }
 });
 
 test("POST /api/gates/revoke/:reason runs `aleph always revoke`, and refuses a request without the UI header", async () => {
@@ -126,7 +159,7 @@ const data = () => ({
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
-  log: { days: 7, max: 200, entries: [{ at: ago(1), by: "Rule", item: "r-5", what: "rescue: recommended" }, { at: ago(2), by: "You", item: "rule", what: "rescue: set to recommended" }] },
+  log: { days: 7, max: 200, entries: [{ at: ago(1), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" }, { at: ago(2), by: "human", subject: "rescue", action: "changed", sub: "rescue", note: "set to recommended" }] },
 });
 
 test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
@@ -167,11 +200,11 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No repo names held paths.</p>');
 });
 
-const entry = (by: string, what = "x", item = "r-1") => ({ at: ago(1), by, item, what }) as any;
+const entry = (by: string, action = "answered", subject = "r-1") => ({ at: ago(1), by, subject, action }) as any;
 const rec = (min: number, name: string, kind: string) => ({ at: ago(min), name, kind, text: "t" });
 
-test("the automation rate is the Rule and Director decisions over those and Chris's answers; his rule changes and a Director escalation do not count", () => {
-  const e = [entry("Rule"), entry("Rule"), entry("Director", "run-cap: decided: rerun"), entry("Director", "run-cap: escalated: x"), entry("You", "Chris: yes"), entry("You", "rescue: set to Ask me", "rule")];
+test("the automation rate is the rule and director decisions over those and Chris's answers; his rule changes, a director escalation and a second event of one decision do not count", () => {
+  const e = [entry("rule", "reran"), entry("rule", "reran", "r-2"), entry("director", "reran"), entry("director", "filed"), entry("director", "escalated", "r-3"), entry("human"), entry("human", "changed", "rescue")];
   expect(metrics(e, []).rate).toEqual({ auto: 3, total: 4, percent: 75 });
   expect(metrics([], []).rate).toBeNull();
 });
@@ -206,25 +239,20 @@ test("gate catches are the builds a check or the reviewer sent back in the 7 day
 });
 
 test("the log filter keeps one actor's entries", () => {
-  const h = gates.renderLog(data(), "you");
-  expect(h).toMatch(/class="seg"[^>]*>.*aria-pressed="true">You</);
+  const h = gates.renderLog(data(), "human");
+  expect(h).toMatch(/class="seg"[^>]*>.*aria-pressed="true">human</);
   expect(h).not.toContain("fchip");
-  expect(h).toContain("<td>rescue</td>");
-  expect(h).toContain("set to recommended");
-  expect(h).not.toContain("rescue: recommended<");
-  expect(h).toContain('<tr><th>Logged</th><th>By</th><th>Item</th><th>Action</th><th>What</th><th class="num">Times</th></tr>');
-  expect(h).not.toContain("clamp");
-  const d = data();
-  d.log.entries.push({ at: ago(3), by: "You", item: "r-6", what: `why: ${"word ".repeat(60)}` });
-  const long = gates.renderLog(d, "you");
-  expect(long).toContain(`<td class="what"><div class="clamp">${"word ".repeat(60)}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
-  expect(long.match(/clamp-btn/g)?.length).toBe(1);
+  expect(h).toContain('<td><a href="#rules">rescue</a></td><td>changed</td><td>rescue</td>');
+  expect(h).not.toContain("r-5");
+  expect(h).toContain('<tr><th>Logged</th><th>By</th><th>Subject</th><th>Action</th><th>Sub</th><th>Content</th><th class="num">Times</th></tr>');
+  expect(h).toContain(`<td class="what"><div class="clamp">set to recommended</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
+  expect(gates.renderLog(data(), "rule")).not.toContain("clamp");
 });
 
 test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {
-  const e = (n: number): any => ({ at: new Date(NOW - n * 1000).toISOString(), by: "Rule", item: "x-1", what: `t${n}` });
+  const e = (n: number): any => ({ at: new Date(NOW - n * 1000).toISOString(), by: "rule", subject: "x-1", action: "reran", note: `t${n}` });
   const entries = Array.from({ length: 120 }, (_, i) => e(i));
-  entries[0] = { ...entries[0], by: "Gate", count: 3, first: entries[1].at };
+  entries[0] = { ...entries[0], by: "gate", times: 3, first: entries[1].at };
   const h = gates.renderLog({ log: { entries } } as any);
   expect(h.match(/<tr>/g)!.length - 1).toBe(50);
   expect(h).toContain("50 of 120");
@@ -239,24 +267,24 @@ const withHolds = (rows: HoldRecord[], f: () => void) => {
   try { f(); } finally { setHolds(was); }
 };
 const hold = (min: number, name = "r-9", text = "busy") => ({ at: ago(min), name, kind: "gate", text });
-const gateLines = () => log().filter((e) => e.by === "Gate");
+const gateLines = () => log().filter((e) => e.by === "gate");
 
-test("log collapses a run of identical Gate lines into one with count, first and last time", () => {
+test("log collapses a run of identical gate events into one with times, first and last time", () => {
   withHolds([hold(30), hold(20), hold(10)], () => {
     const g = gateLines();
     expect(g.length).toBe(1);
-    expect(g[0].count).toBe(3);
+    expect(g[0].times).toBe(3);
     expect(Date.parse(g[0].first!)).toBeCloseTo(NOW - 30 * 60_000, -4);
     expect(Date.parse(g[0].at)).toBeCloseTo(NOW - 10 * 60_000, -4);
   });
 });
 
-test("a revoke line in tick.log is a You entry on the rule, and an always line stays a Rule entry", async () => {
+test("an old revoke line in tick.log is a human change of the rule, and an old always line a rule event; its second line is no entry", async () => {
   const { appendFileSync } = await import("node:fs");
-  appendFileSync(join(base, "factory", "tick.log"), `${ago(0.5)} always: revoked rescue\n${ago(0.4)} always: rescue: recommended on r-9\n`);
+  appendFileSync(join(base, "factory", "tick.log"), `${ago(0.5)} always: revoked rescue\n${ago(0.4)} always: rescue: recommended on r-9\n${ago(0.4)} r-9: always: Rerun; dropped, and the goal reruns\n`);
   const e: any[] = ((await body()) as any).log.entries;
-  expect(e.find((x) => x.what === "rescue: set to Ask me")).toMatchObject({ by: "You", item: "rule" });
-  expect(e.find((x) => x.item === "r-9")).toMatchObject({ by: "Rule", what: "rescue: recommended" });
+  expect(e.find((x) => x.note === "set to Ask me")).toMatchObject({ by: "human", subject: "rescue", action: "changed", sub: "rescue", to: "human" });
+  expect(e.filter((x) => x.subject === "r-9")).toEqual([expect.objectContaining({ by: "rule", action: "reran", sub: "rescue", result: "dropped" })]);
 });
 
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
@@ -366,8 +394,8 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
     rec("x-1", [ask(1)], [build(15)]), rec("x-2", [ask(2)]), rec("x-3", [ask(3)]), rec("x-4", [ask(4), ask(5, false)]),
     rec("x-5", [{ ...ask(6), reason: "run-cap" }]),
   ];
-  const e = (n: number, by: any, item: string, what = "question: decided: x"): any => ({ at: at(n * 10), by, item, what });
-  const entries = [e(1, "Rule", "x-1"), e(2, "Rule", "x-2"), e(3, "Director", "x-3"), e(4, "You", "x-4", "Chris: yes")];
+  const e = (n: number, by: any, subject: string, note?: string): any => ({ at: at(n * 10), by, subject, action: "answered", note });
+  const entries = [e(1, "rule", "x-1"), e(2, "rule", "x-2"), e(3, "director", "x-3"), e(4, "human", "x-4", "Chris: yes")];
   const row: any = rules(entries, records, NOW + 3600_000).find((x) => x.reason === "question");
   expect(row.fired).toBe(5);
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
@@ -456,11 +484,11 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
   const rec = (n: number, reason: string): any => ({ issue: `x-${n}`, asks: [{ set: at(n * 10), cleared: at(n * 10 + 1), reason }], runs: [], events: [] });
   const records = [1, 2, 3].map((n) => rec(n, "intake-failed")).concat([4, 5].map((n) => rec(n, "question")));
-  const entries: any[] = [1, 2, 3, 4, 5].map((n) => ({ at: at(n * 10), by: "You", item: `x-${n}`, what: n < 4 ? "Chris: run intake again" : `Chris decided: My recommendation is plan ${n}.` }));
+  const entries: any[] = [1, 2, 3, 4, 5].map((n) => ({ at: at(n * 10), by: "human", subject: `x-${n}`, action: n < 4 ? "reran" : "answered", note: n < 4 ? "Chris: run intake again" : `Chris decided: My recommendation is plan ${n}.` }));
   const r = repeats(entries, records, NOW + 3600_000);
   expect(r).toEqual([{ reason: "intake-failed", answer: "retry", count: 3, mode: "retry" }]);
   const rescue = [6, 7, 8].map((n) => rec(n, "rescue"));
-  const approved = [6, 7, 8].map((n) => ({ at: at(n * 10), by: "You", item: `x-${n}`, what: `Chris decided: My recommendation is fix ${n}.` }));
+  const approved = [6, 7, 8].map((n) => ({ at: at(n * 10), by: "human", subject: `x-${n}`, action: "answered", note: `Chris decided: My recommendation is fix ${n}.` }));
   expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, mode: "recommended" }]);
   const d = { ...data(), repeats: r };
   const h = gates.renderRepeats(d);
@@ -479,14 +507,14 @@ test("GET /api/gates takes window and project: the log and the metrics keep that
   const logPath = join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), was = readFileSync(logPath, "utf8");
   const m = (min: number) => min * 60 * 24;
   writeFileSync(logPath, [
-    `${ago(30)} alpha-1: always: a-hour`,
-    `${ago(60 * 5)} alpha-2: always: a-day`,
-    `${ago(m(3))} beta-1: always: b-week`,
-    `${ago(m(10))} beta-2: always: b-month`,
-    `${ago(m(40))} alpha-3: always: a-old`,
+    `${ago(30)} always: rescue: recommended on alpha-1`,
+    `${ago(60 * 5)} {"at":"${ago(60 * 5)}","by":"rule","subject":"alpha-2","action":"reran","sub":"rescue"}`,
+    `${ago(m(3))} always: rescue: recommended on beta-1`,
+    `${ago(m(10))} always: rescue: recommended on beta-2`,
+    `${ago(m(40))} always: rescue: recommended on alpha-3`,
   ].join("\n") + "\n");
   const get = async (q: string) => { const r = await at(`/api/gates${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
-  const items = (d: any) => d.log.entries.map((e: any) => e.item).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
+  const items = (d: any) => d.log.entries.map((e: any) => e.subject).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
   try {
     const week = await get("");
     expect(items(week.d)).toEqual(["alpha-1", "alpha-2", "beta-1"]);
@@ -559,7 +587,7 @@ test("the Held time card reads hours() and the Automation rate reads pct()", () 
 
 test("Schedules, Repeat Answers, Rules and Log show empty() with no rows; Repeat Answers and Log page at 50", () => {
   expect(gates.renderLog({ log: { entries: [] } } as any)).toContain('class="empty"');
-  expect(gates.renderLog({ log: { entries: Array.from({ length: 51 }, (_, i) => ({ at: new Date(NOW - i * 1000).toISOString(), by: "Rule", item: "x-1", what: `t${i}` })) } } as any)).toContain("50 of 51");
+  expect(gates.renderLog({ log: { entries: Array.from({ length: 51 }, (_, i) => ({ at: new Date(NOW - i * 1000).toISOString(), by: "rule", subject: "x-1", action: "reran", note: `t${i}` })) } } as any)).toContain("50 of 51");
   expect(gates.renderSchedules({ schedules: [] })).toContain('class="empty"');
   expect(gates.renderRules({ rules: [] })).toContain('class="empty"');
   expect(gates.renderRepeats({ repeats: [] })).toContain('class="empty"');

@@ -11,10 +11,11 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { surfacePaths } from "../roles/issue-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
-import type { Bound, Gate } from "./issue-decision.ts";
-import { layout, readFactoryLog } from "../infra/layout.ts";
+import type { Bound, Gate, Hold } from "./issue-decision.ts";
+import { event, type Event } from "../../../lib/naming.ts";
+import { eventOf, layout, readFactoryLog } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
-import { allRuns, held, isWaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, held, jobIdOf, isWaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { causeOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
@@ -25,8 +26,8 @@ export const factoryDir = () => layout().factory;
 
 const pauseFile = () => join(factoryDir(), "paused");
 
-/** One record of why a goal waits: `kind` is the gate that bound, or `started`. Records from before v6 name older kinds. */
-export interface HoldRecord { at: string; name: string; kind: string; text: string }
+/** One record of why a goal waits: `kind` is the gate that bound, or `started`; `event` its log event, which older records lack. Records from before v6 name older kinds. */
+export interface HoldRecord { at: string; name: string; kind: string; text: string; event?: Event }
 
 /** The hold record kinds from before the 7 gates that did not stop a start: the goal was done, or its job was open. */
 const OLD_NOT_HELD = new Set(["open", "start", "done"]);
@@ -38,7 +39,10 @@ export const stopsStart = (r: HoldRecord): boolean =>
 /** The hold records of a job record: its `hold` and `started` events. */
 const holdsOf = (r: record.JobRecord): HoldRecord[] =>
   r.events.filter((e) => e.kind === "hold" || e.kind === "started")
-    .map((e) => ({ at: e.at, name: r.issue, kind: e.kind === "started" ? "started" : (e.data as { gate: string }).gate, text: e.what }));
+    .map((e) => {
+      const d = e.data as { gate: string; event?: Event } | undefined;
+      return { at: e.at, name: r.issue, kind: e.kind === "started" ? "started" : d!.gate, text: e.what, ...(d?.event ? { event: d.event } : {}) };
+    });
 
 /** Every hold record of every job, oldest first. */
 export function allHolds(): HoldRecord[] {
@@ -53,14 +57,16 @@ export function readHolds(names: string[]): HoldRecord[] {
 
 /**
  * Records why a goal waits (or, with kind `started`, that it no longer does) in its job record: an event, unless it
- * repeats the last one, and `wait`, which a record that stops a start sets and any other clears.
+ * repeats the last one, and `wait`, which a record that stops a start sets and any other clears. `ev` gives the hold's
+ * log event, by `gate` on the goal.
  */
-export function recordHold(name: string, kind: Gate | "started", text: string): void {
+export function recordHold(name: string, kind: Gate | "started", text: string, ev?: Hold): void {
   const at = new Date().toISOString();
+  const logged = ev && event({ at, by: "gate", subject: name, ...ev });
   record.update(name, (r) => {
     const last = holdsOf(r).at(-1);
     if (last && last.kind === kind && last.text === text) return;
-    r.events.push(kind === "started" ? { at, kind: "started", what: text } : { at, kind: "hold", what: text, data: { gate: kind } });
+    r.events.push(kind === "started" ? { at, kind: "started", what: text } : { at, kind: "hold", what: text, data: { gate: kind, ...(logged ? { event: logged } : {}) } });
     r.wait = stopsStart({ at, name, kind, text }) ? { kind, reason: text, since: at } : null;
   });
 }
@@ -127,6 +133,8 @@ export async function gpuSlot(waitMs: number): Promise<(() => void) | null> {
   }
 }
 
+const PAUSED: Bound = { why: "paused", text: "The factory is paused", ev: { action: "paused" } };
+
 /** The gates of the whole factory, in the order of GATES: the others are each goal's own. */
 export const FACTORY_GATES = ["pause", "live-cap"] as const satisfies readonly Gate[];
 
@@ -142,11 +150,11 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
   // A title or judge call holds the `gpu` lock while it runs on the local backend: it takes the GPU slot as a local run does.
   const call = local && held("gpu");
   const live = local ? liveLocal(jobs?.flat(), models) + (call ? 1 : 0) : liveRuns(jobs?.flat());
-  const bound = local
-    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)` }
-    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)` };
+  const bound: Bound = local
+    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)`, ev: call ? { action: "gpu" } : { action: "full", sub: "local", count: `${live} / ${LOCAL_CAP}` } }
+    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: { action: "full", count: `${live} / ${LIVE_CAP()}` } };
   return {
-    pause: paused() ? { why: "paused", text: "The factory is paused" } : null,
+    pause: paused() ? PAUSED : null,
     "live-cap": live >= (local ? LOCAL_CAP : LIVE_CAP()) ? bound : null,
   };
 }
@@ -158,7 +166,7 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
 export function gates(opts: { only?: readonly FactoryGate[]; jobs?: Job[]; run?: Pick<Run, "model" | "merge"> } = {}): ({ gate: FactoryGate } & Bound) | null {
   const on = (g: FactoryGate) => !opts.only || opts.only.includes(g);
   // Each gate is read only when asked: the pause is one stat, and the dispatch asks it first.
-  if (on("pause") && paused()) return { gate: "pause", why: "paused", text: "The factory is paused" };
+  if (on("pause") && paused()) return { gate: "pause", ...PAUSED };
   const rest = FACTORY_GATES.filter((g) => g !== "pause" && on(g));
   if (!rest.length) return null;
   const all = factoryGates(opts.jobs, opts.run);
@@ -330,12 +338,14 @@ export function health(now = Date.now(), o: { jobs?: Job[] } = {}): string[] {
   return lines;
 }
 
-/** The firefighter's lines of the factory log in the last 24 hours, newest last, at most `n`: what the Status page shows. */
+/** The firefighter's lines of the factory log in the last 24 hours, newest last, at most `n`: what the Status page shows. An event shows its note. */
 export function firefighterLines(now = Date.now(), n = 8): { at: string; line: string }[] {
   const text = readFactoryLog();
   return text.split("\n").flatMap((l) => {
-    const m = /^(\S+) (firefighter[: ].*)$/.exec(l);
-    return m && now - Date.parse(m[1]) < DAY ? [{ at: m[1], line: m[2] }] : [];
+    const m = /^(\S+) (.*)$/.exec(l);
+    const e = m && eventOf(m[2]);
+    const line = e ? (e.by === "firefighter" ? `firefighter: ${e.note ?? `${e.action} ${e.subject}`}` : null) : m && /^firefighter[: ]/.test(m[2]) ? m[2] : null;
+    return m && line && now - Date.parse(m[1]) < DAY ? [{ at: m[1], line }] : [];
   }).slice(-n);
 }
 
@@ -351,16 +361,16 @@ const BUSY_CONFLICTS = 3;
 
 const BUSY_MS = 7 * 86_400_000;
 
-/** The first open job of the repo, not waiting for Chris, whose issue `shares` something with the goal; the line says what. */
-function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => string | undefined): string | null {
+/** The first open job of the repo, not waiting for Chris, whose issue `shares` something with the goal; `file` says what. */
+function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; file: string } | null {
   const lists = reader({ fetch: false });
   for (const j of jobs) {
     const last = lastReal(j).run;
     const on = onOf(last);
     if (last.repo !== repo.key || on === undefined || !isOpen(j) || isWaiting(last.condition)) continue;
     const theirs = lists.item(repo.key, on);
-    const what = theirs && shares(theirs);
-    if (what) return `waits for ${last.name}: ${what}`;
+    const s = theirs && shares(theirs);
+    if (s) return { why: `waits for ${last.name}: ${s.what}`, on: last.name, file: s.file };
   }
   return null;
 }
@@ -374,23 +384,25 @@ const usesGptOss = (item: issues.Issue): boolean =>
  * of the two lands would conflict; or both use the gpt-oss server, which runs one build at a time.
  * A job waiting for Chris does not count, as it can wait for hours.
  */
-function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()): string | null {
+function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
   const counts = new Map<string, number>();
   for (const j of jobs) for (const { run } of j) {
     if (run.kind !== "land" || run.repo !== repo.key || now - Date.parse(run.started) > BUSY_MS) continue;
     for (const f of run.conflicts ?? []) counts.set(f, (counts.get(f) ?? 0) + 1);
   }
   const mine = surfacePaths(item.spec).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
-  const file = mine.length ? openWait(repo, jobs, (theirs) => { const f = surfacePaths(theirs.spec).find((p) => mine.includes(p)); return f && `both change the busy file ${f}`; }) : null;
-  return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? "both use the gpt-oss server" : undefined) : null);
+  const busy = (f: string | undefined) => (f ? { file: f, what: `both change the busy file ${f}` } : undefined);
+  const file = mine.length ? openWait(repo, jobs, (theirs) => busy(surfacePaths(theirs.spec).find((p) => mine.includes(p)))) : null;
+  return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? { file: "gpt-oss", what: "both use the gpt-oss server" } : undefined) : null);
 }
 
 /** The facts of a goal that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
 export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
-  const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
+  const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat(), open = openJob(name, null, jobs);
   return {
     name, item,
-    open: openJob(name, null, jobs)?.at(-1)!.run.condition ?? null,
+    open: open?.at(-1)!.run.condition ?? null,
+    job: open ? jobIdOf(open[0], runs) : null,
     busy: busyWait(repo, item, jobs, now),
     noCommits: noCommitStreak(repo.key, name, runs),
     capHeld: capMarked(name),

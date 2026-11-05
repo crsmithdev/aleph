@@ -33,8 +33,8 @@ beforeAll(() => {
 });
 afterAll(() => { restoreEnv(); rmSync(base, { recursive: true, force: true }); });
 
-test("log() shows an issue note `Chris dropped: <reason>` as a You entry on the issue", async () => {
+test("log() shows an issue note `Chris dropped: <reason>` as a human drop on the issue, the note its text", async () => {
   const stub: any = { now: "2026-11-04T00:00:00.000Z", asks: [], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };
   const d: any = JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
-  expect(d.log.entries.find((x: any) => x.by === "You" && x.item === "fac-1")).toMatchObject({ what: "Chris dropped: not needed" });
+  expect(d.log.entries.find((x: any) => x.by === "human" && x.subject === "fac-1")).toMatchObject({ action: "dropped", note: "Chris dropped: not needed" });
 });

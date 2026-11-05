@@ -7,12 +7,14 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
-import { allHolds, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
+import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
+import { allHolds, baselines, type HoldRecord, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
-import { layout, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
+import { eventOf, layout, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
 import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 
@@ -30,8 +32,12 @@ const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DA
 /** Whether `item` (`<repo>-<id>`) belongs to `project`; no project keeps every item. */
 const inProject = (item: string, project?: string) => !project || item.startsWith(`${project}-`);
 
-export type By = "You" | "Rule" | "Director" | "Firefighter" | "Gate";
-export interface LogEntry { at: string; by: By; item: string; what: string; count?: number; first?: string }
+/** One log row: an event. A run of equal gate events is one row: `times` is how many, `first` the first one's time. */
+export type LogEntry = Event & { times?: number; first?: string };
+/** Whether an entry is a decision on an Ask that a rule or the director made, not Chris. */
+const automatic = (e: LogEntry) => e.by === "rule" || (e.by === "director" && e.action !== "escalated");
+/** Whether an entry is Chris's answer to an Ask: his rule changes are not. */
+const answer = (e: LogEntry) => e.by === "human" && e.action !== "changed";
 
 /**
  * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what always.json grants.
@@ -52,9 +58,8 @@ export function rules(entries: LogEntry[] = [], records = record.all(), now = Da
     for (const a of mine) {
       if (!a.cleared) continue;
       const lo = Date.parse(a.set), hi = Date.parse(a.cleared) + SLACK;
-      const by = entries.find((e) => e.item === a.issue && Date.parse(e.at) >= lo && Date.parse(e.at) <= hi
-        && (e.by === "Rule" || e.by === "You" || (e.by === "Director" && /\bdecided:/.test(e.what))));
-      if (by) decided[by.by === "Rule" ? "rule" : by.by === "You" ? "chris" : "director"]++;
+      const by = entries.find((e) => e.subject === a.issue && Date.parse(e.at) >= lo && Date.parse(e.at) <= hi && (automatic(e) || answer(e)));
+      if (by) decided[by.by === "rule" ? "rule" : by.by === "human" ? "chris" : "director"]++;
       outcome[a.rec.runs.some((x) => x.kind === "build" && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
     }
     return {
@@ -79,11 +84,12 @@ export function repeats(entries: LogEntry[], records = record.all(), now = Date.
   for (const rec of records) for (const a of rec.asks ?? []) {
     if (!a.reason || !a.cleared || Date.parse(a.set) < from) continue;
     const lo = Date.parse(a.set), hi = Date.parse(a.cleared) + SLACK;
-    const e = entries.find((x) => x.by === "You" && x.item === rec.issue && Date.parse(x.at) >= lo && Date.parse(x.at) <= hi);
+    const e = entries.find((x) => answer(x) && x.subject === rec.issue && Date.parse(x.at) >= lo && Date.parse(x.at) <= hi);
     if (!e) continue;
-    const answer = ANSWERS.find(([re]) => re.test(e.what))?.[1] ?? e.what.replace(/^Chris(?: decided)?: /, "");
-    const k = `${a.reason}\n${answer}`;
-    const c = counts.get(k) ?? { reason: a.reason, answer, count: 0 };
+    const note = e.note ?? "";
+    const said = ANSWERS.find(([re]) => re.test(note))?.[1] ?? note.replace(/^Chris(?: decided)?: /, "");
+    const k = `${a.reason}\n${said}`;
+    const c = counts.get(k) ?? { reason: a.reason, answer: said, count: 0 };
     c.count++;
     counts.set(k, c);
   }
@@ -98,31 +104,91 @@ export async function securityFacts(): Promise<{ held: string[] }> {
   return JSON.parse(out);
 }
 
-const REF = /\b[a-z][\w.]*?-\d+(?:\.\d+)?\b/i;
+type Fields = Omit<Event, "at" | "by" | "subject">;
 
-/**
- * The Rule, Director and Firefighter lines of tick.log: the Always actions (`always:`, `<name>: always:`, `standing:`),
- * the director's decisions (`director: <ref>: <reason>: decided|escalated: …`, director.ts) and the firefighter's lines.
- */
-function tickEntries(): LogEntry[] {
-  const raw = readFactoryLog();
-  const out: LogEntry[] = [];
-  for (const l of raw.split("\n")) {
-    const m = /^(\S+) (.*)$/.exec(l);
-    if (!m) continue;
-    const [, at, line] = m;
-    let e: RegExpExecArray | null;
-    if ((e = /^always: revoked (\S+)$/.exec(line))) out.push({ at, by: "You", item: "rule", what: `${e[1]}: set to Ask me` });
-    else if ((e = /^always: (\S+): (\S+) on (\S+)$/.exec(line))) out.push({ at, by: "Rule", item: e[3], what: `${e[1]}: ${e[2]}` });
-    else if ((e = /^(\S+): always: (.*)$/.exec(line))) out.push({ at, by: "Rule", item: e[1], what: e[2] });
-    else if ((e = /^standing: (.*)$/.exec(line))) out.push({ at, by: "Rule", item: REF.exec(e[1])?.[0] ?? "", what: e[1] });
-    else if ((e = /^director: (\S+): (.*)$/.exec(line))) out.push({ at, by: "Director", item: e[1], what: e[2] });
-    else if ((e = /^firefighter[: ] ?(.*)$/.exec(line))) out.push({ at, by: "Firefighter", item: REF.exec(e[1])?.[0] ?? "", what: e[1] });
+/** The verb of an old director action or rule line as an action: `land` is `landed`. */
+const act = (verb: string) => word("act", verb);
+
+/** The decisions of an old `director: <ref>: <reason>: decided: …` line: one event per action; a `note` or a `refused` part is the first event's note. */
+function oldDecided(reason: string, text: string): Fields[] {
+  const parts = text.split(/; (?=(?:land|drop|drop-issue|answer|rerun|close|edit-goal|add|note|refused)\b)/);
+  const evs: Fields[] = [], notes: string[] = [];
+  for (const p of parts) {
+    const [, verb, rest = ""] = /^([\w-]+)(?::? ([\s\S]*))?$/.exec(p) ?? [, p];
+    if (verb === "note" || verb === "refused" || !ACTIONS.includes(act(verb!))) { notes.push(verb === "note" ? rest : p); continue; }
+    const dup = verb === "drop" && /\bduplicate\b/.test(rest);
+    evs.push({
+      action: act(verb!), sub: verb === "land" && reason === "review" ? "override" : dup ? "duplicate" : verb === "add" ? undefined : askSub(reason),
+      ...(dup || verb === "add" ? { on: refs(rest).slice(-1) } : {}), ...(rest ? { note: rest } : {}),
+    });
   }
+  const out = evs.length ? evs : [{ action: "answered", sub: askSub(reason) }];
+  if (notes.length) out[0] = { ...out[0], note: [out[0].note, ...notes].filter(Boolean).join("; ") };
   return out;
 }
 
-/** Chris's answers in the issue notes of the factory repos: the notes the UI and CLI write for him (`Chris: …`, `Chris decided: …`, `Chris approved it`). */
+/**
+ * The log events of an old text line of tick.log, as near as its text gives them: the Always actions (`always:`, `standing:`),
+ * the director's decisions (`director: <ref>: <reason>: decided|escalated: …`) and the firefighter's lines. A line of
+ * another kind is no log entry. A director or firefighter line of no known form takes the word before its first `: ` as
+ * its action, and the rest as its note.
+ */
+function oldLine(at: string, line: string): LogEntry[] {
+  let m: RegExpExecArray | null;
+  const one = (by: string, subject: string, f: Fields): LogEntry[] => [{ at, by, subject, ...f }];
+  if ((m = /^always: revoked (\S+)$/.exec(line))) return one("human", m[1], { action: "changed", sub: askSub(m[1]), to: "human", note: "set to Ask me" });
+  // A rescue rule dropped the run and the goal reran; its second line, `<name>: always: Rerun; …`, is the same act.
+  if ((m = /^(?:always|standing): (\S+): (\S+) on (\S+)$/.exec(line))) return one("rule", m[3], m[1] === "rescue" ? { action: "reran", sub: "rescue", result: "dropped" } : { action: act(m[2]), sub: askSub(m[1]) });
+  if ((m = /^director: (\S+): (\S+): decided: ([\s\S]*)$/.exec(line))) { const [, ref, reason, text] = m; return oldDecided(reason, text).map((f) => ({ at, by: "director", subject: ref, ...f })); }
+  if ((m = /^director: (\S+): (\S+): escalated: ([\s\S]*)$/.exec(line))) {
+    const [, ref, reason, why] = m, file = /^the run changes (\S+), a security path/.exec(why)?.[1];
+    return one("director", ref, { action: "escalated", sub: /^its (run failed|reply was malformed)/.test(why) ? "error" : file ? "protected" : askSub(reason), ...(file ? { file } : {}), to: "human", note: why });
+  }
+  if ((m = /^firefighter: filed (\S+) \(critical\)/.exec(line))) return one("firefighter", m[1], { action: "filed", note: line.slice(13) });
+  if ((m = /^firefighter: noted (\S+): also red at (\w+)/.exec(line))) return one("firefighter", m[1], { action: "red", on: [m[2]], note: line.slice(13) });
+  if ((m = /^firefighter: (\S+): its land is live for/.exec(line))) return one("firefighter", m[1], { action: "waiting", sub: "rescue", to: "director", note: line.slice(13) });
+  if ((m = /^firefighter: did ([\w-]+) ([\s\S]*)$/.exec(line))) return one("firefighter", refs(m[2])[0] ?? "", { action: act(m[1]), note: m[2] });
+  if ((m = /^(director|firefighter|standing)[: ] ?([\s\S]*)$/.exec(line))) {
+    const by = m[1] === "standing" ? "rule" : m[1], subject = refs(m[2])[0] ?? "";
+    const rest = subject && m[2].startsWith(`${subject}: `) ? m[2].slice(subject.length + 2) : m[2];
+    const w = /^([\w-]+): /.exec(rest)?.[1];
+    return one(by, subject, { action: w ? act(word("state", w)) : "", note: w ? rest.slice(w.length + 2) : rest });
+  }
+  return [];
+}
+
+/** The log events of tick.log: each event line, and the old text lines that `oldLine` reads. */
+function tickEntries(): LogEntry[] {
+  return readFactoryLog().split("\n").flatMap((l) => {
+    const m = /^(\S+) (.*)$/.exec(l);
+    if (!m) return [];
+    const e = eventOf(m[2]);
+    return e ? [e] : oldLine(m[1], m[2]);
+  });
+}
+
+/** The event of an old hold record, as near as its text gives it; the text is the note when no form fits. */
+function oldHold(h: HoldRecord): LogEntry {
+  const t = h.text;
+  let m: RegExpExecArray | null;
+  const f: Fields = (m = /^after (\S+)$/.exec(t)) ? { action: "after", on: m[1].split(",") }
+    : (m = /^its job is (\w+)$/.exec(t)) ? { action: word("state", m[1]) }
+    : /already (done|landed)/.test(t) ? { action: "done" }
+    : (m = /^the item is (\w+)$/.exec(t)) ? { action: m[1] === "gone" ? "dropped" : m[1] }
+    : /starting it$/.test(t) ? { action: "starting" }
+    : t === "not a goal" ? { action: "parent" }
+    : /holds the GPU$/.test(t) ? { action: "gpu" }
+    : (m = /^\d+ (local )?agent runs are live$/.exec(t)) ? { action: "full", ...(m[1] ? { sub: "local" } : {}) }
+    : (m = /^waits for (\S+): both (?:change the busy file (\S+)|use the (gpt-oss) server)$/.exec(t)) ? { action: "busy", on: [m[1]], file: m[2] ?? m[3] }
+    : (m = /^(\d+) runs in a row with no commit$/.exec(t)) ? { action: "looping", sub: "no-commit", count: `${m[1]} / ${m[1]}` }
+    : (m = /^(\d+) runs in the last hour$/.exec(t)) ? { action: "looping", sub: "starts", count: `${m[1]} / 1h` }
+    : (m = /^main is red at (\w+): ([\s\S]*)$/.exec(t)) ? { action: "red", on: [m[1]], note: m[2] }
+    : t === "paused" ? { action: "paused" }
+    : { action: word("gate", h.kind), note: t };
+  return { at: h.at, by: "gate", subject: h.name, ...f };
+}
+
+/** Chris's answers in the issue notes of the factory repos: the notes the UI and CLI write for him (`Chris: …`, `Chris decided: …`, `Chris approved it`). The note is the whole text. */
 function noteEntries(): LogEntry[] {
   const lists = reader({ fetch: false });
   const out: LogEntry[] = [];
@@ -132,34 +198,38 @@ function noteEntries(): LogEntry[] {
       const ref = `${repo.key}-${item.sub === undefined ? item.id : `${item.id}.${item.sub}`}`;
       for (const n of item.notes) {
         const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (Chris(?::| decided:| approved| denied| dropped).*)$/.exec(n);
-        if (m) out.push({ at: new Date(`${m[1]}T${m[2]}`).toISOString(), by: "You", item: ref, what: m[3] });
+        if (!m) continue;
+        const t = m[3];
+        const action = /^Chris: run (it|intake) again$/.test(t) ? "reran" : /^Chris: checked/.test(t) ? "done" : /^Chris (denied|dropped)/.test(t) ? "dropped" : "answered";
+        out.push({ at: new Date(`${m[1]}T${m[2]}`).toISOString(), by: "human", subject: ref, action, ...(/intake again$/.test(t) ? { sub: "intake" } : {}), note: t });
       }
     }
   }
   return out;
 }
 
-/** One entry for each run of Gate entries with the same item and what, in time order among the Gate entries: `at` is the last line's time, `first` the first's, `count` the lines. A single line gets neither. */
+/** One entry for each run of equal gate events, in time order: `at` is the last one's time, `first` the first's, `times` the events. A single event gets neither. */
 function collapse(entries: LogEntry[]): LogEntry[] {
   const out: LogEntry[] = [];
+  const key = ({ at, times, first, ...e }: LogEntry) => JSON.stringify(e);
   for (const e of [...entries].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
     const last = out.at(-1);
-    if (last && last.item === e.item && last.what === e.what) {
+    if (last && key(last) === key(e)) {
       last.first ??= last.at;
-      last.count = (last.count ?? 1) + 1;
+      last.times = (last.times ?? 1) + 1;
       last.at = e.at;
     } else out.push({ ...e });
   }
   return out;
 }
 
-/** The log: the gate holds, the Always rules Chris set, the Rule, Director and Firefighter lines and his answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
+/** The log: the gate holds, the Always rules Chris set, the rule, director and firefighter events and his answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
 export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, project?: string): LogEntry[] {
-  const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h): LogEntry => ({ at: h.at, by: "Gate", item: h.name, what: `${h.kind}: ${h.text}` })));
+  const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h) => h.event ?? oldHold(h)));
   const seen: Record<string, number> = {};
-  const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "You", item: "rule", what: `${reason}: set to ${g.action}` }));
+  const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "human", subject: reason, action: "changed", ...(askSub(reason) ? { sub: askSub(reason) } : {}), note: `set to ${g.action}` }));
   return [...holds, ...set, ...tickEntries(), ...noteEntries()]
-    .filter((e) => now - Date.parse(e.at) < ms && (!project || (e.item !== "rule" && inProject(e.item, project))))
+    .filter((e) => now - Date.parse(e.at) < ms && (!project || inProject(e.subject, project)))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     .filter((e) => (seen[e.by] = (seen[e.by] ?? 0) + 1) <= max);
 }
@@ -218,8 +288,9 @@ export function schedules(): { name: string; last: string | null; result: string
  */
 export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(), records = record.all(), span = LOG_DAYS * DAY) {
   const from = now - span;
-  const auto = entries.filter((e) => (e.by === "Rule" || (e.by === "Director" && /\bdecided:/.test(e.what)))).length;
-  const chris = entries.filter((e) => e.by === "You" && e.item !== "rule").length;
+  // A decision that applied several actions writes one event each, at one time: it counts once.
+  const auto = new Set(entries.filter(automatic).map((e) => `${e.by} ${e.subject} ${e.at}`)).size;
+  const chris = entries.filter(answer).length;
   const open: Record<string, number> = {}, names = new Set<string>();
   let ms = 0;
   const close = (name: string, end: number) => {
@@ -268,6 +339,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     ...security,
     repoHeld: repoHeld(),
     log: { days: ms / DAY, max: LOG_MAX, entries },
+    codes: Object.fromEntries(Object.values(loadRegistry()).filter((r) => r.code).map((r) => [r.key, r.code])),
   };
 }
 

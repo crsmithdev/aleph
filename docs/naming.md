@@ -36,7 +36,7 @@ Text that people read does not use these old words: goal (an issue), part (an is
 
 ## Events
 
-Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them.
+Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them. A log event is one line of `tick.log`: the time, a space and the event as JSON, which `logEvent` in `jobs/lib/infra/layout.ts` writes. A gate hold keeps its event in the job record.
 
 | Field | Form | Example |
 |---|---|---|
@@ -74,7 +74,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 |---|---|---|
 | Issue status | yes | open, parked, done, dropped |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed |
+| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered |
 | Sub | yes | no-commit, timeout, stalled, infra, locked, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, other |
 | Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter |
 | Kind | yes, never shown | build, recheck, land, intake, director, monitor |
@@ -101,3 +101,4 @@ Old files keep their words. A reader maps each old word through `OLD` in `lib/na
 | Speed class | fixed → returned; nothing → failed; restarted → reran |
 | Actor | You → human; Rule → rule; Gate → gate; Director → director; Firefighter → firefighter; triage, planner → intake |
 | Kind | agent → build; triage, plan, facts → intake; explain → director; firefighter → director |
+| Log act | land → landed; drop, drop-issue, decline → dropped; rerun, retry → reran; add, approve → filed; answer, recommended → answered; close → done; edit-goal → changed |

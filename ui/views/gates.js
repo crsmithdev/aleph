@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { clamp, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { clamp, contentText, parseId, parseJob, setCodes, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -42,7 +42,7 @@ export const MODES = { recommended: "Recommended", retry: "Retry", start: "Start
 const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 
 /** The log's actors, in filter order, with the badge tone of each. */
-export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: "stuck", Gate: "run" };
+export const BY = { human: "need", rule: "done", director: "parked", firefighter: "stuck", gate: "run" };
 
 const PAGE = 50;
 
@@ -148,25 +148,32 @@ export function renderHeld(d) {
     `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`, { label: "Held paths" });
 }
 
-/** An item of the log as a link: an issue ref to its page, `rule` to the Rules. */
-function itemLink(item) {
-  if (item === "rule") return `<a href="#rules">rule</a>`;
-  const m = /^(.+)-(\d+(?:\.\d+)?)$/.exec(item);
-  return m ? idLink(item, `#/issues/${encodeURIComponent(m[1])}/${encodeURIComponent(m[2])}`) : esc(item || "–");
+/** An ID of the log in its short form, as a link to its issue page: a job ID links to its subject's. Other text stays text. */
+function idHtml(id) {
+  const p = parseId(parseJob(id)?.subject ?? id);
+  return p ? idLink(shownId(id), `#/issues/${encodeURIComponent(p.repo)}/${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`, { title: String(id) }) : esc(shownId(id) || "–");
 }
 
-/** The log, newest first, filtered by `by` (you, rule, firefighter, gate) from the address; `limit` rows show. */
+/** The content of an event, `contentText`, with each ID as a link and the file's base name in mono with its full path as the title. */
+function contentHtml(e) {
+  const ids = new Map([e.on ?? []].flat().map((x) => [shownId(x), x]));
+  const file = e.file && String(e.file).split("/").at(-1);
+  return contentText(e).split(" ").map((t) => (ids.has(t) ? idHtml(ids.get(t)) : t === file ? `<code title="${esc(e.file)}">${esc(t)}</code>` : esc(t))).join(" ");
+}
+
+/** The log, newest first, filtered by `by` (an actor) from the address; `limit` rows show. A row's note opens with its button. */
 export function renderLog(d, by, limit = PAGE) {
-  const pick = Object.keys(BY).find((k) => k.toLowerCase() === by) ?? "All";
-  const filter = filterBar([{ name: "by", label: "By", value: pick === "All" ? "" : pick.toLowerCase(), options: [{ value: "", label: "All" }, ...Object.keys(BY).map((k) => ({ value: k.toLowerCase(), label: k }))] }]);
-  const entries = d.log.entries.filter((e) => pick === "All" || e.by === pick);
+  if (d.codes) setCodes(d.codes);
+  const pick = Object.hasOwn(BY, by ?? "") ? by : "";
+  const filter = filterBar([{ name: "by", label: "By", value: pick, options: [{ value: "", label: "all" }, ...Object.keys(BY).map((k) => ({ value: k, label: k }))] }]);
+  const entries = d.log.entries.filter((e) => !pick || e.by === pick);
   const rows = entries.slice(0, limit).map((e) => {
-    const m = /^([^:]+): ([\s\S]*)$/.exec(e.what);
-    const what = m ? m[2] : e.what;
-    return `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td>${m ? esc(m[1]) : "–"}</td><td class="what">${what.length > 180 ? clamp(esc(what)) : esc(what)}</td><td class="num">${e.count || 1}</td></tr>`;
+    const subject = e.action === "changed" && !parseId(e.subject) ? `<a href="#rules">${esc(e.subject)}</a>` : idHtml(e.subject);
+    return `<tr><td class="time">${esc(e.times ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${subject}</td><td>${esc(e.action || "–")}</td><td>${esc(e.sub ?? "")}</td>` +
+      `<td class="what">${contentHtml(e)}${e.note ? clamp(esc(e.note)) : ""}</td><td class="num">${e.times || 1}</td></tr>`;
   }).join("");
   return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}${filter}` +
-    (rows ? dataTable(heads(["Logged", "By", "Item", "Action", "What", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
+    (rows ? dataTable(heads(["Logged", "By", "Subject", "Action", "Sub", "Content", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
 }
 
 /** Load /api/gates again and draw the page with it. */

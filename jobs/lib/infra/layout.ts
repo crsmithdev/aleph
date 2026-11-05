@@ -6,6 +6,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { event, type Event } from "../../../lib/naming.ts";
 
 export interface Layout { store: string; ledger: string; factory: string }
 
@@ -27,6 +28,21 @@ export function factoryLog(line: string): void {
   const dir = layout().factory;
   mkdirSync(dir, { recursive: true });
   appendFileSync(join(dir, "tick.log"), `${new Date().toISOString()} ${line}\n`);
+}
+
+/** One event in tick.log: the time, a space, and the event as JSON. `event()` checks its words first, so a bad word throws. */
+export function logEvent(e: Parameters<typeof event>[0]): Event {
+  const ev = event(e);
+  const dir = layout().factory;
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(join(dir, "tick.log"), `${ev.at} ${JSON.stringify(ev)}\n`);
+  return ev;
+}
+
+/** The event in the rest of a tick.log line (after the time), or null for a text line. */
+export function eventOf(rest: string): Event | null {
+  if (!rest.startsWith("{")) return null;
+  try { return JSON.parse(rest); } catch { return null; }
 }
 
 /** The whole tick.log, or "" when there is none. */

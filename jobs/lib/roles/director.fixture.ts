@@ -62,6 +62,8 @@ export const reply = (actions: object[], text?: object) => writeFileSync(join(ba
 export const replyWith = (o: object | string) => writeFileSync(join(base, "reply.json"), typeof o === "string" ? o : result(o));
 export const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
 export const log = () => readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8");
+/** The events of tick.log, oldest first: its JSON lines. */
+export const events = () => log().split("\n").filter((l) => l.includes(" {")).map((l) => JSON.parse(l.slice(l.indexOf(" ") + 1)));
 
 /** A branch off main that changes `file`. */
 export function branch(name: string, file: string, content = "x\n"): void {

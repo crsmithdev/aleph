@@ -12,7 +12,8 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { factoryLog, layout } from "../infra/layout.ts";
+import { layout, logEvent } from "../infra/layout.ts";
+import { SUBS, word, type Event } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
@@ -214,10 +215,16 @@ export function revoke(reason: string): void {
   if (!(reason in s)) return;
   delete s[reason];
   write(s);
-  factoryLog(`always: revoked ${reason}`);
+  logEvent({ by: "human", subject: reason, action: "changed", sub: askSub(reason), to: "human", note: "set to Ask me" });
 }
 
-export const logAlways = (reason: string, action: string, ref: string): void => factoryLog(`always: ${reason}: ${action} on ${ref}`);
+/** The sub of an event about an Ask reason: the reason, its new word or its first word, when one of them is in SUBS. `run-cap` is `capped`, `intake-failed` is `intake`. */
+export const askSub = (reason: string): string | undefined => [reason, word("ask", reason), reason.split("-")[0]].find((w) => SUBS.includes(w));
+
+/** The log event of an Always rule that acted on `ref`: `action` is what it did, from ACTIONS. */
+export const logAlways = (reason: string, ref: string, action: string, more: Partial<Event> = {}): void => {
+  logEvent({ by: "rule", subject: ref, action, sub: askSub(reason), ...more });
+};
 
 // Setting an Ask on an issue.
 
