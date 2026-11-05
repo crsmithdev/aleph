@@ -151,7 +151,7 @@ test("may: Chris takes the actions the card offers, on a run and on an issue", (
   expect(may("chris", "decide", plain)).toBeNull();
   expect(may("chris", "answer", plainAsk("held-path", "x"), { run: true })).toBe("its held-path Ask offers no answer");
   expect(may("chris", "land", plainAsk("held-path", "x"), { run: true })).toBeNull();
-  expect(may("chris", "rerun", plainAsk("spec-check", "x"))).toBeNull();
+  expect(may("chris", "rerun", plainAsk("no-commit", "x"))).toBeNull();
   expect(may("chris", "answer", { ...plain, reason: "nope" }, { run: true })).toBe("its nope Ask offers no answer");
   expect(may("chris", "answer", undefined, { run: true })).toBe("it has no Ask");
 });
@@ -198,4 +198,9 @@ test("askFromRun marks the run asked, and with a spec the run waits for a spec e
   } finally {
     rmSync(e.folder, { recursive: true, force: true });
   }
+});
+
+test("ASK_REASONS names no reason that no code raises, and a stored one reads as a question", () => {
+  for (const k of ["proposal", "triage-failed", "host-check", "spec-check", "acceptance-failed"]) expect(Object.keys(ASK_REASONS)).not.toContain(k);
+  expect(reasonOf("triage-failed")).toBe("question");
 });

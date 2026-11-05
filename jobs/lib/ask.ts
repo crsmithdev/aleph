@@ -54,26 +54,19 @@ const proposal: Reason = { kind: "approval", name: "Lesson", actions: ["approve"
 
 /**
  * Every reason the factory asks Chris. The first group is the spec's Ask reasons. The second group is kept as it was,
- * because the spec names no new home for it: run-cap, acceptance-failed and the `proposal-<kind>:<place>` keys.
+ * because the spec names no new home for it: run-cap and the `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
   "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "held" },
   "review": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "review" },
-  "proposal": { kind: "approval", name: "Proposal", actions: ["start", "deny"], always: "" },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
   "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question" },
   "no-commit": { kind: "input", name: "No commit", actions: ["rerun", "close"], always: "" },
   "part-dropped": { kind: "input", name: "Part dropped", actions: ["rerun", "close"], always: "" },
   "intake-failed": { kind: "input", name: "Intake failed", actions: ["retry", "close"], always: "retry" },
-  // Read only: Asks from before intake (4 Nov 2026) keep them.
-  "triage-failed": { kind: "input", name: "Triage failed", actions: ["retry", "close"], always: "retry" },
-  "host-check": { kind: "input", name: "Manual check", actions: ["checked", "deny"], always: "" },
-  // Read only, as triage-failed.
-  "spec-check": { kind: "input", name: "Spec check", actions: ["rerun", "close"], always: "" },
   "rescue": { kind: "input", name: "Question", actions: ["decide", "drop"], always: "recommended" },
   // Not Ask reasons of the spec; no new home is named for them.
   "run-cap": { kind: "input", name: "Run cap", actions: ["rerun", "close"], always: "" },
-  "acceptance-failed": { kind: "input", name: "Acceptance failed", actions: ["rerun", "close"], always: "" },
   "proposal-check": proposal,
   "proposal-claude-md": proposal,
   "proposal-skill": proposal,

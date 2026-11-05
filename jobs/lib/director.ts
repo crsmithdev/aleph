@@ -173,12 +173,11 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
 /**
  * Why this Ask is on the escalation list, or null when the director may decide it. Fixed rules, not the model's
  * judgement: a memory proposal, a land of a run that changes a security path or bun.lock (or a held run whose branch
- * cannot be read), a host check (host access is off), and a second run-cap or rescue Ask on a goal the director already
+ * cannot be read), and a second run-cap or rescue Ask on a goal the director already
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
 export function escalation(c: Case, rec: Decision[] = readRecord()): string | null {
   if (c.at === "lesson" || c.ask.reason.startsWith("proposal-")) return "a memory proposal is Chris's";
-  if (c.ask.reason === "host-check") return "a host check is Chris's while host access is off";
   if (ONCE_PER_GOAL.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
     return `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris`;
   const b = actionsOf(c).includes("land") ? branchOf(c) : null;

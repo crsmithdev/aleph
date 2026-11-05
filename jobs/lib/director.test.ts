@@ -75,19 +75,20 @@ test("actions that leave the Ask open send it to Chris when the run ends", async
   expect(asked(1)!.situation).toContain("its actions left the Ask open");
 });
 
-test("the escalation list: a land on a security path and a host check get case text and no action", async () => {
-  fresh([{ title: "held", goal: true }, { title: "check", ask: plainAsk("host-check", "look at the dashboard") }]);
+test("the escalation list: a land on a security path gets case text and no action; a stored host-check Ask is not on it", async () => {
+  fresh([{ title: "held", goal: true }, { title: "check", ask: { ...plainAsk("question", "look at the dashboard"), reason: "host-check" } }]);
   branch(`b${n}`, "hooks/x.ts");
   const folder = run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "Land it?", options: [], why: [] }, branch: `b${n}` });
   reply([{ do: "land" }, { do: "answer", note: "checked" }]);
   const out = await direct();
   expect(out.map((d) => [d.ref, d.outcome, d.why])).toEqual([
-    [`${key}-2`, "escalated", "a host check is Chris's while host access is off"],
+    [`${key}-2`, "decided", undefined],
     [`${key}-1`, "escalated", "the run changes hooks/x.ts, a security path or bun.lock, so its land is Chris's"],
   ]);
-  expect(out.every((d) => d.applied.length === 0 && d.refused.every((r) => r.endsWith("the Ask is on the escalation list")))).toBe(true);
+  expect(out[1].applied).toEqual([]);
+  expect(out[1].refused.every((r) => r.endsWith("the Ask is on the escalation list"))).toBe(true);
   expect(landed).toEqual([]);
-  expect(awaitsChris(`${key}-2`)).toBe(true);
+  expect(awaitsChris(`${key}-2`)).toBe(false);
   expect(readRun(folder)!.ask!.situation).toStartWith("The director did not decide this Ask");
   expect(prompt()).toContain("This Ask is on the escalation list");
 });

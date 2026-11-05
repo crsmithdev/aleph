@@ -61,9 +61,9 @@ const GOALS_DOTTED: Row[] = [
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedGoal("fac", n, 1); landGoal(n, `${n}.1`); return a;
   } },
-  { name: "dotted goal: awaiting its Ask while a trailer commit on main names it", stage: "awaiting", why: /input: acceptance-failed/, build: async () => {
+  { name: "dotted goal: awaiting its Ask while a trailer commit on main names it", stage: "awaiting", why: /input: run-cap/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("acceptance-failed", "it failed twice")); landGoal(n, `${n}.1`); return a;
+    const a = seedGoal("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landGoal(n, `${n}.1`); return a;
   } },
   { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });

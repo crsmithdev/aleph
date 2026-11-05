@@ -62,14 +62,14 @@ beforeAll(async () => {
     // fac-2: one goal that waits for approval; fac-3: an issue that awaits input; fac-4: a new issue.
     const two = add(doc, "Needs a go-ahead", { request: "Ask first.\n" });
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
-    setAsk(refIn(doc.repo!, g), { kind: "approval", reason: "proposal", question: "Update left-pad?", options: [], why: [] });
+    setAsk(refIn(doc.repo!, g), { kind: "input", reason: "question", question: "Update left-pad?", options: [], why: [] });
     const three = add(doc, "A part was dropped", { request: "Plan it.\n" });
     setAsk(refIn(doc.repo!, three), { kind: "input", reason: "part-dropped", question: "A goal was dropped.", options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed", why: [] });
     add(doc, "Just filed", { request: "New.\n" });
     return true;
   }, true);
   run("20261031-000001-fac-fac-1.2-build", { kind: "build", job: "fac-1.2", name: "fac-1.2", condition: "running", on: "fac-1.2" });
-  run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", condition: "awaiting", on: "fac-5", ask: { kind: "input", reason: "triage-failed", question: "Triage gave no verdict.", options: [], why: [] } });
+  run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", condition: "awaiting", on: "fac-5", ask: { kind: "input", reason: "no-commit", question: "Triage gave no verdict.", options: [], why: [] } });
   run("20261031-000003-fac-fac-2.1-build", { kind: "build", job: "fac-2.1-r", name: "fac-2.1-r", condition: "awaiting", on: "fac-2.1", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "ask", reason: "judgement" } });
   run("20261031-000004-fac-fac-1.1-build", { kind: "build", job: "fac-1.1", name: "fac-1.1", condition: "landed", on: "fac-1.1", commit: "abcdef1234567", ended: ago(1) });
   ({ server, stop } = await withServer({ warm: false }));
@@ -93,9 +93,9 @@ describe("/api/state on a work-model store", () => {
   });
 
   test("the Always list is always.json under the new reasons", () => {
-    writeFileSync(join(factory, "always.json"), JSON.stringify({ "triage-failed": { action: "retry", at: "2026-10-30T00:00:00.000Z" } }));
+    writeFileSync(join(factory, "always.json"), JSON.stringify({ "intake-failed": { action: "retry", at: "2026-10-30T00:00:00.000Z" } }));
     try {
-      expect((state(now) as any).always).toEqual([{ reason: "triage-failed", action: "retry", at: "2026-10-30T00:00:00.000Z" }]);
+      expect((state(now) as any).always).toEqual([{ reason: "intake-failed", action: "retry", at: "2026-10-30T00:00:00.000Z" }]);
     } finally { rmSync(join(factory, "always.json")); }
   });
 });

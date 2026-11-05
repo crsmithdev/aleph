@@ -59,15 +59,15 @@
       "kind": "issue",
       "source": "chris",
       "ask": "input",
-      "reason": "host-check",
+      "reason": "question",
       "question": "Check this on the host."
     },
     {
       "title": "Add a dry-run flag",
       "kind": "issue",
       "source": "chris",
-      "ask": "approval",
-      "reason": "proposal",
+      "ask": "input",
+      "reason": "question",
       "question": "Add a dry-run flag"
     },
     {
@@ -241,12 +241,12 @@
       "title": "Support a second input file",
       "kind": "issue",
       "source": "chris",
-      "ask": "approval",
-      "reason": "proposal",
+      "ask": "input",
+      "reason": "question",
       "question": "Support a second input file",
-      "situation": "This proposal asks for a second input file on the digest command. It touches the argument parser and the report writer. It does not start until you approve it; denying it closes the proposal.",
-      "effects": ["start :: Makes the proposal a goal, and the factory starts it on the next free slot.", "deny :: Closes the proposal and records your reason; nothing is built."],
-      "recommend": "start :: the change is small and the parser already takes a list"
+      "situation": "This proposal asks for a second input file on the digest command. It touches the argument parser and the report writer. It does not start until you decide; denying it closes the question.",
+      "effects": ["decide :: Records your choice, and the factory starts the work on the next free slot.", "deny :: Records your refusal; nothing is built."],
+      "recommend": "decide :: the change is small and the parser already takes a list"
     }
   ]
 }

@@ -17,22 +17,21 @@ const CASE = (actions: string[], rec: string) => ({
 });
 const issueAsk = (n: number, reason: string, o: object = {}) => ({ id: `aleph-${n}`, title: `Issue ${n}`, status: "open", href: `#/issues/aleph/${n}`, labels: [], notes: 0, created: "", updated: "", reason, question: "q", ...o });
 
-/** One escalated Ask of each kind: a held run, an issue's question, a no-commit stop and a host check. */
+/** One escalated Ask of each kind: a held run, an issue's question, and a no-commit stop. */
 const four = () => asksOf(
   [job({ name: "aleph-27", condition: "awaiting", reason: "held path hooks/x.ts", item: { id: 27, title: "Digest" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })],
   [
     issueAsk(41, "question", { ask: { kind: "input", reason: "question", question: "A or B?", options: [], why: [], ...CASE(["decide", "deny"], "decide") } }),
     issueAsk(42, "no-commit", { ask: { kind: "input", reason: "no-commit", question: "q", options: [], why: [], ...CASE(["rerun", "close"], "rerun") } }),
-    issueAsk(43, "host-check", { ask: { kind: "input", reason: "host-check", question: "q", options: [], why: [], ...CASE(["checked", "deny"], "checked") } }),
   ], []);
 const card = (row: string) => row.match(/^<article[^]*<\/article>$/)![0];
 
 test("one card per kind: the title opens with the kind label, and the tag names the stop", () => {
   const items = four();
   expect(items.map((i) => [i.reason, i.card, i.tag])).toEqual([
-    ["held-path", "approve", "Security change"], ["question", "decide", "Your choice"], ["no-commit", "unstick", "No change"], ["host-check", "hand", "Manual check"],
+    ["held-path", "approve", "Security change"], ["question", "decide", "Your choice"], ["no-commit", "unstick", "No change"],
   ]);
-  for (const [i, label] of items.map((x, k) => [x, ["Approve", "Decide", "Unstick", "By hand"][k]] as const)) {
+  for (const [i, label] of items.map((x, k) => [x, ["Approve", "Decide", "Unstick"][k]] as const)) {
     const row = card(view.askRow(i, "2026-10-27T17:00:00Z"));
     expect(row).toContain(`data-card="${i.card}"`);
     expect(row).toContain(`<span class="t"><b class="ask-kind">${label}:</b> <span class="ask-title">the doc-claim check in the verify gate</span></span>`);

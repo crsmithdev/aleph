@@ -56,20 +56,15 @@ export type Card = "approve" | "decide" | "unstick" | "hand";
 const CARDS: Record<string, { card: Card; tag: (c: Ctx) => string }> = {
   "held-path": { card: "approve", tag: (c) => (/\b(bun\.lock|package\.json)\b/.test(c.run?.reason ?? "") ? "Package change" : "Security change") },
   review: { card: "approve", tag: () => "Review stuck" },
-  proposal: { card: "approve", tag: () => "Proposal" },
   "proposal-check": { card: "approve", tag: () => "Memory: check" },
   "proposal-claude-md": { card: "approve", tag: () => "Memory: instructions" },
   "proposal-skill": { card: "approve", tag: () => "Memory: skill" },
   question: { card: "decide", tag: (c) => (c.run ? "Builder's question" : "Your choice") },
-  "spec-check": { card: "decide", tag: () => "Spec problem" },
   "part-dropped": { card: "decide", tag: () => "Part dropped" },
   "no-commit": { card: "unstick", tag: () => "No change" },
   "run-cap": { card: "unstick", tag: () => "Looping" },
   "intake-failed": { card: "unstick", tag: () => "Can't take in" },
-  "triage-failed": { card: "unstick", tag: () => "Can't sort" },
-  "acceptance-failed": { card: "unstick", tag: () => "Failed final check" },
   rescue: { card: "unstick", tag: () => "Stalled" },
-  "host-check": { card: "hand", tag: () => "Manual check" },
 };
 /** The text a row shows: the Ask of its run or issue, else the stored text of its lesson. */
 const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effects" | "recommend"> | undefined => {
@@ -77,18 +72,6 @@ const askIn = (c: Ctx): Pick<Ask, "headline" | "situation" | "details" | "effect
   if (ask) return ask;
   const l = c.lesson;
   return l?.situation ? { headline: l.headline, situation: l.situation, details: l.details, effects: l.effects, recommend: l.recommend } : undefined;
-};
-/** The first sentence of the note behind a check, cleaned. */
-const noteOf = (c: Ctx): string => {
-  const raw = String(c.run?.reason ?? c.run?.question ?? c.issue?.question ?? "");
-  return (/^(.*?[.!?])(\s|$)/s.exec(clean(raw))?.[1] ?? clean(raw)).replace(/[.!?]$/, "");
-};
-
-const failure = (note: string): string => {
-  const m = /^(?:triage: no verdict|Triage gave no route) in \d+ runs?:\s*(.*)$/.exec(unlead(note));
-  const why = (m?.[1] ?? "").trim();
-  if (/^malformed verdict/.test(why)) return "it gave a verdict that could not be read";
-  return clean(why.replace(/^failed:\s*/, "")).replace(/\.$/, "") || "it gave no verdict";
 };
 
 const PROBLEM: Record<string, (c: Ctx) => string> = {
@@ -103,15 +86,10 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   },
   question: (c) => c.run ? `The worker on ${c.id} asked: ${clean(c.run.question) || "it needs an answer"}` : sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
   "part-dropped": (c) => `A goal of ${c.id} was dropped and no other goal of it is open.`,
-  "spec-check": (c) => `The spec check found that the spec of ${c.id} cannot be met as written: ${clean(c.issue?.question).replace(/\.$/, "")}.`,
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
   "run-cap": (c) => `The factory started ${c.id} 3 times in one hour, so it stopped starting it until you run it again.`,
   "intake-failed": (c) => `Intake of ${c.id} failed: ${clean(unlead(c.issue?.question ?? "").replace(/^Intake failed:\s*/, "")).replace(/\.$/, "") || "it gave no verdict"}, so no one has decided what to do with this issue.`,
-  "triage-failed": (c) => `Triage of ${c.id} failed twice: ${failure(c.issue?.question ?? "")}, so no one has decided what to do with this issue.`,
-  "acceptance-failed": (c) => `${c.id} is the acceptance follow-up of a goal, and it also failed acceptance on main.`,
   rescue: (c) => sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
-  proposal: () => "This work is a proposal, and it does not start until you approve it.",
-  "host-check": (c) => `This check is against a live system, so you run it on this machine: ${noteOf(c) || "the check"}.`,
 };
 /** What a proposal changes and where, in the words of its buttons and hints. */
 function words(l: Lesson | undefined) {
@@ -132,11 +110,9 @@ for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) 
 
 /** `rerun` by what it does for each reason. */
 const RERUN: Record<string, { label: string; hint: string }> = {
-  "spec-check": { label: "Start the goal", hint: "Clears the Ask and starts the goal. If you edited the spec, the spec check reads the new spec first." },
   "no-commit": { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the goal." },
   "part-dropped": { label: "Close as done", hint: "Sets the issue to done; nothing more runs for it." },
   "run-cap": { label: "Start it again", hint: "Clears the Ask and lets the factory start the goal again." },
-  "acceptance-failed": { label: "Start it again", hint: "Clears the Ask and lets the factory start the goal again." },
 };
 const rerun = (reason: string, args: Record<string, string>): Action => {
   const r = RERUN[reason] ?? { label: "Start it again", hint: "Clears the label and lets the factory start the goal again." };
@@ -158,14 +134,7 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
       case "retry": return [a("retriage", "Run intake again", "Removes the Ask; intake runs again at once.", issue)];
       case "close": return [a("close", "Close the issue", "Marks the issue dropped; nothing more runs for it.", issue)];
       case "deny":
-        if (reason === "proposal") return [a("deny", "Drop the proposal", "Marks the issue dropped; the work does not start.", issue)];
-        if (reason === "host-check") return [a("deny", "Drop the check", "Marks the issue dropped; no one runs the check.", issue)];
         return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
-      case "start": return [a("decide", "Start the work", "Makes the issue a goal, and the factory starts it.", { ...issue, approve: "true" })];
-      case "checked":
-        return [a("checked", "Mark it checked", reason === "host-check"
-          ? `Records that you ran this check yourself: ${noteOf(c) || "the check"}. It runs nothing and tests nothing.`
-          : "Closes the issue as done; use this after the check has run.", issue)];
       case "approve":
         if (c.lesson) { const w = words(c.lesson); return [a("approve", w.approve, `Files the goal that ${w.hint}.`, { id: c.id })]; }
         return [a("approve", "File the goal", "Files the proposal as a goal for the factory.", { id: c.id })];

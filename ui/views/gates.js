@@ -1,7 +1,7 @@
 // The Gates view: what can stop, hold or ask. Each render function takes the /api/gates object and returns an HTML
-// string, so tests can call them. The shell's click handler (index.html) runs the Pause, Resume and "Mark it checked"
-// buttons and the Waiting-for-you buttons; `mount` runs the rule switches and "Mark all done".
-import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, repoIdLink, sectionHead, when } from "../lib.js";
+// string, so tests can call them. The shell's click handler (index.html) runs the Pause and Resume buttons
+// and the Waiting-for-you buttons; `mount` runs the rule switches.
+import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, sectionHead, when } from "../lib.js";
 import { askRow } from "./now.js";
 
 export const view = {
@@ -27,17 +27,12 @@ export const redirect = (hash) => {
 export const REASONS = {
   "held-path": ["Lands on held paths", "A run that changes a held path, after its checks and review pass."],
   review: ["Reviewer holds", "The reviewer held the run and no fix rounds are left."],
-  proposal: ["Proposals", "Work that is a proposal, before it starts."],
   question: ["Questions", "A run or an intake stopped on a choice that the spec leaves open."],
   "no-commit": ["Runs with no commit", "The last 3 runs of a goal ended with nothing committed."],
   "part-dropped": ["Dropped parts", "A part of an issue was dropped and no other part is open."],
   "intake-failed": ["Failed intake", "Intake of an issue failed twice."],
-  "triage-failed": ["Failed triage", "Triage of an issue failed twice (before intake)."],
-  "host-check": ["Host checks", "A check against a live system on this machine, which Chris runs."],
-  "spec-check": ["Spec checks", "The spec check found a spec that cannot be met as written (before intake)."],
   rescue: ["Rescue of a stuck run", "A stuck run with more than one way out."],
   "run-cap": ["Run cap", "A goal started 3 times in one hour."],
-  "acceptance-failed": ["Failed acceptance", "The acceptance follow-up of a goal also failed acceptance."],
   "proposal-check": ["Proposed checks", "The correction memory proposes a check for a repo."],
   "proposal-claude-md": ["Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."],
   "proposal-skill": ["Proposed skill changes", "The correction memory proposes a change to a skill."],
@@ -55,7 +50,7 @@ export function renderGates(d, q = new URLSearchParams()) {
     ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
     : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
   return `<div class="page gates">${pageHead("Automation", { aside: ctl })}` +
-    renderNow(d) + renderWaiting(d) + renderChores(d) + renderRules(d) +
+    renderNow(d) + renderWaiting(d) + renderRules(d) +
     `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
@@ -93,23 +88,11 @@ export function renderNow(d) {
   return `<section id="gates-now" aria-label="Gates now">${sectionHead("Gates now", { aside: esc(line) })}<div class="gtiles">${tilesHtml}</div></section>`;
 }
 
-/** The Asks routed to Chris, as the Status page's cards. Host chores are in their own section. */
+/** The Asks routed to Chris, as the Status page's cards. */
 export function renderWaiting(d) {
   const rows = d.asks.map((i) => askRow(i, d.now)).join("");
   return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for you", { count: d.asks.length })}` +
     (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;
-}
-
-/** The host-check Asks as one checklist, each with its own "Mark it checked". */
-export function renderChores(d) {
-  const rows = d.chores.map((i) => {
-    const a = (i.actions ?? []).find((x) => x.act === "checked");
-    const btn = a?.args?.repo ? `<button class="act" type="button" data-act="checked" data-repo="${esc(a.args.repo)}" data-id="${esc(a.args.id)}" data-label="${esc(a.label)}" title="${esc(a.hint)}">${esc(a.label)}</button>` : "";
-    return `<div class="chore" data-id="${esc(i.id)}"><div class="chore-main">${repoIdLink(i.id, i.href, i.repo)} <span class="t">${esc(i.title)}</span><p class="quiet">${esc(i.problem)}</p></div><span class="quiet num">${esc(when(i.at))}</span><div class="actions">${btn}</div></div>`;
-  }).join("");
-  const all = rows ? `<button class="act" type="button" data-gates="all-done" data-label="Mark all done">Mark all done</button>` : "";
-  return `<section id="gates-chores" aria-label="Host chores">${sectionHead("Host chores", { count: d.chores.length, aside: all })}` +
-    (rows ? `<div class="chores">${rows}</div>` : empty("No host chore is open.")) + `</section>`;
 }
 
 /** One row per Ask reason: who decides it. Ask me, or the reason's one automatic mode. */
@@ -176,7 +159,7 @@ function say(el, text) {
   n.textContent = text;
 }
 
-/** The rule switches and "Mark all done". `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
+/** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
   root.onsubmit = async (e) => {
     const form = e.target.closest?.("form.capform");
@@ -206,25 +189,5 @@ export function mount(root) {
       await redraw(root);
       return;
     }
-    const all = e.target.closest?.('button[data-gates="all-done"]');
-    if (!all) return;
-    const items = [...root.querySelectorAll('#gates-chores button[data-act="checked"]')];
-    if (!all.classList.contains("ask")) {
-      all.classList.add("ask");
-      all.textContent = `Mark ${items.length} done? Click again`;
-      clearTimeout(all._t);
-      all._t = setTimeout(() => { all.classList.remove("ask"); all.textContent = all.dataset.label; }, 5000);
-      return;
-    }
-    clearTimeout(all._t);
-    all.disabled = true;
-    const failed = [];
-    for (const b of items) {
-      const res = await post(`/api/issues/${encodeURIComponent(b.dataset.repo)}/${encodeURIComponent(b.dataset.id)}/checked`).catch(() => null);
-      if (!res?.ok) failed.push(`${b.dataset.repo}-${b.dataset.id}`);
-    }
-    await redraw(root);
-    const again = root.querySelector('button[data-gates="all-done"]');
-    if (failed.length && again) say(again, `Not marked: ${failed.join(", ")}`);
   };
 }

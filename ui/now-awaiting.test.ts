@@ -33,22 +33,17 @@ const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } 
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
   if (reason.startsWith("proposal-")) return { runs: [] as any[], issues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
-    proposal: { reason: "proposal", question: "T" },
-    "host-check": { reason: "host-check", question: "triage: a live check: run it" },
     "no-commit": { reason: "no-commit", question: "ended with no commit, so the factory stopped" },
     "run-cap": { reason: "run-cap", question: "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it." },
-    "spec-check": { reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" },
     "intake-failed": { reason: "intake-failed", question: "Intake failed: the spec: the Oracle is empty" },
-    "triage-failed": { reason: "triage-failed", question: "triage: no verdict in 2 runs: failed: x" },
     "part-dropped": { reason: "part-dropped", question: "A goal was dropped." },
-    "acceptance-failed": { reason: "acceptance-failed", question: "acceptance: fail again" },
     rescue: { reason: "rescue", question: "Which one?", decision: { question: "Which?", options: [{ label: "A", line: "a" }], recommended: "A", kind: "input" as const, reason: "question", why: [] } },
   };
   return iss(q[reason]);
 };
 
 test("the deny and answer inputs render hidden", () => {
-  for (const reason of ["question", "host-check"]) {
+  for (const reason of ["question"]) {
     const sm = sample(reason);
     const row = withAttn({ ...state, stuck: [], factory: { ...state.factory, health: [] }, asks: attend(sm, sm.lessons).items }).match(/<article [^]*?<\/article>/)![0];
     const inputs = row.match(/<input [^>]*>/g) ?? [];

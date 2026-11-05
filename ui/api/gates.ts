@@ -1,5 +1,5 @@
 /**
- * `GET /api/gates`: what the Gates page shows. The gates now, the Asks that wait for Chris, the host chores, one rule per
+ * `GET /api/gates`: what the Gates page shows. The gates now, the Asks that wait for Chris, one rule per
  * Ask reason, the held paths, and the log of who decided what. Each part comes from the module that
  * owns it; this file only gathers them.
  * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
@@ -12,7 +12,7 @@ import { allJobs } from "../../jobs/lib/job.ts";
 import { readFactoryLog } from "../../jobs/lib/layout.ts";
 import { CAP_KEYS, LIVE_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
 import { reader } from "../../todo/lib/store.ts";
-import type { AskItem } from "../asks.ts";
+
 import { runCli } from "../cli.ts";
 import { sameSite, text } from "../http.ts";
 import { loadState } from "../state-load.ts";
@@ -23,19 +23,8 @@ import type { Routes } from "../server.ts";
 export const LOG_DAYS = 7, LOG_MAX = 200;
 const DAY = 86_400_000;
 
-/** The Ask reasons whose Asks are host chores: a step on this machine that Chris marks checked. */
-const CHORES = new Set(["host-check"]);
-
 export type By = "You" | "Rule" | "Director" | "Firefighter" | "Gate";
 export interface LogEntry { at: string; by: By; item: string; what: string; count?: number; first?: string }
-
-/** The Asks, split into the ones to decide and the host chores. One the director still holds shows with no action (asks.ts). */
-export function splitAsks(items: AskItem[]): { asks: AskItem[]; chores: AskItem[] } {
-  return { asks: items.filter((a) => !CHORES.has(a.reason)), chores: items.filter((a) => CHORES.has(a.reason)) };
-}
-
-/** The Ask reasons that no code outside tests raises: ask.ts marks triage-failed and spec-check read-only, and a search finds no raise site for the rest. */
-const UNRAISED = new Set(["acceptance-failed", "triage-failed", "spec-check", "host-check", "proposal"]);
 
 /**
  * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what always.json grants.
@@ -43,7 +32,7 @@ const UNRAISED = new Set(["acceptance-failed", "triage-failed", "spec-check", "h
  */
 export function rules() {
   const granted = readAlways();
-  return Object.entries(ASK_REASONS).filter(([reason]) => !UNRAISED.has(reason)).map(([reason, r]) => {
+  return Object.entries(ASK_REASONS).map(([reason, r]) => {
     const perPlace = reason.startsWith("proposal-");
     const g = granted[reason];
     return {
@@ -157,7 +146,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     gated: gates({ jobs }),
     baseline: baselineGate(),
     goalGates: goalGates(state.queued ?? []),
-    ...splitAsks(state.asks),
+    asks: state.asks,
     rules: rules(),
     ...security,
     repoHeld: repoHeld(),

@@ -218,13 +218,13 @@ describe("a goal that acceptance failed twice", () => {
       goalId = goal.id;
       return true;
     });
-    setAsk(`fac-${goalId}`, { kind: "input", reason: "acceptance-failed", question: "", options: [], why: [] });
+    setAsk(`fac-${goalId}`, { kind: "input", reason: "run-cap", question: "", options: [], why: [] });
     try {
       // The trailer commit on main names the goal; origin/main points at it, as a land would leave it.
       sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${goalId}`);
       sh(repo, "git", "update-ref", "refs/remotes/origin/main", sh(repo, "git", "rev-parse", "HEAD"));
       const s = state(now);
-      expect(s.asks.some((a) => a.id === `fac-${goalId}` && a.reason === "acceptance-failed")).toBe(true);
+      expect(s.asks.some((a) => a.id === `fac-${goalId}` && a.reason === "run-cap")).toBe(true);
       expect(s.queued.some((q) => q.id === goalId)).toBe(false);
       expect(s.done.some((d) => d.id === `fac-${goalId}`)).toBe(false);
     } finally {

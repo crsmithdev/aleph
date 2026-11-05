@@ -26,18 +26,13 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
   review: () => ofRuns(run("review", { reviewCall: { call: "back", reason: "tests are missing" } })),
   question: () => ofRuns(run("question", { question: "Which port?" })),
   "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })),
-  "spec-check": () => ofIssues(issue({ reason: "spec-check", question: "spec check: abc123 hold: the Oracle clause is outside the Edit surface" })),
   "run-cap": () => ofIssues(issue({ reason: "run-cap", question: RUN_CAP })),
   "intake-failed": () => ofIssues(issue({ reason: "intake-failed", question: "Intake failed: no verdict in 2 runs: failed: its process ended before a verdict" })),
-  "triage-failed": () => ofIssues(issue({ reason: "triage-failed", question: "triage: no verdict in 2 runs: failed: its process ended before a verdict" })),
   "part-dropped": () => ofIssues(issue({ reason: "part-dropped", decision: { ...decision, options: [{ label: "Close with what landed", line: "close" }, { label: "Plan the missing part", line: "plan" }], recommended: "Close with what landed" }, question: "A goal was dropped." })),
-  "acceptance-failed": () => ofIssues(issue({ reason: "acceptance-failed", question: "acceptance: fail again at abc: x | the Oracle command `bun test` still fails" })),
   rescue: () => ofIssues(issue({ reason: "rescue", decision, question: "Should it be A or B?" })),
-  proposal: () => ofIssues(issue({ title: "Update left-pad 1.2.0 to 1.3.0", reason: "proposal", askKind: "approval", question: "Update left-pad 1.2.0 to 1.3.0" })),
   "proposal-check": () => asks({ runs: [], issues: [] }, [lesson("check")]),
   "proposal-claude-md": () => asks({ runs: [], issues: [] }, [lesson("claude-md")]),
   "proposal-skill": () => asks({ runs: [], issues: [] }, [lesson("skill")]),
-  "host-check": () => ofIssues(issue({ reason: "host-check", question: "On the host, run `wsl.exe -l -q` and put it in place of `<distro>` at README.md:176." })),
 };
 
 describe("asks", () => {
@@ -70,15 +65,6 @@ describe("asks", () => {
     });
   }
 
-  test("the checked hint of host-check says it runs nothing", () => {
-    STORE = { situation: "Escalated." };
-    let h: string;
-    try { h = CASES["host-check"]().flatMap((i) => i.actions).find((a) => a.act === "checked")!.hint; } finally { STORE = undefined; }
-    expect(h).toContain("runs nothing");
-    expect(h).toContain("Records that you ran this check yourself");
-    expect(CASES["host-check"]()[0].problem).toBe("This check is against a live system, so you run it on this machine: On the host, run wsl.exe -l -q and put it in place of at.");
-  });
-
   test("an issue with a reason the table does not name is a question", () => {
     expect(ofIssues(issue({ reason: "nope", question: "what now?" }))[0].reason).toBe("question");
   });
@@ -86,10 +72,8 @@ describe("asks", () => {
   test("an old note's timestamp is not part of the detail or the Problem", () => {
     expect(clean("- 2026-10-27 12:34: which helper?")).toBe("which helper?");
     expect(clean("- 2026-10-27 12:34:56: triage: for Chris: pick one")).toBe("pick one");
-    const [t] = ofIssues(issue({ reason: "triage-failed", question: "- 2026-10-27 12:34: triage: no verdict in 2 runs: failed: its process ended before a verdict" }));
-    expect(t.problem).toBe("Triage of aleph-387 failed twice: its process ended before a verdict, so no one has decided what to do with this issue.");
-    const [q] = ofIssues(issue({ reason: "triage-failed", question: "Triage gave no route in 2 runs: failed: its process ended before a verdict" }));
-    expect(q.problem).toBe(t.problem);
+    const [t] = ofIssues(issue({ reason: "intake-failed", question: "- 2026-10-27 12:34: Intake failed: no verdict in 2 runs" }));
+    expect(t.problem).toBe("Intake of aleph-387 failed: no verdict in 2 runs, so no one has decided what to do with this issue.");
   });
 });
 

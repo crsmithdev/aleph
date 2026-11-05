@@ -985,11 +985,6 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .gdot.stop { background: var(--stuck); }
 .gates .hint { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--need); }
 .gates p.quiet { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.chores { border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); overflow: hidden; }
-.chore { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8) var(--sp-16); padding: var(--sp-12) var(--sp-16); border-top: 1px solid var(--rule-2); }
-.chore:first-child { border-top: 0; }
-.chore-main { flex: 999 1 420px; min-width: 0; overflow-wrap: anywhere; }
-.chore .t { font-weight: var(--fw-mid); }
 .rule code { font: var(--fs-xs) var(--mono); color: var(--muted); }
 .gates table.tbl td.rule-main { white-space: normal; }
 .rule .seg button[disabled] { cursor: wait; opacity: .6; }
