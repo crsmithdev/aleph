@@ -4,7 +4,8 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { plainAsk, setAsk, awaitsChris } from "./ask.ts";
+import { markAsked, plainAsk, setAsk, awaitsChris } from "./ask.ts";
+import { specVersion } from "./goal-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "./factory.ts";
 import { allRuns, loadRegistry, readRun } from "./ledger.ts";
@@ -189,4 +190,16 @@ test("a paused factory starts no director run", async () => {
   setPaused(true);
   try { expect(await directorStep(ports())).toEqual([]); } finally { setPaused(false); }
   expect(calls()).toBe(0);
+});
+
+test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
+  fresh([{ title: "goal", goal: true, body: "Old spec.", ask: plain("which wins?") }]);
+  const folder = run({ name: `${key}-1`, on: `${key}-1`, condition: "stuck" });
+  markAsked({ id: "w1", folder, run: { job: "w1" } as any }, "which wins?", specVersion(item(1)));
+  reply([{ do: "edit-goal", body: "A clearer spec." }]);
+  let dispatches = 0;
+  const [d] = await directAll([repo()], { ...ports(), dispatch: () => { dispatches++; } });
+  expect(d.applied).toEqual(["edit-goal (spec)"]);
+  expect(item(1).spec).toBe("A clearer spec.");
+  expect(dispatches).toBe(1);
 });

@@ -5,12 +5,13 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
-import { writeList } from "../../todo/lib/store.ts";
+import { readList, writeList } from "../../todo/lib/store.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
-import { plainAsk, setAsk, askOf } from "./ask.ts";
+import { markAsked, plainAsk, setAsk, askOf } from "./ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { setPaused, writeBaseline } from "./factory-status.ts";
 import { git } from "./git.ts";
+import { specVersion } from "./goal-spec.ts";
 import { loadRegistry, writeRun, type Repo } from "./ledger.ts";
 import { due, readTick, sweep, type SweepPorts } from "./tick.ts";
 
@@ -144,6 +145,24 @@ test("the sweep logs work that two ticks in a row saw as missed, once, and start
   expect(p.dispatches).toBe(1);
   setPaused(true);
   try { expect(await sweep(NOW + 3 * MIN, s, p)).toEqual([]); } finally { setPaused(false); }
+});
+
+test("the sweep logs a job that waits for a spec edit as missed once the spec moves, and starts one dispatch", async () => {
+  writeList({ key }, "seed", (doc) => { issues.add(doc, "goal", { spec: "Old spec." }); return true; }, true);
+  const folder = join(process.env.ALEPH_JOBS_DIR!, "w1");
+  mkdirSync(folder, { recursive: true });
+  writeRun(folder, { kind: "build", job: "w1", name: `${key}-1`, repo: key, on: `${key}-1`, condition: "stuck", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
+  markAsked({ id: "w1", folder, run: { job: "w1", name: `${key}-1`, repo: key, on: `${key}-1` } as any }, "which wins?", specVersion(issues.find(readList({ key })!, 1)!));
+  const p = sweepPorts();
+  const s = readTick();
+  expect(await sweep(NOW, s, p)).toEqual([]);
+  expect(await sweep(NOW + MIN, s, p)).toEqual([]);
+  expect(p.dispatches).toBe(0);
+  writeList({ key }, "edit", (doc) => { issues.find(doc, 1)!.spec = "New spec."; return true; });
+  expect(await sweep(NOW + 2 * MIN, s, p)).toEqual([]);
+  expect(await sweep(NOW + 3 * MIN, s, p)).toEqual([`edited:${key}-1`]);
+  expect(tickLog()).toContain(`missed: edited:${key}-1`);
+  expect(p.dispatches).toBe(1);
 });
 
 test("the sweep with nothing to move starts nothing", async () => {

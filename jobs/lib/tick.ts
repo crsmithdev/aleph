@@ -19,7 +19,7 @@ import { factoryLog } from "./layout.ts";
 import { allJobs, loadRegistry, type Entry, type Repo } from "./ledger.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "./monitor.ts";
-import { toRescue } from "./rescue.ts";
+import { editedWaits, toRescue } from "./rescue.ts";
 import { smokeStep } from "./smoke.ts";
 
 /** How often each step with a fixed period runs. */
@@ -74,6 +74,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   const keys = stalled(jobs, lists, doneChecker(false));
   for (const c of pendingCases(factoryRepos(), runs, lists)) if (!busy(runs, "director", c.on)) keys.push(`ask:${c.on}`);
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);
+  for (const j of editedWaits(jobs)) keys.push(`edited:${j[0].run.name}`);
   const seen = readStalls();
   writeStalls(Object.fromEntries(keys.map((k) => [k, seen[k] ?? new Date(now).toISOString()])));
   const over = keys.filter((k) => k in seen && !(k.startsWith("ingest:") && busy(runs, "intake", k.slice("ingest:".length))));

@@ -166,22 +166,26 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
   }
 }
 
+/** The open jobs whose last run waits for a spec edit and whose goal's spec is no longer the one it asked about. */
+export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
+  const last = lastReal(runs), r = last.run;
+  const waits = waitsForSpecEdit(last);
+  if (!waits || !r.repo || !isOpen(runs) || (r.condition !== "stuck" && r.condition !== "failed")) return false;
+  const issue = issueOf(runs);
+  const item = issue === undefined ? undefined : reader().item(r.repo, issue);
+  return !!loadRegistry()[r.repo] && !!item && issues.status(item) === "open" && !isVersion(item, waits.version);
+});
+
 /**
  * A run that ended with no commit and a question waits for a spec edit. When the goal's spec is no longer the one it asked
  * about, the run is dropped and the Ask comes off the item, so the next dispatch starts a run on the edited spec.
  */
 async function releaseEdited(act: Rescue): Promise<void> {
-  for (const runs of allJobs()) {
-    const last = lastReal(runs);
-    const r = last.run;
-    const waits = waitsForSpecEdit(last);
-    if (!waits || !r.repo || !isOpen(runs) || (r.condition !== "stuck" && r.condition !== "failed")) continue;
-    const repo = loadRegistry()[r.repo];
-    const { version: was, question } = waits;
-    const issue = issueOf(runs);
-    if (!repo || issue === undefined) continue;
-    const item = reader().item(repo.key, issue);
-    if (!item || issues.status(item) !== "open" || isVersion(item, was)) continue;
+  for (const runs of editedWaits(allJobs())) {
+    const r = lastReal(runs).run;
+    const { question } = waitsForSpecEdit(lastReal(runs))!;
+    const repo = loadRegistry()[r.repo!];
+    const issue = issueOf(runs)!;
     const release = await lock(`rescue-${r.repo}-${r.name}`, rescueWaitMs());
     if (!release) continue;
     try {

@@ -14,6 +14,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import * as jobRecord from "./record.ts";
 import { basename, dirname, join } from "node:path";
+import { dispatchDetached } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
 import * as verbs from "../../todo/lib/issues.ts";
@@ -483,10 +484,13 @@ const fallback = (why: string): Text => ({ situation: `The director did not deci
 export interface Ports {
   land: (name: string) => Promise<string | null>;
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
+  /** Starts a dispatch; a new spec starts its goal at once. */
+  dispatch?: () => void;
 }
 export const defaultPorts: Ports = {
   land: (name) => refusal(async () => { await (await landJob(name, { lander: "director" }, { output: "ignore" })).child?.exited; }),
   drop: (name, reason, fate) => refusal(() => dropJob(name, { reason, quiet: true, fate })),
+  dispatch: dispatchDetached,
 };
 
 /** The result of one action: applied (and whether it decides the Ask), or refused. */
@@ -592,6 +596,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
   const list = store.reader().list(repo.key);
   if (list && store.partsOf(list, item).length) return no(a, "it has parts");
   const why = await refusal(async () => verbs.edit(repo, n!, { ...(a.body !== undefined ? { spec: a.body } : {}), ...(a.after ? { after: a.after } : {}) }));
+  if (!why && a.body !== undefined) ports.dispatch?.();
   return why ? no(a, why) : done(a, false);
 }
 
