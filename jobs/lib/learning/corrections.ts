@@ -15,10 +15,10 @@ import { factoryLog } from "../infra/layout.ts";
 import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
 import { always, logAlways, type Ask } from "../asks/ask.ts";
 import { causeOf } from "../records/outcome.ts";
-import { file as fileIssues, type Place } from "../../../issues/lib/store.ts";
+import { writeList, type Place } from "../../../issues/lib/store.ts";
 import { PROPOSE_AT } from "../infra/settings.ts";
 import { cutTitle, writeLine, writeTitle } from "../roles/title.ts";
-import { titleProblem } from "../../../issues/lib/todo.ts";
+import { add, edit, find, parseIssueRef, setStatus, titleProblem } from "../../../issues/lib/todo.ts";
 
 export const CORRECTION_AT = 0.7;
 const WINDOW = 14 * 24 * 3600_000;
@@ -243,10 +243,10 @@ export async function mine(now = Date.now()): Promise<Store> {
   return store;
 }
 
-/** Every open lesson at PROPOSE_AT() signals becomes a proposal of the kind Jev finds, with a title and a target. A Jev failure leaves it open. */
+/** Every open lesson at PROPOSE_AT() signals becomes a proposal of the kind Jev finds, with a title, a target and its own parked issue. A Jev failure leaves it open. */
 async function propose(lessons: Lesson[]): Promise<Lesson[]> {
   const made: Lesson[] = [];
-  const todo = lessons.filter((l) => (l.state === "open" && l.count >= PROPOSE_AT()) || (l.state === "proposed" && !l.target));
+  const todo = lessons.filter((l) => (l.state === "open" && l.count >= PROPOSE_AT()) || (l.state === "proposed" && (!l.target || !l.issue)));
   if (!todo.length) return made;
   // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
   const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
@@ -268,9 +268,13 @@ async function propose(lessons: Lesson[]): Promise<Lesson[]> {
         l.state = "proposed";
         made.push(l);
       } else {
-        l.target = await targetOf(l, repo);
+        l.target ||= await targetOf(l, repo);
       }
       l.title ||= await writeTitle(l.sentence);
+      if (!l.issue) {
+        const n = fileLesson(l, repo);
+        if (n !== undefined) l.issue = `${repo.key}-${n}`;
+      }
     } catch (e) {
       factoryLog(`corrections: jev failed on proposal ${l.id}: ${(e as Error).message}`);
     }
@@ -313,6 +317,22 @@ export const proposals = (): Lesson[] => readStore().lessons.filter((l) => l.sta
 
 const KIND_TITLE: Record<Kind, string> = { check: "Add a check", "claude-md": "Add a CLAUDE.md line", skill: "Change a skill" };
 
+/** Files the lesson as a parked `proposal` issue in `repo`: its number, or undefined when the store refused. It holds no spec until Chris approves it. */
+function fileLesson(l: Lesson, repo: Place): number | undefined {
+  const title = l.title && !titleProblem(l.title) ? l.title : cutTitle(l.sentence);
+  try {
+    const w = writeList(repo, `memory: ${KIND_TITLE[l.kind ?? "skill"]}`, (doc) => {
+      const item = add(doc, title, { kind: "proposal", source: "memory" });
+      setStatus(item, "parked");
+      return item.id;
+    }, true);
+    return w?.value;
+  } catch (e) {
+    factoryLog(`corrections: filing the proposal ${l.id} failed: ${(e as Error).message}`);
+    return undefined;
+  }
+}
+
 /** The proposed lesson `id`, or why there is none. */
 function pending(store: Store, id: string, verb: string): Lesson | string {
   const l = store.lessons.find((x) => x.id === id);
@@ -321,7 +341,7 @@ function pending(store: Store, id: string, verb: string): Lesson | string {
   return l;
 }
 
-/** Files the goal issue for a proposal; its ref, or a refusal string. Writes no CLAUDE.md, skill or check. */
+/** Reopens the proposal's own issue with the goal spec; its ref, or a refusal string. Writes no CLAUDE.md, skill or check. */
 export function approve(id: string, repo: Place): string {
   const store = readStore();
   const l = pending(store, id, "approved");
@@ -346,24 +366,46 @@ export function approve(id: string, repo: Place): string {
     "",
     ...sections,
   ].join("\n");
-  let ids: number[];
+  // A lesson the mine filed no issue for, because it was proposed before this or its filing failed, gets its issue now.
+  const n = l.issue ? parseIssueRef(l.issue)?.id : fileLesson(l, repo);
+  if (n === undefined) return "the work store refused the issue";
   try {
-    ids = fileIssues(repo, `memory: ${KIND_TITLE[kind]}`, [{ title: l.title && !titleProblem(l.title) ? l.title : cutTitle(l.sentence), kind: "proposal", source: "memory", spec: body }]);
+    const w = writeList(repo, `memory: approved ${repo.key}-${n}`, (doc) => {
+      const item = find(doc, n);
+      if (!item) return null;
+      setStatus(item, "open");
+      edit(item, { spec: body });
+      return true;
+    });
+    if (!w) return `no issue ${repo.key}-${n} to approve`;
   } catch (e) {
     return `the work store refused: ${(e as Error).message}`;
   }
-  if (ids.length !== 1 || !ids[0]) return "the work store refused the issue";
   l.state = "approved";
-  l.issue = `${repo.key}-${ids[0]}`;
+  l.issue = `${repo.key}-${n}`;
   writeStore(store);
   return l.issue;
 }
 
-/** Marks a proposal declined for good; "" when done, else a refusal string. */
+/** Marks a proposal declined for good and drops its issue; "" when done, else a refusal string. */
 export function decline(id: string, now = Date.now()): string {
   const store = readStore();
   const l = pending(store, id, "declined");
   if (typeof l === "string") return l;
+  const ref = l.issue ? parseIssueRef(l.issue) : null;
+  if (ref) {
+    try {
+      const w = writeList({ key: ref.repo }, `memory: declined ${l.issue}`, (doc) => {
+        const item = find(doc, ref.id);
+        if (!item) return null;
+        setStatus(item, "dropped", undefined, "the memory proposal was declined");
+        return true;
+      });
+      if (!w) return `no issue ${l.issue} to drop`;
+    } catch (e) {
+      return `the work store refused: ${(e as Error).message}`;
+    }
+  }
   l.state = "declined";
   l.declinedAt = new Date(now).toISOString();
   writeStore(store);

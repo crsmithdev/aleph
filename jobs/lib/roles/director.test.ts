@@ -132,15 +132,26 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
 test("a memory proposal is on the escalation list: the director's case text goes on the lesson, and no action is taken", async () => {
   fresh();
   mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
-  const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", title: "Check x.ts", signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "you forgot x.ts", link: "" }] };
+  const issue = `${key}-1`;
+  const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", title: "Check x.ts", issue, signals: [{ id: "s1", source: "chris", at: "2026-10-01T00:00:00Z", quote: "you forgot x.ts", link: "" }] };
   writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "corrections.json"), JSON.stringify({ minedAt: "", lessons: [lesson] }));
   replyWith({ case: { situation: "The lesson says to check x.ts.", effects: [{ action: "approve", text: "Files a goal." }, { action: "decline", text: "Drops it." }], recommend: { action: "decline", why: "Too vague." } }, actions: [{ do: "note", text: "x" }] });
   const [d] = await direct();
-  expect(d).toMatchObject({ ref: "l-1", reason: "proposal-claude-md", outcome: "escalated", why: "a memory proposal is Chris's", applied: [] });
+  expect(d).toMatchObject({ ref: issue, on: issue, reason: "proposal-claude-md", outcome: "escalated", why: "a memory proposal is Chris's", applied: [] });
+  expect(directorRuns()[0].run.on).toBe(issue);
   const l = readStore().lessons[0];
   expect(l.situation).toBe("The lesson says to check x.ts.");
   expect(l.recommend).toEqual({ action: "decline", why: "Too vague." });
   expect(l.state).toBe("proposed");
+});
+
+test("a proposed lesson with no issue is no case", async () => {
+  fresh();
+  mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
+  const lesson = { id: "l-1", sentence: "Check x.ts first", state: "proposed", count: 3, kind: "claude-md", target: "global", signals: [] };
+  writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "corrections.json"), JSON.stringify({ minedAt: "", lessons: [lesson] }));
+  expect(await direct()).toEqual([]);
+  expect(calls()).toBe(0);
 });
 
 test("closing or dropping an issue Chris filed is refused; the same on an agent's issue is applied", async () => {

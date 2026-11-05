@@ -59,7 +59,7 @@ const ALLOWED = ["Read", "Grep", "Glob", ...["status", "log", "show", "diff", "l
 
 // The cases.
 
-/** One Ask with no case text: on a store item, on a waiting run, or a proposed lesson. `on` is the item's ref, the run's folder name or the lesson's id. */
+/** One Ask with no case text: on a store item, on a waiting run, or a proposed lesson. `on` is the item's ref, the run's folder name or the lesson's issue ref. */
 export type Case =
   | { at: "item"; on: string; repo: Repo; item: issues.Issue; ask: Ask }
   | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue }
@@ -95,9 +95,10 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
     const item = m && m[1] === repo!.key ? lists.item(repo!.key, m[2].includes(".") ? m[2] : Number(m[2])) ?? undefined : undefined;
     out.push({ at: "run", on: entry.id, repo, entry, ask: r.ask!, ...(item ? { item } : {}) });
   }
+  // A proposal is a case only once its issue is in the store: that issue is the case's subject.
   for (const lesson of proposals()) {
-    if (lesson.state !== "proposed" || !lesson.kind || lesson.situation?.trim()) continue;
-    out.push({ at: "lesson", on: lesson.id, repo: repos[0], lesson });
+    if (lesson.state !== "proposed" || !lesson.kind || !lesson.issue || lesson.situation?.trim()) continue;
+    out.push({ at: "lesson", on: lesson.issue, repo: repos[0], lesson });
   }
   return out;
 }

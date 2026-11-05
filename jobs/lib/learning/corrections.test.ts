@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList } from "../../../issues/lib/store.ts";
-import { section, titleProblem } from "../../../issues/lib/todo.ts";
-import { approve, explainLesson, mine, proposals, readStore } from "./corrections.ts";
+import { section, status, titleProblem } from "../../../issues/lib/todo.ts";
+import { approve, decline, explainLesson, mine, proposals, readStore } from "./corrections.ts";
 import { missingSections } from "../roles/issue-spec.ts";
 import { storeRepos } from "../../../tests/git-fixture.ts";
 import { writeRun } from "../records/ledger.ts";
@@ -122,12 +122,34 @@ test("a proposed lesson without target gets title and target on the next mine", 
   expect(proposals()[0].title!.length).toBeGreaterThan(0);
 });
 
-test("an approved claude-md proposal files a spec with Goal, Edit surface and Oracle", async () => {
+test("a proposed lesson files its own parked proposal issue", async () => {
+  pickFirst = true;
+  await mine(NOW);
+  const items = readList(repo)!.items;
+  expect(items.length).toBe(1);
+  expect(items[0].fm.kind).toBe("proposal");
+  expect(status(items[0])).toBe("parked");
+  expect(stored().lessons[0].issue).toBe("fac-1");
+});
+
+test("decline drops the proposal's issue", async () => {
+  pickFirst = true;
+  await mine(NOW);
+  expect(decline(proposals()[0].id)).toBe("");
+  expect(stored().lessons[0].state).toBe("declined");
+  expect(status(readList(repo)!.items[0])).toBe("dropped");
+});
+
+test("an approved claude-md proposal reopens its issue with a spec with Goal, Edit surface and Oracle", async () => {
   pickFirst = true; checkP = 0.4; ruleP = 0.5; scope = "repo";
   await mine(NOW);
   const l = proposals()[0];
+  expect(l.issue).toBe("fac-1");
   expect(approve(l.id, repo)).toBe("fac-1");
-  const [item] = readList(repo)!.items;
+  const items = readList(repo)!.items;
+  expect(items.length).toBe(1);
+  const [item] = items;
+  expect(status(item)).toBe("open");
   expect(missingSections(item.spec)).toEqual([]);
   expect(section(item.spec, "Goal")).toContain(l.sentence);
   expect(section(item.spec, "Edit surface")).toBe("- CLAUDE.md");
