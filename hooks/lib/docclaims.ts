@@ -3,7 +3,7 @@
  * It reads the turn's entries and the docs the turn writes, not the docs on disk: a turn with no such
  * claim is not checked, whatever the docs say. docs/verify-gate.md, decision 10. It names:
  * - a claim with no run after the last edit that reads a doc and compares it with the code;
- * - the values a claim gives (backticked text, numbers) that no such run's visible output shows;
+ * - the values a claim gives (backticked text, numbers) that no such run's visible output shows, unless a doc-claims run says every claim matches;
  * - a cited `file:line` that no run's visible output shows;
  * - a code file that a claim, or a line "as the code on main has them" that the turn wrote (by an edit tool or a Bash heredoc or redirect), names
  *   and that no tool call other than an edit touches.
@@ -106,7 +106,8 @@ export function docClaimProblems(entries: Entry[], message: string): string[] {
     });
     if (!comparing.length) {
       problems.push(`no run after the last edit reads the doc and compares it with the code, so nothing backs ${claims.slice(0, 3).map(quote).join(", ")}`);
-    } else {
+    } else if (!comparing.some((c) => /\b(aleph|bun\s+jobs\/cli\.ts)\s+doc-claims\b/.test(String(c.input.command ?? "")) && c.visible.includes("every checked doc claim matches the code"))) {
+      // A passing doc-claims run backs every value a claim gives.
       const shown = comparing.map((c) => c.out).join("\n").toLowerCase();
       const values = new Set<string>();
       for (const s of claims) {

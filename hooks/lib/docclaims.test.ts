@@ -63,4 +63,14 @@ describe("docClaimProblems", () => {
     expect(p.join()).toContain("jobs/lib/transitions/factory.ts");
     expect(p.join()).not.toContain("clock.ts");
   });
+  test("a passing doc-claims run backs the claims' values; a grep that does not show them, a failing run and an unseen file:line do not", () => {
+    const msg = "This run printed every cited code line with a `file:line` prefix, and the doc text matches each one.\n- `bun jobs/cli.ts doc-claims`: every checked doc claim matches the code";
+    const run = (out: string) => [...edit(), ...bash("bun jobs/cli.ts doc-claims", out)];
+    expect(docClaimProblems(run("every checked doc claim matches the code"), msg)).toEqual([]);
+    const e = [...edit(), ...bash("grep -n act-msg docs/design.md ui/lib.js", "docs/design.md:40: act-msg line")];
+    expect(docClaimProblems(e, msg).some((p) => p.includes("`file:line`") && p.includes("no visible output"))).toBe(true);
+    expect(docClaimProblems(run("2 doc claims the code does not back"), msg).join()).toContain("file:line");
+    const m = msg.replace("matches each one", "matches each one, as ui/lib.js:12 shows");
+    expect(docClaimProblems(run("every checked doc claim matches the code"), m).join()).toContain("ui/lib.js:12");
+  });
 });
