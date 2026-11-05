@@ -136,3 +136,44 @@ test("an outcome joins the tier or fixed row of its role and model; one that mat
   expect(row(both, "Worker")).toMatch(/<td>gpt-oss-20b<\/td><td class="num">10<\/td><td class="num warn">60%.*role=worker&condition=failed/);
   expect(row(both, "Worker low")).not.toContain("60%");
 });
+
+const th = (h: string) => [...h.matchAll(/<th( class="num")?>([^<]+)</g)].map((m) => [m[2], !!m[1]]);
+const one = { role: "worker", model: "haiku", runs: 1234, succeeded: 1, failed: 0, stuck: 0, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 };
+
+test("the Roles headers are in Title Case, and every number header has num", () => {
+  const heads = th(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } }));
+  expect(heads).toContainEqual(["First Pass", true]);
+  expect(heads).toContainEqual(["Reviewer Pass", true]);
+  expect(heads.filter(([, n]) => n).length).toBe(8);
+});
+
+test("a Roles count goes through count()", () => {
+  expect(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } })).toContain('<td class="num">1,234</td>');
+});
+
+test("a Roles row with no outcome shows a dash in every cell, with num on the number cells", () => {
+  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  expect(html).toContain(`<tr><td>Director</td><td>fable</td>${'<td class="num">–</td>'.repeat(8)}<td>–</td></tr>`);
+});
+
+test("an empty Roles table shows the empty line", () => {
+  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } });
+  expect(html).toContain('<div class="empty"><p>No agent ran in this window.</p></div>');
+  expect(html).not.toContain("<table");
+});
+
+test("a failed load shows the error state", () => {
+  expect(renderFactoryAgents(S, { error: "no data" })).toContain('<div class="error" role="alert"><p>no data</p>');
+});
+
+test("the chart cards are in Title Case and keep their aria labels", () => {
+  const html = renderFactoryAgents(S, E);
+  for (const [t, l] of [["Agents Live by Role", "Agents live by role"], ["Outcomes by Role", "Outcomes by role"], ["Cost by Model", "Cost by model"]]) {
+    expect(html).toContain(`<h2>${t}</h2>`);
+    expect(html).toContain(`aria-label="${l}"`);
+  }
+});
+
+test("the cost axis labels go through money()", () => {
+  expect(costOption(E).yAxis.axisLabel.formatter(1.5)).toBe("$1.50");
+});

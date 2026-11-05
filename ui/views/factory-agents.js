@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, cardTrend, chart, dataTable, dur, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { barsOption, card, cardTrend, chart, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
@@ -23,9 +23,9 @@ const TIERS = { "worker-low": ["Worker low", "haiku"], "worker-medium": ["Worker
 const FIXED = [["Intake", "opus"], ["Review", "opus"], ["Monitor", "opus"], ["Director", "fable"]];
 
 function roles(a, m) {
-  const num = ["Runs", "Success", "p50", "Cost", "First pass", "Reviewer pass", "Pass", "Fail"];
+  const num = ["Runs", "Success", "p50", "Cost", "First Pass", "Reviewer Pass", "Pass", "Fail"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
-  const cell = (v) => `<td class="num">${v ?? "–"}</td>`;
+  const cell = (v) => `<td class="num">${v == null ? "–" : count(v)}</td>`;
   const up = m?.local === "up";
   const outs = a.outcomes ?? [];
   // The outcome row for a config row: the one of its role and current model, when no other config row claims it.
@@ -36,7 +36,7 @@ function roles(a, m) {
     return o;
   };
   const stats = (o) => {
-    if (!o) return "<td></td>".repeat(num.length + 1);
+    if (!o) return `${cell(null).repeat(num.length)}<td>–</td>`;
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
     return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed runs</a></td>`;
@@ -53,7 +53,7 @@ function roles(a, m) {
   };
   const config = m ? tierRows.map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${stats(find(n.toLowerCase(), model))}</tr>`).join("") : "";
   const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${esc(o.model)}</td>${stats(o)}</tr>`).join("");
-  return dataTable(heads(["Role", "Model", ...num, "Jobs"], num), rows);
+  return rows ? dataTable(heads(["Role", "Model", ...num, "Jobs"], num), rows) : empty("No agent ran in this window.");
 }
 
 const legend = { top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
@@ -87,6 +87,7 @@ export function costOption(d) {
   const models = [...new Set((d.buckets ?? []).flatMap((b) => Object.keys(b.cost ?? {})))].sort();
   const o = stacked(barsOption(d.buckets.map((b) => xLabel(b.at, d.window)), models.map((m) => ({ name: m, data: d.buckets.map((b) => b.cost?.[m] ?? 0) }))));
   o.yAxis.minInterval = 0;
+  o.yAxis.axisLabel = { ...o.yAxis.axisLabel, formatter: money };
   o.tooltip.valueFormatter = money;
   return o;
 }
@@ -105,11 +106,11 @@ const labels = (d) => {
 /** The page body. `d` is /api/speed for the window, or null while it loads. */
 export function renderFactoryAgents(s, d, _key = "live", window = "week", m = null) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
-  const wait = d?.error ? `<p>${esc(d.error)}</p>` : loadingLine("the agents");
+  const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const scope = scopeBar(projectNow(), win), l = a ? labels(d) : null;
   const box = (k) => `<div class="chartbox" data-chart="${k}" role="img" aria-label="${esc(l[k])}"></div>`;
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
-    (a ? `<div class="trio">${card("Agents live by role", box("live"))}${card("Outcomes by role", box("outcomes"))}${card("Cost by model", box("cost"))}</div>` : card("Agents", wait)) +
+    (a ? `<div class="trio">${card("Agents Live by Role", box("live"), { label: "Agents live by role" })}${card("Outcomes by Role", box("outcomes"), { label: "Outcomes by role" })}${card("Cost by Model", box("cost"), { label: "Cost by model" })}</div>` : card("Agents", wait)) +
     card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
 }
 
