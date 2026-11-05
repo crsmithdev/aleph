@@ -1,7 +1,7 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { dur, esc, money, shortModel, tag, when } from "./lib.js";
+import { legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -148,7 +148,7 @@ export function renderTimeline(segments) {
   if (!rows.length) return "";
   const x = compactScale(times);
   const used = new Set(rows.flatMap((r) => [...r.bars.map((b) => b.tone), ...r.waits.map((w) => (w.chris ? "chris" : "wait")), ...(r.marks ?? []).map((m) => m.tone)]));
-  const key = Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => `<li class="t-${k}"><i></i>${esc(v)}</li>`).join("");
+  const key = Object.entries(LEGEND).filter(([k]) => used.has(k)).map(([k, v]) => [v, `t-${k}`]);
   // A tick near the end ends at its time, so it stays inside the axis.
   const ticks = axisTimes(times, x).map((t) => `<span${x(t) > 0.9 ? ' class="end"' : ""} style="left:${pct(x(t))}%">${esc(timeOf(t))}</span>`).join("");
   const at = (a, b) => `left:${pct(x(a))}%;width:${pct(Math.max(0.004, x(b) - x(a)))}%`;
@@ -167,7 +167,7 @@ export function renderTimeline(segments) {
     return list.length ? `<div class="dp-evs">${list.map((e) => `<div class="dp-ev"><span class="dp-at">${esc(timeOf(e.at))}</span><span>${tag(e.tag, e.tone)}</span>${evt(e.html)}</div>`).join("")}</div>` : "";
   };
   const row = (r) => `<div class="dp-row"><div class="dp-tl"><div class="dp-head">${r.head}</div>${lane(r)}<span class="dp-res">${r.result ?? ""}</span><span class="num">${esc(r.time ?? "–")}</span><span class="num">${esc(r.cost ?? "–")}</span></div>${events(r.events)}</div>`;
-  return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2><ul class="dp-key">${key}</ul></div>` +
+  return `<section class="dp-panel dp-timeline" aria-labelledby="h-timeline"><div class="dp-ph"><h2 id="h-timeline">Timeline</h2>${legendHtml(key)}</div>` +
     `<div class="dp-scroll"><div class="dp-tl dp-axis"><span>Long spans are compressed</span><div class="dp-ticks">${ticks}</div><span>Result</span><span class="num">Time</span><span class="num">Cost</span></div>` +
     segments.filter((s) => s.rows.length).map((s) => `<div class="dp-seg"><h3>${esc(s.title)}</h3>${s.aside ? `<span class="quiet">${esc(s.aside)}</span>` : ""}</div>${s.rows.map(row).join("")}`).join("") +
     `</div></section>`;

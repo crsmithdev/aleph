@@ -101,8 +101,9 @@ describe("the timeline panel", () => {
     expect(h).toContain("<h3>Work</h3>");
     expect(h).toContain('<a class="dp-bar t-build" href="#/jobs/fac-1"');
     expect(h).toContain("Long spans are compressed");
-    expect(h).toContain('<li class="t-chris">');
-    expect(h).not.toContain('<li class="t-bad">');
+    expect(h).not.toContain("dp-key");
+    expect(h).toContain('<ul class="legend"><li><i class="t-wait"></i>waiting</li><li><i class="t-chris"></i>');
+    expect(h).not.toContain('<i class="t-bad">');
     expect(h).toContain("&lt;b&gt;x&lt;/b&gt;");
     expect(h).not.toContain("<b>x");
     expect(renderTimeline([])).toBe("");

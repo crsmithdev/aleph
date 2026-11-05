@@ -351,6 +351,7 @@ describe("views", () => {
     expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><span class="count">last week<\/span>/);
     expect(page).toContain("<h2>Time to Close</h2>");
     for (const l of ["Open backlog, filed and closed, last week", "Time to close"]) expect(page).toContain(`aria-label="${l}"`);
+    for (const k of ["backlog", "close", "tests"]) expect(page).toMatch(new RegExp(`<div class="chartbox" data-chart="${k}" role="img" aria-label="[^"]+"></div>`));
     expect(page).not.toContain("30 days");
   });
 

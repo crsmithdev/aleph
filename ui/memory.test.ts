@@ -103,6 +103,8 @@ test("the views render and the note route is wired", () => {
     types: { semantic: { memory: null, notes: [{ title: "Use Bun", kind: "decision", scope: "aleph" }], start: {}, last: "" } } });
   for (const t of ["Use Bun", "#/memory/Use%20Bun", "Counts by kind and scope", "50%", "Search titles, aliases and bodies"]) expect(h).toContain(t);
   for (const t of ["<h3>When Recall Last Returned Each Note</h3>", '<h3>Notes by Kind</h3><span class="count">1</span>', "<h3>Recall Misses, 7 Days</h3>", "<h2>Factory Memory Gates</h2>", "<h2>Recent Writes</h2>", 'aria-label="Factory memory gates"', 'aria-label="Recent writes"']) expect(h).toContain(t);
+  expect(h).toContain('<ul class="legend"><li><i class="c-use"></i>Last 7 days</li><li><i class="c-stale"></i>Earlier</li><li><i class="c-never"></i>Never</li></ul>');
+  expect(h).not.toContain('class="key"');
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   expect(nh).toContain("Linked From");

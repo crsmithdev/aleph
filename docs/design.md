@@ -220,7 +220,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:527`) with `heads()` (`ui/lib.js:530`) or `sortHead()` (`ui/lib.js:640`), styled by `table.tbl` (`ui/app.css:442`). Every table goes through `dataTable()`.
+The one table is `dataTable()` (`ui/lib.js:527`) with `heads()` (`ui/lib.js:530`) or `sortHead()` (`ui/lib.js:650`), styled by `table.tbl` (`ui/app.css:442`). Every table goes through `dataTable()`.
 
 Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:442`):
 
@@ -228,9 +228,9 @@ Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:442`):
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:448`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:454`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `--sp-6 --sp-12 --sp-6 0`, a `--rule-2` line under each row, and `--sunk` on row hover (`ui/app.css:443`). Headers are `600 var(--fs-xs)` in `--muted`.
-- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼` (`ui/lib.js:642`).
-- **Pager:** `pager()` (`ui/lib.js:634`) shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
-- **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:851`) and shows the rest on click.
+- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼` (`ui/lib.js:652`).
+- **Pager:** `pager()` (`ui/lib.js:644`) shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
+- **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:849`) and shows the rest on click.
 - **Wide tables:** `.tscroll` (`ui/app.css:466`) scrolls sideways.
 - **Empty table:** `empty()` (`ui/lib.js:67`) in place of the table.
 
@@ -250,7 +250,7 @@ Columns of the main tables:
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:201`) |
-| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:641`) |
+| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:638`) |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
 
@@ -260,8 +260,8 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `cha
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
 - **Bars:** `barsOption()` (`ui/lib.js:554`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `barsOption()` (`ui/views/factory-agents.js:87`).
-- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js:566`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `stackedAreaOption()` (`ui/views/factory-agents.js:64`).
-- **Range bars:** `rangeBarOption()` (`ui/lib.js:592`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
+- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js:576`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `stackedAreaOption()` (`ui/views/factory-agents.js:64`).
+- **Range bars:** `rangeBarOption()` (`ui/lib.js:602`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: p50 and p90 areas per bucket, with 0 for a bucket with no time; a strip with one dot per issue linking to the issue, with the time on a base-60 log axis that starts at 1m unless a time is under a minute and the filing time on the vertical axis (an issue with no filing time has no dot); and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue, each linking to the issue (for Lead Time an issue has a row per slow stage). Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Agents page:** three charts of the same height in one row (`liveOption`, `outcomesOption`, `costOption` in `ui/views/factory-agents.js`), drawn by `chart()` with the theme tokens: live agents by role as a stacked area, one series per timed role in `--series-1` to `--series-5`; outcomes by role as stacked horizontal bars of succeeded, failed and stuck; and cost by model as stacked columns per bucket, from `buckets[].cost` in `/api/speed`. Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Alerts section (Status page):** one section, "Alerts", holds the Asks and the stuck, failed and error cards. The cards are one full-width column, as the Asks are. Each card has the Ask card structure (`ask-box` with the meta row, then the fold, then the buttons); a stuck, failed or error card uses the red `unstick` tone. The id, priority, date and runtime sit inside the box and show while the fold is closed. The status line links `#awaiting` (Asks) and `#jobs-stuck` (stuck jobs) point at the two lists of the section.
@@ -269,7 +269,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `cha
 - **Meters:** `meter()` (`ui/lib.js:537`) draws every share bar, one share or segments, as `.meter` (`ui/app.css:760`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
 - **Bar lists:** `barRow()` (`ui/lib.js:545`) and `barList()` (`ui/lib.js:551`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:350`) and `priorityBadge()` (`ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
-- **Efficiency bar:** `.obar` (`ui/app.css:878`), in the five `--seg-*` colours under white text.
+- **Efficiency bar:** `.obar` (`ui/app.css:876`), in the five `--seg-*` colours under white text.
 - **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:108`. Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:564`), and each option names its series.
 
 ## Metric cards
@@ -331,7 +331,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 - **Shell:** a sidebar (`#nav`, `ui/app.css:562`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:30`); the sidebar collapses to 48px on desktop (`ui/app.css:578`) and its state is kept in `localStorage` (`ui/index.html:47`, `51`).
 - **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:209`, `ui/app.css:536`).
-- **Skeleton:** `pageHead()` (`ui/lib.js:295`) with the serif title and a muted count, then `card()` sections (`ui/lib.js:523`) with a `sectionHead()` (`ui/lib.js:645`); Status has its own `.shead` (`ui/app.css:210`). A detail page starts with `crumb()` (`ui/lib.js:337`).
+- **Skeleton:** `pageHead()` (`ui/lib.js:295`) with the serif title and a muted count, then `card()` sections (`ui/lib.js:523`) with a `sectionHead()` (`ui/lib.js:655`); Status has its own `.shead` (`ui/app.css:210`). A detail page starts with `crumb()` (`ui/lib.js:337`).
 - **Grid:** `.tiles` (`ui/app.css:721`) holds the metric cards (see Metric cards); `.lanes` (`ui/app.css:189`) is 3 columns, 2 at 1100px and below (`ui/app.css:530`), 1 at 720px and below (`ui/app.css:532`).
 - **Phone:** at 720px and below, 11 `@media` queries change the layout; tables scroll inside `.tscroll` (`ui/app.css:466`). What each table does at a phone width was not seen in a browser.
 
@@ -354,7 +354,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:642`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:505`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:652`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:505`).
 
 ## Components
 

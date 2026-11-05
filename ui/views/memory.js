@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
+import { legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -188,7 +188,7 @@ function readChart(rows) {
     const w = (x) => ((x / of.length) * 100).toFixed(2);
     return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${week} in the last 7 days, ${older} earlier, ${never} never`) });
   }).join("");
-  return sectionHead("When Recall Last Returned Each Note", { level: 3 }) + `<div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div>${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
+  return sectionHead("When Recall Last Returned Each Note", { level: 3 }) + `${legendHtml([["Last 7 days", "c-use"], ["Earlier", "c-stale"], ["Never", "c-never"]])}${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
 }
 const oldest = (rows) => rows.map((n) => n.read).filter(Boolean).sort()[0] ?? "";
 /** The recency alone, for a note with a refusal too. */
@@ -223,7 +223,7 @@ function renderBroad(m) {
   const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.")) +
     `<details class="fold"><summary>Every finding</summary>${renderHealth(m)}</details>`, { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
   const t = { ...EMPTY_TYPES, ...(m.types ?? {}) };
-  const gates = card("Factory Memory Gates", `<div class="key"><span>${t.gates.corrections.length} corrections</span><span>${t.gates.proposals.length} proposals</span></div>` +
+  const gates = card("Factory Memory Gates", legendHtml([[`${t.gates.corrections.length} corrections`], [`${t.gates.proposals.length} proposals`]]) +
     `<details class="fold" id="gates"><summary>Corrections and proposals</summary>${renderGates(t.gates)}</details>`, { label: "Factory memory gates" });
   const writes = card("Recent Writes", renderWrites({ writes: (m.writes ?? []).slice(0, 5) }) +
     ((m.writes ?? []).length > 5 ? `<details class="fold"><summary>${m.writes.length - 5} more</summary>${renderWrites({ writes: m.writes.slice(5) })}</details>` : ""), { count: (m.writes ?? []).length, label: "Recent writes" });

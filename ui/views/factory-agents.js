@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, cardTrend, chart, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, legend, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { barsOption, card, cardTrend, chartBox, mountCharts, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, legend, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
@@ -107,7 +107,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const scope = scopeBar(projectNow(), win), l = a ? labels(d) : null;
-  const box = (k) => `<div class="chartbox" data-chart="${k}" role="img" aria-label="${esc(l[k])}"></div>`;
+  const box = (k) => chartBox(k, l[k]);
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
     (a ? `<div class="trio">${card("Agents Live by Role", box("live"), { label: "Agents live by role" })}${card("Outcomes by Role", box("outcomes"), { label: "Outcomes by role" })}${card("Cost by Model", box("cost"), { label: "Cost by model" })}</div>` : card("Agents", wait)) +
     card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
@@ -137,7 +137,7 @@ export const view = {
       drawn = [];
       if (!d?.agents || !globalThis.echarts) return;
       const t = readTokens(), opts = { live: liveOption(d, t), outcomes: outcomesOption(d, t), cost: costOption(d) };
-      for (const el of root.querySelectorAll(".chartbox")) drawn.push(chart(el, opts[el.dataset.chart]));
+      drawn.push(...mountCharts(root, opts).values());
     };
     root.onchange = async (e) => {
       const b = e.target.closest?.("#roles [data-tier]");

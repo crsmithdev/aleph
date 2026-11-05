@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -46,6 +46,36 @@ test("chart on() attaches a handler that survives a re-theme", () => {
   } finally {
     Object.assign(g, keep);
   }
+});
+
+test("chartBox() gives a box a role and a label, mountCharts() draws the boxes with an option, and legendHtml() one item per entry", () => {
+  expect(chartBox("a", 'Uses "x"', "perday")).toBe('<div class="chartbox perday" data-chart="a" role="img" aria-label="Uses &quot;x&quot;"></div>');
+  const g = globalThis as any;
+  const made: any[] = [];
+  const keep = { echarts: g.echarts, matchMedia: g.matchMedia, ResizeObserver: g.ResizeObserver, getComputedStyle: g.getComputedStyle, document: g.document };
+  g.echarts = {
+    registerTheme() {},
+    init(el: unknown) {
+      const c: any = { el, getOption: () => ({}), setOption(o: unknown) { c.option = o; }, dispose() {}, resize() {} };
+      made.push(c);
+      return c;
+    },
+  };
+  g.matchMedia = () => ({ addEventListener() {}, removeEventListener() {} });
+  g.ResizeObserver = class { observe() {} disconnect() {} };
+  g.getComputedStyle = () => ({ getPropertyValue: () => "" });
+  g.document = { documentElement: {} };
+  const boxes = ["a", "b"].map((k) => ({ dataset: { chart: k } }));
+  try {
+    const charts = mountCharts({ querySelectorAll: () => boxes }, { a: { x: 1 } });
+    expect([...charts.keys()]).toEqual(["a"]);
+    expect(made.map((c) => [c.el, c.option])).toEqual([[boxes[0], { x: 1 }]]);
+  } finally {
+    Object.assign(g, keep);
+  }
+  const h = legendHtml([["One", "c-use"], ["Two"]]);
+  expect(h.match(/<li>/g)).toHaveLength(2);
+  expect(h).toContain('<i class="c-use"></i>One');
 });
 
 test("failMessage shows the reason from the body", () => {

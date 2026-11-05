@@ -188,6 +188,10 @@ test("the skill detail uses section heads and fit tables", async () => {
   const detail = v.renderSkill((await get("/api/skills/aleph:pickup")).body);
   expect(detail).toContain('<div class="sh"><h2>Projects</h2>');
   for (const t of ["<h2>Uses per Day</h2>", "<th>First Prompt Line</th>", "<th>Started by</th>", "<th>Time</th><th>Session</th><th>First Prompt Line</th>", "<h2>Tools Called After It, in the Same Turn</h2>", 'aria-label="Uses per day"', 'aria-label="Tools called after it, in the same turn"']) expect(detail).toContain(t);
+  expect(detail).toMatch(/<div class="chartbox perday" data-chart="aleph:pickup" role="img" aria-label="[^"]+"><\/div>/);
+  const o = v.perDayOption([1, 0, 2], "2026-11-01");
+  expect(o.xAxis.show).not.toBe(false);
+  expect(o.yAxis.show).not.toBe(false);
   expect(detail).not.toContain("<h3>");
   expect(detail).not.toContain("<style");
 });

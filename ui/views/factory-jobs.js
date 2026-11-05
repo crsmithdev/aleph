@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chart, day, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, legend, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chartBox, mountCharts, day, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, legend, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
@@ -92,9 +92,9 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const scope = renderScope(jobs ?? [], { ...f, window: f.window ?? (f.days ? undefined : d.window) });
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: scope })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
-    `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p><div class="chartbox" data-chart="trend" role="img" aria-label="${esc(label(d, key, sentence(name), "p50 and p90 trend"))}"></div>`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
-    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome: its time across, its filing time up.</p><div class="chartbox" data-chart="strip" role="img" aria-label="${esc(label(d, key, sentence(name), "time per issue"))}"></div>`, { label: `${sentence(name)}: time per issue` }) +
-    card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p><div class="chartbox" data-chart="slowest" role="img" aria-label="${esc(label(d, key, sentence(name), "slowest 10"))}"></div>`) + `</div>` +
+    `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p>${chartBox("trend", label(d, key, sentence(name), "p50 and p90 trend"))}`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
+    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome: its time across, its filing time up.</p>${chartBox("strip", label(d, key, sentence(name), "time per issue"))}`, { label: `${sentence(name)}: time per issue` }) +
+    card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p>${chartBox("slowest", label(d, key, sentence(name), "slowest 10"))}`) + `</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Runs", "p50", "p90"], ["Runs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
     card("Build Time by Model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
@@ -136,15 +136,10 @@ export const view = {
       drawn = [];
       if (!globalThis.echarts) return;
       const t = readTokens(), opts = { trend: trendOption(d, key, t), strip: stripOption(d, key, t), slowest: slowestOption(d, key) };
-      for (const el of root.querySelectorAll(".chartbox")) {
-        const c = chart(el, opts[el.dataset.chart]);
-        if (el.dataset.chart === "strip") c.on("click", (p) => { if (p.data?.href) location.hash = p.data.href; });
-        if (el.dataset.chart === "slowest") {
-          const top = slowest(d, key);
-          c.on("click", (p) => { const h = p.data?.href ?? (p.componentType === "yAxis" ? top.find((r) => r.label === p.value)?.href : null); if (h) location.hash = h; });
-        }
-        drawn.push(c);
-      }
+      const made = mountCharts(root, opts), top = slowest(d, key);
+      made.get("strip")?.on("click", (p) => { if (p.data?.href) location.hash = p.data.href; });
+      made.get("slowest")?.on("click", (p) => { const h = p.data?.href ?? (p.componentType === "yAxis" ? top.find((r) => r.label === p.value)?.href : null); if (h) location.hash = h; });
+      drawn.push(...made.values());
     };
     wire();
     wireJobs(root, () => jobsNow(hashQuery()));

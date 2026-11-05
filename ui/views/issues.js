@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -355,9 +355,9 @@ function renderDetail(rows, o) {
 }
 
 /** The two charts under the tiles, on every tile. */
-const renderCharts = (o) => `<div class="trio">${card("Open Backlog, Filed and Closed", '<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p><div class="chartbox" data-chart="backlog"></div>', { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
-  `${card("Time to Close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>', { label: "Time to close" })}` +
-  `${card("Tests", '<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p><div class="chartbox" data-chart="tests"></div>', { cls: "wide" })}</div>`;
+const renderCharts = (o) => `<div class="trio">${card("Open Backlog, Filed and Closed", `<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p>${chartBox("backlog", "Open backlog by priority, filed and closed per bucket")}`, { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
+  `${card("Time to Close", `<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p>${chartBox("close", "Days from filed to closed: p50 bar and p90 tick")}`, { label: "Time to close" })}` +
+  `${card("Tests", `<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p>${chartBox("tests", "Tests per suite run and tests that passed only on rerun")}`, { cls: "wide" })}</div>`;
 
 // ---- The filters ----
 
@@ -413,13 +413,10 @@ function draw(root) {
   for (const c of drawn) c.dispose();
   drawn = [];
   const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
-  const panel = (name, option) => { const el = root.querySelector(`.chartbox[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
   const win = live.o().window, now = new Date();
-  panel("backlog", backlogOption(backlog(rows, win, now), flow(rows, win, now)));
   const close = closeTimes(rows, win, now), note = root.querySelector("[data-close-note]");
   if (note) note.textContent = `${close.unit === "hours" ? "Hours" : "Days"} from filed to closed: the bar is p50, the tick p90.`;
-  panel("close", closeOption(close, readTokens()));
-  panel("tests", testsOption(live.tests, live.o().project, win, now));
+  try { drawn.push(...mountCharts(root, { backlog: backlogOption(backlog(rows, win, now), flow(rows, win, now)), close: closeOption(close, readTokens()), tests: testsOption(live.tests, live.o().project, win, now) }).values()); } catch (e) { console.error("inventory chart failed", e); }
 }
 
 /** Fill what follows the filters. A filter changes no route, so nothing fetches again. */

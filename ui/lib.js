@@ -562,6 +562,16 @@ export const barsOption = (labels, series, { labels: showValues = false } = {}) 
 
 /** The legend of every chart: one line at the top that scrolls when its items do not fit, so it never covers the grid. */
 export const legend = { type: "scroll", top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
+/** The HTML legend: one `<li>` per `[label, cls]`; a `cls` gives the item a swatch that CSS colours. */
+export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls]) => `<li>${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}</li>`).join("")}</ul>`;
+/** The box a chart draws into. `key` finds its option again in `mountCharts`; `label` states its data for a screen reader. */
+export const chartBox = (key, label, cls = "") => `<div class="chartbox${cls ? ` ${cls}` : ""}" data-chart="${esc(key)}" role="img" aria-label="${esc(label)}"></div>`;
+/** Draw each chart box under `root` whose key is in `options` (key to ECharts option); returns the charts by key. */
+export function mountCharts(root, options) {
+  const out = new Map();
+  for (const el of root.querySelectorAll(".chartbox[data-chart]")) if (options[el.dataset.chart]) out.set(el.dataset.chart, chart(el, options[el.dataset.chart]));
+  return out;
+}
 /** The ECharts option for areas stacked over categories on the left axis, and `lines` over the same categories on the right axis. Each series is `{name, data}`; the first area is at the bottom. */
 export const stackedAreaOption = (labels, series, lines = []) => ({
   animation: false,

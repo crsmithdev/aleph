@@ -764,8 +764,8 @@ button.barrow:focus-visible { outline: 2px solid var(--focus); outline-offset: -
 .barrow.top .meter > i:not([class]) { background: var(--hot); }
 .tbl td:has(> .meter) { width: 40%; }
 .c-use { background: var(--run); } .c-stale { background: var(--muted); } .c-never { background: var(--rule); } .c-err { background: var(--stuck); }
-.key { display: flex; flex-wrap: wrap; gap: var(--sp-4) 14px; font-size: var(--fs-xs); color: var(--muted); }
-.key span { display: inline-flex; align-items: center; gap: var(--sp-6); } .key i { width: 10px; height: 10px; border-radius: var(--r-hair); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--sp-4) 14px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--muted); }
+.legend li { display: inline-flex; align-items: center; gap: var(--sp-6); } .legend i { width: 10px; height: 10px; border-radius: var(--r-hair); }
 tr.rowlink { position: relative; }
 tr.rowlink td.wide a { color: inherit; text-decoration: none; }
 tr.rowlink td.wide a::after { content: ""; position: absolute; inset: 0; }
@@ -808,10 +808,8 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-sub .bad { color: var(--stuck); }
 .dp-v { font: var(--fw-text) var(--fs-2xl)/1.15 var(--metric); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .dp-v.text { font: var(--fw-text) var(--fs-lg)/1.4 var(--sans); padding-top: var(--sp-4); }
-.dp-key { display: flex; flex-wrap: wrap; gap: var(--sp-4) 14px; margin: 0; padding: 0; list-style: none; font-size: var(--fs-xs); color: var(--muted); }
-.dp-key li { display: inline-flex; align-items: center; gap: var(--sp-6); }
-.dp-key i { width: 14px; height: 8px; border-radius: var(--r-hair); }
-.dp-key .t-made i, .dp-key .t-done i { width: 2px; height: 12px; }
+.legend i[class^="t-"] { width: 14px; height: 8px; }
+.legend i.t-made, .legend i.t-done { width: 2px; height: 12px; }
 .dp-scroll { overflow-x: auto; padding: var(--sp-6) 18px var(--sp-10); }
 .dp-tl { display: grid; grid-template-columns: minmax(160px, 220px) minmax(300px, 1fr) 96px 64px 56px; column-gap: 14px; align-items: center; min-width: 740px; }
 .dp-axis { padding-bottom: var(--sp-6); font-size: var(--fs-xs); color: var(--muted); }
@@ -831,19 +829,19 @@ tr.nrow:hover td.wide a { text-decoration: underline; }
 .dp-bar { padding-left: var(--sp-6); overflow: hidden; white-space: nowrap; color: var(--on-fill); font: var(--fw-mid) var(--fs-2xs)/1.64 var(--sans); }
 a.dp-bar { text-decoration: none; }
 a.dp-bar:hover, a.dp-bar:focus-visible { filter: brightness(1.15); outline-offset: 1px; }
-.dp-wait, .dp-key .t-wait i { background: repeating-linear-gradient(90deg, var(--rule) 0 5px, transparent 5px 9px); }
-.dp-wait.t-chris, .dp-key .t-chris i { background: repeating-linear-gradient(90deg, var(--need-bg) 0 5px, var(--need) 5px 7px); }
+.dp-wait, .legend i.t-wait { background: repeating-linear-gradient(90deg, var(--rule) 0 5px, transparent 5px 9px); }
+.dp-wait.t-chris, .legend i.t-chris { background: repeating-linear-gradient(90deg, var(--need-bg) 0 5px, var(--need) 5px 7px); }
 .t-build.dp-bar { background: var(--fill-run); }
 .t-bad.dp-bar { background: var(--fill-stuck); }
 .t-land.dp-bar { background: var(--fill-done); }
 .t-aux.dp-bar { background: var(--fill-aux); }
-.dp-key .t-build i { background: var(--run); }
-.dp-key .t-bad i { background: var(--stuck); }
-.dp-key .t-land i { background: var(--done); }
-.dp-key .t-aux i { background: var(--muted); }
+.legend i.t-build { background: var(--run); }
+.legend i.t-bad { background: var(--stuck); }
+.legend i.t-land { background: var(--done); }
+.legend i.t-aux { background: var(--muted); }
 .dp-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: var(--r-hair); }
-.t-made.dp-mark, .dp-key .t-made i { background: var(--muted); }
-.t-done.dp-mark, .dp-key .t-done i { background: var(--ink); }
+.t-made.dp-mark, .legend i.t-made { background: var(--muted); }
+.t-done.dp-mark, .legend i.t-done { background: var(--ink); }
 .dp-evs { padding-top: var(--sp-4); }
 .dp-ev { display: grid; grid-template-columns: 88px 96px minmax(0, 1fr); gap: var(--sp-12); align-items: baseline; padding: var(--sp-4) 0; font-size: var(--fs-sm); line-height: 1.5; }
 .dp-at { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
