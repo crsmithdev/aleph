@@ -1,4 +1,4 @@
-// The Gates view: what can stop, hold or ask. Each render function takes the /api/gates object and returns an HTML
+// The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Pause and Resume buttons
 // and the Waiting-for-you buttons; `mount` runs the rule switches.
 import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, sectionHead, when } from "../lib.js";
@@ -54,10 +54,6 @@ export function renderGates(d, q = new URLSearchParams()) {
     `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
-const tone = (bad, warn = false) => (bad ? "stop" : warn ? "warn" : "ok");
-const gtile = (name, value, note, t, extra = "") =>
-  `<div class="gtile"><div class="gt-head"><span>${esc(name)}</span><span class="gdot ${t}" role="img" aria-label="${t === "ok" ? "open" : t === "warn" ? "near its limit" : "closed"}"></span></div><b>${esc(value)}</b><small>${esc(note)}</small>${extra}</div>`;
-
 /** The environment variable that overrides each cap in caps.json. */
 const CAP_ENV = { live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP" };
 /** A number input and a Save button for one cap; a note when its environment variable overrides caps.json. */
@@ -69,23 +65,16 @@ function capForm(f, key, label, value) {
     (over ? `<small class="cap-env">${esc(env)} is set: an edit has no effect while that variable is set.</small>` : "") + `</form>`;
 }
 
-/** A per-goal gate's tile: how many queued goals it holds now. */
-const goalTile = (name, n, note) => gtile(name, n ? `${n} held` : "none", note, tone(false, n > 0));
-
-/** The 6 gates, in the order the dispatch asks them, with the pause control. */
+/** The metric tiles: the automation rate, the gate catches and the held time, each over the log's window. */
 export function renderNow(d) {
-  const f = d.factory, base = d.baseline ?? [], g = d.goalGates ?? {};
-  const red = base.filter((b) => b.state === "red"), held = g.baseline ? `; ${g.baseline} held` : "";
+  const m = d.metrics, win = `last ${m.days} days`;
+  const tile = (name, value, note) => `<div class="gtile"><div class="gt-head"><span>${esc(name)}</span></div><b>${esc(value)}</b><small>${esc(note)}</small></div>`;
   const tilesHtml = [
-    gtile("Pause", f.paused ? "paused" : "running", f.paused ? "no run starts or lands" : "not paused", tone(f.paused)),
-    gtile("Baseline", red.length ? "red" : base.length ? "green" : "none", ((red.length ? red : base).map((b) => b.line).join(", ") || "no baseline yet") + held, tone(red.length > 0, !!g.baseline)),
-    goalTile("Not ready", g["not-ready"], "done, waits on an issue, or has an open job"),
-    gtile("Live cap", `${f.liveRuns} / ${f.liveCap}`, `cap ${f.liveCap} at once`, tone(f.liveRuns >= f.liveCap)),
-    goalTile("Busy file", g["busy-file"], "an open job changes the same busy file"),
-    goalTile("Loop guard", g["loop-guard"], "3 runs with no commit, or the run cap of starts in an hour: an Ask"),
+    tile("Automation rate", m.rate ? `${m.rate.percent}%` : "–", m.rate ? `${m.rate.auto} of ${m.rate.total} Asks decided without Chris, ${win}` : `no Ask decided, ${win}`),
+    tile("Gate catches", `${m.catches.fired} / ${m.catches.fixed}`, `checks and reviews that sent a build back, against those a later build fixed, ${win}`),
+    tile("Held time", `${m.held.goals} goals, ${m.held.hours} h`, `goals held, and hours in a hold, ${win}`),
   ].join("");
-  const line = d.gated ? `Closed at ${d.gated.gate}: ${d.gated.text}.` : "";
-  return `<section id="gates-now" aria-label="Gates now">${sectionHead("Gates now", { aside: esc(line) })}<div class="gtiles">${tilesHtml}</div></section>`;
+  return `<section id="gates-now" aria-label="Metrics"><div class="gtiles">${tilesHtml}</div></section>`;
 }
 
 /** The live cap and the run cap: each shows its use against its limit, with a form to edit it. */

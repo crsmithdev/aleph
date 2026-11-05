@@ -8,8 +8,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/ask.ts";
-import { allHolds, baselines, factoryRepos, gates, redLine } from "../../jobs/lib/factory-status.ts";
+import { allHolds, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
+import * as record from "../../jobs/lib/record.ts";
 import { layout, readFactoryLog } from "../../jobs/lib/layout.ts";
 import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
 import { reader } from "../../todo/lib/store.ts";
@@ -107,15 +108,15 @@ function collapse(entries: LogEntry[]): LogEntry[] {
   return out;
 }
 
-/** The log: the gate holds, the Always rules Chris set, the Rule, Director and Firefighter lines and his answers; the last LOG_DAYS days, newest first, LOG_MAX of each actor at most, so a busy actor does not push the others out. */
-export function log(now = Date.now()): LogEntry[] {
+/** The log: the gate holds, the Always rules Chris set, the Rule, Director and Firefighter lines and his answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
+export function log(now = Date.now(), max = LOG_MAX): LogEntry[] {
   const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h): LogEntry => ({ at: h.at, by: "Gate", item: h.name, what: `${h.kind}: ${h.text}` })));
   const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "You", item: "rule", what: `${reason}: set to ${g.action}` }));
   return [...holds, ...set, ...tickEntries(), ...noteEntries()]
     .filter((e) => now - Date.parse(e.at) < LOG_DAYS * DAY)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .filter((e) => (seen[e.by] = (seen[e.by] ?? 0) + 1) <= LOG_MAX);
+    .filter((e) => (seen[e.by] = (seen[e.by] ?? 0) + 1) <= max);
 }
 
 /**
@@ -164,13 +165,52 @@ export function schedules(): { name: string; last: string | null; result: string
   ];
 }
 
+/**
+ * The three metrics over the last LOG_DAYS days. `rate`: of the Asks decided (from every log entry in the window, not the capped log), the share that a Rule or the Director decided
+ * and not Chris (his answers; his rule changes do not count), null with none. `catches`: `fired`, the build runs started in the
+ * window that a check or the reviewer sent back, against `fixed`, those of them that a later build run of the same job fixed:
+ * it passed or landed. `held`: the goals held and the hours in a hold, from a hold record to the next `started` record, or to now.
+ */
+export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(), records = record.all()) {
+  const from = now - LOG_DAYS * DAY;
+  const auto = entries.filter((e) => (e.by === "Rule" || (e.by === "Director" && /\bdecided:/.test(e.what)))).length;
+  const chris = entries.filter((e) => e.by === "You" && e.item !== "rule").length;
+  const open: Record<string, number> = {}, goals = new Set<string>();
+  let ms = 0;
+  const close = (name: string, end: number) => {
+    const start = Math.max(open[name], from);
+    delete open[name];
+    if (end <= start) return;
+    ms += end - start;
+    goals.add(name);
+  };
+  for (const h of holds) {
+    if (h.kind === "started") { if (h.name in open) close(h.name, Date.parse(h.at)); }
+    else if (stopsStart(h) && !(h.name in open)) open[h.name] = Date.parse(h.at);
+  }
+  for (const name of Object.keys(open)) close(name, now);
+  const sent = records.flatMap((r) => r.runs.flatMap((x, i) => x.kind === "build" && x.failed && Date.parse(x.started) >= from
+    ? [r.runs.slice(i + 1).some((y) => y.job === x.job && y.kind === "build" && !y.failed && (y.condition === "passed" || y.condition === "landed"))]
+    : []));
+  return {
+    days: LOG_DAYS,
+    rate: auto + chris ? { auto, total: auto + chris, percent: Math.round((100 * auto) / (auto + chris)) } : null,
+    catches: {
+      fired: sent.length,
+      fixed: sent.filter(Boolean).length,
+    },
+    held: { goals: goals.size, hours: Math.round(ms / 360_000) / 10 },
+  };
+}
+
 /** The page's data from the Status page's state (its factory snapshot, its asks and its Queued lane) and the security facts. */
 export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }) {
-  const jobs = allJobs();
+  const jobs = allJobs(), entries = log(), all = log(Date.now(), Infinity);
   const f = state.factory;
   return {
     now: state.now,
     factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP"), run: capEnvSet("ALEPH_RUN_CAP") } },
+    metrics: metrics(all),
     schedules: schedules(),
     gated: gates({ jobs }),
     baseline: baselineGate(),
@@ -179,7 +219,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     rules: rules(),
     ...security,
     repoHeld: repoHeld(),
-    log: { days: LOG_DAYS, max: LOG_MAX, entries: log() },
+    log: { days: LOG_DAYS, max: LOG_MAX, entries },
   };
 }
 

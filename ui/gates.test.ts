@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gate.ts";
-import { gatesBody, log, rules, securityFacts } from "./api/gates.ts";
+import { LOG_MAX, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -74,7 +74,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "now", "repoHeld", "rules", "schedules"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "metrics", "now", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
@@ -117,6 +117,7 @@ const data = () => ({
   now: new Date(NOW).toISOString(),
   schedules: [{ name: "tick", last: null, result: null }],
   factory: { paused: false, liveRuns: 5, liveCap: 5, runCap: 3, runStarts: 2, capEnv: { live: false, run: false } },
+  metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { goals: 2, hours: 3 } },
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
@@ -129,13 +130,15 @@ const data = () => ({
 
 test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Gates now", "Waiting for you", "Rules", "Held paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
+  const order = ["Waiting for you", "Rules", "Held paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
-  expect(h).toContain("Closed at live-cap: Waiting for a slot (5 of 5 running).");
-  // The 6 gates, in the dispatch's order; no tile for the removed hold, day cap or awaiting cap.
+  // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="gt-head"><span>([^<]*)<\/span>/g)].map((m) => m[1]);
-  expect(tiles).toEqual(["Pause", "Baseline", "Not ready", "Live cap", "Busy file", "Loop guard"]);
-  expect(h).toContain("<b>2 held</b>");
+  expect(tiles).toEqual(["Automation rate", "Gate catches", "Held time"]);
+  expect(h).toContain("<b>75%</b>");
+  expect(h).toContain("<b>6 / 2</b>");
+  expect(h).toContain("<b>2 goals, 3 h</b>");
+  expect(h).not.toContain("Gates now");
   expect(h).not.toContain('data-cap="day"');
   expect(h).not.toContain('data-cap="awaiting"');
   expect(h).not.toContain("Edit caps");
@@ -155,6 +158,44 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(card).toContain('<code class="chip">src/auth/**</code>');
   for (const p of SECURITY_PATHS) expect(card).toContain(`<code class="chip">${p}</code>`);
   expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain("No repo names held paths.");
+});
+
+const entry = (by: string, what = "x", item = "r-1") => ({ at: ago(1), by, item, what }) as any;
+const rec = (min: number, name: string, kind: string) => ({ at: ago(min), name, kind, text: "t" });
+
+test("the automation rate is the Rule and Director decisions over those and Chris's answers; his rule changes and a Director escalation do not count", () => {
+  const e = [entry("Rule"), entry("Rule"), entry("Director", "run-cap: decided: rerun"), entry("Director", "run-cap: escalated: x"), entry("You", "Chris: yes"), entry("You", "rescue: set to Ask me", "rule")];
+  expect(metrics(e, []).rate).toEqual({ auto: 3, total: 4, percent: 75 });
+  expect(metrics([], []).rate).toBeNull();
+});
+
+test("the body's automation rate counts every decision in the 7 days, past the log's cap of each actor", async () => {
+  const logPath = join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), was = readFileSync(logPath, "utf8");
+  const before = (await body()).metrics.rate;
+  writeFileSync(logPath, was + Array.from({ length: LOG_MAX }, (_, i) => `${ago(5 + i / 100)} always: rescue: recommended on r-${i}`).join("\n") + "\n");
+  try {
+    const after = (await body()).metrics.rate;
+    expect(after.auto - before.auto).toBe(LOG_MAX);
+    expect(after.total - before.total).toBe(LOG_MAX);
+  } finally {
+    writeFileSync(logPath, was);
+  }
+});
+
+test("the held time sums, over the goals, the hours from a hold to the next start, or to now, in the 7 days", () => {
+  const h = [rec(300, "a-1", "gate"), rec(120, "a-1", "started"), rec(60, "b-1", "gate"), rec(30, "b-1", "gate"), rec(60 * 24 * 9, "c-1", "gate"), rec(60 * 24 * 8, "c-1", "started")];
+  expect(metrics([], h, NOW).held).toEqual({ goals: 2, hours: 4 });
+});
+
+test("gate catches are the builds a check or the reviewer sent back in the 7 days, against those a later build of the job passed", () => {
+  const run = (job: string, min: number, condition: string, failed?: string) => ({ job, kind: "build", condition, started: ago(min), ...(failed ? { failed } : {}) });
+  const r = (runs: any[]) => ({ issue: "r-1", runs }) as any;
+  const records = [
+    r([run("j1", 300, "stuck", "tests"), run("j1", 200, "stuck", "reviewer"), run("j1", 100, "landed")]),
+    r([run("j2", 300, "stuck", "types"), run("j3", 200, "passed")]),
+    r([run("j4", 60 * 24 * 9, "stuck", "tests"), run("j4", 60, "passed")]),
+  ];
+  expect(metrics([], [], NOW, records).catches).toEqual({ fired: 3, fixed: 2 });
 });
 
 test("the log filter keeps one actor's entries", () => {
