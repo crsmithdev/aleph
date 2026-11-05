@@ -13,6 +13,8 @@ import * as fjobs from "./views/factory-jobs.js";
 import { listUrl } from "./views/jobs.js";
 // @ts-ignore plain JS shared with the page
 // @ts-ignore plain JS shared with the page
+import * as gates from "./views/gates.js";
+// @ts-ignore plain JS shared with the page
 import * as now from "./views/now.js";
 import { full } from "./test-now.ts";
 
@@ -124,4 +126,8 @@ test("a chosen project is in the address, in each request, and on the next page"
   }
   expect(projectOf(new URLSearchParams("project=beta"))).toBe("beta");
   expect(PAGES.status.view.api(null, new URLSearchParams("project=alpha"))).toBe("/api/state?project=alpha");
+});
+
+test("the Automation page asks for the chosen window and project", () => {
+  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toBe("/api/gates?window=day&project=alpha");
 });

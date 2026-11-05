@@ -309,14 +309,16 @@ test("the view is Automation at #/automation in the Factory group; #/gates redir
   expect(gates.redirect("#/automation")).toBeNull();
 });
 
-test("the Automation page has no explaining aside; the Pause button sits in the controls panel with the cap forms, before Held paths in one row", () => {
+test("the Automation page has no explaining aside; the controls panel holds the cap forms and no Pause button, before Held paths in one row", () => {
   for (const paused of [false, true]) {
     const h = gates.renderGates({ ...data(), gated: null, factory: { ...data().factory, paused } });
-    const act = `data-act="${paused ? "resume" : "pause"}"`;
-    expect(h.slice(h.indexOf('<header class="ph">'), h.indexOf("</header>"))).not.toContain("data-act");
-    expect(h.match(/data-act="(pause|resume)"/g)!.length).toBe(1);
+    const head = h.slice(h.indexOf('<header class="ph">'), h.indexOf("</header>"));
+    expect(head).not.toContain("data-act");
+    expect(head.indexOf('<select name="project"')).toBeGreaterThan(-1);
+    expect(head.indexOf('<select name="project"')).toBeLessThan(head.indexOf('data-name="window"'));
+    expect(h).not.toContain('data-act="pause"');
+    expect(h).not.toContain('data-act="resume"');
     const panel = h.slice(h.indexOf('<section class="card" id="gates-caps"'), h.indexOf('aria-label="Held paths"'));
-    expect(panel).toContain(act);
     expect(panel).toContain('data-cap="live"');
     expect(panel).toContain('data-cap="run"');
     const row = h.slice(h.indexOf('<div class="gates-two">'));

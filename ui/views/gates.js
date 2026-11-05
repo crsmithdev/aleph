@@ -1,7 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
-// string, so tests can call them. The shell's click handler (index.html) runs the Pause and Resume buttons
-// and the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, pager, pageHead, sectionHead, setQuery, statCard, tiles, when } from "../lib.js";
+// string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
+import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, keepProject, keepWindow, pager, pageHead, projectNow, scopeBar, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow } from "./now.js";
 
 export const view = {
@@ -11,7 +10,7 @@ export const view = {
   group: "factory",
   order: -2,
   icon: "shield-halved",
-  api: "/api/gates",
+  api: (_params, q = new URLSearchParams()) => withProject(`/api/gates?window=${windowOf(q)}`, q),
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
   mount: (root) => mount(root),
@@ -48,7 +47,7 @@ export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: 
 const PAGE = 50;
 
 export function renderGates(d, q = new URLSearchParams()) {
-  return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days` })}` +
+  return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days`, aside: scopeBar(projectNow(), windowOf(q)) })}` +
     renderNow(d) + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
     `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), Number(q.get("limit")) || PAGE) + `</div>`;
 }
@@ -76,16 +75,13 @@ export function renderNow(d) {
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }
 
-/** The controls panel: the Pause or Resume button, then the live cap and the run cap, each with its use against its limit and a form to edit it. */
+/** The controls panel: the live cap and the run cap, each with its use against its limit and a form to edit it. */
 export function renderCaps(d) {
   const f = d.factory;
-  const ctl = f.paused
-    ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
-    : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
   const row = (key, label, use, limit, note) => `<div class="cap-row"><b>${esc(label)}</b><span>${esc(use)} / ${esc(limit)}</span><small>${esc(note)}</small>${capForm(f, key, label, limit)}</div>`;
   return card("Controls", `<div class="caps">` +
     row("live", "Live cap", f.liveRuns, f.liveCap, "live runs against the cap") +
-    row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div>${ctl}`, { id: "gates-caps" });
+    row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div>`, { id: "gates-caps" });
 }
 
 /** The newest monitor report: a summary that expands to every finding and the reader's reply, or why there is no reading. */
@@ -176,9 +172,10 @@ const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI"
 
 /** Load /api/gates again and draw the page with it. */
 async function redraw(root) {
-  const res = await fetch("/api/gates", { cache: "no-store" });
+  const res = await fetch(view.api(null, hashQuery()), { cache: "no-store" });
   if (!res.ok) return;
   root.innerHTML = renderGates(await res.json(), hashQuery());
+  wireScope(root);
 }
 
 /** A message beside the element, for a failed action. */
@@ -190,6 +187,9 @@ function say(el, text) {
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
+  keepWindow(windowOf(hashQuery()));
+  keepProject(projectNow());
+  wireScope(root);
   root.onsubmit = async (e) => {
     const form = e.target.closest?.("form.capform");
     if (!form) return;
