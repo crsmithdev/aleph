@@ -407,6 +407,7 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
     noCommits: noCommitStreak(repo.key, name, runs),
     capHeld: capMarked(name),
     startsInHour: agentStartsInHour(repo.key, name, jobs, now),
+    creditWait: creditWait(repo.key, name, runs, now),
   };
 }
 
@@ -445,11 +446,26 @@ export function clearCap(name: string): void {
 const capMarked = (name: string): boolean =>
   record.read(name)?.events.findLast((e) => e.kind === "cap" || e.kind === "cap-cleared")?.kind === "cap";
 
-/** How many jobs of the goal started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not. */
+/** The API credit error the CLI writes to a run's stderr.log when the account has no credit. */
+const CREDIT_ERROR = /API Error: 402/;
+
+/** Whether the run in `folder` ended with the API credit error: such a run did no work. */
+function creditError(folder: string): boolean {
+  try { return CREDIT_ERROR.test(readFileSync(join(folder, "stderr.log"), "utf8")); } catch { return false; }
+}
+
+/** How long ago the goal's newest build run that ended with the API credit error ended, or null when it has none. */
+function creditWait(repoKey: string, name: string, all: Entry[], now: number): number | null {
+  const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.ended && creditError(e.folder))
+    .sort((a, b) => Date.parse(a.run.ended!) - Date.parse(b.run.ended!)).at(-1);
+  return last ? now - Date.parse(last.run.ended!) : null;
+}
+
+/** How many jobs of the goal started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not, and a first run that ended with the API credit error did no work, so it does not count. */
 function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: number): number {
   return jobs.filter((j) => {
     const first = j.find((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind));
-    return first !== undefined && now - Date.parse(first.run.started) < 3600_000;
+    return first !== undefined && now - Date.parse(first.run.started) < 3600_000 && !creditError(first.folder);
   }).length;
 }
 

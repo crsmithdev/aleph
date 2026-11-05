@@ -8,6 +8,7 @@ const item = (fm: Record<string, unknown> = {}) => ({ fm, notes: [] }) as unknow
 const facts = (f: Partial<IssueFacts> = {}): IssueFacts => ({ name: "fac-9", item: item(), done: () => false, ...f });
 const kind = (f: Partial<IssueFacts>) => issueDecision(facts(f)).kind;
 const live = { why: "12 agent runs are live", text: "Waiting for a slot (12 of 12 running)" };
+const MIN = 60_000;
 
 test("a goal with no fact against it is ready, and a fact not read stops nothing", () => {
   expect(issueDecision(facts())).toEqual({ kind: "ready", why: "ready", text: "Starts at the next dispatch" });
@@ -63,6 +64,13 @@ test("Loop guard binds at its limits; an answered run cap skips the hour count",
   expect(kind({ noCommits: 2 })).toBe("ready");
   expect(kind({ startsInHour: 2 })).toBe("ready");
   expect(kind({ startsInHour: 3, capHeld: true })).toBe("ready");
+});
+
+test("a run that ended with the API credit error holds the goal for its wait and sets no run-cap Ask; past the wait the goal is ready", () => {
+  const waiting = issueDecision(facts({ creditWait: 3 * MIN, startsInHour: 4 }));
+  expect(waiting.kind).toBe("credit-wait");
+  expect(waiting).not.toHaveProperty("ask");
+  expect(issueDecision(facts({ creditWait: 12 * MIN })).kind).toBe("ready");
 });
 
 test("a factory gate gives the dispatch its why and Chris its text", () => {

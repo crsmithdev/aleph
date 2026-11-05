@@ -10,10 +10,12 @@ const MIN = 60_000;
 beforeEach(() => setup());
 afterEach(() => teardown());
 
-const facts = (id: number) => {
+const allFacts = (id: number) => {
   const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
-  return issueFacts(loadRegistry().fac, item, allJobs(), NOW).startsInHour;
+  return issueFacts(loadRegistry().fac, item, allJobs(), NOW);
 };
+
+const facts = (id: number) => allFacts(id).startsInHour;
 
 test("one job whose first run and two fix rounds started in the last hour is one start", () => {
   const id = newIssue();
@@ -32,4 +34,15 @@ test("three jobs whose first runs started in the last hour are three starts; a j
   const old = mk(`fac-${id}`, "build", "failed", { started: ago(90 * MIN) });
   mk(`fac-${id}`, "build", "passed", { job: old.job, started: ago(10 * MIN) });
   expect(facts(id)).toBe(3);
+});
+
+test("a first run that ended with the API credit error is no start, and the goal waits for credit from the newest such run", () => {
+  const id = newIssue();
+  const credit = { "stderr.log": "API Error: 402 This request would exceed your available credits\n" };
+  mk(`fac-${id}`, "build", "failed", { started: ago(50 * MIN), ended: ago(45 * MIN) }, credit);
+  mk(`fac-${id}`, "build", "failed", { started: ago(30 * MIN), ended: ago(25 * MIN) });
+  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN) }, credit);
+  const f = allFacts(id);
+  expect(f.startsInHour).toBe(1);
+  expect(f.creditWait).toBe(5 * MIN);
 });

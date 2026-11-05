@@ -3,7 +3,7 @@
  * stall check and the Queued lane all read it. It reads no store and takes no lock:
  * the caller reads the facts, and holds the locks and does the writes.
  *
- * The dispatch asks the 6 gates in the order of GATES; the first that binds skips the goal,
+ * The dispatch asks the gates in the order of GATES; the first that binds skips the goal,
  * and its name is the kind of the hold record.
  */
 import { afterOf, areasOf, labels } from "../../../issues/lib/store.ts";
@@ -14,10 +14,14 @@ import { word, type Event } from "../../../lib/naming.ts";
 /** Runs of one goal in a row that may end with no commit before the dispatch stops starting it. */
 export const NO_COMMIT_LIMIT = 3;
 
+/** How long a goal waits after a run that ended with the API credit error: 10 minutes. Such a run did no work, so the dispatch does not start the goal again at once. */
+export const CREDIT_WAIT_MS = 10 * 60_000;
+
 /** The dispatch's gates, in the order it asks them. Loop guard is last, so it counts only goals that would start. */
 export const GATES = ["pause", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"] as const;
 
-export type Gate = (typeof GATES)[number];
+/** The kind of a hold record: a gate of GATES, or `credit-wait`, which the goal's own last run decides. */
+export type Gate = (typeof GATES)[number] | "credit-wait";
 
 /** The fields of a hold's log event, after `by` and `subject`. */
 export type Hold = Omit<Event, "at" | "by" | "subject">;
@@ -45,11 +49,13 @@ export interface IssueFacts {
   /** The run cap's Ask was set and answered, so the hour count does not apply. */
   capHeld?: boolean;
   startsInHour?: number;
+  /** How long ago the goal's newest build run that ended with the API credit error ended, in milliseconds. */
+  creditWait?: number | null;
 }
 
 /** `why` is the line in the dispatch's skipped list; `text` is the line Chris reads on the Queued lane. */
 export type IssueDecision = Bound & (
-  | { kind: "ready" | "pause" | "baseline" | "live-cap" }
+  | { kind: "ready" | "pause" | "baseline" | "live-cap" | "credit-wait" }
   /** `on`: the id of the issue whose open job holds the busy file. */
   | { kind: "busy-file"; on?: string }
   /** `ids`: the refs of `after` that are not done, when that is why. */
@@ -90,6 +96,8 @@ export function issueDecision(f: IssueFacts): IssueDecision {
   if (not) return not;
   if (f["live-cap"]) return { kind: "live-cap", ...f["live-cap"] };
   if (f.busy) return { kind: "busy-file", on: f.busy.on, why: f.busy.why, text: f.busy.why[0].toUpperCase() + f.busy.why.slice(1), ev: { action: "busy", on: [f.busy.on], file: f.busy.file } };
+  // A run the API refused for credit did no work, so the goal waits instead of starting again at once, and no run-cap Ask goes out.
+  if ((f.creditWait ?? Infinity) < CREDIT_WAIT_MS) return { kind: "credit-wait", why: "waits for API credit", text: `Waits for API credit: the last run ended with the API credit error, so it starts again ${CREDIT_WAIT_MS / 60_000} minutes later`, ev: { action: "waiting", count: "for API credit" } };
   if ((f.noCommits ?? 0) >= NO_COMMIT_LIMIT) return { kind: "loop-guard", ask: "no-commit", why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director`, ev: { action: "looping", sub: "no-commit", count: `${f.noCommits} / ${NO_COMMIT_LIMIT}` } };
   const starts = f.capHeld ? 0 : f.startsInHour ?? 0;
   if (starts >= RUN_CAP()) return { kind: "loop-guard", ask: "run-cap", starts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director`, ev: { action: "looping", sub: "starts", count: `${starts} / 1h` } };
