@@ -4,7 +4,7 @@
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
 import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Granted } from "../jobs/lib/asks/ask.ts";
-import { word } from "../lib/naming.ts";
+import { parseId, refs, word } from "../lib/naming.ts";
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
 import type { Job, NewIssue } from "./state.ts";
@@ -121,8 +121,8 @@ const rerun = (reason: string, args: Record<string, string>): Action => {
 
 function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
   const run: Record<string, string> = c.run ? { name: c.run.name } : {};
-  const [repo, n] = c.issue ? c.id.split(/-(?=\d+(?:\.\d+)?$)/) : ["", ""];
-  const issue = { repo, id: n };
+  const p = c.issue ? parseId(c.id) : null;
+  const issue = { repo: p?.repo ?? "", id: p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "" };
   const a = (act: string, label: string, hint: string, args: Record<string, string>): Action => ({ act, label, hint, primary: false, args, recommended: false });
   const one = (act: string): Action[] => {
     switch (act) {
@@ -253,7 +253,7 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[]
   const rank: Record<string, number> = { "held-path": 0, review: 1 };
   const runs = s.runs.filter((j) => j.ask && ASK_REASONS[j.ask.reason]).sort((a, b) => (rank[a.ask!.reason] ?? 2) - (rank[b.ask!.reason] ?? 2));
   for (const j of runs) add(item(j.ask!.reason, { id: j.name, run: j }, `run:${j.name}`, `#/jobs/${encodeURIComponent(j.name)}`, j.item?.title ?? "", j.repo, j.ask!.kind, j.item?.priority));
-  for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, i.id.split(/-(?=\d+(?:\.\d+)?$)/)[0], i.askKind, i.priority));
+  for (const i of s.issues) add(item(reasonOf(i.reason), { id: i.id, issue: i }, `issue:${i.id}`, i.href, i.title, parseId(i.id)?.repo ?? "", i.askKind, i.priority));
   for (const l of lessons) {
     const reason = `proposal-${l.kind ?? "skill"}`;
     if (ASK_REASONS[reason]) add(item(reason, { id: l.id, lesson: l }, `proposal:${l.id}`, "", l.title || l.sentence));
@@ -271,7 +271,7 @@ export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: st
   const hit = (id: string): Blocker | null => (id !== own && open.has(id) ? { id, ...open.get(id)! } : null);
   const w = after?.trim();
   if (w && hit(w)) return hit(w);
-  for (const m of (j.reason ?? "").matchAll(/\b([A-Za-z][\w.]*-\d+)\b/g)) if (hit(m[1])) return hit(m[1]);
+  for (const id of refs(j.reason ?? "")) if (hit(id)) return hit(id);
   return null;
 }
 

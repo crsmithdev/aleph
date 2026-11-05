@@ -548,7 +548,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
     } else {
       reason = a.reason;
       // The reply may leave the fate off: a goal whose own commit is on origin/main is met; a reason naming another goal already on main is work that goal did.
-      const other = a.reason.match(new RegExp(`\\b${repo.key}-(\\d+)\\b`, "g"))?.map((r) => r.slice(repo.key.length + 1)).find((x) => Number(x) !== issue && itemOnMain(repo, Number(x)));
+      const other = idsIn(a.reason).filter((r) => r.startsWith(`${repo.key}-`)).map((r) => r.slice(repo.key.length + 1)).find((x) => x !== String(issue) && itemOnMain(repo, x));
       fate = a.fate ?? (onMain(repo, { job: last.run.job, item: issue, fetch: false }) ? "met" : other ? "duplicate" : undefined);
     }
     const why = await ports.drop(name, reason, fate);

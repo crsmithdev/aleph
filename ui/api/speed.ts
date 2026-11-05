@@ -18,9 +18,16 @@ import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip } from "../../lib/naming.ts";
+import { clip, parseId } from "../../lib/naming.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
+
+/** The repo and the ref inside it of a whole issue key: `aleph-1359.1` is `aleph` and `1359.1`; "" and "" for any other text. */
+const splitId = (s: string): [string, string] => {
+  const p = parseId(s);
+  return p ? [p.repo, `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`] : ["", ""];
+};
+
 /** The issue number of a run, from `on` or old `todo`; a goal run "860.1" reads as 860. Undefined when the run has none. */
 function issueOf(r: Run): number | undefined {
   const o = onOf(r);
@@ -241,8 +248,8 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     const causes = [...group((r) => r.cause)].map(([name, x]) => ({ name, sum: sum(x) })).sort((a, b) => b.sum.hours - a.sum.hours).map((c) => ({ name: c.name, text: CAUSE_TEXT[c.name], ...noWeek(rd(c.sum)) }));
     const top = [...group((r) => r.issue)].map(([issue, x]) => {
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
-      const m = issue.lastIndexOf("-");
-      return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: `#/issues/${encodeURIComponent(issue.slice(0, m))}/${issue.slice(m + 1)}` };
+      const [repo, n] = splitId(issue);
+      return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: `#/issues/${encodeURIComponent(repo)}/${n}` };
     }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.issue, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
     return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.issue)).size, causes, top };
   });
@@ -293,8 +300,8 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   const per = new Map<string, IssueTimes>();
   const note = (key: string | undefined, k: Phase, secs: number) => {
     if (!key) return;
-    const m = key.lastIndexOf("-");
-    if (!per.has(key)) per.set(key, { id: key, href: `#/issues/${encodeURIComponent(key.slice(0, m))}/${key.slice(m + 1)}`, outcome: "unlanded", filed: issue.get(key) ?? null, intake: null, queue: null, implement: null, land: null, lead: null });
+    const [repo, n] = splitId(key);
+    if (!per.has(key)) per.set(key, { id: key, href: `#/issues/${encodeURIComponent(repo)}/${n}`, outcome: "unlanded", filed: issue.get(key) ?? null, intake: null, queue: null, implement: null, land: null, lead: null });
     per.get(key)![k] = secs;
   };
   const inWindow = (t: number) => t >= since && t <= now;
@@ -551,32 +558,32 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     const nRuns = new Map<string, number>();
     for (const r of all) if (isAgentRun(r.kind) && issueOf(r) !== undefined) nRuns.set(`${r.repo}-${issueOf(r)}`, (nRuns.get(`${r.repo}-${issueOf(r)}`) ?? 0) + 1);
     issues.usage = keys.map((g) => {
-      const m = g.lastIndexOf("-");
-      return { goal: g, href: `#/issues/${encodeURIComponent(g.slice(0, m))}/${g.slice(m + 1)}`, week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
+      const [repo, n] = splitId(g);
+      return { goal: g, href: `#/issues/${encodeURIComponent(repo)}/${n}`, week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
     }).sort((a, b) => b.week - a.week).slice(0, 8);
     issues.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
   const lists = reader({ fetch: false });
   const statusOf = (ref: string): string | undefined => {
-    const m = ref.lastIndexOf("-");
-    const item = m < 0 ? undefined : lists.item(ref.slice(0, m), ref.slice(m + 1));
+    const [repo, n] = splitId(ref);
+    const item = repo ? lists.item(repo, n) : undefined;
     if (item) return status(item);
     // An issue that is not in a readable list left the store.
-    return m >= 0 && lists.list(ref.slice(0, m)) ? GONE : undefined;
+    return repo && lists.list(repo) ? GONE : undefined;
   };
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
   for (const c of cls.classes) for (const t of c.top) {
-    const m = t.goal.lastIndexOf("-");
-    const item = lists.item(t.goal.slice(0, m), t.goal.slice(m + 1));
+    const [repo, n] = splitId(t.goal);
+    const item = lists.item(repo, n);
     t.title = item?.title;
     // The link would be a 404 for an issue that left the store.
-    if (!item && lists.list(t.goal.slice(0, m))) delete t.href;
+    if (!item && lists.list(repo)) delete t.href;
   }
   for (const u of issues.usage) {
-    const m = u.goal.lastIndexOf("-");
-    const item = lists.item(u.goal.slice(0, m), Number(u.goal.slice(m + 1)));
+    const [repo, n] = splitId(u.goal);
+    const item = lists.item(repo, Number(n));
     if (item) u.title = item.title;
-    else if (lists.list(u.goal.slice(0, m))) delete u.href;
+    else if (lists.list(repo)) delete u.href;
   }
   const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number, q = 0.5) => {

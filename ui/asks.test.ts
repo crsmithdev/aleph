@@ -125,4 +125,9 @@ describe("stuck rows", () => {
     expect(stuckBlocker(stuck, "aleph-99", open)).toBeNull();
     expect(stuckBlocker({ ...stuck, reason: "aleph-27 again" }, "aleph-27", new Map([["aleph-27", { title: "t", href: "" }]]))).toBeNull();
   });
+  test("a reason that names an open goal's part is the blocker; one that holds only a sha is not", () => {
+    const part = new Map([["aleph-12.3", { title: "Land the base", href: "#/issues/aleph/12.3" }]]);
+    expect(stuckBlocker({ ...stuck, reason: "needs aleph-12.3 to land first" }, undefined, part)).toEqual({ id: "aleph-12.3", title: "Land the base", href: "#/issues/aleph/12.3" });
+    expect(stuckBlocker({ ...stuck, reason: "the fix is in a143077" }, undefined, part)).toBeNull();
+  });
 });

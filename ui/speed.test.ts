@@ -222,25 +222,25 @@ test("classify: a drop's fate, not its prose, sets the failed class and the Need
 
 test("runs read their issue from on: a part counts under its own ref, an issue run under its number", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "ox", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
+  const a = (job: string, o: Record<string, unknown>) => ({ kind: "build", job, name: job, repo: "aleph", condition: "passed", cost: 1, started: t(1), ended: t(2), ...o }) as any;
   const runs = [
-    a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), a("r", { on: "ox-7" }),
+    a("p", { on: "aleph-1430" }), a("q", { on: "aleph-1430.1" }), a("r", { on: "aleph-1359" }),
   ];
   const seen: string[] = [];
   classify(runs, (g) => { seen.push(g); return "open"; }, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
-  expect(new Set(seen)).toEqual(new Set(["ox-860", "ox-860.1", "ox-7"]));
+  expect(new Set(seen)).toEqual(new Set(["aleph-1430", "aleph-1430.1", "aleph-1359"]));
 
   const land = (job: string, o: Record<string, unknown>) => ({ ...a(job, o), kind: "land", condition: "landed" });
-  for (const r of [a("p", { on: "ox-860" }), a("q", { on: "ox-860.1" }), land("p", { on: "ox-860" }), land("q", { on: "ox-860.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
+  for (const r of [a("p", { on: "aleph-1430" }), a("q", { on: "aleph-1430.1" }), land("p", { on: "aleph-1430" }), land("q", { on: "aleph-1430.1" })]) run({ ...r, started: at(1, 9), ended: at(1, 10) });
   const fit = { pooled: 0.1, byModel: {} } as any;
   const w = speed("week", now, fit);
-  expect(w.issues.week).toBe(0.2); // both runs under the one key ox-860
-  expect(w.issues.usage).toEqual([{ goal: "ox-860", href: "#/issues/ox/860", week: 0.2, runs: 2 }]);
+  expect(w.issues.week).toBe(0.2); // both runs under the one key aleph-1430
+  expect(w.issues.usage).toEqual([{ goal: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }]);
   expect(speed("week", now).issues.usage).toEqual([]);
-  run({ ...a("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { on: "ox-7" }), started: at(1, 9), ended: at(1, 10) });
+  run({ ...a("r", { on: "aleph-1359" }), started: at(1, 9), ended: at(1, 10) }); run({ ...land("r", { on: "aleph-1359" }), started: at(1, 9), ended: at(1, 10) });
   const w2 = speed("week", now, fit);
-  expect(w2.issues.week).toBe(0.1); // ox-7 counts too: median of 0.2 and 0.1
-  expect(w2.issues.usage).toEqual([{ goal: "ox-860", href: "#/issues/ox/860", week: 0.2, runs: 2 }, { goal: "ox-7", href: "#/issues/ox/7", week: 0.1, runs: 1 }]);
+  expect(w2.issues.week).toBe(0.1); // aleph-1359 counts too: median of 0.2 and 0.1
+  expect(w2.issues.usage).toEqual([{ goal: "aleph-1430", href: "#/issues/aleph/1430", week: 0.2, runs: 2 }, { goal: "aleph-1359", href: "#/issues/aleph/1359", week: 0.1, runs: 1 }]);
 });
 
 test("phases: intake runs from the filing to the first triage end, queue from there to the first agent start, lead from the filing to the last land", () => {

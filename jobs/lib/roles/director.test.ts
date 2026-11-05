@@ -13,7 +13,7 @@ import { jobId } from "../../../lib/naming.ts";
 import { setPaused } from "../gates/factory-status.ts";
 import { readStore } from "../learning/corrections.ts";
 import { lastEvent, read as readJobRecord } from "../records/record.ts";
-import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, run, useDirectorFixture } from "./director.fixture.ts";
+import { asked, base, branch, calls, choice, dropped, fresh, item, key, events, landed, n, plain, ports, reply, replyWith, repoPath, run, sh, useDirectorFixture } from "./director.fixture.ts";
 
 useDirectorFixture();
 
@@ -219,6 +219,25 @@ test("a paused factory starts no director run", async () => {
   setPaused(true);
   try { expect(await directorStep(ports())).toEqual([]); } finally { setPaused(false); }
   expect(calls()).toBe(0);
+});
+
+test("a drop reason that names another goal of this repo on main gets the fate duplicate; another repo's goal does not", async () => {
+  fresh([{ title: "goal", specced: true }]);
+  // origin/main names another goal of this repo: the work the drop is a duplicate of.
+  writeFileSync(join(repoPath(), "z.ts"), "1\n");
+  sh(repoPath(), "git", "add", "-A");
+  sh(repoPath(), "git", "commit", "-q", "-m", `z\n\nIssue: ${key}-2.1`);
+  sh(repoPath(), "git", "update-ref", "refs/remotes/origin/main", "HEAD");
+  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  reply([{ do: "drop", reason: `the work is already in ${key}-2.1` }]);
+  await direct();
+  expect(dropped.map((d) => d.fate)).toEqual(["duplicate"]);
+
+  fresh([{ title: "goal", specced: true }]);
+  run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  reply([{ do: "drop", reason: "the work is already in gpu-faults-2" }]);
+  await direct();
+  expect(dropped.map((d) => d.fate)).toEqual(["duplicate", undefined]);
 });
 
 test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
