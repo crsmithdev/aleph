@@ -3,9 +3,9 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wallStepSince } from "./clock.ts";
-import { emptyObjects, fix, gitChecks, homeCheck, lostCheck, unitChecks } from "./doctor.ts";
+import { emptyObjects, fix, gitChecks, homeCheck, linkCheck, lostCheck, unitChecks, doctor } from "./doctor.ts";
 import { writeRun } from "./ledger.ts";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, symlinkSync } from "node:fs";
 
 let dir: string, repo: string;
 const saved = { ...process.env };
@@ -95,4 +95,27 @@ test("a run with a pid, no exit and no process is lost", () => {
   writeRun(f, { kind: "plain", job: "x", name: "x", condition: "running", told: false, started: "2026-10-30T00:00:00Z" });
   writeFileSync(join(f, "pid"), "999999\n");
   expect(lostCheck()).toMatchObject({ ok: false });
+});
+
+describe("unit links", () => {
+  test("a link into .worktrees or to a missing file fails the check; a good link passes; doctor() includes it", async () => {
+    const units = join(dir, "units"), good = join(dir, "main", "a.service"), wt = join(dir, ".worktrees", "job-x", "jobs", "systemd", "b.service");
+    mkdirSync(join(units, "default.target.wants"), { recursive: true });
+    mkdirSync(join(dir, "main")); mkdirSync(join(wt, ".."), { recursive: true });
+    writeFileSync(good, ""); writeFileSync(wt, "");
+    process.env.ALEPH_UNIT_DIR = units;
+    symlinkSync(good, join(units, "a.service"));
+    expect(linkCheck().ok).toBe(true);
+    symlinkSync(wt, join(units, "b.service"));
+    symlinkSync(join(dir, "gone.service"), join(units, "default.target.wants", "c.service"));
+    const c = linkCheck();
+    expect(c.ok).toBe(false);
+    expect(c.detail).toContain("b.service");
+    expect(c.detail).toContain("c.service");
+    expect(c.detail).not.toContain("a.service");
+    fakeCtl("exit 0");
+    process.env.ALEPH_HOME_URL = "http://127.0.0.1:1/";
+    process.env.ALEPH_DOCTOR_CLOCK_MS = "50";
+    expect((await doctor()).map((x) => x.name)).toContain("unit links");
+  });
 });

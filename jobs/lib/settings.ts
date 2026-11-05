@@ -116,6 +116,7 @@ export const windowsTimeCmd = (): string | undefined => process.env.ALEPH_WINDOW
 export const ruleCmd = () => process.env.ALEPH_RULE_CMD ?? "claude";
 export const doctorClockMs = () => Number(process.env.ALEPH_DOCTOR_CLOCK_MS ?? 15_000);
 export const homeUrl = () => process.env.ALEPH_HOME_URL ?? "http://aleph.home/";
+export const unitDir = () => process.env.ALEPH_UNIT_DIR ?? join(homedir(), ".config", "systemd", "user");
 export const systemctlBin = () => process.env.ALEPH_SYSTEMCTL ?? "systemctl";
 export const jobForeground = (): boolean => process.env.ALEPH_JOB_FOREGROUND === "1";
 /** The repos file, unexpanded. */

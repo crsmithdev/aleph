@@ -2,13 +2,13 @@
  * `aleph doctor`: one command that checks the machine after an outage. Read-only
  * unless `fix` is set; `fix` starts the tick and nothing else.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readlinkSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { git } from "./git.ts";
 import { allRuns, loadRegistry } from "./ledger.ts";
 import { isLost } from "./process.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
-import { doctorClockMs, homeUrl, systemctlBin } from "./settings.ts";
+import { doctorClockMs, homeUrl, systemctlBin, unitDir } from "./settings.ts";
 
 export interface Check { name: string; ok: boolean; detail: string }
 
@@ -151,9 +151,27 @@ export function lostCheck(): Check {
   return lost.length ? bad("lost runs", `${lost.length}: ${lost.join(", ")}`) : ok("lost runs", "none");
 }
 
+/** Every symlink in the unit folder and its *.wants folders must point at a file outside `.worktrees/`. */
+export function linkCheck(): Check {
+  const root = unitDir();
+  const dirs = [root, ...(existsSync(root) ? readdirSync(root).filter((n) => n.endsWith(".wants")).map((n) => join(root, n)) : [])];
+  const badLinks: string[] = [];
+  for (const d of dirs) {
+    if (!existsSync(d)) continue;
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (!lstatSync(p).isSymbolicLink()) continue;
+      const target = resolve(d, readlinkSync(p));
+      if (target.split("/").includes(".worktrees")) badLinks.push(`${p} -> ${target} (in a worktree)`);
+      else if (!existsSync(p)) badLinks.push(`${p} -> ${target} (missing)`);
+    }
+  }
+  return badLinks.length ? bad("unit links", badLinks.join("; ")) : ok("unit links", "none point into a worktree or a missing file");
+}
+
 export async function doctor(): Promise<Check[]> {
   const [clock, home] = await Promise.all([clockChecks(), homeCheck()]);
-  return [...clock, ...gitChecks(), ...unitChecks(), home, lostCheck()];
+  return [...clock, ...gitChecks(), ...unitChecks(), home, lostCheck(), linkCheck()];
 }
 
 /** The safe repair: the tick starts. An empty object stays: `aleph doctor` names it, and Chris decides. */

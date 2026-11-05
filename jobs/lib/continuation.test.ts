@@ -199,6 +199,7 @@ describe("the worker brief", () => {
     const r = run({ worktree: "/w", branch: "factory/fac-1" });
     const sandboxed = brief("rb1", f, r, { ...repo, sandbox: true } as Repo);
     expect(sandboxed).toContain("follow the code-change method at the end of this brief");
+    expect(sandboxed).toContain("link it from the repo's main checkout path");
     expect(sandboxed).toContain("do not run the full\nsuite again to get a clean run");
     expect(sandboxed).toContain("do not add a test for a helper that the\nexisting tests already reach");
     expect(sandboxed).toContain("## Code-change method\n\nAdapted from karpathy-guidelines");
