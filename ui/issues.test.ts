@@ -876,3 +876,20 @@ test("the Issues row, the issue's id and its Work head show the short id, and th
     setCodes({});
   }
 });
+
+test("the Issue page's notes show an issue id in its short form", () => {
+  setCodes({ aleph: "a" });
+  try {
+    const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], goals: [], timeline: { runs: [] },
+      notes: ["- 2026-11-05 11:02: intake: filed aleph-1443 for x", "- 2026-11-05 11:03: director: filed aleph-1441 for x", "director: filed aleph-1444 for z"] };
+    const h = v.renderIssue(d);
+    expect(h).toContain("filed a1443 for x");
+    expect(h).toContain("director: filed a1441 for x");
+    expect(h).toContain("director: filed a1444 for z");
+    expect(h).not.toContain("aleph-1441");
+    expect(h).not.toContain("aleph-1443");
+    expect(h).not.toContain("aleph-1444");
+  } finally {
+    setCodes({});
+  }
+});

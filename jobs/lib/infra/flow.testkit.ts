@@ -12,6 +12,7 @@ import { health, setPaused } from "../gates/factory-status.ts";
 import { fetchOrigin } from "./git.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { flakeLines, reportLine } from "../learning/monitor-table.ts";
+import { shortText } from "../../../lib/naming.ts";
 import type { Fate } from "../records/outcome.ts";
 import { drop as dropJob, startPlain } from "../transitions/transitions.ts";
 
@@ -33,9 +34,9 @@ export const reportText = (): Promise<string> => asCli({}, () => {
     fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
   }
-  lines.push(...health(), ...flakeLines());
+  lines.push(...health().map(shortText), ...flakeLines().map(shortText));
   const m = reportLine();
-  if (m) lines.push(m);
+  if (m) lines.push(shortText(m));
   return lines.filter(Boolean).join("\n\n") || "nothing new";
 });
 

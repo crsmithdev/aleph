@@ -514,7 +514,7 @@ export const isMachineNote = (n) => {
 /** A note as an event: a machine note's prefix is its tag, any other note is tagged "note". */
 function noteItem(e) {
   const m = /^([a-z ]+): (.*)$/s.exec(e.text);
-  return m && isMachineNote(`- ${e.text}`) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(m[2]) } : { at: e.at, tag: "note", tone: "quiet", html: esc(e.text) };
+  return m && isMachineNote(`- ${e.text}`) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(localId(m[2])) } : { at: e.at, tag: "note", tone: "quiet", html: esc(localId(e.text)) };
 }
 
 /** The filing time: the store's, else the created date unless a run that day starts the issue (midnight would draw a false wait). */
@@ -611,7 +611,7 @@ export function renderIssue(d) {
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");
   const noteRow = (n) => {
-    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(n.replace(/^- /, "")) };
+    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(localId(n.replace(/^- /, ""))) };
     return `<li class="dp-ev"><span class="dp-at">${esc(e ? when(new Date(e.at)) : "")}</span><span>${tag(it.tag, it.tone)}</span><div class="dp-evt">${it.html}</div></li>`;
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));

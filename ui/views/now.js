@@ -184,7 +184,7 @@ export function renderLede(s, stale = false) {
   if (f.paused && alert) said.push(["the factory is paused", ""]);
   const week = s.usage?.now?.seven_day;
   if (week >= WEEKLY_WARN) said.push([`weekly usage is at ${pct(week)}`, ""]);
-  for (const l of f.health || []) if (isWarn(l)) said.push([l.replace(/^health:\s*/, ""), ""]);
+  for (const l of f.health || []) if (isWarn(l)) said.push([localId(l.replace(/^health:\s*/, "")), ""]);
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
   if (stale) return `<span class="say error">Alert: this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
   if (alert) return `<span class="say error">Alert: ${parts}.</span>`;
@@ -303,7 +303,7 @@ const TICK_GRACE_MS = 5 * 60_000;
 /** Lines of the factory's own trouble that are errors: health (a red main among them) and a stopped tick; each once. */
 function errorLines(s) {
   const f = s.factory;
-  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l) && !isWarn(l));
+  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l) && !isWarn(l)).map((l) => localId(l));
   if (f.nextTick !== undefined && f.tickInProgress !== true) {
     if (f.nextTick === null) out.push("the factory tick has stopped: aleph-tick.timer has no next run");
     else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`the factory tick has stopped: aleph-tick.timer was due at ${f.nextTick}`);

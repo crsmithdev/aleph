@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { setCodes } from "../lib/naming.ts";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
@@ -31,6 +32,18 @@ test("each error line says its alert, in red", () => {
   for (const [o, text] of cases) {
     expect(said(o)).toBe(`Alert: ${text}.`);
     expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, ...o } })).toContain('class="say error"');
+  }
+});
+
+test("the page and the status sentence show a health line's issue id in its short form", () => {
+  setCodes({ aleph: "a" });
+  try {
+    const page = view.view.render(withFactory({ health: ["health: the land run of aleph-5 is live for over 30 minutes"] }));
+    expect(page).toContain("the land run of a5 is live for over 30 minutes");
+    expect(page).not.toContain("aleph-5");
+    expect(said({ health: ["health: koans main is red at def5678: aleph-6 is the cause"] })).toBe("Everything is running smoothly; koans main is red at def5678: a6 is the cause.");
+  } finally {
+    setCodes({});
   }
 });
 

@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readFileSync, rmSync } from "node:fs";
+import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, file, state, setup, teardown } from "../../cli.helpers";
-import { job } from "../../inproc.ts";
+import { call, job } from "../../inproc.ts";
 import { reportText } from "../infra/flow.testkit.ts";
+import { noteFlake } from "../../../issues/lib/store.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 beforeAll(setup);
@@ -32,4 +33,24 @@ describe("a factory run's checks", () => {
       rmSync(join(base, "factory", "flaky.json"));
     }, 60_000);
   });
+});
+
+test("the report's health lines name an issue in its short form", async () => {
+  setSystemTime(Date.parse("2026-11-05T12:00:00Z"));
+  try {
+    const repos = join(base, "repos.json"), reg = JSON.parse(readFileSync(repos, "utf8"));
+    writeFileSync(repos, JSON.stringify({ ...reg, fac: { ...reg.fac, code: "f" } }));
+    const noted = await call(() => noteFlake({ key: "fac" }, "a.test.ts > a.test.ts"));
+    const id = (noted.json as { id: number }).id;
+    const dir = join(base, "factory", "monitor");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "2026-11-05.json"), JSON.stringify({ day: "2026-11-05", findings: ["fac-9 is the cause"] }));
+    const out = await reportText();
+    expect(out).toContain(`health: f${id} holds 1 flake notes in 7 days`);
+    expect(out).toContain("names 1 thing that looks off; first: f9 is the cause");
+    expect(out).not.toContain(`fac-${id}`);
+    expect(out).not.toContain("fac-9");
+  } finally {
+    setSystemTime();
+  }
 });

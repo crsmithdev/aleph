@@ -34,7 +34,7 @@ import { facts, repoStages, stages } from "./lib/records/status.ts";
 import type { Stage } from "./lib/records/stage.ts";
 import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
-import { parseId } from "../lib/naming.ts";
+import { parseId, shortText } from "../lib/naming.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -327,9 +327,9 @@ function reportCmd(): void {
     fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
   }
-  lines.push(...health(), ...flakeLines());
+  lines.push(...health().map(shortText), ...flakeLines().map(shortText));
   const m = reportLine();
-  if (m) lines.push(m);
+  if (m) lines.push(shortText(m));
   const text = lines.filter(Boolean).join("\n\n");
   if (!rest.includes("--hook")) { console.log(text || "nothing new"); return; }
   if (!text) return;
