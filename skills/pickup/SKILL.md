@@ -9,11 +9,7 @@ description: >
 Find the handoff file:
 
 - With an argument `<name>`: `~/.aleph/handoffs/<name>.md`.
-- With no argument: the project's handoff, `~/.aleph/handoffs/projects/<scope>.md`. `<scope>` is the name of the main repo's directory, or of the current directory outside git:
-
-  ```
-  d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"
-  ```
+- With no argument: the project's handoff, `~/.aleph/handoffs/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`. `<scope>` is that name: the main repo's directory, or the current directory outside git.
 
 Read the file in full. If it does not exist, say so and stop. Do not guess.
 
