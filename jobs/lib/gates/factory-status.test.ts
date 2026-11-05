@@ -38,11 +38,19 @@ test("three jobs whose first runs started in the last hour are three starts; a j
 
 test("a first run that ended with the API credit error is no start, and the goal waits for credit from the newest such run", () => {
   const id = newIssue();
-  const credit = { "stderr.log": "API Error: 402 This request would exceed your available credits\n" };
-  mk(`fac-${id}`, "build", "failed", { started: ago(50 * MIN), ended: ago(45 * MIN) }, credit);
+  const credit = { cause: "credit", reason: "API Error: 402 This request would exceed your available credits" } as const;
+  mk(`fac-${id}`, "build", "failed", { started: ago(50 * MIN), ended: ago(45 * MIN), ...credit });
   mk(`fac-${id}`, "build", "failed", { started: ago(30 * MIN), ended: ago(25 * MIN) });
-  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN) }, credit);
+  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN), ...credit });
   const f = allFacts(id);
   expect(f.startsInHour).toBe(1);
   expect(f.creditWait).toBe(5 * MIN);
+});
+
+test("a run whose stderr.log holds the credit error but that states no credit cause is a start and sets no credit wait", () => {
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN), ended: ago(5 * MIN) }, { "stderr.log": "API Error: 402 This request would exceed your available credits\n" });
+  const f = allFacts(id);
+  expect(f.startsInHour).toBe(1);
+  expect(f.creditWait).toBeNull();
 });
