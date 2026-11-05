@@ -9,9 +9,9 @@ import { needsOf, type Ask } from "../asks/ask.ts";
 import { layout } from "../infra/layout.ts";
 import * as record from "./record.ts";
 import { isLive } from "../infra/process.ts";
-import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
+import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
-import { fileSafe, jobId, ROUTINES, setCodes, shortId } from "../../../lib/naming.ts";
+import { contentText, fileSafe, jobId, ROUTINES, setCodes } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. A record keeps old words; record.ts reads them as these. */
 export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
@@ -371,20 +371,22 @@ export function nextStamp(s: string): string {
   return stamp(new Date(y, mo - 1, d, h, mi, se + 1));
 }
 
-/** The one line of news for an ended run. */
-export function newsLine(run: Run, note?: string): string {
-  if (run.kind === "plain") return `${run.name} ${run.condition === "done" ? "finished" : "failed"}`;
-  let line = `${shortId(run.name)} ${run.condition}`;
+/**
+ * The one line of news for an ended run: its job ID, its state word, its sub and its content. A waiting run takes its
+ * sub from its Ask's needs; a failed run takes its cause. A landed run's reason and the repo note follow on a second
+ * line, indented two spaces.
+ */
+export function newsLine(e: Entry, note?: string): string {
+  const run = e.run;
   const needs = needsOf(askOf(run));
-  if (isWaiting(run.condition) && needs) line += ` ${needs}`;
-  const check = run.condition === "failed" && failedCheckOf(run);
-  if (check) line += ` ${check}`;
-  if (run.condition === "landed" && run.check === "open") line += "; check open";
-  if (run.condition === "landed" && run.reason) line += `; ${run.reason}`;
-  if (run.condition === "landed" && note) line += `; ${note}`;
-  if (run.next === "worker") line += "; sent back to the worker";
-  if (run.next === "land") line += run.kind === "land" ? "; landing again" : "; landing";
-  return line;
+  // The Ask's word for a held path is `held`; the sub set names it `protected`.
+  const sub = isWaiting(run.condition) ? (needs === "held" ? "protected" : needs)
+    : run.condition === "failed" ? causeOf(run) : undefined;
+  // A failed check's name is the content. The arrow marks it: `contentText` puts one before a file only after another field.
+  const check = failedCheckOf(run);
+  const line = [`${jobIdOf(e)} ${run.condition}`, sub, check && `→ ${contentText({ file: check })}`].filter(Boolean).join(" ");
+  const said = run.condition === "landed" ? [run.reason, note].filter(Boolean).join(" ") : "";
+  return said ? `${line}\n  ${said}` : line;
 }
 
 /** POST one line to Sidetone's /tell. True on a 2xx reply. */

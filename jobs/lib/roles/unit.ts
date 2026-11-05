@@ -217,7 +217,7 @@ export async function unit(folder: string): Promise<void> {
   markEnded(folder, code);
   process.exitCode = code;
   if (isAgentRun(run.kind) && repo?.sandbox) await postTrace(folder, id, ended, run.repo!);
-  if (await tell(newsLine(ended, repo?.note))) updateRun(folder, { told: true });
+  if (await tell(newsLine({ id, folder, run: ended }, repo?.note))) updateRun(folder, { told: true });
   if (next) await start(folder, ended, next);
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
 }

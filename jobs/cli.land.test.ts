@@ -31,7 +31,7 @@ describe("land", () => {
     expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(s.commit);
     expect(existsSync(worktree("shipit"))).toBe(false);
     expect(branchExists("shipit")).toBe(false);
-    expect(told).toContain("shipit landed");
+    expect(told).toContain("shipit#2 landed");
     expect(file(r.json.run, "land.log")).toContain("## push: ok");
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "shipit")).toMatchObject({ condition: "landed" });
   });
@@ -57,7 +57,7 @@ describe("land", () => {
     expect(item.title).not.toContain(": ");
     expect(item.request).toContain("phonelater");
     expect(sh(base, "git", "--git-dir", remote, "diff", "--name-only", `${s.commit}~1`, s.commit)).toBe("android/later.txt");
-    expect(told).toContain("demo/phonelater landed; check open");
+    expect(told).toContain("phonelater#2 landed");
     // The list of `aleph jobs` is built in jobs/cli.ts, not in a library: a landed job stays in it while its check is open.
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "phonelater")).toMatchObject({ check: "open" });
 
@@ -94,7 +94,7 @@ describe("land", () => {
     expect(runs.map((d) => state(d).kind)).toEqual(["build", "land"]);
     expect(state(runs[1])).toMatchObject({ condition: "landed" });
     expect(remoteHead()).toBe(state(runs[1]).commit);
-    expect(told).toContain("auto/selfland passed; landing");
+    expect(told).toContain("selfland#1 passed");
   });
 
   test("a to-do write during the checks goes to the work store and leaves the land's main alone", async () => {

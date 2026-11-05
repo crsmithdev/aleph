@@ -26,7 +26,7 @@ describe("job", () => {
     expect(s.checks.map((c: any) => c.name)).not.toContain("android build");
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
     expect(readFileSync(setupLog, "utf8")).toBe("ran\n");
-    expect(told).toContain("alpha passed");
+    expect(told).toContain("alpha#1 passed");
     const args = readFileSync(join(fakeLog, "args"), "utf8");
     expect(args).toContain(`--session-id ${s.session}`);
     expect(args).toContain("--output-format stream-json --verbose");
@@ -159,18 +159,18 @@ describe("news", () => {
     const r = await actionJob("offline", "exit3", { SIDETONE_TELL_URL: "https://127.0.0.1:1/tell" });
     expect(state(r.json.run).told).toBe(false);
     const news = await aleph(["jobs", "--news"]);
-    expect(news.json).toEqual([{ run: r.json.run, line: "demo/offline failed" }]);
+    expect(news.json).toEqual([{ run: r.json.run, line: "offline#1 failed other" }]);
     expect((await aleph(["jobs", "--news"])).json).toEqual([]);
   });
 });
 
 describe("run", () => {
-  test("a plain command runs in the current directory and says it finished", async () => {
+  test("a plain command runs in the current directory and says it is done", async () => {
     const r = await aleph(["run", "build", "--", "bash", "-c", 'pwd; echo "it\'s done"']);
     expect(r.code).toBe(0);
     expect(state(r.json.run)).toMatchObject({ kind: "plain", condition: "done", told: true });
     expect(file(r.json.run, "output.log")).toBe(`${base}\nit's done\n`);
-    expect(told).toContain("build finished");
+    expect(told).toContain("build#1 done");
   });
 });
 

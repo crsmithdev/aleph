@@ -69,13 +69,13 @@ describe("the state rule", () => {
     const r = await actionJob("exits", "exit3");
     expect(r.code).not.toBe(0);
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "worker exited 3" });
-    expect(told).toContain("exits failed");
+    expect(told).toContain("exits#1 failed other");
   });
 
   test("a question needs Chris", async () => {
     const r = await actionJob("asks", "question");
     expect(state(r.json.run)).toMatchObject({ condition: "waiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
-    expect(told).toContain("asks waiting question");
+    expect(told).toContain("asks#1 waiting question");
   });
 
   test("an untracked file fails", async () => {
@@ -93,7 +93,7 @@ describe("the state rule", () => {
   test("a failing check fails, with its name in the news", async () => {
     const r = await actionJob("broken", "commit FAIL");
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "tests failed" });
-    expect(told).toContain("broken failed tests");
+    expect(told).toContain("broken#1 failed check → tests");
     expect(file(r.json.run, "checks.log")).toContain("## tests: exit 1");
   });
 
@@ -143,6 +143,6 @@ describe("run", () => {
     const r = await run("build", ["false"]);
     expect(r.code).toBe(1);
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "exited 1" });
-    expect(told).toContain("build failed");
+    expect(told).toContain("build#1 failed other");
   });
 });

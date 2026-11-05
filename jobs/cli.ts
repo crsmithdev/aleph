@@ -124,7 +124,7 @@ function jobs(): void {
     const news: { run: string; line: string }[] = [];
     for (const e of allRuns()) {
       if (e.run.condition === "running" || e.run.told) continue;
-      news.push({ run: e.id, line: newsLine(e.run, e.run.repo ? loadRegistry()[e.run.repo]?.note : undefined) });
+      news.push({ run: e.id, line: newsLine(e, e.run.repo ? loadRegistry()[e.run.repo]?.note : undefined) });
       updateRun(e.folder, { told: true });
     }
     return out(news);
