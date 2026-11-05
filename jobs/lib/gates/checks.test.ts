@@ -179,6 +179,11 @@ test("newCases: the names of the test and it cases on added lines only", () => {
   expect(newCases(diff)).toEqual(["adds one", "skips"]);
 });
 
+test("newCases: an added case that pairs with a removed one is a rename, not a new case", () => {
+  const diff = `--- a/x.test.ts\n+++ b/x.test.ts\n@@ -3,4 +3,5 @@\n test("kept", () => {});\n-test("old goal title", () => {});\n+test("new objective title", () => {});\n test("kept too", () => {});\n+test("adds one", () => {});\n`;
+  expect(newCases(diff)).toEqual(["adds one"]);
+});
+
 /**
  * The keep-gate with a runner that runs the command in a plain folder: `code` maps a commit to the source of
  * m.ts there, and `hidden` goes to `.hidden` as runOnCommit gives it. The test file is new on the head.

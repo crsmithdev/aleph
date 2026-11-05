@@ -242,9 +242,31 @@ export interface NewTests { path: string; text: string; names: string[] }
 
 const TEST_FILE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 
-/** The names of the `test(` and `it(` cases that the added lines of a diff open. */
-export const newCases = (diff: string): string[] =>
-  [...diff.matchAll(/^\+(?!\+\+).*?\b(?:test|it)(?:\.\w+)*\(\s*(["'`])(.+?)\1/gm)].map((m) => m[2]);
+/** A removed or added line of a diff, not a `---` or `+++` file header. */
+const CHANGE = /^([+-])(?!\+\+|--)/;
+
+/** The name that a `test(` or `it(` line opens. */
+const CASE = /\b(?:test|it)(?:\.\w+)*\(\s*(["'`])(.+?)\1/;
+
+/**
+ * The names of the `test(` and `it(` cases that the added lines of a diff open. A case that a block removes and
+ * an added case at the same place pairs with is a rename, so the added one is not a new case. The pairs go in order.
+ */
+export function newCases(diff: string): string[] {
+  const names: string[] = [];
+  const gone: string[] = [];
+  for (const line of diff.split("\n")) {
+    const sign = CHANGE.exec(line)?.[1];
+    // A line that is not a change line ends the block: the cases after it are at another place.
+    if (!sign) { gone.length = 0; continue; }
+    const name = CASE.exec(line)?.[2];
+    if (name === undefined) continue;
+    if (sign === "-") gone.push(name);
+    else if (gone.length) gone.shift();
+    else names.push(name);
+  }
+  return names;
+}
 
 /** The test files that the diff from `base` to `tip` adds or changes with a new case. */
 export function newTests(cwd: string, base: string, tip: string): NewTests[] {
