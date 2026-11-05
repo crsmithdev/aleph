@@ -94,9 +94,9 @@ Verify each status claim against the tool output that produced it, and name each
 
 ## Memory
 
-The vault at `~/.aleph/vault` is memory; `Home.md` and `MEMORY.md` arrive
-at session start. Read the note Home points at before deriving; search
-only after. When you learn how something actually behaves, decide
+The vault at `~/.aleph/vault` is memory; `MEMORY.md` and the core lines of
+the repo arrive at session start. Read the note a core line names before
+deriving; search only after. When you learn how something actually behaves, decide
 something, or get corrected, write the page before the turn ends
 (`/aleph:vault`).
 
