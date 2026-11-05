@@ -27,17 +27,32 @@ function roles(a, m) {
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const cell = (v) => `<td class="num">${v ?? "–"}</td>`;
   const up = m?.local === "up";
+  const outs = a.outcomes ?? [];
+  // The outcome row for a config row: the one of its role and current model, when no other config row claims it.
+  const claims = [];
+  const find = (role, model) => {
+    const o = outs.find((x) => x.role === role && x.model === model);
+    if (o) claims.push(o);
+    return o;
+  };
+  const stats = (o) => {
+    if (!o) return "<td></td>".repeat(num.length + 1);
+    const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
+    const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
+    return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed runs</a></td>`;
+  };
+  const tierRows = m ? Object.entries(TIERS) : [];
+  const roleOf = (tier) => (tier.startsWith("worker") ? "worker" : tier);
+  // Two config rows on one role and model leave that outcome unmerged.
+  const shared = (role, model) => tierRows.filter(([t]) => roleOf(t) === role && m.tiers[t]?.model === model).length > 1;
+  const merged = (role, model) => (shared(role, model) ? undefined : find(role, model));
   const pick = ([tier, [name, claude]]) => {
     const t = m.tiers[tier], box = tier.startsWith("worker") ? `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${esc(name)} enabled"${t?.enabled ? " checked" : ""}> ` : "";
     return `<tr><td>${esc(name)}</td><td>${box}<select data-tier="${esc(tier)}" aria-label="${esc(name)} model">` +
-      [claude, "gpt-oss-20b"].map((v) => `<option value="${v}"${t?.model === v ? " selected" : ""}${v === "gpt-oss-20b" && !up ? " disabled" : ""}>${v}</option>`).join("") + `</select></td>${"<td></td>".repeat(num.length + 1)}</tr>`;
+      [claude, "gpt-oss-20b"].map((v) => `<option value="${v}"${t?.model === v ? " selected" : ""}${v === "gpt-oss-20b" && !up ? " disabled" : ""}>${v}</option>`).join("") + `</select></td>${stats(merged(roleOf(tier), t?.model))}</tr>`;
   };
-  const config = m ? Object.entries(TIERS).map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${"<td></td>".repeat(num.length + 1)}</tr>`).join("") : "";
-  const rows = config + (a.outcomes ?? []).map((o) => {
-    const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
-    const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    return `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${esc(o.model)}</td>${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed runs</a></td></tr>`;
-  }).join("");
+  const config = m ? tierRows.map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${stats(find(n.toLowerCase(), model))}</tr>`).join("") : "";
+  const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${esc(o.model)}</td>${stats(o)}</tr>`).join("");
   return dataTable(heads(["Role", "Model", ...num, "Jobs"], num), rows);
 }
 

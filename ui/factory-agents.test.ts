@@ -122,3 +122,17 @@ test("the Roles card says the local server is up or down and disables gpt-oss-20
   expect(up).not.toContain("disabled");
   expect(renderFactoryAgents(S, null, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down" })).toContain("Local server: down");
 });
+
+test("an outcome joins the tier or fixed row of its role and model; one that matches none or several stays its own row", () => {
+  const o = (role: string, model: string, rate: number) => ({ role, model, runs: 10, succeeded: rate * 10, failed: 10 - rate * 10, stuck: 0, rate, p50: 60, cost: 1.5, baseline: 0.7 });
+  const row = (h: string, name: string) => h.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "haiku", 0.9), o("worker", "sonnet", 0.8), o("intake", "opus", 0.95)] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  expect(row(h, "Worker low")).toMatch(/<select.*<td class="num">10<\/td><td class="num">90%/);
+  expect(row(h, "Worker medium")).toMatch(/<select.*<td class="num">10<\/td><td class="num">80%/);
+  expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">10<\/td><td class="num">95%/);
+  expect(h).not.toContain("<td>Worker</td>");
+  expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
+  const both = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "gpt-oss-20b", 0.6)] } }, "live", "week", { tiers: tiers("gpt-oss-20b", "gpt-oss-20b"), local: "up" });
+  expect(row(both, "Worker")).toMatch(/<td>gpt-oss-20b<\/td><td class="num">10<\/td><td class="num warn">60%.*role=worker&condition=failed/);
+  expect(row(both, "Worker low")).not.toContain("60%");
+});
