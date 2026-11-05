@@ -30,7 +30,7 @@ export const MODELS: Record<string, Model> = {
   "gpt-oss-20b": { via: "local", id: "gpt-oss-20b", price: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
   "deepseek-v4.1-flash": routed("deepseek/deepseek-v4.1-flash", 0.045, 0.5, 0.018),
   "gpt-6-luna": routed("openai/gpt-6-luna", 0.1, 0.5, 0.01, 0.125),
-  "minimax-m3.1-flash": routed("minimax/minimax-m3.1-flash", 0.15, 0.6, 0.015),
+  "minimax-m3.1-flash": routed("minimax/minimax-m3.1-flash", 0.075, 0.3, 0.0075),
   "step-3.5-flash": routed("stepfun/step-3.5-flash", 0.1, 0.3),
   "mimo-v2.6-flash": routed("xiaomi/mimo-v2.6-flash", 0.14, 0.28, 0.0028),
 };

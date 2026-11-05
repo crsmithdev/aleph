@@ -77,6 +77,10 @@ test("every tier offers its Claude model first, then every model Claude does not
   expect(others).toEqual(["gpt-oss-20b", "deepseek-v4.1-flash", "gpt-6-luna", "minimax-m3.1-flash", "step-3.5-flash", "mimo-v2.6-flash"]);
 });
 
+test("minimax-m3.1-flash carries the OpenRouter list price, with the input price as the cache write", () => {
+  expect(MODELS["minimax-m3.1-flash"].price).toEqual({ input: 0.075, output: 0.3, cacheRead: 0.0075, cacheWrite: 0.075 });
+});
+
 test("the compact window fits the server's context and leaves a usable threshold", () => {
   const a = serverArgs("/h", null);
   const ctx = Number(a[a.indexOf("--ctx-size") + 1]);
