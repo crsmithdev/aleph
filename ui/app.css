@@ -761,6 +761,7 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: var(--gap-in); }
 .split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--gap-in); align-items: start; }
 .trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap-in); }
+.trio > .wide { grid-column: span 2; }
 .chartbox { width: 100%; height: 200px; min-width: 0; }
 .bars { display: grid; grid-template-columns: minmax(80px, 200px) minmax(40px, 1fr) max-content; column-gap: var(--sp-12); }
 .barrow { all: unset; box-sizing: border-box; display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; padding: var(--sp-6) 0; border-top: 1px solid var(--rule-2); font-size: var(--fs-sm); }
@@ -923,7 +924,7 @@ pre.diff span.del { background: var(--stuck-bg); color: var(--del); }
 .seg-nothing { background: var(--seg-nothing); }
 .seg-restarted { background: var(--seg-restarted); }
 .seg-dropped { background: var(--seg-dropped); }
-@media (max-width: 1100px) { .browse, .split, .trio { grid-template-columns: minmax(0, 1fr); } .ins { position: static; max-height: none; } }
+@media (max-width: 1100px) { .browse, .split, .trio { grid-template-columns: minmax(0, 1fr); } .trio > .wide { grid-column: auto; } .ins { position: static; max-height: none; } }
 @media (max-width: 720px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .obar { flex-direction: column; }

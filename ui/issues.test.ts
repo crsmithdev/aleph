@@ -185,12 +185,12 @@ describe("views", () => {
     expect(h).toContain('class="tiles"');
     for (const q of ["status=any", "tile=filed&status=any", "tile=age"]) {
       const page = v.view.render(d, {}, new URLSearchParams(q));
-      for (const c of ["backlog", "close", "flow"]) expect(page).toContain(`data-chart="${c}"`);
+      for (const c of ["backlog", "close"]) expect(page).toContain(`data-chart="${c}"`);
       expect(page).not.toContain('data-chart="age"');
       expect(page).not.toContain("Open issues by age");
     }
     expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="backlog"'));
-    expect(h.indexOf('data-chart="flow"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
+    expect(h.indexOf('data-chart="backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age", "updated", ""]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
@@ -288,9 +288,13 @@ describe("views", () => {
     expect(c.p90[1]).toBeCloseTo(4.6);
     expect(v.flow(rows, "week", now).labels).toHaveLength(7);
     expect(v.flow(rows, "week", now).labels.at(-1)).toBe("Nov 01");
-    const fo = v.flowOption(f);
-    expect(fo.series.filter((x: any) => x.type === "line").map((x: any) => x.name)).toEqual(["Filed", "Closed"]);
-    expect(fo.series.some((x: any) => x.name === "Gap")).toBe(true);
+    const o = v.backlogOption(b, f);
+    expect(o.yAxis).toHaveLength(2);
+    const areas = o.series.filter((x: any) => x.yAxisIndex === undefined), lines = o.series.filter((x: any) => x.yAxisIndex === 1);
+    expect(areas.map((x: any) => x.name)).toEqual(["low", "medium", "high", "critical"]);
+    expect(areas.map((x: any) => x.data)).toEqual([b.counts.low, b.counts.medium, b.counts.high, b.counts.critical]);
+    expect(lines.map((x: any) => x.name)).toEqual(["Filed", "Closed"]);
+    expect(lines.map((x: any) => x.data)).toEqual([f.filed, f.closed]);
     expect(v.renderTiles(v.stats(rows, now))).toContain('<b>1<em> / 0</em></b><span class="q"><span>closed</span><span class="m"> / dropped</span></span>');
   });
 
@@ -319,7 +323,7 @@ describe("views", () => {
     expect(v.closeTimes(rows, "month", now).p50[1]).toBe(3);
     const d = await getJson("/api/contents");
     const page = v.view.render(d, {}, new URLSearchParams("window=week"));
-    expect(page).toContain("Open backlog, last week");
+    expect(page).toContain("Open backlog, filed and closed, last week");
     expect(page).not.toContain("30 days");
   });
 
@@ -357,8 +361,8 @@ describe("views", () => {
     expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
     const page = v.view.render(await getJson("/api/contents"), {}, new URLSearchParams("window=day"));
     const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
-    expect(page).toContain("Filed and closed per hour");
-    expect(v.view.render(await getJson("/api/contents"), {}, new URLSearchParams("window=week"))).toContain("Filed and closed per day");
+    expect(page).toContain("Open backlog, filed and closed, last day");
+    expect(page).not.toContain("Filed and closed per");
     const t = new Date(2026, 10, 4, 16, 0), tr = [{ status: "done", created: "2026-11-04", createdTime: "2026-11-04 15:30", closed: "2026-11-04", closedTime: "2026-11-04 15:45" }, { status: "open", created: "2026-11-04", createdTime: "2026-11-04 09:10" }];
     const fh = v.flow(tr, "hour", t), fd = v.flow(tr, "day", t);
     expect(fh.labels).toHaveLength(60);

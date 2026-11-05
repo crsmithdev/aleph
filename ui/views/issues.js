@@ -1,8 +1,8 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { bucketOf, xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { xLabel } from "./speed.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -353,9 +353,8 @@ export function closeTimes(rows, win = "month", now = new Date()) {
   return out;
 }
 
-export const backlogOption = (b) => stackedAreaOption(b.labels, PRIORITY_ORDER.map((p) => ({ name: p, data: b.counts[p] })));
+export const backlogOption = (b, f) => stackedAreaOption(b.labels, PRIORITY_ORDER.map((p) => ({ name: p, data: b.counts[p] })), [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
 export const closeOption = (c) => rangeBarOption(c.kinds, c.p50, c.p90, c.unit === "hours" ? "h" : "d");
-export const flowOption = (f) => gapLinesOption(f.labels, [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
 export const TILE_FILTER = {
@@ -376,10 +375,9 @@ function renderDetail(rows, o) {
   return "";
 }
 
-/** The three charts under the tiles, on every tile. */
-const renderCharts = (o) => `<div class="trio">${card(`Open backlog, last ${o.window in WINDOW_DAYS ? o.window : "week"}`, '<p>Open issues over time, by priority.</p><div class="chartbox" data-chart="backlog"></div>')}` +
-  `${card("Time to close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
-  `${card(`Filed and closed per ${bucketOf(o)}`, '<p>Blue is filed; green is closed; the gap is shaded.</p><div class="chartbox" data-chart="flow"></div>')}</div>`;
+/** The two charts under the tiles, on every tile. */
+const renderCharts = (o) => `<div class="trio">${card(`Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}`, '<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p><div class="chartbox" data-chart="backlog"></div>', { cls: "wide" })}` +
+  `${card("Time to close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}</div>`;
 
 // ---- The filters ----
 
@@ -436,11 +434,10 @@ function draw(root) {
   const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
   const panel = (name, option) => { const el = root.querySelector(`.chartbox[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
   const win = live.o().window, now = new Date();
-  panel("backlog", backlogOption(backlog(rows, win, now)));
+  panel("backlog", backlogOption(backlog(rows, win, now), flow(rows, win, now)));
   const close = closeTimes(rows, win, now), note = root.querySelector("[data-close-note]");
   if (note) note.textContent = `${close.unit === "hours" ? "Hours" : "Days"} from filed to closed: the bar is p50, the tick p90.`;
   panel("close", closeOption(close));
-  panel("flow", flowOption(flow(rows, win, now)));
 }
 
 /** Fill what follows the filters. A filter changes no route, so nothing fetches again. */

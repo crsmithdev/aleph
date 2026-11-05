@@ -521,15 +521,18 @@ export const lineOption = (labels, name, data, { interval = "auto", step = false
   series: [{ type: "line", name, step: step ? "end" : false, symbol: "none", lineStyle: { width: step ? 0 : 2 }, areaStyle: { opacity: step ? 0.85 : 0.15 }, data }],
 });
 
-/** The ECharts option for areas stacked over categories. Each series is `{name, data}`; the first is at the bottom. */
-export const stackedAreaOption = (labels, series) => ({
+/** The ECharts option for areas stacked over categories on the left axis, and `lines` over the same categories on the right axis. Each series is `{name, data}`; the first area is at the bottom. */
+export const stackedAreaOption = (labels, series, lines = []) => ({
   animation: false,
-  grid: { left: 32, right: 16, top: 24, bottom: 20 },
+  grid: { left: 32, right: lines.length ? 32 : 16, top: 24, bottom: 20 },
   legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
   tooltip: { trigger: "axis", confine: true },
   xAxis: { type: "category", boundaryGap: false, data: labels, axisTick: { show: false }, axisLabel: { hideOverlap: true } },
-  yAxis: { type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
-  series: series.map((s) => ({ type: "line", name: s.name, stack: "all", symbol: "none", lineStyle: { width: 1 }, areaStyle: { opacity: 0.6 }, data: s.data })),
+  yAxis: [{ type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } }, ...(lines.length ? [{ type: "value", min: 0, minInterval: 1, splitLine: { show: false }, axisTick: { show: false } }] : [])],
+  series: [
+    ...series.map((s) => ({ type: "line", name: s.name, stack: "all", symbol: "none", lineStyle: { width: 1 }, areaStyle: { opacity: 0.6 }, data: s.data })),
+    ...lines.map((s) => ({ type: "line", name: s.name, yAxisIndex: 1, symbol: "none", lineStyle: { width: 2 }, data: s.data })),
+  ],
 });
 /** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`. */
 export const rangeBarOption = (labels, p50, p90, suffix = "d") => ({
@@ -544,24 +547,6 @@ export const rangeBarOption = (labels, p50, p90, suffix = "d") => ({
     { type: "scatter", name: "p90", symbol: "rect", symbolSize: [3, 20], data: p90, itemStyle: { color: "#888" } },
   ],
 });
-/** The ECharts option for two lines over categories (`series` is `[{name, data}, {name, data}]`) with the gap between them shaded. */
-export const gapLinesOption = (labels, [a, b]) => ({
-  animation: false,
-  grid: { left: 32, right: 16, top: 24, bottom: 20 },
-  legend: { top: 0, right: 0, data: [a.name, b.name], itemWidth: 10, itemHeight: 10 },
-  tooltip: { trigger: "axis", confine: true },
-  xAxis: { type: "category", boundaryGap: false, data: labels, axisTick: { show: false }, axisLabel: { hideOverlap: true } },
-  yAxis: { type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
-  series: [
-    ...[a, b].map((s) => ({ type: "line", name: s.name, symbol: "none", lineStyle: { width: 2 }, data: s.data })),
-    { type: "custom", name: "Gap", silent: true, tooltip: { show: false }, z: 0, data: a.data.slice(1).map((_, i) => i), itemStyle: { opacity: 0.2 },
-      renderItem: (_p, api) => {
-        const i = api.value(0), at = (j, v) => api.coord([j, v]);
-        return { type: "polygon", shape: { points: [at(i, a.data[i]), at(i + 1, a.data[i + 1]), at(i + 1, b.data[i + 1]), at(i, b.data[i])] }, style: api.style({ fill: api.visual("color") }) };
-      } },
-  ],
-});
-
 /** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */
 export function pager(shown, total, step = 50, { cls = "", attr = "data-more", value = more => more } = {}) {
   const n = Math.min(shown, total), more = Math.min(step, total - n);
