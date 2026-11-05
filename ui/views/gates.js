@@ -89,7 +89,7 @@ export function renderCaps(d) {
 
 /** The tick, the suite and the monitor: when each last ran and what came of it. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => [esc(s.name), s.last ? when(s.last) : "has not run", s.result ? esc(s.result) : ""]);
+  const rows = d.schedules.map((s) => `<tr><td>${esc(s.name)}</td><td>${s.last ? when(s.last) : "has not run"}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
   return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${dataTable(heads(["Schedule", "Last run", "Result"]), rows)}</section>`;
 }
 

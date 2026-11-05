@@ -344,6 +344,10 @@ test("the body has the tick, the suite and the monitor with their last run from 
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
   expect(h).toContain("<h2>Schedules</h2>");
   expect(h.match(/has not run/g)).toHaveLength(3);
+  const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
+  expect(tbody.match(/<tr>/g)).toHaveLength(3);
+  expect(tbody).toContain("<tr><td>tick</td><td>has not run</td><td></td></tr>");
+  expect(h).not.toContain("tick,has not run");
   writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {} }));
   writeFileSync(logPath, was + [`${ago(70)} suite plain: red`, `${ago(11)} suite plain: green`, `${ago(10)} suite held: green`, `${ago(50)} monitor 2026-11-03: 7 findings`].join("\n") + "\n");
   try {
