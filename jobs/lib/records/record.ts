@@ -135,8 +135,8 @@ function pidAlive(pid: number): boolean {
   try { process.kill(pid, 0); return true; } catch (e: any) { return e.code === "EPERM"; }
 }
 
-/** Take the record's lock: a directory with the owner's pid, made whole by a rename. A dead owner's lock goes. */
-function lockSync(key: string): () => void {
+/** Take the record's lock, or another lock of that name: a directory with the owner's pid, made whole by a rename. A dead owner's lock goes. */
+export function lockSync(key: string): () => void {
   const root = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
   mkdirSync(root, { recursive: true });
   const dir = join(root, `record-${key.replaceAll("/", "_")}`);

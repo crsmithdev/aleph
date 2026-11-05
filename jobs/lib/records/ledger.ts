@@ -11,7 +11,7 @@ import * as record from "./record.ts";
 import { isLive } from "../infra/process.ts";
 import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
-import { setCodes, shortId } from "../../../lib/naming.ts";
+import { fileSafe, jobId, ROUTINES, setCodes, shortId } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. A record keeps old words; record.ts reads them as these. */
 export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
@@ -102,6 +102,8 @@ export interface Run {
   told: boolean; shown?: boolean; started: string; ended?: string;
   /** Milliseconds since the epoch, set under the dispatch lock: the order runs were made in. */
   made?: number;
+  /** The run's number on its subject (`subjectOf`), from 1 in start order: the `n` of its job ID. A run from before job IDs has none. */
+  n?: number;
 }
 
 /** `tests`: globs of the test files that `run` takes as arguments, so a land can run only the related ones. */
@@ -198,6 +200,51 @@ export function allJobs(): Entry[][] {
     jobs.set(e.run.job, list);
   }
   return [...jobs.values()];
+}
+
+/** What a run works on: its issue, else its routine (`monitor`), else its name. */
+export const subjectOf = (run: Pick<Run, "on" | "kind" | "name">): string => run.on ?? (ROUTINES.includes(run.kind) ? run.kind : run.name);
+
+/** The runs on `subject`, oldest first, each with its number: the stored `n`, else its place in start order (a run from before job IDs). */
+function numbered(subject: string, runs: Entry[]): { e: Entry; n: number }[] {
+  return runs.filter((e) => subjectOf(e.run) === subject).map((e, i) => ({ e, n: e.run.n ?? i + 1 }));
+}
+
+/** The job ID of a run, `a1375#6`. `runs` gives the start order for a run with no stored `n`. */
+export function jobIdOf(e: Entry, runs?: Entry[]): string {
+  const subject = subjectOf(e.run);
+  return jobId(subject, e.run.n ?? numbered(subject, runs ?? allRuns()).find((x) => x.e.id === e.id)?.n ?? 1);
+}
+
+/** The `Job:` trailer value of the job `job` (the folder name of its first run): that run's job ID, or `job` when no record holds that run. */
+export function trailerOf(job: string): string {
+  const runs = allRuns();
+  const first = runs.find((e) => e.id === job);
+  return first ? jobIdOf(first, runs) : job;
+}
+
+/**
+ * Make the folder of a new run, `<stamp>-<subject>-<n>`, and write the run with `fill`, under the subject's lock: `n`
+ * is one more than the highest number on the subject, so two starts never share it. Runs sort by folder name, so the
+ * stamp comes after the stamp of each earlier run on the subject or in the job `run.job`: a follow-up started in its
+ * land's second, or a run started after the wall clock steps back (WSL2 does, by about a second), would sort before it.
+ */
+export function makeRun(run: Pick<Run, "on" | "kind" | "name"> & { job?: string }, fill: (folder: string, n: number) => void): string {
+  const subject = subjectOf(run);
+  mkdirSync(runsDir(), { recursive: true });
+  const release = record.lockSync(`start-${subject}`);
+  try {
+    const runs = allRuns();
+    const n = Math.max(0, ...numbered(subject, runs).map((x) => x.n)) + 1;
+    const now = stamp();
+    const last = runs.filter((e) => subjectOf(e.run) === subject || (run.job !== undefined && e.run.job === run.job)).map((e) => e.id.slice(0, 15)).sort().at(-1);
+    const id = `${last && last >= now ? nextStamp(last) : now}-${fileSafe(`${subject}#${n}`)}`;
+    mkdirSync(join(runsDir(), id));
+    fill(join(runsDir(), id), n);
+    return id;
+  } finally {
+    release();
+  }
 }
 
 /**

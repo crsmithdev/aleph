@@ -57,7 +57,7 @@ describe("startJob", () => {
     const folder = join(base, "jobs", job);
     mkdirSync(folder, { recursive: true });
     writeRun(folder, { kind: "build", job, name: "x", repo: "fac", branch: "factory/x", condition: "running", phase: "starting", told: false, started: "2026-11-03T00:00:00Z", made: NOW } as Run);
-    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).toBe(`x is running as ${job}`);
+    expect(await refused(() => startJob({ repo: "fac", name: "x", spec: "s" }))).toBe("x is running as x#1");
     expect(runs()).toEqual([job]);
   });
 

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, fakeLog, jobsDir, state, setup, teardown } from "../../cli.helpers";
+import { base, fakeLog, jobRuns, jobsDir, state, setup, teardown } from "../../cli.helpers";
 import { drop, job } from "../../inproc.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
@@ -14,7 +14,7 @@ describe("a factory run", () => {
       job("fac", name, `Goal: ${name} ${mark}\nACTION: ${action}\n`, {}, extra);
     const calls = () => existsSync(join(fakeLog, "review-calls")) ? readFileSync(join(fakeLog, "review-calls"), "utf8").split("\n").length - 1 : 0;
 
-    const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
+    const runsOf = (name: string) => jobRuns(name).map((d) => ({ id: d, ...state(d) }));
 
     test("a silent reviewer is stopped at ALEPH_STALL_SECONDS and holds the run with no worker rerun", async () => {
       const silent = join(base, "silent-reviewer");

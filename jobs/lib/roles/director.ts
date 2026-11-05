@@ -130,8 +130,8 @@ export function readRecord(): Decision[] {
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-function record(d: Decision): void {
-  jobRecord.addEvent(d.on || d.ref, { at: d.at, kind: "director", what: `${d.reason}: ${d.outcome}`, data: d });
+function record(d: Decision, c: Case): void {
+  jobRecord.addEvent(subjectOfCase(c), { at: d.at, kind: "director", what: `${d.reason}: ${d.outcome}`, data: d });
   const what = d.outcome === "decided"
     ? `decided: ${d.applied.join("; ") || "no action"}${d.refused.length ? `; refused ${d.refused.join("; ")}` : ""}`
     : `escalated: ${d.why ?? "undecided"}${d.refused.length ? `; refused ${d.refused.join("; ")}` : ""}`;
@@ -618,6 +618,8 @@ export async function applyActions(c: Exclude<Case, { at: "lesson" }>, actions: 
 // One run per Ask.
 
 const lockName = (on: string) => `director-${on}`;
+/** What the case's director run works on, and the record that keeps it: a run's issue, else the case's `on`. */
+export const subjectOfCase = (c: Case): string => (c.at === "run" ? c.entry.run.on ?? c.on : c.on);
 const lockOf = (run: Run): string | null => (run.on ? lockName(run.on) : null);
 
 /** Send the Ask to Chris: the case text (the director's, else the fallback) on it, and the record. */
@@ -625,13 +627,13 @@ function escalate(c: Case, base: Omit<Decision, "outcome">, text: Text | string 
   const t = text && typeof text !== "string" ? text : fallback(typeof text === "string" ? `${why}; its case text had ${text}` : why);
   if (!writeCaseText(c, t) && stillOpen(c)) factoryLog(`director: ${base.ref}: the case text was not written`);
   const d: Decision = { ...base, outcome: "escalated", why };
-  record(d);
+  record(d, c);
   return d;
 }
 
 /** One director run on one Ask: it decides or escalates. The decision, or null when another run holds the Ask. */
 export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Decision | null> {
-  const release = await lock(lockName(c.on), 0);
+  const release = await lock(lockName(subjectOfCase(c)), 0);
   if (!release) return null;
   try {
     const rec = readRecord();
@@ -644,7 +646,7 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
     const run = openRun({
       role: "director", who: "the director", model: DIRECTOR_MODEL, seconds: SECONDS,
       flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(","), ...dirs], schema: DIRECTOR_SCHEMA,
-      cwd, name: `director-${c.on}`, command: `director ${c.on}: ${reasonName(c)}: ${questionOf(c)}`, shown: true, on: c.on,
+      cwd, name: `director-${c.on}`, command: `director ${c.on}: ${reasonName(c)}: ${questionOf(c)}`, shown: true, on: subjectOfCase(c),
     });
     updateRun(run.folder, { question: questionOf(c) });
     const at = { ...base, run: run.folder.split("/").at(-1)! };
@@ -674,7 +676,7 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
     // A decision whose effect has not cleared the Ask yet (a land still running, say) still ends this Ask's one run: Chris sees it with the text.
     // A land runs in its own unit and settles the Ask when it ends, so a started land leaves no text: a failed land raises its own Ask.
     if (!r.applied.includes("land") && stillOpen(c)) writeCaseText(c, { situation: `The director decided: ${r.applied.join("; ")}. The Ask is still open, so it is with you.` });
-    record(d);
+    record(d, c);
     return d;
   } finally {
     release();

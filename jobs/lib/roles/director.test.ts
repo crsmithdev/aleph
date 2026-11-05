@@ -8,10 +8,11 @@ import { markAsked, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
 import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "../transitions/factory.ts";
-import { allRuns, loadRegistry, readRun } from "../records/ledger.ts";
+import { allRuns, jobIdOf, loadRegistry, readRun } from "../records/ledger.ts";
+import { jobId } from "../../../lib/naming.ts";
 import { setPaused } from "../gates/factory-status.ts";
 import { readStore } from "../learning/corrections.ts";
-import { lastEvent } from "../records/record.ts";
+import { lastEvent, read as readJobRecord } from "../records/record.ts";
 import { asked, base, branch, calls, choice, dropped, fresh, item, key, landed, log, n, plain, ports, reply, replyWith, run, useDirectorFixture } from "./director.fixture.ts";
 
 useDirectorFixture();
@@ -183,6 +184,20 @@ test("a worker's question on a run: the director's answer drops the job with the
   expect(d).toMatchObject({ outcome: "decided" });
   expect(dropped).toEqual([{ name: `${key}-1`, reason: `The director answered the worker's question "which module?": use ask.ts` }]);
   expect(lastEvent(`${key}-1`, "rerun")?.what).toBe(`The director answered the worker's question "which module?": use ask.ts`);
+});
+
+test("a director job on a run's Ask is a job on the run's issue and keeps its record there, not in a record of the run", async () => {
+  fresh([{ title: "issue", specced: true }]);
+  const folder = run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
+  replyWith({ case: TEXT });
+  await direct();
+  const [r] = directorRuns().filter((e) => e.run.on === `${key}-1`);
+  expect(r.id).toEndWith(`-${key}-1-2`);
+  expect(r.run.n).toBe(2);
+  expect(jobIdOf(r)).toBe(jobId(`${key}-1`, 2));
+  expect(readJobRecord(`${key}-1`)!.runs.map((x) => x.id)).toContain(r.id);
+  expect(readJobRecord(`${key}-1`)!.events.some((e) => e.kind === "director")).toBe(true);
+  expect(readJobRecord(folder.split("/").at(-1)!)).toBeNull();
 });
 
 test("a paused factory starts no director run", async () => {

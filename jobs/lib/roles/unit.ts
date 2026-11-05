@@ -12,11 +12,11 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, reader } from "../../../issues/lib/store.ts";
 import { OPUS_MODEL } from "./agent-call.ts";
 import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
-import { addWorktree, fetchOrigin, git } from "../infra/git.ts";
+import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type VerdictPorts } from "../gates/worker-verdict.ts";
-import { admit, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
+import { admit, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, trailerOf, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob, stepOf } from "../records/job.ts";
@@ -137,9 +137,10 @@ const taskOf = (folder: string, repo: Repo, changed: string[], phase: (p: string
  * commits as they are, because the rebase would flatten it.
  */
 function stampJob(wt: string, base: string, job: string): void {
-  const bare = git(wt, "log", "--format=%H", "--invert-grep", "-E", `--grep=^Job: ${job}$`, `${base}..HEAD`).out;
+  const value = trailerOf(job);
+  const bare = git(wt, "log", "--format=%H", "--invert-grep", "-E", jobGrep([job, value]), `${base}..HEAD`).out;
   if (!bare || git(wt, "rev-list", "--merges", `${base}..HEAD`).out) return;
-  const amend = `git -c core.hooksPath=/dev/null commit -q --amend --no-edit --no-verify --trailer 'Job: ${job}'`;
+  const amend = `git -c core.hooksPath=/dev/null commit -q --amend --no-edit --no-verify --trailer 'Job: ${value}'`;
   if (!git(wt, "-c", "core.hooksPath=/dev/null", "rebase", "-q", "--exec", amend, base).ok) git(wt, "rebase", "--abort");
 }
 

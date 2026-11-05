@@ -31,7 +31,8 @@ Text that people read does not use these old words: goal (an issue), part (an is
 - A short ID is never read out of free text. `a1430` is valid hex, so a sha such as `a143077` would match. Only the full form is found in free text.
 - A sub-issue takes the next number from the repo's counter and gets a `from:` link. The parent stays open and closes when its children close.
 - Old dotted parts keep their IDs and still parse.
-- A file or unit name uses `-` in place of `#`: `a1430-2`.
+- A file or unit name uses `-` in place of `#`, with the subject in the full form: run folder `20261105-080726-aleph-1430-2`, unit `aleph-aleph-1430-2`. A run keeps its `n`. A run from before job IDs has none, so its `n` is its place in start order among the runs on its subject.
+- The `Job:` commit trailer is the job ID of the job's first run: `Job: a1430#2`. A commit from before job IDs has the run folder's name, and the search for a job's commits finds both.
 
 ## Events
 

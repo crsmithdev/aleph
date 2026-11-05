@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { waitFor } from "../tests/wait.ts";
-import { aleph, base, branchExists, fakeLog, file, job, jobsDir, seedRun, setupLog, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, seedRun, setupLog, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
 import { actionJob, drop, jobView } from "./inproc";
 
 // The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,
@@ -40,7 +40,7 @@ describe("job", () => {
   test.skip("a follow-up runs in the same worktree with the spec, notes and previous result", async () => {
     const r = await actionJob("alpha", "commit b.txt");
     expect(r.code).toBe(0);
-    const first = readdirSync(jobsDir).sort().find((d) => d.endsWith("-demo-alpha-build"))!;
+    const first = jobRuns("alpha", "build")[0];
     expect(r.json.job).toBe(first);
     expect(r.json.run).not.toBe(first);
     expect(state(r.json.run).condition).toBe("passed");

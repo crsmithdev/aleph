@@ -6,10 +6,10 @@
  * `agentCall` is the other kind: a `claude` call that works in a git worktree (the worker and the reviewer).
  */
 import { modelArgv, modelEnv } from "../routing/models.ts";
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, closeSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { outcome, replyOf, type Outcome } from "../gates/gate.ts";
-import { allRuns, lock, readRun, runsDir, nextStamp, stamp, updateRun, writeRun, type Run } from "../records/ledger.ts";
+import { allRuns, lock, makeRun, readRun, runsDir, updateRun, writeRun, type Run } from "../records/ledger.ts";
 import { roleCmd, roleSeconds } from "../infra/settings.ts";
 import { runFile } from "../records/run-files.ts";
 import { schemaFlags, sessionOf, structuredOf } from "./structured.ts";
@@ -64,7 +64,7 @@ export async function callAgent(c: Call, input: string): Promise<{ text: string;
   return { text: r.text, data: r.data, cost: r.cost };
 }
 
-/** The ledger's line for a role's run. `job` defaults to the folder's own name. */
+/** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else `monitor` for the monitor, else `name`. */
 export interface Opening extends Call {
   role: "intake" | "facts" | "director" | "monitor";
   name: string;
@@ -96,17 +96,10 @@ export interface AgentRun {
 
 /** Make the run's folder and state. The caller ends the run, on every path. */
 export function openRun(o: Opening): AgentRun {
-  mkdirSync(runsDir(), { recursive: true });
-  let folder = "";
-  // Runs sort by folder name, so a run that joins a job stamps after the job's latest run: a clock stepped back would sort it before.
-  const now = stamp();
-  const last = o.job === undefined ? undefined : allRuns().filter((e) => e.run.job === o.job).map((e) => e.id.slice(0, 15)).sort().at(-1);
-  const at = last && last >= now ? nextStamp(last) : now;
-  for (let n = 0; !folder; n++) {
-    const path = join(runsDir(), `${at}-${o.name}${n ? `-${n}` : ""}-${o.role}`);
-    try { mkdirSync(path); folder = path; } catch (e: any) { if (e.code !== "EEXIST") throw e; }
-  }
-  writeRun(folder, { kind: o.role, job: o.job ?? folder.split("/").at(-1)!, name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now() });
+  const id = makeRun({ kind: o.role, name: o.name, on: o.on, job: o.job }, (folder, n) => {
+    writeRun(folder, { kind: o.role, job: o.job ?? basename(folder), name: o.name, ...(o.repo !== undefined ? { repo: o.repo } : {}), ...(o.on !== undefined ? { on: o.on } : {}), condition: "running", phase: o.role, model: o.model, told: true, shown: o.shown, started: new Date().toISOString(), made: Date.now(), n });
+  });
+  const folder = join(runsDir(), id);
   writeFileSync(runFile(folder, "command.txt"), `${o.command}\n`);
   let prev: { input: string; session?: string } | undefined;
   let spent: number | undefined;

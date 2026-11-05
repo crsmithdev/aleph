@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { waitFor } from "../tests/wait.ts";
-import { aleph, base, diagnose, jobsDir, quiet, startScript, stateNow, setup, teardown, until as untilQuiet, seedItem } from "./cli.helpers";
+import { aleph, base, diagnose, issueRuns, jobsDir, quiet, startScript, stateNow, setup, teardown, until as untilQuiet, seedItem } from "./cli.helpers";
 import { drop, issueClose } from "./inproc";
 
 beforeAll(setup);
@@ -18,7 +18,7 @@ describe("a factory run", () => {
     const issue = async (n: string) =>
       seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
     const until = async (f: () => boolean) => { await waitFor(f, { timeout: 30_000, every: 100 }); expect(f()).toBe(true); };
-    const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).condition === "passed");
+    const settled = (id: number) => issueRuns(id).every((r) => stateNow(r).condition === "passed");
     const ids: number[] = [];
     beforeAll(() => {
       startLog = join(base, "start.log");
@@ -58,7 +58,7 @@ describe("a factory run", () => {
       const startedBoth = [...new Set([...(x.json?.started ?? []), ...(y.json?.started ?? [])])];
       if (startedBoth.length !== 1) throw new Error(`started ${startedBoth.length}, not 1\n${why()}`);
       // A run is live while its pid is written and its exit is not.
-      const live = readdirSync(jobsDir).filter((r) => [`-fac-fac-${e}-`, `-fac-fac-${f}-`].some((p) => r.includes(p)) && existsSync(join(jobsDir, r, "pid")) && !existsSync(join(jobsDir, r, "exit")));
+      const live = [...issueRuns(e), ...issueRuns(f)].filter((r) => existsSync(join(jobsDir, r, "pid")) && !existsSync(join(jobsDir, r, "exit")));
       if (live.length !== 1) throw new Error(`live ${live.length}, not 1\n${why()}`);
       writeFileSync(gate("e"), "");
       writeFileSync(gate("f"), "");

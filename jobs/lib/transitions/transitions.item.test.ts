@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { addOld, sh, worktree, setup, teardown } from "../../cli.helpers";
 import { actionJob, drop, issueClose } from "../../inproc.ts";
 import { reportText } from "../infra/flow.testkit.ts";
+import { trailerOf } from "../records/ledger.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 // The CLI tests of a job on an item (its land, and the jobs list that reads fate from git) are in jobs/cli.item.test.ts.
@@ -11,7 +12,7 @@ afterAll(teardown);
 describe("fate from git", () => {
   test("each worker commit carries the job's trailer", async () => {
     const j = await actionJob("stamped", "commit stamped.txt");
-    expect(sh(worktree("stamped"), "git", "log", "-1", "--format=%B")).toContain(`Job: ${j.json.job}`);
+    expect(sh(worktree("stamped"), "git", "log", "-1", "--format=%B")).toContain(`Job: ${trailerOf(j.json.job)}`);
     await drop("stamped");
   });
 });

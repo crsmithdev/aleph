@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { callAgent, endLost, openRun, type Opening } from "./agent-run.ts";
-import { allRuns, lock, readRun, runsDir, stamp, writeRun } from "../records/ledger.ts";
+import { allRuns, jobIdOf, lock, readRun, runsDir, stamp, writeRun } from "../records/ledger.ts";
 
 let base: string;
 const saved = { ...process.env };
@@ -51,6 +51,27 @@ test("a role run that joins a job sorts after the job's earlier runs, even when 
   const run = openRun({ ...opening, name: "step", job: "step-job" });
   const ids = allRuns().map((e) => e.folder);
   expect(ids.indexOf(run.folder)).toBeGreaterThan(ids.indexOf(earlier));
+});
+
+test("two jobs on one subject are #1 and #2, after the runs from before job IDs, and their folders are <stamp>-<subject>-<n>", () => {
+  const old = join(runsDir(), `${stamp(new Date(Date.now() - 60_000))}-intake-r-9-intake`);
+  mkdirSync(old, { recursive: true });
+  writeRun(old, { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", condition: "done", told: true, started: new Date().toISOString() });
+  const one = openRun({ ...opening, on: "r-9" });
+  const two = openRun({ ...opening, on: "r-9" });
+  const e = (f: string) => allRuns().find((x) => x.folder === f)!;
+  expect([jobIdOf(e(old)), jobIdOf(e(one.folder)), jobIdOf(e(two.folder))]).toEqual(["r-9#1", "r-9#2", "r-9#3"]);
+  expect(one.folder.split("/").at(-1)).toMatch(/^\d{8}-\d{6}-r-9-2$/);
+  expect(readRun(two.folder)!.n).toBe(3);
+  const first = openRun({ ...opening, on: "r-10" }), second = openRun({ ...opening, on: "r-10" });
+  expect([jobIdOf(e(first.folder)), jobIdOf(e(second.folder))]).toEqual(["r-10#1", "r-10#2"]);
+});
+
+test("starts on one subject in parallel processes never share a number", async () => {
+  const script = `import { openRun } from ${JSON.stringify(join(import.meta.dir, "agent-run.ts"))}; openRun(${JSON.stringify({ ...opening, on: "r-20" })});`;
+  const ps = Array.from({ length: 6 }, () => Bun.spawn(["bun", "-e", script], { env: process.env, stdout: "ignore", stderr: "inherit" }));
+  expect(await Promise.all(ps.map((p) => p.exited))).toEqual([0, 0, 0, 0, 0, 0]);
+  expect(allRuns().filter((x) => x.run.on === "r-20").map((x) => x.run.n).sort()).toEqual([1, 2, 3, 4, 5, 6]);
 });
 
 test("a run records the cost of its result event, also when the command fails, and has none without one", async () => {

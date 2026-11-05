@@ -5,7 +5,7 @@
 import { readFetched, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { fetchOrigin, git, jobCommit } from "../infra/git.ts";
-import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
+import { allRuns, trailerOf, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";
 import { runViewOf, stage, subjectOf, type Ctx, type RunView, type Stage, type Subject } from "./stage.ts";
 
@@ -115,7 +115,7 @@ export function onMain(repo: { path: string; key: string; main: string } | undef
   if (o.fetch) fetchOrigin(repo.path);
   const main = `origin/${repo.main}`;
   if (o.job) {
-    const trailer = jobCommit(repo.path, repo.main, o.job);
+    const trailer = jobCommit(repo.path, repo.main, [o.job, trailerOf(o.job)]);
     if (trailer) return { commit: trailer, how: "Job trailer" };
   }
   const there = itemOnMain(repo, o.item);

@@ -47,9 +47,12 @@ export function gitWith(o: { env?: Record<string, string>; stdin?: string }, cwd
   return { ok: p.exitCode === 0, out: (p.stdout.toString() + (p.exitCode === 0 ? "" : p.stderr.toString())).trimEnd() };
 }
 
-/** The commit of job `job` on `origin/<main>` (the newest whose message has a `Job: <job>` trailer line), or an empty string. */
-export function jobCommit(cwd: string, main: string, job: string): string {
-  return git(cwd, "log", `origin/${main}`, "-1", "--format=%H", "-E", `--grep=^Job: ${job}$`).out;
+/** The `git log -E --grep` of a `Job:` trailer line with one of `values`: a job ID, and the folder name an old job wrote. */
+export const jobGrep = (values: string[]): string => `--grep=^Job: (${[...new Set(values)].map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})$`;
+
+/** The commit of a job on `origin/<main>` (the newest whose message has a `Job:` trailer with one of `values`), or an empty string. */
+export function jobCommit(cwd: string, main: string, values: string[]): string {
+  return git(cwd, "log", `origin/${main}`, "-1", "--format=%H", "-E", jobGrep(values)).out;
 }
 
 /** The pause between two tries of a step that met a held git lock. A test replaces it to free the lock. */

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { base, branchExists, fakeLog, file, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.helpers";
+import { base, branchExists, fakeLog, file, jobRuns, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.helpers";
 import { actionJob, drop, job, jobView } from "../../inproc.ts";
 import { dropAs, run } from "../infra/flow.testkit.ts";
 import { writeRun } from "../records/ledger.ts";
@@ -31,7 +31,7 @@ describe("job", () => {
     });
 
     test("a follow-up started after the wall clock steps back sorts after the job's runs", async () => {
-      const before = readdirSync(jobsDir).filter((d) => d.endsWith("-demo-alpha-build")).sort();
+      const before = jobRuns("alpha", "build");
       setSystemTime(new Date(Date.now() - 60_000));
       const r = await actionJob("alpha", "commit s.txt").finally(() => setSystemTime());
       expect(r.code).toBe(0);

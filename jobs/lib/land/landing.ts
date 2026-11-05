@@ -9,7 +9,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { closeAndFile, note } from "../../../issues/lib/store.ts";
 import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
-import { askOf, allRuns, isWaiting, isAgentRun, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { askOf, allRuns, isWaiting, isAgentRun, lock, onOf, trailerOf, updateRun, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive } from "../infra/process.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
@@ -114,7 +114,7 @@ function landMessage(subjects: string[], run: Run, repo: Repo): string {
   const on = onOf(run);
   const trailers = [
     ...(on === undefined ? [] : [`Issue: ${repo.key}-${on}`]),
-    `Job: ${run.job}`,
+    `Job: ${trailerOf(run.job)}`,
     ...(run.held ? [`Held-by: ${run.lander ?? "Chris"}`] : []),
   ];
   // A subject is never on a line of its own after the title, so none can read as a trailer.

@@ -7,6 +7,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as record from "../records/record.ts";
 import { both, dir, given, job, landLog, mainFiles, ports, pushes, queued, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
+import { trailerOf } from "../records/ledger.ts";
 
 useLandingFixture();
 
@@ -50,9 +51,9 @@ test("a batch of three: one check call, one push, three commits, each with its o
   expect(pushes()).toBe(1);
   expect(given(b).verdict.condition).toBe("landed");
   expect(given(c).checks).toEqual([{ name: "fake", ok: true, seconds: 0 }]);
-  for (const e of [a, b, c]) expect(remote("log", "-1", "--format=%s", `--grep=^Job: ${e.run.job}$`, "main")).toBe(`add ${e.run.name}.txt`);
-  expect(remote("log", "-1", "--format=%H", `--grep=^Job: ${b.run.job}$`, "main")).toBe(given(b).verdict.commit);
-  for (const [e, n] of [[a, 11], [b, 12], [c, 13]] as const) expect(remote("log", "-1", "--format=%b", `--grep=^Job: ${e.run.job}$`, "main")).toContain(`Issue: demo-${n}\n`);
+  for (const e of [a, b, c]) expect(remote("log", "-1", "--format=%s", `--grep=^Job: ${trailerOf(e.run.job)}$`, "main")).toBe(`add ${e.run.name}.txt`);
+  expect(remote("log", "-1", "--format=%H", `--grep=^Job: ${trailerOf(b.run.job)}$`, "main")).toBe(given(b).verdict.commit);
+  for (const [e, n] of [[a, 11], [b, 12], [c, 13]] as const) expect(remote("log", "-1", "--format=%b", `--grep=^Job: ${trailerOf(e.run.job)}$`, "main")).toContain(`Issue: demo-${n}\n`);
   expect(remote("rev-list", "--count", "main")).toBe("4");
   expect(landLog(a)).toContain("batch of 3");
   expect(existsSync(join(repo.path, "t3.txt"))).toBe(true);

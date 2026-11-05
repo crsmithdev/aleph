@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, jobsDir, other, repo, sh, state, setup, teardown } from "./cli.helpers";
+import { aleph, jobRuns, other, repo, sh, state, setup, teardown } from "./cli.helpers";
 import { job, land } from "./inproc";
 
 beforeAll(setup);
@@ -21,8 +21,8 @@ describe("a factory run", () => {
       for (const [f, text] of extra) { writeFileSync(join(other, f), text); sh(other, "git", "add", f); }
       sh(other, "git", "commit", "-qm", "fix main"); sh(other, "git", "push", "-q", "origin", "main");
     };
-    const agentRuns = (name: string) => readdirSync(jobsDir).filter((d) => d.endsWith(`-fac-${name}-build`));
-    const kinds = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-fac-${name}-`)).sort().map((d) => state(d).kind);
+    const agentRuns = (name: string) => jobRuns(name, "build");
+    const kinds = (name: string) => jobRuns(name).map((d) => state(d).kind);
     const NOFIX = { ALEPH_FIX_ROUNDS: "0" };
 
     test("a job stuck on a failed check passes once main is fixed, keeps the worker's commit and starts no worker", async () => {

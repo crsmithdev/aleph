@@ -40,7 +40,7 @@ erDiagram
 | Old part | `issues/<repo>/backlog/tasks/<repo>-<n>.<k>.md` | Child from before `from`; intake no longer makes one |
 | Job record | `jobs/<repo>-<n>[.<k>].json` | Issue or part with work on it |
 | Run | An entry in the job record's `runs[]` | Agent process: intake, worker, land, director, … |
-| Run folder | `runs/<stamp>-<name>-<kind>/` | Run |
+| Run folder | `runs/<stamp>-<subject>-<n>/` (old: `runs/<stamp>-<name>-<kind>/`) | Run |
 | Ask | The job record's `ask` | Decision that waits |
 
 ## Registry: `repos.json`
@@ -135,7 +135,7 @@ Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec versio
 
 | Group | Fields |
 |---|---|
-| Identity | `job`, `name`, `kind`, `repo`, `on`, `branch`, `worktree` |
+| Identity | `job`, `n`, `name`, `kind`, `repo`, `on`, `branch`, `worktree` |
 | State | `condition`, `phase`, `reason`, `question`, `next`, `round`, `failed` |
 | Why it stopped | `cause`, `checkName`, `fate` |
 | Model | `session`, `model`, `tier`, `cost` |
@@ -159,7 +159,7 @@ A record from before `docs/naming.md` keeps its old words (`awaiting`, `stuck`, 
 
 ## Run folders: `runs/`
 
-One folder per run: `<YYYYMMDD-HHMMSS>-<name>-<kind>`. A stamp is never earlier than the job's previous stamp. `jobs/lib/records/run-files.ts` names the files:
+One folder per run: `<YYYYMMDD-HHMMSS>-<subject>-<n>`, for example `20261105-080726-aleph-1421-6`. The subject is the run's `on` in the full form, else the routine (`monitor`), else the run's `name`. `n` is the run's job number on its subject, from 1 in start order, and the run keeps it in `n`: its job ID is `<subject>#<n>` ([Naming](naming.md)). `makeRun` in `ledger.ts` sets `n` under a lock of the subject, so two starts never get the same `n`. A folder from before job IDs is `<YYYYMMDD-HHMMSS>-<name>-<kind>` and its run has no `n`: a reader takes the run's place in start order among the runs on its subject. A stamp is never earlier than the stamp of an earlier run on the subject or in the job. The systemd unit of a run is `aleph-<subject>-<n>`; an old run's unit is `aleph-<folder>`. `jobs/lib/records/run-files.ts` names the files:
 
 | File | Holds |
 |---|---|

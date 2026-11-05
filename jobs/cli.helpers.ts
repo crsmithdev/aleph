@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readRun, writeRun, type Run } from "./lib/records/ledger.ts";
+import { allRuns, readRun, writeRun, type Run } from "./lib/records/ledger.ts";
 import { unitAlive } from "./lib/infra/process.ts";
 export { unitAlive };
 import { config as storeConfig } from "../issues/lib/store.ts";
@@ -32,11 +32,11 @@ touch "$busy"
 joberr="$START_LOG.err.$$"
 trap 'rm -f "$busy" "$joberr"' EXIT
 echo "$2" >> "$START_LOG"
-before=$(ls -d ${jobsDir}/*-fac-"$2"-* 2>/dev/null)
+before=$(ls -d ${jobsDir}/*-"$2"-* 2>/dev/null)
 ALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --on "$3" > /dev/null 2> "$joberr" < /dev/stdin &
 job=$!
 for ((;;)); do
-  for d in $(ls -d ${jobsDir}/*-fac-"$2"-* 2>/dev/null); do
+  for d in $(ls -d ${jobsDir}/*-"$2"-* 2>/dev/null); do
     [ -e "$d/pid" ] && ! grep -qxF "$d" <<< "$before" && exit 0
   done
   kill -0 $job 2>/dev/null || { cat "$joberr" >&2; exit 1; }
@@ -71,16 +71,21 @@ export const dispatching = (): boolean => {
  */
 export const quiet = (startLog: string): boolean => !starting(startLog) && !dispatching() && readdirSync(jobsDir).every((r) => !unitAlive(join(jobsDir, r)));
 
+/** The run folders on the issue `fac-<id>`, by name: `<stamp>-fac-<id>-<n>`. A folder is there a moment before its record. */
+export const issueRuns = (id: string | number): string[] => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((r) => new RegExp(`^\\d{8}-\\d{6}-fac-${id}-\\d+$`).test(r)) : []);
+/** The runs of the job `name`, oldest first, only those of `kind` when given: a folder name has the subject, not the job's name or kind. */
+export const jobRuns = (name: string, kind?: string): string[] => allRuns().filter((e) => e.run.name === name && (!kind || e.run.kind === kind)).map((e) => e.id);
+
 /** Every run of the goal has passed, and at least one exists: the start log comes before the run folder, so an empty list is not settled. */
 export const passed = (startLog: string, id: string | number): boolean => {
-  const runs = readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
+  const runs = issueRuns(id);
   return !starting(startLog) && runs.length > 0 && runs.every((r) => stateNow(r).condition === "passed");
 };
 
 const tail = (f: string, n = 15) => (existsSync(f) ? readFileSync(f, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "(none)");
 /** What a failed concurrency test needs to name its cause: the runs of the given goal ids with their pid and exit, and the factory logs. */
 export function diagnose(label: string, ids: number[], ...results: { code: number; stdout: string; stderr: string }[]): string {
-  const runs = existsSync(jobsDir) ? readdirSync(jobsDir).sort().filter((r) => ids.some((id) => r.includes(`-fac-fac-${id}-`)))
+  const runs = existsSync(jobsDir) ? readdirSync(jobsDir).sort().filter((r) => ids.some((id) => issueRuns(id).includes(r)))
     .map((r) => `--- ${r}: pid ${tail(join(jobsDir, r, "pid"), 1)}, exit ${tail(join(jobsDir, r, "exit"), 1)}`) : [];
   return [`${label}`, ...results.map((x, i) => `--- dispatch ${"xy"[i] ?? i}: exit ${x.code}\nstdout: ${x.stdout.trim()}\nstderr: ${tail_(x.stderr)}`), ...runs,
     `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`, `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`].join("\n");

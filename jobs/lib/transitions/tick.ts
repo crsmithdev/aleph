@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { reader } from "../../../issues/lib/store.ts";
 import { ciStep } from "../gates/ci.ts";
-import { pendingCases } from "../roles/director.ts";
+import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsStep, directIfNew, doneChecker, episodeStep, runDispatch, stalled } from "./factory.ts";
 import { baselines, factoryDir, factoryRepos, gates, readStalls, writeStalls } from "../gates/factory-status.ts";
 import { firefight } from "../land/firefighter.ts";
@@ -72,7 +72,7 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
   if (gates({ only: ["pause"] })) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
   const keys = stalled(jobs, lists, doneChecker(false));
-  for (const c of pendingCases(factoryRepos(), runs, lists)) if (!busy(runs, "director", c.on)) keys.push(`ask:${c.on}`);
+  for (const c of pendingCases(factoryRepos(), runs, lists)) if (!busy(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);
   for (const j of editedWaits(jobs)) keys.push(`edited:${j[0].run.name}`);
   const seen = readStalls();

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, base, env, file, jobsDir, moveMain, remote, sh, state, stateNow, until, setup, teardown } from "./cli.helpers";
+import { CLI, base, env, file, jobRuns, jobsDir, moveMain, remote, sh, state, stateNow, until, setup, teardown } from "./cli.helpers";
 import { issueAdd, issueShow, job, land as landJob } from "./inproc";
 
 beforeAll(setup);
@@ -9,7 +9,7 @@ afterAll(teardown);
 
 const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
 const startLand = (name: string) => Bun.spawn(["bun", CLI, "land", name], { cwd: base, env: env(), stdout: "ignore", stderr: "ignore" });
-const landRun = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-${name}-land`)).sort().at(-1)!;
+const landRun = (name: string) => jobRuns(name, "land").at(-1)!;
 /** Kills the process that does the land, as a crash or an OOM kill would, and waits for the CLI that started it. */
 async function killLand(name: string, cli: ReturnType<typeof startLand>): Promise<void> {
   process.kill(Number(readFileSync(join(jobsDir, landRun(name), "pid"), "utf8")), "SIGKILL");

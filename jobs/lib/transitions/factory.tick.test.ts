@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, readdirSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { base, jobsDir, remote, sh, state, setup, teardown, seedItem } from "../../cli.helpers";
+import { base, issueRuns, remote, sh, state, setup, teardown, seedItem } from "../../cli.helpers";
 import { issueShow } from "../../inproc.ts";
 import { tick } from "../infra/flow.testkit.ts";
 
@@ -18,7 +18,7 @@ describe("a factory run", () => {
     const t = await tick();
     expect(t.skipped).toEqual([]);
     expect(t.started).toEqual([`fac-${id}`]);
-    const runs = readdirSync(jobsDir).filter((d) => d.includes(`-fac-fac-${id}-`)).sort();
+    const runs = issueRuns(id).sort();
     expect(runs.map((d) => [state(d).kind, state(d).condition])).toEqual([["build", "passed"], ["land", "landed"]]);
     expect((await issueShow("fac", id)).json.status).toBe("done");
     expect(remoteGit("log", "-1", "--format=%(trailers:only)", "main")).toContain(`Issue: fac-${id}`);

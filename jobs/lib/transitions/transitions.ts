@@ -5,10 +5,10 @@
  * argv. The factory and the unit call them in-process. Starting the run's unit
  * is the launcher's (launch.ts). See docs/specs/2026-09-24-agent-jobs.md.
  */
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
-import { allRuns, askOf, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, nextStamp, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, askOf, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, jobIdOf, lock, makeRun, onOf, updateRun, writeRun, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, type Fate } from "../records/outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "../records/job.ts";
@@ -60,7 +60,7 @@ export interface StartOpts { command?: string[]; output?: Output }
  * Create the run folder and start its unit, under the dispatch lock. The lock
  * is held until the unit writes `pid`, so a second dispatch counts this run.
  */
-async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void): Promise<Start> {
+async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, command: string[], output: Output | undefined, prep: (folder: string) => void): Promise<Start> {
   const release = await lock("dispatch", 120_000); // a queue of starts, each holding it until its unit writes pid
   if (!release) refuse("another dispatch holds the lock");
   let child: ReturnType<typeof Bun.spawn> | undefined;
@@ -75,19 +75,14 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
         if (!gpu) refuse("a local call holds the GPU");
       }
     }
-    mkdirSync(runsDir(), { recursive: true });
-    // Runs sort by folder name, so a run's stamp comes after the stamp of each earlier run of its tag: a follow-up
-    // started in its land's second, or a land started after the wall clock steps back (WSL2 does, by about a second), would sort before it.
-    const now = stamp();
-    const last = readdirSync(runsDir()).filter((d) => d.slice(16).startsWith(`${tag}-`)).map((d) => d.slice(0, 15)).sort().at(-1);
-    id = `${last && last >= now ? nextStamp(last) : now}-${tag}-${run.kind}`;
+    id = makeRun(run, (folder, n) => {
+      writeFileSync(runFile(folder, "command.txt"), quote(["aleph", ...command]) + "\n");
+      prep(folder);
+      // `made` orders the land queue: never below an earlier run's, so a clock stepped back keeps the order.
+      const made = Math.max(Date.now(), ...allRuns().map((e) => (e.run.made ?? 0) + 1));
+      writeRun(folder, { ...run, job: run.job ?? basename(folder), made, n } as Run);
+    });
     const folder = join(runsDir(), id);
-    mkdirSync(folder);
-    writeFileSync(runFile(folder, "command.txt"), quote(["aleph", ...command]) + "\n");
-    prep(folder);
-    // `made` orders the land queue: never below an earlier run's, so a clock stepped back keeps the order.
-    const made = Math.max(Date.now(), ...allRuns().map((e) => (e.run.made ?? 0) + 1));
-    writeRun(folder, { ...run, job: run.job ?? id, made } as Run);
     gpu?.();
     gpu = null;
 
@@ -95,7 +90,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     const factory = isBuild(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;
     const max = factory ? [`--property=RuntimeMaxSec=${jobSeconds() + 3600}`] : [];
     try {
-      child = startUnit(["unit", folder], { unit: `aleph-${id}`, cwd, props: max, output, attach: true });
+      child = startUnit(["unit", folder], { unit: `aleph-${id.slice(16)}`, cwd, props: max, output, attach: true });
     } catch (e: any) {
       updateRun(folder, { condition: "failed", reason: e.message, ended: new Date().toISOString() });
       refuse(e.message);
@@ -158,8 +153,8 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   try {
     const open = openJob(name);
     const last = open?.at(-1);
-    if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${last.id}`);
-    if (last && isRunning(last)) refuse(`${name} is running as ${last.id}`);
+    if (last && last.run.repo !== repo.key) refuse(last.run.repo ? `${name} is open in ${last.run.repo}` : `${name} is running as ${jobIdOf(last)}`);
+    if (last && isRunning(last)) refuse(`${name} is running as ${jobIdOf(last)}`);
     const first = open?.[0];
     const item = on ?? (open && issueOf(open));
     const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;
@@ -171,7 +166,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
       kind: "build", job: first?.id, name, repo: repo.key, branch: `${repo.sandbox ? "factory" : "job"}/${name}`, worktree,
       condition: "running", phase: "starting", session: crypto.randomUUID(), ...(a.model ? { model: a.model } : {}),
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(a.land ? { land: true } : {}), ...(a.merge ? { merge: true as const } : {}), told: false, shown: false, started: new Date().toISOString(),
-    }, `${repo.key}-${name}`, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
+    }, repo.path, o.command ?? jobCommand(a), o.output, (folder) => {
       if (!first) return writeFileSync(runFile(folder, "spec.md"), a.spec);
       addNote(open!, a.spec);
     });
@@ -188,11 +183,11 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
   if (!release) refuse(`${name} is busy`);
   try {
     const live = openJob(name);
-    if (live) refuse(`${name} is open as ${live.at(-1)!.id}`);
+    if (live) refuse(`${name} is open as ${jobIdOf(live.at(-1)!)}`);
     // A command inside a registered repo gets that repo's env file, as scripts/job gave Sidetone's.
     const home = Object.values(loadRegistry()).find((r) => r.env && (a.cwd === r.path || a.cwd.startsWith(r.path + "/")));
     if (home?.env) process.env.ALEPH_RUN_ENV = home.env;
-    return await dispatch({ kind: "plain", name, condition: "running", phase: "command", told: false, started: new Date().toISOString() }, name, a.cwd,
+    return await dispatch({ kind: "plain", name, condition: "running", phase: "command", told: false, started: new Date().toISOString() }, a.cwd,
       o.command ?? ["run", name, "--", ...a.argv], o.output, (folder) => {
         writeFileSync(runFile(folder, "command.txt"), quote(a.argv) + "\n");
       });
@@ -218,7 +213,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
     // A unit that has not written `pid` in the dispatch's wait still counts: a second land here would land the job twice.
     const live = runs.find((e) => isLive(e.folder) || isStarting(e));
-    if (live) refuse(`${name} is running as ${live.id}`);
+    if (live) refuse(`${name} is running as ${jobIdOf(live)}`);
     const agent = agentOf(runs)!.run;
     const terms = landTerms(agent);
     if (!terms) {
@@ -241,7 +236,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
       ...(agent.checkedBase ? { checkedBase: agent.checkedBase } : {}),
       ...(agent.checkedTip ? { checkedTip: agent.checkedTip } : {}),
       ...(agent.on !== undefined ? { on: agent.on } : {}),
-    }, `${repo.key}-${name}`, repo.path, o.command ?? ["land", name, ...(a.checked ? ["--checked"] : [])], o.output, () => {});
+    }, repo.path, o.command ?? ["land", name, ...(a.checked ? ["--checked"] : [])], o.output, () => {});
   } finally {
     release!();
   }
@@ -276,7 +271,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
   try {
     const runs = openJob(name) ?? refuse(`no open job named ${name}`);
     const last = runs.at(-1)!;
-    if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
+    if (isLive(last.folder)) refuse(`${name} is running as ${jobIdOf(last)}`);
     const r = last.run;
     if (!isAgentRun(r.kind)) refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
     if (r.condition !== "returned" && r.condition !== "failed") refuse(`${name} is ${r.condition}, not returned or failed`);
@@ -289,7 +284,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     s = await dispatch({
       kind: "recheck", job: runs[0].id, name, repo: repo.key, branch: r.branch, ...(worktree ? { worktree } : {}), condition: "running", phase: "starting",
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
-    }, `${repo.key}-${name}`, repo.path, o.command ?? ["recheck", name], o.output, () => {});
+    }, repo.path, o.command ?? ["recheck", name], o.output, () => {});
   } finally {
     release!();
   }
@@ -317,7 +312,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
       if (await stop(e)) continue;
       // A run whose process outlives the stop fails as `infra`.
       updateRun(e.folder, { condition: "failed", cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
-      refuse(`cannot stop ${e.id}: its process still runs`);
+      refuse(`cannot stop ${jobIdOf(e)}: its process still runs`);
     }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }
     // Chris asked for the drop, so it is not news.

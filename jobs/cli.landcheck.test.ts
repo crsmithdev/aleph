@@ -1,13 +1,12 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
-import { aleph, jobsDir, state, setup, teardown } from "./cli.helpers";
+import { aleph, jobRuns, state, setup, teardown } from "./cli.helpers";
 import { actionJob as job } from "./inproc";
 
 beforeAll(setup);
 afterAll(teardown);
 
 describe("a batch of lands", () => {
-  const landRuns = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`) && d.endsWith("-land")).sort().map((d) => ({ id: d, ...state(d) }));
+  const landRuns = (name: string) => jobRuns(name, "land").map((d) => ({ id: d, ...state(d) }));
 
   // Two `aleph land` processes: the lock between processes is what the case tests.
   // flaky: tests/flaky.md#landcheck-two-lands

@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, jobsDir, state, setup, teardown } from "./cli.helpers";
+import { aleph, jobRuns, jobsDir, state, setup, teardown } from "./cli.helpers";
 import { actionJob as job } from "./inproc";
 import { updateRun } from "./lib/records/ledger.ts";
 
@@ -10,7 +9,7 @@ afterAll(teardown);
 
 // `aleph drop --quiet` keeps one CLI test: jobs/cli.ts maps --quiet to no fate.
 describe("an item that is already on main", () => {
-  const runsOf = (name: string) => readdirSync(jobsDir).filter((d) => d.includes(`-demo-${name}-`)).sort().map((d) => ({ id: d, ...state(d) }));
+  const runsOf = (name: string) => jobRuns(name).map((d) => ({ id: d, ...state(d) }));
 
   test("drop keeps the fact that a no-commit run ended with no commit", async () => {
     await job("nocom", "commit nocom.txt");

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, seedItem } from "./cli.helpers";
+import { aleph, base, issueRuns, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, seedItem } from "./cli.helpers";
 import { dispatch, drop, issueClose } from "./inproc";
 
 beforeAll(setup);
@@ -15,7 +15,7 @@ describe("every transition dispatches at once", () => {
   const on = (extra: Record<string, string> = {}) => ({ ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog, ...extra });
   const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
   const gate = (n: string) => join(base, `tgate-${n}`);
-  const runs = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`));
+  const runs = (id: number) => issueRuns(id);
   // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
   // with its run-end dispatch, has exited.
   const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).condition !== "running" && !unitAlive(join(jobsDir, r)));

@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { buildableIssues, isBuildable, isSorted, partsOf, readList, writeList } from "../../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
-import { readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
+import { allRuns, readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 
@@ -114,7 +114,7 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(base, { recursive: true, force: true }));
 beforeEach(() => { delete process.env.ALEPH_INTAKE_TRIES; writeFileSync(join(base, "calls"), ""); });
-const runs = () => readdirSync(join(base, "jobs")).filter((d) => d.includes(`-intake-${repo.key}-`)).map((d) => readRun(join(base, "jobs", d))!);
+const runs = () => allRuns().filter((e) => e.run.kind === "intake" && e.run.repo === repo.key).map((e) => e.run);
 const runOf = (id: number) => runs().find((r) => r.name === `intake-${repo.key}-${id}`);
 const calls = () => readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean);
 
@@ -140,7 +140,7 @@ test("a reply that fails the code check goes back once in the same session; a fi
   expect(c[1]).toContain("--resume s-missing");
   const r = runOf(1)!;
   expect(r.cost).toBe(0.5);
-  const sent = readFileSync(join(base, "jobs", readdirSync(join(base, "jobs")).find((d) => d.includes(`-intake-${repo.key}-1`))!, "prompt.md"), "utf8");
+  const sent = readFileSync(join(allRuns().find((e) => e.run.name === `intake-${repo.key}-1`)!.folder, "prompt.md"), "utf8");
   expect(sent).toContain("the Edit surface names nope.ts, which is not on main");
 });
 

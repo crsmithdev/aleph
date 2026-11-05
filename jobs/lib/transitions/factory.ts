@@ -20,7 +20,7 @@ import { clearRerun, issueBrief } from "./continuation.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import { allJobs, checkedBy, lookMinutes, openJob } from "../records/job.ts";
 import { mine, proposals, readStore } from "../learning/corrections.ts";
-import { directAll, pendingCases, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
+import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
 import { episodesDir, writeEpisodes } from "../learning/episode.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "../land/landing.ts";
@@ -292,7 +292,7 @@ export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDet
  */
 export function directIfNew(start: () => void = directorDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false })): boolean {
   if (gates({ only: ["pause"] })) return false;
-  if (!pendingCases(sandboxRepos(), runs, lists).some((c) => !running(runs, "director", c.on))) return false;
+  if (!pendingCases(sandboxRepos(), runs, lists).some((c) => !running(runs, "director", subjectOfCase(c)))) return false;
   start();
   return true;
 }

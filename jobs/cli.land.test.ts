@@ -27,7 +27,7 @@ describe("land", () => {
     const s = state(r.json.run);
     expect(s).toMatchObject({ kind: "land", condition: "landed", told: true });
     expect(remoteHead()).toBe(s.commit);
-    expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s%n%b%n%P", "main")).toBe(`add ship.txt\nJob: ${r.json.job}\n\n${before}`);
+    expect(sh(base, "git", "--git-dir", remote, "log", "-1", "--format=%s%n%b%n%P", "main")).toBe(`add ship.txt\nJob: shipit#1\n\n${before}`);
     expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(s.commit);
     expect(existsSync(worktree("shipit"))).toBe(false);
     expect(branchExists("shipit")).toBe(false);
@@ -81,7 +81,7 @@ describe("land", () => {
     } finally {
       setSystemTime();
     }
-    const runs = readdirSync(jobsDir).filter((d) => d.includes("-demo-stepback-")).sort();
+    const runs = readdirSync(jobsDir).filter((d) => /-stepback-\d+$/.test(d)).sort();
     expect(runs).toEqual([b.json.run, r.json.run]);
     expect((await jobView("stepback")).json).toMatchObject({ run: { kind: "land" }, condition: "landed" });
   });
@@ -90,7 +90,7 @@ describe("land", () => {
   test.skip("in a repo that lands by itself, a passed job lands with no aleph land", async () => {
     const r = await job("selfland", "commit selfland.txt", {}, "auto");
     expect(state(r.json.run)).toMatchObject({ condition: "passed", next: "land" });
-    const runs = readdirSync(jobsDir).filter((d) => d.includes("-auto-selfland-")).sort();
+    const runs = readdirSync(jobsDir).filter((d) => /-selfland-\d+$/.test(d)).sort();
     expect(runs.map((d) => state(d).kind)).toEqual(["build", "land"]);
     expect(state(runs[1])).toMatchObject({ condition: "landed" });
     expect(remoteHead()).toBe(state(runs[1]).commit);

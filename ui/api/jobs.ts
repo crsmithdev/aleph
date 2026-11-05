@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { OPUS_MODEL } from "../../jobs/lib/roles/agent-call.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { isAgentRun, isBuild, loadRegistry, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allRuns, isAgentRun, isBuild, jobIdOf, loadRegistry, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, readFile, view } from "../../jobs/lib/records/job.ts";
 import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
@@ -15,7 +15,8 @@ import { word } from "../../lib/naming.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
-export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "triage" | "plan" | "facts" | "firefighter" | "director" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+/** `id` is the run folder's name, the key of its logs; `job` is the job ID that the page shows, `a1375#6`. */
+export interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "triage" | "plan" | "facts" | "firefighter" | "director" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 export interface LogFile { name: string; size: number }
 /** The log files the Job page serves, and no others. */
@@ -98,12 +99,13 @@ const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", triage: "intake", plan: "intake", facts: "intake",
   director: "director", explain: "director", monitor: "monitor", firefighter: "firefighter",
 };
-function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
+/** The runs of a job as the page shows them; with `all`, every run, each also gets its job ID. */
+function runInfos(runs: Entry[], fit: Fit | null = null, all?: Entry[]): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e) => {
     const r = e.run;
     const condition = r.condition;
-    const info: RunInfo = { id: e.id, kind: KIND[r.kind] ?? "worker", condition, started: r.started };
+    const info: RunInfo = { id: e.id, ...(all ? { job: jobIdOf(e, all) } : {}), kind: KIND[r.kind] ?? "worker", condition, started: r.started };
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
     if (r.model) info.model = r.model;
@@ -168,7 +170,7 @@ export const routes: Routes = {
     const v = view(runs);
     const fit = await currentFit().catch(() => null);
     const projector = jobProjector();
-    const detail: JobDetail = { ...projector.toJob(runs, v), runs: runInfos(runs, fit), holds: readHolds([projector.toJob(runs, v).name]) };
+    const detail: JobDetail = { ...projector.toJob(runs, v), runs: runInfos(runs, fit, allRuns()), holds: readHolds([projector.toJob(runs, v).name]) };
     const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
     if (blockers.length) detail.blockers = blockers;
     const rec = readRecord(keyOf(runs.at(-1)!.run));
