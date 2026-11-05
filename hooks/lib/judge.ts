@@ -11,9 +11,7 @@
  * docs/verify-gate.md "Jev screen".
  */
 import { decide, judgeChoice } from "./jev.ts";
-import { modelArgv, modelEnv, onGpu, readModels } from "../../jobs/lib/routing/models.ts";
-import { gpuSlot } from "../../jobs/lib/gates/factory-status.ts";
-import { factoryLog } from "../../jobs/lib/infra/layout.ts";
+import { oneShot } from "../../jobs/lib/routing/one-shot.ts";
 
 export interface Verdict { verdict: "pass" | "deny"; reason: string }
 
@@ -77,41 +75,16 @@ export async function judge(digestText: string, finalMessage: string, budgetMs =
 }
 
 async function haiku(digestText: string, left: () => number, started: number): Promise<JudgeResult> {
-  const cmd = process.env.ALEPH_JUDGE_CMD ?? "claude";
-  const env = { ...process.env };
-  delete env.CLAUDECODE;
-  delete env.CLAUDE_CODE_ENTRYPOINT;
-  delete env.ANTHROPIC_API_KEY; // the judge runs on the subscription, never the API
-  // A local call waits for the GPU slot within its time box, then falls back to Claude.
-  const pick = readModels().judge.model;
-  let release: (() => void) | null = null;
-  if (onGpu(pick)) {
-    release = await gpuSlot(left());
-    if (!release) factoryLog(`judge: the GPU slot stayed taken for budget; the call falls back to Claude`);
-  }
-  const model = onGpu(pick) && !release ? "haiku" : pick;
-  Object.assign(env, modelEnv(model));
-  env.MAX_THINKING_TOKENS = "0"; // measured: 3 s without thinking, 15-45 s with it, same verdicts
-  try {
+  return oneShot("judge", process.env.ALEPH_JUDGE_CMD ?? "claude", "judge", left(), "budget", async (ask) => {
     let error = "";
     for (let attempt = 1; attempt <= 2; attempt++) {
       if (left() <= 0) return { verdict: null, error: `judge budget spent${error ? `: ${error}` : ""}`, ms: Date.now() - started };
-      const proc = Bun.spawn(modelArgv(cmd, model, ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", RUBRIC, digestText]), {
-        env, stdout: "pipe", stderr: "pipe", stdin: "ignore",
-      });
-      const timer = setTimeout(() => proc.kill(), Math.max(left(), 0));
-      const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
-      const code = await proc.exited;
-      clearTimeout(timer);
+      const { code, stderr, result } = await ask(RUBRIC, digestText, left());
       if (code !== 0) { error = `exit ${code}: ${stderr.slice(0, 200)}`; continue; }
-      let result = stdout;
-      try { result = JSON.parse(stdout).result ?? stdout; } catch { /* plain text */ }
       const verdict = parseVerdict(result);
       if (verdict) return { verdict, ms: Date.now() - started };
       error = `unparseable: ${result.slice(0, 200)}`;
     }
     return { verdict: null, error, ms: Date.now() - started };
-  } finally {
-    release?.();
-  }
+  });
 }
