@@ -680,7 +680,7 @@ describe("hooks.json runs each guard through sh, so a guard that cannot parse de
     const code = await proc.exited;
     return { code, stdout: await new Response(proc.stdout).text(), stderr: await new Response(proc.stderr).text() };
   }
-  for (const name of ["git-guard", "secret-scan"]) {
+  for (const name of ["git-guard", "secret-scan", "gh-guard"]) {
     test(`${name}: a syntax error in the guard -> exit 2, named on stderr`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "aleph-syntax-"));
       try {
