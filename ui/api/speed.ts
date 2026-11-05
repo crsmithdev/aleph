@@ -46,8 +46,8 @@ export interface Speed {
   /** Asks set in the window: `count` all of them, `manual` those that came to Chris (a director event "escalated" from the set time until the Ask cleared). */
   asks: { count: number; manual: number };
   checks: { name: string; count: number; p50: number; p90: number }[];
-  /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
-  buckets: ({ at: string; runs: number; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
+  /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string; `cost` is the recorded cost of the agent runs that started in it, per model. */
+  buckets: ({ at: string; runs: number; cost: Record<string, number>; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
   /** Every issue with a phase that ended in the window. */
   times: IssueTimes[];
   slowest: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[];
@@ -583,9 +583,13 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   };
   const recent = flakes().filter((f) => Date.parse(f.at) >= since.getTime() && (!project || f.repo === project));
   const started = Array.from({ length: n }, () => 0);
+  const costs = Array.from({ length: n }, () => ({} as Record<string, number>));
   for (const e of entries) {
     const t = Date.parse(e.run.started);
     if (t >= since.getTime() && t < now.getTime()) started[Math.min(n - 1, Math.max(0, slot(t)))]++;
+    if (!isAgentRun(e.run.kind) || !(t >= since.getTime() && t < now.getTime())) continue;
+    const spent = costs[Math.min(n - 1, Math.max(0, slot(t)))], model = e.run.model || "unset";
+    spent[model] = round((spent[model] ?? 0) + (e.run.cost ?? 0), 4);
   }
   return {
     window,
@@ -596,7 +600,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
-      return { at: d.toISOString(), runs: started[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
+      return { at: d.toISOString(), runs: started[i], cost: costs[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
     }),
     times: ended.issues,
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),

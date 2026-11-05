@@ -450,3 +450,16 @@ test("GET /api/speed?project= counts only that repo's runs and issues, in the an
     expect((await get("?window=week&baseline=1")).baseline.prev.landed).toBe(3);
   } finally { setSystemTime(); }
 });
+
+test("a bucket's cost per model is the recorded cost of the agent runs that started in it", () => {
+  const now3 = new Date(2026, 4, 10, 15), h = (hh: number, m = 0) => new Date(2026, 4, 10, hh, m).toISOString();
+  run({ kind: "build", repo: "pc", condition: "passed", model: "opus", cost: 1.25, started: h(9, 5), ended: h(9, 10) });
+  run({ kind: "build", repo: "pc", condition: "passed", model: "opus", cost: 0.5, started: h(9, 40), ended: h(10, 10) }); // ends in the next hour, counts where it starts
+  run({ kind: "build", repo: "pc", condition: "passed", model: "sonnet", cost: 2, started: h(9, 20), ended: h(9, 30) });
+  run({ kind: "build", repo: "pc", condition: "passed", cost: 4, started: h(11), ended: h(11, 5) });
+  const d = speed("day", now3, null, "pc");
+  const at9 = d.buckets.find((b) => b.at === h(9))!, at11 = d.buckets.find((b) => b.at === h(11))!;
+  expect(at9.cost).toEqual({ opus: 1.75, sonnet: 2 });
+  expect(at11.cost).toEqual({ unset: 4 });
+  expect(d.buckets.find((b) => b.at === h(12))!.cost).toEqual({});
+});

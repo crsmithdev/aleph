@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { liveOption, renderFactoryAgents, totals } from "./views/factory-agents.js";
+import { costOption, liveOption, outcomesOption, renderFactoryAgents } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import { pace, weekGone } from "./views/speed.js";
 
@@ -54,11 +54,40 @@ test("no usage data says usage unknown; while the speed data loads the page says
   expect(renderFactoryAgents(S, { error: "no data" })).toContain("no data");
 });
 
-test("the chart has one area of the total agents live", () => {
-  expect(totals(agents)).toEqual([1.5, 0]);
-  const o = liveOption(D, "#123");
-  expect(o.series.length).toBe(1);
-  expect(o.series[0].data).toEqual([1.5, 0]);
+const T: any = { done: "#d", need: "#n", stuck: "#s", "series-1": "#1", "series-2": "#2" };
+const buckets = [{ at: new Date(2026, 9, 27).toISOString(), cost: { opus: 1.5, sonnet: 0.25 } }, { at: new Date(2026, 9, 28).toISOString(), cost: { opus: 2 } }];
+const outcomes = [
+  { role: "worker", model: "haiku", succeeded: 6, failed: 2, stuck: 1 },
+  { role: "worker", model: "sonnet", succeeded: 4, failed: 0, stuck: 0 },
+  { role: "triage", model: "opus", succeeded: 5, failed: 0, stuck: 0 },
+];
+const E: any = { window: "week", buckets, agents: { ...agents, outcomes } };
+
+test("the page has three chart boxes in one row, each with role img and an aria-label", () => {
+  const html = renderFactoryAgents(S, E);
+  const row = html.slice(html.indexOf('<div class="trio">'), html.indexOf('id="models"'));
+  const boxes = [...row.matchAll(/<div class="chartbox" data-chart="(\w+)" role="img" aria-label="([^"]+)"><\/div>/g)];
+  expect(boxes.map((m) => m[1])).toEqual(["live", "outcomes", "cost"]);
+  expect(boxes[1][2]).toBe("Outcomes by role: 15 succeeded, 2 failed, 1 stuck");
+  expect(boxes[2][2]).toBe("Cost by model: opus $3.50, sonnet $0.25");
+  expect(html.match(/class="chartbox"/g)!.length).toBe(3);
+});
+
+test("the live option has one stacked series per timed role with the point values", () => {
+  const o = liveOption(E, T);
+  expect(o.series.map((s: any) => [s.name, s.stack, s.color, s.data])).toEqual([["Worker", "all", "#1", [1, 0]], ["Triage", "all", "#2", [0.5, 0]]]);
+});
+
+test("the outcomes option has horizontal stacked bars of succeeded, failed and stuck, summed per role", () => {
+  const o = outcomesOption(E, T);
+  expect(o.yAxis.type).toBe("category");
+  expect(o.yAxis.data).toEqual(["Worker", "Triage"]);
+  expect(o.series.map((s: any) => [s.name, s.stack, s.data])).toEqual([["Succeeded", "all", [10, 5]], ["Failed", "all", [2, 0]], ["Stuck", "all", [1, 0]]]);
+});
+
+test("the cost option has one stacked series per model with the bucket costs", () => {
+  const o = costOption(E);
+  expect(o.series.map((s: any) => [s.name, s.stack, s.data])).toEqual([["opus", "all", [1.5, 2]], ["sonnet", "all", [0.25, 0]]]);
 });
 
 test("the title is the sidebar name, whatever the data", () => {
