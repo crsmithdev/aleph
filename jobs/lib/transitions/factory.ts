@@ -5,6 +5,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { LANES, lane, word } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
@@ -434,16 +435,15 @@ export function behind(repo: Repo): string | null {
 
 const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
 
-/** The heading a run's report entry goes under. */
-const laneOf = (e: Entry): string =>
-  e.run.condition === "landed" ? "delivered" : isAwaiting(e.run.condition) ? "needs you" : e.run.condition === "stuck" || e.run.condition === "failed" ? "stuck" : "other";
+/** The heading a run's report entry goes under: the report lane of its stored condition. */
+const laneOf = (e: Entry): string => lane(word("state", e.run.condition));
 
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
   const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
   const lane = laneOf(e);
-  const prio = (lane === "delivered" || lane === "needs you") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
+  const prio = (lane === "landed" || lane === "waiting") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
   const head = `${r.repo}/${r.name} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.condition === "landed" && r.commit) {
@@ -533,9 +533,9 @@ function cameDue(): string[] {
 function runLines(now: number): string[] {
   const fresh = allRuns().filter((e) => e.run.shown === false && e.run.kind !== "plain" && e.run.condition !== "running" && !(isLive(e.folder) || isStarting(e)));
   const lines: string[] = [];
-  for (const lane of ["delivered", "needs you", "stuck", "other"]) {
-    const here = fresh.filter((e) => laneOf(e) === lane);
-    if (here.length) lines.push(`${lane}:`, ...here.map(entry));
+  for (const l of LANES) {
+    const here = fresh.filter((e) => laneOf(e) === l);
+    if (here.length) lines.push(`${l}:`, ...here.map(entry));
   }
   for (const e of fresh) updateRun(e.folder, { shown: true });
   const today = runsToday(now);

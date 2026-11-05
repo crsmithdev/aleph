@@ -30,6 +30,22 @@ test("report lists each new episode page once, and nothing without an episodes f
   expect(second).not.toContain("fac-2 Other");
 });
 
+test("the report groups each unshown run under its report lane, in the order of the naming standard", () => {
+  mk("fac-11", "build", "landed", { shown: false });
+  mk("fac-12", "build", "awaiting", { shown: false });
+  mk("fac-13", "build", "stuck", { shown: false });
+  const out = report();
+  const at = (s: string) => out.indexOf(s);
+  expect(at("landed:")).toBeLessThan(at("waiting:"));
+  expect(at("waiting:")).toBeLessThan(at("failed:"));
+  expect(out).toContain("landed:\nfac/fac-11 landed");
+  expect(out).toContain("waiting:\nfac/fac-12 awaiting");
+  expect(out).toContain("failed:\nfac/fac-13 stuck");
+  expect(out).not.toContain("delivered:");
+  expect(out).not.toContain("needs you:");
+  expect(out).not.toContain("stuck:");
+});
+
 test("a deleted episode page leaves the seen file, and a page still on disk is not listed again", () => {
   const dir = join(ctx.base, "factory", "episodes");
   rmSync(dir, { recursive: true, force: true });
