@@ -93,7 +93,7 @@ test("the lanes: Running shows live agent runs of the cap and lists every open r
   const d = (n: number) => ({ id: `aleph-${n}`, title: `D${n}`, href: "#/x", jobs: [] });
   const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)) });
   expect((done.match(/done-row/g) ?? []).length).toBe(10);
-  expect(done).toContain('<h2 id="h-done">Done</h2>');
+  expect(done).toContain('<h2 id="h-done">Done 10 of 0</h2>');
   expect(done).not.toContain("Latest done");
 });
 
@@ -146,4 +146,31 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
 test("the Status view is at / in the Factory group", () => {
   expect(view.view.path).toBe("/");
   expect(view.view.group).toBe("factory");
+});
+
+test("a blocked Queued card ends its meta row with the id it waits on, with no wait text and no status chip", () => {
+  const w = { repo: "r", title: "t", stage: "blocked", why: "Waits on r-9", at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z" };
+  const html = view.renderLanes({ ...state, queued: [
+    { ...w, id: 1, kind: "not-ready", waits: [{ id: "r-9", href: "#/issues/r/9", state: "working", dead: null }] },
+    { ...w, id: 2, kind: "busy-file", why: "waits for r-7: both change the busy file a.ts", on: "r-7" },
+  ] });
+  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">blocked: r-9<\/span><\/div>/);
+  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">blocked: r-7<\/span><\/div>/);
+  expect(html).not.toContain("Waits");
+  expect(html).not.toContain("waits for");
+  expect(html).not.toContain("badge stuck");
+  expect(html).not.toContain(">blocked</span>");
+});
+
+test("a land card has its own kind class, and the Done header counts the selected window", () => {
+  const run = (kind: string) => ({ name: "j", repo: "r", item: { title: "t" }, started: "2026-11-02T11:00:00Z", run: { kind, started: "2026-11-02T11:00:00Z" } });
+  const html = view.renderLanes({ ...state, running: [run("land"), run("build")] });
+  expect(html).toContain("run-row kind-land");
+  expect(html).toContain("run-row kind-worker");
+  const day = Date.parse(state.now);
+  const done = { ...state, done: [1, 2].map((n) => ({ id: `r-${n}`, title: "d", href: "#/x", jobs: [] })),
+    doneStamps: [0, 1, 2, 3 * 86_400_000, 20 * 86_400_000].map((a, i) => ({ id: `r-${i}`, at: day - a })) };
+  expect(view.renderLanes(done)).toContain("Done 2 of 4");
+  expect(view.renderLanes(done, "day")).toContain("Done 2 of 3");
+  expect(view.renderLanes(done, "month")).toContain("Done 2 of 5");
 });

@@ -10,7 +10,7 @@ import { annotate, currentFit, summary } from "../usage.ts";
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo: string }>(a: T[]) => a.filter((x) => x.repo === project);
-  return { ...s, stuck: mine(s.stuck), running: mine(s.running), delivered: mine(s.delivered), planner: mine(s.planner), done: s.done.filter((i) => i.id.startsWith(`${project}-`)), incoming: s.incoming.filter((i) => i.id.startsWith(`${project}-`)), issues: s.issues.filter((i) => i.id.startsWith(`${project}-`)), queued: mine(s.queued), runningIssues: s.runningIssues.filter((i) => i.id.startsWith(`${project}-`)), asks: s.asks.filter((a) => a.repo === undefined || a.repo === project) };
+  return { ...s, stuck: mine(s.stuck), running: mine(s.running), delivered: mine(s.delivered), planner: mine(s.planner), done: s.done.filter((i) => i.id.startsWith(`${project}-`)), doneStamps: s.doneStamps.filter((i) => i.id.startsWith(`${project}-`)), incoming: s.incoming.filter((i) => i.id.startsWith(`${project}-`)), issues: s.issues.filter((i) => i.id.startsWith(`${project}-`)), queued: mine(s.queued), runningIssues: s.runningIssues.filter((i) => i.id.startsWith(`${project}-`)), asks: s.asks.filter((a) => a.repo === undefined || a.repo === project) };
 }
 
 export const routes: Routes = {

@@ -99,7 +99,7 @@ export interface State {
   asks: AskItem[];
   /** Queued and blocked goals (and old items): the Queued lane. */
   queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; why: string; kind: GoalDecision["kind"];
-    waits?: { id: string; href: string; state: string | null }[] }[];
+    waits?: { id: string; href: string; state: string | null }[]; /** The id of the issue whose job holds a busy file this one needs. */ on?: string }[];
   /** Issues in Running: each with its goals nested and "n of m issues". */
   runningIssues: RunningIssue[];
   /** Land runs in progress. */
@@ -112,6 +112,8 @@ export interface State {
   openIssues: number;
   /** Done: the last 10 done issues, newest first, each with the intake and land jobs that belong to it. */
   done: DoneItem[];
+  /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
+  doneStamps: { id: string; at: number }[];
   /** Incoming: the last 10 issues added, newest first, each with its current status. */
   incoming: IncomingItem[];
   /** The intake runs (and planner runs from before intake), the running ones first, then the latest finished. */
@@ -459,7 +461,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...tickTimer(), monitor: monitorPanel() },
-    asks: att.items, done, incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
+    asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })), incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
     always: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at })),
     stuck, running, runningIssues, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES),
     velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
@@ -470,7 +472,7 @@ export function state(now = new Date()): State {
       // The stage already says when an issue is to plan.
       const w = goalDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
-        ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}),
+        ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}), ...(w.kind === "busy-file" && w.on ? { on: w.on } : {}),
       };
     }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q),
   };

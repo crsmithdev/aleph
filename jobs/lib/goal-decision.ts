@@ -43,7 +43,9 @@ export interface GoalFacts {
 
 /** `why` is the line in the dispatch's skipped list; `text` is the line Chris reads on the Queued lane. */
 export type GoalDecision = Bound & (
-  | { kind: "ready" | "pause" | "baseline" | "live-cap" | "busy-file" }
+  | { kind: "ready" | "pause" | "baseline" | "live-cap" }
+  /** `on`: the id of the issue whose open job holds the busy file. */
+  | { kind: "busy-file"; on?: string }
   /** `ids`: the refs of `after` that are not done, when that is why. */
   | { kind: "not-ready"; ids?: string[] }
   /** `ask`: the Ask the dispatch sets in place of a start. */
@@ -81,7 +83,7 @@ export function goalDecision(f: GoalFacts): GoalDecision {
   const not = notReady(f);
   if (not) return not;
   if (f["live-cap"]) return { kind: "live-cap", ...f["live-cap"] };
-  if (f.busy) return { kind: "busy-file", why: f.busy, text: f.busy[0].toUpperCase() + f.busy.slice(1) };
+  if (f.busy) return { kind: "busy-file", on: f.busy.match(/^waits for (\S+):/)?.[1], why: f.busy, text: f.busy[0].toUpperCase() + f.busy.slice(1) };
   if ((f.noCommits ?? 0) >= NO_COMMIT_LIMIT) return { kind: "loop-guard", ask: "no-commit", why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director` };
   const starts = f.capHeld ? 0 : f.startsInHour ?? 0;
   if (starts >= RUN_CAP()) return { kind: "loop-guard", ask: "run-cap", starts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director` };

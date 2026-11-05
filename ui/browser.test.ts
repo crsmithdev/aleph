@@ -207,6 +207,37 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
   })()`;
 
   for (const w of [1440, 1060]) {
+    test(`at ${w} px a lane card is a meta row and one title line, marks its kind, and ends a blocked one with the id`, async () => {
+      await page.width(w);
+      await page.go("#/");
+      await page.ev(fixture);
+      await page.ev(`(async () => {
+        const { renderLanes } = await import("/views/now.js");
+        const long = ${JSON.stringify(long)}, at = "2026-11-02T11:56:00Z";
+        const run = (kind) => ({ name: "j-" + kind, repo: "r", item: { priority: "low", title: long }, started: at, run: { kind, started: at } });
+        const s = { now: "2026-11-02T12:00:00Z", factory: {}, runningIssues: [], running: [run("land"), run("build")],
+          queued: [{ repo: "r", id: "1", priority: "low", title: long, stage: "blocked", kind: "busy-file", why: "waits", on: "r-7", at, since: at }],
+          done: [{ id: "r-3", title: long, href: "#/x", priority: "low", finished: at, since: at, jobs: [] }] };
+        document.querySelector("#view .lanes").outerHTML = renderLanes(s);
+      })()`);
+      const m = await page.ev<any>(`(() => {
+        const cs = [...document.querySelectorAll(".lane-card")].map((e) => {
+          const r = e.getBoundingClientRect(), st = getComputedStyle(e), ih = e.querySelector(".ih").getBoundingClientRect(), t = e.querySelector(":scope > .t");
+          return { h: r.height, pad: parseFloat(st.paddingTop) + parseFloat(st.paddingBottom) + parseFloat(st.borderTopWidth) + parseFloat(st.borderBottomWidth), ih: ih.height, line: parseFloat(getComputedStyle(t).lineHeight), tm: parseFloat(getComputedStyle(t).marginTop), cls: e.className, bw: parseFloat(st.borderLeftWidth), bc: st.borderLeftColor };
+        });
+        const b = document.querySelector(".blocked"), br = b.getBoundingClientRect(), ihr = b.parentElement.getBoundingClientRect();
+        const probe = (v) => { const p = document.createElement("i"); p.style.color = v; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
+        return { cs, bcolor: getComputedStyle(b).color, ink: probe("var(--ink)"), done: probe("var(--done)"), gap: ihr.right - br.right };
+      })()`);
+      expect(m.cs.length).toBe(4);
+      for (const c of m.cs) expect(c.h).toBeLessThanOrEqual(c.ih + c.tm + c.line + c.pad + 0.5);
+      const land = m.cs.find((c: any) => c.cls.includes("kind-land")), worker = m.cs.find((c: any) => c.cls.includes("kind-worker"));
+      expect(land.bc).toBe(m.done);
+      expect(worker.bw).toBeGreaterThan(1);
+      expect(m.bcolor).toBe(m.ink);
+      expect(m.gap).toBeLessThan(1.5);
+    }, 30_000);
+
     test(`at ${w} px the Running and Queued cards share one height, meta row and title font`, async () => {
       await page.width(w);
       await page.go("#/");

@@ -54,6 +54,7 @@ test("Not ready covers a done goal, an after ref and an open job, in that order"
 
 test("the Queued lane reads the stops it once left out", () => {
   expect(goalDecision(facts({ busy: "waits for fac-1: both change the busy file a.ts" })).text).toBe("Waits for fac-1: both change the busy file a.ts");
+  expect(goalDecision(facts({ busy: "waits for fac-1: both change the busy file a.ts" }))).toMatchObject({ kind: "busy-file", on: "fac-1" });
   expect(goalDecision(facts({ noCommits: 3 }))).toMatchObject({ kind: "loop-guard", ask: "no-commit", why: "3 runs in a row with no commit" });
   expect(goalDecision(facts({ startsInHour: 4 }))).toMatchObject({ kind: "loop-guard", ask: "run-cap", starts: 4, why: "4 runs in the last hour" });
 });

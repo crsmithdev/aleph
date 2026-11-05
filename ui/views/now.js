@@ -15,7 +15,7 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time by outcome">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="stages" class="card" aria-label="Stages">${renderStages(s)}</section><section id="holds" class="card" aria-label="Holds">${renderHolds(s)}</section>${renderMonitor(s)}</div>${renderLanes(s)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time by outcome">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="stages" class="card" aria-label="Stages">${renderStages(s)}</section><section id="holds" class="card" aria-label="Holds">${renderHolds(s)}</section>${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -198,14 +198,14 @@ export function span(since, to) {
 const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Part ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
 
 /** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, then why it waits (it gives up space first; its tooltip holds the whole text). `chips` is HTML. */
-function metaRow({ id, chips, part, at, since, now, end, why }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${why ? `<span class="why" title="${esc(why)}">${esc(why)}</span>` : ""}</div>`;
+function metaRow({ id, chips, part, at, since, now, end, why, blocked }) {
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${blocked ? `<span class="blocked">blocked: ${esc(blocked)}</span>` : ""}${why ? `<span class="why" title="${esc(why)}">${esc(why)}</span>` : ""}</div>`;
 }
 
-/** The title of a card: at most 2 lines, an ellipsis after that. */
+/** The title of a card: one line, an ellipsis after that. */
 const titleOf = (title, href) => (href ? `<a href="${esc(href)}" class="t" title="${esc(title)}">${esc(title)}</a>` : `<span class="t" title="${esc(title)}">${esc(title)}</span>`);
 
-/** An item card of a lane: the 3-line face (the meta row, then the title on 2 lines); `below` is HTML after the face. */
+/** An item card of a lane: the 2-line face (the meta row, then the title on 1 line); `below` is HTML after the face. */
 function laneCard(cls, row, title, href, below = "") {
   return `<article class="job-card small lane-card ${cls}">${row}${titleOf(title, href)}${below}</article>`;
 }
@@ -215,17 +215,20 @@ const lane = (id, title, n, rows, none, cap = 0) =>
   `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
 
 /** Done: the done parts and issues /api/state sends, newest first, each its own card. */
-function doneLane(s) {
+function doneLane(s, win) {
   const rows = (s.done ?? []).map((i) =>
     laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
-  return lane("done", "Done", null, rows, "Nothing is done yet.");
+  const from = Date.parse(s.now) - WINDOW_DAYS[win] * 86_400_000;
+  const total = (s.doneStamps ?? []).filter((d) => d.at >= from).length;
+  return lane("done", `Done ${(s.done ?? []).length} of ${total}`, null, rows, "Nothing is done yet.");
 }
 
 function queuedLane(s) {
   const rows = (s.queued ?? []).map((w) => {
     const dead = (w.waits ?? []).filter((b) => b.dead);
     const id = repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo);
-    return laneCard("queued-row", metaRow({ id, chips: statusBadge(w.stage ?? "queued") + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, why: w.why }), w.title, "",
+    const blocked = w.waits?.[0]?.id ?? w.on;
+    return laneCard("queued-row", metaRow({ id, chips: (blocked ? "" : statusBadge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, why: blocked ? "" : w.why, blocked }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
   return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
@@ -243,14 +246,14 @@ function runningLane(s) {
     const worker = run.kind === "agent" || run.kind === "build";
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
     const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
-    return laneCard("run-row", metaRow({ id: itemId(j), chips: `${tag(kind, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now, why: over ? "past the time box" : "" }), j.item?.title || j.name, jobHref(j));
+    return laneCard(`run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(kind, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now, why: over ? "past the time box" : "" }), j.item?.title || j.name, jobHref(j));
   }).join("");
   return lane("running", "Running", s.factory.liveRuns ?? runningCount(s), rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }
 
 /** The three lanes: Running, Queued, Done. */
-export function renderLanes(s) {
-  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s)}</div>`;
+export function renderLanes(s, win = "week") {
+  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s, win)}</div>`;
 }
 
 /** Awaiting you: the asks, each marked input or approval, then the stuck and failed jobs; absent when nothing awaits Chris. */

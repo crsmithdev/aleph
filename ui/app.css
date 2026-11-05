@@ -947,12 +947,15 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .job-card.small .ih > .num { flex: none; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 .job-card.small .ih > .why { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--need); margin: 0; cursor: help; }
 .lane-card > .t, .issue-row > .t {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  margin: var(--sp-4) 0 0; font-family: var(--sans); font-size: 1em; font-weight: var(--fw-strong); line-height: 1.35; min-height: calc(2 * 1.35em); text-decoration: none; color: inherit; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+  margin: var(--sp-4) 0 0; font-family: var(--sans); font-size: 1em; font-weight: var(--fw-strong); line-height: 1.35; min-height: 1.35em; text-decoration: none; color: inherit; overflow-wrap: anywhere;
 }
 /* The meta row has one fixed height whatever it holds; the container query below does not change it. */
 .lane-card > .ih { box-sizing: border-box; height: 22px; min-height: 22px; max-height: 22px; flex-wrap: nowrap; align-items: center; overflow: hidden; white-space: nowrap; }
 .lane-card > .ih > * { line-height: 1; align-self: center; }
+.cards > .job-card.small.lane-card { border-left: 4px solid var(--rule); }
+.cards > .job-card.small.lane-card.kind-land { border-left-color: var(--done); }
+.job-card.small .ih > .blocked { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--fs-xs); color: var(--ink); }
 .lane-card .blockers { margin-top: var(--sp-6); font-size: var(--fs-sm); }
 @container (max-width: 420px) {
   .job-card.small .ih { gap: var(--sp-4); }
