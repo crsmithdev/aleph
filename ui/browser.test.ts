@@ -105,6 +105,21 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('getComputedStyle(document.querySelector("#nav li.head")).display')).not.toBe("none");
   }, 30_000);
 
+  test("at 390 px a metric value stays one line and a segmented control stays one row or scrolls inside itself", async () => {
+    await page.width(390);
+    for (const route of ["#/", "#/issues", "#/jobs", "#/agents"]) {
+      await page.go(route);
+      await page.until('document.querySelector("#view .tile b, #view .empty, #view h2")');
+      const r = await page.ev<any>(`(() => ({
+        tall: [...document.querySelectorAll(".tile b")].filter((b) => b.getBoundingClientRect().height >= 1.5 * parseFloat(getComputedStyle(b).fontSize)).map((b) => b.textContent),
+        seg: [...document.querySelectorAll(".seg")].filter((s) => new Set([...s.querySelectorAll("button")].map((b) => b.offsetTop)).size > 1 && !(s.scrollWidth > s.clientWidth && /auto|scroll/.test(getComputedStyle(s).overflowX))).length,
+        wide: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }))()`);
+      expect({ route, ...r, wide: Math.max(r.wide, 0) }).toEqual({ route, tall: [], seg: 0, wide: 0 });
+    }
+    await page.width(1200);
+  }, 60_000);
+
   // flaky: tests/flaky.md#browser-timed-refresh
   test.skip("a timed refresh re-renders, except over an armed button", async () => {
     // Refresh every 200 ms: the shell reads the global setInterval when the route starts.
