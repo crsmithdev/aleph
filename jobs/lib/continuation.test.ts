@@ -215,6 +215,15 @@ describe("the worker brief", () => {
     expect(b).toContain("Do not start other work.");
   });
 
+  test("a merge run's brief lists a conflicted path with no last commit when git log fails", () => {
+    const notGit = join(dir, "not-git");
+    mkdirSync(notGit, { recursive: true });
+    const b = brief("rm2", folder("rm2"), run({ job: "jm", merge: true, conflicts: ["a.ts"] }), { ...repo, path: notGit });
+    expect(b).toContain("Conflicted paths:\n- a.ts\n");
+    expect(b).not.toContain("fatal");
+    expect(b).not.toContain("last commit on");
+  });
+
   test("a factory brief names the job's worktree and branch, and says Chrome runs there", () => {
     const r = run({ job: "jw", worktree: "/w", branch: "factory/fac-1" });
     folder("jw", { "spec.md": "# Spec\n\n## Edit surface\n\n- ui/views/issues.js\n" });

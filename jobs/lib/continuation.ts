@@ -186,7 +186,8 @@ export function bounceNote(run: Run): string {
 function mergeBrief(land: Run, repo: Repo, title?: string): string {
   const main = `origin/${repo.main}`;
   const paths = (land.conflicts ?? []).map((p) => {
-    const last = git(repo.path, "log", "-1", "--format=%h %s", main, "--", p).out.trim();
+    const log = git(repo.path, "log", "-1", "--format=%h %s", main, "--", p);
+    const last = log.ok ? log.out.trim() : "";
     return `- ${p}${last ? ` (last commit on ${main}: ${last})` : ""}`;
   });
   return [
