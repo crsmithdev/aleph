@@ -33,7 +33,7 @@ export interface Job {
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */
   run: { kind: string; started: string };
-  ended?: string; cost?: number; model?: string;
+  ended?: string; cost?: number; model?: string; tier?: string;
   /** The cost as an estimated share of the weekly plan limit; set by the routes, none under 6 hours of usage snapshots. */
   wk?: Wk;
   commit?: string; commitUrl?: string;
@@ -223,7 +223,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       condition: v.condition, started: v.started, run: { kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
-    for (const k of ["phase", "reason", "question", "ended", "cost", "model"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
+    for (const k of ["phase", "reason", "question", "ended", "cost", "model", "tier"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
     if (v.commit) {
       job.commit = v.commit;
       const url = commitUrl(repo, v.commit, bases);

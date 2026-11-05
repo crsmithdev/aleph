@@ -126,7 +126,6 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
 const section = (id, title, n, body, cap) =>
   `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${n === null ? "" : `<span class="count">${n}${cap > 0 ? ` of ${cap}` : ""}</span>`}</div>${body}`;
 
-const BOX_MIN = 40;
 const STAT_FILES = 12;
 
 /** The first STAT_FILES file lines of a diff stat, then "+N more files" and the summary line. */
@@ -229,9 +228,9 @@ export function span(since, to) {
 /** The "3/4" link of a part to its parent; "" for a card that is no part. */
 const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Part ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
 
-/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, then why it waits (it gives up space first; its tooltip holds the whole text). `chips` is HTML. */
-function metaRow({ id, chips, part, at, since, now, end, why, blocked }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${blocked ? `<span class="blocked">blocked: ${esc(blocked)}</span>` : ""}${why ? `<span class="why" title="${esc(why)}">${esc(why)}</span>` : ""}</div>`;
+/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration. `chips` is HTML. */
+function metaRow({ id, chips, part, at, since, now, end, blocked }) {
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${blocked ? `<span class="blocked">blocked: ${esc(blocked)}</span>` : ""}</div>`;
 }
 
 /** The title of a card: one line, an ellipsis after that. */
@@ -252,7 +251,7 @@ function doneLane(s, win) {
     laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
   const from = Date.parse(s.now) - WINDOW_DAYS[win] * 86_400_000;
   const total = (s.doneStamps ?? []).filter((d) => d.at >= from).length;
-  return lane("done", `Done ${(s.done ?? []).length} of ${total}`, null, rows, "Nothing is done yet.");
+  return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.", total);
 }
 
 function queuedLane(s) {
@@ -260,7 +259,7 @@ function queuedLane(s) {
     const dead = (w.waits ?? []).filter((b) => b.dead);
     const id = repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo);
     const blocked = w.waits?.[0]?.id ?? w.on;
-    return laneCard("queued-row", metaRow({ id, chips: (blocked ? "" : statusBadge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, why: blocked ? "" : w.why, blocked }), w.title, "",
+    return laneCard("queued-row", metaRow({ id, chips: (blocked ? "" : statusBadge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, blocked }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
   return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
@@ -268,8 +267,10 @@ function queuedLane(s) {
 
 /** A parent that waits to close: all its parts are done. */
 function runningIssue(i, now) {
-  return laneCard("run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now, why: `${i.of.n} of ${i.of.m} parts done; waits to close` }), i.title, i.href);
+  return laneCard("run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
 }
+
+const TIERS = { haiku: "low", sonnet: "medium", opus: "high" };
 
 function runningLane(s) {
   const issues = (s.runningIssues ?? []).map((i) => runningIssue(i, s.now)).join("");
@@ -277,8 +278,9 @@ function runningLane(s) {
     const run = j.run ?? { kind: "build", started: j.started };
     const worker = run.kind === "agent" || run.kind === "build";
     const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
-    const over = worker && Date.parse(s.now) - Date.parse(run.started) > BOX_MIN * 60_000;
-    return laneCard(`run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(kind, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now, why: over ? "past the time box" : "" }), j.item?.title || j.name, jobHref(j));
+    const tier = TIERS[j.tier ?? shortModel(j.model)];
+    const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
+    return laneCard(`run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j));
   }).join("");
   return lane("running", "Running", s.factory.liveRuns ?? runningCount(s), rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }

@@ -52,6 +52,8 @@ export interface Run {
   /** A run from before `cause`: a drop set this when the run had ended with no commit. */
   noCommit?: true;
   session?: string; model?: string; commit?: string;
+  /** The worker tier (haiku or sonnet) of a run whose model the local backend replaced. */
+  tier?: string;
   /** A land run of a job with a manual check: "open" until `aleph checked` makes it "done". */
   check?: "open" | "done";
   /** The issue that holds an open manual check. */

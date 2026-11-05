@@ -350,7 +350,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 
   const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
   const local = tier !== undefined && readModels()[tier].model === LOCAL.model;
-  if (local) { run = { ...run, model: LOCAL.model }; updateRun(folder, { model: LOCAL.model }); }
+  if (local) { updateRun(folder, { model: LOCAL.model, tier: run.model }); run = { ...run, model: LOCAL.model }; }
   const argv = [workerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : []), ...(repo.sandbox ? schemaFlags(WORKER_SCHEMA) : [])];

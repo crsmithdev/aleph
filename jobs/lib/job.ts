@@ -104,7 +104,7 @@ export interface JobView {
   run: { id: string; kind: Run["kind"]; started: string };
   condition: State; needs?: ReturnType<typeof needsOf>; phase?: string; reason?: string; question?: string; say?: string; session?: string;
   started: string; ended?: string;
-  item?: number | string; cost?: number; model?: string; commit?: string; stat?: string;
+  item?: number | string; cost?: number; model?: string; tier?: string; commit?: string; stat?: string;
   defaults: string[]; followups: string[];
   checks?: CheckResult[];
   /** The review of the last run: its call and reason. */
@@ -145,7 +145,7 @@ export function view(j: Job): JobView {
   const item = issue(j);
   if (item !== undefined) v.item = item;
   if (j.some((e) => e.run.cost !== undefined)) v.cost = j.reduce((a, e) => a + (e.run.cost ?? 0), 0);
-  for (const k of ["model", "commit", "stat"] as const) {
+  for (const k of ["model", "tier", "commit", "stat"] as const) {
     const val = latest(k);
     if (val) v[k] = val;
   }

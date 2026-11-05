@@ -6,11 +6,10 @@ import { awaitingHeld, job, state } from "./fixtures/status-state.ts";
 import { actMessages, openDiffs } from "./lib.js";
 import { asksOf, withAttn } from "./test-now.ts";
 
-test("a build run is a worker and is past the time box after 40 minutes", () => {
+test("a build run is a worker, with no why text", () => {
   const h = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T15:00:00Z", run: { kind: "build", started: "2026-10-27T16:00:00Z" } })] });
   expect(h).toContain("worker");
-  expect(h).toContain("past the time box");
-  expect(withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T16:30:00Z", run: { kind: "build", started: "2026-10-27T16:30:00Z" } })] })).not.toContain("past the time box");
+  expect(h).not.toContain("past the time box");
 });
 
 test("an awaiting row does not show checks as facts", () => {

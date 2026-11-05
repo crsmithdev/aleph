@@ -945,7 +945,6 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .job-card.small .ih > .kind-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .part { flex: none; font: var(--fw-strong) var(--fs-xs) var(--mono); white-space: nowrap; }
 .job-card.small .ih > .num { flex: none; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
-.job-card.small .ih > .why { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--need); margin: 0; cursor: help; }
 .lane-card > .t, .issue-row > .t {
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
   margin: var(--sp-4) 0 0; font-family: var(--sans); font-size: 1em; font-weight: var(--fw-strong); line-height: 1.35; min-height: 1.35em; text-decoration: none; color: inherit; overflow-wrap: anywhere;
@@ -960,7 +959,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 @container (max-width: 420px) {
   .job-card.small .ih { gap: var(--sp-4); }
   .job-card.small .ih > .badge, .job-card.small .ih > .kind-tag { padding: 1px 5px; font-size: var(--fs-2xs); }
-  .job-card.small .ih > .num, .job-card.small .ih > .part, .job-card.small .ih > .why { font-size: var(--fs-2xs); }
+  .job-card.small .ih > .num, .job-card.small .ih > .part { font-size: var(--fs-2xs); }
   .job-card.small .ih > .idp, .job-card.small .ih > .idl { font-size: var(--fs-2xs); }
 }
 .issue-row > .ih, .issue-row > .t { flex: 1 1 100%; min-width: 0; }

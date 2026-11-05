@@ -276,6 +276,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
         }
         out.dim = { n: document.querySelectorAll(".lane-card .badge.dim").length, h: [], ih: [], font: [] };
         out.part = { n: document.querySelectorAll(".lane-card .part").length, h: [], ih: [], font: [] };
+        out.heads = { n: 0, h: [], ih: [], font: ["running", "queued", "done"].map((id) => getComputedStyle(document.querySelector("#h-" + id)).fontSize) };
         out.why = { n: document.querySelectorAll(".lane-card .why").length, h: [], ih: [], font: [] };
         return out;
       })()`);
@@ -283,7 +284,8 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
       expect(m.queued!.n).toBe(4);
       expect(m.dim!.n).toBeGreaterThan(0);
       expect(m.part!.n).toBeGreaterThan(0);
-      expect(m.why!.n).toBeGreaterThan(0);
+      expect(m.why!.n).toBe(0);
+      expect(new Set(m.heads!.font).size).toBe(1);
       const h = [...m.running!.h, ...m.queued!.h], ih = [...m.running!.ih, ...m.queued!.ih], font = [...m.running!.font, ...m.queued!.font];
       for (const x of h) expect(Math.abs(x - h[0]!)).toBeLessThan(0.5);
       for (const x of ih) expect(Math.abs(x - ih[0]!)).toBeLessThan(0.5);

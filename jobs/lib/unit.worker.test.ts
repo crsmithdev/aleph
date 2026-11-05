@@ -37,4 +37,12 @@ describe("a factory run", () => {
     await drop("flocal");
     await drop("fclaude");
   }, 60_000);
+
+  test("a worker.haiku slot set to local leaves a run record with model gpt-oss-20b and tier haiku", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "models.json"), JSON.stringify({ "worker.haiku": "local" }));
+    const r = await aleph(["job", "fac", "flowtier", "--spec", "-", "--model", "haiku"], { ALEPH_FIX_ROUNDS: "0" }, "Goal: flowtier\nACTION: commit flowtier.txt\n");
+    expect(state(r.json.run)).toMatchObject({ model: "gpt-oss-20b", tier: "haiku" });
+    await drop("flowtier");
+  }, 30_000);
 });

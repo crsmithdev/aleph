@@ -93,8 +93,19 @@ test("the lanes: Running shows live agent runs of the cap and lists every open r
   const d = (n: number) => ({ id: `aleph-${n}`, title: `D${n}`, href: "#/x", jobs: [] });
   const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)) });
   expect((done.match(/done-row/g) ?? []).length).toBe(10);
-  expect(done).toContain('<h2 id="h-done">Done 10 of 0</h2>');
+  expect(done).toContain('<h2 id="h-done">Done</h2><span class="count">10</span>');
   expect(done).not.toContain("Latest done");
+});
+
+test("lane cards show no why text and a worker tag reads its tier and model", () => {
+  const run = (o: object) => view.renderLanes({ ...state, queued: [{ repo: "aleph", id: 1, title: "t", why: "Starts at the next dispatch", kind: "ready" }],
+    running: [job({ name: "a", run: { kind: "build", started: "2026-10-27T15:00:00Z" }, ...o })] });
+  const h = run({});
+  expect(h).not.toContain('class="why"');
+  expect(h).toContain(">worker</span>");
+  expect(run({ tier: "haiku", model: "haiku" })).toContain(">worker · low · haiku</span>");
+  expect(run({ tier: "haiku", model: "gpt-oss-20b" })).toContain(">worker · low · gpt-oss-20b</span>");
+  expect(run({ model: "claude-opus-4-1" })).toContain(">worker · high · opus</span>");
 });
 
 test("an ask keeps its action buttons on the page", () => {
@@ -183,7 +194,7 @@ test("a land card has its own kind class, and the Done header counts the selecte
   const day = Date.parse(state.now);
   const done = { ...state, done: [1, 2].map((n) => ({ id: `r-${n}`, title: "d", href: "#/x", jobs: [] })),
     doneStamps: [0, 1, 2, 3 * 86_400_000, 20 * 86_400_000].map((a, i) => ({ id: `r-${i}`, at: day - a })) };
-  expect(view.renderLanes(done)).toContain("Done 2 of 4");
-  expect(view.renderLanes(done, "day")).toContain("Done 2 of 3");
-  expect(view.renderLanes(done, "month")).toContain("Done 2 of 5");
+  expect(view.renderLanes(done)).toContain('<h2 id="h-done">Done</h2><span class="count">2 of 4</span>');
+  expect(view.renderLanes(done, "day")).toContain('<span class="count">2 of 3</span>');
+  expect(view.renderLanes(done, "month")).toContain('<span class="count">2 of 5</span>');
 });
