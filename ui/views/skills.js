@@ -43,20 +43,20 @@ const sessionCell = (id) => (id ? idLink(id.slice(0, 8), sessionHref(id)) : "");
 const table = (head, rows) => dataTable(head, rows);
 
 export function renderSkill(d) {
-  // Columns: session, title (prompt or message), project, numbers, time last.
+  // Columns: time, session, title (prompt or message), project, numbers.
   const sessions = d.sessions.map((s) =>
-    `<tr><td>${sessionCell(s.id)}</td><td class="wide" title="${esc(s.prompt)}">${esc(s.prompt)}</td><td>${esc(s.project)}</td>` +
-    `<td>${s.via === "slash" ? "slash command" : "Skill tool"}</td><td class="time">${esc(when(s.time))}</td></tr>`).join("");
+    `<tr><td class="time">${esc(when(s.time))}</td><td>${sessionCell(s.id)}</td><td class="wide" title="${esc(s.prompt)}">${esc(s.prompt)}</td><td>${esc(s.project)}</td>` +
+    `<td>${s.via === "slash" ? "slash command" : "Skill tool"}</td></tr>`).join("");
   const errors = d.errors.map((e) =>
-    `<tr><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td>${esc(e.project)}</td><td class="time">${esc(when(e.time))}</td></tr>`).join("");
+    `<tr><td class="time">${esc(when(e.time))}</td><td>${sessionCell(e.session)}</td><td class="wide" title="${esc(e.message)}">${esc(e.message)}</td><td>${esc(e.project)}</td></tr>`).join("");
   const tools = d.tools.map((t) => `<tr><td><code>${esc(t.tool)}</code></td><td class="num">${t.count}</td></tr>`).join("");
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`).join("");
   return `<div class="page sp skills">${crumb("#/sessions", [["sessions", "#/sessions"], ["skills"], [d.name]])}` +
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
     (d.uses ? card("Uses per Day", bars(d.name), { label: "Uses per day" }) : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
     (projects ? card("Projects", table("<th>Project</th><th class=\"num\">Uses</th>", projects)) : "") +
-    (sessions ? card("Sessions", table("<th>Session</th><th>First Prompt Line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)) : "") +
+    (sessions ? card("Sessions", table("<th>Time</th><th>Session</th><th>First Prompt Line</th><th>Project</th><th>Started by</th>", sessions)) : "") +
     (tools ? card("Tools Called After It, in the Same Turn", table("<th>Tool</th><th class=\"num\">Calls</th>", tools), { label: "Tools called after it, in the same turn" }) : "") +
-    (errors ? card("Turns With Errors", table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors), { count: d.errors.length, label: "Turns with errors" }) : "") +
+    (errors ? card("Turns With Errors", table("<th>Time</th><th>Session</th><th>Error</th><th>Project</th>", errors), { count: d.errors.length, label: "Turns with errors" }) : "") +
     `</div>`;
 }

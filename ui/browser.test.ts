@@ -69,7 +69,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(all).toBeGreaterThan(1);
     const titles = () => page.ev<string>('[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|")');
     const first = await titles();
-    await click('#issues-table button[data-sort]');
+    await click('#issues-table button[data-sort="title"]');
     await page.until(`[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|") !== ${JSON.stringify(first)}`);
     await page.go("#/issues");
     const search = 'document.querySelector("#view input[type=search]")';
@@ -253,14 +253,14 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
         });
         const b = document.querySelector(".blocked"), br = b.getBoundingClientRect(), ihr = b.parentElement.getBoundingClientRect();
         const probe = (v) => { const p = document.createElement("i"); p.style.color = v; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
-        return { cs, bcolor: getComputedStyle(b).color, ink: probe("var(--ink)"), done: probe("var(--done)"), gap: ihr.right - br.right };
+        return { cs, bcolor: getComputedStyle(b).color, muted: probe("var(--muted)"), done: probe("var(--done)"), gap: ihr.right - br.right };
       })()`);
       expect(m.cs.length).toBe(4);
       for (const c of m.cs) expect(c.h).toBeLessThanOrEqual(c.ih + c.tm + c.line + c.pad + 0.5);
       const land = m.cs.find((c: any) => c.cls.includes("kind-land")), worker = m.cs.find((c: any) => c.cls.includes("kind-worker"));
       expect(land.bc).toBe(m.done);
       expect(worker.bw).toBeGreaterThan(1);
-      expect(m.bcolor).toBe(m.ink);
+      expect(m.bcolor).toBe(m.muted);
       expect(m.gap).toBeLessThan(1.5);
     }, 30_000);
 

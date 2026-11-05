@@ -155,7 +155,7 @@ The one table is `dataTable()` (`ui/lib.js:523`) with `heads()` (`ui/lib.js:526`
 
 Rules, as the code states them (`ui/lib.js:523`, `ui/app.css:451`):
 
-- **Column order:** time first in Issues and Jobs, then id or name, title, state badge, project, labels, numbers; the other tables still put the time last.
+- **Column order:** time first, then id or name, title, state badge, project, labels, numbers. A duration is a number and stays among the numbers.
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:457`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:463`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `6px 12px 6px 0`, a `--rule-2` line under each row, and `--sunk` on row hover. Headers are `600 var(--fs-xs)` in `--muted`.
@@ -172,17 +172,17 @@ Columns of the main tables:
 |---|---|---|
 | Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:215`) |
 | Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:86`) |
-| Sessions | Session, First Prompt, Project, Kinds, Turns (num), Cost (num), Started, Last | `dataTable()` (`ui/views/sessions.js:120`) |
-| Memory notes | Title, Kind, Scope, Read, Written, Status | `dataTable()` (`ui/views/memory.js:263`) |
-| Turns of a session | Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num), Started | `dataTable()` (`ui/views/session.js:23`) |
+| Sessions | Started, Last, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:120`) |
+| Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:263`) |
+| Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num) | `dataTable()` (`ui/views/session.js:23`) |
 | Observations | Kind, Name, Detail, Duration (num) | `dataTable()` (`ui/views/session.js:259`) |
 | Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
-| Hooks | Hook, Calls (num), Errors (num), Last | `dataTable()` (`ui/views/sessions.js:104`) |
-| Denials | Reason, When | `dataTable()` (`ui/views/sessions.js:107`) |
+| Hooks | Last, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:104`) |
+| Denials | When, Reason | `dataTable()` (`ui/views/sessions.js:107`) |
 | Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:210`) |
-| Commits | Commit, Subject, Part, Date | `dataTable()` (`ui/views/issues.js:640`) |
+| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:640`) |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. No table has a row action column. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:498`) over the table.
 

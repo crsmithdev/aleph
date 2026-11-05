@@ -43,7 +43,7 @@ export function renderHealth(m) {
 
 export function renderWrites(m) {
   return (m.writes.length
-    ? dataTable("<th>Write</th><th>When</th>", m.writes.map((w) => `<tr><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td></tr>`).join(""))
+    ? dataTable("<th>When</th><th>Write</th>", m.writes.map((w) => `<tr><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td></tr>`).join(""))
     : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
 }
 
@@ -260,8 +260,8 @@ function renderNoteTable(rows, o, hits) {
   if (!all.length) return empty("No note matches.", "Loosen the filters.");
   const shown = all.slice(0, o.limit), sort = o.sort ?? (o.q.trim() ? null : { key: "updated", dir: -1 });
   const h = (label, key) => sortHead(label, key, sort);
-  return dataTable(`${h("Title", "title")}${h("Kind", "kind")}${h("Scope", "scope")}${h("Read", "read")}${h("Written", "updated")}${h("Status", "status")}`,
-    shown.map((n) => `<tr class="nrow" data-note="${esc(n.title)}" aria-selected="${n.title === o.note}"><td class="wide" title="${esc(n.title)}"><a href="#/memory/${encodeURIComponent(n.title)}">${esc(n.title)}</a></td><td>${esc(n.kind)}</td><td>${esc(n.scope)}</td><td class="time">${n.read ? esc(shortDay(n.read)) : "never"}</td><td class="time">${esc(shortDay(n.updated))}</td><td>${pill(n.status)}</td></tr>`).join("")) + pager(shown.length, all.length, STEP);
+  return dataTable(`${h("Written", "updated")}${h("Title", "title")}${h("Kind", "kind")}${h("Scope", "scope")}${h("Read", "read")}${h("Status", "status")}`,
+    shown.map((n) => `<tr class="nrow" data-note="${esc(n.title)}" aria-selected="${n.title === o.note}"><td class="time">${esc(shortDay(n.updated))}</td><td class="wide" title="${esc(n.title)}"><a href="#/memory/${encodeURIComponent(n.title)}">${esc(n.title)}</a></td><td>${esc(n.kind)}</td><td>${esc(n.scope)}</td><td class="time">${n.read ? esc(shortDay(n.read)) : "never"}</td><td>${pill(n.status)}</td></tr>`).join("")) + pager(shown.length, all.length, STEP);
 }
 
 function renderNoteTools(rows, o) {

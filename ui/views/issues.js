@@ -637,9 +637,9 @@ export function renderIssue(d) {
   const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + fold_ : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
-    ? dataTable(`<th>Commit</th><th>Subject</th>${parts ? "<th>Part</th>" : ""}<th>Date</th>`, d.commits.map((c) => {
+    ? dataTable(`<th>Date</th><th>Commit</th><th>Subject</th>${parts ? "<th>Part</th>" : ""}`, d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
-      return `<tr><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}<td class="time">${esc(when(c.date))}</td></tr>`;
+      return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}</tr>`;
     }).join(""))
     : empty("No commit on main names this issue in its trailers.");
   const segments = issueSegments(d);

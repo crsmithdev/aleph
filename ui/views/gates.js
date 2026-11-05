@@ -97,8 +97,8 @@ export function renderMonitor(d) {
 
 /** The tick, the suite and the monitor: when each last ran and what came of it. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr><td>${esc(s.name)}</td><td>${s.last ? when(s.last) : "has not run"}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
-  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${dataTable(heads(["Schedule", "Last Run", "Result"]), rows)}</section>`;
+  const rows = d.schedules.map((s) => `<tr><td>${s.last ? when(s.last) : "has not run"}</td><td>${esc(s.name)}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
+  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${dataTable(heads(["Last Run", "Schedule", "Result"]), rows)}</section>`;
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */

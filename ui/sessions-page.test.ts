@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/sessions.js";
+// @ts-ignore plain JS, shared with the page
+import { when } from "./lib.js";
 
 const data = () => ({
   window: 7, project: null,
@@ -46,6 +48,10 @@ describe("the Sessions page", () => {
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
     expect(h).toContain('data-tile="tool:Bash"');
+    const heads = (h.match(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g) ?? []).map((x: string) => x.replace(/<[^>]*>/g, ""));
+    const at = heads.indexOf("Started");
+    expect(heads.slice(at, at + 3)).toEqual(["Started", "Last", "Session"]);
+    expect(h).toContain(`<tr><td class="time">${when("2026-10-31T00:00:00Z")}</td><td class="time">${when("2026-10-31T01:00:00Z")}</td><td>`);
     for (const s of ["<h2>Verify-Gate Denials</h2>", 'aria-label="Verify-gate denials"', '<button type="button" data-sort="prompt">First Prompt<']) expect(h).toContain(s);
   });
 

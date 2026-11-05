@@ -15,12 +15,12 @@ const sessionLink = (s) =>
 
 /** The turn table: the session page's `?view=table`. */
 function turnTable(d) {
-  // Columns: turn (id), prompt (title), output, model, numbers, time last.
+  // Columns: time, turn (id), prompt (title), output, model, numbers.
   const rows = d.turns.map((t) =>
-    `<tr><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
+    `<tr><td class="time">${esc(when(t.start))}</td><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
     `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
-    `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${costHtml(t.cost, t.wk)}</td><td class="time">${esc(when(t.start))}</td></tr>`).join("");
-  return dataTable('<th class="num">Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th><th>Started</th>', rows);
+    `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${costHtml(t.cost, t.wk)}</td></tr>`).join("");
+  return dataTable('<th>Started</th><th class="num">Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th>', rows);
 }
 
 export const CHAT_PAGE = 20;

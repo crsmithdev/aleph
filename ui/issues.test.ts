@@ -9,6 +9,8 @@ import { askOf, setAsk, refIn } from "../jobs/lib/ask.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
+// @ts-ignore plain JS, shared with the page
+import { when } from "./lib.js";
 // @ts-ignore
 import { view as issueView } from "./views/issue.js";
 import { writeRun } from "../jobs/lib/ledger.ts";
@@ -697,6 +699,14 @@ describe("the Issue page shows the ask row", () => {
     return i.id;
   }, true)!.value;
 
+  test("renderIssue puts the Date first in the Commits table", async () => {
+    const d = await getJson(`/api/issues/fac/1`);
+    const date = "2026-11-02T09:00:00Z";
+    const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
+    expect(h).toContain("<th>Date</th><th>Commit</th><th>Subject</th>");
+    expect(h).toContain(`<tr><td class="time">${when(date)}</td><td><code>abcdef1</code></td>`);
+  });
+
   test("renderIssue shows one row with the situation, effects and buttons, and no ask fields in the front matter", async () => {
     const n = seed(true);
     const d = await getJson(`/api/issues/fac/${n}`);
@@ -780,7 +790,7 @@ describe("the Updated time", () => {
   });
 
   test("updatedText gives when()'s form for a minute and the day without one; the sort uses the minute", () => {
-    const now = new Date();
+    const now = new Date(NOW);
     const y = now.getFullYear();
     expect(v.updatedText({ at: `${y}-11-03`, atTime: `${y}-11-03 14:05` })).toBe("11/03 14:05");
     expect(v.updatedText({ at: `${y}-11-03`, atTime: null })).toBe("11/03");
