@@ -12,6 +12,7 @@ interface Rate { input: number; output: number; cacheRead: number; cacheWrite: n
 /** `long` replaces the base rate for a request whose prompt (input + cache read + cache write) exceeds `above` tokens. */
 type Price = Rate & { long?: { above: number; rate: Rate } };
 const PER_MILLION: Record<string, Price> = {
+  "gpt-oss-20b": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, // local llama-server
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
   "claude-haiku-5-5": {

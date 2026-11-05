@@ -13,3 +13,7 @@ test("haiku 5.5 tier is per request by prompt size", () => {
   expect(high?.cache_read_input_tokens).toBeCloseTo((60_001 * 0.05) / 1e6, 12);
   expect(high?.output).toBeCloseTo((1_000 * 2.5) / 1e6, 12);
 });
+
+test("gpt-oss-20b costs nothing", () => {
+  expect(costDetails("gpt-oss-20b", { input: 1000, output: 500, cache_read_input_tokens: 200 })?.total).toBe(0);
+});

@@ -33,6 +33,7 @@ import * as doctor from "./lib/doctor.ts";
 import { facts, repoStages, stages } from "./lib/status.ts";
 import type { Stage } from "./lib/stage.ts";
 import { jobId } from "./lib/settings.ts";
+import { readModels, setModel } from "./lib/models.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -436,6 +437,12 @@ try {
       else refuse("usage: aleph always <list|grant <reason> <action>|revoke <reason>>");
       break;
     }
+    case "models": {
+      if (positional[0] === "set") { const bad = setModel(positional[1] ?? "", positional[2] ?? ""); if (bad) refuse(bad); }
+      else if (positional[0] !== undefined) refuse("usage: aleph models [set <slot> <claude|local>]");
+      out(readModels());
+      break;
+    }
     case "judge": {
       const v = positional[0];
       if (v === "jev" || v === "haiku") setJudgeChoice(v);
@@ -443,7 +450,7 @@ try {
       out({ judge: judgeChoice() });
       break;
     }
-    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|suite|report|pause|resume|status|judge|dispatch|doctor|doc-claims|monitor> ...");
+    default: refuse("usage: aleph <job|run|land|checked|recheck|drop|jobs|issue|tick|suite|report|pause|resume|status|judge|models|dispatch|doctor|doc-claims|monitor> ...");
   }
 } catch (e) {
   if (!(e instanceof Refusal)) throw e;

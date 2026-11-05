@@ -173,3 +173,14 @@ describe("run", () => {
     expect(told).toContain("build finished");
   });
 });
+
+describe("models", () => {
+  test("set title local is printed by models; a bad slot exits non-zero", async () => {
+    expect((await aleph(["models", "set", "title", "local"])).code).toBe(0);
+    const r = await aleph(["models"]);
+    expect(r.json).toMatchObject({ title: "local", merge: "claude" });
+    const bad = await aleph(["models", "set", "intake", "local"]);
+    expect(bad.code).not.toBe(0);
+    expect(bad.stderr).toContain("unknown slot");
+  });
+});
