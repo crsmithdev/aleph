@@ -237,7 +237,7 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
   const card = CARDS[reason];
   const headline = (escalated && askIn(c)?.headline?.trim()) || title;
   return {
-    key, reason, kind: kindOf(reason, kind), card: card.card, headline, tag: card.tag(c), id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
+    key, reason, kind: kindOf(reason, kind), card: card.card, headline, tag: escalated ? card.tag(c) : "Director's call", id: c.id, href, title, problem, situation: stored || problem, escalated, actions, ...(more.length ? { more } : {}),
     ...(!escalated ? {} : c.lesson ? { always: proposalAlways(c.lesson) } : r.always ? { always: alwaysFor(reason, r.always, actions[0]?.label) } : {}),
     details: detailsFor(c), ...(repo ? { repo } : {}), ...(priority ? { priority } : {}),
   };

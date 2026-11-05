@@ -72,7 +72,7 @@ test("Technical details are closed by default and hold the director's details an
 });
 
 test("each held path names its change: a package file is a package change", () => {
-  const [i] = asksOf([job({ name: "aleph-28", condition: "awaiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { kind: "approval", reason: "held-path" } })]);
+  const [i] = asksOf([job({ name: "aleph-28", condition: "awaiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })]);
   expect(i.tag).toBe("Package change");
 });
 
