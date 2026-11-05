@@ -79,7 +79,9 @@ type Land = (name: string) => Promise<string | null>;
  * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
  * steps a pause kept (`startKept`), the rescue of returned, failed, killed and lost runs, the lands and the close of parents whose parts are done.
  * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 6 gates of issueDecision in
- * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds starts. Each start
+ * order; the first that binds skips it, and its hold record names that gate. Between Busy file and Loop guard a goal whose last build run ended with the
+ * API credit error (`API Error: 402`) less than 10 minutes ago (`CREDIT_WAIT_MS`) waits out its credit wait with a `credit-wait` hold; the credit wait is
+ * not one of the 6 gates, because the goal's own last run decides it. A goal no gate holds starts. Each start
  * holds a lock on its goal and re-reads the jobs under it, so two dispatches at once start a goal once. `start`
  * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts goals
  * only: an issue is closed as done once its goals are all done (`closeIssues`). Intake (intake.ts) took each goal in
