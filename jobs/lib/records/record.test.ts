@@ -103,8 +103,11 @@ test("next: each run condition gives its step", () => {
     [[{ kind: "land", condition: "landed", commit: "abc1234def" }], "none"],
     [[{ condition: "dropped", reason: "dropped by Chris" }], "none"],
     [[{ kind: "land", condition: "landed" }, { kind: "facts", condition: "running" }], "none"],
+    [[{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }], "rescue"],
+    [[{ condition: "passed", next: "land" }, { kind: "director", condition: "passed" }], "land"],
   ];
   for (const [runs, step] of cases) expect([runs, record.next(rec(runs)).step]).toEqual([runs, step]);
+  expect(record.next(rec([{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }])).why).toBe("no commit");
 });
 
 test("next: a stuck run the factory asked Chris about waits", () => {

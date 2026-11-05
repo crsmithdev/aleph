@@ -296,12 +296,13 @@ export type Step =
  * The next step of the job. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
  * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
  * goes to the rescue, unless the factory asked Chris about it; a landed, done or dropped job does nothing; a goal
- * with no open run waits for its `wait`, else starts. The run that counts is the newest one that is not a facts run
- * and not a land that lost the lock race (job.ts `lastReal`).
+ * with no open run waits for its `wait`, else starts. The run that counts is the newest one that is not a facts or
+ * director run and not a land that lost the lock race (job.ts `lastReal`): a director run changes the step through
+ * the Ask and the `director` event it writes, never as the run that counts.
  */
 export function next(r: JobRecord): Step {
   if (r.ask) return { step: "ask", why: `asks for your ${r.ask.kind}: ${r.ask.reason}` };
-  const last = r.runs.findLast((x) => x.kind !== "facts" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "locked"));
+  const last = r.runs.findLast((x) => x.kind !== "facts" && x.kind !== "director" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "locked"));
   if (last?.condition === "running") return { step: "run", why: `${last.kind} run ${last.id} is running` };
   if (last?.condition === "waiting") return { step: "ask", why: `${last.kind} run ${last.id} waits for Chris` };
   if (last?.next === "worker") return { step: "worker", why: `${last.failed ?? "a check"} sent it back: fix round ${r.rounds}` };
