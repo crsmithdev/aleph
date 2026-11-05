@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chart, day, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chart, day, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, legend, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
@@ -25,7 +25,7 @@ const axis = { axisLabel: { formatter: (v) => durShort(v) } };
 export const trendOption = (d, key, t) => ({
   animation: false,
   grid: { left: 48, right: 16, top: 28, bottom: 20 },
-  legend: { top: 0, right: 0 },
+  legend,
   tooltip: { trigger: "axis", confine: true, valueFormatter: (v) => (v ? dur(v) : "–") },
   xAxis: { type: "category", boundaryGap: false, data: d.buckets.map((b) => xLabel(b.at, d.window)), axisTick: { show: false }, axisLabel: { hideOverlap: true } },
   yAxis: { type: "value", min: 0, splitLine: { lineStyle: { opacity: 0.5 } }, ...axis },
@@ -43,7 +43,7 @@ export const trendOption = (d, key, t) => ({
 export const stripOption = (d, key, t) => ({
   animation: false,
   grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
-  legend: { top: 0, right: 0 },
+  legend,
   tooltip: { confine: true, formatter: (p) => `${esc(p.data.id)}: ${esc(dur(p.value[0]))}, filed ${esc(when(p.value[1]))}` },
   xAxis: { type: "log", logBase: 60, min: (v) => (v.min >= 60 ? 60 : 1), max: (v) => v.max * 1.5, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
   yAxis: { type: "time", axisLabel: { formatter: (v) => (d.window === "week" || d.window === "month" ? xLabel(v, d.window) : `${day(v)} ${xLabel(v, d.window)}`), hideOverlap: true } },
@@ -71,7 +71,7 @@ export const slowestOption = (d, key) => {
   return {
     animation: false,
     grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
-    legend: { top: 0, right: 0 },
+    legend,
     tooltip: { trigger: "item", confine: true, formatter: (p) => `${esc(p.name)}: ${esc(dur(p.value))}` },
     xAxis: { type: "value", splitNumber: 3, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
     yAxis: { type: "category", inverse: true, data: top.map((r) => r.label), axisTick: { show: false }, axisLabel: { interval: 0 }, triggerEvent: true },

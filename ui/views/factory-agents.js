@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, cardTrend, chart, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { barsOption, card, cardTrend, chart, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, legend, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
@@ -56,8 +56,7 @@ function roles(a, m) {
   return rows ? dataTable(heads(["Role", "Model", ...num, "Jobs"], num), rows) : empty("No agent ran in this window.");
 }
 
-const legend = { top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
-const stacked = (o) => ({ ...o, grid: { ...o.grid, top: 24 }, legend, series: o.series.map((s) => ({ ...s, stack: "all" })) });
+const stacked = (o) => ({ ...o, grid: { ...o.grid, top: 28 }, legend, series: o.series.map((s) => ({ ...s, stack: "all" })) });
 const timed = (a) => a.roles.filter((r) => r.hours != null);
 
 /** The live chart: one stacked area per timed role, in `--series-1` to `--series-5`. `t` is the page tokens. */
@@ -73,7 +72,7 @@ export function outcomesOption(d, t) {
   const sum = (r, k) => rows.filter((o) => o.role === r.key).reduce((n, o) => n + (o[k] ?? 0), 0);
   return {
     animation: false,
-    grid: { left: 64, right: 16, top: 24, bottom: 20 },
+    grid: { left: 64, right: 16, top: 28, bottom: 20 },
     legend,
     tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
     xAxis: { type: "value", minInterval: 1, splitLine: { show: true } },

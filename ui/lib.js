@@ -547,11 +547,13 @@ export const barsOption = (labels, series, { labels: showValues = false } = {}) 
   series: series.map((s) => ({ type: "bar", barMaxWidth: 64, name: s.name, data: s.data, ...(s.color ? { itemStyle: { color: s.color } } : {}), ...(showValues ? { label: { show: true, position: "top", textBorderWidth: 0, textBorderColor: "transparent" } } : {}) })),
 });
 
+/** The legend of every chart: one line at the top that scrolls when its items do not fit, so it never covers the grid. */
+export const legend = { type: "scroll", top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
 /** The ECharts option for areas stacked over categories on the left axis, and `lines` over the same categories on the right axis. Each series is `{name, data}`; the first area is at the bottom. */
 export const stackedAreaOption = (labels, series, lines = []) => ({
   animation: false,
-  grid: { left: 32, right: lines.length ? 32 : 16, top: 24, bottom: 20 },
-  legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
+  grid: { left: 32, right: lines.length ? 32 : 16, top: 28, bottom: 20 },
+  legend,
   tooltip: { trigger: "axis", confine: true },
   xAxis: { type: "category", boundaryGap: false, data: labels, axisTick: { show: false }, axisLabel: { hideOverlap: true } },
   yAxis: [{ type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } }, ...(lines.length ? [{ type: "value", min: 0, minInterval: 1, splitLine: { show: false }, axisTick: { show: false } }] : [])],
@@ -563,8 +565,8 @@ export const stackedAreaOption = (labels, series, lines = []) => ({
 /** The ECharts option for `lines` (the left axis) and `bars` (the right axis) over time. Each series is `{name, data}` with `data` as `[ms, value]` pairs. */
 export const timeSeriesOption = (lines, bars) => ({
   animation: false,
-  grid: { left: 40, right: 32, top: 24, bottom: 20 },
-  legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
+  grid: { left: 40, right: 32, top: 28, bottom: 20 },
+  legend,
   tooltip: { trigger: "axis", confine: true },
   xAxis: { type: "time", axisTick: { show: false } },
   yAxis: [{ type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } }, { type: "value", min: 0, minInterval: 1, splitLine: { show: false }, axisTick: { show: false } }],
@@ -576,8 +578,8 @@ export const timeSeriesOption = (lines, bars) => ({
 /** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`. */
 export const rangeBarOption = (labels, p50, p90, suffix, t) => ({
   animation: false,
-  grid: { left: 64, right: 16, top: 24, bottom: 20 },
-  legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
+  grid: { left: 64, right: 16, top: 28, bottom: 20 },
+  legend,
   tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
   xAxis: { type: "value", splitLine: { lineStyle: { opacity: 0.5 } }, axisLabel: { formatter: `{value}${suffix}` } },
   yAxis: { type: "category", data: labels, inverse: true, axisTick: { show: false } },

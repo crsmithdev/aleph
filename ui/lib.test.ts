@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -188,5 +188,26 @@ test("bar value labels take the theme ink, not ECharts' #333, in the dark and th
     const values = svg.match(/<text[^>]*text-anchor="middle"[^>]*>[12]<\/text>/g) ?? [];
     expect(values.length, name).toBe(2);
     for (const el of values) expect(el.match(/fill="([^"]*)"/)?.[1], name).toBe(t.ink);
+  }
+});
+
+test("the legend of the Tests and the Live chart ends above the grid at 390 and 1440px", async () => {
+  // @ts-ignore the vendored ECharts bundle has no types
+  const echarts = (await import("./vendor/echarts.min.js")).default;
+  // @ts-ignore issues.js is plain JS, shared with the page
+  const { testsOption } = await import("./views/issues.js");
+  const now = new Date("2026-11-04T12:00:00Z");
+  const tests = Object.fromEntries(["aleph", "sidetone", "voiceover"].map((p) => [p, [{ at: "2026-11-04T10:00:00Z", ran: 100, rerunPassed: 1 }]]));
+  const roles = ["Worker", "Judge", "Planner", "Reviewer", "Intake"].map((name) => ({ name, data: [1, 2] }));
+  const charts = { tests: testsOption(tests, "", "week", now), live: stackedAreaOption(["a", "b"], roles) };
+  for (const [name, option] of Object.entries(charts)) for (const width of [390, 1440]) {
+    const ec = echarts.init(null, chartTheme({ ink: "#000", rule: "#ccc", sans: "sans" }), { renderer: "svg", ssr: true, width, height: 240 });
+    ec.setOption(option);
+    const model = ec.getModel(), group = ec.getViewOfComponentModel(model.getComponent("legend")).group;
+    const box = group.getBoundingRect().clone();
+    box.applyTransform(group.getLocalTransform());
+    const grid = model.getComponent("grid").coordinateSystem.getRect();
+    ec.dispose();
+    expect(box.y + box.height, `${name} at ${width}px`).toBeLessThanOrEqual(grid.y);
   }
 });
