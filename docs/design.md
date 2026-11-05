@@ -161,7 +161,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 
 ### Form messages
 
-- A result line after an action, or inside a form, is `<span class="act-msg">` (`ui/app.css:333`). `say()` in `ui/lib.js:721` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:662`, `674`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
+- A result line after an action, or inside a form, is a `<span>` with the class `act-msg` (`ui/app.css:333`). `say()` in `ui/lib.js:721` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:662`, `674`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
 
 ### Two-click confirm
 
@@ -261,7 +261,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `cha
 - **Bar lists:** `barRow()` (`ui/lib.js:564`) and `barList()` (`ui/lib.js:570`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:357`) and `priorityBadge()` (`ui/lib.js:361`) are squared with `--r-tag`; `chips()` (`ui/lib.js:373`) are pills.
 - **Efficiency bar:** `.obar` (`ui/app.css:877`), in the five `--seg-*` colours under white text.
-- **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:77`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:107`. Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:583`), and each option names its series.
+- **Loading and empty:** a chart's loading line is `loadingLine()` (`ui/lib.js:77`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:107`. Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:583`), and each option names its series.
 
 ## Metric cards
 

@@ -132,7 +132,7 @@ export function lineRefsIn(docs: Doc[]): { path: string; from: number; line: num
   const out: { path: string; from: number; line: number; name?: string; quote: string; file: string; at: number }[] = [];
   each(docs, (d, text, at) => {
     for (const m of text.matchAll(/`((?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[a-z]{1,5}):(\d+)(?:-(\d+))?`/g)) {
-      const pair = text.slice(0, m.index).match(/`([^`\s]+?)(?:\(\))?`(?: \(| in )$/);
+      const pair = text.slice(0, m.index).match(/`([^`]+?)(?:\(\))?`(?: \(| in )$/);
       out.push({ path: m[1], from: Number(m[2]), line: Number(m[3] ?? m[2]), name: pair?.[1], quote: pair ? pair[0] + m[0] + (pair[0].endsWith("(") ? ")" : "") : m[0], file: d.file, at });
     }
   });

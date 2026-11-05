@@ -52,6 +52,13 @@ describe("a doc that does not match fails, quoting the claim", () => {
     ]);
   });
 
+  test("a selector with a space paired with a line that does not hold it", () => {
+    const p = "ui/app.css";
+    const at = readFileSync(join(ROOT, p), "utf8").split("\n").findIndex((l) => l.startsWith(".chat .clamp ")) + 1;
+    expect(one(`\`.chat .clamp\` (\`${p}:1\`)`)).toEqual([`docs/x.md:1: "\`.chat .clamp\` (\`${p}:1\`)": .chat .clamp is at line ${at} of ${p}`]);
+    expect(one(`\`.chat .clamp\` in \`${p}:${at}\``)).toEqual([]);
+  });
+
   test("a claim that a file imports only some modules", () => {
     expect(one("`jobs/lib/infra/settings.ts` imports only `node:fs`, `node:os`, `node:path` and `./layout.ts`.")).toEqual([]);
     const p = one("`jobs/lib/infra/settings.ts` imports only `./sandbox.ts`, `./gate.ts` and `node:fs`.");
