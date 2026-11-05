@@ -17,16 +17,28 @@ function scorecard(s, a, w) {
 /** A success rate under this line (0 to 1) shows in the warn tone. */
 export const WARN_RATE = 0.7;
 
-function roles(a) {
-  const num = ["Runs", "Succeeded", "Failed", "Timed out or stuck", "Success", "p50", "Cost", "First pass", "Reviewer pass", "Pass", "Fail"];
+/** Each tier's name and its Claude model; the other model each tier offers is gpt-oss-20b. */
+const TIERS = { "worker-low": ["Worker low", "haiku"], "worker-medium": ["Worker medium", "sonnet"], merge: ["Merge", "haiku"], title: ["Title", "haiku"], judge: ["Judge", "haiku"] };
+/** The roles whose model is fixed, and that model. */
+const FIXED = [["Intake", "opus"], ["Review", "opus"], ["Monitor", "opus"], ["Director", "fable"]];
+
+function roles(a, m) {
+  const num = ["Runs", "Success", "p50", "Cost", "First pass", "Reviewer pass", "Pass", "Fail"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const cell = (v) => `<td class="num">${v ?? "–"}</td>`;
-  const rows = (a.outcomes ?? []).map((o) => {
+  const up = m?.local === "up";
+  const pick = ([tier, [name, claude]]) => {
+    const t = m.tiers[tier], box = tier.startsWith("worker") ? `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${esc(name)} enabled"${t?.enabled ? " checked" : ""}> ` : "";
+    return `<tr><td>${esc(name)}</td><td>${box}<select data-tier="${esc(tier)}" aria-label="${esc(name)} model">` +
+      [claude, "gpt-oss-20b"].map((v) => `<option value="${v}"${t?.model === v ? " selected" : ""}${v === "gpt-oss-20b" && !up ? " disabled" : ""}>${v}</option>`).join("") + `</select></td>${"<td></td>".repeat(num.length + 1)}</tr>`;
+  };
+  const config = m ? Object.entries(TIERS).map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${"<td></td>".repeat(num.length + 1)}</tr>`).join("") : "";
+  const rows = config + (a.outcomes ?? []).map((o) => {
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    return `<tr><td>${esc(names[o.role] ?? o.role)} · ${esc(o.model)}</td>${cell(o.runs)}${cell(o.succeeded)}${cell(o.failed)}${cell(o.stuck)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed runs</a></td></tr>`;
+    return `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${esc(o.model)}</td>${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed runs</a></td></tr>`;
   }).join("");
-  return dataTable(heads(["Role", ...num, "Jobs"], num), rows);
+  return dataTable(heads(["Role", "Model", ...num, "Jobs"], num), rows);
 }
 
 const legend = { top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
@@ -75,20 +87,6 @@ const labels = (d) => {
   };
 };
 
-/** Each tier's name and its Claude model; the other model each tier offers is gpt-oss-20b. */
-const TIERS = { "worker-low": ["Worker low", "haiku"], "worker-medium": ["Worker medium", "sonnet"], merge: ["Merge", "haiku"], title: ["Title", "haiku"], judge: ["Judge", "haiku"] };
-const FIXED = ["Intake", "Review", "Monitor", "Director"];
-
-/** The Models card: a Claude | Local control per tier, the fixed roles, and the local server's state. `m` is /api/models, or null while it loads. */
-function models(m) {
-  if (!m) return card("Models", loadingLine("the models"), { id: "models" });
-  const up = m.local === "up";
-  const row = ([tier, [name, claude]]) => `<div class="cap-row"><b>${esc(name)}</b><div class="seg" role="group" aria-label="${esc(name)} model" data-tier="${esc(tier)}">` +
-    [[claude, "Claude"], ["gpt-oss-20b", "Local"]].map(([v, l]) => `<button type="button" data-value="${v}" aria-pressed="${m.tiers[tier]?.model === v}"${l === "Local" && !up ? " disabled" : ""}>${l}</button>`).join("") + `</div></div>`;
-  return card("Models", `<p class="quiet">Local server: ${up ? "up" : "down"}</p><div class="caps">` + Object.entries(TIERS).map(row).join("") +
-    FIXED.map((n) => `<div class="cap-row"><b>${n}</b><span>Claude, fixed</span></div>`).join("") + `</div>`, { id: "models" });
-}
-
 /** The page body. `d` is /api/speed for the window, or null while it loads. */
 export function renderFactoryAgents(s, d, _key = "live", window = "week", m = null) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
@@ -97,7 +95,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const box = (k) => `<div class="chartbox" data-chart="${k}" role="img" aria-label="${esc(l[k])}"></div>`;
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
     (a ? `<div class="trio">${card("Agents live by role", box("live"))}${card("Outcomes by role", box("outcomes"))}${card("Cost by model", box("cost"))}</div>` : card("Agents", wait)) +
-    models(m) + card("Roles", a ? roles(a) : wait) + `</div>`;
+    card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
 }
 
 /** The old address. */
@@ -126,10 +124,10 @@ export const view = {
       const t = readTokens(), opts = { live: liveOption(d, t), outcomes: outcomesOption(d, t), cost: costOption(d) };
       for (const el of root.querySelectorAll(".chartbox")) drawn.push(chart(el, opts[el.dataset.chart]));
     };
-    root.onclick = async (e) => {
-      const b = e.target.closest?.("#models .seg button");
-      if (!b || b.disabled) return;
-      const res = await post({ tier: b.parentElement.dataset.tier, model: b.dataset.value });
+    root.onchange = async (e) => {
+      const b = e.target.closest?.("#roles [data-tier]");
+      if (!b || e.type !== "change") return;
+      const res = await post({ tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) });
       if (res.ok) { modelsNow = await res.json(); draw(usable(windowNow())); }
     };
     keepWindow(windowNow());
