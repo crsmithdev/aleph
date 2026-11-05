@@ -151,7 +151,10 @@ test("the view draws the sections in order, a closed gate, and the rule switches
     const modes = [...row.matchAll(/data-mode="([^"]*)"/g)].map((m) => m[1]);
     if (reason.startsWith("proposal-")) expect(modes).toEqual([]);
     else expect(modes).toEqual(r.always ? ["", r.always] : [""]);
-    if (!r.always && !reason.startsWith("proposal-")) expect(row).toContain("No automatic mode");
+    if (!r.always && !reason.startsWith("proposal-")) {
+      expect(row).toContain("The director decides first and sends the rest to you.");
+      expect(row).not.toContain("No automatic mode");
+    }
   }
   const rescue = h.slice(h.indexOf('data-reason="rescue"'));
   expect(rescue).toMatch(/data-mode="recommended" aria-pressed="true">Recommended</);

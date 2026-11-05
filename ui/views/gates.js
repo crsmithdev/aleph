@@ -132,7 +132,7 @@ export function renderRules(d) {
     } else {
       const seg = (mode, label, on) => `<button type="button" data-rule="${esc(r.reason)}" data-mode="${esc(mode)}" aria-pressed="${on}">${esc(label)}</button>`;
       control = `<div class="seg" role="group" aria-label="Who decides ${esc(name)}">${seg("", "Ask me", !g)}${r.mode ? seg(r.mode, modeLabel(r.mode), g?.action === r.mode) : ""}</div>`;
-      if (!r.mode) hint = "No automatic mode.";
+      if (!r.mode) hint = "The director decides first and sends the rest to you.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }
     const num = (n) => `<td class="num">${n}</td>`;
