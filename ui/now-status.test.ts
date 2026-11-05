@@ -54,11 +54,11 @@ test("the sentence says at most three parts, the most serious first", () => {
   expect(said({ health: ["health: something new broke.", mainRed, ciRed] }, { stuck })).toBe("Alert: GitHub CI is broken; the build is failing on main; jobs are unhealthy.");
 });
 
-test("what asks for you follows the fine sentence, in the warning colour", () => {
+test("what asks for you leads the status sentence, in the warning colour", () => {
   const ask = (kind: string) => ({ kind });
   const asks = (...k: string[]) => ({ asks: k.map(ask) });
   const raw = (top: object, o: object = {}) => view.renderLede({ ...calmState, ...top, factory: { ...calmState.factory, ...o } });
-  expect(raw(asks("approval"))).toBe('<span class="say warning">Everything is running smoothly; <a href="#awaiting">your attention is needed</a>.</span>');
+  expect(raw(asks("approval"))).toBe('<span class="say warning"><a href="#awaiting">Your attention is needed</a>.</span>');
   expect(raw(asks("input", "input"))).toBe(raw(asks("approval")));
   expect(raw(asks("input", "approval"))).toBe(raw(asks("approval")));
   expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is running smoothly.</span>');
@@ -99,7 +99,7 @@ test("the status line says your attention is needed when the Issues section has 
   const calm = { ...state, asks: [], stuck: [], issues: [], factory: { ...state.factory, health: [], paused: false } };
   for (const o of [{ asks: asksOf([], [{ ...issue(7), question: "q", ask: { kind: "input", reason: "question", question: "q", options: [], why: [], situation: "Escalated." } }]) }]) {
     const h = view.renderLede({ ...calm, ...o });
-    expect(h).toContain("your attention is needed");
+    expect(h).toMatch(/your attention is needed/i);
     expect(h).not.toContain("Awaiting");
   }
 });
@@ -107,10 +107,10 @@ test("the status line says your attention is needed when the Issues section has 
 test("a held run asks for your attention once the director escalates it, and not while the director holds it", () => {
   const calm = { ...state, stuck: [], factory: { ...state.factory, health: [] } };
   const withDirector = attend({ runs: [held], issues: [] }, []).items;
-  expect(view.renderLede({ ...calm, asks: withDirector })).not.toContain("your attention is needed");
+  expect(view.renderLede({ ...calm, asks: withDirector })).not.toMatch(/your attention is needed/i);
   const asks = attend({ runs: [{ ...held, ask: { ...held.ask, situation: "It changes hooks/lib/digest.ts." } }], issues: [] }, []).items;
   const h = view.renderLede({ ...calm, asks });
-  expect(h).toContain("your attention is needed");
+  expect(h).toMatch(/your attention is needed/i);
   expect(h).toContain('class="say warning"');
 });
 

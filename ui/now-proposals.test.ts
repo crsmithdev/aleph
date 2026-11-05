@@ -21,9 +21,9 @@ test("the lede says proposals need your attention", () => {
   // A proposal reaches Chris once the director wrote its case text.
   const sent = { ...prop, situation: "The memory proposes a check." };
   const s = { ...state, asks: asksOf([], [], [sent]), stuck: [], factory: { ...state.factory, health: [] } };
-  expect(view.renderLede(s)).toContain("<a href=\"#awaiting\">your attention is needed</a>.");
-  expect(view.renderLede({ ...s, asks: asksOf([], [], [sent, sent]) })).toContain("your attention is needed");
-  expect(view.renderLede({ ...s, asks: asksOf([], [], [prop]) })).not.toContain("your attention is needed");
+  expect(view.renderLede(s)).toContain("<a href=\"#awaiting\">Your attention is needed</a>.");
+  expect(view.renderLede({ ...s, asks: asksOf([], [], [sent, sent]) })).toContain("Your attention is needed");
+  expect(view.renderLede({ ...s, asks: asksOf([], [], [prop]) })).not.toMatch(/your attention is needed/i);
 });
 
 test("approve and decline handlers", async () => {

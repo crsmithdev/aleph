@@ -174,7 +174,7 @@ const ALERTS = [
 ];
 const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
 
-/** The status sentence: "Alert: " and what is wrong, or the fine sentence, then what asks for you and a weekly usage of WEEKLY_WARN or more and the warning health lines; at most MAX_SAID parts, each a link but the usage and warning parts, which are plain text. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
+/** The status sentence: "Alert: " and what is wrong; otherwise what asks for you, which leads, or the fine sentence, then a weekly usage of WEEKLY_WARN or more and the warning health lines; at most MAX_SAID parts, each a link but the usage and warning parts, which are plain text. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 export function renderLede(s, stale = false) {
   const f = s.factory;
   const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
@@ -182,7 +182,8 @@ export function renderLede(s, stale = false) {
   const said = [...alerts].sort((a, b) => alertRank(a) - alertRank(b)).map((t) => [t, t === JOBS_UNHEALTHY && s.stuck.length ? "#jobs-stuck" : "#awaiting"]);
   // An Ask still with the director does not need Chris yet.
   const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
-  if (asks.length) said.push(["your attention is needed", "#awaiting"]);
+  // With no alert, no pause and a fresh status, the Ask part leads the sentence, so it starts with a capital.
+  if (asks.length) said.push([alerts.size || f.paused || stale ? "your attention is needed" : "Your attention is needed", "#awaiting"]);
   const alert = alerts.size > 0;
   if (f.paused && alert) said.push(["the factory is paused", ""]);
   const week = s.usage?.now?.seven_day;
@@ -191,6 +192,7 @@ export function renderLede(s, stale = false) {
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
   if (stale) return `<span class="say error">Alert: this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
   if (alert) return `<span class="say error">Alert: ${parts}.</span>`;
+  if (asks.length && !f.paused) return `<span class="say warning">${parts}.</span>`;
   const lead = f.paused ? "The factory is paused" : FINE;
   return `<span class="say ${parts || f.paused ? "warning" : "fine"}">${lead}${parts ? `; ${parts}` : ""}.</span>`;
 }
