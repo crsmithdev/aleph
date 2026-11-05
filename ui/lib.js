@@ -391,6 +391,7 @@ const opt = (o) => (typeof o === "object" && o ? { value: String(o.value), label
  */
 export function filterBar(groups) {
   const control = (g) => {
+    if (g.html) return g.html;
     const name = esc(g.name ?? "");
     const opts = (g.options ?? []).map(opt);
     const cur = String(g.value ?? opts[0]?.value ?? "");
@@ -485,10 +486,14 @@ export function keepProject(p) {
 export const projectNow = () => (typeof location === "undefined" ? "" : projectOf(hashQuery()));
 /** A request URL with the page's project added, when there is one. */
 export const withProject = (url, q) => { const p = projectOf(q); return p ? `${url}${url.includes("?") ? "&" : "?"}project=${encodeURIComponent(p)}` : url; };
-/** The head's scope: the Project select, then the window control. `more` adds project names the page knows. */
-export const scopeBar = (project, win, more = []) => filterBar([
-  { label: "Project", name: "project", data: true, value: project, options: [{ value: "", label: "All" }, ...projectChoices(project, more)] },
-  { label: "Window", bare: true, name: "window", value: win, options: WINDOWS },
+/**
+ * The head's scope: the Project select, then the window control, then `after` (html for a control of the page). `more` adds project names the page knows.
+ * `o.label(p)` names a project option ("" is All); `o.name` and `o.options` replace the window control (a window other than `window` stays out of aleph.window).
+ */
+export const scopeBar = (project, win, more = [], o = {}) => filterBar([
+  { label: "Project", name: "project", data: true, value: project, options: [{ value: "", label: "All" }, ...projectChoices(project, more)].map((c) => ({ value: c.value, label: o.label ? o.label(c.value) : c.label })) },
+  { label: "Window", bare: true, name: o.name ?? "window", value: win, options: o.options ?? WINDOWS },
+  ...(o.after ? [{ html: o.after }] : []),
 ]);
 
 // ---------- the blocks of a page: tile, card, table, bar list ----------

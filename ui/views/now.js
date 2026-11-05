@@ -141,7 +141,7 @@ const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).l
 
 /** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
 export function renderStatusLine(s, stale = false, w = "day") {
-  const bar = scopeBar(projectNow(), w).replace(/<\/div><\/div>$/, `</div><div class="fg">${renderControls(s)}</div></div>`);
+  const bar = scopeBar(projectNow(), w, [], { after: renderControls(s) });
   return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
 }
 

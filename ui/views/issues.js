@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -365,7 +365,8 @@ const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medi
 /** The project filter scopes the tiles too: a select in the page head, each option with the count the other filters leave. */
 export function renderProjects(projects, rows, o = {}) {
   const left = filterRows(rows, o, ["project"]);
-  return filterBar([{ label: "Project", name: "project", data: true, value: o.project ?? "", options: [{ value: "", label: `All (${left.length})` }, ...projects.map((p) => ({ value: p, label: `${p} (${left.filter((r) => r.project === p).length})` }))] }, { label: "Window", bare: true, name: "window", value: o.window ?? "week", options: WINDOWS }]);
+  const n = (p) => left.filter((r) => !p || r.project === p).length;
+  return scopeBar(o.project ?? "", o.window ?? "week", projects, { label: (p) => `${p || "All"} (${n(p)})` });
 }
 
 export function renderFilters(rows, o = {}) {

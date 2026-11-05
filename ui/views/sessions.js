@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/agents. The session and skill detail routes stay in their own views.
-import { barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, filterBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope } from "../lib.js";
+import { barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, scopeBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope } from "../lib.js";
 
 export const view = {
   path: "/sessions",
@@ -129,10 +129,7 @@ const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }
 export function renderSessions(d, o = options()) {
   const projects = d?.sessions?.projects ?? d?.activity?.projects ?? [];
   const total = sum(d?.sessions?.sessions ?? [], (s) => s.cost ?? 0);
-  const scope = filterBar([
-    { label: "Project", name: "project", data: true, value: projects.includes(o.project) ? o.project : "", options: [{ value: "", label: "All" }, ...projects] },
-    { label: "Window", name: "days", value: o.days, options: DAYS },
-  ]);
+  const scope = scopeBar(projects.includes(o.project) ? o.project : "", o.days, projects, { name: "days", options: DAYS });
   return `<div class="page sp agents">${pageHead("Sessions", { count: `last ${o.days} days`, aside: scope })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
     `<p class="hint">${esc(money(total))} recorded across these sessions.</p></div>`;
 }

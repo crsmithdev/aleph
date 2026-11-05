@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -290,6 +290,25 @@ test("seg draws a labelled group, and scopeBar names its window group", () => {
   expect(groups.length).toBe(1);
   expect(groups[0]).toMatch(/aria-label="[^"]+"/);
   expect(scopeBar("", "week")).not.toContain('class="fl">Window');
+});
+
+test("scopeBar takes a window name, its choices and an extra control; a click on days stays out of aleph.window", () => {
+  const days = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
+  const h = scopeBar("", "7", [], { name: "days", options: days, after: "<button>Pause</button>", label: (p: string) => `${p || "All"} (2)` });
+  expect(h).toContain('data-name="days"');
+  expect(h.match(/data-value="(7|30|90)"/g)).toHaveLength(3);
+  expect(h).toContain('<option value="" selected>All (2)</option>');
+  expect(h).toMatch(/<\/div><div class="fg"><button>Pause<\/button><\/div><\/div>$/);
+  const g = globalThis as any, set: string[] = [];
+  g.localStorage = { getItem: () => null, setItem: (k: string) => set.push(k) };
+  g.location = { hash: "#/sessions" };
+  try {
+    let click: any;
+    wireScope({ querySelector: () => ({ querySelector: () => null, addEventListener: (t: string, f: unknown) => { if (t === "click") click = f; } }) });
+    click({ target: { closest: () => ({ dataset: { value: "30" }, parentElement: { dataset: { name: "days" } } }) } });
+    expect(g.location.hash).toContain("days=30");
+    expect(set).toEqual([]);
+  } finally { delete g.localStorage; delete g.location; }
 });
 
 test("sectionHead takes an id and a level, and card passes both through", () => {
