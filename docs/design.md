@@ -212,7 +212,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:546`) with `heads()` (`ui/lib.js:549`) or `sortHead()` (`ui/lib.js:682`), styled by `table.tbl` (`ui/app.css:441`). Every table goes through `dataTable()`.
+The one table is `dataTable()` (`ui/lib.js:546`) with `heads()` (`ui/lib.js:549`) or `sortHead()` (`ui/lib.js:682`), styled by `table.tbl` (`ui/app.css:441`). A table that can pass 50 rows is `pagedTable()` (`ui/lib.js:669`), which wraps `dataTable()` and `pager()`. Every table goes through one of the two.
 
 Rules, as the code states them (`ui/app.css:441`):
 
