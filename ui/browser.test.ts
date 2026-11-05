@@ -371,4 +371,14 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
     expect(m.em).toBe(m.fs);
     await page.ev('document.querySelector("#lane-probe").remove()');
   }, 30_000);
+
+  test("the font picker button weight comes from --fw-strong", async () => {
+    await page.width(1200);
+    await page.go("#/");
+    const weight = () => page.ev<string>('getComputedStyle(document.querySelector(".fontpick > summary")).fontWeight');
+    expect(await weight()).toBe("600");
+    await page.ev('document.documentElement.style.setProperty("--fw-strong", "700")');
+    expect(await weight()).toBe("700");
+    await page.ev('document.documentElement.style.removeProperty("--fw-strong")');
+  }, 30_000);
 });
