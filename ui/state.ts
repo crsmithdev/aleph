@@ -326,6 +326,10 @@ export function state(now = new Date()): State {
     }
   }
 
+  // A dropped issue holds no Ask and no stuck run.
+  const droppedJob = (j: Job) => j.item !== null && status(lists.item(j.repo, j.item.id) ?? { fm: {} } as any) === "dropped";
+  for (const list of [needs, stuck]) list.splice(0, list.length, ...list.filter((j) => !droppedJob(j)));
+
   for (const j of [...needs, ...stuck]) {
     const todo = j.item?.id;
     j.agent = liveJobs.has(j.name) || (todo !== undefined && liveItems.has(`${j.repo}/${todo}`));

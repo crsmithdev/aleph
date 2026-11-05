@@ -200,6 +200,7 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
     if (how === "drop") askIfPartDropped(doc, i, text);
     return i;
   })!;
+  if (how === "drop") clearAsk(refIn(repo.key, w.value));
   return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
 }
 

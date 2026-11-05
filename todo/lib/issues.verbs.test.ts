@@ -7,6 +7,7 @@ import { breakItem, doc, env, fx, parse, remoteItem, sec, seed, sh, tasks, useFi
 import { config } from "./store.ts";
 import { renderItem } from "./todo.ts";
 import * as verbs from "./issues.ts";
+import { askOf, refIn, setAsk } from "../../jobs/lib/ask.ts";
 
 setDefaultTimeout(30000);
 
@@ -167,4 +168,13 @@ test("add and edit refuse a title over 60 characters, with a final period or wit
     expect((await code(() => verbs.edit(proj(), 3, { title: t }))).code).toBe(1);
   }
   expect(head()).toBe(before);
+});
+
+test("drop: clears the Ask on the issue", async () => {
+  await add("Asks something");
+  const ask = { kind: "input" as const, reason: "question", question: "q?", options: [], why: [] };
+  setAsk(refIn(proj().key, { id: 4 } as any), ask);
+  expect(askOf(refIn(proj().key, { id: 4 } as any))).not.toBeNull();
+  verbs.close(proj(), 4, "drop", "not needed");
+  expect(askOf(refIn(proj().key, { id: 4 } as any))).toBeNull();
 });

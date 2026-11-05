@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../todo/lib/store.ts";
-import { add, addPart } from "../todo/lib/todo.ts";
+import { add, addPart, setStatus } from "../todo/lib/todo.ts";
 import { state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { loadRegistry, writeRun } from "../jobs/lib/ledger.ts";
@@ -167,6 +167,18 @@ describe("a land that found the job lock busy", () => {
     expect(card.run.kind).toBe("build");
     expect(facts(loadRegistry().fac).open[2]).toBe("passed");
     for (const id of ["20261027-000040-a", "20261027-000041-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
+  });
+});
+
+describe("a dropped issue", () => {
+  test("holds no ask and no stuck entry", () => {
+    expect(runAsks(state(now)).map((a) => a.id)).toEqual(["fac-1"]);
+    const setAll = (to: "dropped" | "open") => writeList({ key: "fac" }, to, (doc) => { for (const i of doc.items) if (i.id === 1 || i.id === 3) setStatus(i, to); return true; }, true);
+    setAll("dropped");
+    const s = state(now);
+    setAll("open");
+    expect(s.asks.filter((a) => a.id === "fac-1" || a.on === "fac-1")).toEqual([]);
+    expect(s.stuck).toEqual([]);
   });
 });
 
