@@ -107,6 +107,22 @@ test("the views render and the note route is wired", () => {
   expect(nh).toContain("Linked From");
 });
 
+test("the Writes, counts and hooks tables show empty() with no rows and page at 50", () => {
+  const base = { exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, notes: [] };
+  const hooks = (n: number) => ({ procedural: { skills: [], claudeMd: null, hooks: Array.from({ length: n }, (_, i) => ({ event: "Stop", matcher: "", command: `c${i}`, calls: i })), last: "" } });
+  const one = '<div class="empty"><p>';
+  expect(v.renderWrites({ writes: [] })).toContain(`${one}No writes recorded.`);
+  const sem = v.renderMemory({ ...base, writes: [] }, v.options(new URLSearchParams("type=semantic")));
+  for (const t of ["No notes by kind.", "No notes by scope."]) expect(sem).toContain(`${one}${t}`);
+  expect(v.renderMemory({ ...base, writes: [], types: hooks(0) }, v.options(new URLSearchParams("type=procedural")))).toContain(`${one}No hooks in`);
+  const w = v.renderWrites({ writes: Array.from({ length: 51 }, (_, i) => ({ text: `w${i}`, date: "2026-11-01", time: "10:00" })) });
+  expect(w).toContain("50 of 51");
+  expect(w.match(/<tr hidden>/g)?.length).toBe(1);
+  const h = v.renderMemory({ ...base, writes: [], types: hooks(51) }, v.options(new URLSearchParams("type=procedural")));
+  expect(h).toContain('<th>Event</th><th>Command</th><th class="num">Calls</th>');
+  expect(h).toContain("50 of 51");
+});
+
 test("warm() fills the misses cache, so the first request runs vault misses zero more times", async () => {
   const bin = join(base, "bin-warm"), log = join(base, "calls-warm");
   mkdirSync(bin);

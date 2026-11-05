@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, loadingLine, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when } from "../lib.js";
+import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, loadingLine, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -17,8 +17,11 @@ export const view = {
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
 const head = (id, title, n) => `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${n === undefined ? "" : `<span class="count">${n}</span>`}</div>`;
 
-const table = (rows) => rows.length
-  ? dataTable("", rows.map(([k, v]) => `<tr><td>${esc(k === "" ? "(none)" : k)}</td><td class="num">${v}</td></tr>`).join("")) : "";
+const table = ([key, val], rows, none = "") => rows.length
+  ? dataTable(heads([key, val], [val]), rows.map(([k, v]) => `<tr><td class="wide">${esc(k === "" ? "(none)" : k)}</td><td class="num">${v}</td></tr>`).join("")) : empty(none);
+/** A table of STEP rows; the pager's button shows the next STEP. */
+const paged = (head, rows) =>
+  `<div class="mem-page">${dataTable(head, rows.map((r, i) => (i < STEP ? r : r.replace("<tr", "<tr hidden"))).join(""))}${pager(STEP, rows.length, STEP)}</div>`;
 
 export function renderHome(m) {
   const secs = m.home.map((s) =>
@@ -36,14 +39,14 @@ export function renderHealth(m) {
     (refuse.length ? `<h3>Refusals<span class="count">${refuse.length}</span></h3><ul>${refuse.map(f).join("")}</ul>` : "") +
     (warn.length ? `<h3>Warnings<span class="count">${warn.length}</span></h3><ul>${warn.map(f).join("")}</ul>` : "") +
     (!refuse.length && !warn.length ? empty("Lint finds nothing.") : "") +
-    (med ? `<h3>Recall Misses, ${esc(med.days)} Days</h3>` + table([
+    (med ? `<h3>Recall Misses, ${esc(med.days)} Days</h3>` + table(["Measure", "Count"], [
       ["Recalls", med.recalls], ["Empty", `${med.empty} (${pct(med.empty_share * 100)})`],
       ["Reformulated", med.reformulated], ["Reads not offered", med.unoffered_reads]]) : "");
 }
 
 export function renderWrites(m) {
   return (m.writes.length
-    ? dataTable("<th>When</th><th>Write</th>", m.writes.map((w) => `<tr><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td></tr>`).join(""))
+    ? paged(heads(["When", "Write"]), m.writes.map((w) => `<tr><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td></tr>`))
     : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
 }
 
@@ -80,7 +83,7 @@ function renderSemantic(m, s) {
     `<details><summary>Core lines, ${esc(scope)} <span class="count">${x.bytes} / ${x.budget} bytes</span></summary>${x.cut ? `<p class="quiet">${x.cut} cut.</p>` : ""}${x.core.length ? fold(x.core, (c) => `${link(c.title)} ${q(esc(c.core))}`) : `<p class="quiet">None.</p>`}</details>`).join("");
   if (!m.exists) return mem + none("No vault yet.", "Run <code>vault init</code> to make one.");
   return mem + start + `<h3>Notes by Kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
-    `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(Object.entries(m.byKind))}</div><div>${table(Object.entries(m.byScope)) || empty("No notes.")}</div></div></details>` +
+    `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(["Kind", "Notes"], Object.entries(m.byKind), "No notes by kind.")}</div><div>${table(["Scope", "Notes"], Object.entries(m.byScope), "No notes by scope.")}</div></div></details>` +
     `<details><summary>Home</summary>${renderHome(m)}</details>`;
 }
 
@@ -97,7 +100,7 @@ function renderProcedural(p) {
   const skills = p.skills.length ? chipRow(p.skills.map((n) => chip(n, { el: "a", attrs: ` href="#/skills/${encodeURIComponent(n)}"` })).join(""), "p") : none("No skills.", "Folders under <code>skills/</code> fill this.");
   const claude = p.claudeMd ? `<p><code>${esc(p.claudeMd.path)}</code> ${q(`${p.claudeMd.lines} lines, written ${ago(p.claudeMd.at)}`)}</p>` : none("No identity/CLAUDE.md.");
   const hooks = p.hooks.length
-    ? dataTable("", p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide" title="${esc(h.command)}"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`).join(""))
+    ? paged(heads(["Event", "Command", "Calls"], ["Calls"]), p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide" title="${esc(h.command)}"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`))
     : none("No hooks in ~/.claude/settings.json.", "The hooks entry of that file fills this, with calls from Langfuse.");
   return `<div class="kinds">${sub("Skills", p.skills.length, skills + `<p class="hint"><a href="#/skills">Skill use</a></p>`)}${sub("Rules", undefined, claude)}${sub("Hooks, Calls in 7 Days", p.hooks.length, hooks)}</div>`;
 }
@@ -106,7 +109,7 @@ function renderRetrieval(r) {
   if (!r.stats) return none("No recall data.", "<code>vault misses</code> reads Langfuse; set its keys to fill this.");
   const s = r.stats;
   const rows = r.missed.length ? fold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : `<p class="quiet">No query missed.</p>`;
-  return `<div class="kinds">${sub(`Recalls, ${s.days} Days`, s.recalls, table([["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest Misses", r.missed.length, rows)}</div>`;
+  return `<div class="kinds">${sub(`Recalls, ${s.days} Days`, s.recalls, table(["Measure", "Count"], [["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest Misses", r.missed.length, rows)}</div>`;
 }
 
 function renderProspective(p) {
@@ -357,6 +360,13 @@ if (typeof document !== "undefined") {
     }
     const more = t.closest("#mem-table button[data-more]");
     if (more) { setQuery({ limit: String(here().limit + Number(more.dataset.more)) }); return redrawNotes(); }
+    const page = t.closest(".mem-page button[data-more]");
+    if (page) {
+      const box = page.closest(".mem-page"), rows = [...box.querySelectorAll("tbody tr")], n = rows.filter((r) => !r.hidden).length + Number(page.dataset.more);
+      rows.forEach((r, i) => { r.hidden = i >= n; });
+      box.querySelector(".pager").outerHTML = pager(n, rows.length, STEP);
+      return;
+    }
     const row = t.closest("tr.nrow");
     // A click selects; with a modifier key, the title's link opens the note's page.
     if (row && !(e.metaKey || e.ctrlKey || e.shiftKey)) {
