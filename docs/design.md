@@ -188,7 +188,7 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 | Weekly share | `≈1.4% wk` | ≈1.4% wk | `wkText()` (`ui/lib.js:30`), `costHtml()` (`ui/lib.js:33`) | empty string |
 | Percent | whole number from 1%, one decimal below, `<0.1%` under 0.05% | 12%, 0.4% | `pct()` (`ui/lib.js:29`) | `–` |
 | Count | thousands separators | 12,345 | `count()` (`ui/lib.js:19`) | none |
-| Ids | mono, muted, `500 var(--fs-xs)` | aleph-52 | `idLink()` (`ui/lib.js:341`), `repoIdLink()` (`ui/lib.js:351`) | none |
+| Ids | mono, muted, `500 var(--fs-xs)`; forms in [Naming](naming.md) | a52 | `idLink()` (`ui/lib.js:341`), `repoIdLink()` (`ui/lib.js:351`) | none |
 | Model | name without `claude-` and the version | opus | `shortModel()` (`ui/lib.js:329`) | empty string |
 | Bytes | `B`, `KiB`, `MiB`, one decimal | 1.5KiB | `bytes()` (`ui/lib.js:25`) | none |
 | Mean | one decimal | 2.4 | `mean()` (`ui/lib.js:21`) | `–` |
@@ -313,7 +313,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Runs per Item`); CSS uppercases two keys (`text-transform: uppercase`, 2 rows: the nav group heads at `ui/app.css:566` and the metric card key at `ui/app.css:726`).
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
-- **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:292`); a priority is `critical`, `high`, `medium` or `low`.
+- **States:** lower case, from the word sets in [Naming](naming.md); a priority is `critical`, `high`, `medium` or `low`.
 - **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:61`). Gates shows `empty()` (`ui/views/gates.js:108`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:74`) as "No job matches." with "Widen the window or clear a filter."
 - **Loading:** `loadingLine()` (`ui/lib.js:77`) draws the inline line, `Loading <what>…`; `loading()` (`ui/lib.js:79`) draws a view's first-load state, `Loading <title>…`.
 - **Error:** `error()` (`ui/lib.js:82`) says what failed, and the default hint is "Check that aleph-ui is running, then reload."

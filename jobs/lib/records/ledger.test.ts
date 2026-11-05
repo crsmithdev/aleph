@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { admit, lock } from "./ledger.ts";
+import { admit, loadRegistry, lock } from "./ledger.ts";
+import { shortId } from "../../../lib/naming.ts";
 
 let base: string;
 let saved: string | undefined;
@@ -108,5 +109,24 @@ describe("admit", () => {
     expect(reads).toEqual(["first", "first", "second"]);
     // The second start did not wait for the load, so it keeps no gap: the queue is free.
     (await lock("admit", 0))!();
+  });
+});
+
+describe("loadRegistry codes", () => {
+  const load = (repos: object) => {
+    const file = join(base, "repos.json");
+    writeFileSync(file, JSON.stringify(repos));
+    const old = process.env.ALEPH_REPOS;
+    process.env.ALEPH_REPOS = file;
+    try { return loadRegistry(); } finally { if (old === undefined) delete process.env.ALEPH_REPOS; else process.env.ALEPH_REPOS = old; }
+  };
+  test("a repo's code sets its short IDs", () => {
+    expect(load({ aleph: { path: "/a", code: "a" }, koans: { path: "/k" } }).aleph.code).toBe("a");
+    expect(shortId("aleph-12")).toBe("a12");
+    expect(shortId("koans-3")).toBe("koans-3");
+  });
+  test("a code on two repos, or not 1–2 letters, is refused", () => {
+    expect(() => load({ aleph: { path: "/a", code: "a" }, other: { path: "/o", code: "a" } })).toThrow(/more than one/);
+    expect(() => load({ aleph: { path: "/a", code: "a1" } })).toThrow(/letters/);
   });
 });

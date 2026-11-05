@@ -11,6 +11,7 @@ import * as record from "./record.ts";
 import { isLive } from "../infra/process.ts";
 import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
+import { setCodes } from "../../../lib/naming.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
@@ -105,7 +106,8 @@ export interface Run {
 /** `tests`: globs of the test files that `run` takes as arguments, so a land can run only the related ones. */
 export interface Check { name: string; run: string; when?: string[]; tests?: string[] }
 export interface Repo {
-  key: string; path: string; env?: string; main: string;
+  /** The short code of its IDs (`a` in `a1430`), docs/naming.md. */
+  key: string; code?: string; path: string; env?: string; main: string;
   setup: string[]; checks: Check[]; manual: { when: string[]; say: string }[]; note?: string;
   /** A passed agent run lands by itself. On unless the registry says false. */
   autoland: boolean;
@@ -133,11 +135,17 @@ export function loadRegistry(): Record<string, Repo> {
   const repos: Record<string, Repo> = {};
   for (const [key, r] of Object.entries<any>(raw)) {
     repos[key] = {
-      key, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
+      key, code: r.code, path: expand(r.path), env: r.env ? expand(r.env) : undefined, main: r.main ?? "main",
       setup: r.setup ?? [], checks: r.checks ?? [], manual: r.manual ?? [], note: r.note, autoland: r.autoland ?? true,
       sandbox: r.sandbox ?? false, held: r.held ?? [], author: r.author ?? false, critical: r.critical ?? [],
     };
   }
+  const codes = Object.values(repos).filter((r) => r.code).map((r) => [r.key, r.code!] as const);
+  const twice = codes.find(([k, c]) => codes.some(([k2, c2]) => c2 === c && k2 !== k));
+  const bad = codes.find(([, c]) => !/^[a-z]{1,2}$/.test(c));
+  if (bad) throw new Error(`repos.json: the code of ${bad[0]} is not 1 or 2 lower-case letters`);
+  if (twice) throw new Error(`repos.json: the code "${twice[1]}" is on more than one repo`);
+  setCodes(Object.fromEntries(codes));
   return repos;
 }
 

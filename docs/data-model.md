@@ -34,7 +34,7 @@ erDiagram
 
 | Entity | Lives in | One per |
 |---|---|---|
-| Repo | `repos.json` | Registered repo |
+| Repo | `repos.json` | Registered repo; its `code` gives the short IDs in [Naming](naming.md) |
 | Issue | `issues/<repo>/backlog/tasks/<repo>-<n>.md` | Request |
 | Part | `issues/<repo>/backlog/tasks/<repo>-<n>.<k>.md` | Goal that intake split from an issue |
 | Job record | `jobs/<repo>-<n>[.<k>].json` | Issue or part with work on it |

@@ -26,6 +26,7 @@ beforeAll(async () => {
   // A view added the way a view goal adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
   for (const f of ["index.html", "app.css", "lib.js", "system-parts.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
+  cpSync(join(import.meta.dir, "..", "lib"), join(base, "lib"), { recursive: true });
   mkdirSync(apiDir);
   writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "factory", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
   writeFileSync(join(apiDir, "_test.ts"), `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
@@ -100,6 +101,14 @@ test("every API answer carries the server's version; the page and its modules ar
   const a = await at("/api/_test/x");
   expect(a.headers.get("x-aleph-version")).toBe(version(pageDir));
   for (const p of ["/", "/lib.js", "/views/_test.js"]) expect((await at(p)).headers.get("cache-control")).toBe("no-cache");
+});
+
+test("lib/naming.ts reaches the page as JS at the path ui/lib.js imports", async () => {
+  const r = await at("/lib/naming.ts");
+  expect(r.headers.get("content-type")).toContain("text/javascript");
+  const js = await r.text();
+  expect(js).toContain("export function parseId(s) {");
+  expect(js).not.toContain("export interface");
 });
 
 test("x-aleph-login is on every API answer behind the gate, and absent without a password", async () => {

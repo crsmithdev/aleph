@@ -11,5 +11,5 @@
     "types": ["bun"],
     "skipLibCheck": true
   },
-  "include": ["hooks", "vault", "jobs", "issues", "tests", "ui"]
+  "include": ["hooks", "vault", "jobs", "issues", "lib", "tests", "ui"]
 }

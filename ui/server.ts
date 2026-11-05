@@ -22,8 +22,9 @@ const JS = { "content-type": "text/javascript; charset=utf-8", "cache-control": 
 /** This process's start time: part of the version, so a restart changes it. */
 const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
-/** The modules in ui/ that views import (`from "../lib.js"`), served at the root. */
-const SHARED = new Set(["/lib.js", "/system-parts.js", "/decision.js", "/timeline.js"]);
+const TS = new Bun.Transpiler({ loader: "ts" });
+/** The modules that views import, by URL, and each one's file under ui/. `lib/naming.ts` sits at the same path from the page and from the repo, so `ui/lib.js` imports it as `../lib/naming.ts`; the page gets it as JS. */
+const SHARED = new Map([["/lib.js", "lib.js"], ["/system-parts.js", "system-parts.js"], ["/decision.js", "decision.js"], ["/timeline.js", "timeline.js"], ["/lib/naming.ts", "../lib/naming.ts"]]);
 
 /** `/api/jobs/:name` as a regex and its parameter names. */
 export function compile(path: string): { pattern: RegExp; names: string[] } {
@@ -64,7 +65,7 @@ export function views(dir = join(import.meta.dir, "views")): string[] {
  * so an open page sees that its code changed and reloads its modules.
  */
 export function version(dir = import.meta.dir): string {
-  const files = ["index.html", "app.css", ...[...SHARED].map((p) => p.slice(1)), ...views(join(dir, "views")).map((f) => `views/${f}`)];
+  const files = ["index.html", "app.css", ...SHARED.values(), ...views(join(dir, "views")).map((f) => `views/${f}`)];
   const parts = files.map((f) => {
     try {
       const st = statSync(join(dir, f));
@@ -126,7 +127,10 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
       }
       if (path === "/app.css") return new Response(Bun.file(join(dir, "app.css")), { headers: { "content-type": "text/css; charset=utf-8", "cache-control": "no-cache" } });
       if (path === "/vendor/echarts.min.js") return new Response(Bun.file(join(dir, "vendor", "echarts.min.js")), { headers: JS });
-      if (SHARED.has(path)) return new Response(Bun.file(join(dir, path.slice(1))), { headers: JS });
+      if (SHARED.has(path)) {
+        const file = join(dir, SHARED.get(path)!);
+        return new Response(file.endsWith(".ts") ? TS.transformSync(readFileSync(file, "utf8")) : Bun.file(file), { headers: JS });
+      }
       const v = path.match(/^\/views\/([^/]+)$/);
       if (v && VIEW_FILE.test(v[1]) && existsSync(join(dir, "views", v[1]))) return new Response(Bun.file(join(dir, "views", v[1])), { headers: JS });
       return new Response("not found", { status: 404 });
