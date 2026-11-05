@@ -102,7 +102,7 @@ Breakpoints are not tokens, because custom properties do not work in `@media`. T
 
 Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. Widths and heights stay literal.
 
-Radii: the five `--r-*` tokens; one literal is left, `6px` on the login page (`ui/auth.ts:54`). Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` is tokens, `--z-rowlink` < `--z-sticky` < `--z-overlay`. Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:414`).
+Radii: the five `--r-*` tokens. Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` is tokens, `--z-rowlink` < `--z-sticky` < `--z-overlay`. Motion: 2 `transition` literals (`.15s ease-out`), one `pulse` animation switched off under `prefers-reduced-motion` (`ui/app.css:414`).
 
 Rules taken from the audit of 2026-11-04 (`docs/findings/2026-11-04-ui-design-audit.md`). Each pattern has 3 or more uses and no token yet. Until its token lands, use the value given here.
 
@@ -148,11 +148,10 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 | `ui/views/jobs.js:11` | Rounds a window length to a stable number, not display. |
 | `ui/views/memory.js:198`, `236`, `ui/views/sessions.js:74`, `ui/views/session.js:148`, `ui/timeline.js:138`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
-| `ui/api/speed.ts:136`, `491` | Hand-built labels, not shown by any view: the bucket `label` and its `pad`. No view reads them. |
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:480`) with `heads()` or `sortHead()` (`ui/lib.js:496`), styled by `table.tbl` (`ui/app.css:438`). Six tables are written by hand with `<table class="tbl">` and not through `dataTable()`: `ui/views/issues.js:241`, `ui/views/issues.js:617`, `ui/views/jobs.js:240`, `ui/views/memory.js:46`, `ui/views/session.js:23` and `ui/views/session.js:259`.
+The one table is `dataTable()` (`ui/lib.js:480`) with `heads()` or `sortHead()` (`ui/lib.js:496`), styled by `table.tbl` (`ui/app.css:438`). Every table goes through `dataTable()`.
 
 Rules, as the code states them (`ui/lib.js:289`, `ui/app.css:438`):
 
@@ -191,7 +190,7 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
 - **Bars:** `barsOption()` (`ui/lib.js:480`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `ui/views/factory-agents.js:33`.
-- **Lines:** `lineOption()` (`ui/lib.js:480`) for one series over time, filled at 15% opacity, or as a step area (85%) for live counts. Uses: `ui/views/factory-agents.js:37`, `ui/views/factory-agents.js:49`, `ui/views/skills.js:33`.
+- **Lines:** `lineOption()` (`ui/lib.js:480`) for one series over time, filled at 15% opacity, or as a step area (85%) for live counts. Uses: `ui/views/factory-agents.js:36`, `ui/views/factory-agents.js:48`.
 - **Stacked areas:** `stackedAreaOption()` (`ui/lib.js`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend. Use: the open backlog by priority in `ui/views/issues.js`.
 - **Range bars:** `rangeBarOption()` (`ui/lib.js`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
 - **Gap lines:** `gapLinesOption()` (`ui/lib.js`) for two counts over time: two lines, with the area between them shaded by a `custom` series. Use: filed and closed per day in `ui/views/issues.js`.
