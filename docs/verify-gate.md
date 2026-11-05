@@ -37,8 +37,12 @@ Stop              verify-gate.ts
                     always → guardrail span + score
 ```
 
-The hook is synchronous with `timeout: 45`. The judge call itself is capped
-at 30 s and runs with `MAX_THINKING_TOKENS=0` and `--tools ""`: measured
+The hook is synchronous with `timeout: 45`. The judge works to one
+total budget of 35 s, which ends 10 s before the hook timeout and leaves
+room for the snapshot, the digest and the Langfuse post. The Jev screen, the
+GPU slot wait and each Haiku try use only the time left in the budget. When
+the budget is spent the judge stops and returns no verdict, and the gate
+passes the turn as fail-open with the reason. The Haiku call runs with `MAX_THINKING_TOKENS=0` and `--tools ""`: measured
 3 s per verdict without thinking against 15 to 45 s with it, same verdicts.
 The deny is emitted as `{"decision":"block","reason":…}`; on 2.1.259 the
 documented `hookSpecificOutput.permissionDecision` shape does nothing for

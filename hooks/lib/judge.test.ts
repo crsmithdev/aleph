@@ -97,3 +97,18 @@ test("a judge slot set to local runs claude on gpt-oss-20b at the local base URL
     if (saved.factory === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = saved.factory;
   }
 });
+
+test("a judge that outlasts its budget returns no verdict and tries claude once", async () => {
+  const saved = process.env.ALEPH_JUDGE_CMD;
+  process.env.ALEPH_JUDGE = "haiku";
+  writeFileSync(join(dir, "slow"), `#!/bin/sh\necho x >> ${join(dir, "runs")}\nexec tail -f /dev/null\n`, { mode: 0o755 });
+  rmSync(join(dir, "runs"), { force: true });
+  process.env.ALEPH_JUDGE_CMD = join(dir, "slow");
+  try {
+    const r = await judge("x", "done", 300);
+    expect(r.verdict).toBeNull();
+    expect(r.error).toContain("budget");
+    expect(r.ms).toBeLessThan(2000);
+    expect(readFileSync(join(dir, "runs"), "utf8")).toBe("x\n");
+  } finally { process.env.ALEPH_JUDGE_CMD = saved; }
+});

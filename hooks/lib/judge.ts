@@ -52,9 +52,9 @@ const CLAIM = {
 };
 
 /** Jev's probability that the final message claims completion, or why it gave none. */
-async function jevScreen(finalMessage: string): Promise<{ pClaim: number | null; error?: string; cost: number }> {
+async function jevScreen(finalMessage: string, timeoutMs: number): Promise<{ pClaim: number | null; error?: string; cost: number }> {
   try {
-    const d = await decide({ final_message: finalMessage }, { claim: CLAIM });
+    const d = await decide({ final_message: finalMessage }, { claim: CLAIM }, timeoutMs);
     const a = d.answers.claim;
     return { pClaim: a.type === "noul" ? a.noul : null, cost: d.cost };
   } catch (e: any) {
@@ -62,20 +62,21 @@ async function jevScreen(finalMessage: string): Promise<{ pClaim: number | null;
   }
 }
 
-export async function judge(digestText: string, finalMessage: string, timeoutMs = 30_000): Promise<JudgeResult> {
+export async function judge(digestText: string, finalMessage: string, budgetMs = 35_000): Promise<JudgeResult> {
   const started = Date.now();
+  const left = () => started + budgetMs - Date.now();
   let screened: JudgeResult["jev"];
   if (judgeChoice() === "jev" && finalMessage.trim()) {
-    screened = await jevScreen(finalMessage);
+    screened = await jevScreen(finalMessage, Math.min(15_000, left()));
     if (screened.pClaim !== null && screened.pClaim < JEV_PASS_BELOW()) {
       return { verdict: { verdict: "pass", reason: `Jev: no completion claim (p ${screened.pClaim.toFixed(2)})` }, ms: Date.now() - started, by: "jev", jev: screened };
     }
   }
-  const r = await haiku(digestText, timeoutMs, started);
+  const r = await haiku(digestText, left, started);
   return { ...r, by: "haiku", ...(screened ? { jev: screened } : {}) };
 }
 
-async function haiku(digestText: string, timeoutMs: number, started: number): Promise<JudgeResult> {
+async function haiku(digestText: string, left: () => number, started: number): Promise<JudgeResult> {
   const cmd = process.env.ALEPH_JUDGE_CMD ?? "claude";
   const env = { ...process.env };
   delete env.CLAUDECODE;
@@ -84,8 +85,8 @@ async function haiku(digestText: string, timeoutMs: number, started: number): Pr
   // A local call waits for the GPU slot within its time box, then falls back to Claude.
   let release: (() => void) | null = null;
   if (readModels().judge.model === LOCAL.model) {
-    release = await gpuSlot(timeoutMs);
-    if (!release) factoryLog(`judge: the GPU slot stayed taken for ${timeoutMs / 1000} s; the call falls back to Claude`);
+    release = await gpuSlot(left());
+    if (!release) factoryLog(`judge: the GPU slot stayed taken for budget; the call falls back to Claude`);
   }
   const local = release !== null;
   if (local) Object.assign(env, LOCAL_ENV);
@@ -93,10 +94,11 @@ async function haiku(digestText: string, timeoutMs: number, started: number): Pr
   try {
     let error = "";
     for (let attempt = 1; attempt <= 2; attempt++) {
+      if (left() <= 0) return { verdict: null, error: `judge budget spent${error ? `: ${error}` : ""}`, ms: Date.now() - started };
       const proc = Bun.spawn([cmd, "-p", "--model", local ? LOCAL.model : "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", RUBRIC, digestText], {
         env, stdout: "pipe", stderr: "pipe", stdin: "ignore",
       });
-      const timer = setTimeout(() => proc.kill(), timeoutMs);
+      const timer = setTimeout(() => proc.kill(), Math.max(left(), 0));
       const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
       const code = await proc.exited;
       clearTimeout(timer);
