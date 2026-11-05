@@ -1,16 +1,18 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { redirect, renderFactoryJobs, slowestOption, stripOption, trendOption } from "./views/factory-jobs.js";
+import { xLabel } from "./views/speed.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
+const F1 = new Date(2026, 9, 27, 9).getTime(), F2 = new Date(2026, 9, 28, 14).getTime();
 const D: any = {
   window: "week",
   phases: { lead: P(3, 1570, 16560), intake: P(3, 59, 1467), queue: P(3, 304, 6120, [1, 1, 1, 0, 0, 0, 0], 800), implement: P(3, 475, 1698), land: P(3, 74, 650) },
   buckets: [{ at: new Date(2026, 9, 27).toISOString(), lead: 1000, queue: 200, p90: { lead: 3000, queue: 900 } }, { at: new Date(2026, 9, 28).toISOString(), lead: null, queue: 100, p90: { lead: null, queue: 400 } }],
   times: [
-    { id: "fx-1", href: "#/issues/fx/1", outcome: "landed", intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 },
-    { id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", intake: 100, queue: 300, implement: 100, land: null, lead: null },
-    { id: "fx-3", href: "#/issues/fx/3", outcome: "landed", intake: 10, queue: 20, implement: 4000, land: 30, lead: 5000 },
+    { id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: F1, intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 },
+    { id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: F2, intake: 100, queue: 300, implement: 100, land: null, lead: null },
+    { id: "fx-3", href: "#/issues/fx/3", outcome: "landed", filed: null, intake: 10, queue: 20, implement: 4000, land: 30, lead: 5000 },
   ],
   checks: [{ name: "tests", count: 5, p50: 51, p90: 171 }],
   models: [{ model: "unset", count: 2, p50: 480 }, { model: "opus", count: 1, p50: 700 }],
@@ -39,7 +41,9 @@ test("three chart boxes in one row replace the old cards, each says its data for
   const o = stripOption(D, "queue", { done: "D", need: "N" });
   expect([o.xAxis.type, o.xAxis.logBase, o.xAxis.min({ min: 20 }), o.xAxis.min({ min: 60 })]).toEqual(["log", 60, 1, 60]);
   const pts = o.series.flatMap((s: any) => s.data);
-  expect(pts.map((p: any) => [p.id, p.href, p.value[0]]).sort()).toEqual([["fx-1", "#/issues/fx/1", 600], ["fx-2", "#/issues/fx/2", 300], ["fx-3", "#/issues/fx/3", 20]]);
+  // fx-3 has no filing time, so it has no dot.
+  expect(pts.map((p: any) => [p.id, p.href, p.value[0], p.value[1]]).sort()).toEqual([["fx-1", "#/issues/fx/1", 600, F1], ["fx-2", "#/issues/fx/2", 300, F2]]);
+  expect([o.yAxis.type, o.yAxis.axisLabel.formatter(F1)]).toEqual(["time", xLabel(F1, "week")]);
   expect(o.series.map((s: any) => s.color)).toEqual(["D", "N"]);
   expect(trendOption(D, "queue", { run: "R", hot: "H" }).series.map((s: any) => [s.name, s.data, !!s.areaStyle])).toEqual([["p90", [900, 400], true], ["p50", [200, 100], true]]);
   expect(trendOption(D, "lead", { run: "R", hot: "H" }).series.map((s: any) => s.data)).toEqual([[3000, 0], [1000, 0]]);

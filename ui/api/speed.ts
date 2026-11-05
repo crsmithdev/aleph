@@ -35,7 +35,8 @@ export interface PhaseStat extends Pct { hist: number[]; worst: number }
 export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
 const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
 /** One issue's seconds per phase (null when the phase did not end in the window). `outcome` is "landed" once a land run landed it, else "unlanded". */
-export type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded" } & Record<Phase, number | null>;
+/** `filed` is the issue's filing time in ms, or null when the store has none. */
+export type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded"; filed: number | null } & Record<Phase, number | null>;
 export interface Speed {
   window: Window;
   /** Issues that landed in the window: one per issue, however many land runs it had. Land runs with no issue count as one. */
@@ -292,7 +293,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   const note = (key: string | undefined, k: Phase, secs: number) => {
     if (!key) return;
     const m = key.lastIndexOf("-");
-    if (!per.has(key)) per.set(key, { id: key, href: `#/issues/${encodeURIComponent(key.slice(0, m))}/${key.slice(m + 1)}`, outcome: "unlanded", intake: null, queue: null, implement: null, land: null, lead: null });
+    if (!per.has(key)) per.set(key, { id: key, href: `#/issues/${encodeURIComponent(key.slice(0, m))}/${key.slice(m + 1)}`, outcome: "unlanded", filed: issue.get(key) ?? null, intake: null, queue: null, implement: null, land: null, lead: null });
     per.get(key)![k] = secs;
   };
   const inWindow = (t: number) => t >= since && t <= now;

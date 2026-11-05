@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chart, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chart, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
@@ -36,20 +36,20 @@ export const trendOption = (d, key, t) => ({
 });
 
 /**
- * One dot per issue with a time for the stage, coloured by outcome. The time is on the horizontal log axis in base 60, so
- * the ticks fall on 1s, 1m and 1h; it starts at 1m unless a time is under a minute. The height of a dot only spreads the
- * dots apart. The axis ends at half again the longest time. A dot's `href` is its issue.
+ * One dot per issue with a time for the stage and a filing time, coloured by outcome. The time is on the horizontal log
+ * axis in base 60, so the ticks fall on 1s, 1m and 1h; it starts at 1m unless a time is under a minute. The axis ends at
+ * half again the longest time. The vertical axis is the filing time, newest at the top. A dot's `href` is its issue.
  */
 export const stripOption = (d, key, t) => ({
   animation: false,
-  grid: { left: 8, right: 16, top: 28, bottom: 24 },
+  grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
   legend: { top: 0, right: 0 },
-  tooltip: { confine: true, formatter: (p) => `${esc(p.data.id)}: ${esc(dur(p.value[0]))}` },
+  tooltip: { confine: true, formatter: (p) => `${esc(p.data.id)}: ${esc(dur(p.value[0]))}, filed ${esc(when(p.value[1]))}` },
   xAxis: { type: "log", logBase: 60, min: (v) => (v.min >= 60 ? 60 : 1), max: (v) => v.max * 1.5, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
-  yAxis: { type: "value", min: 0, max: 1, show: false },
+  yAxis: { type: "time", axisLabel: { formatter: (v) => xLabel(v, d.window), hideOverlap: true } },
   series: [["landed", t.done], ["unlanded", t.need]].map(([outcome, color]) => ({
     type: "scatter", name: outcome, color, symbolSize: 9,
-    data: (d.times ?? []).filter((i) => i.outcome === outcome && i[key] > 0).map((i, n) => ({ value: [i[key], ((n * 0.618) % 1) * 0.8 + 0.1], id: i.id, href: i.href })),
+    data: (d.times ?? []).filter((i) => i.outcome === outcome && i[key] > 0 && i.filed != null).map((i) => ({ value: [i[key], i.filed], id: i.id, href: i.href })),
   })),
 });
 
@@ -93,7 +93,7 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: scope })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
     `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p><div class="chartbox" data-chart="trend" role="img" aria-label="${esc(label(d, key, sentence(name), "p50 and p90 trend"))}"></div>`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
-    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome.</p><div class="chartbox" data-chart="strip" role="img" aria-label="${esc(label(d, key, sentence(name), "time per issue"))}"></div>`, { label: `${sentence(name)}: time per issue` }) +
+    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome: its time across, its filing time up.</p><div class="chartbox" data-chart="strip" role="img" aria-label="${esc(label(d, key, sentence(name), "time per issue"))}"></div>`, { label: `${sentence(name)}: time per issue` }) +
     card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p><div class="chartbox" data-chart="slowest" role="img" aria-label="${esc(label(d, key, sentence(name), "slowest 10"))}"></div>`) + `</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Runs", "p50", "p90"], ["Runs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
     card("Build Time by Model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +

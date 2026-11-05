@@ -269,8 +269,8 @@ test("per-issue times carry each issue's phases and outcome, and a bucket has a 
     r(2, "triage", "done", 1000_000, 1100_000), r(2, "build", "passed", 1400_000, 1500_000),
   ], f, 0, 9_999_000);
   const by = Object.fromEntries(t.issues.map((i) => [i.id, i]));
-  expect(by["fx-1"]).toEqual({ id: "fx-1", href: "#/issues/fx/1", outcome: "landed", intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 });
-  expect(by["fx-2"]).toEqual({ id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", intake: 100, queue: 300, implement: 100, land: null, lead: null });
+  expect(by["fx-1"]).toEqual({ id: "fx-1", href: "#/issues/fx/1", outcome: "landed", filed: 1000_000, intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 });
+  expect(by["fx-2"]).toEqual({ id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", filed: 1000_000, intake: 100, queue: 300, implement: 100, land: null, lead: null });
   // Two jobs finish in one hour: builds of 600 and 1200 s.
   const now2 = new Date(2026, 2, 10, 15), h = (m: number) => new Date(2026, 2, 10, 9, m).toISOString();
   run({ kind: "build", job: "pa", repo: "px", on: "px-1", condition: "passed", started: h(0), ended: h(10) });
