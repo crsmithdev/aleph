@@ -28,15 +28,14 @@ describe("the waits", () => {
   });
 });
 
-// flaky: tests/flaky.md#timeline
-describe.skip("the issue timeline", () => {
+describe("the issue timeline", () => {
   test("without parts it is one Work row: a bar per run, the waits, and the notes as events", () => {
     const [row] = rowsOf({ timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: held() }, notes: ["- 2026-11-01 10:41: triage: asked"] });
     expect(issueSegments(issue({ timeline: { filed: 0, runs: held() } })).map((s: any) => s.title)).toEqual(["Work"]);
     expect(row.bars.map((b: any) => [b.label, b.tone])).toEqual([["triage", "aux"], ["build", "build"], ["land", "land"]]);
     expect(row.bars[1].href).toBe("#/jobs/fac-1");
     expect(row.waits.map((w: any) => w.chris)).toEqual([false, true]);
-    expect(row.events.map((e: any) => e.tag)).toEqual(["Waiting", "Awaiting you", "triage"]);
+    expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "triage"]);
     expect(row.cost).toBe("$0.30");
   });
 
@@ -65,15 +64,15 @@ describe.skip("the issue timeline", () => {
     expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Parts", 2], ["After the Parts", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
     expect(before.bars.map((b: any) => b.label)).toEqual(["plan"]);
-    expect(before.events.map((e: any) => e.tag)).toEqual(["Waiting", "planner"]);
+    expect(before.events.map((e: any) => e.tag)).toEqual(["waiting", "planner"]);
     expect(one.bars.map((b: any) => [b.label, b.tone])).toEqual([["build 1", "bad"], ["build 2", "build"]]);
-    expect(one.events.find((e: any) => e.tag === "Failed").html).toBe("Build 1: it broke");
+    expect(one.events.find((e: any) => e.tag === "failed").html).toBe("build 1 · it broke");
     expect(one.head).toContain('href="#/jobs/fac-1.1"');
     expect(two.head).toContain('href="#/issues/fac/1.2"');
     // fac-1.2 waited from the split to its run: 10 min.
     expect(two.waits.map((w: any) => dur((w.end - w.start) / 1000))).toEqual(["10m 00s"]);
     expect(after.marks.map((m: any) => m.tone)).toEqual(["done"]);
-    expect(after.events.map((e: any) => e.tag)).toEqual(["Waiting", "note"]);
+    expect(after.events.map((e: any) => e.tag)).toEqual(["waiting", "note"]);
   });
 });
 
