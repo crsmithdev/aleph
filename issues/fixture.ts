@@ -93,7 +93,7 @@ export function useFixture(): void {
     // Four repos cost twenty git processes: make them once, and copy them with their remotes pointed here.
     cpSync(template(), fx.base, { recursive: true });
     for (const clone of [fx.items, fx.repo]) writeFileSync(join(clone, ".git", "config"), readFileSync(join(clone, ".git", "config"), "utf8").replaceAll(templateDir, fx.base));
-    writeFileSync(join(fx.base, "repos.json"), JSON.stringify({ proj: { path: fx.repo } }));
+    writeFileSync(join(fx.base, "repos.json"), JSON.stringify({ proj: { path: fx.repo, code: "p" } }));
     seed("# To do\n\n## 3. An old item\n---\nid: 3\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\nlabels: []\n---\n\nWritten long ago.\n\nDone when it is done.\n");
   });
   afterEach(() => rmSync(fx.base, { recursive: true, force: true }));

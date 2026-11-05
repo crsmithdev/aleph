@@ -22,6 +22,7 @@ import { readModels } from "../routing/models.ts";
 import { factoryLog } from "../infra/layout.ts";
 import { route, TIER_MODEL, type Tier } from "../routing/route.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
+import { fullId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "../infra/settings.ts";
@@ -142,7 +143,8 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   const name = checkName(a.name);
   let on = a.on;
   if (on !== undefined) {
-    const ref = String(on).startsWith(`${repo.key}-`) ? String(on).slice(repo.key.length + 1) : String(on);
+    const full = fullId(on);
+    const ref = full.startsWith(`${repo.key}-`) ? full.slice(repo.key.length + 1) : full;
     if (!/^\d+(\.\d+)?$/.test(ref)) refuse("--on takes an issue number");
     on = ref.includes(".") ? ref : Number(ref);
     let doc: issues.Doc | null = null;

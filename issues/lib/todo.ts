@@ -7,6 +7,7 @@
  * a `.k`; its parent comes from its id.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../vault/lib/frontmatter.ts";
+import { parseId } from "../../lib/naming.ts";
 import { nowOverride } from "../../jobs/lib/infra/settings.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
@@ -55,14 +56,13 @@ export function touch(item: { fm: Record<string, unknown> }, now = new Date()): 
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
 export const clock = (): Date => (nowOverride() ? new Date(nowOverride()!) : new Date());
 
-const REF = /^(.+)-(\d+)$/;
 /** A ref in `after`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
 const ITEM_REF = /^[^\s,]+-\d+(\.\d+)?$/;
 
 /** `<repo>-<n>` split into its parts, or null. */
 export function parseRef(s: string): { repo: string; id: number } | null {
-  const m = REF.exec(s);
-  return m ? { repo: m[1], id: Number(m[2]) } : null;
+  const p = parseId(s);
+  return p ? { repo: p.repo, id: p.n } : null;
 }
 
 /** `<repo>-<n>` or a part's `<repo>-<n>.<m>` split into its parts: the id is a number for the first, `"n.m"` for the second. Null for neither. */

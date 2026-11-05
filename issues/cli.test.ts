@@ -177,3 +177,14 @@ test("aleph issue is the only command: aleph todo is gone", () => {
   expect(usage).not.toContain("todo");
 });
 
+
+test("a short ID names the issue in the repo slot of show and note", () => {
+  const short = aleph("issue", "show", "p3", "--json");
+  const long = aleph("issue", "show", "proj", "3", "--json");
+  expect([short.code, long.code]).toEqual([0, 0]);
+  const [a, b] = [JSON.parse(short.out), JSON.parse(long.out)];
+  expect(a.id).toBe(b.id);
+  expect(a.title).toBe(b.title);
+  expect(aleph("issue", "note", "p3", "short-form-note").code).toBe(0);
+  expect(remoteItem(3)).toContain("short-form-note");
+});

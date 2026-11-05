@@ -34,6 +34,7 @@ import { facts, repoStages, stages } from "./lib/records/status.ts";
 import type { Stage } from "./lib/records/stage.ts";
 import { jobId } from "./lib/infra/settings.ts";
 import { readModels, setModel } from "./lib/routing/models.ts";
+import { parseId } from "../lib/naming.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -161,7 +162,7 @@ function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
  * parses argv, prints, and starts the dispatch or intake a write calls for.
  */
 async function todoCmd(): Promise<void> {
-  const [verb, repoKey, ...args] = positional;
+  let [verb, repoKey, ...args] = positional;
   const json = rest.includes("--json");
   const fixing = rest.includes("--fix");
   const stat = flag("status");
@@ -183,6 +184,11 @@ async function todoCmd(): Promise<void> {
   };
   const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   const registry = loadRegistry();
+  const ref = parseId(repoKey);
+  if (ref && sub !== "add") {
+    repoKey = ref.repo;
+    args = [ref.sub === undefined ? String(ref.n) : `${ref.n}.${ref.sub}`, ...args];
+  }
   if (!repoKey && (sub === "list" || sub === "lint")) return todoRecent(sub, registry, { status: stat, label, kind: flag("kind") }, json);
   const repo = registry[repoKey ?? ""] ?? refuse(repoKey ? `no repo named ${repoKey}` : "name a repo");
   verbs.checkFields(fields);
@@ -293,8 +299,9 @@ function todoRecent(sub: "list" | "lint", registry: Record<string, Repo>, o: { s
 
 /** `aleph intake <repo>-<n>`: take in one issue now, under the dispatch's gates. */
 async function intakeCmd(): Promise<void> {
+  const registry = loadRegistry();
   const ref = issues.parseRef(rest[0] ?? "") ?? refuse("usage: aleph intake <repo>-<n>");
-  const repo = loadRegistry()[ref.repo] ?? refuse(`no repo ${ref.repo}`);
+  const repo = registry[ref.repo] ?? refuse(`no repo ${ref.repo}`);
   out(await intakeNow(repo, ref.id));
 }
 
