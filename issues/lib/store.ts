@@ -189,10 +189,10 @@ export function sourceOf(item: Issue): "chris" | "worker" | "deps" | "memory" | 
   const s = text(item.fm.source);
   return s === "worker" || s === "deps" || s === "memory" || s === "agent" ? s : item.sub === undefined ? "chris" : "agent";
 }
-/** The parts of an issue, in number order. */
-export const partsOf = (doc: Doc, item: Issue): Issue[] => (item.sub === undefined ? doc.items.filter((i) => i.id === item.id && i.sub !== undefined) : []);
-/** The parent of a part; undefined for a top-level issue. */
-export const parentOf = (doc: Doc, item: Issue): Issue | undefined => (item.sub === undefined ? undefined : issues.find(doc, item.id));
+/** The children of an issue, in number order: the issues with a `from` that names it, and its old parts `<n>.<k>`. */
+export const partsOf = (doc: Doc, item: Issue): Issue[] => doc.items.filter((i) => issues.parentRef(i) === issues.refOf(item));
+/** The parent of a child or an old part; undefined for a top-level issue. */
+export const parentOf = (doc: Doc, item: Issue): Issue | undefined => { const up = issues.parentRef(item); return up === undefined ? undefined : issues.find(doc, up); };
 /** Whether the issue needs a plan run, or "plan the rest" on a parent. */
 export const planSet = (item: Issue): boolean => item.fm.plan === "true";
 /** The flake tracker: a note log, never built. */
@@ -205,7 +205,7 @@ export const takenIn = (item: Issue): boolean => item.fm.intake !== undefined ||
  */
 export const isBuildable = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
   status(item) === "open" && (parentOf(doc, item) === undefined || status(parentOf(doc, item)!) !== "parked") && !asks(doc, item, repo) && !!item.spec.trim() && !planSet(item) && !isTracker(item) && partsOf(doc, item).length === 0
-  && (item.sub !== undefined || !repo.author || takenIn(item));
+  && (issues.parentRef(item) !== undefined || !repo.author || takenIn(item));
 /** The refs an issue waits for: its `after`. */
 export const afterOf = (item: Issue): string[] => list(item.fm.after);
 /** The item's areas: its `areas`. */
@@ -216,7 +216,7 @@ export const areasOf = (item: Issue): string[] => list(item.fm.areas);
  * In a repo with `author`, a spec alone does not sort it: intake takes in an issue filed with a spec too.
  */
 export const isSorted = (doc: Doc, item: Issue, repo: Place = { key: "" }): boolean =>
-  asks(doc, item, repo) || item.sub !== undefined || isTracker(item)
+  asks(doc, item, repo) || issues.parentRef(item) !== undefined || isTracker(item)
   || (!planSet(item) && (partsOf(doc, item).length > 0 || takenIn(item) || (!repo.author && !!item.spec.trim())));
 
 // The read.

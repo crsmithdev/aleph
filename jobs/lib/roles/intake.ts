@@ -315,13 +315,16 @@ ${PART_RULES}
 }
 
 /**
- * Add the parts `<repo>-<id>.k` to the issue in a write, which clears its `plan` and its spec. Each part's `after` is the
+ * File each part as a new issue with `from: <repo>-<id>`, in a write that clears the issue's `plan` and its spec. A part
+ * takes the issue's kind and priority, and its source when that is not chris, else agent. Each part's `after` is the
  * earlier parts it names and the issue's own `after`. The parts' refs.
  */
 export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
   const refs: string[] = [];
+  const from = `${repo.key}-${issues.refOf(issue)}`;
+  const source = issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as issues.Source) : "agent";
   for (const c of parts) {
-    const part = issues.addPart(doc, issue, { title: c.title, spec: specText(c.spec), after: [...after, ...c.after.map((w) => refs[w - 1])] });
+    const part = issues.add(doc, c.title, { kind: String(issue.fm.kind ?? "task"), priority: String(issue.fm.priority ?? "medium"), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
     refs.push(`${repo.key}-${issues.refOf(part)}`);
   }
   delete issue.fm.plan;

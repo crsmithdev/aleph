@@ -298,11 +298,24 @@ describe("views", () => {
     expect(v.renderTable(rows, { status: "open", q: "land" })).toContain("<mark>land</mark>");
   });
 
+  test("a child and an old part show indented under their parent, whatever the sort; a child whose parent is filtered out keeps its place", () => {
+    const rows = v.issueRows({ issues: [
+      { id: 1, repo: "fac", title: "parent", status: "open", labels: [], updated: "2026-10-01" },
+      { id: 2, repo: "fac", title: "other", status: "open", labels: [], updated: "2026-10-20" },
+      { id: 3, repo: "fac", title: "child", parent: "1", status: "open", labels: [], updated: "2026-10-31" },
+      { id: 1, ref: "1.1", parent: "1", repo: "fac", title: "old part", status: "open", labels: [], updated: "2026-10-30" },
+      { id: 4, repo: "fac", title: "lone child", parent: "9", status: "open", labels: [], updated: "2026-10-10" },
+    ] });
+    const html = v.renderTable(rows, { status: "open" });
+    expect([...html.matchAll(/<td class="wide"><a[^>]*>(.*?)<\/a>/g)].map((m) => m[1])).toEqual(["other", "lone child", "parent", "child", "old part"]);
+    expect([...html.matchAll(/<tr class="rowlink( part-row)?"[^>]*data-n="([^"]+)"/g)].filter((m) => m[1]).map((m) => m[2])).toEqual(["4", "3", "1.1"]);
+  });
+
   test("the numbers: open, filed and closed in 7 days, the week before, age and runs; a part's run is not counted twice", () => {
     const now = new Date("2026-11-01T12:00");
     const rows = v.issueRows({ issues: [
       { id: 1, repo: "f", title: "a", status: "open", stage: "new", labels: [], created: "2026-11-01", runs: 2, cost: 1 },
-      { id: 1, ref: "1.1", repo: "f", title: "a part", status: "open", stage: "working", labels: [], created: "2026-10-20", runs: 2, cost: 1 },
+      { id: 1, ref: "1.1", parent: "1", repo: "f", title: "a part", status: "open", stage: "working", labels: [], created: "2026-10-20", runs: 2, cost: 1 },
       { id: 2, repo: "f", title: "b", status: "done", labels: [], created: "2026-10-21", closed: "2026-10-30", runs: 3, cost: 0.5 },
       { id: 3, repo: "f", title: "c", status: "dropped", labels: [], created: "2026-10-26", closed: "2026-10-25", runs: 0, cost: 0 },
     ] });
@@ -485,10 +498,10 @@ describe("views", () => {
   test("a part row names its part and nests", () => {
     const rows = v.issueRows({ issues: [
       { id: 910, ref: "910", repo: "fac", title: "ask", status: "open", labels: [] },
-      { id: 910, ref: "910.1", repo: "fac", title: "part", status: "open", labels: [] },
+      { id: 910, ref: "910.1", parent: "910", repo: "fac", title: "part", status: "open", labels: [] },
     ] });
     const [, partRow] = rows;
-    expect(partRow).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", part: true });
+    expect(partRow).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", part: true, parent: "fac-910" });
     expect(v.renderRow(partRow)).toContain("part-row");
     expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(partRow);
   });

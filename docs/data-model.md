@@ -24,7 +24,7 @@ Locks are not on disk. Each is a directory with an `owner` pid under `$XDG_RUNTI
 ```mermaid
 erDiagram
   REPO ||--o{ ISSUE : "has"
-  ISSUE ||--o{ ISSUE : "parts (n.k)"
+  ISSUE ||--o{ ISSUE : "children (from)"
   ISSUE ||--o| JOB_RECORD : "state"
   JOB_RECORD ||--o{ RUN : "runs[]"
   JOB_RECORD ||--o| ASK : "ask"
@@ -36,7 +36,8 @@ erDiagram
 |---|---|---|
 | Repo | `repos.json` | Registered repo; its `code` gives the short IDs in [Naming](naming.md) |
 | Issue | `issues/<repo>/backlog/tasks/<repo>-<n>.md` | Request |
-| Part | `issues/<repo>/backlog/tasks/<repo>-<n>.<k>.md` | Goal that intake split from an issue |
+| Child | `issues/<repo>/backlog/tasks/<repo>-<n>.md` with `from` | Issue that intake split from a parent issue |
+| Old part | `issues/<repo>/backlog/tasks/<repo>-<n>.<k>.md` | Child from before `from`; intake no longer makes one |
 | Job record | `jobs/<repo>-<n>[.<k>].json` | Issue or part with work on it |
 | Run | An entry in the job record's `runs[]` | Agent process: intake, worker, land, director, … |
 | Run folder | `runs/<stamp>-<name>-<kind>/` | Run |
@@ -97,7 +98,8 @@ The Status page shows the wrong weekly usage.
 | `priority` | `low`, `medium`, `high`, `critical` | Dispatch order; none ranks as `medium` |
 | `source` | `chris`, `worker`, `memory`, `agent`, `deps` | Who filed it; the director cannot close Chris's |
 | `areas` | list | Labels |
-| `after` | list of ids | Run order between parts |
+| `from` | `<repo>-<n>` | The parent: intake split this issue from it |
+| `after` | list of ids | The issues that must be done first |
 | `parked` | `"true"` | Stops all work on the issue |
 | `closed_as`, `closed_at`, `closed_why` | `done`, `dropped` | How it closed |
 | `plan` | `"true"` | Intake will split it |
@@ -107,6 +109,8 @@ The Status page shows the wrong weekly usage.
 | `created`, `updated`, `*_time` | | Dates and times |
 
 The status comes from the fields: `closed_as`, else `parked`, else `open`. `aleph issue lint` flags retired fields.
+
+An issue's children are the issues whose `from` names it, and its old parts `<n>.<k>` (`partsOf` in `issues/lib/store.ts`). The factory does not build a parent. A parent closes as done when each child is done or dropped and at least one is done.
 
 ## Job records: `jobs/`
 

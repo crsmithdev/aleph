@@ -3,8 +3,9 @@
  * opened by a marker line: the request, the spec and the notes. See
  * docs/specs/2026-10-31-work-model.md.
  *
- * An issue is closed by its `closed_as` field. A part is an issue whose id has
- * a `.k`; its parent comes from its id.
+ * An issue is closed by its `closed_as` field. A child is an issue with a `from`
+ * field that names its parent. An old part is an issue whose id has a `.k`; its
+ * parent comes from its id.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../vault/lib/frontmatter.ts";
 import { parseId } from "../../lib/naming.ts";
@@ -137,6 +138,9 @@ export const blank = (repo?: string): Doc => ({ items: [], ...(repo ? { repo } :
 export const refOf = (item: Issue): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
 /** The text with each `<repo>-<n>` of this repo as `<n>`, for output where the repo is known. An id of another repo stays whole. */
 export const localRefs = (key: string, text: string): string => text.replace(new RegExp(`(^|[^\\w-])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(?=\\d)`, "g"), "$1");
+/** The ref of the parent: `"5"` for an old part `5.1` and for a child with `from: <repo>-5`. Undefined for a top-level issue. */
+export const parentRef = (item: Issue): string | undefined =>
+  item.sub !== undefined ? String(item.id) : item.fm.from ? parseRef(String(item.fm.from))?.id.toString() : undefined;
 /** The id that finds the item: its number for a top-level issue, `"5.1"` for a part. */
 export const idOf = (item: Issue): number | string => (item.sub === undefined ? item.id : refOf(item));
 /** A number resolves to the top-level issue, never to a part under it; a string like `"5.1"` to the part. */
@@ -176,10 +180,11 @@ export function titleProblem(title: string, o: { part?: boolean } = {}): string 
 /** Null for a kind the store knows, else the message that names them. */
 export const kindProblem = (kind: string): string | null => ((KINDS as readonly string[]).includes(kind) ? null : `unknown kind "${kind}": use ${KINDS.join(", ")}`);
 
-export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; now?: Date } = {}): Issue {
+/** `from` is the full id of the issue this one was split from; `after` the refs it waits for. */
+export function add(doc: Doc, title: string, o: { kind?: string; priority?: string; labels?: string[]; request?: string; spec?: string; source?: Source; tracker?: boolean; from?: string; after?: string[]; now?: Date } = {}): Issue {
   const day = today(o.now);
   const kind = o.kind ?? "task";
-  const bad = kindProblem(kind) ?? titleProblem(title);
+  const bad = kindProblem(kind) ?? titleProblem(title, { part: !!o.from });
   if (bad) throw new Error(bad);
   const given = o.labels ?? [];
   const source = o.source ?? (given.includes("followup") ? "worker" : given.includes("memory") ? "memory" : "chris");
@@ -187,7 +192,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   const item: Issue = {
     id: nextId(doc),
     title,
-    fm: { id: String(nextId(doc)), created: day, created_time: minute(o.now), updated: day, updated_time: minute(o.now), kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}) },
+    fm: { id: String(nextId(doc)), created: day, created_time: minute(o.now), updated: day, updated_time: minute(o.now), kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}), ...(o.from ? { from: o.from } : {}), ...(o.after?.length ? { after: o.after } : {}) },
     request: o.request ?? "",
     spec: o.spec ?? "",
     notes: [],
@@ -196,7 +201,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   return item;
 }
 
-/** Add part `<n>.<k>` under issue `issue` (`k` the next free number), with `after`, the issue's priority and a `source`: the issue's when it is not chris, else agent. */
+/** Add an old part `<n>.<k>` under issue `issue` (`k` the next free number), with `after`, the issue's priority and a `source`: the issue's when it is not chris, else agent. Only tests call it now: they make the parts that old stores hold. */
 export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string; after?: string[]; now?: Date }): Issue {
   const bad = titleProblem(o.title, { part: true });
   if (bad) throw new Error(bad);
@@ -226,7 +231,7 @@ export function note(item: Issue, text: string, now = new Date()): string {
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
 export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; areas?: string[] }, now = new Date()): void {
-  const bad = change.title === undefined ? null : titleProblem(change.title, { part: item.sub !== undefined });
+  const bad = change.title === undefined ? null : titleProblem(change.title, { part: parentRef(item) !== undefined });
   if (bad) throw new Error(bad);
   if (change.kind !== undefined) item.fm.kind = change.kind;
   if (change.title !== undefined) item.title = change.title;
@@ -290,6 +295,7 @@ export function lint(doc: Doc): Finding[] {
       const refs = Array.isArray(after) ? after : [after];
       if (refs.some((r) => !ITEM_REF.test(String(r)))) findings.push({ id: refOf(item), problem: `after: ${refs.join(", ")} is not <repo>-<n>[.<k>]`, fixable: false });
     }
+    if (item.fm.from !== undefined && !/^.+-\d+$/.test(String(item.fm.from))) findings.push({ id: refOf(item), problem: `from: ${item.fm.from} is not <repo>-<n>`, fixable: false });
     const source = item.fm.source;
     if (source !== undefined && !(SOURCES as readonly string[]).includes(source as string)) findings.push({ id: refOf(item), problem: `source "${source}" is not one of ${SOURCES.join(", ")}`, fixable: false });
     for (const key of RETIRED) if (item.fm[key] !== undefined) findings.push({ id: refOf(item), problem: `${key} is retired`, fixable: false });
@@ -297,7 +303,7 @@ export function lint(doc: Doc): Finding[] {
     const kind = item.fm.kind;
     if (kind === undefined || kind === "") findings.push({ id: refOf(item), problem: "kind is missing", fixable: true });
     else if (kindProblem(String(kind))) findings.push({ id: refOf(item), problem: kindProblem(String(kind))!, fixable: true });
-    const title = ["open", "parked"].includes(status(item)) ? titleProblem(item.title, { part: item.sub !== undefined }) : null;
+    const title = ["open", "parked"].includes(status(item)) ? titleProblem(item.title, { part: parentRef(item) !== undefined }) : null;
     if (title) findings.push({ id: refOf(item), problem: title, fixable: false });
   }
   for (const [ref, count] of seen) if (count > 1) findings.push({ id: ref, problem: `${count} items share id ${ref}`, fixable: false });

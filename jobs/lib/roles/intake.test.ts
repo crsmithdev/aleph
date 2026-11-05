@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssues, isBuildable, isSorted, readList, writeList } from "../../../issues/lib/store.ts";
+import { buildableIssues, isBuildable, isSorted, partsOf, readList, writeList } from "../../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
 import { readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
@@ -196,16 +196,20 @@ test("a worker's follow-up whose Edit surface is only test files is closed as te
   expect(item(2).spec).toContain("x.test.ts");
 });
 
-test("parts are filed in the intake run; each waits on what the issue waits on and on its earlier parts", async () => {
+test("parts are filed in the intake run as new issues from the issue; each waits on what the issue waits on and on its earlier parts", async () => {
   reset([{ title: "a", body: "VERDICT:parts" }]);
   const t = await run();
   expect(t.counts).toEqual({ build: 1 });
-  const parts = readList(repo)!.items.filter((i) => i.id === 1 && i.sub !== undefined);
+  const doc = readList(repo)!;
+  const parts = partsOf(doc, item(1));
+  expect(parts.map((p) => [p.id, p.sub, p.fm.from])).toEqual([[2, undefined, `${repo.key}-1`], [3, undefined, `${repo.key}-1`]]);
   expect(parts.map((p) => p.title)).toEqual(["[Big] Do the first half", "[Big] Do the second half"]);
-  expect(parts.map((p) => p.fm.after)).toEqual([["int-9"], ["int-9", `${repo.key}-1.1`]]);
+  expect(parts.map((p) => p.fm.after)).toEqual([["int-9"], ["int-9", `${repo.key}-2`]]);
   expect(parts[1].spec).toContain("- y.ts (new)");
+  expect(parts.map((p) => [isSorted(doc, p, repo), isBuildable(doc, p, repo)])).toEqual([[true, true], [true, true]]);
+  expect(isBuildable(doc, item(1), repo)).toBe(false);
   expect(item(1).spec).toBe("");
-  expect(item(1).notes.at(-1)).toContain(`intake: split into ${repo.key}-1.1`);
+  expect(item(1).notes.at(-1)).toContain(`intake: split into ${repo.key}-2`);
   expect(calls()).toHaveLength(1);
 });
 

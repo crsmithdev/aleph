@@ -180,7 +180,7 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 | Kind | Format | Example | Helper | Missing |
 |---|---|---|---|---|
 | Absolute time | mm/dd hh:mm, 24-hour; `YYYY-MM-DD` in another year | 10/28 14:05 | `when()` (`ui/lib.js:307`) | empty string |
-| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:322`), `dateText()` (`ui/views/issues.js:176`) | empty string |
+| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:322`), `dateText()` (`ui/views/issues.js:183`) | empty string |
 | Axis hour | 12-hour, `a` or `p` | 4a, 1:36p | `hourLabel()` (`ui/lib.js:316`), for a chart axis only | none |
 | Clock | 24-hour time | 14:05 | `clock()` (`ui/lib.js:12`) | empty string |
 | Duration | seconds, minutes, hours, days; `durMs()` writes `850ms` under a second | 43s, 4m 05s, 1h 02m, 2d 04h, 850ms | `dur()` (`ui/lib.js:41`), `durMs()` (`ui/lib.js:52`), `span()` (`ui/lib.js:55`) for two timestamps | `–` from `dur()`, empty from `durMs()` |
@@ -229,7 +229,7 @@ Columns of the main tables:
 
 | Table | Columns, in order | Source |
 |---|---|---|
-| Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:210`) |
+| Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:217`) |
 | Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:83`) |
 | Sessions | Started, Last Turn, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:117`) |
 | Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:251`) |
@@ -241,7 +241,7 @@ Columns of the main tables:
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:55`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:192`) |
-| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:615`) |
+| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:622`) |
 
 Gaps: a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:495`) over the table.
 
@@ -364,7 +364,7 @@ Reference view = the view that follows the rules best.
 | Chart | `chart()`, `barsOption()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
-| Pager | `pager()` | `pager()` (`ui/views/issues.js:210`) |
+| Pager | `pager()` | `pager()` (`ui/views/issues.js:217`) |
 | Empty state | `empty()` | `empty()` (`ui/views/jobs.js:74`) |
 
 Cards with their own markup, because `card()` would add a heading or change the element:

@@ -55,7 +55,7 @@ const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? localMs(String(
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, createdTime: r.createdTime ?? null, closed: r.closed ?? null, closedTime: r.closedTime ?? null, at: r.updated, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, createdTime: r.createdTime ?? null, closed: r.closed ?? null, closedTime: r.closedTime ?? null, at: r.updated, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: !!r.parent, parent: r.parent ? `${r.repo}-${r.parent}` : null }));
 }
 
 // ---- Fuzzy search ----
@@ -172,6 +172,13 @@ export function sortRows(rows, sort = UPDATED) {
 /** With a search and no chosen sort, the best match first. */
 const ordered = (rows, o) => (o.sort || !(o.q ?? "").trim() ? sortRows(rows, o.sort ?? UPDATED) : [...rows].sort((a, b) => b.score - a.score || ms(b.at) - ms(a.at)));
 
+/** The rows with each child moved under its parent, in their order. A child whose parent is not in the rows keeps its place. */
+export function nest(rows) {
+  const ids = new Set(rows.map((r) => r.id)), under = (r) => r.parent && ids.has(r.parent);
+  const kids = Map.groupBy(rows.filter(under), (r) => r.parent);
+  return rows.filter((r) => !under(r)).flatMap((r) => [r, ...(kids.get(r.id) ?? [])]);
+}
+
 /** A store date as the table shows it: "Oct 20" this year, "2025-12-03" another; "" for none. */
 export function dateText(s, now = new Date()) {
   const t = dayMs(s);
@@ -202,7 +209,7 @@ export function renderRow(r) {
 }
 
 export function renderTable(rows, o = {}) {
-  const all = ordered(filterRows(rows, o), o);
+  const all = nest(ordered(filterRows(rows, o), o));
   if (!all.length) return empty("Nothing matches.", "Loosen the filters, or file an issue below.");
   const shown = all.slice(0, o.limit ?? PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
@@ -583,7 +590,7 @@ function issueKpis(d, segments, now = Date.now()) {
 }
 
 /** Front-matter keys the page shows elsewhere, or that are the store's own. */
-const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "closed_time", "created_time", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
+const HIDE = ["labels", "id", "from", "closed_as", "parked", "closed_why", "closed_at", "closed_time", "created_time", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
 
 /** The Issue page: the header and its pills, the KPI strip, the Timeline, the Description and the Spec, then Notes and Commits. Shared with views/issue.js. */
 export function renderIssue(d) {

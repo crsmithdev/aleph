@@ -12,7 +12,7 @@ import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 import { word } from "../../lib/naming.ts";
-import { partsOf, readList } from "../../issues/lib/store.ts";
+import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
 export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "triage" | "plan" | "facts" | "firefighter" | "director" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
@@ -83,10 +83,11 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   if (!doc || !item) return {};
   const out: Pick<JobDetail, "spec" | "parent"> = {};
   if (item.spec) out.spec = item.spec;
-  if (item.sub === undefined) return out;
-  const parts = partsOf(doc, todos.find(doc, item.id)!).map(todos.refOf);
+  const up = parentOf(doc, item);
+  if (!up) return out;
+  const parts = partsOf(doc, up).map(todos.refOf);
   const n = parts.indexOf(todos.refOf(item)), next = parts[n + 1];
-  out.parent = { id: `${repo}-${item.id}`, href: issueHref(repo, String(item.id)), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: `#/jobs/${encodeURIComponent(`${repo}-${next}`)}` } } : {}) };
+  out.parent = { id: `${repo}-${todos.refOf(up)}`, href: issueHref(repo, todos.refOf(up)), n: n + 1, of: parts.length, ...(next ? { next: { id: `${repo}-${next}`, href: `#/jobs/${encodeURIComponent(`${repo}-${next}`)}` } } : {}) };
   return out;
 }
 

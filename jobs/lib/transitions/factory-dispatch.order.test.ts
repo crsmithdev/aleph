@@ -26,6 +26,22 @@ const doneParent = (): number => writeList({ key: "fac" }, "add", (doc) => {
 }, true)!.value;
 const parentStatus = (id: number) => issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!);
 
+test("a parent stays open while a child from it is open, and closes in the dispatch after its last child is done", async () => {
+  redBaseline();
+  const { id, last } = writeList({ key: "fac" }, "add", (doc) => {
+    const i = issues.add(doc, "parent");
+    issues.setStatus(issues.add(doc, "first", { spec: "Do it.", from: "fac-1" }), "done");
+    return { id: i.id, last: issues.add(doc, "second", { spec: "Do it.", from: "fac-1", after: ["fac-2"] }).id };
+  }, true)!.value;
+  const f = fakes();
+  await withChecks(f, async () => { throw new Error("no baseline run"); });
+  expect(parentStatus(id)).toBe("open");
+  writeList({ key: "fac" }, "done", (doc) => { issues.setStatus(issues.find(doc, last)!, "done"); return true; });
+  await withChecks(f, async () => { throw new Error("no baseline run"); });
+  expect(parentStatus(id)).toBe("done");
+  expect(readList({ key: "fac" })!.items.find((i) => i.id === id)!.notes.at(-1)).toContain("fac-2 (no commit), fac-3 (no commit)");
+});
+
 test("a parent whose parts are all done closes in a dispatch where main's baseline is red", async () => {
   redBaseline();
   const id = doneParent();

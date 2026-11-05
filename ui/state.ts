@@ -12,7 +12,7 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
-import { idOf, parseIssueRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
+import { idOf, parentRef, parseIssueRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
@@ -397,7 +397,7 @@ export function state(now = new Date()): State {
       const ref = refOf(item), id = `${repo.key}-${ref}`, href = hrefOf(repo, ref);
       const st = stageById.get(ref)?.stage ?? status(item);
       // Incoming and Done list issues; a goal with an issue shows under it.
-      const top = item.sub === undefined;
+      const top = parentRef(item) === undefined;
       const card = (): NewIssue => ({ id, title: item.title, priority: priorityOf(item), status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
       const created = String(item.fm.created ?? "");
       if (top) everyone.push({ at: created, n: item.id, card: { id, title: item.title, href, created, stage: st } });

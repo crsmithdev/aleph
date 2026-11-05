@@ -222,6 +222,24 @@ describe("the writers of the new shape", () => {
   });
 });
 
+describe("an issue's children", () => {
+  test("are the issues whose from names it and its old parts; each finds the issue as its parent; a child round-trips and lints clean", () => {
+    const doc = { items: [] } as unknown as issues.Doc;
+    const top = issues.add(doc, "big");
+    const old = issues.addPart(doc, top, { title: "old part", spec: "x" });
+    const child = issues.add(doc, "[Big] new child", { spec: "x", from: "r-1", after: ["r-1.1"] });
+    issues.add(doc, "other");
+    expect(child.id).toBe(2);
+    expect(store.partsOf(doc, top)).toEqual([old, child]);
+    expect([store.parentOf(doc, old), store.parentOf(doc, child), store.parentOf(doc, top)]).toEqual([top, top, undefined]);
+    expect(store.partsOf(doc, child)).toEqual([]);
+    expect(issues.parseItem(issues.renderItem("r", child)).fm).toMatchObject({ from: "r-1", after: ["r-1.1"] });
+    expect(issues.lint(doc)).toEqual([]);
+    child.fm.from = "r-1.1";
+    expect(issues.lint(doc).map((f) => f.problem)).toEqual(["from: r-1.1 is not <repo>-<n>"]);
+  });
+});
+
 describe("a part's source", () => {
   test("addPart stores agent, or the parent's source when it is not chris; a part with none stored reads agent", () => {
     const doc = { items: [] } as unknown as issues.Doc;
