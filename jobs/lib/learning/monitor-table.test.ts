@@ -20,11 +20,11 @@ const empty: Sources = { runs: [], holds: [], specChecks: [], items: [], storeLo
 
 describe("stages", () => {
   const runs = [
-    run({ kind: "build", on: "p-1", started: at(DAY, 9), ended: at(DAY, 9, 10), condition: "passed", cost: 1, review: { call: "land" } }),
-    run({ kind: "build", on: "p-1", started: at(DAY, 10), ended: at(DAY, 10, 20), condition: "stuck", cause: "no-commit", cost: 2, review: { call: "error" } }),
+    run({ kind: "build", on: "p-1", started: at(DAY, 9), ended: at(DAY, 9, 10), condition: "passed", cost: 1, review: { call: "passed" } }),
+    run({ kind: "build", on: "p-1", started: at(DAY, 10), ended: at(DAY, 10, 20), condition: "failed", cause: "no-commit", cost: 2, review: { call: "failed" } }),
     run({ kind: "build", on: "p-2", started: at(DAY, 11), ended: at(DAY, 11, 30), condition: "passed", cost: 3 }),
     run({ kind: "build", on: "p-3", started: at(DAY, 12), condition: "running" }),
-    run({ kind: "triage", on: "p-1", started: at(DAY, 8), ended: at(DAY, 8, 1), reason: "failed: no reply", cause: "no-answer" }),
+    run({ kind: "triage", on: "p-1", started: at(DAY, 8), ended: at(DAY, 8, 1), reason: "failed: no reply", cause: "unanswered" }),
     run({ kind: "firefighter", started: at(DAY, 8), ended: at(DAY, 8, 2) }),
     run({ kind: "firefighter", started: at(DAY, 9), ended: at(DAY, 9, 2) }),
     // The trailing 7 days: two builds on one item.
@@ -67,7 +67,7 @@ describe("Asks, reopens and holds", () => {
     { at: at(DAY, 12), item: "p-4", added: ["closed_as: dropped"], removed: ["closed_as: done"] },
     { at: at("2026-10-14", 9), item: "p-5", added: ["reason: question"], removed: [] },
   ];
-  const runs = [run({ kind: "build", on: "p-6", started: at(DAY, 9), ended: at(DAY, 10), condition: "awaiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } })];
+  const runs = [run({ kind: "build", on: "p-6", started: at(DAY, 9), ended: at(DAY, 10), condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } })];
   const holds = [
     { at: at(DAY, 9), name: "p-1", kind: "spec-check", text: "" },
     { at: at(DAY, 11), name: "p-1", kind: "started", text: "" },

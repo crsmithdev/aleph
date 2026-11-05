@@ -151,7 +151,7 @@ test("a reply that fails the code check twice asks Chris with the reason intake-
   expect(calls()).toHaveLength(2);
   expect(askOf(`${repo.key}-1`)).toMatchObject({ reason: "intake-failed" });
   expect(askOf(`${repo.key}-1`)!.question).toContain("nope.ts");
-  expect(runOf(1)!.cause).toBe("no-answer");
+  expect(runOf(1)!.cause).toBe("unanswered");
 });
 
 test("a malformed verdict is sent back once, then asks Chris", async () => {

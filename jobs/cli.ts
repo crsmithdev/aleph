@@ -49,7 +49,7 @@ function flag(name: string): string | undefined {
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
 const VALUED = ["--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day"];
-const FATES: Fate[] = ["duplicate", "already-met", "by-hand"];
+const FATES: Fate[] = ["duplicate", "met", "manual"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
 const command = process.argv.slice(2);
@@ -410,7 +410,7 @@ try {
       const quiet = rest.includes("--quiet");
       const given = flag("fate");
       if (rest.includes("--fate") && !FATES.includes(given as Fate)) refuse(`--fate takes one of ${FATES.join(", ")}`);
-      const fate = (given as Fate | undefined) ?? (quiet ? undefined : "by-hand");
+      const fate = (given as Fate | undefined) ?? (quiet ? undefined : "manual");
       out(await drop(positional[0], { reason: positional.slice(1).join(" "), quiet, fate }));
       break;
     }

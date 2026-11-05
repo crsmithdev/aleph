@@ -13,7 +13,8 @@ import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
 import { setCodes, shortId } from "../../../lib/naming.ts";
 
-export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
+/** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. A record keeps old words; record.ts reads them as these. */
+export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
 
 /** One check that ran: its name, whether it passed (a timeout does not), and whole seconds. A run from before 4 Nov 2026 may have a hidden check with its test counts. */
 /** `files`: the number of test files a build or a land ran in place of the full suite. */
@@ -28,10 +29,10 @@ export interface FailedTest { file: string; name: string; message: string }
 export interface TestRecord { ran: number; passed: number; failed: number; skipped: number; failures: FailedTest[] }
 
 /**
- * The second review's call: what it decided, or `pending` while it ran and `error` when it ended without one. A `chris`
- * VERDICT line reads as `ask`. The second review went in v6 phase 6 (3 Nov 2026); only runs from before it have one.
+ * The second review's call: what it decided, or `running` while it ran and `failed` when it ended without one. A `chris`
+ * VERDICT line reads as `waiting`. The second review went in v6 phase 6 (3 Nov 2026); only runs from before it have one.
  */
-export type Review = { call: "land" | "back" | "ask" | "pending" | "error"; reason?: string };
+export type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string };
 
 export interface Run {
   /**
@@ -121,7 +122,7 @@ export interface Repo {
   critical?: string[];
 }
 
-export const OPEN: State[] = ["running", "passed", "awaiting", "failed", "stuck"];
+export const OPEN: State[] = ["running", "passed", "waiting", "returned", "failed"];
 
 export function expand(p: string): string {
   return p === "~" || p.startsWith("~/") ? join(homedir(), p.slice(1)) : p;
@@ -212,7 +213,7 @@ export function isOpen(runs: Entry[]): boolean {
 }
 
 /** A run waits for Chris. */
-export const isAwaiting = (state: State): boolean => state === "awaiting";
+export const isWaiting = (state: State): boolean => state === "waiting";
 
 /** A build run. */
 export const isBuild = (kind: Run["kind"]): boolean => kind === "build";
@@ -328,7 +329,7 @@ export function newsLine(run: Run, note?: string): string {
   if (run.kind === "plain") return `${run.name} ${run.condition === "done" ? "finished" : "failed"}`;
   let line = `${shortId(run.name)} ${run.condition}`;
   const needs = needsOf(askOf(run));
-  if (isAwaiting(run.condition) && needs) line += ` ${needs}`;
+  if (isWaiting(run.condition) && needs) line += ` ${needs}`;
   const check = run.condition === "failed" && failedCheckOf(run);
   if (check) line += ` ${check}`;
   if (run.condition === "landed" && run.check === "open") line += "; check open";
@@ -362,9 +363,9 @@ export async function tell(line: string): Promise<boolean> {
 export function parseVerdict(result: string): Review | null {
   const v = lastTagged(result, "VERDICT");
   if (v === undefined) return null;
-  if (v === "land") return { call: "land" };
+  if (v === "land") return { call: "passed" };
   const m = v.match(/^(back|chris)\s+(\S.*)$/);
-  return m ? { call: m[1] === "chris" ? "ask" : "back", reason: m[2] } : null;
+  return m ? { call: m[1] === "chris" ? "waiting" : "returned", reason: m[2] } : null;
 }
 
 /** The file in a run folder where the second review wrote its call. Runs from before v6 phase 6 keep it. */
@@ -382,9 +383,9 @@ function readVerdictFile(file: string): Review | undefined {
   let text: string;
   try { text = readFileSync(file, "utf8"); } catch { return undefined; }
   const last = text.trim().split("\n").at(-1)?.trim() ?? "";
-  if (last === "PENDING") return { call: "pending" };
-  if (last.startsWith("ERROR:")) return { call: "error", reason: last.slice(6).trim() };
-  return parseVerdict(text) ?? { call: "error", reason: "no VERDICT line" };
+  if (last === "PENDING") return { call: "running" };
+  if (last.startsWith("ERROR:")) return { call: "failed", reason: last.slice(6).trim() };
+  return parseVerdict(text) ?? { call: "failed", reason: "no VERDICT line" };
 }
 
 /** The reason of a land that found the job lock taken: it did nothing to the job. */

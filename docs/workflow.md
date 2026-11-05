@@ -30,7 +30,7 @@ flowchart LR
 | Next step | `continuation.ts` `nextStep` | The end of each unit: a fix round, a land or a wait |
 | Land | `landing.ts` `land` | A passed run, a dispatch, `aleph land` |
 | Director | `director.ts` `direct` | Each write that sets an Ask |
-| Rescue | `rescue.ts` `rescueJob` | Each dispatch, for stuck, failed, killed and lost runs |
+| Rescue | `rescue.ts` `rescueJob` | Each dispatch, for returned, failed, killed and lost runs |
 | Tick | `tick.ts` | The `aleph-tick` timer, each minute |
 
 No transition waits for the tick. Each step starts the next one directly. The tick runs periodic work and the sweep, which is the safety net: work it sees two ticks in a row is a missed key in `tick.log`, and the sweep starts a dispatch for it.
@@ -42,17 +42,18 @@ No transition waits for the tick. Each step starts the next one directly. The ti
 | Stage | When |
 |---|---|
 | dropped | The store says dropped |
-| awaiting | The issue, one of its runs or one of its parts has an Ask |
+| waiting | The issue, one of its runs or one of its parts has an Ask |
 | done | A commit on main names it in an `Issue:` trailer, or the store says done |
-| stuck | Its job or a part's job is stuck or failed |
-| planning, working | It has parts in progress |
+| parked | The store says parked |
+| failed | Its job or a part's job is returned or failed |
+| working | It has parts in progress |
 | landing, working | It has an open job |
-| blocked | It waits on an issue in its `after` list |
-| planning | `plan` is set: intake will split it |
+| held | It waits on an issue in its `after` list |
+| working | `plan` is set: intake will split it |
 | queued | It has a spec and waits for a dispatch |
 | new | Intake has not taken it in |
 
-A run has one condition: `running`, `passed`, `stuck`, `failed`, `awaiting`, `landed`, `done` or `dropped`. `record.ts` keeps it, with the run's `next` step.
+A run has one condition: `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped` or `done`. `returned` is a run that a reviewer or a check sent back to its worker. `record.ts` keeps it, with the run's `next` step.
 
 ## 1. Intake
 
@@ -91,7 +92,7 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 Each dispatch first does its steps, in this order:
 
 1. start the next steps that a pause kept (`startKept`);
-2. rescue stuck, failed, killed and lost runs (`rescueStuck`);
+2. rescue returned, failed, killed and lost runs (`rescueStuck`);
 3. land the passed runs;
 4. close parents whose parts are done (`closeIssues`);
 5. send `plan` issues to intake to split.
@@ -124,14 +125,14 @@ The worker is `claude -p` in `<repo>/.worktrees/job-<name>` on the branch `facto
 | `already_met` | A claim that the goal holds on main; the baseline decides it |
 | `question` | A question on the Oracle; with no commit, the goal waits for a spec edit |
 
-**Gate: the worker's output** (`unit.ts` `factoryVerdict`). The run is stuck when:
+**Gate: the worker's output** (`unit.ts` `factoryVerdict`). The run fails when:
 
 - the last event is not a `result` with structured output;
 - it made no commit ahead of main, or changed only `result.md`;
 - it reached the time box (`ALEPH_JOB_TIMEOUT`, 1800 s);
 - its output did not grow for `ALEPH_STALL_SECONDS` (600 s).
 
-A stuck run goes to the rescue (section 7).
+A failed run goes to the rescue (section 7).
 
 ## 4. Verify
 
@@ -146,11 +147,11 @@ Verify runs four checks in order, each in a detached worktree at the branch's ti
 
 A failing check or Oracle command runs once more on the same tree. A pass on the rerun is a flake, recorded in `~/.aleph/factory/flaky.json`.
 
-**Send-back: the fix round.** A failure sends the job back to its worker on the same branch and worktree. The note names the check and quotes the JUnit failures, or the last 80 lines of the log. A job gets at most `ALEPH_FIX_ROUNDS` (2) rounds. After the last round the run is stuck as `<check> failed after <n> fix rounds`.
+**Send-back: the fix round.** A failure sends the job back to its worker on the same branch and worktree. The note names the check and quotes the JUnit failures, or the last 80 lines of the log. A job gets at most `ALEPH_FIX_ROUNDS` (2) rounds. A run that goes back is `returned`. After the last round the run fails as `<check> failed after <n> fix rounds`.
 
 When the same tests fail on two rounds in a row, no further round starts. The run sets a `question` Ask and quotes the failure, so Chris can tell a wrong test from a wrong branch.
 
-**No verdict.** A check that a clock (`ALEPH_CHECK_TIMEOUT`, 1200 s) or a signal ended, or whose setup failed, is neither a pass nor a failure. The run is stuck with the cause `infra`. This does not use a fix round. The rescue checks the branch again once.
+**No verdict.** A check that a clock (`ALEPH_CHECK_TIMEOUT`, 1200 s) or a signal ended, or whose setup failed, is neither a pass nor a failure. The run fails with the cause `infra`. This does not use a fix round. The rescue checks the branch again once.
 
 ## 5. Review
 
@@ -178,7 +179,7 @@ A diff over `ALEPH_REVIEW_DIFF_MAX` (200,000 characters) goes in as the `--stat`
 Lands of one repo go one at a time, in the order they became ready (`landing.ts`).
 
 1. Merge the branch onto `origin/main` in memory (`git merge-tree`). On a conflict, try a mechanical rebase.
-2. Refuse a change to the repo's own to-do list (`own-list`): the worker gets it back with a note.
+2. Refuse a change to the repo's own to-do list (cause `other`): the worker gets it back with a note.
 3. Run the land checks: the test files the change reaches, the repo's `critical` globs, and every check that is not a test. A change to a file that is not a module runs every test. When `origin/main` has not moved since the run's checks, only the critical tests run.
 4. Push one squash commit with the trailers `Issue: <repo>-<n>` and `Job: <job>`, and `Held-by:` for a held land.
 5. Fast-forward the repo's main checkout if it is clean. Restart `aleph-ui` when the change touches a file the server imports.
@@ -190,7 +191,7 @@ Lands of one repo go one at a time, in the order they became ready (`landing.ts`
 | Failure | Result |
 |---|---|
 | Conflict | A merge run: a Haiku worker merges `origin/main` into the branch (600 s), and the reviewer judges the merge commit. At most 2 conflicted lands per job; then the rescue |
-| `own-list` | Back to the worker with a note |
+| A change to the to-do list | Back to the worker with a note |
 | Push lost a race (`moved`) | Land again, at most 3 times |
 | Land checks fail | Rescue `land-checks`: drop and rerun the goal once from main |
 | No verdict | No batch split; each run lands again once |
@@ -257,7 +258,7 @@ An Ask that the actions leave open, a failed director run or a malformed reply a
 | Stop and restart new work | `aleph pause`, `aleph resume` | Pause button |
 | Land a passed, held or reviewed run | `aleph land <name>` | Land it |
 | Drop a run and its branch | `aleph drop <name> [reason]` | Drop the job |
-| Check a stuck run again, keeping its work | `aleph recheck <name>` | Recheck |
+| Check a returned or failed run again, keeping its work | `aleph recheck <name>` | Recheck |
 | Answer an issue that waits | `aleph issue decide <repo> <id> "<text>"` or `note` | Decide, Note |
 | Change a goal's spec | `aleph issue edit <repo> <id> --spec -` | Edit |
 | Grant or revoke a standing rule | `aleph always grant\|revoke` | Always, Gates page |

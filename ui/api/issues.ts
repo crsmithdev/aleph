@@ -156,12 +156,12 @@ function detail(params: Record<string, string>, url: URL): Response {
 
   const blockers = jobProjector().blockers(repo.key, ref);
 
-  // The Ask row of an issue that awaits Chris: the item `attend` builds, from the NewIssue as the state builds it.
+  // The Ask row of an issue that waits for Chris: the item `attend` builds, from the NewIssue as the state builds it.
   const stored = askOf(`${repo.key}-${ref}`);
   let ask: unknown;
-  if (stored && todos.status(item) === "open" && (mine?.stage ?? "awaiting") === "awaiting") {
+  if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") {
     const id = `${repo.key}-${ref}`;
-    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: "awaiting" };
+    const c: NewIssue = { id, title: item.title, status: "open", href: `#/issues/${encodeURIComponent(repo.key)}/${ref}`, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: "waiting" };
     const q = stored.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
     if (q) c.question = q;
     if (stored.options.length) c.decision = stored;

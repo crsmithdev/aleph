@@ -79,9 +79,9 @@ export const land = (name: string, o: { checked?: boolean } = {}, extra: Record<
   start(() => landJob(name, { checked: o.checked }, { command: ["land", name], output: "ignore" }), extra);
 /** `aleph recheck <name>`. */
 export const recheck = (name: string, extra: Record<string, string> = {}) => start(() => recheckJob(name, { command: ["recheck", name], output: "ignore" }), extra);
-/** `aleph drop <name> [<reason>] [--quiet]`: the CLI's fate is by-hand unless quiet. */
+/** `aleph drop <name> [<reason>] [--quiet]`: the CLI's fate is manual unless quiet. */
 export const drop = (name: string, reason = "", quiet = false, extra: Record<string, string> = {}) =>
-  call(() => dropJob(name, { reason, quiet, fate: quiet ? undefined : "by-hand" }), extra);
+  call(() => dropJob(name, { reason, quiet, fate: quiet ? undefined : "manual" }), extra);
 /** `aleph checked <name>`. */
 export const checked = (name: string) => call(() => checkedJob(name));
 /** The job's view, from which `aleph jobs [<name>]` prints its condition and check. */

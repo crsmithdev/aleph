@@ -12,6 +12,7 @@ import { join } from "node:path";
 import type { Ask } from "../asks/ask.ts";
 import type { Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
+import { jobState, word } from "../../../lib/naming.ts";
 
 /** A run in a record: the run and its id, the name of its run folder. */
 export type RunRecord = Run & { id: string };
@@ -24,7 +25,7 @@ export interface JobRecord {
   issue: string;
   /** What the job waits on from Chris, or null: the one Ask of the issue and its runs. */
   ask: Ask | null;
-  /** The run whose Ask `ask` is, while that run awaits Chris; absent when the Ask is on the issue. */
+  /** The run whose Ask `ask` is, while that run waits for Chris; absent when the Ask is on the issue. */
   askRun?: string;
   /** Every Ask the record held, oldest first: when it was set and, once it is gone, when it was cleared. */
   asks?: { set: string; cleared?: string; reason?: string; recommended?: string }[];
@@ -83,9 +84,27 @@ const fileOf = (key: string) => join(recordsDir(), `${key.replaceAll("/", "_")}.
 /** A record with nothing in it yet. */
 export const empty = (key: string): JobRecord => ({ issue: key, ask: null, wait: null, rounds: 0, cost: 0, runs: [], events: [] });
 
+/**
+ * A run with the words of docs/naming.md: a record keeps the old words of its runs (`awaiting`, `stuck`, `time-box`,
+ * a review call `back`, …), and every read maps them here, so no caller sees an old word.
+ */
+function newWords(x: RunRecord): RunRecord {
+  const run = { ...x, condition: jobState(x.condition, x.failed) as Run["condition"] };
+  if (x.cause) run.cause = word("sub", x.cause) as Run["cause"];
+  if (x.fate) run.fate = word("sub", x.fate) as Run["fate"];
+  if (x.review) run.review = { ...x.review, call: word("review", x.review.call) as NonNullable<Run["review"]>["call"] };
+  return run;
+}
+
+/** A record as its text holds it, with the runs in new words. */
+function parse(text: string): JobRecord {
+  const r: JobRecord = JSON.parse(text);
+  return { ...r, runs: r.runs.map(newWords) };
+}
+
 /** The record of `key`, or null when there is none. */
 export function read(key: string): JobRecord | null {
-  try { return JSON.parse(readFileSync(fileOf(key), "utf8")); } catch { return null; }
+  try { return parse(readFileSync(fileOf(key), "utf8")); } catch { return null; }
 }
 
 /** Every record. */
@@ -95,7 +114,7 @@ export function all(): JobRecord[] {
   const out: JobRecord[] = [];
   for (const f of readdirSync(dir).sort()) {
     if (!f.endsWith(".json")) continue;
-    try { out.push(JSON.parse(readFileSync(join(dir, f), "utf8"))); } catch { /* a file mid-rename is not there yet */ }
+    try { out.push(parse(readFileSync(join(dir, f), "utf8"))); } catch { /* a file mid-rename is not there yet */ }
   }
   return out;
 }
@@ -187,7 +206,7 @@ function keyOfId(id: string): string | undefined {
     let text: string;
     try { text = readFileSync(join(dir, f), "utf8"); } catch { continue; }
     if (!text.includes(needle)) continue;
-    const r: JobRecord = JSON.parse(text);
+    const r: JobRecord = parse(text);
     if (r.runs.some((x) => x.id === id)) { keys.set(id, r.issue); return r.issue; }
   }
   return undefined;
@@ -275,20 +294,20 @@ export type Step =
 
 /**
  * The next step of the job. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
- * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a stuck or failed run
+ * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
  * goes to the rescue, unless the factory asked Chris about it; a landed, done or dropped job does nothing; a goal
  * with no open run waits for its `wait`, else starts. The run that counts is the newest one that is not a facts run
  * and not a land that lost the lock race (job.ts `lastReal`).
  */
 export function next(r: JobRecord): Step {
   if (r.ask) return { step: "ask", why: `asks for your ${r.ask.kind}: ${r.ask.reason}` };
-  const last = r.runs.findLast((x) => x.kind !== "facts" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "lock-busy"));
+  const last = r.runs.findLast((x) => x.kind !== "facts" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "locked"));
   if (last?.condition === "running") return { step: "run", why: `${last.kind} run ${last.id} is running` };
-  if (last?.condition === "awaiting") return { step: "ask", why: `${last.kind} run ${last.id} awaits Chris` };
+  if (last?.condition === "waiting") return { step: "ask", why: `${last.kind} run ${last.id} waits for Chris` };
   if (last?.next === "worker") return { step: "worker", why: `${last.failed ?? "a check"} sent it back: fix round ${r.rounds}` };
   if (last?.next === "land") return { step: "land", why: last.kind === "land" ? "it lands again" : "it passed" };
   if (last?.condition === "passed") return { step: "wait", why: "it passed and waits for aleph land" };
-  if (last && (last.condition === "stuck" || last.condition === "failed")) {
+  if (last && (last.condition === "returned" || last.condition === "failed")) {
     if (r.events.some((e) => e.kind === "asked" && e.run === last.id)) return { step: "wait", why: `the factory asked Chris about run ${last.id}` };
     return { step: "rescue", why: last.reason ?? `its run is ${last.condition}` };
   }

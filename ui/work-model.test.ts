@@ -69,8 +69,8 @@ beforeAll(async () => {
     return true;
   }, true);
   run("20261031-000001-fac-fac-1.2-build", { kind: "build", job: "fac-1.2", name: "fac-1.2", condition: "running", on: "fac-1.2" });
-  run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", condition: "awaiting", on: "fac-5", ask: { kind: "input", reason: "no-commit", question: "Triage gave no verdict.", options: [], why: [] } });
-  run("20261031-000003-fac-fac-2.1-build", { kind: "build", job: "fac-2.1-r", name: "fac-2.1-r", condition: "awaiting", on: "fac-2.1", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "ask", reason: "judgement" } });
+  run("20261031-000002-fac-fac-5-triage", { kind: "triage", job: "triage-fac-5", name: "triage-fac-5", condition: "waiting", on: "fac-5", ask: { kind: "input", reason: "no-commit", question: "Triage gave no verdict.", options: [], why: [] } });
+  run("20261031-000003-fac-fac-2.1-build", { kind: "build", job: "fac-2.1-r", name: "fac-2.1-r", condition: "waiting", on: "fac-2.1", ask: { kind: "approval", reason: "review", question: "Land it?", options: [], why: [] }, review: { call: "waiting", reason: "judgement" } });
   run("20261031-000004-fac-fac-1.1-build", { kind: "build", job: "fac-1.1", name: "fac-1.1", condition: "landed", on: "fac-1.1", commit: "abcdef1234567", ended: ago(1) });
   ({ server, stop } = await withServer({ warm: false }));
 });
@@ -84,11 +84,11 @@ describe("/api/state on a work-model store", () => {
 
   test("parts are flat: the parent waits for its parts, and .3 runs after .2", () => {
     const s: any = state(now);
-    // Parts are flat: the parent waits for its parts and has no card in Running; .3 runs after .2, so it is blocked.
+    // Parts are flat: the parent waits for its parts and has no card in Running; .3 runs after .2, so it is held.
     expect(s.runningIssues).toEqual([]);
     expect(s.incoming.find((i: any) => i.id === "fac-1").stage).toBe("working");
     expect(s.running.find((j: any) => j.name === "fac-1.2").part).toMatchObject({ n: 2, m: 3, parent: "fac-1" });
-    expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "blocked"]]);
+    expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "held"]]);
     expect(s.queued[0].part).toMatchObject({ n: 3, m: 3, parent: "fac-1" });
   });
 

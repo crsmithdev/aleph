@@ -9,7 +9,7 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { closeAndFile, note } from "../../../issues/lib/store.ts";
 import { fetchOrigin, followMain, git } from "../infra/git.ts";
 import { needsOf } from "../asks/ask.ts";
-import { askOf, allRuns, isAwaiting, isAgentRun, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { askOf, allRuns, isWaiting, isAgentRun, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive } from "../infra/process.ts";
 import { buildChecks } from "../gates/related.ts";
 import { stopFields, type ChecksStop } from "../gates/checks.ts";
@@ -48,7 +48,7 @@ export const agentOf = (runs: Entry[]): Entry | undefined => runs.filter((e) => 
 export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: boolean } | null {
   if (!isAgentRun(agent.kind)) return null;
   if (agent.condition === "passed") return { manual: agent.say !== undefined, held: false, asked: false };
-  const needs = isAwaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
+  const needs = isWaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
   if (needs === "held" || needs === "review") return { manual: false, held: true, asked: true };
   return null;
 }
@@ -213,7 +213,7 @@ function build(ctx: Attempt, list: Member[], from: string): Pending[] {
       continue;
     }
     // Only aleph issue writes the list. A worker can go past git-guard with a script, so the land refuses it.
-    if (git(repo.path, "diff", "--name-only", cur, tree).out.split("\n").includes(TODO_PATH)) { finish(m, failed("own-list", OWN_LIST, { conflicts: [TODO_PATH] })); continue; }
+    if (git(repo.path, "diff", "--name-only", cur, tree).out.split("\n").includes(TODO_PATH)) { finish(m, failed("other", OWN_LIST, { conflicts: [TODO_PATH] })); continue; }
     const fork = git(repo.path, "merge-base", cur, tip).out;
     const subjects = git(repo.path, "log", "--reverse", "--no-merges", "--format=%s", `${fork}..${tip}`).out.split("\n").filter(Boolean);
     const c = git(repo.path, "commit-tree", tree, "-p", cur, "-m", landMessage(subjects, m.run, repo));
@@ -295,7 +295,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
   const fail =(cause: Cause, reason: string, extra: Partial<Verdict> = {}) => { log(`failed: ${reason}`); return failed(cause, reason, extra); };
 
   const release = await lock(`job-${repo.key}-${run.name}`, 60_000);
-  if (!release) return fail("lock-busy", LOCK_BUSY);
+  if (!release) return fail("locked", LOCK_BUSY);
   let releaseRepo: (() => void) | null = null;
   try {
     phase("queued");

@@ -58,7 +58,7 @@ test("an Oracle failure is the Verify result: phase verify, one oracle result wi
   const phases: (string | undefined)[] = [];
   const r = await verdict(async (_r, _s, command) => { phases.push(readRun(folder)!.phase); report(command, PASS + FAIL); return { code: 1, output: "ORACLE-LOG" }; });
   expect(phases).toEqual(["verify", "verify"]);
-  expect(r.outcome).toMatchObject({ condition: "stuck", cause: "check", checkName: "oracle", failed: "oracle", round: 0 });
+  expect(r.outcome).toMatchObject({ condition: "returned", cause: "check", checkName: "oracle", failed: "oracle", round: 0 });
   const tests = { ran: 2, passed: 1, failed: 1, skipped: 0, failures: [{ file: "x.test.ts", name: "bad", message: "Error: ORACLE-BOOM\n  at x.test.ts:1" }] };
   expect(readRun(folder)!.checks).toEqual([{ name: "test", ok: true, seconds: 1 }, { name: "oracle", ok: false, seconds: expect.any(Number), tests }]);
   expect(readFileSync(join(folder, "checks.log"), "utf8")).toContain("## oracle: exit 1 (second run)\n$ bun test x.test.ts\nORACLE-LOG");
@@ -76,7 +76,7 @@ test("an Oracle that fails once and then passes is one passing oracle result wit
 
 test("an Oracle command with no verdict (timed out) is an infra stop with a noVerdict oracle result, not a pass", async () => {
   const r = await verdict(async () => ({ code: 124, output: "timed out after 1200 s", infra: true }));
-  expect(r.outcome).toMatchObject({ condition: "stuck", cause: "infra", checkName: "oracle", reason: "no verdict: oracle: bun test x.test.ts" });
+  expect(r.outcome).toMatchObject({ condition: "failed", cause: "infra", checkName: "oracle", reason: "no verdict: oracle: bun test x.test.ts" });
   expect(r.outcome.failed).toBeUndefined();
   expect(readRun(folder)!.checks!.at(-1)).toEqual({ name: "oracle", ok: false, seconds: expect.any(Number), noVerdict: true });
   expect(readFileSync(join(folder, "checks.log"), "utf8")).toContain("## oracle: no verdict\n$ bun test x.test.ts\ntimed out after 1200 s");
@@ -84,12 +84,12 @@ test("an Oracle command with no verdict (timed out) is an infra stop with a noVe
 
 test("an Oracle `bun test` that runs 0 tests fails", async () => {
   const r = await verdict(async () => ({ code: 0, output: "" }));
-  expect(r.outcome).toMatchObject({ condition: "stuck", checkName: "oracle", reason: "oracle ran 0 tests: bun test x.test.ts" });
+  expect(r.outcome).toMatchObject({ condition: "returned", checkName: "oracle", reason: "oracle ran 0 tests: bun test x.test.ts" });
 });
 
 test("a checks failure is the Verify result too: the next brief names the check and quotes its section of checks.log", () => {
   writeFileSync(join(folder, "checks.log"), "## test: exit 1\nCHECK-BOOM\n\n## oracle: exit 0\n$ bun test x.test.ts\nfine\n\n");
-  const note = nextBrief(folder, { ...run, condition: "stuck", cause: "check", checkName: "test", failed: "test" } as Run).note;
+  const note = nextBrief(folder, { ...run, condition: "returned", cause: "check", checkName: "test", failed: "test" } as Run).note;
   expect(note).toContain("The check `test` failed on this branch.");
   expect(note).toContain("CHECK-BOOM");
   expect(note).not.toContain("fine");

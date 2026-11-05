@@ -101,7 +101,7 @@ test("afterLand sends a conflict back to the worker at most twice", () => {
 });
 
 test("landTerms: which runs may land, and how", () => {
-  const ask = (reason: string, kind = "review") => ({ condition: "awaiting", ask: { kind, reason, question: "", options: [], why: [] } });
+  const ask = (reason: string, kind = "review") => ({ condition: "waiting", ask: { kind, reason, question: "", options: [], why: [] } });
   const needs = (n: Partial<Run>) => landTerms({ kind: "build", ...n } as Run);
   expect(needs({ condition: "passed" })).toEqual({ manual: false, held: false, asked: false });
   expect(needs({ condition: "passed", say: "look" })).toEqual({ manual: true, held: false, asked: false });
@@ -132,5 +132,5 @@ test("the run after a conflicted land has a merge prompt: the paths and the last
   expect(text).not.toContain("## Spec");
   expect(MERGE_SECONDS).toBe(600);
   expect(isMergeBounce({ ...e.run, ...r.outcome } as Run)).toBe(true);
-  expect(isMergeBounce({ ...e.run, cause: "own-list", conflicts: ["docs/todo.md"] } as Run)).toBe(false);
+  expect(isMergeBounce({ ...e.run, cause: "other", conflicts: ["docs/todo.md"] } as Run)).toBe(false);
 });

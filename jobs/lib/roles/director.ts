@@ -1,6 +1,6 @@
 /**
  * The director: every new Ask goes to it first. An Ask is new while it has no case text (`situation`): on an open store
- * item that awaits Chris, on an awaiting run's `ask` in the ledger, or on a proposed lesson. Each one gets one read-only
+ * item that awaits Chris, on a waiting run's `ask` in the ledger, or on a proposed lesson. Each one gets one read-only
  * `claude -p` run, kind `director`, in the repo's checkout. Every reply carries the case text (situation, effects,
  * recommendation) that Chris reads on the Ask's card. With typed actions the run decides: code checks and applies them
  * for that Ask only. With no actions it escalates. The card shows no buttons until the case text is there (ui/asks.ts).
@@ -57,7 +57,7 @@ const ALLOWED = ["Read", "Grep", "Glob", ...["status", "log", "show", "diff", "l
 
 // The cases.
 
-/** One Ask with no case text: on a store item, on an awaiting run, or a proposed lesson. `on` is the item's ref, the run's folder name or the lesson's id. */
+/** One Ask with no case text: on a store item, on a waiting run, or a proposed lesson. `on` is the item's ref, the run's folder name or the lesson's id. */
 export type Case =
   | { at: "item"; on: string; repo: Repo; item: issues.Issue; ask: Ask }
   | { at: "run"; on: string; repo?: Repo; entry: Entry; ask: Ask; item?: issues.Issue }
@@ -70,7 +70,7 @@ const idOf = (i: issues.Issue): number | string => (i.sub === undefined ? i.id :
 const factoryRepos = (): Repo[] => Object.values(loadRegistry()).filter((r) => r.sandbox);
 const empty = (ask: Ask | null | undefined): ask is Ask => !!ask && !ask.situation?.trim();
 
-/** Every Ask that has no case text: open items that await Chris, then awaiting runs, oldest run first, then proposed lessons. */
+/** Every Ask that has no case text: open items that await Chris, then waiting runs, oldest run first, then proposed lessons. */
 export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = allRuns(), lists: store.Reader = store.reader()): Case[] {
   const out: Case[] = [];
   for (const repo of repos) {
@@ -84,7 +84,7 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
   const jobs = allJobs();
   for (const entry of runs) {
     const r = entry.run;
-    if (r.condition !== "awaiting" || !empty(r.ask)) continue;
+    if (r.condition !== "waiting" || !empty(r.ask)) continue;
     // A run whose job has a live run (a land the director started) is not a new case: the land settles its Ask.
     if (openJob(r.name, r.repo, jobs)?.some((e) => e.folder !== entry.folder && (isLive(e.folder) || isStarting(e)))) continue;
     const repo = r.repo ? byKey.get(r.repo) : undefined;
@@ -345,7 +345,7 @@ export const DIRECTOR_SCHEMA = {
       items: {
         oneOf: [
           shape("land"),
-          shape("drop", { reason: nonEmpty, after: refList, fate: { enum: ["already-met", "duplicate", "by-hand"] } }, ["reason"]),
+          shape("drop", { reason: nonEmpty, after: refList, fate: { enum: ["met", "duplicate", "manual"] } }, ["reason"]),
           shape("answer", { note: nonEmpty, option: nonEmpty, after: refList }, ["note"]),
           shape("rerun", { note: nonEmpty }),
           shape("close", { note: nonEmpty }, ["note"]),
@@ -380,7 +380,7 @@ function parseAction(raw: any): Action | string {
   if (!raw || typeof raw !== "object") return "not an object";
   const f = (k: string) => str(raw[k]) || null;
   const after = refs(raw.after);
-  const fate = (["duplicate", "already-met", "by-hand"] as const).find((x) => x === raw.fate);
+  const fate = (["duplicate", "met", "manual"] as const).find((x) => x === raw.fate);
   const w = { ...(after ? { after } : {}) };
   switch (raw.do) {
     case "land": return { do: "land" };
@@ -456,7 +456,7 @@ export function stillOpen(c: Case): boolean {
     return !!item && issues.status(item) === "open" && sameAsk(askOf(c.on), c.ask);
   }
   const now = readRun(c.entry.folder);
-  return !!now && now.condition === "awaiting" && sameAsk(now.ask, c.ask);
+  return !!now && now.condition === "waiting" && sameAsk(now.ask, c.ask);
 }
 
 /** Write the text on the Ask, when the Ask is still the same one. Whether it was written. */
@@ -470,7 +470,7 @@ export function writeCaseText(c: Case, t: Text): boolean {
   }
   if (c.at === "lesson") return explainLesson(c.lesson.id, c.lesson.sentence, t);
   const now = readRun(c.entry.folder);
-  if (!now || now.condition !== "awaiting" || !sameAsk(now.ask, c.ask)) return false;
+  if (!now || now.condition !== "waiting" || !sameAsk(now.ask, c.ask)) return false;
   updateRun(c.entry.folder, { ask: { ...now.ask!, ...t } });
   return true;
 }
@@ -540,7 +540,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       reason = a.reason;
       // The reply may leave the fate off: a goal whose own commit is on origin/main is met; a reason naming another goal already on main is work that goal did.
       const other = a.reason.match(new RegExp(`\\b${repo.key}-(\\d+)\\b`, "g"))?.map((r) => r.slice(repo.key.length + 1)).find((x) => Number(x) !== issue && itemOnMain(repo, Number(x)));
-      fate = a.fate ?? (onMain(repo, { job: last.run.job, item: issue, fetch: false }) ? "already-met" : other ? "duplicate" : undefined);
+      fate = a.fate ?? (onMain(repo, { job: last.run.job, item: issue, fetch: false }) ? "met" : other ? "duplicate" : undefined);
     }
     const why = await ports.drop(name, reason, fate);
     if (why) return no(a, why);
@@ -574,7 +574,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       return why ? no(a, why) : done(a);
     }
     const open = jobOf(c, n);
-    if (open) { const why = await ports.drop(open, `closed by the director: ${a.note}`, "already-met"); if (why) return no(a, why); }
+    if (open) { const why = await ports.drop(open, `closed by the director: ${a.note}`, "met"); if (why) return no(a, why); }
     const why = store.note(repo, n!, `director: closed: ${a.note}`, { done: true });
     return why ? no(a, why) : done(a);
   }

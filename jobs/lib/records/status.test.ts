@@ -68,13 +68,13 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
   ] };
   const folder = join(base, "jobs", "20261028-000021-demo-21-build");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", condition: "awaiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: STARTED });
+  writeRun(folder, { kind: "build", job: "j21", name: "j21", repo: "demo", on: "demo-21", condition: "waiting", ask: { kind: "input", reason: "question", question: "?", options: [], why: [] }, told: true, shown: true, started: STARTED });
   const f = facts(repo, doc);
   // The run owns the issue's one Ask, so the issue has none of its own.
   expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [] });
   expect(f.items[21].ask).toBeUndefined();
   expect(f.items[22]).toMatchObject({ parts: ["demo-22.1"], after: [] });
-  expect(f.runs[21]).toEqual([{ kind: "build", condition: "awaiting", open: true, ask: { kind: "input", reason: "question" } }]);
+  expect(f.runs[21]).toEqual([{ kind: "build", condition: "waiting", open: true, ask: { kind: "input", reason: "question" } }]);
 });
 
 test("a dotted ref in after, parts and on resolves to the goal, its runs and its status", () => {
@@ -97,7 +97,7 @@ test("a dotted ref in after, parts and on resolves to the goal, its runs and its
   const st = (items: (number | string)[], doc = open) => repoStages(repo, { fetch: false, doc, items });
   expect(st(["5.1"]).map((s) => ({ id: s.id, stage: s.stage }))).toEqual([{ id: "demo-5.1", stage: "working" }]);
   const blocked = st(["5.2"])[0];
-  expect(blocked.stage).toBe("blocked");
+  expect(blocked.stage).toBe("held");
   expect(blocked.why).toContain("demo-5.1");
   const issue = st([5])[0];
   expect(issue.stage).toBe("working");

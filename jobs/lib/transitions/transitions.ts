@@ -8,7 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { needsOf } from "../asks/ask.ts";
-import { allRuns, askOf, isAwaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, nextStamp, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, askOf, isWaiting, isAgentRun, isBuild, runsDir, loadRegistry, lock, nextStamp, onOf, stamp, updateRun, writeRun, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isRunning, isStarting, markEnded, stop, waitForPid } from "../infra/process.ts";
 import { causeOf, failedCheckOf, type Fate } from "../records/outcome.ts";
 import { addNote, issue as issueOf, lastReal, latestJob, openJob } from "../records/job.ts";
@@ -222,7 +222,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
     const agent = agentOf(runs)!.run;
     const terms = landTerms(agent);
     if (!terms) {
-      const needs = isAwaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
+      const needs = isWaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
       refuse(`${name} is ${agent.condition}${needs ? ` (${needs})` : ""}, not passed`);
     }
     const { manual, held } = terms!;
@@ -264,7 +264,7 @@ export function checked(name: string): { job: string; name: string; condition: "
 
 /**
  * `aleph recheck`: start a recheck run. The last run of an open job is an agent or recheck run
- * that ended stuck or failed, and its branch still exists. The run merges main
+ * that ended returned or failed, and its branch still exists. The run merges main
  * into the branch and runs the checks and the reviewer again; no worker starts.
  */
 export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
@@ -279,7 +279,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     if (isLive(last.folder)) refuse(`${name} is running as ${last.id}`);
     const r = last.run;
     if (!isAgentRun(r.kind)) refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
-    if (r.condition !== "stuck" && r.condition !== "failed") refuse(`${name} is ${r.condition}, not stuck or failed`);
+    if (r.condition !== "returned" && r.condition !== "failed") refuse(`${name} is ${r.condition}, not returned or failed`);
     const repo = loadRegistry()[r.repo ?? ""];
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);
     if (!r.branch || !git(repo.path, "rev-parse", "--verify", "-q", `refs/heads/${r.branch}`).ok) refuse(`${name} has no branch: drop it`);
@@ -315,8 +315,8 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     const live = runs.filter((e) => isLive(e.folder));
     for (const e of live) {
       if (await stop(e)) continue;
-      // A run whose process outlives the stop is stuck, not failed: nothing ended it.
-      updateRun(e.folder, { condition: "stuck", cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
+      // A run whose process outlives the stop fails as `infra`.
+      updateRun(e.folder, { condition: "failed", cause: "infra", reason: "cannot stop: its process still runs", phase: undefined });
       refuse(`cannot stop ${e.id}: its process still runs`);
     }
     if (repo) { keepDiff(repo, last.run.branch, last.folder); removeBranch(repo, last.run); }

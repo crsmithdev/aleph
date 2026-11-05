@@ -22,9 +22,9 @@ export async function run(name: string, argv: string[]): Promise<Result> {
   return r.code ? r : { ...r, code };
 }
 
-/** `aleph drop <name> [<reason>] [--quiet] [--fate <fate>]`: the fate is by-hand unless quiet or given. */
+/** `aleph drop <name> [<reason>] [--quiet] [--fate <fate>]`: the fate is manual unless quiet or given. */
 export const dropAs = (name: string, a: { reason?: string; quiet?: boolean; fate?: Fate }) =>
-  call(() => dropJob(name, { reason: a.reason, quiet: a.quiet, fate: a.fate ?? (a.quiet ? undefined : "by-hand") }));
+  call(() => dropJob(name, { reason: a.reason, quiet: a.quiet, fate: a.fate ?? (a.quiet ? undefined : "manual") }));
 
 /** `aleph report`: the text it prints, from the same parts in the same order. */
 export const reportText = (): Promise<string> => asCli({}, () => {

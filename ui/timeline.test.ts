@@ -10,7 +10,7 @@ const run = (kind: string, started: string, ended: string | null, extra: object 
 const issue = (over: object = {}) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [] }, ...over });
 const held = () => [
   run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"),
-  run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { condition: "awaiting", cost: 0.25 }),
+  run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z", { condition: "waiting", cost: 0.25 }),
   run("land", "2026-11-01T15:00:00Z", "2026-11-01T15:01:00Z", { condition: "landed", cost: 0.05 }),
 ];
 const rowsOf = (d: object, now?: number) => issueSegments(issue(d), now).flatMap((s: any) => s.rows);

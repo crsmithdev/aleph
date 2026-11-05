@@ -20,7 +20,7 @@ describe("a factory run", () => {
       const silent = join(base, "silent-reviewer");
       writeFileSync(silent, "#!/bin/bash\nexec sleep 60\n", { mode: 0o755 });
       const t = await job("fac", "rstall", "Goal: g\nACTION: commit rstall.txt\n", {}, { ALEPH_REVIEWER_CMD: silent, ALEPH_STALL_SECONDS: "2" });
-      expect(state(t.json.run)).toMatchObject({ condition: "awaiting", reason: "reviewer: no verdict (stalled: no output for 2 seconds)" });
+      expect(state(t.json.run)).toMatchObject({ condition: "waiting", reason: "reviewer: no verdict (stalled: no output for 2 seconds)" });
       expect(runsOf("rstall").length).toBe(1);
       expect(existsSync(join(jobsDir, t.json.run, "review.json"))).toBe(false);
       await drop("rstall");
@@ -42,7 +42,7 @@ describe("a factory run", () => {
     test("a security path gets the reviewer, then one held-path Ask, and no second review", async () => {
       const n = calls();
       const r = await rjob("rsec", "REVIEW:pass", "commit hooks/r.txt");
-      expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path hooks/r.txt" });
+      expect(state(r.json.run)).toMatchObject({ condition: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path hooks/r.txt" });
       expect(calls()).toBe(n + 1);
       noSecondReview(r.json.run);
       await drop("rsec");
@@ -52,14 +52,14 @@ describe("a factory run", () => {
       const n = calls();
       const r = await job("fac", "rheld", "Goal: rheld REVIEW:pass\nACTION: commit held/r.txt\n", { land: true });
       const s = state(r.json.run);
-      expect(s).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/r.txt" });
+      expect(s).toMatchObject({ condition: "waiting", ask: expect.objectContaining({ kind: "approval", reason: "held-path" }), reason: "held path held/r.txt" });
       expect(s.next).toBeUndefined();
       expect(s.review).toBeUndefined();
       expect(calls()).toBe(n + 1);
       expect(JSON.parse(readFileSync(join(jobsDir, r.json.run, "review.json"), "utf8"))).toMatchObject({ verdict: "pass" });
       noSecondReview(r.json.run);
       // One run, one Ask: no land run, and nothing on origin/main.
-      expect(runsOf("rheld").map((x) => [x.kind, x.condition])).toEqual([["build", "awaiting"]]);
+      expect(runsOf("rheld").map((x) => [x.kind, x.condition])).toEqual([["build", "waiting"]]);
       await drop("rheld");
     });
 
@@ -68,8 +68,8 @@ describe("a factory run", () => {
       rmSync(join(fakeLog, "holdonce"), { force: true });
       await job("fac", "rheldhold", "Goal: rheldhold REVIEW:holdonce\nACTION: commit held/h.txt\n");
       const rs = runsOf("rheldhold");
-      expect(rs[0]).toMatchObject({ condition: "stuck", failed: "review" });
-      expect(rs.at(-1)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ reason: "held-path" }) });
+      expect(rs[0]).toMatchObject({ condition: "returned", failed: "review" });
+      expect(rs.at(-1)).toMatchObject({ condition: "waiting", ask: expect.objectContaining({ reason: "held-path" }) });
       for (const x of rs) noSecondReview(x.id);
       await drop("rheldhold");
     }, 30_000);

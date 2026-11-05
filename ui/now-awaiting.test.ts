@@ -27,9 +27,9 @@ test("an old prose note gets a Problem with no tag or lead, Approve recommendati
 /** The case text the director writes when it escalates: until then, the row offers no action. */
 const CASE = { situation: "The director sent it to you." };
 const sample = (reason: string): { runs: any[]; issues: any[]; lessons: any[] } => {
-  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", condition: "awaiting", ask: { kind: why === "held-path" || why === "review" ? "approval" : "input", reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
+  const run = (why: string, o: object = {}) => ({ runs: [job({ name: "aleph-27", condition: "waiting", ask: { kind: why === "held-path" || why === "review" ? "approval" : "input", reason: why, ...CASE }, reason: "<task-notification>x</task-notification> y", item: { id: 27, title: "T" }, ...o })], issues: [] as any[], lessons: [] as any[] });
   const iss = (o: any) => ({ runs: [] as any[], issues: [{ ...issue(7), title: "T", ...o, ask: { kind: "input", reason: o.reason, question: o.question, options: [], why: [], ...CASE } }], lessons: [] as any[] });
-  if (["held-path", "review"].includes(reason)) return run(reason, reason === "review" ? { reviewCall: { call: "ask", reason: "r" } } : {});
+  if (["held-path", "review"].includes(reason)) return run(reason, reason === "review" ? { reviewCall: { call: "waiting", reason: "r" } } : {});
   if (reason === "question") return run("question", { question: "<agent-message>q</agent-message> Which?" });
   if (reason.startsWith("proposal-")) return { runs: [] as any[], issues: [] as any[], lessons: [{ ...prop, kind: reason.slice(9), target: { check: "aleph checks", "claude-md": "aleph/CLAUDE.md", skill: "skills/aleph/SKILL.md" }[reason.slice(9)] }] };
   const q: Record<string, object> = {
@@ -53,7 +53,7 @@ test("the deny and answer inputs render hidden", () => {
 });
 
 test("an ask and a stuck run are one Alerts section, and the stuck card has the Ask card structure in the red tone", () => {
-  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { kind: "input", reason: "question", question: "q", options: [], why: [], situation: "s" } }], []), stuck: [job({ name: "aleph-30", condition: "stuck", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
+  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { kind: "input", reason: "question", question: "q", options: [], why: [], situation: "s" } }], []), stuck: [job({ name: "aleph-30", condition: "failed", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
   const h = view.renderNeeds(s);
   expect(h).toContain('<h2 id="h-needs">Alerts</h2><span class="count">2</span>');
   expect(h).not.toContain("Stuck or failed");

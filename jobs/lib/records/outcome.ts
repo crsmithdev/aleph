@@ -7,14 +7,14 @@
 import type { Run } from "./ledger.ts";
 
 export type Cause =
-  | "no-commit" | "time-box" | "stalled" | "infra" | "lock-busy"
-  | "check" | "conflict" | "moved" | "own-list" | "reviewer" | "no-answer" | "other";
+  | "no-commit" | "timeout" | "stalled" | "infra" | "locked"
+  | "check" | "conflict" | "moved" | "review" | "unanswered" | "other";
 
 /**
  * What a drop means, as a closed code on the run's state. `cause` is why the run stopped; `fate` is what the
  * drop means. A drop with no fate is valid and writes no `fate`.
  */
-export type Fate = "duplicate" | "already-met" | "by-hand";
+export type Fate = "duplicate" | "met" | "manual";
 
 /** The cause on a run's state, and the check's name for the cause `check`. */
 export type Stated = { cause: Cause; checkName?: string };
@@ -23,13 +23,13 @@ export const LOCK_BUSY = "job lock busy";
 
 const SENTENCES: [RegExp, Cause][] = [
   [/^no commit$/, "no-commit"],
-  [/^time box$/, "time-box"],
-  [/^job lock busy$/, "lock-busy"],
+  [/^time box$/, "timeout"],
+  [/^job lock busy$/, "locked"],
   [/^(fetch failed|systemd-run failed|worktree gone|checkout failed|bundle failed)/, "infra"],
   [/^merge conflict/, "conflict"],
   [/^main moved during the land; land again$/, "moved"],
-  [/^the branch changes docs\/todo\.md;/, "own-list"],
-  [/^(malformed (verdict|plan)|failed):/, "no-answer"],
+  [/^the branch changes docs\/todo\.md;/, "other"],
+  [/^(malformed (verdict|plan)|failed):/, "unanswered"],
 ];
 
 /** What an exact sentence of the unit states, or null. A drop's sentence is free prose and states nothing. */

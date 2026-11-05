@@ -3,27 +3,27 @@ import { newsLine, type Run } from "./ledger.ts";
 import { setCodes } from "../../../lib/naming.ts";
 import { causeOf, failedCheckOf } from "./outcome.ts";
 
-const run = (o: Partial<Run>) => ({ kind: "build", job: "j", name: "n", repo: "fac", condition: "stuck", told: false, started: "", ...o }) as Run;
+const run = (o: Partial<Run>) => ({ kind: "build", job: "j", name: "n", repo: "fac", condition: "failed", told: false, started: "", ...o }) as Run;
 
 test("a stated cause wins over the sentence, so a drop does not change it", () => {
-  expect(causeOf(run({ cause: "time-box", condition: "dropped", reason: "no commit" }))).toBe("time-box");
+  expect(causeOf(run({ cause: "timeout", condition: "dropped", reason: "no commit" }))).toBe("timeout");
   expect(failedCheckOf(run({ cause: "check", checkName: "tests", condition: "dropped", reason: "not needed" }))).toBe("tests");
 });
 
 test.each([
   ["no commit", "no-commit", undefined],
-  ["time box", "time-box", undefined],
-  ["job lock busy", "lock-busy", undefined],
+  ["time box", "timeout", undefined],
+  ["job lock busy", "locked", undefined],
   ["fetch failed: x", "infra", undefined],
   ["fetch failed", "infra", undefined],
   ["merge conflict: a.ts", "conflict", undefined],
   ["main moved during the land; land again", "moved", undefined],
-  ["the branch changes docs/todo.md; change the list with aleph issue", "own-list", undefined],
+  ["the branch changes docs/todo.md; change the list with aleph issue", "other", undefined],
   ["tests failed", "check", "tests"],
   ["timed out: check types", "check", "types"],
-  ["malformed verdict: x", "no-answer", undefined],
-  ["malformed plan: x", "no-answer", undefined],
-  ["failed: x", "no-answer", undefined],
+  ["malformed verdict: x", "unanswered", undefined],
+  ["malformed plan: x", "unanswered", undefined],
+  ["failed: x", "unanswered", undefined],
 ] as const)("an old run with the sentence %p has the cause %p", (reason, cause, check) => {
   expect(causeOf(run({ reason }))).toBe(cause);
   expect(failedCheckOf(run({ reason }))).toBe(check);

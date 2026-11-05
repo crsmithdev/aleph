@@ -112,7 +112,7 @@ test("endLost ends a run when its lock is free, and leaves one whose lock is hel
   } finally {
     release();
   }
-  expect(readRun(free.folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict", cause: "no-answer" });
+  expect(readRun(free.folder)).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict", cause: "unanswered" });
   expect(readRun(held.folder)?.condition).toBe("running");
   expect(readRun(other.folder)?.condition).toBe("running");
   expect(readRun(done.folder)?.reason).toBe("kept");

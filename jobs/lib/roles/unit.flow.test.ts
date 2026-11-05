@@ -43,7 +43,7 @@ describe("job", () => {
     test("drop writes the fate by-hand, none with --quiet, and --fate overrides it", async () => {
       await actionJob("alpha", "commit p.txt");
       await drop("alpha", "not needed");
-      expect(state((await jobView("alpha")).json.run.id)).toMatchObject({ fate: "by-hand", reason: "not needed" });
+      expect(state((await jobView("alpha")).json.run.id)).toMatchObject({ fate: "manual", reason: "not needed" });
       await actionJob("alpha", "commit q.txt");
       await drop("alpha", "", true);
       expect(state((await jobView("alpha")).json.run.id).fate).toBeUndefined();
@@ -74,8 +74,8 @@ describe("the state rule", () => {
 
   test("a question needs Chris", async () => {
     const r = await actionJob("asks", "question");
-    expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
-    expect(told).toContain("asks awaiting question");
+    expect(state(r.json.run)).toMatchObject({ condition: "waiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
+    expect(told).toContain("asks waiting question");
   });
 
   test("an untracked file fails", async () => {

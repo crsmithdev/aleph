@@ -7,7 +7,7 @@ import type { Job, NewIssue } from "./state.ts";
 /** Stored case text the fixtures put on their Ask while a test sets it. */
 let STORE: Partial<Ask> | undefined;
 const run = (reason: string, extra: Partial<Job> = {}): Job => ({
-  name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, condition: "awaiting", started: "2026-10-28T00:00:00Z",
+  name: "aleph-27", repo: "aleph", item: { id: 27, title: "a title" }, condition: "waiting", started: "2026-10-28T00:00:00Z",
   ask: { kind: reason === "held-path" || reason === "review" ? "approval" : "input", reason, ...STORE },
   run: { kind: "build", started: "2026-10-28T00:00:00Z" }, defaults: [], followups: [], ...extra,
 } as Job);
@@ -23,7 +23,7 @@ const ofIssues = (...issues: NewIssue[]) => asks({ runs: [], issues }, []);
 
 const CASES: Record<string, () => ReturnType<typeof asks>> = {
   "held-path": () => ofRuns(run("held-path", { reason: "changes hooks/x.ts" })),
-  review: () => ofRuns(run("review", { reviewCall: { call: "back", reason: "tests are missing" } })),
+  review: () => ofRuns(run("review", { reviewCall: { call: "returned", reason: "tests are missing" } })),
   question: () => ofRuns(run("question", { question: "Which port?" })),
   "no-commit": () => ofIssues(issue({ reason: "no-commit", question: "the last 3 runs of this goal ended with no commit, so the factory stopped starting it; rewrite the goal." })),
   "run-cap": () => ofIssues(issue({ reason: "run-cap", question: RUN_CAP })),
@@ -85,7 +85,7 @@ describe("asks", () => {
 });
 
 describe("stuck rows", () => {
-  const stuck = run("held-path", { condition: "stuck", reason: "no commit" });
+  const stuck = run("held-path", { condition: "failed", reason: "no commit" });
   const open = new Map([["aleph-12", { title: "Land the base", href: "#/issues/aleph/12" }]]);
   test("an item waiting on an open issue gets its id and title", () => {
     const b = stuckBlocker(stuck, "aleph-12", open);

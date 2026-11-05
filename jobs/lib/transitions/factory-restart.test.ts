@@ -73,7 +73,7 @@ test("a goal whose run a host restart killed keeps its rerun: the next no commit
   const f = fakes();
   f.start = async () => null;
   await dispatchIssues(f.start, f.land, f.rescue);
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit" });
   await dispatchIssues(f.start, f.land, f.rescue);
   expect(f.calls).toEqual([`drop fac-${id}`, `drop fac-${id}`]);
   expect(ask(id)).toBeNull();
@@ -161,12 +161,12 @@ test("a land killed by a host restart fails and lands again, and the goal does n
 
 // A run held before v6 phase 6, whose second review a host restart killed: call.md says PENDING from before the boot.
 test("an old held run with a PENDING call.md from before the boot is left alone: no review starts and the run keeps its Ask", async () => {
-  const r = mk(`fac-${newIssue()}`, "build", "awaiting", { ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": "PENDING\n" });
+  const r = mk(`fac-${newIssue()}`, "build", "waiting", { ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } }, { "call.md": "PENDING\n" });
   utimesSync(join(r.folder, "call.md"), new Date(BEFORE_BOOT), new Date(BEFORE_BOOT));
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([]);
-  expect(readRun(r.folder)).toMatchObject({ condition: "awaiting", ask: { reason: "held-path" } });
+  expect(readRun(r.folder)).toMatchObject({ condition: "waiting", ask: { reason: "held-path" } });
   expect(readFileSync(join(r.folder, "call.md"), "utf8")).toBe("PENDING\n");
 });
 

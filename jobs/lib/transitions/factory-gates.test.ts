@@ -38,7 +38,7 @@ test("gates returns the first factory gate, in the order pause, live cap", () =>
 });
 
 test("a stuck or failed run stops no gate: its open job keeps only its own goal not ready", () => {
-  expect(gates({ jobs: [[entry("build", "stuck")]] as any })).toBeNull();
+  expect(gates({ jobs: [[entry("build", "failed")]] as any })).toBeNull();
 });
 
 test("after a land that failed 'job lock busy' the passed agent run is waiting to land again", () => {

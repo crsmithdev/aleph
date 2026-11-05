@@ -15,7 +15,7 @@ import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
-import { awaiting, workerVerdict, type NoVerdict, type Outcome, type VerdictPorts } from "../gates/worker-verdict.ts";
+import { waiting, workerVerdict, type NoVerdict, type Outcome, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
@@ -230,7 +230,7 @@ async function dispatchFree(folder: string): Promise<void> {
 const workSeconds = (run: Run): number => (run.merge ? MERGE_SECONDS : jobSeconds());
 
 /**
- * The file in a run folder that marks a next step the pause kept: the run keeps `next`, so it does not show as stuck,
+ * The file in a run folder that marks a next step the pause kept: the run keeps `next`, so it does not show as failed,
  * and the first dispatch after the resume starts the step (`startKept`). A `next` without this file is history.
  */
 const PAUSED_NEXT = "paused-next";
@@ -373,7 +373,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   if (w.step.timedOut) return fail("stalled", "timed out: worker");
   if (w.step.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
   const question = questionOf(result);
-  if (question !== undefined) return { outcome: { ...awaiting("question", question), question }, code: 0 };
+  if (question !== undefined) return { outcome: { ...waiting("question", question), question }, code: 0 };
   const dirty = git(wt, "status", "--porcelain").out;
   if (dirty) return fail("other", `uncommitted: ${dirty.split("\n")[0].slice(3)}`);
   const refetched = fetchOrigin(wt);
@@ -398,12 +398,12 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 
 /**
  * A factory worker's run after its worker: the fields of its structured output, then the worker verdict on its branch.
- * A reply with no structured output is stuck. Only the branch's commits count: what the worker left uncommitted is not checked.
+ * A reply with no structured output fails. Only the branch's commits count: what the worker left uncommitted is not checked.
  */
 async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, w: Awaited<ReturnType<typeof agentCall>>, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const tip = `refs/heads/${run.branch!}`;
   const main = `refs/remotes/origin/${repo.main}`;
-  const stuck = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, cause, reason, ...extra }, code: 1 });
+  const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "failed" as const, cause, reason, ...extra }, code: 1 });
   const o = w.outcome;
   const reply = parseWorker(structuredOf(readFileSync(runFile(folder, "output.log"), "utf8")));
   writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? o.result : reply.summary);
@@ -415,10 +415,10 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
     await fileFollowups(repo, run, reply.followups);
     noteFlakes(repo, run, reply.flakes);
   }
-  if (w.cause) return stuck(w.cause.kind, w.cause.reason, facts);
-  if (typeof reply === "string") return stuck("other", `worker: ${reply}`, facts);
-  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`, facts); }
-  if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return stuck("no-commit", "no commit", facts);
+  if (w.cause) return stop(w.cause.kind, w.cause.reason, facts);
+  if (typeof reply === "string") return stop("other", `worker: ${reply}`, facts);
+  { const f = fetchOrigin(repo.path); if (!f.ok) return stop("infra", `fetch failed: ${f.out}`, facts); }
+  if (git(repo.path, "rev-list", "--count", `${main}..${tip}`).out === "0") return stop("no-commit", "no commit", facts);
   const base = git(repo.path, "merge-base", main, tip).out;
 
   // The fix rounds so far are the job record's; the runs sent back say what they failed.
@@ -426,7 +426,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   if (done) facts.round = done;
   const earlier = earlierRounds(jobById(run.job) ?? [], id);
   const changed = git(repo.path, "diff", "--name-only", base, tip).out.split("\n").filter(Boolean);
-  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit", facts);
+  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stop("no-commit", "no commit", facts);
   const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", tip).out };
   return workerVerdict({ earlier: earlier.map((e) => e.run), done, rounds: fixRounds(), facts, checked }, branchPorts(folder, run, repo, base, run.branch!, { changed, earlier, result: reply.summary, env }));
 }
@@ -541,7 +541,7 @@ async function oracleFailure(folder: string, run: Run, repo: Repo, branch: strin
 
 /**
  * A recheck: no worker. The run branch takes origin/<main> by a merge made in
- * memory (a conflict makes the run stuck and names the files), the checks run
+ * memory (a conflict fails the run and names the files), the checks run
  * on the result, then the held rule and the reviewer, as after a worker.
  */
 async function recheck(folder: string, run: Run, repo: Repo, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
@@ -549,11 +549,11 @@ async function recheck(folder: string, run: Run, repo: Repo, env: Record<string,
   const ref = `refs/heads/${branch}`;
   const main = `refs/remotes/origin/${repo.main}`;
   const phase = (p: string) => updateRun(folder, { phase: p });
-  const stuck = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "stuck" as const, cause, reason, ...extra }, code: 1 });
+  const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "failed" as const, cause, reason, ...extra }, code: 1 });
   phase("setup");
-  { const f = fetchOrigin(repo.path); if (!f.ok) return stuck("infra", `fetch failed: ${f.out}`); }
+  { const f = fetchOrigin(repo.path); if (!f.ok) return stop("infra", `fetch failed: ${f.out}`); }
   const tip = git(repo.path, "rev-parse", "--verify", "-q", ref);
-  if (!tip.ok) return stuck("other", `branch gone: ${branch}`);
+  if (!tip.ok) return stop("other", `branch gone: ${branch}`);
   const upstream = git(repo.path, "rev-parse", main).out;
   phase("merge");
   if (!git(repo.path, "merge-base", "--is-ancestor", upstream, tip.out).ok) {
@@ -561,17 +561,17 @@ async function recheck(folder: string, run: Run, repo: Repo, env: Record<string,
     const lines = merged.out.split("\n");
     if (!merged.ok) {
       const conflicts = lines.slice(1, lines.indexOf("") < 0 ? undefined : lines.indexOf("")).filter(Boolean);
-      return stuck("conflict", `merge conflict: ${conflicts.join(", ")}`, { conflicts });
+      return stop("conflict", `merge conflict: ${conflicts.join(", ")}`, { conflicts });
     }
     const c = git(repo.path, "commit-tree", lines[0], "-p", tip.out, "-p", upstream, "-m", `Merge ${repo.main} into ${branch}`);
-    if (!c.ok || !git(repo.path, "update-ref", ref, c.out, tip.out).ok) return stuck("other", `merge failed: ${c.out}`);
+    if (!c.ok || !git(repo.path, "update-ref", ref, c.out, tip.out).ok) return stop("other", `merge failed: ${c.out}`);
     // The job's worktree has the branch checked out: its files follow the moved branch.
     if (run.worktree && existsSync(run.worktree)) git(run.worktree, "reset", "-q", "--hard");
   }
   const base = git(repo.path, "merge-base", main, ref).out;
-  if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stuck("no-commit", "no commit");
+  if (git(repo.path, "rev-list", "--count", `${main}..${ref}`).out === "0") return stop("no-commit", "no commit");
   const changed = git(repo.path, "diff", "--name-only", base, ref).out.split("\n").filter(Boolean);
-  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stuck("no-commit", "no commit");
+  if (changed.length > 0 && changed.every((f) => f === "result.md")) return stop("no-commit", "no commit");
   const checked = { checkedBase: base, checkedTip: git(repo.path, "rev-parse", ref).out };
   return workerVerdict({ rounds: fixRounds(), facts: {}, checked }, branchPorts(folder, run, repo, base, branch, { changed, env }));
 }

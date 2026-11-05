@@ -124,7 +124,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   expect(e).toMatchObject({ outcome: "decided", applied: ["land"] });
   expect(landed).toEqual([`${key}-1`]);
   // The land runs in its own unit and the run still awaits: the Ask gets no "with you" text, so Chris sees no buttons on a landing run.
-  expect(readRun(folder)!.condition).toBe("awaiting");
+  expect(readRun(folder)!.condition).toBe("waiting");
   expect(readRun(folder)!.ask!.situation ?? "").toBe("");
 });
 
@@ -194,7 +194,7 @@ test("a paused factory starts no director run", async () => {
 
 test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
   fresh([{ title: "goal", specced: true, body: "Old spec.", ask: plain("which wins?") }]);
-  const folder = run({ name: `${key}-1`, on: `${key}-1`, condition: "stuck" });
+  const folder = run({ name: `${key}-1`, on: `${key}-1`, condition: "failed" });
   markAsked({ id: "w1", folder, run: { job: "w1" } as any }, "which wins?", specVersion(item(1)));
   reply([{ do: "edit-goal", body: "A clearer spec." }]);
   let dispatches = 0;

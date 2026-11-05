@@ -21,8 +21,8 @@ export interface AskItem {
   repo?: string;
   /** The priority of the issue, goal or run's item it is about; none for a proposal. */
   priority?: string;
-  /** An awaiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
-  /** An awaiting run: the goal or issue it is on. */ on?: string;
+  /** A waiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
+  /** A waiting run: the goal or issue it is on. */ on?: string;
   /** The date shown on the card, and when the work was first picked up (ISO, "" for never); a part of a goal as "n/m" of its parent. */
   at?: string; since?: string; part?: { n: number; m: number; parent: string; href: string };
   agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
@@ -78,8 +78,8 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
   "held-path": (c) => `The run for ${c.id} changes a path the repo holds for your review, so the factory did not land it.`,
   review: (c) => {
     const r = c.run?.reviewCall;
-    if (r?.call === "back") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
-    if (r?.call === "ask") return `The reviewer left ${c.id} to you${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
+    if (r?.call === "returned") return `The reviewer sent ${c.id} back twice${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
+    if (r?.call === "waiting") return `The reviewer left ${c.id} to you${r.reason ? `: ${clean(r.reason).replace(/\.$/, "")}` : ""}.`;
     const back = /^the reviewer sent it back twice:\s*(.*)$/s.exec(c.run?.reason ?? "");
     if (back) return `The reviewer sent ${c.id} back twice: ${clean(back[1]).replace(/\.$/, "")}.`;
     return `The reviewer could not reach a verdict on ${c.id} in two tries.`;

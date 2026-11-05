@@ -19,7 +19,7 @@ const issueAsk = (n: number, reason: string, o: object = {}) => ({ id: `aleph-${
 
 /** One escalated Ask of each kind: a held run, an issue's question, and a no-commit stop. */
 const four = () => asksOf(
-  [job({ name: "aleph-27", condition: "awaiting", reason: "held path hooks/x.ts", item: { id: 27, title: "Digest" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })],
+  [job({ name: "aleph-27", condition: "waiting", reason: "held path hooks/x.ts", item: { id: 27, title: "Digest" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })],
   [
     issueAsk(41, "question", { ask: { kind: "input", reason: "question", question: "A or B?", options: [], why: [], ...CASE(["decide", "deny"], "decide") } }),
     issueAsk(42, "no-commit", { ask: { kind: "input", reason: "no-commit", question: "q", options: [], why: [], ...CASE(["rerun", "close"], "rerun") } }),
@@ -72,7 +72,7 @@ test("Technical details are closed by default and hold the director's details an
 });
 
 test("each held path names its change: a package file is a package change", () => {
-  const [i] = asksOf([job({ name: "aleph-28", condition: "awaiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })]);
+  const [i] = asksOf([job({ name: "aleph-28", condition: "waiting", reason: "held path bun.lock", item: { id: 28, title: "Bump" }, ask: { kind: "approval", reason: "held-path", ...CASE(["land", "drop"], "land") } })]);
   expect(i.tag).toBe("protected");
 });
 
@@ -99,7 +99,7 @@ test("an Ask still with the director shows its title and fixed text, and no butt
 });
 
 test("the id, priority, date and runtime sit inside the coloured box of an Ask card and of a stuck card", () => {
-  const stuck = view.renderNeeds({ asks: [], stuck: [job({ name: "aleph-30", condition: "stuck", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
+  const stuck = view.renderNeeds({ asks: [], stuck: [job({ name: "aleph-30", condition: "failed", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
   for (const row of [view.askRow({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), stuck]) {
     const [before, box] = row.split('<div class="ask-box">');
     expect(before).not.toContain('class="ih"');

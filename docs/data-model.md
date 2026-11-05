@@ -148,12 +148,14 @@ Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec versio
 | Field | Values |
 |---|---|
 | `kind` | `build`, `plain`, `land`, `intake`, `recheck`, `director`, `monitor`, `agent`, … |
-| `condition` | `running`, `passed`, `awaiting`, `failed`, `stuck`, `done`, `landed`, `dropped` |
-| `cause` (`outcome.ts`) | `no-commit`, `time-box`, `stalled`, `infra`, `lock-busy`, `check`, `conflict`, `moved`, `own-list`, `reviewer`, `no-answer`, `other` |
-| `fate` | `duplicate`, `already-met`, `by-hand` |
+| `condition` | `running`, `waiting`, `passed`, `returned`, `failed`, `landed`, `dropped`, `done` |
+| `cause` (`outcome.ts`) | `no-commit`, `timeout`, `stalled`, `infra`, `locked`, `check`, `conflict`, `moved`, `review`, `unanswered`, `other` |
+| `fate` | `duplicate`, `met`, `manual` |
 | `checks[]` | `{name, ok, seconds, tests?: {ran, passed, failed, skipped, failures[]}, rerun?, noVerdict?}` |
 
-A job is open while its latest run is `running`, `passed`, `awaiting`, `failed` or `stuck`.
+A job is open while its latest run is `running`, `passed`, `waiting`, `returned` or `failed`.
+
+A record from before `docs/naming.md` keeps its old words (`awaiting`, `stuck`, `time-box`, …). `record.ts` reads them as the new words; see "Old words" in `docs/naming.md`.
 
 ## Run folders: `runs/`
 

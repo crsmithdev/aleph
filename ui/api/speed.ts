@@ -111,8 +111,8 @@ export const CLASS_TEXT: Record<Class, string> = {
 };
 /** The breakdown's name of each stated cause that has one. */
 const CAUSE_NAME: Partial<Record<Cause, string>> = {
-  reviewer: "Reviewer sent back", check: "Checks failed",
-  "time-box": "Stalled or timed out", stalled: "Stalled or timed out",
+  review: "Reviewer sent back", check: "Checks failed",
+  timeout: "Stalled or timed out", stalled: "Stalled or timed out",
   "no-commit": "No commit", conflict: "Passed, not landed",
 };
 
@@ -185,8 +185,8 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     for (const l of lands) {
       const end = Date.parse(l.ended ?? "");
       if (Number.isFinite(end)) lastLand.set(g, Math.max(lastLand.get(g) ?? -Infinity, end));
-      // A held run lands from `awaiting`, so it counts for the land of its own job.
-      const cand = (agentsOf.get(g) ?? []).filter((a) => (passedState(a.condition) || (a.condition === "awaiting" && a.job === l.job)) && t0(a) < end).sort((a, b) => t0(b) - t0(a))[0];
+      // A held run lands from `waiting`, so it counts for the land of its own job.
+      const cand = (agentsOf.get(g) ?? []).filter((a) => (passedState(a.condition) || (a.condition === "waiting" && a.job === l.job)) && t0(a) < end).sort((a, b) => t0(b) - t0(a))[0];
       if (cand) { if (!landing.has(g)) landing.set(g, new Set()); landing.get(g)!.add(cand); }
     }
   }
@@ -206,7 +206,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     let cls: Class | null = null;
     if (lands.has(r)) cls = "landed";
     else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "returned";
-    else if (afterLand || r.fate === "already-met" || r.fate === "duplicate") cls = "failed";
+    else if (afterLand || r.fate === "met" || r.fate === "duplicate") cls = "failed";
     else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "reran";
     else if (["done", "dropped", GONE].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
@@ -214,7 +214,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
     else if (cls === "failed") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
     else if (cls === "reran" && startsBefore >= 3) row.cause = "Restart loop";
-    else if (r.condition === "awaiting") row.cause = "Needed Chris";
+    else if (r.condition === "waiting") row.cause = "Needed Chris";
     else if (r.failed === "review") row.cause = "Reviewer sent back";
     else if (r.failed) row.cause = "Checks failed";
     else if (stated) row.cause = stated;
@@ -223,7 +223,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     else if (/ failed$/.test(reason)) row.cause = "Checks failed";
     else if (/time box|stalled|timed out|lost/i.test(reason)) row.cause = "Stalled or timed out";
     else if (/no commit/i.test(reason)) row.cause = "No commit";
-    else if (r.fate === "by-hand") row.cause = "Needed Chris";
+    else if (r.fate === "manual") row.cause = "Needed Chris";
     else if (passedState(r.condition) || /conflict/i.test(reason)) row.cause = "Passed, not landed";
     else row.cause = "Other";
     rows.get(cls)!.push(row);
@@ -305,7 +305,7 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     const agents = rs.filter((r) => { const a = Date.parse(r.started), b = Date.parse(r.ended ?? ""); return isAgentRun(r.kind) && b >= a && b - a <= MAX_RUN; });
     const landed = Math.min(...rs.filter((r) => r.kind === "land" && (r.condition === "landed" || r.condition === "done")).map((r) => Date.parse(r.ended ?? "")).filter(Number.isFinite));
     // A job can run again after it lands; what finished the work is the last finish before the land.
-    const ends = agents.filter((r) => passedState(r.condition) || r.condition === "awaiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
+    const ends = agents.filter((r) => passedState(r.condition) || r.condition === "waiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
     if (!ends.length) continue;
     const owner = rs.find((r) => issueOf(r) !== undefined), key = owner && `${owner.repo}-${issueOf(owner)}`;
     const finished = Math.max(...ends), started = Math.min(...agents.map((r) => Date.parse(r.started)));
@@ -360,10 +360,10 @@ const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
 /**
  * The rows of OutcomeRow for the runs that started in `since`..`now`, without `baseline`.
  * What "succeeded" means, from what each role's run records:
- * - Worker (build, older "agent"): the run ends `passed`, `awaiting` or `landed`: its checks passed and the reviewer did not send it back. A reviewer or check that sent it back sets `failed`: that is a fail, not stuck.
+ * - Worker (build, older "agent"): the run ends `passed`, `waiting` or `landed`: its checks passed and the reviewer did not send it back. A run that a reviewer or a check sent back is `returned`: that is a fail, not stuck.
  * - Intake, Triage, Planner, Firefighter, Director: the run ends `passed` or `done`: the role applied its route or wrote its answer. These roles set no `failed`.
- * - Reviewer: it runs inside the build run and records no run, model or cost. Its verdict is read from the build: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `back`) is a fail; `review.call` of `land` is a pass. A reviewer that gave no verdict counts as neither. Its model is not recorded, so its row has the model "unset".
- * Stuck is a run that ended `stuck` with no `failed`, or with the cause `time-box` or `stalled`. Failed is any other end that is not running. A running run counts in `runs` only.
+ * - Reviewer: it runs inside the build run and records no run, model or cost. Its verdict is read from the build: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `returned`) is a fail; `review.call` of `passed` is a pass. A reviewer that gave no verdict counts as neither. Its model is not recorded, so its row has the model "unset".
+ * Stuck is a run that ended `failed` with no `failed` field, or with the cause `timeout` or `stalled`. Failed is any other end that is not running. A running run counts in `runs` only.
  */
 function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[] {
   const order = (k: string) => AGENT_ROLES.findIndex(([r]) => r === k) + 1 || AGENT_ROLES.length + 1;
@@ -380,9 +380,9 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   for (const r of runs) {
     const a = Date.parse(r.started);
     if (!(a >= since && a < now)) continue;
-    const ok = passedState(r.condition) || r.condition === "awaiting";
+    const ok = passedState(r.condition) || r.condition === "waiting";
     const cause = causeOf(r);
-    const stuck = !ok && r.condition !== "running" && (cause === "time-box" || cause === "stalled" || (r.condition === "stuck" && !r.failed));
+    const stuck = !ok && r.condition !== "running" && (cause === "timeout" || cause === "stalled" || (r.condition === "failed" && !r.failed));
     const fail = !ok && !stuck && r.condition !== "running";
     const build = isBuild(r.kind) || r.kind === "agent";
     const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.kind)?.[0];
@@ -398,7 +398,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
       }
     }
     if (build) {
-      const back = r.failed === "review" || r.review?.call === "back", land = ok || r.review?.call === "land";
+      const back = r.failed === "review" || r.review?.call === "returned", land = ok || r.review?.call === "passed";
       if (back || land) {
         const v = row("reviewer", "unset");
         v.runs++;

@@ -45,8 +45,8 @@ describe("words", () => {
   });
   test("a sent-back stuck job is returned, any other stuck job failed", () => {
     expect(n.jobState("stuck", "review")).toBe("returned");
-    expect(n.jobState("stuck", "check")).toBe("returned");
-    expect(n.jobState("stuck", "infra")).toBe("failed");
+    expect(n.jobState("stuck", "test")).toBe("returned");
+    expect(n.jobState("stuck")).toBe("failed");
   });
   test("every set is lower case with no separator marks", () => {
     const sets = [n.STATUSES, n.ACTIONS, n.SUBS, n.ACTORS, n.KINDS, n.STAGES, n.LANES, n.SPEEDS];
@@ -86,7 +86,7 @@ const files = (dir: string): string[] =>
   });
 
 /** Copies that later phases move onto lib/naming.js; each phase deletes its entries here. */
-const LEFT = new Set<string>(["ui/lib.js"]);
+const LEFT = new Set<string>([]);
 
 test("no other file defines a state list", () => {
   const hits = ["jobs", "issues", "ui", "hooks"].flatMap((d) => files(join(ROOT, d)))

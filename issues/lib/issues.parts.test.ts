@@ -13,7 +13,7 @@ const show = async (ref: number | string) => (await issueShow("fac", ref)).json;
 const statusLine = async (ref: string) => { const s = (await status(ref)).json; return `${s.id} ${s.stage}: ${s.why}`; };
 
 describe("the drop of a part", () => {
-  test("dropping the only open part sets the part-dropped Ask, and status says awaiting", async () => {
+  test("dropping the only open part sets the part-dropped Ask, and status says waiting", async () => {
     const n = await add();
     seedPart("fac", n, 1);
     const r = await issueClose("fac", `${n}.1`, "drop", "not needed");
@@ -21,7 +21,7 @@ describe("the drop of a part", () => {
     const issue = await show(n);
     expect(issue.ask).toMatchObject({ kind: "input", reason: "part-dropped" });
     expect(issue.ask.options.map((o: any) => o.label)).toEqual(["Close with what landed", "Plan the missing part"]);
-    expect(await statusLine(`fac-${n}`)).toContain("awaiting");
+    expect(await statusLine(`fac-${n}`)).toContain("waiting");
   });
 
   test("a second open part means no Ask", async () => {

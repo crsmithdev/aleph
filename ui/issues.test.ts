@@ -126,7 +126,7 @@ describe("GET /api/issues", () => {
   test("a row carries its stage", async () => {
     const rows = await getJson("/api/issues?repo=fac");
     expect(rows[0].stage).toBe("done");
-    expect(rows[2].stage).toBe("blocked");
+    expect(rows[2].stage).toBe("held");
   });
 });
 

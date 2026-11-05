@@ -7,7 +7,7 @@ import { judgeChoice } from "../hooks/lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
+import { askOf as runAsk, isWaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
@@ -229,16 +229,16 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       const url = commitUrl(repo, v.commit, bases);
       if (url) job.commitUrl = url;
     }
-    if (v.condition === "awaiting" && v.stat) job.stat = v.stat;
-    // An awaiting run with no ask of its own asks a question, as stage() reads it.
-    const stored = isAwaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) : undefined;
-    const asked = isAwaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
+    if (v.condition === "waiting" && v.stat) job.stat = v.stat;
+    // A waiting run with no ask of its own asks a question, as stage() reads it.
+    const stored = isWaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) : undefined;
+    const asked = isWaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
     if (asked) job.ask = asked;
     if (asked && v.review) job.reviewCall = v.review;
     if (v.checks) job.checks = v.checks;
     if (v.check === "open") job.check = "open";
     const trailers = v.condition === "landed" ? landedTrailers(repo, v.commit)
-      : v.condition === "awaiting" ? [
+      : v.condition === "waiting" ? [
         ...needsYouIssue(v.repo, todo),
         { key: "Job", value: v.job },
         ...(needsOf(asked) === "held" || needsOf(asked) === "review" ? [{ key: "Held-by", value: "Chris" }] : []),
@@ -306,13 +306,13 @@ export function state(now = new Date()): State {
     }
     // An intake, triage, planner or facts run sorts a goal and never lands; it shows only when it awaits you.
     if (last.kind === "intake" || last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
-      if (isOpen(runs) && isAwaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
+      if (isOpen(runs) && isWaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
       continue;
     }
     if (isOpen(runs)) {
       const real = lastReal(runs).run;
-      if (isAwaiting(real.condition)) needs.push(toJob(runs));
-      else if (real.condition === "stuck" || real.condition === "failed") stuck.push(toJob(runs));
+      if (isWaiting(real.condition)) needs.push(toJob(runs));
+      else if (real.condition === "returned" || real.condition === "failed") stuck.push(toJob(runs));
       else {
         liveJobs.add(real.job);
         if (onOf(real) !== undefined) liveItems.add(`${real.repo}/${onOf(real)}`);
@@ -411,7 +411,7 @@ export function state(now = new Date()): State {
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
       if (top) openIssues++;
       const ask = askOf(id);
-      if (st === "awaiting" && ask) {
+      if (st === "waiting" && ask) {
         const c = card();
         const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
         if (q) c.question = q;
@@ -421,7 +421,7 @@ export function state(now = new Date()): State {
         c.askKind = ask.kind;
         awaitingItems.push(c);
       }
-      else if (st === "queued" || st === "blocked") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated ?? item.fm.created ?? "") });
+      else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated ?? item.fm.created ?? "") });
       else if (st === "new" && !isTracker(item)) fresh.push({ ...card(), status: st });
       // A parent shows a card in Running only while it waits to close: every part is done.
       if (st === "working" && mineParts.length) {

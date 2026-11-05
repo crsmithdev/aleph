@@ -76,7 +76,7 @@ beforeAll(() => {
   run("20261027-000002-a", { job: "fac-9", name: "fac-9", repo: "fac", branch: "factory/fac-9", condition: "passed", started: ago(3.5), ended: ago(3), cost: 0.25, defaults: ["a? -> b"] },
     { "result.md": "fixed it\nFOLLOWUP: tidy\n", "review.md": "Looks right.\nVERDICT: hold quoted\n", "review.json": '{"verdict":"pass","summary":"Looks right.","failures":[]}' });
   run("20261027-000003-a", { job: "fac-9", name: "fac-9", kind: "land", repo: "fac", branch: "factory/fac-9", condition: "landed", started: ago(2.5), ended: ago(2), commit: "abc1234" });
-  run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "stuck", started: ago(1) });
+  run("20261027-000004-a", { job: "oth-1", name: "oth-1", repo: "oth", condition: "failed", started: ago(1) });
   run("20261027-000005-a", { job: "fac-2", name: "fac-2", repo: "fac", branch: "factory/gone", condition: "landed", started: ago(24 * 20), ended: ago(24 * 20 - 1) });
 });
 afterAll(() => {
@@ -107,17 +107,17 @@ describe("a land that found the job lock busy", () => {
 describe("GET /api/jobs", () => {
   test("filters by repo, state and days", async () => {
     expect((await (await get("/api/jobs?repo=fac")).json()).map((j: any) => j.name)).toEqual(["fac-9"]);
-    expect((await (await get("/api/jobs?condition=stuck")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
+    expect((await (await get("/api/jobs?condition=failed")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
     expect((await (await get("/api/jobs?days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1", "fac-9", "fac-2"]);
     expect(await (await get("/api/jobs?days=x")).status).toBe(400);
   });
   test("?role keeps the jobs with a run of that role, next to ?condition", async () => {
     run("20261027-000006-a", { kind: "intake", job: "oth-3", name: "oth-3", repo: "oth", condition: "failed", started: ago(1) });
     run("20261027-000007-a", { job: "fac-3", name: "fac-3", repo: "fac", condition: "failed", started: ago(1) });
-    run("20261027-000008-a", { job: "fac-4", name: "fac-4", repo: "fac", condition: "stuck", started: ago(1) });
+    run("20261027-000008-a", { job: "fac-4", name: "fac-4", repo: "fac", condition: "returned", failed: "review", started: ago(1) });
     try {
       const names = async (q: string) => (await (await get(`/api/jobs?${q}`)).json()).map((j: any) => j.name).sort();
-      expect(await names("role=worker&condition=failed")).toEqual(["fac-3"]);
+      expect(await names("role=worker&condition=failed")).toEqual(["fac-3", "oth-1"]);
       expect(await names("role=intake")).toEqual(["oth-3"]);
     } finally { for (const id of ["20261027-000006-a", "20261027-000007-a", "20261027-000008-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
   });
@@ -174,7 +174,7 @@ describe("GET /api/jobs/:name", () => {
     }, true);
     const [gone, open, shut] = refs;
     const ids = ["20261027-000050-a", "20261027-000051-a"];
-    run(ids[0], { job: `oth-${open}`, name: `oth-${open}`, repo: "oth", condition: "stuck", on: `oth-${open}`, started: ago(1) });
+    run(ids[0], { job: `oth-${open}`, name: `oth-${open}`, repo: "oth", condition: "failed", on: `oth-${open}`, started: ago(1) });
     run(ids[1], { job: `oth-${shut}`, name: `oth-${shut}`, repo: "oth", condition: "landed", on: `oth-${shut}`, started: ago(1) });
     const j = await (await get(`/api/jobs/oth-${open}`)).json();
     const closed = await (await get(`/api/jobs/oth-${shut}`)).json();
@@ -365,7 +365,7 @@ describe("render", () => {
 });
 
 describe("a worker round the reviewer sent back", () => {
-  test("reads returned while a later worker run follows, stuck when it is the last", async () => {
+  test("an old stored stuck run that the reviewer sent back reads returned", async () => {
     const ids = ["20261102-000101-a", "20261102-000102-a", "20261102-000103-a"];
     const job = { job: "oth-sb", name: "oth-sb", repo: "oth", branch: "factory/oth-sb", failed: "review", started: ago(4), ended: ago(3.5) };
     run(ids[0], { ...job, condition: "stuck", reason: "needs work", next: "worker", round: 0 }, { "review.md": "Redo it.\nVERDICT: fail\n" });

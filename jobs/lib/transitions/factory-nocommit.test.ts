@@ -13,7 +13,7 @@ afterEach(() => { setSystemTime(); teardown(); });
 
 test("no commit, the item on main by its Item trailer: the open item is closed with a note naming the commit", async () => {
   const id = newIssue();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit" });
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${id}\nJob: other`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
   const sha = Bun.spawnSync(["git", "rev-parse", "--short=7", "HEAD"], { cwd: join(ctx.base, "repo") }).stdout.toString().trim();

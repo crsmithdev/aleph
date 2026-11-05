@@ -404,7 +404,7 @@ function giveUp(repo: Repo, id: number, reason: string): string | null {
   try { before = JSON.parse(readFileSync(mark, "utf8")); } catch {}
   const runs = allRuns().filter((e) => e.run.kind === "intake" && e.run.repo === repo.key && onOf(e.run) === id
     && !before.includes(e.id)
-    && causeOf(e.run) === "no-answer");
+    && causeOf(e.run) === "unanswered");
   const n = runs.length;
   if (n < INTAKE_TRIES()) return null;
   const grant = always("intake-failed")?.action;
@@ -470,7 +470,7 @@ async function intakeItem(repo: Repo, id: number, counts: Counts, skipped: strin
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
     const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
-    const noAnswer = (reason: string) => run.end(reason, { cause: "no-answer" });
+    const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.
       const got = await withMainClone(repo, "intake-", async (dir): Promise<Route | { failed: string }> => {

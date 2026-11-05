@@ -41,10 +41,26 @@ test("getRun finds a run that another process wrote: it scans the records", () =
   expect(record.getRun("missing")).toBeNull();
 });
 
+test("a record from before docs/naming.md reads in the new words: waiting, returned, failed, the subs and the review call", () => {
+  const old = (o: Record<string, unknown>) => ({ ...run(), ...o }) as unknown as record.RunRecord;
+  record.write({ ...record.empty("aleph-7"), runs: [
+    old({ id: "1", condition: "awaiting", review: { call: "back", reason: "no" } }),
+    old({ id: "2", condition: "stuck", cause: "reviewer", failed: "review", next: "worker" }),
+    old({ id: "3", condition: "stuck", cause: "time-box" }),
+    old({ id: "4", condition: "dropped", fate: "by-hand" }),
+  ] });
+  const runs = record.read("aleph-7")!.runs;
+  expect(runs.map((x) => x.condition)).toEqual(["waiting", "returned", "failed", "dropped"]);
+  expect(runs.map((x) => x.cause ?? x.fate)).toEqual([undefined, "review", "timeout", "manual"]);
+  expect(runs[0].review).toEqual({ call: "returned", reason: "no" });
+  expect(record.getRun("2")?.condition).toBe("returned");
+  expect(record.all()[0].runs[0].condition).toBe("waiting");
+});
+
 test("a write derives the cost of all runs and the fix rounds of the newest job", () => {
   record.putRun("1", run({ job: "old", failed: "tests", condition: "failed", cost: 1 }));
   record.putRun("2", run({ job: "new", failed: "tests", condition: "failed", cost: 0.25 }));
-  record.putRun("3", run({ job: "new", failed: "review", condition: "stuck", cost: 0.5 }));
+  record.putRun("3", run({ job: "new", failed: "review", condition: "returned", cost: 0.5 }));
   record.putRun("4", run({ job: "new", kind: "land", failed: "tests", condition: "failed" }));
   const r = record.read("aleph-7")!;
   expect(r.cost).toBe(1.75);
@@ -71,18 +87,18 @@ const rec = (runs: Partial<Run>[], o: Partial<record.JobRecord> = {}): record.Jo
 test("next: an Ask waits for Chris before anything else", () => {
   const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
   expect(record.next(rec([{ condition: "passed" }], { ask })).step).toBe("ask");
-  expect(record.next(rec([{ condition: "awaiting" }])).step).toBe("ask");
+  expect(record.next(rec([{ condition: "waiting" }])).step).toBe("ask");
 });
 
 test("next: each run condition gives its step", () => {
   const cases: [Partial<Run>[], record.Step["step"]][] = [
     [[{ condition: "running" }], "run"],
-    [[{ condition: "stuck", failed: "tests", next: "worker" }], "worker"],
+    [[{ condition: "returned", failed: "tests", next: "worker" }], "worker"],
     [[{ condition: "passed", next: "land" }], "land"],
     [[{ kind: "land", condition: "failed", next: "land" }], "land"],
     [[{ condition: "passed" }], "wait"],
-    [[{ condition: "passed", next: "land" }, { kind: "land", condition: "failed", cause: "lock-busy" }], "land"],
-    [[{ condition: "stuck", reason: "no commit" }], "rescue"],
+    [[{ condition: "passed", next: "land" }, { kind: "land", condition: "failed", cause: "locked" }], "land"],
+    [[{ condition: "failed", reason: "no commit" }], "rescue"],
     [[{ condition: "failed" }], "rescue"],
     [[{ kind: "land", condition: "landed", commit: "abc1234def" }], "none"],
     [[{ condition: "dropped", reason: "dropped by Chris" }], "none"],
@@ -93,7 +109,7 @@ test("next: each run condition gives its step", () => {
 
 test("next: a stuck run the factory asked Chris about waits", () => {
   const events = [{ at: AT, kind: "asked", what: "q", run: "0" }];
-  expect(record.next(rec([{ condition: "stuck" }], { events })).step).toBe("wait");
+  expect(record.next(rec([{ condition: "failed" }], { events })).step).toBe("wait");
 });
 
 test("next: a goal with no run waits for its hold, else starts", () => {
@@ -134,7 +150,7 @@ test("an Ask set on a record and cleared keeps its set time and clear time, thro
 test("a land or build run of the job that joins after the run an Ask is on clears that Ask, a director run or another job's land does not, and the stuck run's reason is the next step", () => {
   const ask = { kind: "input" as const, reason: "question", question: "the reviewer sent it back once: free-text column gets td.wide", options: [], why: [] };
   setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
-  record.putRun("1", run({ condition: "awaiting", ask }));
+  record.putRun("1", run({ condition: "waiting", ask }));
   setSystemTime(new Date("2026-11-04T10:02:00.000Z"));
   record.putRun("2", run({ kind: "director", condition: "passed" }));
   record.putRun("25", run({ kind: "land", job: "j2", condition: "landed" }));
@@ -143,7 +159,7 @@ test("a land or build run of the job that joins after the run an Ask is on clear
   setSystemTime(new Date("2026-11-04T10:05:00.000Z"));
   record.putRun("3", run({ kind: "land", condition: "failed", failed: "conflict" }));
   setSystemTime(new Date("2026-11-04T10:10:00.000Z"));
-  record.putRun("4", run({ condition: "stuck", reason: "doc claims: x after 2 fix rounds" }));
+  record.putRun("4", run({ condition: "failed", reason: "doc claims: x after 2 fix rounds" }));
   const r = record.read("aleph-7")!;
   expect(r.ask).toBeNull();
   expect(r.asks!.at(-1)!.cleared).toBe("2026-11-04T10:05:00.000Z");

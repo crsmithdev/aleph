@@ -5,7 +5,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { LANES, lane, shortId, word } from "../../../lib/naming.ts";
+import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
@@ -13,7 +13,7 @@ import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { factoryLog } from "../infra/layout.ts";
 import { itemOnMain, repoStages } from "../records/status.ts";
 import { countsLine, intakeIssue, type Counts } from "../roles/intake.ts";
-import { allRuns, askOf as runAskOf, isAwaiting, loadRegistry, lock, updateRun, type Entry, type Repo } from "../records/ledger.ts";
+import { allRuns, askOf as runAskOf, isWaiting, loadRegistry, lock, updateRun, type Entry, type Repo } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { clearRerun, issueBrief } from "./continuation.ts";
@@ -77,7 +77,7 @@ type Land = (name: string) => Promise<string | null>;
 /**
  * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
  * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
- * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands and the close of parents whose parts are done.
+ * steps a pause kept (`startKept`), the rescue of returned, failed, killed and lost runs, the lands and the close of parents whose parts are done.
  * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 6 gates of issueDecision in
  * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds starts. Each start
  * holds a lock on its goal and re-reads the jobs under it, so two dispatches at once start a goal once. `start`
@@ -435,16 +435,16 @@ export function behind(repo: Repo): string | null {
 
 const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
 
-/** The heading a run's report entry goes under: the report lane of its stored condition. */
-const laneOf = (e: Entry): string => lane(word("state", e.run.condition));
+/** The heading a run's report entry goes under: the report lane of its condition. */
+const laneOf = (e: Entry): string => lane(e.run.condition);
 
 /** One run as the report gives it. */
 function entry(e: Entry): string {
   const r = e.run;
-  const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
+  const needs = isWaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
   const lane = laneOf(e);
   const prio = (lane === "landed" || lane === "waiting") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
-  const head = `${shortId(r.name)} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
+  const head = `${shortId(r.name)} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "returned" && r.condition !== "failed" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.condition === "landed" && r.commit) {
     lines.push(`  commit ${r.commit.slice(0, 7)}`);
@@ -559,7 +559,7 @@ export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Pro
   const t = await intakeIssue(repo, id);
   factoryLog(`intake ${name}: ${countsLine(t.counts)}${t.skipped.length ? `; skipped ${t.skipped.join("; ")}` : ""}`);
   if (t.counts.build) dispatchDetached();
-  const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "no-answer");
+  const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "unanswered");
   const doc = reader({ fetch: false }).list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
   if (failed && item && issues.status(item) === "open" && !askOf(refIn(repo.key, item)) && !isSorted(doc!, item, repo)) {
@@ -581,7 +581,7 @@ const recheckIssue = (name: string) => refusal(async () => { await (await rechec
  * dispatch or the run before it set. A run's end calls it, so an intake the live cap held starts when a slot frees.
  */
 export async function runDispatch(p: Starts = starts): Promise<Awaited<ReturnType<typeof dispatchIssues>> & { intaking?: string[] }> {
-  // `ALEPH_RESCUE=off` leaves a stuck or failed run as it is: its open job keeps its goal not ready.
+  // `ALEPH_RESCUE=off` leaves a returned or failed run as it is: its open job keeps its goal not ready.
   const d = await dispatchIssues(startIssue, landPart, !rescueOn() ? undefined : { drop: dropIssue, recheck: recheckIssue });
   if (d.paused) return d;
   const intaking = intakeQueued(p.intake);

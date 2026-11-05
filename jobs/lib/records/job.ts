@@ -43,7 +43,7 @@ export const jobById = (id: string, jobs = allJobs()): Job | undefined => jobs.f
 export const issue = (j: Job): number | string | undefined => j.map((e) => onOf(e.run)).findLast((n) => n !== undefined);
 
 /** The job's last run that did something to it: a land that found the job lock busy did nothing, so the run before it counts; a facts run is not the job's state. */
-export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.condition === "failed" && causeOf(e.run) === "lock-busy")) ?? j.at(-1)!;
+export const lastReal = (j: Job): Entry => j.findLast((e) => e.run.kind !== "facts" && !(e.run.kind === "land" && e.run.condition === "failed" && causeOf(e.run) === "locked")) ?? j.at(-1)!;
 
 /** The job's next step: record.ts `next` over the job's runs, with the Ask, wait and events of its record. */
 export function stepOf(j: Job): record.Step {
@@ -149,8 +149,8 @@ export function view(j: Job): JobView {
     const val = latest(k);
     if (val) v[k] = val;
   }
-  // The latest checks that ran; a stuck or failed job shows its last run's, even none.
-  const checks = r.condition === "stuck" || r.condition === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
+  // The latest checks that ran; a returned or failed job shows its last run's, even none.
+  const checks = r.condition === "returned" || r.condition === "failed" ? j.findLast((e) => e.run.checks)?.run.checks : j.findLast((e) => e.run.checks?.length)?.run.checks;
   if (Array.isArray(checks)) v.checks = checks;
   const review = reviewOf(last);
   if (review) v.review = { call: review.call, ...(review.reason !== undefined && { reason: review.reason }) };

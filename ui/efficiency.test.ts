@@ -30,13 +30,13 @@ beforeAll(() => {
   // g1 landed first try; g2 landed after two fix rounds; g3 landed first try; g4 is not landed
   run("g1", { kind: "build", condition: "passed", cost: 1, ...span(8, 600) });
   run("g1", { kind: "land", condition: "landed", ...span(9, 30) });
-  run("g2", { kind: "build", condition: "stuck", failed: "tests", cost: 2, ...span(8, 600) });
-  run("g2", { kind: "build", condition: "stuck", failed: "review", round: 1, cost: 2, ...span(9, 600) });
+  run("g2", { kind: "build", condition: "returned", failed: "tests", cost: 2, ...span(8, 600) });
+  run("g2", { kind: "build", condition: "returned", failed: "review", round: 1, cost: 2, ...span(9, 600) });
   run("g2", { kind: "build", condition: "passed", round: 2, cost: 2, ...span(10, 600) });
   run("g2", { kind: "land", condition: "landed", ...span(11, 30) });
   run("g3", { kind: "build", condition: "passed", cost: 3, ...span(8, 600) });
   run("g3", { kind: "land", condition: "landed", ...span(12, 30) });
-  run("g4", { kind: "build", condition: "stuck", failed: "tests", cost: 9, ...span(8, 600) });
+  run("g4", { kind: "build", condition: "returned", failed: "tests", cost: 9, ...span(8, 600) });
 });
 afterAll(() => {
   restore();

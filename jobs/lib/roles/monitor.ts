@@ -60,7 +60,7 @@ async function read(day: string, table: Table): Promise<Report> {
     run.end(r.findings.length ? `${r.findings.length} findings` : "nothing looks off");
   } catch (e: any) {
     r.error = String(e?.message ?? e);
-    run.end(`failed: ${r.error}`, { cause: "no-answer" });
+    run.end(`failed: ${r.error}`, { cause: "unanswered" });
   }
   mkdirSync(monitorDir(), { recursive: true });
   writeFileSync(reportFile(day), JSON.stringify(r, null, 2) + "\n");

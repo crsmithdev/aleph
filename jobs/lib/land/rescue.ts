@@ -1,5 +1,5 @@
 /**
- * The safe default actions for stuck and failed runs, taken by the dispatch that sees them: a duplicate
+ * The safe default actions for returned and failed runs, taken by the dispatch that sees them: a duplicate
  * is dropped; a no-commit run whose worker says the goal is already met is checked on main, and closed when
  * the checks pass there; no commit and checks that fail after a land merge and a land that hits a merge conflict drop the run for one rerun
  * of the goal, with a note; a time box drops the run and sends the issue to intake to split it, with no rerun, and an Ask
@@ -143,10 +143,10 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
   return out;
 }
 
-/** The killed, lost, stuck and failed jobs that the rescue acts on. */
+/** The killed, lost, returned and failed jobs that the rescue acts on. */
 export const toRescue = (jobs: Job[]): Job[] => [...killed(jobs), ...lost(jobs), ...stuckJobs(jobs)];
 
-/** Take the safe default action for each killed, lost, stuck or failed job, one job at a time under its lock. */
+/** Take the safe default action for each killed, lost, returned or failed job, one job at a time under its lock. */
 export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
   await releaseEdited(act);
   const pending = toRescue;
@@ -171,7 +171,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
 export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
   const last = lastReal(runs), r = last.run;
   const waits = waitsForSpecEdit(last);
-  if (!waits || !r.repo || !isOpen(runs) || (r.condition !== "stuck" && r.condition !== "failed")) return false;
+  if (!waits || !r.repo || !isOpen(runs) || (r.condition !== "returned" && r.condition !== "failed")) return false;
   const issue = issueOf(runs);
   const item = issue === undefined ? undefined : reader().item(r.repo, issue);
   return !!loadRegistry()[r.repo] && !!item && issues.status(item) === "open" && !isVersion(item, waits.version);
@@ -309,7 +309,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
 
   if (isKilled) {
     const step = killedStep(stuck, isAgentRun(r.kind) && hasWork(stuck));
-    // The real recheck takes only a stuck or failed run, so the killed run ends failed first, as a killed land does.
+    // The real recheck takes only a returned or failed run, so the killed run ends failed first, as a killed land does.
     if (r.kind === "land" || step.action === "recheck") {
       markEnded(last.folder, 143);
       updateRun(last.folder, { condition: "failed", reason, cause: "other", phase: undefined, told: true, ended: new Date().toISOString() });
@@ -357,7 +357,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     markRescued(last, key);
     return take(duplicateStep(stuck, found?.onMain));
   }
-  if (key === "time-box") {
+  if (key === "timeout") {
     // No rerun of the same goal: a plain issue goes to intake to be split; a part, or an issue split already, asks.
     if (earlier || splitAlready(stuck)) return chris(`${name} ran out of its time box again, and it cannot be split further (${earlier ? "an earlier run hit the time box too" : "it is a part, or it has been split already"}). Drop it, or change the goal?`, choice(`${name} ran out of its time box and cannot be split: how should the factory go on?`, ["Intake cannot split it again"]));
     markRescued(last, key);

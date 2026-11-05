@@ -54,7 +54,7 @@ test("aleph-1206: the local checks pass but GitHub CI on main is red, so the cla
 
 test("no commit, the item open, first time: dropped with no fate and the goal reruns once, with the last 20 lines of result.md", async () => {
   const id = newIssue();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit" }, { "result.md": lines(30) });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
@@ -71,11 +71,11 @@ const dotted = (ref: string) => readList({ key: "fac" })!.items.find((i) => issu
 
 test("a dotted goal's rescue note reaches the goal, and a second no-commit run asks Chris on it", async () => {
   const ref = dottedPart();
-  mk(`fac-${ref}`, "build", "stuck", { reason: "no commit" });
+  mk(`fac-${ref}`, "build", "failed", { reason: "no commit" });
   const f = fakes();
   await dispatch(f);
   expect(dotted(ref).notes.join("\n")).toContain("the last run made no commit");
-  mk(`fac-${ref}`, "build", "stuck", { reason: "no commit" });
+  mk(`fac-${ref}`, "build", "failed", { reason: "no commit" });
   await dispatch(f);
   expect(askOf(`fac-${ref}`)).not.toBeNull();
 });
@@ -96,11 +96,11 @@ test("a pass that began before a pause starts nothing after it", async () => {
 
 test("the second no-commit run with no claim asks Chris: no drop and the issue stays open", async () => {
   const id = newIssue();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit" }, { "result.md": lines(3) });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit" }, { "result.md": lines(30) });
   await dispatch(f);
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
   expect(ask(id)).not.toBeNull();
@@ -110,7 +110,7 @@ test("the second no-commit run with no claim asks Chris: no drop and the issue s
 test("a second infrastructure failure of one goal gets an Ask", async () => {
   const id = newIssue();
   const a = mk(`fac-${id}`, "build", "passed", { land: true });
-  mk(`fac-${id}`, "land", "stuck", { reason: "fetch failed", job: a.job });
+  mk(`fac-${id}`, "land", "failed", { reason: "fetch failed", job: a.job });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toEqual([`land fac-${id}`]);
@@ -144,7 +144,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
   mkdirSync(join(ctx.base, "factory"), { recursive: true });
   writeFileSync(join(ctx.base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: "2026-11-04T12:00:00.000Z" } }));
   const id = newIssue();
-  mk(`fac-${id}`, "build", "stuck", { reason: "tests failed after 2 fix rounds" });
+  mk(`fac-${id}`, "build", "failed", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   await dispatch(f);
   expect(f.calls).toContain(`drop fac-${id}`);
@@ -156,7 +156,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {
   const id = newIssue();
   const name = `fac-${id}`;
-  const { folder } = mk(name, "build", "stuck", { reason: "weird" });
+  const { folder } = mk(name, "build", "failed", { reason: "weird" });
   // Dispatch A holds the lock; the stuck state B must act on appears only after A is done.
   const release = (await lock(`rescue-fac-${name}`, 0))!;
   const f = fakes();

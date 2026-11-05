@@ -40,8 +40,8 @@ export interface LogEntry { at: string; by: By; item: string; what: string; coun
 export function rules(entries: LogEntry[] = [], records = record.all(), now = Date.now(), ms = LOG_DAYS * DAY) {
   const granted = readAlways();
   const from = now - ms, SLACK = 60_000;
-  // An entry from before record.asks kept the reason takes the reason of the run's Ask: the record keeps it in rec.ask while rec.askRun awaits.
-  const runReason = (rec: record.JobRecord, set: string) => rec.runs.some((x) => x.id === rec.askRun && x.condition === "awaiting" && Date.parse(x.started) <= Date.parse(set)) ? rec.ask?.reason : undefined;
+  // An entry from before record.asks kept the reason takes the reason of the run's Ask: the record keeps it in rec.ask while rec.askRun waits.
+  const runReason = (rec: record.JobRecord, set: string) => rec.runs.some((x) => x.id === rec.askRun && x.condition === "waiting" && Date.parse(x.started) <= Date.parse(set)) ? rec.ask?.reason : undefined;
   const asks = records.flatMap((rec) => (rec.asks ?? []).map((a) => ({ ...a, reason: a.reason ?? runReason(rec, a.set), issue: rec.issue, rec }))
     .filter((a) => a.reason && Date.parse(a.set) >= from));
   return Object.entries(ASK_REASONS).map(([reason, r]) => {

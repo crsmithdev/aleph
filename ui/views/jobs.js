@@ -159,10 +159,10 @@ export function jobSegments(j, now = Date.now()) {
 /** The KPI strip of a job: builds, elapsed, cost, change, and what checked it. */
 function jobKpis(j, now = Date.now()) {
   const runs = spans(workRuns(j), now), builds = runs.filter((x) => x.r.kind === "worker");
-  const bad = builds.filter((x) => ["stuck", "failed"].includes(x.r.condition)).length, last = builds.at(-1)?.r.condition;
+  const bad = builds.filter((x) => ["returned", "failed"].includes(x.r.condition)).length, last = builds.at(-1)?.r.condition;
   const end = runs.length ? Math.max(...runs.map((x) => x.end)) : NaN, c = change(j.stat);
   return renderKpis([
-    { k: "Builds", v: esc(builds.length), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "awaiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
+    { k: "Builds", v: esc(builds.length), sub: bad ? `<span class="bad">${esc(`${bad} stuck${["passed", "landed", "waiting"].includes(last) ? ", then fixed" : ""}`)}</span>` : "" },
     { k: "Elapsed", v: esc(runs.length ? dur((end - runs[0].start) / 1000) : "–"), sub: esc(runs.length ? fromTo(runs[0].start, end) : j.started ? `started ${when(j.started)}` : "") },
     { k: "Cost", v: j.cost !== undefined ? esc(money(j.cost)) : "–", sub: j.wk ? esc(wkText(j.wk)) : "" },
     { k: "Change", v: esc(c?.lines ?? "–"), sub: [c ? esc(c.files) : "", j.commit ? shortSha(j) : ""].filter(Boolean).join(", ") },
@@ -195,7 +195,7 @@ export function renderJob(j) {
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
     pageHead(j.item?.title || id, { aside: nav }) + `${pills}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
-    (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +
+    (j.condition === "waiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +
     (j.spec ? panel("spec", "Spec", `<div class="md">${md(j.spec)}</div>`) : "") +
     (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") +

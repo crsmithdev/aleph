@@ -149,7 +149,7 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
     if (!release) continue;
     try {
       // Read again under the lock: the run may have ended since the list was read.
-      if (readRun(folder)?.condition === "running") endRun(folder, `failed: its process ended before ${before}`, { cause: "no-answer" });
+      if (readRun(folder)?.condition === "running") endRun(folder, `failed: its process ended before ${before}`, { cause: "unanswered" });
     } finally {
       release();
     }
@@ -160,7 +160,7 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
 export type AgentRole = "worker" | "reviewer";
 
 /** Why a call gave no usable reply, and its kind. */
-export interface AgentCause { kind: "stalled" | "time-box" | "other"; reason: string }
+export interface AgentCause { kind: "stalled" | "timeout" | "other"; reason: string }
 
 /** How a call ended: its exit code, and whether the time box or the stall watch stopped it. */
 export interface Step { code: number; timedOut: boolean; stalled: boolean }
@@ -176,7 +176,7 @@ export const stallReason = (): string => {
 /** The cause the call states: a stall, the time box, or a reply that is not ok; null when the reply is ok. */
 export function agentCause(r: Step, o: Outcome): AgentCause | null {
   if (r.stalled) return { kind: "stalled", reason: stallReason() };
-  if (r.timedOut) return { kind: "time-box", reason: "time box" };
+  if (r.timedOut) return { kind: "timeout", reason: "time box" };
   if (!o.ok) return { kind: "other", reason: o.line || `exit ${r.code}` };
   return null;
 }

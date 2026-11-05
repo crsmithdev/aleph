@@ -32,15 +32,15 @@ test("report lists each new episode page once, and nothing without an episodes f
 
 test("the report groups each unshown run under its report lane, in the order of the naming standard", () => {
   mk("fac-11", "build", "landed", { shown: false });
-  mk("fac-12", "build", "awaiting", { shown: false });
-  mk("fac-13", "build", "stuck", { shown: false });
+  mk("fac-12", "build", "waiting", { shown: false });
+  mk("fac-13", "build", "failed", { shown: false });
   const out = report();
   const at = (s: string) => out.indexOf(s);
   expect(at("landed:")).toBeLessThan(at("waiting:"));
   expect(at("waiting:")).toBeLessThan(at("failed:"));
   expect(out).toContain("landed:\nfac-11 landed");
-  expect(out).toContain("waiting:\nfac-12 awaiting");
-  expect(out).toContain("failed:\nfac-13 stuck");
+  expect(out).toContain("waiting:\nfac-12 waiting");
+  expect(out).toContain("failed:\nfac-13 failed");
   expect(out).not.toContain("delivered:");
   expect(out).not.toContain("needs you:");
   expect(out).not.toContain("stuck:");
@@ -121,7 +121,7 @@ test("a goal that names a busy file an open job also names waits; a job waiting 
   const out = await dispatchIssues(start);
   expect(calls).toEqual([]);
   expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both change the busy file jobs/busy.ts`);
-  writeRun(folder, { ...readRun(folder)!, condition: "awaiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  writeRun(folder, { ...readRun(folder)!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
   expect(calls).toEqual([`fac-${second}`]);
 });
@@ -137,7 +137,7 @@ test("a goal that uses the gpt-oss server waits for an open job that uses it; a 
   const out = await dispatchIssues(start);
   expect(calls).toEqual([`fac-${third}`]);
   expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both use the gpt-oss server`);
-  writeRun(folder, { ...readRun(folder)!, condition: "awaiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  writeRun(folder, { ...readRun(folder)!, condition: "waiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
   await dispatchIssues(start);
   expect(calls).toContain(`fac-${second}`);
 });
@@ -164,7 +164,7 @@ test("stalled lists what could move: a goal, a new issue and a passed run, each 
   setPaused(true);
   expect(stalled()).toEqual([]);
   setPaused(false);
-  writeRun(folder, { ...readRun(folder)!, condition: "stuck", next: undefined });
+  writeRun(folder, { ...readRun(folder)!, condition: "failed", next: undefined });
   // A stuck run holds only its own goal, which its open job keeps not ready; the new issue can still move.
   expect(stalled()).toEqual([`ingest:fac-${fresh}`]);
 });

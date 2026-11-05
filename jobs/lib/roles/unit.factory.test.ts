@@ -35,14 +35,14 @@ describe("a factory run", () => {
     expect(env).not.toMatch(/^(ANTHROPIC_API_KEY|GH_TOKEN|GITHUB_TOKEN|CLAUDECODE)=./m);
   });
 
-  test("an error result, no result, a line after the result, or no commit ends stuck", async () => {
-    expect(state((await fjob("ferr", "error")).json.run)).toMatchObject({ condition: "stuck", reason: "API Error: 500" });
-    expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ condition: "stuck", reason: expect.stringContaining('"type":"assistant"') });
-    expect(state((await fjob("ftrail", "trailing")).json.run)).toMatchObject({ condition: "stuck", reason: "one more line" });
-    expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
-    expect(state((await fjob("fnoout", "nostructured")).json.run)).toMatchObject({ condition: "stuck", reason: "worker: no structured output" });
+  test("an error result, no result, a line after the result, or no commit ends failed", async () => {
+    expect(state((await fjob("ferr", "error")).json.run)).toMatchObject({ condition: "failed", reason: "API Error: 500" });
+    expect(state((await fjob("fnone", "noresult")).json.run)).toMatchObject({ condition: "failed", reason: expect.stringContaining('"type":"assistant"') });
+    expect(state((await fjob("ftrail", "trailing")).json.run)).toMatchObject({ condition: "failed", reason: "one more line" });
+    expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ condition: "failed", reason: "no commit" });
+    expect(state((await fjob("fnoout", "nostructured")).json.run)).toMatchObject({ condition: "failed", reason: "worker: no structured output" });
     expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--json-schema");
-    expect(told).toContain("ferr stuck");
+    expect(told).toContain("ferr failed");
     for (const n of ["ferr", "fnone", "ftrail", "fidle", "fnoout"]) await drop(n);
   });
 });

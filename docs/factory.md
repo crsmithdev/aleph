@@ -28,7 +28,7 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph report` | Runs not yet shown, how far each checkout is behind `origin/main`, and health lines |
 | `aleph land <name>` | Lands a held or reviewed run, with `Held-by: Chris` |
 | `aleph drop <name>` | Drops a run and deletes its branch |
-| `aleph recheck <name>` | Merges main into a stuck run's branch and checks it again, without a worker |
+| `aleph recheck <name>` | Merges main into a returned or failed run's branch and checks it again, without a worker |
 | `aleph pause` / `aleph resume` | Stops and restarts new runs |
 | `aleph always <list\|grant <reason> <action>\|revoke <reason>>` | Lists or changes the Always rules |
 | `aleph doctor [--fix] [--json]` | After an outage: clocks, git objects, units, `aleph.home` and lost runs |

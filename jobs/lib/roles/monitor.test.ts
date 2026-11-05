@@ -72,7 +72,7 @@ test("a reader that fails leaves a report with the table and the error, and the 
   const r = (await monitorStep(now))!;
   expect(r.error).toBe("the monitor reader exited 1");
   expect(r.findings).toEqual([]);
-  expect(allRuns().find((e) => e.run.kind === "monitor")!.run).toMatchObject({ condition: "done", cause: "no-answer" });
+  expect(allRuns().find((e) => e.run.kind === "monitor")!.run).toMatchObject({ condition: "done", cause: "unanswered" });
   expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 has no reading: the monitor reader exited 1");
 });
 

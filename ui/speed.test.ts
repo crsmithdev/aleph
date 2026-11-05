@@ -30,7 +30,7 @@ beforeAll(() => {
   // today: agents of 600 s (passed, tests 36), 1200 s (dropped), 1800 s (stuck, model unset), a 5 h broken clock
   run({ kind: "build", condition: "passed", model: "claude-opus-5-5", cost: 1, checks: [{ name: "tests", ok: true, seconds: 36 }, { name: "types", ok: true, seconds: 8 }], ...secs(0, 9, 600) });
   run({ kind: "build", condition: "dropped", model: "claude-opus-5-5", cost: 2, ...secs(0, 10, 1200) });
-  run({ kind: "build", condition: "stuck", cost: 3, ...secs(0, 10, 1800) });
+  run({ kind: "build", condition: "failed", cost: 3, ...secs(0, 10, 1800) });
   run({ kind: "build", condition: "passed", cost: 9, ...secs(0, 1, 5 * 3600) });
   run({ kind: "land", condition: "landed", ...secs(0, 9, 40) });
   run({ kind: "land", condition: "landed", ...secs(0, 9, 46) }); // both without an issue: one key
@@ -85,9 +85,9 @@ test("phases: implement spans a job's fix rounds, land starts at the last finish
   const none = { issue: new Map(), goal: new Map() };
   const p = phases([
     // A fix round: 1 hour from the first start to the last finish, then 10 minutes to the land, then a run after the land.
-    r("a", "build", "stuck", t(6), t(6, 10)), r("a", "build", "passed", t(6, 30), t(7)), r("a", "land", "landed", t(7, 5), t(7, 10)), r("a", "build", "passed", t(8), t(8, 5)),
+    r("a", "build", "failed", t(6), t(6, 10)), r("a", "build", "passed", t(6, 30), t(7)), r("a", "land", "landed", t(7, 5), t(7, 10)), r("a", "build", "passed", t(8), t(8, 5)),
     // A held run that a land took 30 minutes later.
-    r("b", "build", "awaiting", t(9), t(9, 20)), r("b", "land", "landed", t(9, 45), t(9, 50)),
+    r("b", "build", "waiting", t(9), t(9, 20)), r("b", "land", "landed", t(9, 45), t(9, 50)),
     // Finished and not landed: implement only.
     r("c", "build", "passed", t(10), t(10, 40)),
     // Never finished: neither.
@@ -127,7 +127,7 @@ test("classify: one run of each class, with its cause", () => {
     ({ kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, condition: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
   const runs = [
     // goal 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
-    r("z", 1, 1, 0, { condition: "stuck", reason: "agent run z: stalled" }),
+    r("z", 1, 1, 0, { condition: "failed", reason: "agent run z: stalled" }),
     r("a", 1, 2, 0, { condition: "failed", failed: "tests" }),
     r("a", 1, 3, 0),
     { kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
@@ -135,7 +135,7 @@ test("classify: one run of each class, with its cause", () => {
     // goal 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
     r("l1", 2, 6, 0), r("l2", 2, 6, 10), r("l3", 2, 6, 20), r("l4", 2, 6, 30),
     // goal 3 is dropped
-    r("d", 3, 8, 0, { condition: "stuck", noCommit: true }),
+    r("d", 3, 8, 0, { condition: "failed", noCommit: true }),
     // goal 4 is open and unclassed
     r("o", 4, 9, 0),
   ];
@@ -182,7 +182,7 @@ test("a build run counts as an agent run", () => {
 
 test("classify: a held run that later landed is landed, its earlier held rounds are returned", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
-  const r = (o: Record<string, unknown>) => ({ kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", condition: "awaiting", reason: "held path package.json", ...o }) as any;
+  const r = (o: Record<string, unknown>) => ({ kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", condition: "waiting", reason: "held path package.json", ...o }) as any;
   const land = (job: string, state: string, h: number) => ({ kind: "land", job, name: job, repo: "fx", on: "fx-1", condition: state, started: t(h, 20), ended: t(h, 25) }) as any;
   const out = classify([
     r({ started: t(2), ended: t(2, 10) }),
@@ -199,14 +199,14 @@ test("classify: a held run that later landed is landed, its earlier held rounds 
 test("classify: a drop's fate, not its prose, sets the failed class and the Needed Chris cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (todo: number, o: Record<string, unknown>) =>
-    ({ kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "stuck", started: t(todo), ended: t(todo, 10), ...o }) as any;
+    ({ kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "failed", started: t(todo), ended: t(todo, 10), ...o }) as any;
   const runs = [
-    r(1, { fate: "already-met", reason: "agent run j1: stopped" }),
+    r(1, { fate: "met", reason: "agent run j1: stopped" }),
     r(2, { fate: "duplicate" }),
     // No fate: the prose says duplicate or already met, but the run is a plain drop.
     r(3, { reason: "found it already met" }),
     r(4, { reason: "duplicate of 2" }),
-    r(5, { fate: "by-hand" }),
+    r(5, { fate: "manual" }),
     // No fate: the prose says by hand or aleph drop, but it has no Needed Chris cause.
     r(6, { reason: "dropped by hand" }),
     r(7, { reason: "aleph drop" }),
@@ -248,7 +248,7 @@ test("phases: intake runs from the filing to the first triage end, queue from th
   const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", null], ["fx-3", 1000_000]]) };
   const p = phases([
     r(1, "triage", "done", 1000_000, 1060_000),
-    r(1, "build", "stuck", 1660_000, 1700_000), r(1, "build", "passed", 1800_000, 1900_000),
+    r(1, "build", "failed", 1660_000, 1700_000), r(1, "build", "passed", 1800_000, 1900_000),
     r(1, "land", "landed", 2000_000, 2100_000), r(1, "land", "landed", 3000_000, 4600_000),
     // fx-2 has a bulk filing: a queue from its triage, and no intake or lead. fx-3 has no triage: it queues from its filing.
     r(2, "triage", "done", 1000_000, 1060_000), r(2, "build", "passed", 1120_000, 1200_000), r(2, "land", "landed", 1300_000, 1400_000),
@@ -286,7 +286,7 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
   const e = (kind: string, a: number, b: number | null, extra: object = {}) => ({ folder: `f${a}`, id: `f${a}`, run: { kind, condition: b === null ? "running" : "passed", started: iso(a), ...(b === null ? {} : { ended: iso(b) }), ...extra } }) as any;
   const runs = [
-    e("build", 1, 3, { model: "sonnet", review: { call: "land" } }), e("build", 2, 4, { model: "sonnet" }), e("agent", 3, 3.5, { model: "haiku" }),
+    e("build", 1, 3, { model: "sonnet", review: { call: "passed" } }), e("build", 2, 4, { model: "sonnet" }), e("agent", 3, 3.5, { model: "haiku" }),
     e("build", 7, null), e("build", 6, null), e("build", 0, 9.5), // a live run, a lost one, and a broken clock
     e("triage", 2, 2.5, { model: "claude-opus-5-5" }), e("director", 4, 5, { model: "claude-fable-5-1" }), e("land", 1, 8), e("recheck", 1, 2),
     e("build", 5, 6, { model: "sonnet" }),
@@ -311,8 +311,8 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
   const runs = [
     // Window 10..20: haiku has one pass that landed first time, one run sent back by the reviewer, one timed out; gpt-oss has one failed check.
     e("build", 10, { model: "claude-haiku", cost: 1, job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
-    e("build", 11, { model: "claude-haiku", cost: 0.5, condition: "stuck", failed: "review", reason: "reviewer: no" }),
-    e("build", 13, { model: "claude-haiku", condition: "stuck", cause: "time-box" }),
+    e("build", 11, { model: "claude-haiku", cost: 0.5, condition: "returned", failed: "review", reason: "reviewer: no" }),
+    e("build", 13, { model: "claude-haiku", condition: "failed", cause: "timeout" }),
     e("build", 14, { model: "gpt-oss-20b", condition: "failed", failed: "tests", cost: 0.25 }),
     e("triage", 15, { model: "gpt-oss-20b" }),
     // The span before, 0..10: haiku one of two, gpt-oss none.
@@ -334,7 +334,7 @@ test("agents: the all-roles success rate, its baseline, the worker first pass an
   const runs = [
     // Window 10..20: job a landed first time, job b landed after a fix round, a gpt-oss triage passed, a gpt-oss build failed.
     e("build", 10, { model: "claude-haiku", job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
-    e("build", 13, { model: "claude-haiku", job: "b", condition: "stuck", failed: "review" }), e("build", 14, { model: "claude-haiku", job: "b" }), e("land", 16, { job: "b", condition: "landed" }),
+    e("build", 13, { model: "claude-haiku", job: "b", condition: "returned", failed: "review" }), e("build", 14, { model: "claude-haiku", job: "b" }), e("land", 16, { job: "b", condition: "landed" }),
     e("triage", 15, { model: "gpt-oss-20b" }), e("build", 17, { model: "gpt-oss-20b", condition: "failed", failed: "tests" }),
     // The span before, 0..10: one of two ended runs succeeded.
     e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", condition: "failed" }),
@@ -346,7 +346,7 @@ test("agents: the all-roles success rate, its baseline, the worker first pass an
 
 test("an unlanded run of an issue that left the store is Dropped", () => {
   const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
-  const r = { job: "g", name: "g", repo: "fx", on: "fx-659", condition: "stuck", kind: "build", started: t(8), ended: t(9) } as any;
+  const r = { job: "g", name: "g", repo: "fx", on: "fx-659", condition: "failed", kind: "build", started: t(8), ended: t(9) } as any;
   const since = new Date(2026, 9, 27).getTime(), at = new Date(2026, 9, 28, 15).getTime();
   expect(classify([r], () => "gone", since, at, null).classes.find((c) => c.key === "dropped")!.runs).toBe(1);
   expect(classify([r], () => undefined, since, at, null).notCounted.runs).toBe(1);

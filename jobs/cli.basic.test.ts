@@ -92,7 +92,7 @@ describe("job", () => {
     await actionJob("alpha", "commit r.txt");
     const r = await aleph(["drop", "alpha", "--fate", "bogus"]);
     expect(r.code).toBe(1);
-    expect(r.stderr).toContain("duplicate, already-met, by-hand");
+    expect(r.stderr).toContain("duplicate, met, manual");
     expect((await jobView("alpha")).json.condition).not.toBe("dropped");
     await drop("alpha");
   });

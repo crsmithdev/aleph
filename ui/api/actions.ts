@@ -5,7 +5,7 @@
  * name, run as a subprocess by the launcher; the page offers nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own, so a web page in the browser cannot post here. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
-import { askOf, isAwaiting, loadRegistry, onOf } from "../../jobs/lib/records/ledger.ts";
+import { askOf, isWaiting, loadRegistry, onOf } from "../../jobs/lib/records/ledger.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
 import { latestJob } from "../../jobs/lib/records/job.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
@@ -40,7 +40,7 @@ const answerAndRerun: Handler = async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const last = find(name);
   if (!last) return text(`no job named ${name}`, 404);
-  if (!isAwaiting(last.run.condition) || may("chris", "answer", askOf(last.run), { run: true })) return text("this run is not waiting for an answer", 409);
+  if (!isWaiting(last.run.condition) || may("chris", "answer", askOf(last.run), { run: true })) return text("this run is not waiting for an answer", 409);
   const body: any = await req.json().catch(() => ({}));
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);

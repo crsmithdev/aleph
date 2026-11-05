@@ -18,7 +18,7 @@ export const SUBS = [
 ];
 export const ACTORS = ["human", "rule", "gate", "worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"];
 export const KINDS = ["build", "recheck", "land", "intake", "director", "monitor"];
-export const STAGES = ["new", "queued", "held", "working", "waiting", "landing", "done", "dropped", "parked"];
+export const STAGES = ["new", "queued", "held", "working", "waiting", "failed", "landing", "done", "dropped", "parked"];
 export const LANES = ["landed", "waiting", "failed", "other"];
 export const SPEEDS = ["landed", "returned", "failed", "reran", "dropped"];
 export const ROUTINES = ["monitor"];
@@ -49,9 +49,12 @@ export function word(set: string, w: string): string {
   return OLD[set]?.[w] ?? w;
 }
 
-/** A job's state from a stored condition: a `stuck` job that a reviewer or a check sent back is `returned`. */
+/**
+ * A job's state from a stored condition. `failed` is the stored name of what sent the job back: `review` or a check's
+ * name. A `stuck` job that a reviewer or a check sent back is `returned`; any other `stuck` job is `failed`.
+ */
 export const jobState = (condition: string, failed?: string): string =>
-  condition === "stuck" && (failed === "review" || failed === "check") ? "returned" : word("state", condition);
+  condition === "stuck" && failed ? "returned" : word("state", condition);
 
 // ---------- IDs ----------
 

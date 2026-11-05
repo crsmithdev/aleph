@@ -170,12 +170,15 @@ export function afterLand(run: Run, lands?: Run[]): Run["next"] {
   return undefined;
 }
 
-/** Whether the next run is a merge run: a conflict bounce, not an `own-list` one. */
-export const isMergeBounce = (land: Run): boolean => causeOf(land) !== "own-list" && !!land.conflicts?.length;
+/** A land that refused the branch because it changes TODO_PATH: its cause is `other` and its one conflict is TODO_PATH. */
+const isOwnList = (land: Run): boolean => causeOf(land) === "other" && !!land.conflicts?.includes(TODO_PATH);
+
+/** Whether the next run is a merge run: a conflict bounce, not an own-list one. */
+export const isMergeBounce = (land: Run): boolean => !isOwnList(land) && !!land.conflicts?.length;
 
 /** What the worker reads when a land sent the job back. */
 export function bounceNote(run: Run): string {
-  return causeOf(run) === "own-list"
+  return isOwnList(run)
     ? `The land refused this branch because it changes ${TODO_PATH}. Only aleph issue writes the list. The lists live in the work store now. Remove ${TODO_PATH} from the branch, commit, and make each change to the list with aleph issue.`
     : `The land conflicted with origin/main in: ${(run.conflicts ?? []).join(", ")}. Merge origin/main into this branch, resolve each conflict so that the change on main and this job's change both survive, run the tests, and commit.`;
 }
@@ -262,7 +265,7 @@ export function repeatedFailure(folder: string, check: string, earlier: { id: st
 export const questionOf = (result: string): string | undefined => lastTagged(result, "QUESTION");
 
 // ---------------------------------------------------------------------------
-// The rescue of a stuck or failed run: which case it is, and the step
+// The rescue of a returned or failed run: which case it is, and the step
 
 /** The case of the safe default action taken on the run, or "" when none was. */
 export const rescued = (e: Entry): string => record.read(record.keyOf(e.run))?.events.findLast((x) => x.kind === "rescued" && x.run === e.id)?.what ?? "";
@@ -277,14 +280,14 @@ export function askedQuestion(r: Run): string | null {
   return r.question;
 }
 
-export type RescueCase = "duplicate" | "no-commit" | "claimed" | "time-box" | "infra" | "land-checks" | "land-conflict";
+export type RescueCase = "duplicate" | "no-commit" | "claimed" | "timeout" | "infra" | "land-checks" | "land-conflict";
 
-/** Which safe case a stuck or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
+/** Which safe case a returned or failed run is in, or null: not safe. `claim` is the worker's "already met" reason, if it made one. */
 export function rescueCase(r: Run, onMainOrDone: boolean, claim: string | null): RescueCase | null {
   const cause = causeOf(r);
   if (cause === "no-commit") return onMainOrDone ? "duplicate" : claim !== null ? "claimed" : "no-commit";
-  if (cause === "time-box" && r.kind !== "land") return "time-box";
-  if (cause === "infra" || cause === "lock-busy") return "infra";
+  if (cause === "timeout" && r.kind !== "land") return "timeout";
+  if (cause === "infra" || cause === "locked") return "infra";
   if (r.kind === "land" && cause === "conflict") return "land-conflict";
   if (r.kind === "land" && !r.conflicts?.length && cause === "check") return "land-checks";
   return null;
@@ -317,7 +320,7 @@ export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
 /** The step for a worker's claim that the goal is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
 export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
   const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
-  if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "already-met" };
+  if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "met" };
   return {
     action: "drop",
     rerun: `The last run said the goal is already met (${claim}), but the checks do not pass on origin/${repo.main} (${red}). Make the change the goal asks for.${failure ? ` The failure happens on GitHub CI: a pass on this host does not show the goal met. The CI failure:\n\n\`\`\`\n${failure}\n\`\`\`` : ""}`,
@@ -327,7 +330,7 @@ export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: s
 
 /** The step for a run that ended with no commit while the item is already on main (`onMain`) or done. */
 export function duplicateStep({ last, r }: Stuck, onMain: string | null | undefined): Step {
-  return { action: "drop", noted: `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "already-met" };
+  return { action: "drop", noted: `${r.kind} run ${last.id} ended with no commit and the item is already ${onMain ? `on main as ${onMain}` : "done"}: dropped as a duplicate, and the item is closed`, done: !!onMain, fate: "met" };
 }
 
 /** The step for an infrastructure failure: a land lands again, a run with a branch (`hasBranch`) is rechecked, and any other run reruns. */

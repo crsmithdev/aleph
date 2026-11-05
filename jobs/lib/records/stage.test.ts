@@ -33,6 +33,7 @@ const ISSUES_NEW: Row[] = [
     seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
   } },
+  { name: "new issue: parked", stage: "parked", build: async () => issue({ status: "parked" }) },
   { name: "new issue: dropped while a trailer commit on main names it", stage: "dropped", build: async () => {
     const n = issue({ status: "dropped" });
     sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(n)}`);
@@ -43,9 +44,11 @@ const ISSUES_NEW: Row[] = [
 
 const PARTS_NEW: Row[] = [
   { name: "new goal: working", stage: "working", build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
-  // PARTS_NEW[1] is the blocked goal that the `aleph status` test below reads.
-  { name: "new goal: blocked", stage: "blocked", why: /after fac-/, build: async () => newIssue({ after: [ref(newIssue())] }) },
-  { name: "new goal: planning", stage: "planning", build: async () => newIssue({ plan: "true" }) },
+  // PARTS_NEW[1] is the held goal that the `aleph status` test below reads.
+  { name: "new goal: held", stage: "held", why: /after fac-/, build: async () => newIssue({ after: [ref(newIssue())] }) },
+  { name: "new goal: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
+  // A record from before docs/naming.md keeps `stuck`: a stuck run that nothing sent back reads `failed`.
+  { name: "new goal: failed under an old stuck run", stage: "failed", build: async () => newRun(newIssue(), { kind: "build", condition: "stuck" as never }) },
 ];
 
 // A commit on origin/main that names goal `partRef` (`<n>.<k>`) and its issue `n`, as the land of a goal does; returns its sha.
@@ -61,7 +64,7 @@ const PARTS_DOTTED: Row[] = [
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); landPart(n, `${n}.1`); return a;
   } },
-  { name: "dotted goal: awaiting its Ask while a trailer commit on main names it", stage: "awaiting", why: /input: run-cap/, build: async () => {
+  { name: "dotted goal: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /input: run-cap/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landPart(n, `${n}.1`); return a;
   } },

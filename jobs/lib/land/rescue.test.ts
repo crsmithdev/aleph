@@ -12,7 +12,7 @@ afterEach(teardown);
 
 test("a run with a question waits for a spec edit: the Ask says so, and an edit drops the run, clears the Ask and starts the goal", async () => {
   const id = newIssue();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
   const a = askOf(`fac-${id}`)!;
@@ -33,7 +33,7 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
 
 test("a spec question run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {
   const id = newIssue();
-  mk(`fac-${id}`, "build", "stuck", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
+  mk(`fac-${id}`, "build", "failed", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
   // The real rescue path sets the plain question Ask and writes asked-spec.
   await dispatchIssues(f.start, undefined, f.rescue);

@@ -59,9 +59,9 @@ beforeAll(() => {
     return true;
   }, true);
 
-  run("20261027-000001-a", { job: "fac-1", name: "fac-1", condition: "awaiting", ask: HELD, on: "fac-1", stat: " held/x.ts | 2 +-", defaults: ["port? -> 3020"], shown: false, cost: 0.5 },
+  run("20261027-000001-a", { job: "fac-1", name: "fac-1", condition: "waiting", ask: HELD, on: "fac-1", stat: " held/x.ts | 2 +-", defaults: ["port? -> 3020"], shown: false, cost: 0.5 },
     { "result.md": "done\nFOLLOWUP: tidy the logs\n" });
-  run("20261027-000002-a", { job: "fac-3", name: "fac-3", condition: "stuck", reason: "a check failed", on: "fac-3" });
+  run("20261027-000002-a", { job: "fac-3", name: "fac-3", condition: "failed", reason: "a check failed", on: "fac-3" });
   run("20261027-000003-a", { job: "fac-4", name: "fac-4", condition: "running", on: "fac-4" });
   run("20261027-000004-a", { job: "fac-5", name: "fac-5", condition: "landed", on: "fac-5", commit: "abcdef1234567", ended: ago(2), started: ago(3) });
   run("20261027-000005-a", { job: "fac-6", name: "fac-6", condition: "landed", on: "fac-6", commit: "123456abcdef", ended: ago(30), started: ago(31) });
@@ -138,7 +138,7 @@ describe("state", () => {
       addPart(doc, doc.items.find((i) => i.id === 1)!, { title: "a goal", spec: "Do it." });
       return true;
     });
-    run("20261027-000040-a", { job: "fac-g1", name: "fac-g1", condition: "awaiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] }, on: "fac-1.1", ended: ago(1), started: ago(2) });
+    run("20261027-000040-a", { job: "fac-g1", name: "fac-g1", condition: "waiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] }, on: "fac-1.1", ended: ago(1), started: ago(2) });
     const j = state(now).asks.find((x) => x.id === "fac-g1")!;
     expect(j.trailers).toEqual([{ key: "Issue", value: "fac-1.1" }, { key: "Job", value: "fac-g1" }]);
   });
@@ -204,15 +204,15 @@ describe("an intake run", () => {
 
 describe("a goal that acceptance failed twice", () => {
   test("a held run from before v6 phase 6 still reads: its old phase, and its second review's call.md as the Ask's review", () => {
-    run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "awaiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle" },
+    run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "waiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle" },
       { "review.md": "Fine.\nVERDICT: pass\n", "call.md": "Merged and checked.\nVERDICT: land\n", "call-prompt.md": "old recipe\n" });
     try {
       const a = runAsks(state(now)).find((x) => x.id === "fac-60");
       expect(a).toBeDefined();
-      expect(a!.details).toEqual({ note: "held path held/x.ts", stat: " held/x.ts | 1 +", review: { call: "land" } });
+      expect(a!.details).toEqual({ note: "held path held/x.ts", stat: " held/x.ts | 1 +", review: { call: "passed" } });
       // The Now card renders it.
       const card = rows(withAttn({ ...fixture, stuck: [], factory: { ...fixture.factory, health: [] }, asks: [a!] }))[0];
-      expect(card).toContain("Reviewer: land");
+      expect(card).toContain("Reviewer: passed");
     } finally {
       (rmSync(join(jobsDir, "20261027-000060-a"), { recursive: true }), removeRun("20261027-000060-a"));
     }

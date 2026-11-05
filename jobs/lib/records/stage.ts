@@ -8,13 +8,14 @@
  * item or run and a new-shape one alike.
  */
 import { askOf, waitOf } from "../asks/ask.ts";
-import { askOf as runAsk, isAwaiting, type Run, type State } from "./ledger.ts";
+import { askOf as runAsk, isWaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { isOpen, lastReal } from "./job.ts";
 import * as store from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 
-export type StageName = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "working" | "blocked" | "planning" | "queued" | "new";
+/** The stages of docs/naming.md. */
+export type StageName = "new" | "queued" | "held" | "working" | "waiting" | "failed" | "landing" | "done" | "dropped" | "parked";
 export interface Stage { id: string; stage: StageName; why: string; of?: { n: number; m: number } }
 
 /** What stage() needs of an Ask. */
@@ -62,7 +63,7 @@ export function subjectOf(item: issues.Issue, key: string, doc: issues.Doc): Sub
 
 export function runViewOf(job: Job): RunView {
   const run = lastReal(job).run;
-    return { kind: run.kind, condition: run.condition, open: isOpen(job), ...(isAwaiting(run.condition) ? { ask: waitOf(runAsk(run)) } : {}) };
+    return { kind: run.kind, condition: run.condition, open: isOpen(job), ...(isWaiting(run.condition) ? { ask: waitOf(runAsk(run)) } : {}) };
 }
 
 /** The ref's part after `<repo>-`, as `landedIndex` and `reverted` key it: `"910"` for an issue, `"910.1"` for a part. */
@@ -85,23 +86,25 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   const id = item.id;
   const out = (s: StageName, why: string, of?: Stage["of"]): Stage => ({ id, stage: s, why, ...(of ? { of } : {}) });
   if (item.status === "dropped") return out("dropped", "the store says dropped");
-  // An open item that asks is awaiting, even when a trailer commit on main names it (a reopened issue can have one).
-  if (item.status === "open" && item.ask) return out("awaiting", asks(item.ask));
+  // An open item that asks is waiting, even when a trailer commit on main names it (a reopened issue can have one).
+  if (item.status === "open" && item.ask) return out("waiting", asks(item.ask));
   const done = doneWhy(item, ctx);
   if (done) return out("done", done);
+  if (item.status === "parked") return out("parked", "the store says parked");
   const live = ctx.runs(id).filter((r) => r.open && r.kind !== "facts");
   const work = live.filter((r) => !SORTING.includes(r.kind));
   const parts = item.parts.map((ref) => ctx.item(ref)).filter((p): p is Subject => p !== undefined && !seen.has(p.id)).map((p) => stage(p, ctx, new Set([...seen, id])));
-  if (item.ask) return out("awaiting", asks(item.ask));
+  if (item.ask) return out("waiting", asks(item.ask));
   const mine = live.at(-1);
-  if (mine && isAwaiting(mine.condition)) return out("awaiting", asks(mine.ask!));
-  const waiting = parts.find((p) => p.stage === "awaiting");
-  if (waiting) return out("awaiting", `${waiting.id} ${waiting.why}`);
-  if (mine && (mine.condition === "stuck" || mine.condition === "failed")) return out("stuck", `its job is ${mine.condition}`);
-  const stuck = parts.find((p) => p.stage === "stuck");
-  if (stuck) return out("stuck", `${stuck.id}: ${stuck.why}`);
+  if (mine && isWaiting(mine.condition)) return out("waiting", asks(mine.ask!));
+  const waiting = parts.find((p) => p.stage === "waiting");
+  if (waiting) return out("waiting", `${waiting.id} ${waiting.why}`);
+  // A failed job that the director or Chris has carries an Ask, so it is `waiting` above.
+  if (mine && (mine.condition === "returned" || mine.condition === "failed")) return out("failed", `its job is ${mine.condition}`);
+  const failed = parts.find((p) => p.stage === "failed");
+  if (failed) return out("failed", `${failed.id}: ${failed.why}`);
   if (item.parts.length) {
-    if (item.plan) return out("planning", "intake plans the rest");
+    if (item.plan) return out("working", "intake plans the rest");
     const n = parts.filter((p) => p.stage === "done").length;
     return out("working", `${n} of ${item.parts.length} parts done`, { n, m: item.parts.length });
   }
@@ -112,8 +115,8 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
     const s = ctx.item(ref);
     return s !== undefined && (s.status === "dropped" || (s.status === "open" && !doneWhy(s, ctx)));
   });
-  if (blockers.length) return out("blocked", `after ${blockers.join(", ")}`);
-  if (item.plan) return out("planning", "intake splits it");
+  if (blockers.length) return out("held", `after ${blockers.join(", ")}`);
+  if (item.plan) return out("working", "intake splits it");
   if (item.tracker) return out("new", "the flake tracker: a note log");
   if (item.spec) return out("queued", "no job has started it");
   if (live.some((r) => r.kind === "intake")) return out("new", "an intake run is open");

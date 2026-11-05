@@ -116,10 +116,10 @@ const inside = (iso: string | undefined, from: number, to: number): boolean => {
   return t >= from && t < to;
 };
 
-/** A run that ended with nothing the line can use: it failed, got stuck or was dropped, or it states a cause. */
+/** A run that ended with nothing the line can use: it failed, was returned or was dropped, or it states a cause. */
 function unusable(e: Entry): boolean {
   const r = e.run;
-  return r.condition === "failed" || r.condition === "stuck" || r.condition === "dropped" || causeOf(r) !== undefined;
+  return r.condition === "failed" || r.condition === "returned" || r.condition === "dropped" || causeOf(r) !== undefined;
 }
 
 function stageRows(src: Sources, from: number, to: number): StageRow[] {
@@ -139,12 +139,12 @@ function stageRows(src: Sources, from: number, to: number): StageRow[] {
     if (typeof r.cost === "number") s.cost = (s.cost ?? 0) + r.cost;
     const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
     if (took >= 0) s.minutes.push(took / 60_000);
-    // The reviewer of a build: its call is on the build's state. `error` means it ended with no verdict.
-    if (r.kind === "build" && r.review && r.review.call !== "pending") {
+    // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
+    if (r.kind === "build" && r.review && r.review.call !== "running") {
       const v = row("review", true);
       v.runs++;
       v.items.add(r.on ?? r.name);
-      if (r.review.call === "error") v.unusable!++;
+      if (r.review.call === "failed") v.unusable!++;
     }
   }
   for (const c of src.specChecks) {

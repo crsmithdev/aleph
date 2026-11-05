@@ -14,7 +14,7 @@ import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate } from "./issue-decision.ts";
 import { layout, readFactoryLog } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
-import { allRuns, held, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, held, isWaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { causeOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
@@ -357,7 +357,7 @@ function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => str
   for (const j of jobs) {
     const last = lastReal(j).run;
     const on = onOf(last);
-    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isAwaiting(last.condition)) continue;
+    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isWaiting(last.condition)) continue;
     const theirs = lists.item(repo.key, on);
     const what = theirs && shares(theirs);
     if (what) return `waits for ${last.name}: ${what}`;

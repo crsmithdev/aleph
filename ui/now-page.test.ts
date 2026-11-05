@@ -179,7 +179,7 @@ test("the Status view is at / in the Factory group", () => {
 });
 
 test("a blocked Queued card ends its meta row with the id it waits on, with no wait text and no status chip", () => {
-  const w = { repo: "r", title: "t", stage: "blocked", why: "Waits on r-9", at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z" };
+  const w = { repo: "r", title: "t", stage: "held", why: "Waits on r-9", at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z" };
   const html = view.renderLanes({ ...state, queued: [
     { ...w, id: 1, kind: "not-ready", waits: [{ id: "r-9", href: "#/issues/r/9", state: "working", dead: null }] },
     { ...w, id: 2, kind: "busy-file", why: "waits for r-7: both change the busy file a.ts", on: "r-7" },

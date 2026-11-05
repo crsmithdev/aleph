@@ -198,9 +198,9 @@ test("gate catches are the builds a check or the reviewer sent back in the 7 day
   const run = (job: string, min: number, condition: string, failed?: string) => ({ job, kind: "build", condition, started: ago(min), ...(failed ? { failed } : {}) });
   const r = (runs: any[]) => ({ issue: "r-1", runs }) as any;
   const records = [
-    r([run("j1", 300, "stuck", "tests"), run("j1", 200, "stuck", "reviewer"), run("j1", 100, "landed")]),
-    r([run("j2", 300, "stuck", "types"), run("j3", 200, "passed")]),
-    r([run("j4", 60 * 24 * 9, "stuck", "tests"), run("j4", 60, "passed")]),
+    r([run("j1", 300, "returned", "tests"), run("j1", 200, "returned", "review"), run("j1", 100, "landed")]),
+    r([run("j2", 300, "returned", "types"), run("j3", 200, "passed")]),
+    r([run("j4", 60 * 24 * 9, "returned", "tests"), run("j4", 60, "passed")]),
   ];
   expect(metrics([], [], NOW, records).catches).toEqual({ fired: 3, fixed: 2 });
 });
@@ -381,7 +381,7 @@ test("rules() takes an entry's missing reason from the run that awaited when it 
   const set = new Date(NOW).toISOString();
   const fired = (records: any[]) => Object.fromEntries(rules([], records, NOW + 3600_000).map((x) => [x.reason, x.fired]));
   const base = fired([]);
-  const awaiting: any = { id: "r1", kind: "build", condition: "awaiting", started: new Date(NOW - 60_000).toISOString(), ended: set };
+  const awaiting: any = { id: "r1", kind: "build", condition: "waiting", started: new Date(NOW - 60_000).toISOString(), ended: set };
   expect(fired([{ issue: "x-1", asks: [{ set }], ask: { reason: "held-path" }, askRun: "r1", runs: [awaiting], events: [] }])["held-path"]).toBe(base["held-path"] + 1);
   expect(fired([{ issue: "x-2", asks: [{ set }], runs: [], events: [] }])).toEqual(base);
 });

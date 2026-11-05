@@ -22,7 +22,7 @@ afterAll(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const run = (r: Partial<Run>): Run => ({ kind: "build", job: "j1", name: "fac-1", condition: "stuck", started: "2026-11-01T00:00:00Z", ...r } as Run);
+const run = (r: Partial<Run>): Run => ({ kind: "build", job: "j1", name: "fac-1", condition: "failed", started: "2026-11-01T00:00:00Z", ...r } as Run);
 const entry = (id: string, r: Partial<Run>): Entry => ({ id, folder: join(dir, "runs", id), run: run(r) });
 const folder = (id: string, files: Record<string, string> = {}): string => {
   const f = join(dir, "runs", id);
@@ -42,11 +42,11 @@ describe("next step after a build or recheck", () => {
     expect(nextStep(run({ condition: "passed" }), true)).toBe("land");
     expect(nextStep(run({ condition: "passed" }), false)).toBeUndefined();
     expect(nextStep(run({ kind: "recheck", condition: "passed" }), true)).toBe("land");
-    expect(nextStep(run({ condition: "stuck" }), true)).toBeUndefined();
+    expect(nextStep(run({ condition: "failed" }), true)).toBeUndefined();
   });
 
   test("a check fail with no test record goes back to the worker with the check's log as its note", () => {
-    const ended = run({ condition: "stuck", cause: "check", checkName: "types", reason: "types failed", failed: "types", round: 1 });
+    const ended = run({ condition: "returned", cause: "check", checkName: "types", reason: "types failed", failed: "types", round: 1 });
     expect(nextStep(ended, false)).toBe("worker");
     const f = folder("check-fail", { "checks.log": "## lint: exit 0\nok\n## types: exit 1\n$ tsc\nerror TS2322\n" });
     const { note, merge } = nextBrief(f, ended);
@@ -59,17 +59,17 @@ describe("next step after a build or recheck", () => {
   test("a check fail with failed tests in its record goes back with those tests, not the log", () => {
     const failures = [{ file: "a.test.ts", name: "s > one", message: "Error: boom\n  at a.test.ts:3" }];
     const tests = { ran: 3, passed: 2, failed: 1, skipped: 0, failures };
-    const ended = run({ condition: "stuck", cause: "check", checkName: "tests", failed: "tests", round: 1, checks: [{ name: "tests", ok: false, seconds: 1, tests }] });
+    const ended = run({ condition: "returned", cause: "check", checkName: "tests", failed: "tests", round: 1, checks: [{ name: "tests", ok: false, seconds: 1, tests }] });
     const { note } = nextBrief(folder("check-fail-rec", { "checks.log": "## tests: exit 1\nlog line\n" }), ended);
     expect(note).toBe("The check `tests` failed on this branch. Its failed tests:\n\n- a.test.ts > s > one\n    Error: boom\n      at a.test.ts:3\n\nFix the cause, run the tests, and commit.");
   });
 
   test("a stuck run with no fix round left starts nothing", () => {
-    expect(nextStep(run({ condition: "stuck", reason: "tests failed after 2 fix rounds" }), true)).toBeUndefined();
+    expect(nextStep(run({ condition: "failed", reason: "tests failed after 2 fix rounds" }), true)).toBeUndefined();
   });
 
   test("a reviewer hold goes back to the worker with the reviewer's reason while rounds are left", () => {
-    const ended = run({ condition: "stuck", cause: "reviewer", reason: "reviewer: no test", failed: "review", round: 0 });
+    const ended = run({ condition: "returned", cause: "review", reason: "reviewer: no test", failed: "review", round: 0 });
     expect(nextStep(ended, false)).toBe("worker");
     expect(nextBrief(folder("review-back"), ended).note).toBe("The reviewer sent this branch back: reviewer: no test\n\nFix what it names, run the tests, and commit.");
   });
@@ -111,9 +111,9 @@ describe("next step after a land", () => {
   });
 
   test("a branch that changes the list goes back with its own note, and not as a merge run", () => {
-    const fail = run({ kind: "land", condition: "failed", cause: "own-list", conflicts: ["docs/todo.md"] });
+    const fail = run({ kind: "land", condition: "failed", cause: "other", conflicts: ["docs/todo.md"] });
     expect(afterLand(fail, [fail])).toBe("worker");
-    const { note, merge } = nextBrief(folder("own-list"), fail);
+    const { note, merge } = nextBrief(folder("other"), fail);
     expect(merge).toBe(false);
     expect(note).toContain("Only aleph issue writes the list");
   });
@@ -129,7 +129,7 @@ describe("next step after a land", () => {
 
 describe("rescue of a stuck or failed run", () => {
   test("no commit and a question asks Chris and waits for a spec edit, whatever else holds", () => {
-    const r = run({ condition: "stuck", cause: "no-commit" });
+    const r = run({ condition: "failed", cause: "no-commit" });
     expect(askedQuestion({ ...r, question: "which clause wins?" })).toBe("which clause wins?");
     expect(askedQuestion(r)).toBeNull();
     expect(askedQuestion(run({ cause: "check", question: "x" }))).toBeNull();
@@ -138,24 +138,24 @@ describe("rescue of a stuck or failed run", () => {
   });
 
   test("already met: on main or done is a duplicate; a worker's claim is checked on main", () => {
-    const r = run({ condition: "stuck", cause: "no-commit" });
+    const r = run({ condition: "failed", cause: "no-commit" });
     expect(rescueCase(r, true, "evidence")).toBe("duplicate");
     expect(rescueCase(r, false, "evidence")).toBe("claimed");
     expect(rescueCase(r, false, null)).toBe("no-commit");
     const s = stuck({ cause: "no-commit" });
-    expect(duplicateStep(s, "abc1234")).toMatchObject({ action: "drop", done: true, fate: "already-met" });
-    expect(duplicateStep(s, null)).toMatchObject({ action: "drop", done: false, fate: "already-met" });
-    expect(claimStep(s, "foo.ts:3", null)).toMatchObject({ action: "drop", done: true, fate: "already-met" });
+    expect(duplicateStep(s, "abc1234")).toMatchObject({ action: "drop", done: true, fate: "met" });
+    expect(duplicateStep(s, null)).toMatchObject({ action: "drop", done: false, fate: "met" });
+    expect(claimStep(s, "foo.ts:3", null)).toMatchObject({ action: "drop", done: true, fate: "met" });
     const red = claimStep(s, "foo.ts:3", "tests fail");
     expect(red.rerun).toContain("but the checks do not pass on origin/main (tests fail)");
     expect(red.done).toBeUndefined();
   });
 
   test("the other safe cases, and none for the rest", () => {
-    expect(rescueCase(run({ cause: "time-box" }), false, null)).toBe("time-box");
-    expect(rescueCase(run({ kind: "land", cause: "time-box" }), false, null)).toBeNull();
+    expect(rescueCase(run({ cause: "timeout" }), false, null)).toBe("timeout");
+    expect(rescueCase(run({ kind: "land", cause: "timeout" }), false, null)).toBeNull();
     expect(rescueCase(run({ cause: "infra" }), false, null)).toBe("infra");
-    expect(rescueCase(run({ cause: "lock-busy" }), false, null)).toBe("infra");
+    expect(rescueCase(run({ cause: "locked" }), false, null)).toBe("infra");
     expect(rescueCase(run({ kind: "land", cause: "conflict" }), false, null)).toBe("land-conflict");
     expect(rescueCase(run({ kind: "land", cause: "check" }), false, null)).toBe("land-checks");
     expect(rescueCase(run({ kind: "land", cause: "check", conflicts: ["a"] }), false, null)).toBeNull();

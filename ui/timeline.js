@@ -39,10 +39,10 @@ export function axisTimes(times, x, max = 5) {
   return out.slice(0, max);
 }
 
-const BAD = ["failed", "stuck", "dropped"];
+const BAD = ["failed", "returned", "dropped"];
 const AUX = ["intake", "triage", "plan", "facts", "explain", "firefighter", "director", "monitor"];
 /** A run's bar colour: bad for a run that failed, land, aux for a run that does not build, else build. */
-export const barTone = (r) => (BAD.includes(r.condition) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
+export const barTone = (r) => (BAD.includes(jobState(r.condition, r.failed)) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
 
 /** A run's start and end in ms; a live run ends now, a run with no end ends where it started. */
 export function spanOf(r, now = Date.now()) {
@@ -61,11 +61,11 @@ export function gaps(runs, from, to) {
   const out = [];
   let cursor = from, prev = null;
   for (const s of runs) {
-    if (Number.isFinite(cursor) && s.start - cursor > GAP) out.push({ start: cursor, end: s.start, chris: prev?.condition === "awaiting" });
+    if (Number.isFinite(cursor) && s.start - cursor > GAP) out.push({ start: cursor, end: s.start, chris: prev?.condition === "waiting" });
     cursor = Number.isFinite(cursor) ? Math.max(cursor, s.end) : s.end;
     prev = s.r;
   }
-  if (Number.isFinite(to) && Number.isFinite(cursor) && to - cursor > GAP) out.push({ start: cursor, end: to, chris: prev?.condition === "awaiting" });
+  if (Number.isFinite(to) && Number.isFinite(cursor) && to - cursor > GAP) out.push({ start: cursor, end: to, chris: prev?.condition === "waiting" });
   return out;
 }
 
@@ -174,17 +174,18 @@ export const costText = (n) => (n ? money(n) : "–");
 /** "08:11 to 08:39" for a span in one day, else with the dates. */
 export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 
-/** A run's event tone by its stored condition, so a sent-back or failed run stays in the stuck tone. */
-const RUN_TONE = { stuck: "stuck", failed: "stuck", dropped: "quiet", passed: "done", landed: "done", done: "done", awaiting: "need", running: "run" };
+/** A run's event tone by its stored condition, so a returned or failed run stays in the stuck tone. */
+const RUN_TONE = { returned: "stuck", failed: "stuck", dropped: "quiet", passed: "done", landed: "done", done: "done", waiting: "need", running: "run" };
 /** The event of one run: its job state as the tag, then `name` and its reason, or `what` in their place. */
 export function runEvent(x, name, what = null) {
-  const state = jobState(x.r.condition, x.r.failed), tone = RUN_TONE[x.r.condition] ?? "quiet", cap = esc(name[0].toUpperCase() + name.slice(1));
+  const state = jobState(x.r.condition, x.r.failed), tone = RUN_TONE[state] ?? "quiet", cap = esc(name[0].toUpperCase() + name.slice(1));
   return { at: x.end, tag: state, tone, html: what ?? `${cap}${x.r.reason ? `: ${codeText(x.r.reason)}` : "."}` };
 }
 /** The events of a lane: each run that stopped or asks, with its reason. */
 const laneEvents = (runs, bars) => runs.flatMap((x, i) => {
-  // A run that awaits you shows only with its question; the wait after it already shows.
-  if (!["stuck", "failed", "dropped", "awaiting"].includes(x.r.condition) || (x.r.condition === "awaiting" && !x.r.reason)) return [];
+  // A run that waits for you shows only with its question; the wait after it already shows.
+  const state = jobState(x.r.condition, x.r.failed);
+  if (!["returned", "failed", "dropped", "waiting"].includes(state) || (state === "waiting" && !x.r.reason)) return [];
   return [runEvent(x, bars[i].label)];
 });
 

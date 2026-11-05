@@ -151,7 +151,7 @@ test("the sweep logs a job that waits for a spec edit as missed once the spec mo
   writeList({ key }, "seed", (doc) => { issues.add(doc, "goal", { spec: "Old spec." }); return true; }, true);
   const folder = join(process.env.ALEPH_JOBS_DIR!, "w1");
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: "w1", name: `${key}-1`, repo: key, on: `${key}-1`, condition: "stuck", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
+  writeRun(folder, { kind: "build", job: "w1", name: `${key}-1`, repo: key, on: `${key}-1`, condition: "failed", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
   markAsked({ id: "w1", folder, run: { job: "w1", name: `${key}-1`, repo: key, on: `${key}-1` } as any }, "which wins?", specVersion(issues.find(readList({ key })!, 1)!));
   const p = sweepPorts();
   const s = readTick();
