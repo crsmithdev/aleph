@@ -34,6 +34,8 @@ test("three chart boxes in one row replace the old cards, each says its data for
     "Lead time slowest 10: 2 issues in the last 7 days, from 18m 20s to 1h 23m",
   ]);
   expect(queue).toContain("Queue slowest 10: 3 issues");
+  expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time: p50 and p90 by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
+  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead time: p50 and p90 by day", "Lead time: time per issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
   const o = stripOption(D, "queue", { done: "D", need: "N" });
   expect(o.xAxis.type).toBe("log");
   const pts = o.series.flatMap((s: any) => s.data);

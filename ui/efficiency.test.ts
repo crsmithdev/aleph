@@ -80,8 +80,8 @@ test("All lost time: the causes sum to lost.hours", () => {
   const s = selection(D, "all");
   expect(s.causes.map((x: any) => [x.name, x.hours, x.runs])).toEqual([["Issue had landed", 3, 7], ["No commit", 3, 2]]);
   expect(s.causes.reduce((a: number, x: any) => a + x.hours, 0)).toBe(D.lost.hours);
-  expect(renderEfficiency(D, "all")).toContain("<h2>Lost time causes</h2>");
-  expect(renderEfficiency(D, "all")).toContain("<h2>Lost time issues</h2>");
+  expect(renderEfficiency(D, "all")).toContain("<h2>Lost Time Causes</h2>");
+  expect(renderEfficiency(D, "all")).toContain("<h2>Lost Time Issues</h2>");
   for (const k of ["all", "flakes", "usage", "fixed"]) expect(Object.keys(selection(D, k))).toEqual(["title", "causes", "top"]);
 });
 
@@ -98,7 +98,7 @@ test("the causes card is a table beside the issues card, with no intro and no Fi
 test("selecting a class shows its causes; selecting Lost time again restores the merged list", () => {
   const all = renderEfficiency(D, "all");
   const one = renderEfficiency(D, "fixed");
-  expect(one).toContain("<h2>Fixed causes</h2>");
+  expect(one).toContain("<h2>Fixed Causes</h2>");
   expect(one).toContain('data-tile="fixed" style="flex:4" aria-pressed="true"');
   expect(one).not.toContain("No commit");
   expect(renderEfficiency(D, "all")).toBe(all);

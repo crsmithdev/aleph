@@ -381,14 +381,14 @@ const TOP_RUNS = 10;
 function renderDetail(rows, o) {
   if (o.tile === "runs") {
     const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
-    return card("Issues by runs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a run."));
+    return card("Issues by Runs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a run."), { label: "Issues by runs" });
   }
   return "";
 }
 
 /** The two charts under the tiles, on every tile. */
-const renderCharts = (o) => `<div class="trio">${card(`Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}`, '<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p><div class="chartbox" data-chart="backlog"></div>', { cls: "wide" })}` +
-  `${card("Time to close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
+const renderCharts = (o) => `<div class="trio">${card(`Open Backlog, Filed and Closed, Last ${o.window in WINDOW_DAYS ? o.window[0].toUpperCase() + o.window.slice(1) : "Week"}`, '<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p><div class="chartbox" data-chart="backlog"></div>', { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
+  `${card("Time to Close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>', { label: "Time to close" })}` +
   `${card("Tests", '<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p><div class="chartbox" data-chart="tests"></div>', { cls: "wide" })}</div>`;
 
 // ---- The filters ----
@@ -612,7 +612,7 @@ export function issueSegments(d, now = Date.now()) {
   const split = Number.isFinite(ends(before)) ? ends(before) : filed, lastPart = ends(partRuns);
   const done = goals.filter((g) => g.stage === "done").length;
   const segments = [
-    { title: "Before the split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${goals.length}`), events: notes.filter((n) => n.at < first), holds: holdsOf(id) })] },
+    { title: "Before the Split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${goals.length}`), events: notes.filter((n) => n.at < first), holds: holdsOf(id) })] },
     { title: "Parts", aside: `${done} of ${goals.length} done`, rows: goals.map((g) => {
       const runs = ofPart(g);
       const job = g.jobs?.at(-1), p = g.priority && g.priority !== "medium" ? ` ${priorityBadge(g.priority)}` : "";
@@ -620,7 +620,7 @@ export function issueSegments(d, now = Date.now()) {
     }) },
   ];
   const later = notes.filter((n) => n.at >= first);
-  if (after.length || later.length || !open) segments.push({ title: "After the parts", rows: [laneRow({ head: headOf(open ? kinds(after) : d.status), runs: after, from: lastPart, to: open ? NaN : closed, marks: marks.filter((m) => m.tone === "done"), result: badge(state), events: later, holds: holdsOf(id) })] });
+  if (after.length || later.length || !open) segments.push({ title: "After the Parts", rows: [laneRow({ head: headOf(open ? kinds(after) : d.status), runs: after, from: lastPart, to: open ? NaN : closed, marks: marks.filter((m) => m.tone === "done"), result: badge(state), events: later, holds: holdsOf(id) })] });
   return segments;
 }
 

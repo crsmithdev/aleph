@@ -46,11 +46,12 @@ describe("the Sessions page", () => {
     for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
     expect(h).toContain('data-tile="tool:Bash"');
+    for (const s of ["<h2>Verify-Gate Denials</h2>", 'aria-label="Verify-gate denials"', '<button type="button" data-sort="prompt">First Prompt<']) expect(h).toContain(s);
   });
 
   test("a selection is pressed, titles the list, and offers the way back and the skill's page", () => {
     const h = v.renderSessions(data(), opts("pick=skill:aleph:handoff"));
-    expect(h).toContain("Sessions that used aleph:handoff");
+    expect(h).toContain("<h2>Sessions That Used aleph:handoff</h2>");
     expect(h).toContain('data-tile="skill:aleph:handoff" aria-pressed="true"');
     expect(h).toContain("Show all sessions");
     expect(h).toContain('href="#/skills/aleph%3Ahandoff"');

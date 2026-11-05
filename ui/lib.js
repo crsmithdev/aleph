@@ -515,9 +515,9 @@ export function onTile(el, fn) {
   });
 }
 
-/** A block of a page: the section head (`sectionHead`'s options, plus `id`), then its body. */
-export const card = (title, body, { count, aside, id, cls = "" } = {}) =>
-  `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(title)}">${sectionHead(title, { count, aside })}${body}</section>`;
+/** A block of a page: the section head (`sectionHead`'s options, plus `id`), then its body. `label` is the aria label, the title by default. */
+export const card = (title, body, { count, aside, id, cls = "", label = title } = {}) =>
+  `<section class="card${cls ? ` ${cls}` : ""}"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${sectionHead(title, { count, aside })}${body}</section>`;
 
 /** The one table: `head` is the cells of the header row, or "" for none; `rows` the rows. */
 export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
@@ -610,3 +610,5 @@ export function sortHead(label, key, sort, { num = false } = {}) {
 export const sectionHead = (title, { count, aside } = {}) =>
   `<div class="sh"><h2>${esc(title)}</h2>${count != null ? `<span class="count">${esc(count)}</span>` : ""}${aside ? `<span class="aside">${aside}</span>` : ""}</div>`;
 
+/** A Title Case heading in sentence case, for an aria label: "Lead Time" is "Lead time". */
+export const sentence = (t) => t[0] + t.slice(1).toLowerCase();

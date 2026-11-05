@@ -53,10 +53,10 @@ export function renderSkill(d) {
   const projects = d.projects.map((p) => `<tr><td>${esc(p.project)}</td><td class="num">${p.uses}</td></tr>`).join("");
   return `<div class="page sp skills">${crumb("#/sessions", [["sessions", "#/sessions"], ["skills"], [d.name]])}` +
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
-    (d.uses ? card("Uses per day", bars(d.name)) : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
+    (d.uses ? card("Uses per Day", bars(d.name), { label: "Uses per day" }) : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
     (projects ? card("Projects", table("<th>Project</th><th class=\"num\">Uses</th>", projects)) : "") +
-    (sessions ? card("Sessions", table("<th>Session</th><th>First prompt line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)) : "") +
-    (tools ? card("Tools called after it, in the same turn", table("<th>Tool</th><th class=\"num\">Calls</th>", tools)) : "") +
-    (errors ? card("Turns with errors", table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors), { count: d.errors.length }) : "") +
+    (sessions ? card("Sessions", table("<th>Session</th><th>First Prompt Line</th><th>Project</th><th>Started by</th><th>Time</th>", sessions)) : "") +
+    (tools ? card("Tools Called After It, in the Same Turn", table("<th>Tool</th><th class=\"num\">Calls</th>", tools), { label: "Tools called after it, in the same turn" }) : "") +
+    (errors ? card("Turns With Errors", table("<th>Session</th><th>Error</th><th>Project</th><th>Time</th>", errors), { count: d.errors.length, label: "Turns with errors" }) : "") +
     `</div>`;
 }

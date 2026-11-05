@@ -60,7 +60,7 @@ describe.skip("the issue timeline", () => {
     ];
     const notes = ["- 2026-11-01 10:06: planner: split into fac-1.1, fac-1.2", "- 2026-11-01 10:25: its parts are done"];
     const segs = issueSegments(issue({ goals, notes, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } }));
-    expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the split", 1], ["Parts", 2], ["After the parts", 1]]);
+    expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Parts", 2], ["After the Parts", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
     expect(before.bars.map((b: any) => b.label)).toEqual(["plan"]);
     expect(before.events.map((e: any) => e.tag)).toEqual(["Waiting", "planner"]);

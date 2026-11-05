@@ -1,10 +1,10 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chart, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chart, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
 export const STAGES = [
-  ["lead", "Lead time", "From filing to the last land."],
+  ["lead", "Lead Time", "From filing to the last land."],
   ["intake", "Intake", "From filing to the end of the first intake."],
   ["queue", "Queue", "From intake to the first agent run. This includes waits for a slot or for another issue."],
   ["implement", "Build", "From the first agent run to the last finish with work to land."],
@@ -77,11 +77,11 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const scope = renderScope(jobs ?? [], { ...f, window: f.window ?? (f.days ? undefined : d.window) });
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: scope })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
-    `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)}`, `<p>${esc(text)}</p><div class="chartbox" data-chart="trend" role="img" aria-label="${esc(label(d, key, name, "p50 and p90 trend"))}"></div>`)}` +
-    card(`${name}: time per issue`, `<p>One dot per issue, by outcome.</p><div class="chartbox" data-chart="strip" role="img" aria-label="${esc(label(d, key, name, "time per issue"))}"></div>`) +
-    card("Slowest 10", `<p>Intake, queue, build and land of the slowest issues.</p><div class="chartbox" data-chart="slowest" role="img" aria-label="${esc(label(d, key, name, "slowest 10"))}"></div>`) + `</div>` +
+    `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p><div class="chartbox" data-chart="trend" role="img" aria-label="${esc(label(d, key, sentence(name), "p50 and p90 trend"))}"></div>`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
+    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome.</p><div class="chartbox" data-chart="strip" role="img" aria-label="${esc(label(d, key, sentence(name), "time per issue"))}"></div>`, { label: `${sentence(name)}: time per issue` }) +
+    card("Slowest 10", `<p>Intake, queue, build and land of the slowest issues.</p><div class="chartbox" data-chart="slowest" role="img" aria-label="${esc(label(d, key, sentence(name), "slowest 10"))}"></div>`) + `</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Runs", "p50", "p90"], ["Runs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
-    card("Build time by model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)]))) + `</div>` +
+    card("Build Time by Model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
 }
 

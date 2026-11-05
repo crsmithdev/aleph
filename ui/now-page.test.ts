@@ -140,7 +140,7 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   await view.mountStatus({ querySelector: (s: string) => (s === "#outcome" ? outcome : null) }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, classes: [...WEEK.classes, { key: "idle", name: "Idle", hours: 0, causes: [] }] }) }; }, new URLSearchParams("window=week"));
   expect(outcome.innerHTML).toContain('class="obar"');
   const h = outcome.innerHTML;
-  expect(h).toContain("<h2>Agent time</h2>");
+  expect(h).toContain("<h2>Agent Time</h2>");
   expect(h).not.toContain("by outcome");
   const sep = h.indexOf('class="osep"');
   expect(h.indexOf('<span class="obk">Reached main</span>')).toBeLessThan(h.indexOf("seg-landed"));

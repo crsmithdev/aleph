@@ -249,7 +249,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Voice and copy
 
-- **Headers:** sentence case for page and section titles (`Efficiency`, `Uses per day`); table headers in sentence case (`First prompt`); metric card keys are uppercased by CSS (`text-transform: uppercase`, 2 uses).
+- **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Runs per Item`); metric card keys are uppercased by CSS (`text-transform: uppercase`, 2 uses).
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:285`); a priority is `critical`, `high`, `medium` or `low`.
 - **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:67`): "Nothing waits for you." (`ui/views/gates.js:112`), "No job matches." with "Widen the window or clear a filter." (`ui/views/jobs.js:79`).

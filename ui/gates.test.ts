@@ -131,7 +131,7 @@ const data = () => ({
 
 test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Waiting for you", "Rules", "Controls", "Held paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
+  const order = ["Waiting for You", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="tile sc"><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
@@ -368,7 +368,7 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
   const h = gates.renderRules({ rules: [row] });
-  for (const t of ["Fired", "Decided by (rule / director / manual)", "Outcome (fixed / no change)", "<td class=\"num\">5</td>", "2 / 1 / 1", "1 / 3"]) expect(h).toContain(t);
+  for (const t of ["Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)", "<td class=\"num\">5</td>", "2 / 1 / 1", "1 / 3"]) expect(h).toContain(t);
   expect(h).not.toContain("2 rule, 1 director, 1 Chris");
 });
 
@@ -441,7 +441,7 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, mode: "recommended" }]);
   const d = { ...data(), repeats: r };
   const h = gates.renderRepeats(d);
-  expect(h).toContain("<h2>Repeat answers");
+  expect(h).toContain("<h2>Repeat Answers");
   expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
   expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><\/span><b>1<\/b>/);
   const none = gates.renderRepeats(data());

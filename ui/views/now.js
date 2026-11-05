@@ -34,7 +34,7 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
 
 /** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
 export function renderOutcome(d) {
-  const title = `<h2>Agent time</h2>`;
+  const title = `<h2>Agent Time</h2>`;
   if (!d) return `${title}${loadingLine("the outcomes")}`;
   if (d.error) return `${title}<p>${esc(d.error)}</p>`;
   return `${title}${bar(d)}`;
@@ -66,7 +66,7 @@ export function renderStages(s, sort = SORTS.stages) {
   const rows = sorted(all, STAGE_COLS, sort).map((r) =>
     `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, numText, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
-  const head = h("Stage", "stage") + h("Runs Per Item", "runs", true) + h("No Usable Result", "unusable", true);
+  const head = h("Stage", "stage") + h("Runs per Item", "runs", true) + h("No Usable Result", "unusable", true);
   return `<h2>Stages</h2>${rows ? dataTable(head, rows) : `<p class="quiet">No stage ran.</p>`}`;
 }
 

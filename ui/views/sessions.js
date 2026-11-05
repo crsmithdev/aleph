@@ -106,7 +106,7 @@ function hooksCard(d) {
   const list = denials.recent.length
     ? dataTable(heads(["Reason", "When"]), denials.recent.map((r) => `<tr><td class="wide" title="${esc(r.reason)}">${esc(r.reason)}</td><td class="time">${esc(when(r.at))}</td></tr>`).join(""))
     : empty("The gate denied nothing in this period.");
-  return `<div class="pair">${card("Hooks", hooks)}${card("Verify-gate denials", list, { count: count(denials.total) })}</div>`;
+  return `<div class="pair">${card("Hooks", hooks)}${card("Verify-Gate Denials", list, { count: count(denials.total), label: "Verify-gate denials" })}</div>`;
 }
 
 function renderSessionsTable(d, o) {
@@ -117,12 +117,12 @@ function renderSessionsTable(d, o) {
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
   const rows = shown.map((s) => `<tr><td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`).replace('<a class="idl"', `<a class="idl" title="${esc(s.id)}"`)}</td>` +
     `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td><td title="${esc(s.taskTypes.join(", "))}">${chips(s.taskTypes.slice(0, 2))}${s.taskTypes.length > 2 ? ` <span class="quiet">+${s.taskTypes.length - 2}</span>` : ""}</td><td class="num">${s.turns}</td><td class="num">${costHtml(s.cost, s.wk)}</td><td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td></tr>`).join("");
-  return dataTable(`<th>Session</th>${h("First prompt", "prompt")}${h("Project", "project")}<th>Kinds</th>${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}${h("Started", "start")}${h("Last", "last")}`, rows) + pager(shown.length, all.length, STEP);
+  return dataTable(`<th>Session</th>${h("First Prompt", "prompt")}${h("Project", "project")}<th>Kinds</th>${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}${h("Started", "start")}${h("Last", "last")}`, rows) + pager(shown.length, all.length, STEP);
 }
 
 function sessionsHead(d, o) {
   const name = o.pick.slice(o.pick.indexOf(":") + 1), n = shownSessions(d, o).length;
-  const title = o.pick ? `Sessions that used ${name}` : "Sessions";
+  const title = o.pick ? `Sessions That Used ${name}` : "Sessions";
   const open = o.pick.startsWith("skill:") ? `<a href="${esc(skillHref(name))}">Open the skill</a>` : "";
   return sectionHead(title, { count: count(n), aside: `${open}${o.pick ? `<button type="button" class="act" data-tile="">Show all sessions</button>` : ""}` });
 }

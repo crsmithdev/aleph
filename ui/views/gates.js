@@ -98,13 +98,13 @@ export function renderMonitor(d) {
 /** The tick, the suite and the monitor: when each last ran and what came of it. */
 export function renderSchedules(d) {
   const rows = d.schedules.map((s) => `<tr><td>${esc(s.name)}</td><td>${s.last ? when(s.last) : "has not run"}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
-  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${dataTable(heads(["Schedule", "Last run", "Result"]), rows)}</section>`;
+  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${dataTable(heads(["Schedule", "Last Run", "Result"]), rows)}</section>`;
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
 export function renderWaiting(d) {
   const rows = d.asks.map((i) => askRow(i, d.now)).join("");
-  return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for you", { count: d.asks.length })}` +
+  return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for You", { count: d.asks.length })}` +
     (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;
 }
 
@@ -112,7 +112,7 @@ export function renderWaiting(d) {
 export function renderRepeats(d) {
   const rows = d.repeats.map((r) => `<tr><td>${esc(REASONS[r.reason]?.[0] ?? r.reason)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
     (r.mode ? `<button class="act" type="button" data-rule="${esc(r.reason)}" data-mode="${esc(r.mode)}" data-label="Make it a rule">Make it a rule</button>` : "") + `</td></tr>`).join("");
-  return `<section id="gates-repeats" aria-label="Repeat answers">${sectionHead("Repeat answers", { count: d.repeats.length })}` +
+  return `<section id="gates-repeats" aria-label="Repeat answers">${sectionHead("Repeat Answers", { count: d.repeats.length })}` +
     (rows ? dataTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
 }
 
@@ -135,7 +135,7 @@ export function renderRules(d) {
     const dec = r.decided, out = r.outcome;
     return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
   }).join("");
-  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who decides", "Fired", "Decided by (rule / director / manual)", "Outcome (fixed / no change)"]), rows, { id: "rules-table" })}</section>`;
+  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who Decides", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"]), rows, { id: "rules-table" })}</section>`;
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
@@ -144,8 +144,8 @@ export function renderHeld(d) {
   const rows = repos.length
     ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${r.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>`).join("")
     : `<p class="quiet">No repo names held paths.</p>`;
-  return card("Held paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
-    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`);
+  return card("Held Paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
+    `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`, { label: "Held paths" });
 }
 
 /** An item of the log as a link: an issue ref to its page, `rule` to the Rules. */

@@ -36,7 +36,7 @@ export function renderHealth(m) {
     (refuse.length ? `<h3>Refusals<span class="count">${refuse.length}</span></h3><ul>${refuse.map(f).join("")}</ul>` : "") +
     (warn.length ? `<h3>Warnings<span class="count">${warn.length}</span></h3><ul>${warn.map(f).join("")}</ul>` : "") +
     (!refuse.length && !warn.length ? empty("Lint finds nothing.") : "") +
-    (med ? `<h3>Recall misses, ${esc(med.days)} days</h3>` + table([
+    (med ? `<h3>Recall Misses, ${esc(med.days)} Days</h3>` + table([
       ["Recalls", med.recalls], ["Empty", `${med.empty} (${pct(med.empty_share * 100)})`],
       ["Reformulated", med.reformulated], ["Reads not offered", med.unoffered_reads]]) : "");
 }
@@ -79,7 +79,7 @@ function renderSemantic(m, s) {
   const start = Object.entries(s.start ?? {}).map(([scope, x]) =>
     `<details><summary>Core lines, ${esc(scope)} <span class="count">${x.bytes} / ${x.budget} bytes</span></summary>${x.cut ? `<p class="quiet">${x.cut} cut.</p>` : ""}${x.core.length ? fold(x.core, (c) => `${link(c.title)} ${q(esc(c.core))}`) : `<p class="quiet">None.</p>`}</details>`).join("");
   if (!m.exists) return mem + none("No vault yet.", "Run <code>vault init</code> to make one.");
-  return mem + start + `<h3>Notes by kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
+  return mem + start + `<h3>Notes by Kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
     `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(Object.entries(m.byKind))}</div><div>${table(Object.entries(m.byScope)) || empty("No notes.")}</div></div></details>` +
     `<details><summary>Home</summary>${renderHome(m)}</details>`;
 }
@@ -90,7 +90,7 @@ function renderEpisodic(e) {
   const sess = e.sessions === null ? none("Sessions are not available.", "Langfuse keys fill this.")
     : e.sessions.length ? fold(e.sessions, (x) => `<a href="#/sessions/${encodeURIComponent(x.id)}">${esc(x.firstPrompt || x.id)}</a> ${q(esc(`${x.project} · ${x.turns} turns · ${ago(x.last)}`))}`)
     : none("No session in 7 days.", "Claude Code sessions traced to Langfuse fill this.");
-  return `<div class="kinds">${sub("Episode pages", e.episodes.length, eps)}${sub("Daily pages", e.daily.total, daily)}${sub("Latest sessions", e.sessions?.length, sess)}</div><p class="hint"><a href="#/sessions">All sessions</a></p>`;
+  return `<div class="kinds">${sub("Episode Pages", e.episodes.length, eps)}${sub("Daily Pages", e.daily.total, daily)}${sub("Latest Sessions", e.sessions?.length, sess)}</div><p class="hint"><a href="#/sessions">All sessions</a></p>`;
 }
 
 function renderProcedural(p) {
@@ -99,21 +99,21 @@ function renderProcedural(p) {
   const hooks = p.hooks.length
     ? dataTable("", p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide" title="${esc(h.command)}"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`).join(""))
     : none("No hooks in ~/.claude/settings.json.", "The hooks entry of that file fills this, with calls from Langfuse.");
-  return `<div class="kinds">${sub("Skills", p.skills.length, skills + `<p class="hint"><a href="#/skills">Skill use</a></p>`)}${sub("Rules", undefined, claude)}${sub("Hooks, calls in 7 days", p.hooks.length, hooks)}</div>`;
+  return `<div class="kinds">${sub("Skills", p.skills.length, skills + `<p class="hint"><a href="#/skills">Skill use</a></p>`)}${sub("Rules", undefined, claude)}${sub("Hooks, Calls in 7 Days", p.hooks.length, hooks)}</div>`;
 }
 
 function renderRetrieval(r) {
   if (!r.stats) return none("No recall data.", "<code>vault misses</code> reads Langfuse; set its keys to fill this.");
   const s = r.stats;
   const rows = r.missed.length ? fold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : `<p class="quiet">No query missed.</p>`;
-  return `<div class="kinds">${sub(`Recalls, ${s.days} days`, s.recalls, table([["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest misses", r.missed.length, rows)}</div>`;
+  return `<div class="kinds">${sub(`Recalls, ${s.days} Days`, s.recalls, table([["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest Misses", r.missed.length, rows)}</div>`;
 }
 
 function renderProspective(p) {
   const issues = p.issues.length
     ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${priorityBadge(i.priority)} ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
     : none("No open issue has an after.", "<code>aleph issue edit</code> with <code>--after</code> fills this.");
-  return `<div class="kinds">${sub("Open issues with a wait", p.issues.length, issues)}</div>`;
+  return `<div class="kinds">${sub("Open Issues With a Wait", p.issues.length, issues)}</div>`;
 }
 
 const renderParametric = () =>
@@ -188,7 +188,7 @@ function readChart(rows) {
     const w = (x) => ((x / of.length) * 100).toFixed(2);
     return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: `<span class="stack" role="img" aria-label="${week} in the last 7 days, ${older} earlier, ${never} never"><span class="c-use" style="width:${w(week)}%"></span><span class="c-stale" style="width:${w(older)}%"></span><span class="c-never" style="width:${w(never)}%"></span></span>` });
   }).join("");
-  return `<h3>When recall last returned each note</h3><div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div>${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
+  return `<h3>When Recall Last Returned Each Note</h3><div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div>${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
 }
 const oldest = (rows) => rows.map((n) => n.read).filter(Boolean).sort()[0] ?? "";
 /** The recency alone, for a note with a refusal too. */
@@ -223,10 +223,10 @@ function renderBroad(m) {
   const lintCard = card("Lint", (rules.length ? barList(rules.map((r, i) => barRow(esc(r.rule), ((r.refused + r.warned) / top) * 100, [r.refused && `${r.refused} refused`, r.warned && `${r.warned} warned`].filter(Boolean).join(", "), { top: i === 0 && r.refused > 0 })).join("")) : empty("Lint finds nothing.")) +
     `<details class="fold"><summary>Every finding</summary>${renderHealth(m)}</details>`, { count: `${lint.refuse.length} refusals, ${lint.warn.length} warnings` });
   const t = { ...EMPTY_TYPES, ...(m.types ?? {}) };
-  const gates = card("Factory memory gates", `<div class="key"><span>${t.gates.corrections.length} corrections</span><span>${t.gates.proposals.length} proposals</span></div>` +
-    `<details class="fold" id="gates"><summary>Corrections and proposals</summary>${renderGates(t.gates)}</details>`);
-  const writes = card("Recent writes", renderWrites({ writes: (m.writes ?? []).slice(0, 5) }) +
-    ((m.writes ?? []).length > 5 ? `<details class="fold"><summary>${m.writes.length - 5} more</summary>${renderWrites({ writes: m.writes.slice(5) })}</details>` : ""), { count: (m.writes ?? []).length });
+  const gates = card("Factory Memory Gates", `<div class="key"><span>${t.gates.corrections.length} corrections</span><span>${t.gates.proposals.length} proposals</span></div>` +
+    `<details class="fold" id="gates"><summary>Corrections and proposals</summary>${renderGates(t.gates)}</details>`, { label: "Factory memory gates" });
+  const writes = card("Recent Writes", renderWrites({ writes: (m.writes ?? []).slice(0, 5) }) +
+    ((m.writes ?? []).length > 5 ? `<details class="fold"><summary>${m.writes.length - 5} more</summary>${renderWrites({ writes: m.writes.slice(5) })}</details>` : ""), { count: (m.writes ?? []).length, label: "Recent writes" });
   return `<div class="pair">${lintCard}${gates}</div>${writes}`;
 }
 
@@ -283,7 +283,7 @@ export function renderInspector(n, row) {
     (row?.problems?.length ? `<div class="warnbox">${row.problems.map((p) => esc(`${p.rule}: ${p.detail}`)).join("<br>")}</div>` : "") +
     `<dl class="facts">${fact("Kind", [fm.kind, fm.scope].filter(Boolean).join(", "))}${fact("Confidence", fm.confidence)}${fact("Written", fm.updated && shortDay(fm.updated))}${fact("Last read", row ? (row.read ? shortDay(row.read) : "never") : "")}</dl>` +
     `<article class="note">${md(n.body)}</article>` +
-    list("Sources", sources, (s) => `<code>${esc(s)}</code>`) + list("Links to", n.links ?? [], (l) => link(l.title)) + list("Linked from", n.backlinks ?? [], (l) => link(l.title)) +
+    list("Sources", sources, (s) => `<code>${esc(s)}</code>`) + list("Links to", n.links ?? [], (l) => link(l.title)) + list("Linked From", n.backlinks ?? [], (l) => link(l.title)) +
     `<p class="hint"><code>${esc(n.path)}</code> · ${`<a href="#/memory/${encodeURIComponent(n.title)}">Open the page</a>`}</p>`;
 }
 
@@ -391,5 +391,5 @@ export function renderNote(n) {
     (fm ? `<dl class="facts">${fm}</dl>` : "") +
     `<article class="note">${md(n.body)}</article>` +
     `<section id="links">${head("links", "Links to", n.links.length)}${crumbs(n.links)}</section>` +
-    `<section id="backlinks">${head("backlinks", "Linked from", n.backlinks.length)}${crumbs(n.backlinks)}</section></div>`;
+    `<section id="backlinks">${head("backlinks", "Linked From", n.backlinks.length)}${crumbs(n.backlinks)}</section></div>`;
 }

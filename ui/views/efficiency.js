@@ -1,5 +1,5 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { card, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope } from "../lib.js";
+import { card, sentence, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope } from "../lib.js";
 import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
@@ -16,7 +16,7 @@ export function selection(d, key) {
   if (c) return { title: c.name, causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
   const causes = mergeCauses(d), lost = lostClasses(d);
   return {
-    title: "Lost time",
+    title: "Lost Time",
     causes,
     top: lost.flatMap((x) => x.top ?? []).sort((a, b) => b.hours - a.hours).slice(0, TOP_ISSUES),
   };
@@ -49,8 +49,8 @@ function usagePage(d, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);
   const scope = scopeBar(projectNow(), d.window ?? "week");
   return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, key))}` +
-    card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
-    card("Usage per issue, largest first", s.top.length ? usageTable(s.top) : "<p>No issue to show.</p>") + `</div>`;
+    card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
+    card("Usage per Issue, Largest First", s.top.length ? usageTable(s.top) : "<p>No issue to show.</p>", { label: "Usage per issue, largest first" }) + `</div>`;
 }
 
 /** The page body for a selection. `d` is /api/speed for the window, with its `baseline` when there is one. */
@@ -59,9 +59,9 @@ export function renderEfficiency(d, key = ALL) {
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
   const scope = scopeBar(projectNow(), d.window ?? "week");
   return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, key))}` +
-    card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
-    `<div class="pair">${card(`${s.title} causes`, s.causes.length ? causeBars(s) : "<p>No cause to show.</p>")}` +
-    (key === FLAKES ? "" : card(`${s.title} issues`, s.top.length ? topTable(s.top) : "<p>No issue to show.</p>")) + `</div></div>`;
+    card("Agent Time by Outcome", bar(d, key), { label: "Agent time by outcome", aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
+    `<div class="pair">${card(`${s.title} Causes`, s.causes.length ? causeBars(s) : "<p>No cause to show.</p>", { label: sentence(`${s.title} causes`) })}` +
+    (key === FLAKES ? "" : card(`${s.title} Issues`, s.top.length ? topTable(s.top) : "<p>No issue to show.</p>", { label: sentence(`${s.title} issues`) })) + `</div></div>`;
 }
 
 /** The old address. */

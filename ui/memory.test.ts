@@ -101,9 +101,10 @@ test("the views render and the note route is wired", () => {
   expect(noteView.api({ title: "A b" })).toBe("/api/memory/note?title=A%20b");
   const h = v.renderMemory({ exists: true, total: 1, byKind: { decision: 1 }, byScope: { aleph: 1 }, home: [{ heading: "Decisions", entries: [{ title: "Use Bun", hook: "h" }] }], lint: { refuse: [], warn: [] }, writes: [], misses: { days: 7, recalls: 2, empty: 1, empty_share: 0.5, reformulated: 0, unoffered_reads: 0 } });
   for (const t of ["Use Bun", "#/memory/Use%20Bun", "Counts by kind and scope", "50%", "Search titles, aliases and bodies"]) expect(h).toContain(t);
+  for (const t of ["<h3>When Recall Last Returned Each Note</h3>", "<h3>Notes by Kind ", "<h3>Recall Misses, 7 Days</h3>", "<h2>Factory Memory Gates</h2>", "<h2>Recent Writes</h2>", 'aria-label="Factory memory gates"', 'aria-label="Recent writes"']) expect(h).toContain(t);
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
-  expect(nh).toContain("Linked from");
+  expect(nh).toContain("Linked From");
 });
 
 test("warm() fills the misses cache, so the first request runs vault misses zero more times", async () => {
@@ -204,7 +205,7 @@ test("the page is the board, then broad health, then the note browser; the type 
 
 test("the inspector shows the note, its problem, sources, links and path, escaped", () => {
   const h = v.renderInspector({ title: "N", path: "wiki/N.md", frontmatter: { kind: "gotcha", scope: "a", confidence: "measured", updated: "2026-10-01", sources: ["<src>"] }, body: "**Claim.** x", links: [{ title: "L" }], backlinks: [{ title: "B" }] }, row({ status: "lint", problems: [{ rule: "schema", detail: "bad" }] }));
-  for (const s of ["Lint problem", "schema: bad", "&lt;src&gt;", "<strong>Claim.</strong>", "Linked from", "wiki/N.md"]) expect(h).toContain(s);
+  for (const s of ["Lint problem", "schema: bad", "&lt;src&gt;", "<strong>Claim.</strong>", "Linked From", "wiki/N.md"]) expect(h).toContain(s);
   expect(v.renderInspector(null)).toContain("Select a note");
 });
 
@@ -247,6 +248,7 @@ test("prospective issues carry their priority, medium when they have none, and t
     const h = v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: t }, {}, new URLSearchParams("type=prospective"));
     expect(h).toContain(priorityBadge("critical"));
     expect(h).toContain(">critical<");
+    expect(h).toContain("<h3>Open Issues With a Wait<");
   } finally {
     writeFileSync(join(base, "repos.json"), "{}");
   }
