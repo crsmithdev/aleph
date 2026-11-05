@@ -6,8 +6,8 @@ This page follows one change from an issue to a commit on `main`. It names each 
 
 ```mermaid
 flowchart LR
-  I[Issue] -->|intake| G[Goal + spec]
-  I -->|intake: large| P[Parts] --> G
+  I[Issue] -->|intake| G[Issue + spec]
+  I -->|intake: large| P[Sub-issues] --> G
   I -->|intake: close / done| X[Closed]
   G -->|dispatch, 6 gates| W[Worker]
   W --> V[Verify]
@@ -26,7 +26,7 @@ flowchart LR
 |---|---|---|
 | Intake | `intake.ts` `intakeIssue`, `factory.ts` `intakeNow` | An issue write (`add`, an answering `note`, `decide`), a dispatch, an issue with `plan` |
 | Dispatch | `factory.ts` `runDispatch` → `dispatchIssues` | The end of each run, an issue write, `resume`, a director decision, the sweep |
-| Unit (worker, verify, review) | `unit.ts` `unit`, `worker-verdict.ts` | A dispatch that starts a goal (`transitions.ts` `startJob`) |
+| Unit (worker, verify, review) | `unit.ts` `unit`, `worker-verdict.ts` | A dispatch that starts an issue (`transitions.ts` `startJob`) |
 | Next step | `continuation.ts` `nextStep` | The end of each unit: a fix round, a land or a wait |
 | Land | `landing.ts` `land` | A passed run, a dispatch, `aleph land` |
 | Director | `director.ts` `direct` | Each write that sets an Ask |
@@ -42,11 +42,11 @@ No transition waits for the tick. Each step starts the next one directly. The ti
 | Stage | When |
 |---|---|
 | dropped | The store says dropped |
-| waiting | The issue, one of its runs or one of its parts has an Ask |
+| waiting | The issue, one of its runs or one of its sub-issues has an Ask |
 | done | A commit on main names it in an `Issue:` trailer, or the store says done |
 | parked | The store says parked |
-| failed | Its job or a part's job is returned or failed |
-| working | It has parts in progress |
+| failed | Its job or a sub-issue's job is returned or failed |
+| working | It has sub-issues in progress |
 | landing, working | It has an open job |
 | held | It waits on an issue in its `after` list |
 | working | `plan` is set: intake will split it |
@@ -66,7 +66,7 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 
 | Route | Result |
 |---|---|
-| `build` | A spec (Goal, Edit surface, Oracle), or 2 to 6 parts, each with its own spec and `after` order |
+| `build` | A spec (Goal, Edit surface, Oracle), or 2 to 6 sub-issues, each with its own spec and `after` order |
 | `close` | Done, with the reason: a duplicate, stale or already fixed |
 | `done` | Done; the named commit must be on main |
 | `ask` | An Ask with a question, 2 to 4 options and a recommendation |
@@ -77,7 +77,7 @@ Otherwise one read-only Opus run on a clone of `origin/main` returns one route:
 - each Edit surface path on main or marked new;
 - an Oracle that names a command or a test file, with no `bun test` argument that bun reads as a name filter;
 - each test file the Oracle names on main or in the Edit surface;
-- 2 to 6 parts, part titles within the title rule, and `after` refs that exist;
+- 2 to 6 sub-issues, sub-issue titles within the title rule, and `after` refs that exist;
 - for `done`, a commit that is on main.
 
 **Send-backs at intake:**
@@ -94,21 +94,21 @@ Each dispatch first does its steps, in this order:
 1. start the next steps that a pause kept (`startKept`);
 2. rescue returned, failed, killed and lost runs (`rescueStuck`);
 3. land the passed runs;
-4. close parents whose parts are done (`closeIssues`);
+4. close parents whose sub-issues are done (`closeIssues`);
 5. send `plan` issues to intake to split.
 
-Then it asks each queued goal 6 gates, in order (`issue-decision.ts`, `factory-status.ts`). The first gate that binds skips the goal for this dispatch and adds a `hold` event, naming the gate, to the goal's job record in `~/.aleph/jobs/`. The next dispatch asks again.
+Then it asks each queued issue 6 gates, in order (`issue-decision.ts`, `factory-status.ts`). The first gate that binds skips the issue for this dispatch and adds a `hold` event, naming the gate, to the issue's job record in `~/.aleph/jobs/`. The next dispatch asks again.
 
 | Gate | Binds when | Result |
 |---|---|---|
 | Pause | `~/.aleph/factory/paused` exists | Nothing starts. Intake, director, suite, firefighter, corrections and episodes stop too. A unit's next step is kept in `paused-next` |
 | Baseline | The last `aleph suite` on main failed | Skip. Issues labelled `red-main` pass, so the fix can land |
-| Not ready | The goal is done, waits on `after`, or has an open job | Skip |
-| Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the goal to a tier with room |
+| Not ready | The issue is done, waits on `after`, or has an open job | Skip |
+| Live cap | `ALEPH_LIVE_CAP` Claude runs are live; local-model runs count against `LOCAL_CAP` (1) | Skip, or route the issue to a tier with room |
 | Busy file | A file in the Edit surface had 3 land conflicts in 7 days and another open job names it | Skip |
-| Loop guard | The goal's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or `caps.json` sets | A `no-commit` or `run-cap` Ask in place of a start |
+| Loop guard | The issue's last 3 runs made no commit, or it started too often in 60 minutes: 3 times, or the run cap that `ALEPH_RUN_CAP` or `caps.json` sets | A `no-commit` or `run-cap` Ask in place of a start |
 
-A goal that no gate holds starts. Each start holds the lock `goal-<name>`, so two dispatches start it once. GitHub CI on main does not gate.
+An issue that no gate holds starts. Each start holds the lock `goal-<name>`, so two dispatches start it once. GitHub CI on main does not gate.
 
 **Load admission** (`ledger.ts` `admit`) is not a gate. A check, a worker and a land start only while the 1-minute load average is under `ALEPH_LOAD_LIMIT`. Otherwise they wait in a queue. The wait fails nothing and counts against no time limit.
 
@@ -122,8 +122,8 @@ The worker is `claude -p` in `<repo>/.worktrees/job-<name>` on the branch `facto
 | `followups[]` | New issues with `source: worker` |
 | `flakes[]` | Notes on the flake tracker |
 | `defaults[]` | Lines in the report |
-| `already_met` | A claim that the goal holds on main; the baseline decides it |
-| `question` | A question on the Oracle; with no commit, the goal waits for a spec edit |
+| `already_met` | A claim that the issue holds on main; the baseline decides it |
+| `question` | A question on the Oracle; with no commit, the issue waits for a spec edit |
 
 **Gate: the worker's output** (`unit.ts` `factoryVerdict`). The run fails when:
 
@@ -155,14 +155,14 @@ When the same tests fail on two rounds in a row, no further round starts. The ru
 
 ## 5. Review
 
-A fresh reviewer (Opus, read-only, in a detached worktree at the branch's tip) reads the goal, the spec and the diff, and ends with `pass` or `hold <reason>`.
+A fresh reviewer (Opus, read-only, in a detached worktree at the branch's tip) reads the issue, the spec and the diff, and ends with `pass` or `hold <reason>`.
 
 The reviewer also gets these as findings:
 
 - each change that deletes or renames a test, changes a `test`, `it`, `describe` or `expect` line, or adds `.skip`, `.only` or `.todo`;
 - each changed file that the Edit surface does not name.
 
-It holds only when the goal does not call for the change.
+It holds only when the issue does not call for the change.
 
 | Outcome | Result |
 |---|---|
@@ -193,25 +193,25 @@ Lands of one repo go one at a time, in the order they became ready (`landing.ts`
 | Conflict | A merge run: a Haiku worker merges `origin/main` into the branch (600 s), and the reviewer judges the merge commit. At most 2 conflicted lands per job; then the rescue |
 | A change to the to-do list | Back to the worker with a note |
 | Push lost a race (`moved`) | Land again, at most 3 times |
-| Land checks fail | Rescue `land-checks`: drop and rerun the goal once from main |
+| Land checks fail | Rescue `land-checks`: drop and rerun the issue once from main |
 | No verdict | No batch split; each run lands again once |
 
 The land does not run the full suite. `aleph suite` runs it on `origin/main` each hour and sets the baseline.
 
 ## 7. Rescue
 
-The rescue (`rescue.ts`, `continuation.ts` `rescueCase`) takes one safe action per case, once per goal. The second time on the same goal sets a `rescue` Ask.
+The rescue (`rescue.ts`, `continuation.ts` `rescueCase`) takes one safe action per case, once per issue. The second time on the same issue sets a `rescue` Ask.
 
 | Case | Action |
 |---|---|
-| Killed by a host restart | A land lands again; a run with commits ahead of main is checked again; else drop and rerun. Does not use the once-per-goal mark |
-| Lost (the process ended with no end record) | The same actions, once per goal |
+| Killed by a host restart | A land lands again; a run with commits ahead of main is checked again; else drop and rerun. Does not use the once-per-issue mark |
+| Lost (the process ended with no end record) | The same actions, once per issue |
 | A spec question | A `question` Ask; the run waits for a spec edit and drops when the spec changes |
 | Duplicate: no commit, and the issue is already done | Drop and close |
 | `already_met` | The baseline decides: green is done; red reruns with a note; unchecked waits |
 | No commit | Drop and rerun |
 | `infra` | Check again, land again, or drop and rerun when there is no branch |
-| Time box | Drop and set `plan`, so intake splits the issue. Ask instead when the issue is a part, was split before or hit the time box before |
+| Time box | Drop and set `plan`, so intake splits the issue. Ask instead when the issue is a sub-issue, was split before or hit the time box before |
 | Land conflict after 2 bounces, land checks failed | Drop and rerun once from main |
 | Stalled, failed after the fix rounds, other | A `rescue` Ask |
 
@@ -243,7 +243,7 @@ Whatever waits for Chris is an Ask (`ask.ts`), with a reason, a question and opt
 **Escalation** (`director.ts` `escalation`). The director writes case text (situation, effects, recommendation) and takes no action when:
 
 - the Ask is a memory proposal;
-- it is a second `run-cap` or `rescue` Ask on a goal the director decided once;
+- it is a second `run-cap` or `rescue` Ask on an issue the director decided once;
 - the land changes a security path or `bun.lock`;
 - a held run's branch cannot be read.
 
@@ -260,7 +260,7 @@ An Ask that the actions leave open, a failed director run or a malformed reply a
 | Drop a run and its branch | `aleph drop <name> [reason]` | Drop the job |
 | Check a returned or failed run again, keeping its work | `aleph recheck <name>` | Recheck |
 | Answer an issue that waits | `aleph issue decide <repo> <id> "<text>"` or `note` | Decide, Note |
-| Change a goal's spec | `aleph issue edit <repo> <id> --spec -` | Edit |
+| Change an issue's spec | `aleph issue edit <repo> <id> --spec -` | Edit |
 | Grant or revoke a standing rule | `aleph always grant\|revoke` | Always, Gates page |
 | Set caps and models | `aleph models`, `~/.aleph/factory/caps.json` | Gates page, Agents page |
 
@@ -273,14 +273,14 @@ A write to an issue starts intake or a dispatch at once. A land by hand writes `
 | Firefighter | Tick, each 5 minutes | Files one `critical` `red-main` bug per failing commit of the baseline or GitHub CI; sets a `rescue` Ask on a land live for 30 minutes | The `Failing commit:` line; an `asked` event on the land's record |
 | Suite | `aleph-suite` timer, hourly; the sweep after a red main moves | Runs the full checks on `origin/main` and records the baseline | Runs only when main moved |
 | Corrections | Tick, daily from 03:00 | Groups signals into lessons and proposes a check, a rule or a skill as a `proposal-*` Ask | Signals already in a lesson are skipped |
-| Episodes | Tick, each 30 minutes | Writes a page for each finished goal | `episodes-seen` |
+| Episodes | Tick, each 30 minutes | Writes a page for each finished issue | `episodes-seen` |
 | Monitor | Tick, daily | Reads the day's records and writes numbered findings for the Status page | One per day |
 
 ## Where to look
 
 | To learn | Read |
 |---|---|
-| Why a goal did not start | The `hold` events in `~/.aleph/jobs/<repo>-<n>.json`, or the Holds panel on Status |
+| Why an issue did not start | The `hold` events in `~/.aleph/jobs/<repo>-<n>.json`, or the Holds panel on Status |
 | Why a run stopped | `aleph status <repo>-<n>`, or the job page |
 | What a check printed | `~/.aleph/runs/<run>/checks.log` |
 | What the director decided | The Automation page |

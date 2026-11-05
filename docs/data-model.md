@@ -36,9 +36,9 @@ erDiagram
 |---|---|---|
 | Repo | `repos.json` | Registered repo; its `code` gives the short IDs in [Naming](naming.md) |
 | Issue | `issues/<repo>/backlog/tasks/<repo>-<n>.md` | Request |
-| Child | `issues/<repo>/backlog/tasks/<repo>-<n>.md` with `from` | Issue that intake split from a parent issue |
-| Old part | `issues/<repo>/backlog/tasks/<repo>-<n>.<k>.md` | Child from before `from`; intake no longer makes one |
-| Job record | `jobs/<repo>-<n>[.<k>].json` | Issue or part with work on it |
+| Sub-issue | `issues/<repo>/backlog/tasks/<repo>-<n>.md` with `from` | Issue that intake split from a parent issue |
+| Old part | `issues/<repo>/backlog/tasks/<repo>-<n>.<k>.md` | Sub-issue from before `from`; intake no longer makes one |
+| Job record | `jobs/<repo>-<n>[.<k>].json` | Issue or sub-issue with work on it |
 | Run | An entry in the job record's `runs[]` | Agent process: intake, worker, land, director, … |
 | Run folder | `runs/<stamp>-<subject>-<n>/` (old: `runs/<stamp>-<name>-<kind>/`) | Run |
 | Ask | The job record's `ask` | Decision that waits |
@@ -121,7 +121,7 @@ The run state. `jobs/lib/records/record.ts` is the only module that opens a reco
 | `issue` | The issue id |
 | `ask`, `askRun` | The open Ask, and the run that owns it |
 | `asks[]` | Ask history: `{set, cleared?, reason?, recommended?}` |
-| `wait` | Why the goal does not start: `{kind, reason, since}` |
+| `wait` | Why the issue does not start: `{kind, reason, since}` |
 | `runs[]` | Each run, oldest first |
 | `events[]` | `{at, kind, what, run?, data?}` |
 | `rounds`, `cost` | Derived on each write |
@@ -203,7 +203,7 @@ No code prunes run folders or records.
 | `stalls.json`, `smoke.json` | Stall first-seen times; the smoke test | Tick |
 | `corrections.json` | Signals and lessons | Corrections |
 | `monitor/<day>.json` | The day's table and findings | Monitor |
-| `episodes/` | One page per finished goal; kept 14 days | Episodes |
+| `episodes/` | One page per finished issue; kept 14 days | Episodes |
 | `standing-retry/` | Runs an Always `retry` started | Intake |
 | `ui-sessions.json` | UI login tokens | `aleph-ui` |
 | `dispatch.log` | Output of detached dispatch, intake, director and suite | `launch.ts` |

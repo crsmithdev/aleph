@@ -85,7 +85,7 @@ const PROBLEM: Record<string, (c: Ctx) => string> = {
     return `The reviewer could not reach a verdict on ${c.id} in two tries.`;
   },
   question: (c) => c.run ? `The worker on ${c.id} asked: ${clean(c.run.question) || "it needs an answer"}` : sentence(clean(c.issue?.decision?.question ?? c.issue?.question) || "Your answer is needed"),
-  "part-dropped": (c) => `A goal of ${c.id} was dropped and no other goal of it is open.`,
+  "part-dropped": (c) => `A sub-issue of ${c.id} was dropped and no other sub-issue of it is open.`,
   "no-commit": (c) => `The last 3 runs of ${c.id} ended with no commit, so the factory stopped starting it.`,
   "run-cap": (c) => `The factory started ${c.id} 3 times in one hour, so it stopped starting it until you run it again.`,
   "intake-failed": (c) => `Intake of ${c.id} failed: ${clean(unlead(c.issue?.question ?? "").replace(/^Intake failed:\s*/, "")).replace(/\.$/, "") || "it gave no verdict"}, so no one has decided what to do with this issue.`,

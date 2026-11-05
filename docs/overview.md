@@ -35,10 +35,9 @@ Aleph is a Claude Code plugin for one person on one machine. It does two jobs.
 | Word | Means |
 |---|---|
 | Issue | What someone asks for: Chris, a worker, the corrections or a session |
-| Part | A goal that intake split from a large issue: `aleph-577.1` |
-| Goal | An issue or part with a spec that the factory can build |
+| Sub-issue | An issue that intake split from a large issue, with a `from` link to the parent |
 | Spec | Goal, Edit surface and Oracle: what to change, where, and the check that proves it |
-| Job | All the runs on one goal, with one record |
+| Job | All the runs on one issue, with one record |
 | Run | One process: intake, a worker, a land, the director |
 | Fix round | A send-back of a failed check or a review hold to the same worker branch |
 | Land | The squash push of a passed branch onto `origin/main` |

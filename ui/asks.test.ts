@@ -65,6 +65,12 @@ describe("asks", () => {
     });
   }
 
+  test("the part-dropped card reads as a sub-issue, with no goal", () => {
+    const [a] = CASES["part-dropped"]();
+    expect(a.problem).toBe("A sub-issue of aleph-387 was dropped and no other sub-issue of it is open.");
+    expect(a.problem).not.toContain("goal");
+  });
+
   test("an Ask the director still holds is tagged as its call; once escalated it has the reason's tag", () => {
     const held = ofIssues(issue({ reason: "question", question: "what now?", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] } as Ask }))[0];
     expect(held.tag).toBe("director");
