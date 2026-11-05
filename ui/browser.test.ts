@@ -69,7 +69,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(all).toBeGreaterThan(1);
     const titles = () => page.ev<string>('[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|")');
     const first = await titles();
-    await click('#issues-table button[data-sort="title"]');
+    await click("#issues-table th:first-child button[data-sort]");
     await page.until(`[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|") !== ${JSON.stringify(first)}`);
     await page.go("#/issues");
     const search = 'document.querySelector("#view input[type=search]")';

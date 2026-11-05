@@ -164,13 +164,13 @@ const SORT = {
 const DOWN_FIRST = new Set(["updated", "priority", "notes", "runs", "cost", "age"]);
 const UPDATED = { key: "updated", dir: -1 };
 
-/** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first. */
+/** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first; rows that tie on that too keep their order going down and reverse it going up. */
 export function sortRows(rows, sort = UPDATED) {
-  const f = SORT[sort.key] ?? SORT.updated;
+  const f = SORT[sort.key] ?? SORT.updated, at = new Map(rows.map((r, i) => [r, i]));
   return [...rows].sort((a, b) => {
     const x = f(a), y = f(b);
     const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
-    return c * sort.dir || ms(b.at) - ms(a.at);
+    return c * sort.dir || ms(b.at) - ms(a.at) || (at.get(a) - at.get(b)) * -sort.dir;
   });
 }
 
@@ -657,7 +657,7 @@ if (typeof document !== "undefined") {
     const t = e.target.closest ? e.target : null;
     const sort = t?.closest("#issues-table button[data-sort]");
     if (sort) {
-      const key = sort.dataset.sort, cur = here().sort;
+      const key = sort.dataset.sort, cur = here().sort ?? ((here().q ?? "").trim() ? null : UPDATED);
       const dir = cur?.key === key ? -cur.dir : DOWN_FIRST.has(key) ? -1 : 1;
       return setQuery({ sort: key, dir: dir > 0 ? "asc" : "desc" });
     }
