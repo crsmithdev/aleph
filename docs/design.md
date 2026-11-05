@@ -151,7 +151,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:523`) with `heads()` (`ui/lib.js:526`) or `sortHead()` (`ui/lib.js:592`), styled by `table.tbl` (`ui/app.css:454`). Every table goes through `dataTable()`.
+The one table is `dataTable()` (`ui/lib.js:523`) with `heads()` (`ui/lib.js:526`) or `sortHead()` (`ui/lib.js:605`), styled by `table.tbl` (`ui/app.css:454`). Every table goes through `dataTable()`.
 
 Rules, as the code states them (`ui/lib.js:523`, `ui/app.css:454`):
 
@@ -284,7 +284,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:177`) is visible on all controls. Motion stops under `prefers-reduced-motion` (`ui/app.css:430`). Sort headers set `aria-sort` (`ui/lib.js:594`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:177`) is visible on all controls. Motion stops under `prefers-reduced-motion` (`ui/app.css:430`). Sort headers set `aria-sort` (`ui/lib.js:607`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
 
 ## Components
 

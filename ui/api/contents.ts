@@ -1,7 +1,8 @@
 /**
- * `GET /api/contents`: the Inventory view's data: `{ issues, projects }`, the rows of `/api/issues`, each with
- * the count and recorded cost of the runs on it and its parts, and the registry's keys. `?project=<key>` shows only that project.
+ * `GET /api/contents`: the Inventory view's data: `{ issues, projects, tests }`, the rows of `/api/issues`, each with
+ * the count and recorded cost of the runs on it and its parts, the registry's keys and each project's suite history records. `?project=<key>` shows only that project.
  */
+import { suiteHistory } from "../../jobs/lib/factory-status.ts";
 import { allRuns, loadRegistry, onOf } from "../../jobs/lib/ledger.ts";
 import type { Routes } from "../server.ts";
 import { routes as issueRoutes, type Row } from "./issues.ts";
@@ -32,6 +33,7 @@ export const routes: Routes = {
     const project = url.searchParams.get("project");
     const totals = runTotals();
     const issues = ((await res.json()) as Row[]).map((r) => ({ ...r, ...(totals.get(`${r.repo}-${r.ref}`) ?? { runs: 0, cost: 0 }) }));
-    return Response.json({ issues, projects: Object.keys(loadRegistry()).filter((k) => !project || k === project) });
+    const projects = Object.keys(loadRegistry()).filter((k) => !project || k === project);
+    return Response.json({ issues, projects, tests: Object.fromEntries(projects.map((k) => [k, suiteHistory(k)])) });
   },
 };

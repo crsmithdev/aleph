@@ -162,6 +162,27 @@ describe("views", () => {
     expect((await getJson("/api/contents?project=fac")).projects).toEqual(["fac"]);
   });
 
+  test("the tests card charts the suite history of the selected project in the window", async () => {
+    const rec = (repo: string, at: string, ran: number, rerunPassed: number) => ({ repo, commit: "c", at, ran, passed: ran, failed: 0, skipped: 0, rerunPassed });
+    const now = new Date("2026-11-04T12:00:00Z"), recs = [rec("fac", "2026-11-04T10:00:00Z", 120, 2), rec("fac", "2026-10-01T10:00:00Z", 90, 1), rec("oth", "2026-11-04T11:00:00Z", 40, 0)];
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "suite-history.jsonl"), recs.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    const d = await getJson("/api/contents");
+    expect(Object.keys(d.tests).sort()).toEqual(["fac", "oth"]);
+    expect(d.tests.fac.map((r: any) => r.ran)).toEqual([120, 90]);
+    expect(Object.keys((await getJson("/api/contents?project=oth")).tests)).toEqual(["oth"]);
+    const page = v.view.render(d, {}, new URLSearchParams());
+    expect(page).toContain('data-chart="tests"');
+    const all = v.testsOption(d.tests, "", "week", now);
+    expect(all.series.map((s: any) => s.name)).toEqual(["fac tests", "oth tests", "fac passed on rerun", "oth passed on rerun"]);
+    expect(all.series[0].data.map((p: any) => p[1])).toEqual([120]);
+    expect(all.series[2].data.map((p: any) => p[1])).toEqual([2]);
+    const fac = v.testsOption(d.tests, "fac", "month", now);
+    expect(fac.series.map((s: any) => s.name)).toEqual(["fac tests", "fac passed on rerun"]);
+    expect(fac.series[0].data.map((p: any) => p[1])).toEqual([120]);
+    expect(v.testsOption(d.tests, "fac", "month", new Date("2026-10-02T00:00:00Z")).series[0].data).toHaveLength(1);
+  });
+
   test("the view is Issues at #/issues; #/inventory and #/projects redirect, the detail routes do not", () => {
     expect(v.view.path).toBe("/issues");
     expect(v.view.title).toBe("Issues");

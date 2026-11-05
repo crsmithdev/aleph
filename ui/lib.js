@@ -569,6 +569,19 @@ export const stackedAreaOption = (labels, series, lines = []) => ({
     ...lines.map((s) => ({ type: "line", name: s.name, yAxisIndex: 1, symbol: "none", lineStyle: { width: 2 }, data: s.data })),
   ],
 });
+/** The ECharts option for `lines` (the left axis) and `bars` (the right axis) over time. Each series is `{name, data}` with `data` as `[ms, value]` pairs. */
+export const timeSeriesOption = (lines, bars) => ({
+  animation: false,
+  grid: { left: 40, right: 32, top: 24, bottom: 20 },
+  legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
+  tooltip: { trigger: "axis", confine: true },
+  xAxis: { type: "time", axisTick: { show: false } },
+  yAxis: [{ type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } }, { type: "value", min: 0, minInterval: 1, splitLine: { show: false }, axisTick: { show: false } }],
+  series: [
+    ...lines.map((s) => ({ type: "line", name: s.name, symbol: "circle", symbolSize: 4, lineStyle: { width: 2 }, data: s.data })),
+    ...bars.map((s) => ({ type: "bar", name: s.name, yAxisIndex: 1, barMaxWidth: 8, data: s.data })),
+  ],
+});
 /** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`. */
 export const rangeBarOption = (labels, p50, p90, suffix = "d") => ({
   animation: false,

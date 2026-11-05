@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -354,6 +354,17 @@ export function closeTimes(rows, win = "month", now = new Date()) {
 }
 
 export const backlogOption = (b, f) => stackedAreaOption(b.labels, PRIORITY_ORDER.map((p) => ({ name: p, data: b.counts[p] })), [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
+/** The suite records of `tests` ({ project: records }) of `project` (all when empty) within the window: the test count of each record as a line per project, and the tests that passed only on rerun as bars. */
+export function testsOption(tests, project = "", win = "month", now = new Date()) {
+  const from = now.getTime() - WINDOW_DAYS[win in WINDOW_DAYS ? win : "week"] * 86400000, lines = [], bars = [];
+  for (const [key, records] of Object.entries(tests ?? {})) {
+    if (project && key !== project) continue;
+    const kept = records.map((r) => ({ t: Date.parse(r.at), r })).filter(({ t }) => t >= from && t <= now.getTime());
+    lines.push({ name: `${key} tests`, data: kept.map(({ t, r }) => [t, r.ran]) });
+    bars.push({ name: `${key} passed on rerun`, data: kept.map(({ t, r }) => [t, r.rerunPassed]) });
+  }
+  return timeSeriesOption(lines, bars);
+}
 export const closeOption = (c) => rangeBarOption(c.kinds, c.p50, c.p90, c.unit === "hours" ? "h" : "d");
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
@@ -377,7 +388,8 @@ function renderDetail(rows, o) {
 
 /** The two charts under the tiles, on every tile. */
 const renderCharts = (o) => `<div class="trio">${card(`Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}`, '<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p><div class="chartbox" data-chart="backlog"></div>', { cls: "wide" })}` +
-  `${card("Time to close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}</div>`;
+  `${card("Time to close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
+  `${card("Tests", '<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p><div class="chartbox" data-chart="tests"></div>', { cls: "wide" })}</div>`;
 
 // ---- The filters ----
 
@@ -438,6 +450,7 @@ function draw(root) {
   const close = closeTimes(rows, win, now), note = root.querySelector("[data-close-note]");
   if (note) note.textContent = `${close.unit === "hours" ? "Hours" : "Days"} from filed to closed: the bar is p50, the tick p90.`;
   panel("close", closeOption(close));
+  panel("tests", testsOption(live.tests, live.o().project, win, now));
 }
 
 /** Fill what follows the filters. A filter changes no route, so nothing fetches again. */
@@ -451,7 +464,7 @@ function refill() {
 
 /** Draws the charts, keeps the data for the filters, and fills the form's Project select from the registry's keys. */
 export async function mount(root, d) {
-  live = { root, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")) };
+  live = { root, tests: d?.tests, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")) };
   if (root.querySelector?.(".chartbox")) draw(root);
   onTile(root.querySelector?.("#inv-numbers"), (k) => {
     setQuery(TILE_FILTER[k]);
