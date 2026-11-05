@@ -42,6 +42,7 @@ describe("serverArgs", () => {
     expect(flag(a, "--ctx-size")).toBe("40960");
     expect(flag(a, "--n-gpu-layers")).toBe("99");
     expect(flag(a, "--reasoning-budget")).toBe("0");
+    expect(flag(a, "--threads")).toBe("6");
     expect(flag(a, "--model")).toBe("/h/.local/share/gpt-oss-20b.gguf");
   });
 });

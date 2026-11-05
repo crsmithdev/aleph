@@ -10,7 +10,7 @@
 
 - The model is the Ollama blob `~/.ollama/models/blobs/sha256-8ecb5d4a...`. The unit reads it through the symlink `~/.local/share/gpt-oss-20b.gguf`. The blob stays in place.
 - The blob carries a ChatML template, not the gpt-oss one. With it, the model prints raw harmony text and the `Read` tool call fails. The unit passes `--chat-template-file models/templates/openai-gpt-oss-120b.jinja` from the llama.cpp clone. With that file, `claude -p` with `--allowedTools Read` prints `# aleph`.
-- Flags: `--jinja --ctx-size 40960 --n-gpu-layers 99 --n-cpu-moe N --reasoning-budget 0`. The unit picks N at each start, as described under "Choice at start".
+- Flags: `--jinja --ctx-size 40960 --n-gpu-layers 99 --n-cpu-moe N --reasoning-budget 0 --threads 6`. The unit picks N at each start, as described under "Choice at start".
 - The Anthropic API treats a request without `thinking` as thinking off. llama-server defaults to an unlimited reasoning budget, so a `max_tokens: 16` request spent all 16 tokens on reasoning and returned only a `thinking` block. `--reasoning-budget 0` makes the default match the API: such a request returns a `text` block. A request with `thinking.budget_tokens` gets that budget and returns a `thinking` block and a `text` block.
 - `claude -p --allowedTools Read "<prompt>"` reads the prompt as a second tool name and exits with `Input must be provided`. Put the prompt before the flag, or write `--allowedTools=Read`.
 
@@ -96,3 +96,16 @@ env -u CLAUDECODE bun -e 'import { LOCAL_ENV } from "./jobs/lib/models.ts"; cons
 - Token totals: 21,897 input, 140,768 cache read, 4,730 output (167,395 in all), 7 turns, 2 m 46 s.
 - Compacted: yes, once (one `compact_boundary` in the session transcript). The server's largest slot was 29,381 tokens.
 - Result: exit code 0, `is_error` false, `terminal_reason` completed, a summary of all five files, and no "exceed" or context-length error in the server log.
+
+## Threads
+
+Without `--threads`, llama-server uses 12 threads, one per physical core of the Ryzen 9 7900X. At 12 threads it used about 42% of the 24 logical CPUs while it served a call. The unit runs with `--threads 6` and `Nice=10`.
+
+Method: `uvx llama-benchy` 0.4.0 against port 8012, `--pp 2048 --tg 128 --runs 2`, at `--n-cpu-moe 12`, while factory tests ran. CPU is the server's CPU time over the benchmark's wall time, as a share of 24 CPUs.
+
+| `--threads` | Prompt processing (t/s) | Generation (t/s) | CPU |
+|---|---|---|---|
+| 12 | 872 ± 52 | 27 ± 12 | 23% |
+| 6 | 555 ± 103 | 31 ± 13 | 13% |
+
+Prompt processing is CPU-bound with experts on the CPU: 6 threads cost about 36%. The change in generation is within the noise. Values 7 to 11 were not measured.

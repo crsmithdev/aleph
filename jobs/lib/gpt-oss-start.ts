@@ -44,7 +44,7 @@ export function serverArgs(home: string, freeMiB: number | null): string[] {
     "--host", "127.0.0.1", "--port", "8012", "--jinja",
     "--chat-template-file", `${llama}/models/templates/openai-gpt-oss-120b.jinja`,
     "--ctx-size", "40960", "--n-gpu-layers", "99", "--n-cpu-moe", String(nCpuMoe),
-    "--reasoning-budget", "0",
+    "--reasoning-budget", "0", "--threads", "6",
   ];
 }
 
