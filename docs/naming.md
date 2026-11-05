@@ -51,7 +51,7 @@ Every event has these fields: a log row, a job's end, a Status card line, a repo
 | `to` | who decides next: `human` or `director` | `director` |
 | `note` | free text | |
 
-The content is the fields after `sub`, joined by a space. `→` comes before `result`, `file` and `to`:
+The content is the fields after `sub`, joined by a space. `→` comes before `result`, `file` and `to`. A file that a `to` follows, with no `on` before it, takes the `to`'s arrow and has no arrow of its own (`docclaims.ts → human`). A file with no other field before it and no `to` after it still takes an arrow (`→ tests`):
 
 ```
 gate      a1421  running              a1421#6
