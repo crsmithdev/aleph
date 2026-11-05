@@ -81,6 +81,30 @@ test("add starts a list for a repo that has none; every other verb refuses", () 
   expect(aleph("issue", "lint", "proj").code).toBe(0);
 });
 
+test("the duplicate warning names the item with the repo's key", async () => {
+  // The stub answers item 3 at 0.9, above the 0.7 cut, so the add warns about it.
+  const server = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      const body: any = await req.json();
+      const answers = Object.fromEntries(Object.keys(body.questions).map((id) => [id, { type: "noul", noul: id === "item:3" ? 0.9 : 0.1 }]));
+      return Response.json({ model: "typesafe/jev-1.13", answers });
+    },
+  });
+  try {
+    // Await the spawn: a synchronous one blocks the event loop, so this stub could not answer it.
+    const p = Bun.spawn(["bun", CLI, "issue", "add", "proj", "An old item again"], {
+      // ALEPH_JUDGE empty is how a child says "not haiku": judgeChoice reads "" as jev.
+      env: env({ ALEPH_JUDGE: "", ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" }),
+      stdin: "ignore", stdout: "pipe", stderr: "pipe",
+    });
+    const [code, , err] = await Promise.all([p.exited, new Response(p.stdout).text(), new Response(p.stderr).text()]);
+    expect(code).toBe(0);
+    expect(err).toContain("proj-3 may be the same task: An old item");
+    expect(err).not.toContain("aleph-3");
+  } finally { server.stop(true); }
+});
+
 test("dates are local, not UTC", () => {
   // `bun test` pins TZ=UTC, so the stamp has to be read from a process that has
   // a real zone. At 18:06 in Los Angeles it is already tomorrow in UTC, and an

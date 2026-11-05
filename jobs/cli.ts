@@ -194,7 +194,7 @@ async function todoCmd(): Promise<void> {
     case "add": {
       const a = await verbs.add(repo, args.join(" "), fields);
       warn(a.follow);
-      for (const m of a.result.maybeSame ?? []) console.error(`aleph-${m.id} may be the same task: ${m.title}`);
+      for (const m of a.result.maybeSame ?? []) console.error(`${repo.key}-${m.id} may be the same task: ${m.title}`);
       out(a.result);
       dispatchAfterGoal(repo, a.item);
       const list = store.reader().list(repo.key);
