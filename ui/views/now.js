@@ -62,7 +62,7 @@ export function renderStages(s, sort = SORTS.stages) {
   const rows = sorted(all, STAGE_COLS, sort).map((r) =>
     `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, mean, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
-  const head = h("Stage", "stage") + h("Runs per Item", "runs", true) + h("No Usable Result", "unusable", true);
+  const head = h("Stage", "stage") + h("Jobs per Item", "runs", true) + h("No Usable Result", "unusable", true);
   return card("Stages", rows ? dataTable(head, rows) : empty("No stage ran."), { id: "stages" });
 }
 
@@ -221,7 +221,7 @@ export function span(since, to) {
 }
 
 /** The "3/4" link of a part to its parent; "" for a card that is no part. */
-const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Part ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
+const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Sub-issue ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
 
 /** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, the hold. `chips` is HTML. */
 function metaRow({ id, chips, part, at, since, now, end, hold }) {
@@ -335,7 +335,7 @@ const stuckRow = (s) => (j) => {
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;
   return alertCard("stuck", j.name, meta, j.item?.title || j.name, hold,
-    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(act("drop", j.name, "Drop"), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
     agentLine(j) + jobDetails(s, j));
 };
 

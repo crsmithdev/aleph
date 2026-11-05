@@ -328,6 +328,21 @@ test("the Caps section holds one form each for the live cap and the run cap, wit
   expect(gates.renderGates(data())).toContain(">Controls</h2>");
 });
 
+test("the cap row and the rule hints say job and issue, with no goal and no Run cap", () => {
+  const h = gates.renderGates(data());
+  const caps = h.slice(h.indexOf('<section class="card" id="gates-caps"'), h.indexOf('aria-label="Held paths"'));
+  expect(caps).toContain("<b>Job cap</b>");
+  expect(caps).toContain("live jobs against the cap");
+  expect(caps).toContain("the most starts any one issue made in the last hour");
+  const rules = h.slice(h.indexOf('<section id="rules"'));
+  expect(rules).toContain("Jobs with no commit");
+  expect(rules).toContain("The last 3 jobs of an issue ended with nothing committed.");
+  expect(rules).toContain("An issue started 3 times in one hour.");
+  expect(rules).toContain("A sub-issue of an issue was dropped and no other sub-issue is open.");
+  expect(h).not.toContain("Run cap");
+  expect(h.replace(/<[^>]*>/g, "")).not.toMatch(/goal/i);
+});
+
 test("the view is Automation at #/automation in the Factory group; #/gates redirects; the By filter is buttons, not links", () => {
   expect(gates.view.path).toBe("/automation");
   expect(gates.view.title).toBe("Automation");

@@ -24,14 +24,14 @@ export const redirect = (hash) => {
 
 /** The name and the one line of each Ask reason. A reason not listed shows its key. */
 export const REASONS = {
-  "held-path": ["Lands on held paths", "A run that changes a held path, after its checks and review pass."],
-  review: ["Reviewer holds", "The reviewer held the run and no fix rounds are left."],
-  question: ["Questions", "A run or an intake stopped on a choice that the spec leaves open."],
-  "no-commit": ["Runs with no commit", "The last 3 runs of a goal ended with nothing committed."],
-  "part-dropped": ["Dropped parts", "A part of an issue was dropped and no other part is open."],
+  "held-path": ["Lands on held paths", "A job that changes a held path, after its checks and review pass."],
+  review: ["Reviewer holds", "The reviewer held the job and no fix rounds are left."],
+  question: ["Questions", "A job or an intake stopped on a choice that the spec leaves open."],
+  "no-commit": ["Jobs with no commit", "The last 3 jobs of an issue ended with nothing committed."],
+  "part-dropped": ["Dropped sub-issues", "A sub-issue of an issue was dropped and no other sub-issue is open."],
   "intake-failed": ["Failed intake", "Intake of an issue failed twice."],
-  rescue: ["Rescue of a stuck run", "A stuck run with more than one way out."],
-  "run-cap": ["Run cap", "A goal started 3 times in one hour."],
+  rescue: ["Rescue of a stuck job", "A stuck job with more than one way out."],
+  "run-cap": ["Job cap", "An issue started 3 times in one hour."],
   "proposal-check": ["Proposed checks", "The correction memory proposes a check for a repo."],
   "proposal-claude-md": ["Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."],
   "proposal-skill": ["Proposed skill changes", "The correction memory proposes a change to a skill."],
@@ -70,7 +70,7 @@ export function renderNow(d) {
     statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "Asks"] } : { note: "no Ask decided" }) }),
     statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed later"] }),
     statCard({ k: "Repeat answers", v: count(d.repeats.length), note: "Asks answered the same way 3+ times" }),
-    statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "goals"] }),
+    statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "issues"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }
@@ -80,8 +80,8 @@ export function renderCaps(d) {
   const f = d.factory;
   const row = (key, label, use, limit, note) => `<div class="cap-row"><b>${esc(label)}</b><span>${esc(use)} / ${esc(limit)}</span><small>${esc(note)}</small>${capForm(f, key, label, limit)}</div>`;
   return card("Controls", `<div class="caps">` +
-    row("live", "Live cap", f.liveRuns, f.liveCap, "live runs against the cap") +
-    row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div>`, { id: "gates-caps" });
+    row("live", "Live cap", f.liveRuns, f.liveCap, "live jobs against the cap") +
+    row("run", "Job cap", f.runStarts ?? 0, f.runCap, "the most starts any one issue made in the last hour") + `</div>`, { id: "gates-caps" });
 }
 
 /** The newest monitor report: a summary that expands to every finding and the reader's reply, or why there is no reading. */
@@ -144,7 +144,7 @@ export function renderHeld(d) {
   const rows = repos.length
     ? repos.map((r) => `<div class="held-repo"><b>${esc(r.repo)}</b> <div class="held">${r.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>`).join("")
     : empty("No repo names held paths.");
-  return card("Held Paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the run. A test is never held.</p>` +
+  return card("Held Paths", `<p class="quiet">The security paths and a repo's held paths wait for Chris after the reviewer passes the job. A test is never held.</p>` +
     `<div class="held-repo"><b>Every repo</b> <div class="held">${d.held.map((p) => chip(p, { el: "code" })).join("")}</div></div>${rows}`, { label: "Held paths" });
 }
 

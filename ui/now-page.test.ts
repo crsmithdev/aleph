@@ -173,6 +173,18 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   resetSpeed();
 });
 
+test("the Status page says Jobs per Item and titles a sub-issue link, with no goal and no Part", () => {
+  const part = { n: 2, m: 3, parent: "Issue 1", href: "#/issues/aleph/1.2" };
+  const monitor = { day: "2026-11-04", findings: [], stages: [{ stage: "build", runsPerItem: { day: 2, trailing: 1.4 }, unusable: { day: 0.25, trailing: null } }], holds: [] };
+  const page = view.view.render({ ...full, usage: USAGE, factory: { ...full.factory, monitor }, queued: [{ repo: "aleph", id: 9, title: "w", part, at: "2026-10-27T16:00:00Z", since: "2026-10-27T16:00:00Z" }] }, {}, new URLSearchParams()) as string;
+  expect(page).toContain('data-sort="runs">Jobs per Item');
+  expect(page).toContain('title="Sub-issue 2 of 3 of Issue 1"');
+  expect(page).toContain("Discards the job&#39;s branch; the issue stays open.");
+  const text = page.replace(/<[^>]*>/g, "");
+  expect(text).not.toMatch(/goal/i);
+  expect(text).not.toContain("Part");
+});
+
 test("the Status view is at / in the Factory group", () => {
   expect(view.view.path).toBe("/");
   expect(view.view.group).toBe("factory");
