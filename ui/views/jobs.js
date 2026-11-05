@@ -211,8 +211,10 @@ function jobKpis(j, now = Date.now()) {
 /** The Job page: the header and its pills, the KPI strip, the Timeline, the Spec and the Result, then the Detail panels. */
 export function renderJob(j) {
   const id = localId(j.name, j.repo), p = j.parent;
-  const back = p ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(p.id, j.repo)}`, p.href], [`job ${id}`]] : [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [id]];
-  const nav = [p ? `<a class="act" href="${esc(p.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next part: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
+  // The issue the job works on: a part's parent, else the job's own item.
+  const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: `#/issues/${encodeURIComponent(j.repo)}/${j.item.id}` });
+  const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(iss.id, j.repo)}`, iss.href], [`job ${id}`]] : [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [id]];
+  const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next part: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
   const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `part ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}` }) : ""}<span class="idp">${esc(j.name)}</span></div>`;
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
@@ -228,7 +230,7 @@ export function renderJob(j) {
     ? `<div class="dp-logs" data-logs>${dataTable('<th>Check</th><th>Result</th><th class="num">Ran</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Time</th><th>Log</th>', j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join(""))}${failures}<div class="logbody" hidden></div></div>`
     : "";
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
-  return `<div class="page dp-page">${crumb(p ? p.href : "#/jobs", back)}` +
+  return `<div class="page dp-page">${crumb(iss ? iss.href : "#/jobs", back)}` +
     `<header class="ph"><h1>${esc(j.item?.title || j.name)}</h1>${nav ? `<div class="aside">${nav}</div>` : ""}</header>${pills}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +

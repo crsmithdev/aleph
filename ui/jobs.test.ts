@@ -254,6 +254,13 @@ describe("render", () => {
     expect(h).not.toContain("<it>");
     expect(h).toContain('<pre class="diff" id="diff" data-job="fac-9"><p class="quiet" role="status">Loading the diff…</p></pre>');
   });
+  test("a job on an issue links to it above the Timeline, and its crumb goes through the issue", () => {
+    const h = v.renderJob(job), href = "#/issues/fac/9";
+    expect(h.slice(0, h.indexOf('class="dp-tl'))).toContain(`<a class="act" href="${href}">Issue</a>`);
+    expect(h.match(/<nav[^>]*>.*?<\/nav>/s)?.[0] ?? "").toContain(href);
+    const bare = v.renderJob({ ...job, item: undefined });
+    expect(bare).not.toContain("#/issues/");
+  });
   test("the Checks panel shows each check's test counts and each failed test with its failure", () => {
     const tests = { ran: 1203, passed: 1180, failed: 23, skipped: 4, failures: [{ file: "a.test.ts", name: "s > <one>", message: "Error: boom\n  at a.test.ts:3" }] };
     const h = v.renderJob({ ...job, checks: [{ name: "tests", ok: false, seconds: 61, tests }, { name: "types", ok: true, seconds: 9 }] });
