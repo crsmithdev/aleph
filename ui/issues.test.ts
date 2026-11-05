@@ -183,10 +183,14 @@ describe("views", () => {
     expect(h).not.toContain("<h2>Projects");
     expect(h).not.toContain("<h2>Specs");
     expect(h).toContain('class="tiles"');
-    expect(h).toContain('data-chart="age"');
-    expect(v.view.render(d, {}, new URLSearchParams("tile=filed&status=any"))).toContain('data-chart="flow"');
-    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="age"'));
-    expect(h.indexOf('data-chart="age"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
+    for (const q of ["status=any", "tile=filed&status=any", "tile=age"]) {
+      const page = v.view.render(d, {}, new URLSearchParams(q));
+      for (const c of ["backlog", "close", "flow"]) expect(page).toContain(`data-chart="${c}"`);
+      expect(page).not.toContain('data-chart="age"');
+      expect(page).not.toContain("Open issues by age");
+    }
+    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="backlog"'));
+    expect(h.indexOf('data-chart="flow"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age", "updated", ""]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
@@ -265,7 +269,25 @@ describe("views", () => {
     expect(f.labels.at(-1)).toBe("Nov 01");
     expect(f.filed.at(-1)).toBe(1);
     expect(f.closed.at(-3)).toBe(1);
-    expect(v.ageBins(rows, now).counts).toEqual([1, 0, 0, 1, 0, 0]);
+    const b = v.backlog(rows, 30, now);
+    expect(b.labels).toHaveLength(30);
+    // Row 1 is open from Nov 01; the part from Oct 20; row 2 from Oct 21 to Oct 30; row 3 closed before it was created.
+    expect(b.counts.medium.at(-1)).toBe(2);
+    expect(b.counts.medium.at(-3)).toBe(2);
+    expect(b.counts.medium.at(-2)).toBe(1);
+    expect(b.counts.medium[0]).toBe(0);
+    expect(b.counts.high.at(-1)).toBe(0);
+    const c = v.closeTimes([
+      ...[1, 2, 3, 4, 5].map((n) => ({ status: "done", kind: "bug", created: "2026-10-01", closed: `2026-10-0${n + 1}` })),
+      { status: "done", kind: "task", created: "2026-10-01", closed: "2026-10-05" },
+      { status: "open", kind: "flake", created: "2026-10-01", closed: null },
+    ]);
+    expect(c.kinds).toEqual(["task", "bug", "check", "proposal", "flake"]);
+    expect(c.p50).toEqual([4, 3, null, null, null]);
+    expect(c.p90[1]).toBeCloseTo(4.6);
+    const fo = v.flowOption(f);
+    expect(fo.series.filter((x: any) => x.type === "line").map((x: any) => x.name)).toEqual(["Filed", "Closed"]);
+    expect(fo.series.some((x: any) => x.name === "Gap")).toBe(true);
     expect(v.renderTiles(v.stats(rows, now))).toContain("1 done, 0 dropped");
   });
 

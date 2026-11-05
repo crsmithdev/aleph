@@ -1,7 +1,7 @@
-// The Issues view: a browser for the issues of every repo: tiles, two charts, filters, fuzzy search, a sortable
+// The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { barList, barRow, blockersHtml, barsOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -284,7 +284,7 @@ export function renderTiles(s, key = "open") {
 }
 
 /** The last `days` days: their labels and how many rows were filed and closed on each. */
-export function flow(rows, days = 14, now = new Date()) {
+export function flow(rows, days = 30, now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const out = { labels: [], filed: [], closed: [] };
   for (let i = days - 1; i >= 0; i--) {
@@ -296,21 +296,39 @@ export function flow(rows, days = 14, now = new Date()) {
   return out;
 }
 
-const AGES = [["Under 1d", 1], ["1–3d", 3], ["3–7d", 7], ["1–2wk", 14], ["2–4wk", 28], ["Over 4wk", Infinity]];
-/** The open rows counted into age bins. */
-export function ageBins(rows, now = new Date()) {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const counts = AGES.map(() => 0);
-  for (const r of rows) {
-    if (r.status !== "open" || !dayMs(r.created)) continue;
-    const age = (today - dayMs(r.created)) / DAY;
-    counts[AGES.findIndex(([, hi]) => age < hi)]++;
+const PRIORITY_ORDER = ["low", "medium", "high", "critical"];
+/** The last `days` days: how many rows were open on each, per priority. A row is open from its created day to its closed day. */
+export function backlog(rows, days = 30, now = new Date()) {
+  const labels = [], counts = Object.fromEntries(PRIORITY_ORDER.map((p) => [p, []]));
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), t = d.getTime();
+    labels.push(day(d, now));
+    for (const p of PRIORITY_ORDER) counts[p].push(rows.filter((r) => r.priority === p && dayMs(r.created) && dayMs(r.created) <= t && (!dayMs(r.closed) || t <= dayMs(r.closed))).length);
   }
-  return { labels: AGES.map(([k]) => k), counts };
+  return { labels, counts };
 }
 
-export const flowOption = (f) => barsOption(f.labels, [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
-export const ageOption = (b) => barsOption(b.labels, [{ name: "Open issues", data: b.counts }]);
+const KINDS = ["task", "bug", "check", "proposal", "flake"];
+/** The p-th share (0 to 1) of `xs`, by linear interpolation; null for none. */
+const quantile = (xs, p) => {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b), at = (s.length - 1) * p, lo = Math.floor(at);
+  return s[lo] + (s[Math.ceil(at)] - s[lo]) * (at - lo);
+};
+/** For each kind, the p50 and p90 days from created to closed over the closed rows; null for a kind with none. */
+export function closeTimes(rows) {
+  const out = { kinds: KINDS, p50: [], p90: [] };
+  for (const k of KINDS) {
+    const days = rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && dayMs(r.created) && dayMs(r.closed)).map((r) => (dayMs(r.closed) - dayMs(r.created)) / DAY);
+    out.p50.push(quantile(days, 0.5));
+    out.p90.push(quantile(days, 0.9));
+  }
+  return out;
+}
+
+export const backlogOption = (b) => stackedAreaOption(b.labels, PRIORITY_ORDER.map((p) => ({ name: p, data: b.counts[p] })));
+export const closeOption = (c) => rangeBarOption(c.kinds, c.p50, c.p90);
+export const flowOption = (f) => gapLinesOption(f.labels, [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
 export const TILE_FILTER = {
@@ -322,15 +340,19 @@ export const TILE_FILTER = {
 };
 
 const TOP_RUNS = 10;
-/** The one card under the tiles: what the selected tile counts. */
+/** The card under the charts for the Runs tile; none for the other tiles. */
 function renderDetail(rows, o) {
   if (o.tile === "runs") {
     const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
     return card("Issues by runs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a run."));
   }
-  const flowing = o.tile === "filed" || o.tile === "closed";
-  return card(flowing ? "Filed and closed, 14 days" : "Open issues by age", `<p>${flowing ? "Blue is filed; green is closed." : "Days since the issue was filed."}</p><div class="chartbox" data-chart="${flowing ? "flow" : "age"}"></div>`);
+  return "";
 }
+
+/** The three charts under the tiles, on every tile. */
+const renderCharts = () => `<div class="trio">${card("Open backlog, 30 days", '<p>Open issues per day, by priority.</p><div class="chartbox" data-chart="backlog"></div>')}` +
+  `${card("Time to close", '<p>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
+  `${card("Filed and closed per day", '<p>Blue is filed; green is closed; the gap is shaded.</p><div class="chartbox" data-chart="flow"></div>')}</div>`;
 
 // ---- The filters ----
 
@@ -362,7 +384,7 @@ function renderLive(projects, rows, o) {
     scope: renderProjects(projects, rows, o),
     filters: renderFilters(rows, o),
     numbers: renderTiles(stats(scoped), o.tile),
-    detail: renderDetail(scoped, o),
+    detail: renderCharts() + renderDetail(scoped, o),
     count: sectionHead("Issues", { count: shown }),
     table: renderTable(rows, o),
   };
@@ -386,8 +408,9 @@ function draw(root) {
   drawn = [];
   const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
   const panel = (name, option) => { const el = root.querySelector(`.chartbox[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
+  panel("backlog", backlogOption(backlog(rows)));
+  panel("close", closeOption(closeTimes(rows)));
   panel("flow", flowOption(flow(rows)));
-  panel("age", ageOption(ageBins(rows)));
 }
 
 /** Fill what follows the filters. A filter changes no route, so nothing fetches again. */
