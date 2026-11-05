@@ -3,6 +3,8 @@ import { expect, test } from "bun:test";
 import { redirect, renderFactoryJobs, slowestOption, stripOption, trendOption } from "./views/factory-jobs.js";
 // @ts-ignore plain JS shared with the page
 import { xLabel } from "./views/speed.js";
+// @ts-ignore plain JS shared with the page
+import { day } from "./lib.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const F1 = new Date(2026, 9, 27, 9).getTime(), F2 = new Date(2026, 9, 28, 14).getTime();
@@ -48,6 +50,14 @@ test("three chart boxes in one row replace the old cards, each says its data for
   expect(o.series.map((s: any) => s.color)).toEqual(["D", "N"]);
   expect(trendOption(D, "queue", { run: "R", hot: "H" }).series.map((s: any) => [s.name, s.data, !!s.areaStyle])).toEqual([["p90", [900, 400], true], ["p50", [200, 100], true]]);
   expect(trendOption(D, "lead", { run: "R", hot: "H" }).series.map((s: any) => s.data)).toEqual([[3000, 0], [1000, 0]]);
+});
+
+test("the strip's filing-time labels in the day window hold the day and the hour, so 4a on two days differ", () => {
+  const o = stripOption({ ...D, window: "day" }, "queue", { done: "D", need: "N" });
+  const a = new Date(2026, 9, 27, 4).getTime(), b = new Date(2026, 9, 28, 4).getTime();
+  const [la, lb] = [o.yAxis.axisLabel.formatter(a), o.yAxis.axisLabel.formatter(b)];
+  expect([la, lb]).toEqual([`${day(a)} ${xLabel(a, "day")}`, `${day(b)} ${xLabel(b, "day")}`]);
+  expect(la).not.toBe(lb);
 });
 
 test("Slowest 10 holds the 10 slowest stages, by stage then by issue; for Lead Time an issue has a row per slow stage", () => {

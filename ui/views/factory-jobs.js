@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chart, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chart, day, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
@@ -46,7 +46,7 @@ export const stripOption = (d, key, t) => ({
   legend: { top: 0, right: 0 },
   tooltip: { confine: true, formatter: (p) => `${esc(p.data.id)}: ${esc(dur(p.value[0]))}, filed ${esc(when(p.value[1]))}` },
   xAxis: { type: "log", logBase: 60, min: (v) => (v.min >= 60 ? 60 : 1), max: (v) => v.max * 1.5, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
-  yAxis: { type: "time", axisLabel: { formatter: (v) => xLabel(v, d.window), hideOverlap: true } },
+  yAxis: { type: "time", axisLabel: { formatter: (v) => (d.window === "week" || d.window === "month" ? xLabel(v, d.window) : `${day(v)} ${xLabel(v, d.window)}`), hideOverlap: true } },
   series: [["landed", t.done], ["unlanded", t.need]].map(([outcome, color]) => ({
     type: "scatter", name: outcome, color, symbolSize: 9,
     data: (d.times ?? []).filter((i) => i.outcome === outcome && i[key] > 0 && i.filed != null).map((i) => ({ value: [i[key], i.filed], id: i.id, href: i.href })),
