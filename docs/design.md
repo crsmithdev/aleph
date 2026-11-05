@@ -140,7 +140,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 ### Focus offset
 
 - A control takes `outline: 2px solid var(--focus)` with `outline-offset: 2px` (`ui/app.css:182`).
-- A control inside a container takes `outline-offset: -2px`, so the ring sits inside the box (`ui/app.css:499`, `673`, `980`).
+- A control inside a container takes `outline-offset: -2px`, so the ring sits inside the box (`ui/app.css:499`, `673`, `979`).
 
 ### Chart gridlines and fills
 
@@ -291,12 +291,12 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Interaction
 
-- **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:182`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:499`, `ui/app.css:673`, `ui/app.css:980`). See Patterns.
+- **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:182`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:499`, `ui/app.css:673`, `ui/app.css:979`). See Patterns.
 - **Hover:** a link or button darkens its border to `--ink-2` (`.act:hover` at `ui/app.css:337`, `.cmd:hover` at `ui/app.css:326`, cards) or its text to `--ink` (crumbs, `a.idl` at `ui/app.css:476`, sort buttons); a table row and a nav item take `--sunk` (`ui/app.css:574`); a metric card takes a `--run` border.
 - **Pressed:** a selector (metric card, segmented button, bar row) sets `aria-pressed="true"`, drawn with `--raised`, `--rule-2` or `--sunk`.
 - **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:340`).
 - **Active:** `.cmd:active` (`ui/app.css:319`) moves 1px down.
-- **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`, `ui/app.css:977`); the open state of each is kept across a redraw by `recordState()` (`ui/lib.js:229`) and `restoreState()` (`ui/lib.js:242`).
+- **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`, `ui/app.css:976`); the open state of each is kept across a redraw by `recordState()` (`ui/lib.js:229`) and `restoreState()` (`ui/lib.js:242`).
 - **Page-head controls:** the heads of Status, Jobs, Efficiency, Agents and Issues hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()`, `ui/lib.js:494`). The Sessions head is the one page with its own window: `scopeBar()` draws a Project select and then 7 / 30 / 90 days (`days`), which stays out of the shared `aleph.window` storage because the API takes only those values. The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as the `act warn` classes (`ui/views/now.js:411`): it is an action with consequences, not a plain button.
 - **Motion:** `.15s ease-out` on borders and backgrounds; no animation.
 

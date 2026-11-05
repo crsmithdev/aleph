@@ -909,8 +909,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 /* Line 1 is the meta row; lines 2 and 3 are the title. The "why it waits" text gives up space first: it truncates, its tooltip holds the whole text. The date and the duration never shrink. */
 .lane-card, .issue-row { container-type: inline-size; }
 .job-card.small .ih { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-6); min-width: 0; overflow: hidden; }
-.job-card.small .ih > .idp, .job-card.small .ih > .idl, .job-card.small .ih > .id { flex: none; white-space: nowrap; }
-.job-card.small .ih > .idp { margin-right: calc(-1 * var(--sp-2)); }
+.job-card.small .ih > .idl, .job-card.small .ih > .id { flex: none; white-space: nowrap; }
 .job-card.small .ih > .badge { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .kind-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .part { flex: none; font: var(--fw-strong) var(--fs-xs) var(--mono); white-space: nowrap; }
@@ -931,7 +930,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
   .job-card.small .ih { gap: var(--sp-4); }
   .job-card.small .ih > .badge, .job-card.small .ih > .kind-tag { padding: 1px 5px; font-size: var(--fs-2xs); }
   .job-card.small .ih > .num, .job-card.small .ih > .part { font-size: var(--fs-2xs); }
-  .job-card.small .ih > .idp, .job-card.small .ih > .idl { font-size: var(--fs-2xs); }
+  .job-card.small .ih > .idl { font-size: var(--fs-2xs); }
 }
 .issue-row > .ih, .issue-row > .t { flex: 1 1 100%; min-width: 0; }
 .issue-row > .ih { gap: var(--sp-6); }
