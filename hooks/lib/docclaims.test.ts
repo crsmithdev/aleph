@@ -27,6 +27,11 @@ describe("claimsDocMatch", () => {
     expect(claimsDocMatch("The spec matches the code.")).toBe(true);
     expect(claimsDocMatch("`checkSpec` strips it before matching `spec check: <hash>`, because a plain `startsWith` never matched.")).toBe(false);
   });
+  test("a names-only diff sentence is not a claim, even when a docs/ path is in it", () => {
+    expect(claimsDocMatch("The branch now changes only docs/design.md, ui/app.css, ui/gates.test.ts and ui/views/gates.js (checked with `git diff --name-only main...HEAD`).")).toBe(false);
+    expect(claimsDocMatch("I checked docs/design.md against ui/lib.js after the edit.")).toBe(true);
+    expect(claimsDocMatch("docs/factory.md matches the code in jobs/lib/unit.ts.")).toBe(true);
+  });
 });
 
 describe("docClaimProblems", () => {

@@ -37,7 +37,7 @@ const sentences = (text: string) => text.split(/\.(?=\s|$)|\n/).map((s) => s.tri
 
 /** The sentences of `message` that say a doc, a spec or a README matches, agrees with or is backed by the code. */
 export function claimSentences(message: string): string[] {
-  return sentences(message).filter((s) => pair(STATE).test(s) || (pair(ACTION).test(s) && CODE_SIDE.test(s)) || AS_CODE.test(s));
+  return sentences(message).filter((s) => pair(STATE).test(s) || (pair(ACTION).test(s) && CODE_SIDE.test(s) && !NAMES_ONLY.test(s)) || AS_CODE.test(s));
 }
 
 /** Whether `message` says a doc, a spec or a README matches, agrees with or is backed by the code. */
