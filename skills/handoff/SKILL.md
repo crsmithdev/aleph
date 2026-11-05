@@ -38,9 +38,7 @@ What the user has not answered, and decisions deferred.
 ## Resume instructions
 One paragraph to the next instance of yourself: where to start reading, what to verify first, and the next concrete action. Be directive: "do X, then Y".
 
-After writing the file, output exactly this and nothing else. With no argument:
-
-> Handoff saved to `<path>`. Run `/clear`; the next session picks it up on your first prompt.
+After writing the file, with no argument, output nothing: a hook ends the turn and shows the user the next step.
 
 With an argument, a program starts the next session, so output only:
 
