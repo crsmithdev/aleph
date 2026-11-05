@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LOCAL, readModels, setModel, SLOTS } from "./models.ts";
+import { serverArgs } from "./gpt-oss-start.ts";
+import { LOCAL, LOCAL_ENV, readModels, setModel, SLOTS } from "./models.ts";
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "models-")); process.env.ALEPH_FACTORY_DIR = dir; });
@@ -25,4 +26,14 @@ test("a slot set to local reads back local and the others stay claude", () => {
 test("the local entry names gpt-oss-20b and the base URL", () => {
   expect(LOCAL.model).toBe("gpt-oss-20b");
   expect(LOCAL.baseUrl).toBe("http://127.0.0.1:8012");
+});
+
+test("the compact window fits the server's context and leaves a usable threshold", () => {
+  const a = serverArgs("/h", null);
+  const ctx = Number(a[a.indexOf("--ctx-size") + 1]);
+  const window = Number(LOCAL_ENV.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
+  const maxOut = Number(LOCAL_ENV.CLAUDE_CODE_MAX_OUTPUT_TOKENS ?? 32000);
+  expect(window).toBeGreaterThan(0);
+  expect(window).toBeLessThanOrEqual(ctx);
+  expect(window - Math.min(maxOut, 20000) - 13000).toBeGreaterThanOrEqual(20000);
 });

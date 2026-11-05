@@ -36,7 +36,7 @@ describe("serverArgs", () => {
     const a = serverArgs("/h", 10_600);
     expect(flag(a, "--n-cpu-moe")).toBe("11");
     expect(flag(a, "--port")).toBe("8012");
-    expect(flag(a, "--ctx-size")).toBe("32768");
+    expect(flag(a, "--ctx-size")).toBe("40960");
     expect(flag(a, "--n-gpu-layers")).toBe("99");
     expect(flag(a, "--reasoning-budget")).toBe("0");
     expect(flag(a, "--model")).toBe("/h/.local/share/gpt-oss-20b.gguf");

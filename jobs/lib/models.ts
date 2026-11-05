@@ -36,4 +36,10 @@ export function setModel(slot: string, backend: string): string | null {
 }
 
 /** The env a local slot's claude call adds: the local base URL and a dummy token. */
-export const LOCAL_ENV = { ANTHROPIC_BASE_URL: LOCAL.baseUrl, ANTHROPIC_AUTH_TOKEN: "local" };
+export const LOCAL_ENV = {
+  ANTHROPIC_BASE_URL: LOCAL.baseUrl,
+  ANTHROPIC_AUTH_TOKEN: "local",
+  // Equal to --ctx-size in jobs/lib/gpt-oss-start.ts. Claude Code compacts at window - min(max output, 20k) - 13k = 23,864.
+  CLAUDE_CODE_AUTO_COMPACT_WINDOW: "40960",
+  CLAUDE_CODE_MAX_OUTPUT_TOKENS: "4096",
+};

@@ -8,7 +8,7 @@ import { homedir } from "node:os";
 export const LAYERS = 24;
 export const FALLBACK = 12;
 /** GPU share of llama-server with every expert layer on the CPU, KV cache and compute buffers included. */
-export const BASE_MIB = 3600;
+export const BASE_MIB = 3750;
 /** GPU share that one expert layer adds. */
 export const LAYER_MIB = 400;
 /** Free VRAM that must stay free after the load. */
@@ -43,7 +43,7 @@ export function serverArgs(home: string, freeMiB: number | null): string[] {
     "--model", `${home}/.local/share/gpt-oss-20b.gguf`, "--alias", "gpt-oss-20b",
     "--host", "127.0.0.1", "--port", "8012", "--jinja",
     "--chat-template-file", `${llama}/models/templates/openai-gpt-oss-120b.jinja`,
-    "--ctx-size", "32768", "--n-gpu-layers", "99", "--n-cpu-moe", String(nCpuMoe),
+    "--ctx-size", "40960", "--n-gpu-layers", "99", "--n-cpu-moe", String(nCpuMoe),
     "--reasoning-budget", "0",
   ];
 }

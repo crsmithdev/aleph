@@ -10,7 +10,7 @@
 
 - The model is the Ollama blob `~/.ollama/models/blobs/sha256-8ecb5d4a...`. The unit reads it through the symlink `~/.local/share/gpt-oss-20b.gguf`. The blob stays in place.
 - The blob carries a ChatML template, not the gpt-oss one. With it, the model prints raw harmony text and the `Read` tool call fails. The unit passes `--chat-template-file models/templates/openai-gpt-oss-120b.jinja` from the llama.cpp clone. With that file, `claude -p` with `--allowedTools Read` prints `# aleph`.
-- Flags: `--jinja --ctx-size 32768 --n-gpu-layers 99 --n-cpu-moe N --reasoning-budget 0`. The unit picks N at each start, as described under "Choice at start".
+- Flags: `--jinja --ctx-size 40960 --n-gpu-layers 99 --n-cpu-moe N --reasoning-budget 0`. The unit picks N at each start, as described under "Choice at start".
 - The Anthropic API treats a request without `thinking` as thinking off. llama-server defaults to an unlimited reasoning budget, so a `max_tokens: 16` request spent all 16 tokens on reasoning and returned only a `thinking` block. `--reasoning-budget 0` makes the default match the API: such a request returns a `text` block. A request with `thinking.budget_tokens` gets that budget and returns a `thinking` block and a `text` block.
 - `claude -p --allowedTools Read "<prompt>"` reads the prompt as a second tool name and exits with `Input must be provided`. Put the prompt before the flag, or write `--allowedTools=Read`.
 
@@ -54,7 +54,7 @@ The fourth run at 11 is the one through the restarted unit. Value 10 is the lowe
 
 ## Choice at start
 
-The unit runs `jobs/lib/gpt-oss-start.ts`, which reads the free VRAM with `nvidia-smi --query-gpu=memory.free` and runs llama-server with the smallest `--n-cpu-moe` from 0 to 24 that fits. The GPU share of llama-server is modelled as 3,600 MiB plus 400 MiB per layer on the GPU (fitted to the table above), and the start keeps 1,536 MiB free after the load. So N = 24 - floor((free - 1,536 - 3,600) / 400), limited to 0..24. A larger free amount never gives a larger N. At 10,600 MiB free the value is 11. When the `nvidia-smi` read fails or is unparsable, N is 12. The other flags are as listed under Setup.
+The unit runs `jobs/lib/gpt-oss-start.ts`, which reads the free VRAM with `nvidia-smi --query-gpu=memory.free` and runs llama-server with the smallest `--n-cpu-moe` from 0 to 24 that fits. The GPU share of llama-server is modelled as 3,750 MiB plus 400 MiB per layer on the GPU (fitted to the table above), and the start keeps 1,536 MiB free after the load. So N = 24 - floor((free - 1,536 - 3,750) / 400), limited to 0..24. A larger free amount never gives a larger N. At 10,600 MiB free the value is 11. When the `nvidia-smi` read fails or is unparsable, N is 12. The other flags are as listed under Setup.
 
 ## Stop first
 
@@ -62,3 +62,33 @@ The server needs about 8.5 GB beyond the desktop. Stop these before `enable --no
 
 - The hand-started Ollama serve (`pkill -f 'ollama serve'`). It loads models into the GPU on demand.
 - `sidetone.service` (`systemctl --user stop sidetone.service`). It holds about 6 GB when active.
+
+## Context size 40960
+
+Goal: a local run compacts before it passes the context size of llama-server.
+
+Claude Code compacts at window - min(max output, 20,000) - 13,000. With `--ctx-size 32768` no output cap gives a threshold of 20,000 tokens or more, so `--ctx-size` rose to 40960.
+
+Settings:
+
+- `--ctx-size 40960` in `serverArgs()` of `jobs/lib/gpt-oss-start.ts`.
+- `LOCAL_ENV` in `jobs/lib/models.ts`: `CLAUDE_CODE_AUTO_COMPACT_WINDOW=40960`, `CLAUDE_CODE_MAX_OUTPUT_TOKENS=4096`. The compact threshold is 40,960 - 4,096 - 13,000 = 23,864 tokens.
+
+VRAM (whole card, desktop idle at 1,634 MiB), with `--n-cpu-moe 24` (every expert layer on the CPU):
+
+| Point | MiB used |
+|---|---|
+| After load | 5,375 |
+| After a 16,501-token prompt | 5,470 |
+
+The server's share after load is 3,741 MiB, so `BASE_MIB` is 3,750 (was 3,600). With the unit's own choice (`--n-cpu-moe 12`, 10,315 MiB free at start), `nvidia-smi` showed 10,417 MiB used during the run below. A prompt near 40,960 tokens was not measured.
+
+Real run, from a server started by `bun jobs/lib/gpt-oss-start.ts` in the worktree:
+
+```
+env -u CLAUDECODE bun -e 'import { LOCAL_ENV } from "./jobs/lib/models.ts"; const p = Bun.spawnSync(["claude", "-p", "Read jobs/lib/unit.ts, jobs/lib/models.ts, jobs/lib/title.ts, hooks/lib/judge.ts and hooks/lib/context.ts in full, then summarize each file in two sentences", "--model", "gpt-oss-20b", "--output-format", "json", "--allowedTools=Read"], { env: { ...process.env, ...LOCAL_ENV } }); console.log(p.exitCode, p.stdout.toString(), p.stderr.toString())'
+```
+
+- Token totals: 21,897 input, 140,768 cache read, 4,730 output (167,395 in all), 7 turns, 2 m 46 s.
+- Compacted: yes, once (one `compact_boundary` in the session transcript). The server's largest slot was 29,381 tokens.
+- Result: exit code 0, `is_error` false, `terminal_reason` completed, a summary of all five files, and no "exceed" or context-length error in the server log.
