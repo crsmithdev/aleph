@@ -142,6 +142,15 @@ describe("the reviewer", () => {
     expect((await workerVerdict(branch(), ports({ reviews: [miss, { reason: null }] }).p)).outcome.condition).toBe("passed");
   });
 
+  test("a reviewer the API refused for credit stops the run with the credit cause, with no second call and no Ask", async () => {
+    const line = "API Error: 402 This request would exceed your available credits";
+    const { p, calls } = ports({ reviews: [{ reason: `reviewer: no verdict (${line})`, credit: line, none: true }] });
+    const v = await workerVerdict(branch(), p);
+    expect(v).toEqual({ outcome: { condition: "failed", cause: "credit", reason: line, ...checked }, code: 1 });
+    expect(v.outcome.ask).toBeUndefined();
+    expect(calls.filter((c) => c === "review")).toHaveLength(1);
+  });
+
   test("a hold goes back as a fix round while rounds are left", async () => {
     const v = await workerVerdict(branch(), ports({ reviews: [{ reason: "reviewer: no test" }] }).p);
     expect(v).toEqual({ outcome: { condition: "returned", cause: "review", reason: "reviewer: no test", stat: " a.ts | 1 +", ...checked, failed: "review", round: 0 }, code: 1 });

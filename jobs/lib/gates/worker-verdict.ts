@@ -14,8 +14,8 @@ import type { Run } from "../records/ledger.ts";
 export type Outcome = Pick<Run, "condition" | "ask" | "reason" | "cause" | "checkName" | "question" | "say" | "commit" | "conflicts" | "checkItem" | "failed" | "round" | "cost" | "defaults" | "followups" | "alreadyMet" | "stat" | "checkedBase" | "checkedTip">;
 export interface Verdict { outcome: Outcome; code: number }
 
-/** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict. */
-export interface ReviewCall { reason: string | null; cost?: number; none?: boolean }
+/** One reviewer call: the reason to hold, or null on a pass. `none` is a call that gave no verdict, `credit` its API credit error line when the API refused it. */
+export interface ReviewCall { reason: string | null; cost?: number; none?: boolean; credit?: string }
 
 /** What runs each step on the branch. */
 export interface VerdictPorts {
@@ -129,7 +129,9 @@ export async function workerVerdict(b: Branch, p: VerdictPorts): Promise<Verdict
   };
   let rv = await call();
   // A second miss is the reviewer's, not the worker's: it goes to Chris whatever fix rounds are left, since a fix round cannot cure it.
-  if (rv.none) rv = await call();
+  if (rv.none && !rv.credit) rv = await call();
+  // A call the API refused for credit did no work: the run stops as failed with the credit cause, as a worker's does, so it waits for credit and counts no run cap.
+  if (rv.credit) return { outcome: { condition: "failed", cause: "credit", reason: rv.credit, ...facts }, code: 1 };
   if (!rv.reason) {
     // A reviewed diff that changes a security path or a held path waits for Chris.
     const security = p.security();

@@ -15,7 +15,7 @@ import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
 import { schemaFlags, structuredOf } from "./structured.ts";
-import { waiting, workerVerdict, type NoVerdict, type Outcome, type VerdictPorts } from "../gates/worker-verdict.ts";
+import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, loadRegistry, lock, newsLine, readEnvFile, readRun, tell, trailerOf, updateRun, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
@@ -644,7 +644,7 @@ export function reviewDiff(cwd: string, range: { from: string; to: string; merge
  * A fresh reviewer reads the passing run: `claude -p` on Opus 5.5 in a detached worktree at the branch's tip,
  * with the worker's env. Returns the reason to hold, or null on a pass, and the cost. Fails closed.
  */
-async function review(folder: string, run: Run, repo: Repo, base: string, branch: string, findings: string[], changed: string[], env: Record<string, string | undefined>): Promise<{ reason: string | null; cost?: number; none?: boolean }> {
+async function review(folder: string, run: Run, repo: Repo, base: string, branch: string, findings: string[], changed: string[], env: Record<string, string | undefined>): Promise<ReviewCall> {
   const spec = jobSpec(folder, run);
   const range = reviewRange(repo.path, run, base, `refs/heads/${branch}`);
   const diff = reviewDiff(repo.path, range, reviewDiffMax());
@@ -667,6 +667,7 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
       writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? o.result : v.text);
       const cost = o.cost;
       const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
+      if (w.cause?.kind === "credit") return { ...none(w.cause.reason), credit: w.cause.reason };
       if (w.cause) return none(w.cause.reason);
       if (typeof v === "string") return none(v);
       writeFileSync(runFile(folder, "review.json"), JSON.stringify(v.json));
