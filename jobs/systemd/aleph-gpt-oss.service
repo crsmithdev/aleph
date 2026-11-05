@@ -11,7 +11,7 @@ Description=gpt-oss-20b on 127.0.0.1:8012
 [Service]
 WorkingDirectory=%h/.local/src/llama.cpp
 Environment=PATH=%h/.local/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=%h/.local/src/llama.cpp/build/bin/llama-server --model %h/.local/share/gpt-oss-20b.gguf --alias gpt-oss-20b --host 127.0.0.1 --port 8012 --jinja --chat-template-file %h/.local/src/llama.cpp/models/templates/openai-gpt-oss-120b.jinja --ctx-size 32768 --n-gpu-layers 99 --n-cpu-moe 12 --reasoning-budget 0
+ExecStart=%h/.local/src/llama.cpp/build/bin/llama-server --model %h/.local/share/gpt-oss-20b.gguf --alias gpt-oss-20b --host 127.0.0.1 --port 8012 --jinja --chat-template-file %h/.local/src/llama.cpp/models/templates/openai-gpt-oss-120b.jinja --ctx-size 32768 --n-gpu-layers 99 --n-cpu-moe 11 --reasoning-budget 0
 Restart=always
 RestartSec=2
 
