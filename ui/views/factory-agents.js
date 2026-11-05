@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
 import { barsOption, card, cardTrend, chart, dataTable, dur, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
-import { hours, lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
+import { lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
 const rateCard = (k, v, base, note) => statCard({ k, v: share(v), note, trend: cardTrend(v, base, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(base)}` }) });
