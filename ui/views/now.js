@@ -76,7 +76,7 @@ export function renderHolds(s, sort = SORTS.holds) {
   const rows = sorted(all, HOLD_COLS, sort).map((r) =>
     `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, numText, max, TRAIL.holds)}${pairCell(r.hours, numText, null, TRAIL.holds)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
-  const head = h("Kind", "kind") + h("Affected Issues", "goals", true) + h("Hours", "hours", true);
+  const head = h("Kind", "kind") + h("Affected Issues", "goals", true) + h("Took", "hours", true);
   return card("Holds", rows ? dataTable(head, rows) : empty("No hold record."), { id: "holds" });
 }
 

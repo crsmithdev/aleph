@@ -267,6 +267,17 @@ test("the turns, hooks and denials tables show empty() with no rows; the turns t
   expect(page).toContain('<div class="empty"><p>The gate denied nothing in this period.</p>');
 });
 
+test("the Turns table and the Observations table head their duration column Took", async () => {
+  const d = await chat("s1");
+  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
+  const th = (h: string) => [...h.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1]);
+  expect(th(v.renderSession(d, { id: "s1" }, TABLE))).toContain("Took");
+  expect(th(v.renderSession(d, { id: "s1" }, TABLE))).not.toContain("Duration");
+  const obs = th(v.renderTurn({ ...t, observations: [{ id: "o", kind: "tool", name: "T", children: [] }] }));
+  expect(obs).toContain("Took");
+  expect(obs).not.toContain("Duration");
+});
+
 test("the Turn page pages observations at 50 and gives Detail td.wide", async () => {
   const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
   const obs = Array.from({ length: 51 }, (_, i) => ({ id: `o${i}`, kind: "tool", name: `T${i}`, children: [], error: "boom" }));

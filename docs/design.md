@@ -225,7 +225,7 @@ The one table is `dataTable()` (`ui/lib.js:527`) with `heads()` (`ui/lib.js:530`
 
 Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:442`):
 
-- **Column order:** time first, then id or name, title, state badge, project, labels, numbers. A duration is a number and stays among the numbers.
+- **Column order:** time first, then id or name, title, state badge, project, labels, numbers. A duration is a number and stays among the numbers; its header is always `Took`.
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:448`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:454`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `--sp-6 --sp-12 --sp-6 0`, a `--rule-2` line under each row, and `--sunk` on row hover (`ui/app.css:443`). Headers are `600 var(--fs-xs)` in `--muted`.
@@ -243,14 +243,14 @@ Columns of the main tables:
 | Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:83`) |
 | Sessions | Started, Last, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:117`) |
 | Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:259`) |
-| Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
-| Observations | Kind, Name, Detail, Duration (num) | `dataTable()` (`ui/views/session.js:273`) |
+| Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Took (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
+| Observations | Kind, Name, Detail, Took (num) | `dataTable()` (`ui/views/session.js:273`) |
 | Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
 | Hooks | Last, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
 | Denials | When, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
-| Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
+| Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
-| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:201`) |
+| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:201`) |
 | Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:641`) |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
@@ -405,7 +405,6 @@ Each deviation is a value or pattern in the code that a rule above does not allo
 | Hours with a fraction (`cardHours()`) | `ui/views/speed.js:85` | Hours | aleph-1358 (pending) |
 | Duration formats outside `dur()`: `durShort()`, `cardDur()`, `lifespan()`, `timeText()`, `span()` | `ui/views/speed.js:5`, `83`; `ui/timeline.js:10`, `188`; `ui/views/now.js:222` | Duration; one `dur()` helper | aleph-1370 (pending) |
 | Time column names differ: `Started`, `Updated`, `Last`, `When`, `Date`, `Written` | Tables | Column order, time column | aleph-1360 (pending) |
-| Duration column names differ: `Duration`, `Took`, `Time` | `ui/views/session.js:25`, `273`; `ui/views/jobs.js:201` | Duration column name | aleph-1377 (pending) |
 | Raw `<th>` headers passed to `dataTable()` | `ui/views/jobs.js:201`, `ui/views/issues.js:641` | Tables built with `heads()` | aleph-1359 (pending) |
 | Detail page heads built by hand (`<header class="ph">`) | `ui/views/jobs.js:205`, `ui/views/issues.js:494` | Page head | none; follow-up (aleph-1362 is done and left them) |
 | Issues and Sessions heads without `scopeBar()` | `ui/views/issues.js`, `ui/views/sessions.js` | Page-head controls | aleph-1363 (pending) |

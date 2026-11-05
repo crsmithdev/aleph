@@ -35,11 +35,11 @@ function scorecard(d, key) {
 
 const causeBars = (s) => {
   const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0;
-  return dataTable(heads(["Cause", "Time", "Runs", "Bar"], ["Time", "Runs"]), s.causes.map((x) =>
+  return dataTable(heads(["Cause", "Took", "Runs", "Bar"], ["Took", "Runs"]), s.causes.map((x) =>
     `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${x.hours === undefined ? "" : esc(hours(x.hours))}</td><td class="num">${x.runs}</td><td>${meter(max > 0 ? (size(x) / max) * 100 : 0)}</td></tr>`).join(""));
 };
 
-const topTable = (rows) => dataTable(heads(["Issue", "Why", "Hours", "Runs"], ["Hours", "Runs"]), rows.map((x) =>
+const topTable = (rows) => dataTable(heads(["Issue", "Why", "Took", "Runs"], ["Took", "Runs"]), rows.map((x) =>
   `<tr><td>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="wide" title="${esc(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`)}">${x.title ? `${esc(x.title)}. ` : ""}${esc(x.reason || "No reason recorded.")}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${x.runs}</td></tr>`).join(""));
 
 const usageTable = (rows) => dataTable(heads(["Issue", "Usage", "Runs"], ["Usage", "Runs"]), rows.map((x) =>

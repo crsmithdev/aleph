@@ -286,6 +286,15 @@ describe("render", () => {
     expect(h).toContain('<p><code>a.test.ts</code> s &gt; &lt;one&gt; <span class="quiet">tests</span></p><pre class="trailers">Error: boom\n  at a.test.ts:3</pre>');
     expect(h).toContain("22 more failed tests of tests not recorded.");
   });
+  test("the Jobs table and the Job checks table head their duration column Took", () => {
+    const heads = (h: string) => [...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]+)/g)].map((m) => m[1].trim());
+    const list = heads(v.renderJobsTable([{ ...job, started: ago(5), ended: ago(4) }]));
+    expect(list).toContain("Took");
+    expect(list).not.toContain("Time");
+    const checks = heads(v.renderJob({ ...job, checks: [{ name: "tests", ok: true, seconds: 9 }] }));
+    expect(checks).toContain("Took");
+    expect(checks).not.toContain("Time");
+  });
   test("the Review tag is the reviewer's JSON verdict, not a line of review.md", () => {
     const h = (o: object) => v.renderJob({ ...job, review: "Text says VERDICT: hold x.", ...o });
     expect(h({ verdict: "pass" })).toContain('class="badge done">pass<');

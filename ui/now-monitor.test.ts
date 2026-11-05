@@ -38,7 +38,7 @@ test("Stages and Holds heads are Title Case sortHead buttons, with no cost per i
   const s = view.renderStages(only(many));
   expect(labels(s)).toEqual([["stage", "Stage"], ["runs", "Runs per Item"], ["unusable", "No Usable Result"]]);
   expect(s).not.toContain("Cost Per Item");
-  expect(labels(view.renderHolds(only(many)))).toEqual([["kind", "Kind"], ["goals", "Affected Issues"], ["hours", "Hours"]]);
+  expect(labels(view.renderHolds(only(many)))).toEqual([["kind", "Kind"], ["goals", "Affected Issues"], ["hours", "Took"]]);
 });
 
 test("rows sort by runs per item and goals, descending, by default; another key or direction reorders them", () => {

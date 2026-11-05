@@ -22,7 +22,7 @@ function turnTable(d, limit = TURN_PAGE) {
     `<tr><td class="time">${esc(when(t.start))}</td><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
     `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
     `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${costHtml(t.cost, t.wk)}</td></tr>`).join("");
-  return dataTable(heads(["Started", "Turn", "Prompt", "Output", "Model", "Tools", "Duration", "Cost"], ["Turn", "Tools", "Duration", "Cost"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
+  return dataTable(heads(["Started", "Turn", "Prompt", "Output", "Model", "Tools", "Took", "Cost"], ["Turn", "Tools", "Took", "Cost"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
 }
 
 export const CHAT_PAGE = 20;
@@ -270,7 +270,7 @@ export function renderTurn(d) {
 /** The observations of a turn: `limit` top-level ones with their children, and a pager. */
 function obsTable(d, limit = TURN_PAGE) {
   if (!d.observations.length) return empty("No observation in this turn.");
-  return dataTable(heads(["Kind", "Name", "Detail", "Duration"], ["Duration"]), d.observations.slice(0, limit).map((o) => obsRows(o, 0)).join("")) + pager(limit, d.observations.length, TURN_PAGE);
+  return dataTable(heads(["Kind", "Name", "Detail", "Took"], ["Took"]), d.observations.slice(0, limit).map((o) => obsRows(o, 0)).join("")) + pager(limit, d.observations.length, TURN_PAGE);
 }
 
 // "Show 50 more" draws the next observations in place.
