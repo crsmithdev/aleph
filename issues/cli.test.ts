@@ -2,6 +2,7 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { env, fx, remoteItem, seed, sh, tasks, useFixture } from "./fixture.ts";
+import { renderItem } from "./lib/todo.ts";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
@@ -133,6 +134,16 @@ test("edit replaces the title, body, priority and labels it is given, and keeps 
   expect(shown.notes[0]).toContain("a finding");
   expect(JSON.parse(aleph("issue", "edit", "proj", "4", "--labels", "b,c").out).areas).toEqual(["b", "c"]);
   expect(sh(fx.base, "git", "--git-dir", fx.remote, "log", "-1", "--format=%s", "main")).toBe("proj: todo: edit item 4");
+});
+
+test("list and show print a part's ref, and the list column is right-aligned on the longest ref", () => {
+  seed(`# To do\n\n## 5. Parent\n---\nid: 5\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\n---\n\nBody.\n`);
+  writeFileSync(join(fx.items, tasks, "proj-5.1.md"), renderItem("proj", { id: 5, sub: 1, title: "A part", fm: { kind: "task", priority: "medium" }, request: "Body.", spec: "", notes: [] }));
+  sh(fx.items, "git", "add", "-A");
+  sh(fx.items, "git", "commit", "-qm", "seed part");
+  sh(fx.items, "git", "push", "-q", "origin", "main");
+  expect(aleph("issue", "list", "proj").out).toBe("  5  open    medium   Parent\n5.1  open    medium   A part\n");
+  expect(aleph("issue", "show", "proj", "5.1").out.split("\n")[0]).toBe("## 5.1. A part");
 });
 
 test("list and lint with no repo cover the repos with a run or an item update in the last 7 days, the latest first", () => {

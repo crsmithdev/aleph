@@ -211,7 +211,7 @@ async function todoCmd(): Promise<void> {
     case "show": {
       const i = verbs.show(repo, id);
       if (json) { out({ ...verbs.brief(repo.key)(i), request: i.request, spec: i.spec, notes: i.notes }); return; }
-      console.log(`## ${i.id}. ${i.title}`);
+      console.log(`## ${issues.refOf(i)}. ${i.title}`);
       const ask = askOf(refIn(repo.key, i));
       console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
       console.log(`after ${issues.localRefs(repo.key, store.afterOf(i).join(", ")) || "-"}   areas ${store.areasOf(i).join(", ") || "-"}`);
@@ -368,8 +368,9 @@ function statusRecent(): void {
 const ready = (i: issues.Issue, key: string) => (store.afterOf(i).length ? `after ${issues.localRefs(key, store.afterOf(i).join(","))}` : "");
 
 function printRows(rows: issues.Issue[], key: string, indent = ""): void {
-  const w = String(Math.max(...rows.map((i) => i.id))).length;
-  for (const i of rows) console.log(`${indent}${String(i.id).padStart(w)}  ${issues.status(i).padEnd(7)} ${String(i.fm.priority ?? "medium").padEnd(8)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
+  const refs = rows.map(issues.refOf);
+  const w = refs.reduce((m, r) => Math.max(m, r.length), 0);
+  for (const [n, i] of rows.entries()) console.log(`${indent}${refs[n].padStart(w)}  ${issues.status(i).padEnd(7)} ${String(i.fm.priority ?? "medium").padEnd(8)} ${i.title}${ready(i, key) ? `  (${ready(i, key)})` : ""}`);
 }
 
 /** `aleph doctor [--fix] [--json]`: pass or fail for each part of the machine; exit 1 if any fails. */
