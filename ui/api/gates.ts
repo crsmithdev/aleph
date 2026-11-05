@@ -32,13 +32,25 @@ export interface LogEntry { at: string; by: By; item: string; what: string; coun
  * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what always.json grants.
  * A `proposal-<kind>` reason is granted per place (`proposal-<kind>:<place>`); its row lists those keys.
  */
-export function rules() {
+export function rules(entries: LogEntry[] = [], records = record.all(), now = Date.now()) {
   const granted = readAlways();
+  const from = now - LOG_DAYS * DAY, SLACK = 60_000;
+  const asks = records.flatMap((rec) => (rec.asks ?? []).filter((a) => a.reason && Date.parse(a.set) >= from).map((a) => ({ ...a, issue: rec.issue, rec })));
   return Object.entries(ASK_REASONS).map(([reason, r]) => {
     const perPlace = reason.startsWith("proposal-");
     const g = granted[reason];
+    const mine = asks.filter((a) => a.reason === reason);
+    const decided = { rule: 0, director: 0, chris: 0 }, outcome = { fixed: 0, none: 0 };
+    for (const a of mine) {
+      if (!a.cleared) continue;
+      const lo = Date.parse(a.set), hi = Date.parse(a.cleared) + SLACK;
+      const by = entries.find((e) => e.item === a.issue && Date.parse(e.at) >= lo && Date.parse(e.at) <= hi
+        && (e.by === "Rule" || e.by === "You" || (e.by === "Director" && /\bdecided:/.test(e.what))));
+      if (by) decided[by.by === "Rule" ? "rule" : by.by === "You" ? "chris" : "director"]++;
+      outcome[a.rec.runs.some((x) => x.kind === "build" && Date.parse(x.started) >= Date.parse(a.cleared!)) ? "fixed" : "none"]++;
+    }
     return {
-      reason, kind: r.kind, mode: r.always,
+      reason, kind: r.kind, mode: r.always, fired: mine.length, decided, outcome,
       granted: g ? { action: g.action, at: g.at } : null,
       ...(perPlace ? { places: Object.keys(granted).filter((k) => k.startsWith(`${reason}:`)) } : {}),
     };
@@ -216,7 +228,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     baseline: baselineGate(),
     goalGates: goalGates(state.queued ?? []),
     asks: state.asks,
-    rules: rules(),
+    rules: rules(all),
     ...security,
     repoHeld: repoHeld(),
     log: { days: LOG_DAYS, max: LOG_MAX, entries },

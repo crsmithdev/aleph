@@ -114,9 +114,11 @@ export function renderRules(d) {
       if (!r.mode) hint = "No automatic mode.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }
-    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td></tr>`;
+    const num = (n) => `<td class="num">${n}</td>`;
+    const dec = r.decided, out = r.outcome;
+    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} rule, ${dec.director} director, ${dec.chris} Chris</td><td>${out.fixed} fixed, ${out.none} no change</td></tr>`;
   }).join("");
-  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who decides"]), rows, { id: "rules-table" })}</section>`;
+  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who decides", "Fired", "Decided by", "Outcome"]), rows, { id: "rules-table" })}</section>`;
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */

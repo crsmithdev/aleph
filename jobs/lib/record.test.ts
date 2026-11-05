@@ -115,7 +115,7 @@ test("an Ask set on a record and cleared keeps its set time and clear time, thro
   setSystemTime(new Date("2026-11-04T11:30:00.000Z"));
   record.patchRun("r1", { ask: undefined, condition: "passed" });
   expect(record.read("aleph-7")!.asks).toEqual([
-    { set: "2026-11-04T10:00:00.000Z", cleared: "2026-11-04T10:05:00.000Z" },
-    { set: "2026-11-04T11:00:00.000Z", cleared: "2026-11-04T11:30:00.000Z" },
+    { set: "2026-11-04T10:00:00.000Z", cleared: "2026-11-04T10:05:00.000Z", reason: "question" },
+    { set: "2026-11-04T11:00:00.000Z", cleared: "2026-11-04T11:30:00.000Z", reason: "question" },
   ]);
 });

@@ -122,7 +122,7 @@ const data = () => ({
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
   asks: [askItem("run-cap", "r-1")],
-  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
+  rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
   log: { days: 7, max: 200, entries: [{ at: ago(1), by: "Rule", item: "r-5", what: "rescue: recommended" }, { at: ago(2), by: "You", item: "rule", what: "rescue: set to recommended" }] },
@@ -306,6 +306,25 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
   const h = gates.renderRules({ rules: rules() });
   expect(h.match(/<table/g)!.length).toBe(1);
   expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
+});
+
+test("rules() counts each reason's Asks in the window by who decided them and what followed; renderRules shows the counts", () => {
+  const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
+  const ask = (n: number, cleared = true) => ({ set: at(n * 10), ...(cleared ? { cleared: at(n * 10 + 1) } : {}), reason: "question" });
+  const build = (m: number): any => ({ kind: "build", started: at(m) });
+  const rec = (issue: string, asks: any[], runs: any[] = []): any => ({ issue, asks, runs, events: [] });
+  const records = [
+    rec("x-1", [ask(1)], [build(15)]), rec("x-2", [ask(2)]), rec("x-3", [ask(3)]), rec("x-4", [ask(4), ask(5, false)]),
+    rec("x-5", [{ ...ask(6), reason: "run-cap" }]),
+  ];
+  const e = (n: number, by: any, item: string, what = "question: decided: x"): any => ({ at: at(n * 10), by, item, what });
+  const entries = [e(1, "Rule", "x-1"), e(2, "Rule", "x-2"), e(3, "Director", "x-3"), e(4, "You", "x-4", "Chris: yes")];
+  const row: any = rules(entries, records, NOW + 3600_000).find((x) => x.reason === "question");
+  expect(row.fired).toBe(5);
+  expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
+  expect(row.outcome).toEqual({ fixed: 1, none: 3 });
+  const h = gates.renderRules({ rules: [row] });
+  for (const t of ["Fired", "Decided by", "Outcome", "<td class=\"num\">5</td>", "2 rule, 1 director, 1 Chris", "1 fixed, 3 no change"]) expect(h).toContain(t);
 });
 
 test("the body has the tick, the suite and the monitor with their last run from tick.json and tick.log; with no record each has not run", async () => {
