@@ -656,7 +656,7 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
   try {
     return await atCommit(repo, tip, async (wt) => {
       const w = await agentCall("reviewer", argv, {
-        cwd: wt, env: agentEnv(env, folder), stdin: text, stdout: log, stderr: err, limit: reviewSeconds(), stall: stallSeconds(),
+        cwd: wt, env: { ...agentEnv(env, folder), ...modelEnv(OPUS_MODEL) }, stdin: text, stdout: log, stderr: err, limit: reviewSeconds(), stall: stallSeconds(),
         onSpawn: (p) => { child = p; },
       });
       child = null;

@@ -26,6 +26,13 @@ describe("a factory run", () => {
       await drop("rstall");
     }, 30_000);
 
+    test("the reviewer runs without ANTHROPIC_BASE_URL from the job's env", async () => {
+      const r = await rjob("rbase", "REVIEW:pass", undefined, { ANTHROPIC_BASE_URL: "https://openrouter.ai/api" });
+      expect(state(r.json.run).condition).not.toBe("failed");
+      expect(readFileSync(join(fakeLog, "review-env"), "utf8")).not.toContain("ANTHROPIC_BASE_URL");
+      await drop("rbase");
+    });
+
     // v6 phase 6: no second review. A held diff is reviewed once, then waits with one held-path Ask.
     const noSecondReview = (run: string) => {
       expect(existsSync(join(jobsDir, run, "call.md"))).toBe(false);

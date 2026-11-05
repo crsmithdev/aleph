@@ -170,6 +170,7 @@ export const REVIEWER = `#!/bin/bash
 prompt=$(cat)
 printf '%s' "$prompt" > "$FAKE_LOG/review-prompt"
 echo x >> "$FAKE_LOG/review-calls"
+env > "$FAKE_LOG/review-env"
 case $prompt in
   *REVIEW:holdonce*) if [ -e "$FAKE_LOG/holdonce" ]; then echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}'; else touch "$FAKE_LOG/holdonce"; echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"hold","summary":"Looked.","failures":[{"clause":"the flag has no test","observed":"seen"}]}}'; fi ;;
   *REVIEW:noneonce*) if [ -e "$FAKE_LOG/noneonce" ]; then echo '{"type":"result","is_error":false,"result":"","structured_output":{"verdict":"pass","summary":"Fine.","failures":[]}}'; else touch "$FAKE_LOG/noneonce"; echo '{"type":"result","is_error":true,"result":"API Error: 529"}'; fi ;;
