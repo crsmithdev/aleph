@@ -101,6 +101,17 @@ test("next: a goal with no run waits for its hold, else starts", () => {
   expect(record.next(rec([])).step).toBe("start");
 });
 
+test("an Ask with a recommended option keeps the label in its entry after the Ask is cleared", () => {
+  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [], recommended: "B" };
+  setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
+  record.setIssueAsk("aleph-7", ask);
+  setSystemTime(new Date("2026-11-04T10:05:00.000Z"));
+  record.setIssueAsk("aleph-7", null);
+  expect(record.read("aleph-7")!.asks).toEqual([
+    { set: "2026-11-04T10:00:00.000Z", cleared: "2026-11-04T10:05:00.000Z", reason: "question", recommended: "B" },
+  ]);
+});
+
 test("an Ask set on a record and cleared keeps its set time and clear time, through the issue and through a run", () => {
   const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
   setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
