@@ -399,6 +399,23 @@ test("the Monitor panel says the monitor has not run with no report, and holds t
   }
 });
 
+test("the Monitor draws **text** as bold in the summary and the list, and escapes other HTML in a finding", async () => {
+  const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(file, JSON.stringify({ day: "2026-11-03", table: {}, text: "", findings: ["**x** <i>y</i>", "**z**"] }));
+  try {
+    const [sum, rest] = gates.renderMonitor(await body()).split("</summary>");
+    expect(sum).toContain("First: <b>x</b> &lt;i&gt;y&lt;/i&gt;");
+    expect(sum).not.toContain("**");
+    expect(rest).toContain("<li><b>x</b> &lt;i&gt;y&lt;/i&gt;</li>");
+    expect(rest).toContain("<li><b>z</b></li>");
+    expect(rest).not.toContain("**");
+    expect(rest).not.toContain("<i>");
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
 test("the body has the tick, the suite and the monitor with their last run from tick.json and tick.log; with no record each has not run", async () => {
   const dir = process.env.ALEPH_FACTORY_DIR!, logPath = join(dir, "tick.log"), was = readFileSync(logPath, "utf8");
   const none: any = (await body()).schedules;
