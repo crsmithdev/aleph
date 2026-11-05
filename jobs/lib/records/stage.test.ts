@@ -18,7 +18,7 @@ afterAll(() => { restore(); teardown(); });
 
 // One fixture item per stage, each built through the CLI seam of cli.helpers:
 // seeded new-shape item and run files.
-interface Row { name: string; stage: string; of?: { n: number; m: number }; why?: RegExp; build: () => Promise<number | string> }
+interface Row { name: string; stage: string; of?: { n: number; m: number }; action?: string; count?: string; on?: RegExp; why?: RegExp; build: () => Promise<number | string> }
 
 const ref = (n: number | string) => `fac-${n}`;
 let jobs = 0;
@@ -28,7 +28,7 @@ const newIssue = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${+
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
 
 const ISSUES_NEW: Row[] = [
-  { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, why: /^1 of 2 sub-issues done$/, build: async () => {
+  { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, count: "1 / 2", why: /^1 \/ 2$/, build: async () => {
     const n = issue();
     seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
@@ -43,9 +43,9 @@ const ISSUES_NEW: Row[] = [
 ];
 
 const PARTS_NEW: Row[] = [
-  { name: "new goal: working", stage: "working", build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
+  { name: "new goal: working", stage: "working", action: "running", on: /^fac-\d+#1$/, why: /^running fac-\d+#1$/, build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
   // PARTS_NEW[1] is the held goal that the `aleph status` test below reads.
-  { name: "new goal: held", stage: "held", why: /after fac-/, build: async () => newIssue({ after: [ref(newIssue())] }) },
+  { name: "new goal: held", stage: "held", action: "after", why: /^after fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
   { name: "new goal: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
   // A record from before docs/naming.md keeps `stuck`: a stuck run that nothing sent back reads `failed`.
   { name: "new goal: failed under an old stuck run", stage: "failed", build: async () => newRun(newIssue(), { kind: "build", condition: "stuck" as never }) },
@@ -60,15 +60,15 @@ const landPart = (_n: number, partRef: string): string => {
 
 // Dotted goals: the goal `.k` of an issue, seeded through seedPart.
 const PARTS_DOTTED: Row[] = [
-  { name: "dotted goal: done by its trailer commit while the store holds it open", stage: "done", why: /^commit [0-9a-f]{7} on /, build: async () => {
+  { name: "dotted goal: done by its trailer commit while the store holds it open", stage: "done", action: "landed", on: /^[0-9a-f]{7}$/, why: /^landed [0-9a-f]{7}$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); landPart(n, `${n}.1`); return a;
   } },
-  { name: "dotted goal: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /input: run-cap/, build: async () => {
+  { name: "dotted goal: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /^waiting → human$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landPart(n, `${n}.1`); return a;
   } },
-  { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, why: /^1 of 2 sub-issues done$/, build: async () => {
+  { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, count: "1 / 2", why: /^1 \/ 2$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
@@ -92,9 +92,12 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new sha
     for (const row of rows) {
       test(row.name, async () => {
         const s = await statusOf(row);
-        expect(s).toMatchObject({ id: ref(await idOf(row)), stage: row.stage, ...(row.of ? { of: row.of } : {}) });
+        expect(s).toMatchObject({ id: ref(await idOf(row)), stage: row.stage, ...(row.action ? { action: row.action } : {}), ...(row.count ? { count: row.count } : {}), ...(row.of ? { of: row.of } : {}) });
         if (!row.of) expect(s.of).toBeUndefined();
+        if (row.on) expect(s.on?.join(" ")).toMatch(row.on);
         expect(s.why).toMatch(row.why ?? /./);
+        // The reason is event words, never a sentence: no `is`, `has`, `says` or `of`, and no `:`.
+        expect(s.why).not.toMatch(/\b(is|has|says|of)\b|:/);
       });
     }
   });
@@ -107,7 +110,7 @@ test("aleph status prints the same stage as JSON and as one line, with the short
   expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(PARTS_NEW[1]))));
   expect(r.json.why).toMatch(/after fac-\d/);
   const text = await aleph(["status", ref(id)]);
-  expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage}: ${r.json.why}`);
+  expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage} ${r.json.why}`);
   expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no issue 999");
 }, 90_000);
 

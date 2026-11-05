@@ -348,7 +348,7 @@ function statusCmd(): void {
   try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (rest.includes("--json")) return out(s);
-  console.log(issues.localRefs(key, `${s!.id} ${s!.stage}: ${s!.why}`));
+  console.log(issues.localRefs(key, [s!.id, s!.stage, s!.why].filter(Boolean).join(" ")));
 }
 
 /** `aleph status` with no issue: the stage of each open issue in each recent repo. */
@@ -369,7 +369,7 @@ function statusRecent(): void {
   }
   if (rest.includes("--json")) return out(states);
   if (!states.length) { console.log("no open items"); return; }
-  for (const { key, rows } of ofRepo) { console.log(key); for (const s of rows) console.log(issues.localRefs(key, `  ${s.id} ${s.stage}: ${s.why}`)); }
+  for (const { key, rows } of ofRepo) { console.log(key); for (const s of rows) console.log(issues.localRefs(key, `  ${[s.id, s.stage, s.why].filter(Boolean).join(" ")}`)); }
 }
 
 const ready = (i: issues.Issue, key: string) => (store.afterOf(i).length ? `after ${issues.localRefs(key, store.afterOf(i).join(","))}` : "");

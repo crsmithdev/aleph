@@ -53,5 +53,5 @@ export const issueNotes = async (key: string, id: number | string): Promise<stri
 /** `aleph status <repo>-<n>`: the line it prints. */
 export async function statusLine(key: string, n: number): Promise<string> {
   const s = (await status(`${key}-${n}`)).json;
-  return issues.localRefs(key, `${s.id} ${s.stage}: ${s.why}`);
+  return issues.localRefs(key, [s.id, s.stage, s.why].filter(Boolean).join(" "));
 }

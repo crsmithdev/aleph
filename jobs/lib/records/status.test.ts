@@ -74,7 +74,7 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
   expect(f.items[21]).toMatchObject({ id: "demo-21", status: "open", spec: true, after: ["demo-22"], parts: [] });
   expect(f.items[21].ask).toBeUndefined();
   expect(f.items[22]).toMatchObject({ parts: ["demo-22.1"], after: [] });
-  expect(f.runs[21]).toEqual([{ kind: "build", condition: "waiting", open: true, ask: { kind: "input", reason: "question" } }]);
+  expect(f.runs[21]).toEqual([{ id: "demo-21#1", kind: "build", condition: "waiting", open: true, ask: { kind: "input", reason: "question" } }]);
 });
 
 test("a dotted ref in after, parts and on resolves to the goal, its runs and its status", () => {

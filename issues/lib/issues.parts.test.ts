@@ -10,7 +10,7 @@ const SPEC = "## Goal\n\nAdd a line.\n\n## Oracle\n\n`bun test`\n\n## Time box\n
 const add = async (title = "t") => (await issueAdd("fac", title, { request: "Why." }, { ALEPH_DISPATCH: "off" })).json.added as number;
 const show = async (ref: number | string) => (await issueShow("fac", ref)).json;
 /** The line `aleph status <ref>` prints. */
-const statusLine = async (ref: string) => { const s = (await status(ref)).json; return `${s.id} ${s.stage}: ${s.why}`; };
+const statusLine = async (ref: string) => { const s = (await status(ref)).json; return [s.id, s.stage, s.why].filter(Boolean).join(" "); };
 
 describe("the drop of a part", () => {
   test("dropping the only open part sets the part-dropped Ask, and status says waiting", async () => {
