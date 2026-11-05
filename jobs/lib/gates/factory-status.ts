@@ -386,7 +386,7 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
 }
 
 /** The facts of a goal that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
-export function goalFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
+export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
   const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
   return {
     name, item,
@@ -443,9 +443,9 @@ function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: numb
 
 /** The most job starts any one goal made in the last 60 minutes, by the rule the loop guard uses. */
 function maxStartsInHour(now: number, jobs: Job[]): number {
-  const goals = new Map<string, { repo: string; name: string }>();
-  for (const e of jobs.flat()) if (e.run.repo && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000) goals.set(`${e.run.repo}/${e.run.name}`, { repo: e.run.repo, name: e.run.name });
-  return Math.max(0, ...[...goals.values()].map((g) => agentStartsInHour(g.repo, g.name, jobs, now)));
+  const issues = new Map<string, { repo: string; name: string }>();
+  for (const e of jobs.flat()) if (e.run.repo && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000) issues.set(`${e.run.repo}/${e.run.name}`, { repo: e.run.repo, name: e.run.name });
+  return Math.max(0, ...[...issues.values()].map((g) => agentStartsInHour(g.repo, g.name, jobs, now)));
 }
 
 /** What the Status page shows of the factory, and the gate and the baselines its Queued lane reads. */

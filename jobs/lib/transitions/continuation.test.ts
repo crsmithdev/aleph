@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  afterLand, askedQuestion, brief, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, goalBrief,
+  afterLand, askedQuestion, brief, claimStep, clearRerun, conflictStep, duplicateStep, earlierRounds, issueBrief,
   infraStep, killedStep, nextBrief, nextStep, questionOf, repeatedFailure, rerunStep, rescueCase, writeRerun, type Stuck,
 } from "./continuation.ts";
 import type { Entry, Repo, Run } from "../records/ledger.ts";
@@ -181,14 +181,14 @@ describe("the goal's brief", () => {
   test("the rerun note goes in once under its own heading; drops come newest first", () => {
     const item = { title: "Do it", spec: "The spec.\n", notes: ["- a note"] };
     const dropped = (reason: string): Entry[] => [entry(`d-${reason}`, { name: "fac-7", condition: "dropped", reason })];
-    expect(goalBrief(item, "fac-7", [])).toEqual({ spec: "# Do it\n\nThe spec.\n\n## Notes on the issue\n\n- a note\n", rerun: false });
+    expect(issueBrief(item, "fac-7", [])).toEqual({ spec: "# Do it\n\nThe spec.\n\n## Notes on the issue\n\n- a note\n", rerun: false });
     writeRerun("fac-7", "The last run made no commit.");
-    const b = goalBrief(item, "fac-7", [dropped("first"), dropped("second")]);
+    const b = issueBrief(item, "fac-7", [dropped("first"), dropped("second")]);
     expect(b.rerun).toBe(true);
     expect(b.spec).toContain("## Reasons of the earlier drops, newest first\n\n- second\n- first\n");
     expect(b.spec).toEndWith("## Note on the last run\n\nThe last run made no commit.\n");
     clearRerun("fac-7");
-    expect(goalBrief(item, "fac-7", []).rerun).toBe(false);
+    expect(issueBrief(item, "fac-7", []).rerun).toBe(false);
   });
 });
 

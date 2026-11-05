@@ -91,7 +91,7 @@ test("the schema requires the case text with actions, and parseReply returns it 
 });
 
 test("the escalation list: a land on a security path gets case text and no action; a stored host-check Ask is not on it", async () => {
-  fresh([{ title: "held", goal: true }, { title: "check", ask: { ...plainAsk("question", "look at the dashboard"), reason: "host-check" } }]);
+  fresh([{ title: "held", specced: true }, { title: "check", ask: { ...plainAsk("question", "look at the dashboard"), reason: "host-check" } }]);
   branch(`b${n}`, "hooks/x.ts");
   const folder = run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "held-path", question: "Land it?", options: [], why: [] }, branch: `b${n}` });
   reply([{ do: "land" }, { do: "answer", note: "checked" }]);
@@ -109,7 +109,7 @@ test("the escalation list: a land on a security path gets case text and no actio
 });
 
 test("a review Ask on a run that changes bun.lock or a security path is Chris's; one that changes neither the director lands", async () => {
-  fresh([{ title: "lock", goal: true }]);
+  fresh([{ title: "lock", specced: true }]);
   branch(`lock${n}`, "bun.lock");
   run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "review", question: "Land?", options: [], why: [] }, branch: `lock${n}` });
   reply([{ do: "land" }]);
@@ -117,7 +117,7 @@ test("a review Ask on a run that changes bun.lock or a security path is Chris's;
   expect(d).toMatchObject({ outcome: "escalated", why: "the run changes bun.lock, a security path or bun.lock, so its land is Chris's" });
   expect(landed).toEqual([]);
 
-  fresh([{ title: "plain", goal: true }]);
+  fresh([{ title: "plain", specced: true }]);
   branch(`ok${n}`, "src/a.ts");
   const folder = run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "approval", reason: "review", question: "Land?", options: [], why: [] }, branch: `ok${n}` });
   const [e] = await direct();
@@ -143,7 +143,7 @@ test("a memory proposal is on the escalation list: the director's case text goes
 });
 
 test("closing or dropping an issue Chris filed is refused; the same on an agent's issue is applied", async () => {
-  fresh([{ title: "mine", goal: true, ask: plainAsk("no-commit", "3 runs, no commit") }, { title: "agent's", goal: true, source: "agent", ask: plainAsk("no-commit", "3 runs, no commit") }]);
+  fresh([{ title: "mine", specced: true, ask: plainAsk("no-commit", "3 runs, no commit") }, { title: "agent's", specced: true, source: "agent", ask: plainAsk("no-commit", "3 runs, no commit") }]);
   reply([{ do: "close", note: "met on main" }]);
   const [a, b] = await direct();
   expect(a).toMatchObject({ ref: `${key}-1`, outcome: "escalated" });
@@ -163,7 +163,7 @@ test(`at most ${MAX_ACTIONS} actions: the 11th is refused`, async () => {
 });
 
 test("a run-cap Ask: the director reruns the goal once; the second run-cap Ask on it goes to Chris", async () => {
-  fresh([{ title: "loops", goal: true, ask: plainAsk("run-cap", "3 starts in an hour") }]);
+  fresh([{ title: "loops", specced: true, ask: plainAsk("run-cap", "3 starts in an hour") }]);
   reply([{ do: "rerun" }]);
   const [first] = await direct();
   expect(first).toMatchObject({ outcome: "decided", applied: ["rerun"] });
@@ -176,7 +176,7 @@ test("a run-cap Ask: the director reruns the goal once; the second run-cap Ask o
 });
 
 test("a worker's question on a run: the director's answer drops the job with the answer as the next run's note", async () => {
-  fresh([{ title: "goal", goal: true }]);
+  fresh([{ title: "goal", specced: true }]);
   run({ name: `${key}-1`, on: `${key}-1`, ask: { kind: "input", reason: "question", question: "which module?", options: [], why: [] } });
   reply([{ do: "answer", note: "use ask.ts" }]);
   const [d] = await direct();
@@ -193,7 +193,7 @@ test("a paused factory starts no director run", async () => {
 });
 
 test("an edit-goal with a body on the Ask of a run that waits for a spec edit starts a dispatch with no tick", async () => {
-  fresh([{ title: "goal", goal: true, body: "Old spec.", ask: plain("which wins?") }]);
+  fresh([{ title: "goal", specced: true, body: "Old spec.", ask: plain("which wins?") }]);
   const folder = run({ name: `${key}-1`, on: `${key}-1`, condition: "stuck" });
   markAsked({ id: "w1", folder, run: { job: "w1" } as any }, "which wins?", specVersion(item(1)));
   reply([{ do: "edit-goal", body: "A clearer spec." }]);

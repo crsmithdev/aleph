@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { seedGoal, setup, teardown } from "../../jobs/cli.helpers";
+import { seedPart, setup, teardown } from "../../jobs/cli.helpers";
 import { issueAdd, issueClose, issueEdit, issueNote, issueShow, status } from "../../jobs/inproc";
 
 // The verbs of `aleph issue` on a part `<n>.<k>`, and the drop of a part, called in-process as the CLI calls them.
@@ -15,7 +15,7 @@ const statusLine = async (ref: string) => { const s = (await status(ref)).json; 
 describe("the drop of a part", () => {
   test("dropping the only open part sets the part-dropped Ask, and status says awaiting", async () => {
     const n = await add();
-    seedGoal("fac", n, 1);
+    seedPart("fac", n, 1);
     const r = await issueClose("fac", `${n}.1`, "drop", "not needed");
     expect(r.code, r.stderr).toBe(0);
     const issue = await show(n);
@@ -26,8 +26,8 @@ describe("the drop of a part", () => {
 
   test("a second open part means no Ask", async () => {
     const n = await add();
-    seedGoal("fac", n, 1);
-    seedGoal("fac", n, 2, {}, "second");
+    seedPart("fac", n, 1);
+    seedPart("fac", n, 2, {}, "second");
     const r = await issueClose("fac", `${n}.1`, "drop", "not needed");
     expect(r.code, r.stderr).toBe(0);
     expect((await show(n)).ask).toBeNull();
@@ -39,7 +39,7 @@ describe("the verbs on a part", () => {
   test("show --json, note, and edit; after takes a plain or a dotted ref", async () => {
     const n = await add("Listed");
     const m = await add("Other");
-    seedGoal("fac", n, 1, {}, "Part", SPEC);
+    seedPart("fac", n, 1, {}, "Part", SPEC);
     expect((await issueNote("fac", `${n}.1`, "a worker note")).code).toBe(0);
     const e = await issueEdit("fac", `${n}.1`, { title: "Renamed", priority: "high", after: [`fac-${m}`] });
     expect(e.code, e.stderr).toBe(0);

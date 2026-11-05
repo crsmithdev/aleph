@@ -33,17 +33,17 @@ function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {
 }
 
 /** The repo's done goals with a ledger run in the last KEEP_DAYS and no episode page yet. */
-export function doneGoals(repo: Repo, now = Date.now()): issues.Issue[] {
+export function doneIssues(repo: Repo, now = Date.now()): issues.Issue[] {
   const doc = readList(repo);
   if (!doc) return [];
-  const goals = doc.items.filter((i) => !!i.spec.trim());
-  if (!goals.length) return [];
-  const done = new Set(repoStages(repo, { fetch: true, doc, items: goals.map(issues.refOf) }).filter((s) => s.stage === "done").map((s) => s.id));
+  const specced = doc.items.filter((i) => !!i.spec.trim());
+  if (!specced.length) return [];
+  const done = new Set(repoStages(repo, { fetch: true, doc, items: specced.map(issues.refOf) }).filter((s) => s.stage === "done").map((s) => s.id));
   const dir = episodesDir();
   const pages = existsSync(dir) ? readdirSync(dir) : [];
   const since = now - KEEP_DAYS * 86400_000;
   const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined && (epoch(e.run.ended) || epoch(e.run.started)) >= since).map((e) => onOf(e.run)));
-  return goals.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(issues.idOf(i)) && !written(repo, i, pages));
+  return specced.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(issues.idOf(i)) && !written(repo, i, pages));
 }
 
 const NAME_MAX = 255; // bytes one file name may take
@@ -123,7 +123,7 @@ const minutes = (e: Entry) => Math.max(0, Math.round((epoch(e.run.ended) - epoch
 export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commits: Commit[], langfuse: Langfuse): string {
   const id = `${repo.key}-${issues.refOf(item)}`;
   const sources = [id, ...commits.map((c) => `commit:${c.sha.slice(0, 7)}`), ...runs.map((e) => `run:${e.id}`)];
-  const goal = section(item.spec, "Goal") || item.spec.trim() || item.request.trim();
+  const aim = section(item.spec, "Goal") || item.spec.trim() || item.request.trim();
   const landed = commits.length ? commits.map((c) => `${c.sha.slice(0, 7)} ${c.subject}${c.stat ? `\n${c.stat}` : ""}`).join("\n") : "nothing landed";
   const went = runs.map(({ id: name, run }) => {
     const parts = [`${run.kind} run ${name}: ${run.condition}`];
@@ -145,7 +145,7 @@ export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commi
   return [
     "---", "kind: episode", `scope: ${repo.key}`, "confidence: measured", `updated: ${today()}`, "supersedes: []",
     `sources: [${sources.join(", ")}]`, "written_by: factory", "tags: [episode]", "---", "",
-    "## Goal", goal, "",
+    "## Goal", aim, "",
     "## What landed", landed, "",
     "## How it went", went, "",
     "## Cost", `$${cost.toFixed(2)} at the API price over ${runs.length} runs, ${total} min`, traces, "",
@@ -181,7 +181,7 @@ export async function writeEpisodes(repos: Repo[], cap = 10): Promise<{ written:
   pruneEpisodes();
   const todo: { repo: Repo; item: issues.Issue; at: number }[] = [];
   for (const repo of repos) {
-    for (const item of doneGoals(repo)) {
+    for (const item of doneIssues(repo)) {
       const last = Math.max(...runsOf(repo, item).map((e) => epoch(e.run.ended) || epoch(e.run.started)));
       todo.push({ repo, item, at: last });
     }

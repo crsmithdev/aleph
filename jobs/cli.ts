@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/records/ledger.ts";
 import { isLive } from "./lib/infra/process.ts";
-import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/records/job.ts";
+import { allJobs, findJob, isOpen, issue as issueOf, issueTitle, lastReal, readFile, view, type Job } from "./lib/records/job.ts";
 import { unit } from "./lib/roles/unit.ts";
 import { onMain } from "./lib/records/status.ts";
 import { removeBranch } from "./lib/land/landing.ts";
@@ -112,7 +112,7 @@ function reconcile(all: Entry[][]): Map<string, string> {
 function summary(runs: Job, fates = new Map<string, string>()) {
   const v = view(runs);
   return {
-    name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: goal(runs), condition: v.condition, needs: v.needs, phase: v.phase,
+    name: v.name, repo: v.repo, kind: v.run.kind, job: v.job, run: v.run.id, goal: issueTitle(runs), condition: v.condition, needs: v.needs, phase: v.phase,
     reason: v.reason, say: v.say, review: v.review, ...(v.check ? { check: v.check } : {}), fate: fates.get(v.job), session: v.session, started: v.started, ended: v.ended,
     ...(v.lost ? { lost: true } : {}),
   };
@@ -150,7 +150,7 @@ function jobs(): void {
 }
 
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
-function dispatchAfterGoal(repo: Repo, item: issues.Issue): void {
+function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
   if (!repo.sandbox || !store.buildableIssue(repo, issues.idOf(item))) return;
   dispatchDetached();
 }
@@ -196,7 +196,7 @@ async function todoCmd(): Promise<void> {
       warn(a.follow);
       for (const m of a.result.maybeSame ?? []) console.error(`${repo.key}-${m.id} may be the same task: ${m.title}`);
       out(a.result);
-      dispatchAfterGoal(repo, a.item);
+      dispatchAfterIssue(repo, a.item);
       const list = store.reader().list(repo.key);
       if (list && !store.isSorted(list, a.item, repo)) intakeDetached(repo, a.item.id);
       return;
@@ -241,7 +241,7 @@ async function todoCmd(): Promise<void> {
       const e = verbs.edit(repo, id, fields, text);
       warn(e.follow);
       out(e.result);
-      dispatchAfterGoal(repo, e.item);
+      dispatchAfterIssue(repo, e.item);
       return;
     }
     case "done":

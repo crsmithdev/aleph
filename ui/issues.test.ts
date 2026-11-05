@@ -23,7 +23,7 @@ beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 
 /** An item stored as a goal: `kind: goal` on a plain number. */
-const seedGoal = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
+const seedPart = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
 
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, jobsDir: string, argvFile: string, stdinFile: string;
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -70,10 +70,10 @@ beforeAll(async () => {
   chmodSync(fake, 0o755);
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: jobsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: items, ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
-    seedGoal(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
+    seedPart(doc, "first goal", "# Heading\n\n- one\n\n<script>alert(1)</script>");
     add(doc, "plain task", { kind: "bug", labels: ["bug"] });
-    seedGoal(doc, "second goal").fm.after = ["fac-4"];
-    seedGoal(doc, "third goal");
+    seedPart(doc, "second goal").fm.after = ["fac-4"];
+    seedPart(doc, "third goal");
     setStatus(doc.items[1], "done");
     return true;
   }, true);
@@ -486,10 +486,10 @@ describe("views", () => {
       { id: 910, ref: "910", repo: "fac", title: "ask", status: "open", labels: [] },
       { id: 910, ref: "910.1", repo: "fac", title: "part", status: "open", labels: [] },
     ] });
-    const [, goal] = rows;
-    expect(goal).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", part: true });
-    expect(v.renderRow(goal)).toContain("part-row");
-    expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(goal);
+    const [, partRow] = rows;
+    expect(partRow).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", part: true });
+    expect(v.renderRow(partRow)).toContain("part-row");
+    expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(partRow);
   });
 });
 

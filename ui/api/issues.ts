@@ -116,9 +116,9 @@ function detail(params: Record<string, string>, url: URL): Response {
   const n = item.id;
 
   const main = `refs/remotes/origin/${repo.main}`;
-  const goalRefs = partsOf(doc, item).map(todos.refOf);
+  const partRefs = partsOf(doc, item).map(todos.refOf);
   let states = new Map<string, { stage: string; why: string }>();
-  try { for (const s of repoStages(repo, { fetch: false, doc, items: [ref, ...goalRefs] })) states.set(s.id.slice(repo.key.length + 1), s); } catch {}
+  try { for (const s of repoStages(repo, { fetch: false, doc, items: [ref, ...partRefs] })) states.set(s.id.slice(repo.key.length + 1), s); } catch {}
   const mine = todos.status(item) === "parked" ? undefined : states.get(ref);
   const state = mine ? { item: `${repo.key}-${ref}`, stage: mine.stage, why: mine.why } : null;
 
@@ -127,7 +127,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const jobs = !ref.includes(".") ? all.filter((runs) => runs.some((e) => isOfIssue(onOf(e.run), n))).map(jobRow) : jobsOf(ref);
 
   // The Issue page: the `## Request`, then the goals, each with its Job.
-  const goals = goalRefs.map((g) => {
+  const parts = partRefs.map((g) => {
     const gi = todos.find(doc!, g), st = states.get(g);
     return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: `#/issues/${encodeURIComponent(repo.key)}/${g}`, priority: String(gi?.fm.priority ?? "medium"), stage: st?.stage ?? (gi ? todos.status(gi) : "missing"), why: st?.why ?? "", jobs: jobsOf(g) };
   });
@@ -138,13 +138,13 @@ function detail(params: Record<string, string>, url: URL): Response {
     runs: all.flat().filter((e) => onThis(onOf(e.run))).map(({ run: r }) => ({ kind: r.kind, name: r.name, on: r.on, condition: r.condition, started: r.started, ended: r.ended ?? null, model: r.model ?? null, cost: r.cost ?? null, reason: r.reason ?? null })),
   };
   // The hold records of every job name the answer shows.
-  const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...goals.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);
+  const holds = readHolds([...new Set([...jobs.map((j) => j.name), ...parts.flatMap((g) => g.jobs.map((j) => j.name)), ...timeline.runs.map((r) => r.name)])]);
   const up = parentOf(doc, item);
   const parent = up ? `${repo.key}-${todos.refOf(up)}` : null;
 
   const base = githubBase(git(repo.path, "remote", "get-url", "origin").out);
   // The issue's own commits, then each part's, with the part it landed for.
-  const own = ref.includes(".") ? [ref] : [ref, ...goalRefs];
+  const own = ref.includes(".") ? [ref] : [ref, ...partRefs];
   const seen = new Set<string>(), index = landedIndex(repo.path, main, repo.key);
   const commits = own.flatMap((r) => (index.get(r) ?? []).filter((h) => !seen.has(h) && seen.add(h)).map((h) => {
     const [hash, date, subject] = git(repo.path, "show", "-s", "--format=%H%x09%cI%x09%s", h).out.split("\t");
@@ -166,7 +166,7 @@ function detail(params: Record<string, string>, url: URL): Response {
     ask = attend({ runs: [], issues: [c] }, []).items[0];
   }
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {

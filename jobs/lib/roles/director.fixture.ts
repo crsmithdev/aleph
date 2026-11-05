@@ -34,14 +34,14 @@ export let key = "";
 export const repoPath = () => join(base, "repo");
 
 /** A new repo key, ledger and factory directory, with these items in its list. */
-export function fresh(items: { title: string; body?: string; goal?: boolean; notes?: string[]; ask?: Ask; source?: issues.Source }[] = []): void {
+export function fresh(items: { title: string; body?: string; specced?: boolean; notes?: string[]; ask?: Ask; source?: issues.Source }[] = []): void {
   key = `ff${++n}`;
   writeFileSync(join(base, "repos.json"), JSON.stringify({ [key]: { path: repoPath(), sandbox: true, autoland: false } }));
   process.env.ALEPH_JOBS_DIR = join(base, `jobs${n}`);
   process.env.ALEPH_FACTORY_DIR = join(base, `factory${n}`);
   writeList({ key }, "reset", (doc) => {
     for (const i of items) {
-      const it = issues.add(doc, i.title, { ...(i.goal ? { spec: i.body ?? "Ship the thing." } : { request: i.body }), ...(i.source ? { source: i.source } : {}) });
+      const it = issues.add(doc, i.title, { ...(i.specced ? { spec: i.body ?? "Ship the thing." } : { request: i.body }), ...(i.source ? { source: i.source } : {}) });
       for (const note of i.notes ?? []) issues.note(it, note);
       if (i.ask) setAsk(`${key}-${it.id}`, i.ask);
     }
@@ -134,4 +134,4 @@ export const alwaysFile = (s: object) => {
 };
 
 /** Goal `.1` under issue `id`, as `fresh` files none: the goal a drop or an answer can wait for. */
-export const addGoal = (id: number) => writeList({ key }, "a goal", (doc) => { issues.addPart(doc, issues.find(doc, id)!, { title: "blocker goal", spec: "Do it." }); return true; });
+export const addIssue = (id: number) => writeList({ key }, "a goal", (doc) => { issues.addPart(doc, issues.find(doc, id)!, { title: "blocker goal", spec: "Do it." }); return true; });

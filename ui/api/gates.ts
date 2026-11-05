@@ -171,7 +171,7 @@ export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, projec
 const baselineGate = () => Object.values(baselines()).map((b) => ({ repo: b.repo, state: b.ok ? "green" : "red", line: b.ok ? `${b.repo} ${b.commit.slice(0, 7)}` : `${b.repo} ${redLine(b)}` }));
 
 /** How many queued goals each per-goal gate holds now, by the Queued lane's decision. */
-const goalGates = (queued: State["queued"]) => ({
+const issueGates = (queued: State["queued"]) => ({
   baseline: queued.filter((q) => q.kind === "baseline").length,
   "not-ready": queued.filter((q) => q.kind === "not-ready").length,
   "busy-file": queued.filter((q) => q.kind === "busy-file").length,
@@ -220,14 +220,14 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
   const from = now - span;
   const auto = entries.filter((e) => (e.by === "Rule" || (e.by === "Director" && /\bdecided:/.test(e.what)))).length;
   const chris = entries.filter((e) => e.by === "You" && e.item !== "rule").length;
-  const open: Record<string, number> = {}, goals = new Set<string>();
+  const open: Record<string, number> = {}, names = new Set<string>();
   let ms = 0;
   const close = (name: string, end: number) => {
     const start = Math.max(open[name], from);
     delete open[name];
     if (end <= start) return;
     ms += end - start;
-    goals.add(name);
+    names.add(name);
   };
   for (const h of holds) {
     if (h.kind === "started") { if (h.name in open) close(h.name, Date.parse(h.at)); }
@@ -244,7 +244,7 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
       fired: sent.length,
       fixed: sent.filter(Boolean).length,
     },
-    held: { goals: goals.size, hours: Math.round(ms / 360_000) / 10 },
+    held: { goals: names.size, hours: Math.round(ms / 360_000) / 10 },
   };
 }
 
@@ -261,7 +261,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
     gated: gates({ jobs }),
     baseline: baselineGate(),
-    goalGates: goalGates(state.queued ?? []),
+    goalGates: issueGates(state.queued ?? []),
     asks: state.asks,
     rules: rules(all, records, Date.now(), ms),
     repeats: repeats(all, records, Date.now(), ms),

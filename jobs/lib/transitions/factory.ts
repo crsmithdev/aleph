@@ -15,7 +15,7 @@ import { countsLine, intakeIssue, type Counts } from "../roles/intake.ts";
 import { allRuns, askOf as runAskOf, isAwaiting, loadRegistry, lock, updateRun, type Entry, type Repo } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
-import { clearRerun, goalBrief } from "./continuation.ts";
+import { clearRerun, issueBrief } from "./continuation.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
 import { allJobs, checkedBy, lookMinutes, openJob } from "../records/job.ts";
 import { mine, proposals, readStore } from "../learning/corrections.ts";
@@ -24,22 +24,22 @@ import { episodesDir, writeEpisodes } from "../learning/episode.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "../land/landing.ts";
 import { baselineChecks, type CheckTask, type ChecksStop } from "../gates/checks.ts";
-import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
+import { drop, land, recheck, refusal, startIssue } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, TIER_MODEL, TIERS, type Tier } from "../routing/route.ts";
-import { appendSuiteHistory, mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "../gates/factory-status.ts";
+import { appendSuiteHistory, mainRed, writeBaseline, clearCap, issueFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from "../gates/issue-decision.ts";
 
 /** A start refused because the live cap filled: the line `gates` gives for it. */
 const LIVE_REFUSAL = / agent runs are live/;
-import { INTAKE_CAP, goalLockWaitMs, rescueOn } from "../infra/settings.ts";
+import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
 
 
 /** The buildable issues of each factory repo. */
-export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => buildableIssues(sandboxRepos(), lists);
+export const openIssues = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => buildableIssues(sandboxRepos(), lists);
 
 /**
  * Whether `<repo>-<n>` is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched.
@@ -107,7 +107,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   const done = doneChecker(true, (key, id) => reader({ fetch: false }).item(key, id));
   // A parent whose parts all landed closes without a green main.
   for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
-  const goals = openGoals();
+  const ready = openIssues();
   // An issue to plan goes to intake, which splits it. Intake starts an agent run, so the baseline gate holds it as it holds a goal.
   const planners: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
@@ -121,7 +121,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   }
   /** Records the hold and the skip line of a goal no start reached. */
   const skip = (name: string, kind: Gate, why: string, line = why) => { recordHold(name, kind, why); skipped.push(`${name}: ${line}`); };
-  for (const { repo, item: listed } of goals) {
+  for (const { repo, item: listed } of ready) {
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = redOf(repo);
@@ -136,7 +136,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     if (first.kind !== "ready") { skip(name, first.kind, first.why); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
-    const release = await lock(`goal-${name}`, goalLockWaitMs());
+    const release = await lock(`goal-${name}`, issueLockWaitMs());
     if (!release) { skip(name, "not-ready", "another dispatch is starting it"); continue; }
     try {
       const jobs = allJobs();
@@ -144,13 +144,13 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : buildableIssue(repo, ref);
       if (!item) { skip(name, "not-ready", "not a goal"); continue; }
-      const facts = { ...goalFacts(repo, item, jobs), done, red };
+      const facts = { ...issueFacts(repo, item, jobs), done, red };
       // A pass that began before a pause must not start a run after it.
       let d = issueDecision({ ...facts, ...factoryGates(jobs) });
       let tier: Tier | null | undefined;
       // The live cap held the goal, but a tier on the local backend has room: rate the goal, and check its tier's cap.
       if (d.kind === "live-cap" && TIERS.some((t) => !factoryGates(jobs, { model: TIER_MODEL[t] })["live-cap"])) {
-        tier = await route(goalBrief(item, name, jobs).spec);
+        tier = await route(issueBrief(item, name, jobs).spec);
         if (tier) d = issueDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
       }
       if (d.kind !== "ready" && d.kind !== "loop-guard") { skip(name, d.kind, d.why); continue; }
@@ -177,7 +177,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         }
         continue;
       }
-      const { spec, rerun } = goalBrief(item, name, jobs);
+      const { spec, rerun } = issueBrief(item, name, jobs);
       const why = await start(repo, name, ref, spec, tier);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
       if (why) skip(name, LIVE_REFUSAL.test(why) ? "live-cap" : "not-ready", why);
@@ -407,8 +407,8 @@ export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()
   const redOf = mainRed();
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs)) {
-    for (const { repo, item } of openGoals(lists)) {
-      const facts = goalFacts(repo, item, jobs);
+    for (const { repo, item } of openIssues(lists)) {
+      const facts = issueFacts(repo, item, jobs);
       if (issueDecision({ ...facts, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
     }
   }
@@ -570,10 +570,10 @@ export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Pro
 }
 
 /** The factory's ports onto the transitions, each in-process; each returns the refusal, or null. */
-const landGoal = (name: string) => refusal(async () => { await (await land(name, {}, { output: "ignore" })).child?.exited; });
+const landPart = (name: string) => refusal(async () => { await (await land(name, {}, { output: "ignore" })).child?.exited; });
 /** A safe default drop: quiet, as the factory writes the issue note and the news. */
-const dropGoal = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
-const recheckGoal = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
+const dropIssue = (name: string, reason: string, fate?: Fate) => refusal(() => drop(name, { reason, quiet: true, fate }));
+const recheckIssue = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
 
 /**
  * `aleph dispatch`: one dispatch of the ready goals, then the intake queue and the director for an Ask that the
@@ -581,7 +581,7 @@ const recheckGoal = (name: string) => refusal(async () => { await (await recheck
  */
 export async function runDispatch(p: Starts = starts): Promise<Awaited<ReturnType<typeof dispatchIssues>> & { intaking?: string[] }> {
   // `ALEPH_RESCUE=off` leaves a stuck or failed run as it is: its open job keeps its goal not ready.
-  const d = await dispatchIssues(startGoal, landGoal, !rescueOn() ? undefined : { drop: dropGoal, recheck: recheckGoal });
+  const d = await dispatchIssues(startIssue, landPart, !rescueOn() ? undefined : { drop: dropIssue, recheck: recheckIssue });
   if (d.paused) return d;
   const intaking = intakeQueued(p.intake);
   directIfNew(p.director);

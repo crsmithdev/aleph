@@ -412,7 +412,7 @@ function pushItems(): void {
  */
 /** A seed's fields and text in the stored shape: `status` becomes `closed_as`, and `kind: "goal"` puts the text in the spec. */
 function seedShape(id: string, fm: Record<string, unknown>, body: string, spec: boolean) {
-  const { status, kind, issue: _issue, goals: _goals, ...rest } = fm as Record<string, any>;
+  const { status, kind, issue: _issue, goals: _parts, ...rest } = fm as Record<string, any>;
   const closed = status && status !== "open" ? { closed_as: status, closed_at: "2026-10-30" } : {};
   const isSpec = spec || kind === "goal";
   return { fm: { id, created: "2026-10-30", updated: "2026-10-30", priority: "medium", ...closed, ...rest }, request: isSpec ? "" : body, spec: isSpec ? body : "", notes: [] as string[] };
@@ -433,7 +433,7 @@ export function seedItem(repoKey: string, title: string, fm: Record<string, unkn
 }
 
 /** Files the goal `<repo>-<n>.<k>` of issue `<repo>-<n>` in one commit on the test store's origin/main; returns `"<n>.<k>"`. */
-export function seedGoal(repoKey: string, n: number, k: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): string {
+export function seedPart(repoKey: string, n: number, k: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): string {
   pullItems();
   const dir = join(items, repoKey, "backlog", "tasks");
   mkdirSync(dir, { recursive: true });
@@ -465,9 +465,9 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
 export async function addOld(title: string, action: string, extra: string[] = [], env: Record<string, string> = {}): Promise<number> {
   const flag = (n: string) => { const i = extra.indexOf(`--${n}`); return i >= 0 ? extra[i + 1] : undefined; };
   const labels = (flag("labels") ?? "").split(",").filter(Boolean);
-  const isGoal = labels.includes("goal"), areas = labels.filter((l) => l !== "goal");
-  const id = seedItem("fac", title, { ...(isGoal ? { kind: "goal" } : {}), ...(areas.length ? { areas } : {}), ...(flag("after") ? { after: flag("after")!.split(",").filter(Boolean) } : {}) }, action ? `ACTION: ${action}` : "");
-  if (isGoal && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
+  const isPart = labels.includes("goal"), areas = labels.filter((l) => l !== "goal");
+  const id = seedItem("fac", title, { ...(isPart ? { kind: "goal" } : {}), ...(areas.length ? { areas } : {}), ...(flag("after") ? { after: flag("after")!.split(",").filter(Boolean) } : {}) }, action ? `ACTION: ${action}` : "");
+  if (isPart && env.ALEPH_DISPATCH !== "off") await aleph(["dispatch"], env);
   return id;
 }
 

@@ -4,7 +4,7 @@ hooks/hooks.test.ts
 jobs/cli.basic.test.ts
 jobs/cli.dispatch-once.test.ts
 jobs/cli.helpers.ts
-jobs/cli.issue-goal.test.ts
+jobs/cli.issue-part.test.ts
 jobs/cli.land-crash.test.ts
 jobs/cli.transitions.test.ts
 jobs/lib/roles/agent-run.test.ts

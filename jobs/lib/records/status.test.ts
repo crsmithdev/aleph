@@ -78,12 +78,12 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
 });
 
 test("a dotted ref in after, parts and on resolves to the goal, its runs and its status", () => {
-  const goal = (sub: number, fm: Record<string, unknown>) => ({ id: 5, sub, title: `g${sub}`, fm: { ...fm } as Issue["fm"], request: "", spec: "s", notes: [] });
+  const part = (sub: number, fm: Record<string, unknown>) => ({ id: 5, sub, title: `g${sub}`, fm: { ...fm } as Issue["fm"], request: "", spec: "s", notes: [] });
   const mk = (g1: string): Doc => ({
     items: [
       { ...item(5, "open"), fm: {} },
-      goal(1, closed(g1)),
-      goal(2, { after: ["demo-5.1"] }),
+      part(1, closed(g1)),
+      part(2, { after: ["demo-5.1"] }),
     ],
   });
   const folder = join(base, "jobs", "20261030-000001-demo-5.1-build");

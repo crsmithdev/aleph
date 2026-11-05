@@ -15,7 +15,7 @@ describe("a factory run", () => {
     const on = (extra: Record<string, string> = {}) => ({ ALEPH_DISPATCH: "on", ALEPH_START_CMD: startCmd, START_LOG: startLog, ...extra });
     const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
     const gate = (n: string) => join(base, `gate-${n}`);
-    const goal = async (n: string) =>
+    const issue = async (n: string) =>
       seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
     const until = async (f: () => boolean) => { await waitFor(f, { timeout: 30_000, every: 100 }); expect(f()).toBe(true); };
     const settled = (id: number) => readdirSync(jobsDir).filter((r) => r.includes(`-fac-fac-${id}-`)).every((r) => stateNow(r).condition === "passed");
@@ -39,7 +39,7 @@ describe("a factory run", () => {
 
     // Two `aleph dispatch` processes at once: the lock between processes is what these cases test.
     test("two dispatches at once start each goal once", async () => {
-      const d = await goal("d");
+      const d = await issue("d");
       ids.push(d);
       const [x, y] = await Promise.all([aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" })), aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" }))]);
       expect(started().filter((n) => n === `fac-${d}`)).toHaveLength(1);
@@ -50,8 +50,8 @@ describe("a factory run", () => {
 
     // flaky: tests/flaky.md#dispatch-once-cap-1
     test.skip("two dispatches at once with a live cap of 1 start only one goal", async () => {
-      const e = await goal("e");
-      const f = await goal("f");
+      const e = await issue("e");
+      const f = await issue("f");
       ids.push(e, f);
       const [x, y] = await Promise.all([aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "1" })), aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "1" }))]);
       const why = () => diagnose(`x.json ${JSON.stringify(x.json)}\ny.json ${JSON.stringify(y.json)}`, [e, f], x, y);

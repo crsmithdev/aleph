@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { join } from "node:path";
 import { readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { ctx, sh, goal, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { ctx, sh, newIssue, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 import { clearAsk } from "../asks/ask.ts";
 
 // The test's clock: the run cap's hour, the streak and the notes read it.
@@ -12,7 +12,7 @@ beforeEach(() => { setSystemTime(NOW); setup(); });
 afterEach(() => { setSystemTime(); teardown(); });
 
 test("no commit, the item on main by its Item trailer: the open item is closed with a note naming the commit", async () => {
-  const id = goal();
+  const id = newIssue();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" });
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${id}\nJob: other`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
@@ -26,7 +26,7 @@ test("no commit, the item on main by its Item trailer: the open item is closed w
 });
 
 test("a fourth no-commit run in a row is not dispatched; the item gets an Ask", async () => {
-  const id = goal();
+  const id = newIssue();
   for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "no commit, run X ended with no commit: dropped as a duplicate", noCommit: true, started: ago((4 - i) * 60_000) });
   const f = fakes();
   const out = await dispatch(f);
@@ -46,7 +46,7 @@ const unlabel = async (id: number) => clearAsk(`fac-${id}`);
 const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
 
 test("answering the Ask restarts the no-commit streak; three more no-commit runs give it another Ask", async () => {
-  const id = goal();
+  const id = newIssue();
   // Two hours back: outside the run cap's hour, so only the streak holds the goal.
   noCommitRuns(id, 3, 7200);
   const f = fakes();
@@ -67,7 +67,7 @@ test("answering the Ask restarts the no-commit streak; three more no-commit runs
 });
 
 test("while the Ask stays on the item, dispatches start nothing and write one note", async () => {
-  const id = goal();
+  const id = newIssue();
   noCommitRuns(id, 3, 600);
   const f = fakes();
   await dispatch(f);
@@ -80,7 +80,7 @@ test("while the Ask stays on the item, dispatches start nothing and write one no
 // The run cap: a fourth agent run of a goal in 60 minutes is not started; one Ask note says so.
 const RUN_CAP_NOTE = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it";
 test("a fourth start in an hour is skipped with one Ask note, and the goal is not started", async () => {
-  const id = goal();
+  const id = newIssue();
   for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: ago((i + 1) * 60_000) });
   const f = fakes();
   const out = await dispatch(f);

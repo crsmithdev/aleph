@@ -6,7 +6,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { factoryDir } from "../gates/factory-status.ts";
 import { readRun, writeRun, allJobs, allRuns, lock } from "../records/ledger.ts";
-import { ctx, goal, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
+import { ctx, newIssue, mk, lines, notes, ask, fakes, dispatch, claimed, withChecks, setup, teardown } from "./factory.helpers.ts";
 import { askOf } from "../asks/ask.ts";
 import { markRescued } from "./continuation.ts";
 import { ciStep } from "../gates/ci.ts";
@@ -18,7 +18,7 @@ afterEach(teardown);
 
 for (const red of [false, true]) {
   test(`a second claimed run after one rescued as claimed, main ${red ? "red: it asks Chris" : "green: the item is done"}`, async () => {
-    const id = goal();
+    const id = newIssue();
     const first = mk(`fac-${id}`, "build", "dropped", { reason: "no commit", alreadyMet: "main has it" });
     markRescued({ id: first.folder.split("/").at(-1)!, folder: first.folder, run: readRun(first.folder)! }, "claimed");
     claimed(`fac-${id}`, "main has it");
@@ -37,7 +37,7 @@ for (const red of [false, true]) {
 }
 
 test("aleph-1206: the local checks pass but GitHub CI on main is red, so the claim on a CI issue does not close it, and the rerun quotes the CI failure", async () => {
-  const id = goal(["red-main"]);
+  const id = newIssue(["red-main"]);
   const failure = "Failing tests:\n(fail) the docs on this tree match the code > every default\n\nRunner: 4 cores; this host: 24.";
   record.update(`fac-${id}`, (r) => { r.ci = { url: "https://github.com/x/y/actions/runs/7", commit: "c1", failure }; });
   const red = [{ conclusion: "failure", status: "completed", headSha: "c1", url: "https://github.com/x/y/actions/runs/7", createdAt: "2026-11-04T20:20:05Z" }];
@@ -53,7 +53,7 @@ test("aleph-1206: the local checks pass but GitHub CI on main is red, so the cla
 });
 
 test("no commit, the item open, first time: dropped with no fate and the goal reruns once, with the last 20 lines of result.md", async () => {
-  const id = goal();
+  const id = newIssue();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(30) });
   const f = fakes();
   await dispatch(f);
@@ -66,11 +66,11 @@ test("no commit, the item open, first time: dropped with no fate and the goal re
   expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
 });
 
-const dottedGoal = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(issues.addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." })), true)!.value;
+const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(issues.addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." })), true)!.value;
 const dotted = (ref: string) => readList({ key: "fac" })!.items.find((i) => issues.refOf(i) === ref)!;
 
 test("a dotted goal's rescue note reaches the goal, and a second no-commit run asks Chris on it", async () => {
-  const ref = dottedGoal();
+  const ref = dottedPart();
   mk(`fac-${ref}`, "build", "stuck", { reason: "no commit" });
   const f = fakes();
   await dispatch(f);
@@ -81,8 +81,8 @@ test("a dotted goal's rescue note reaches the goal, and a second no-commit run a
 });
 
 test("a pass that began before a pause starts nothing after it", async () => {
-  const first = goal();
-  goal();
+  const first = newIssue();
+  newIssue();
   const calls: string[] = [];
   const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);
@@ -95,7 +95,7 @@ test("a pass that began before a pause starts nothing after it", async () => {
 });
 
 test("the second no-commit run with no claim asks Chris: no drop and the issue stays open", async () => {
-  const id = goal();
+  const id = newIssue();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit" }, { "result.md": lines(3) });
   const f = fakes();
   await dispatch(f);
@@ -108,7 +108,7 @@ test("the second no-commit run with no claim asks Chris: no drop and the issue s
 });
 
 test("a second infrastructure failure of one goal gets an Ask", async () => {
-  const id = goal();
+  const id = newIssue();
   const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "stuck", { reason: "fetch failed", job: a.job });
   const f = fakes();
@@ -123,7 +123,7 @@ test("a second infrastructure failure of one goal gets an Ask", async () => {
 });
 
 test("a land that failed with a merge conflict is dropped and the goal reruns; the second one gets an Ask", async () => {
-  const id = goal();
+  const id = newIssue();
   const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts", "b.ts"], job: a.job });
   const f = fakes();
@@ -143,7 +143,7 @@ test("a land that failed with a merge conflict is dropped and the goal reruns; t
 test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an always: Rerun note", async () => {
   mkdirSync(join(ctx.base, "factory"), { recursive: true });
   writeFileSync(join(ctx.base, "factory", "always.json"), JSON.stringify({ rescue: { action: "recommended", at: "2026-11-04T12:00:00.000Z" } }));
-  const id = goal();
+  const id = newIssue();
   mk(`fac-${id}`, "build", "stuck", { reason: "tests failed after 2 fix rounds" });
   const f = fakes();
   await dispatch(f);
@@ -154,7 +154,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
 });
 
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {
-  const id = goal();
+  const id = newIssue();
   const name = `fac-${id}`;
   const { folder } = mk(name, "build", "stuck", { reason: "weird" });
   // Dispatch A holds the lock; the stuck state B must act on appears only after A is done.

@@ -95,7 +95,7 @@ export function addNote(j: Job, text: string): void {
 }
 
 /** The first line of the job's spec, or of a plain run's command. */
-export const goal = (j: Job): string => (readFile(j[0], "spec.md") ?? readFile(j[0], "command.txt") ?? "").trim().split("\n")[0];
+export const issueTitle = (j: Job): string => (readFile(j[0], "spec.md") ?? readFile(j[0], "command.txt") ?? "").trim().split("\n")[0];
 
 /** A job as the UI and `aleph jobs` show it. Run fields are the last run's; the rest is the latest run that has them. */
 export interface JobView {

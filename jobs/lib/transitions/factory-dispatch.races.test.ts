@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
-import { goal, change, mk, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
+import { newIssue, change, mk, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -13,7 +13,7 @@ test("a goal waiting on a factory item the store says done, with no commit namin
   const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => issues.add(doc, "met elsewhere").id, true)!.value;
   mk(`fac-${blocker}`, "build", "dropped", { reason: "the goal is already met" });
   await change(blocker, (item) => issues.setStatus(item, "done"));
-  const waiter = goal();
+  const waiter = newIssue();
   await change(waiter, (item) => { item.fm.after = [`fac-${blocker}`]; });
   const f = fakes();
   const out = await dispatch(f);
@@ -23,8 +23,8 @@ test("a goal waiting on a factory item the store says done, with no commit namin
 
 // The label gap is between the read of the list and a goal's lock: an earlier goal's start removes it.
 test("a goal turned back into an issue while an earlier goal starts is not started", async () => {
-  const first = goal();
-  const second = goal();
+  const first = newIssue();
+  const second = newIssue();
   const calls: string[] = [];
   const out = await dispatchIssues(async (_repo, name) => {
     calls.push(name);

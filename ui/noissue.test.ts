@@ -8,7 +8,7 @@ import { renderLanes } from "./views/now.js";
 /** What a reader sees: no style or script blocks, no tags, no attribute values. */
 const visible = (html: string) =>
   html.replace(/<(style|script)[\s\S]*?<\/\1>/g, "").replace(/<[^>]*>/g, " ").replace(/&[a-z#0-9]+;/g, " ");
-const noGoal = (html: string) => expect(visible(html)).not.toMatch(/goal/i);
+const noIssue = (html: string) => expect(visible(html)).not.toMatch(/goal/i);
 // Attributes the reader meets too: placeholders, titles and aria labels.
 const attrs = (html: string) => [...html.matchAll(/\b(?:title|placeholder|aria-label|data-label)="([^"]*)"/g)].map((m) => m[1]).join(" ");
 
@@ -17,7 +17,7 @@ describe("the UI never says goal", () => {
   const pages: [string, string][] = [
     ["now issues", renderLanes({ stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],
   ];
-  for (const [name, html] of pages) test(name, () => { noGoal(html); noGoal(attrs(html)); });
+  for (const [name, html] of pages) test(name, () => { noIssue(html); noIssue(attrs(html)); });
 
   test("the form still files a spec", () => {
     const form = renderIssues({ projects: [], issues: [] });

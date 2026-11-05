@@ -222,23 +222,23 @@ describe("a goal that acceptance failed twice", () => {
     const repo = join(base, "repo");
     const headBefore = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });
     const before = headBefore.exitCode === 0 ? headBefore.stdout.toString().trim() : null;
-    let goalId = 0;
+    let partId = 0;
     writeList({ key: "fac" }, "goal that failed acceptance twice", (doc) => {
-      const goal = add(doc, "acceptance goal");
+      const it = add(doc, "acceptance it");
 
-      goal.notes.push("- Oracle: `bun test ui/state.test.ts` fails on the acceptance check.");
-      goalId = goal.id;
+      it.notes.push("- Oracle: `bun test ui/state.test.ts` fails on the acceptance check.");
+      partId = it.id;
       return true;
     });
-    setAsk(`fac-${goalId}`, { kind: "input", reason: "run-cap", question: "", options: [], why: [] });
+    setAsk(`fac-${partId}`, { kind: "input", reason: "run-cap", question: "", options: [], why: [] });
     try {
       // The trailer commit on main names the goal; origin/main points at it, as a land would leave it.
-      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${goalId}`);
+      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${partId}`);
       sh(repo, "git", "update-ref", "refs/remotes/origin/main", sh(repo, "git", "rev-parse", "HEAD"));
       const s = state(now);
-      expect(s.asks.some((a) => a.id === `fac-${goalId}` && a.reason === "run-cap")).toBe(true);
-      expect(s.queued.some((q) => q.id === goalId)).toBe(false);
-      expect(s.done.some((d) => d.id === `fac-${goalId}`)).toBe(false);
+      expect(s.asks.some((a) => a.id === `fac-${partId}` && a.reason === "run-cap")).toBe(true);
+      expect(s.queued.some((q) => q.id === partId)).toBe(false);
+      expect(s.done.some((d) => d.id === `fac-${partId}`)).toBe(false);
     } finally {
       Bun.spawnSync(["git", "update-ref", "-d", "refs/remotes/origin/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
       if (before) sh(repo, "git", "update-ref", "refs/heads/main", before);

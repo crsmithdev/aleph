@@ -9,7 +9,7 @@ import * as ledger from "../records/ledger.ts";
 import { held, runsDir, updateRun, type Run } from "../records/ledger.ts";
 import { startJob } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
-import { ctx, goal, mk, setup, teardown } from "./factory.helpers.ts";
+import { ctx, newIssue, mk, setup, teardown } from "./factory.helpers.ts";
 
 /** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
 let afterHeld: ((name: string) => void) | undefined;
@@ -98,7 +98,7 @@ test("with the live cap full of Claude runs and the GPU free, the dispatch start
   setSystemTime(NOW);
   try {
     mk("claude-1", "build", "running", { model: "sonnet", made: NOW });
-    const id = goal();
+    const id = newIssue();
     const tiers: unknown[] = [];
     const out = await dispatchIssues(async (_r, _n, _id, _spec, tier) => { tiers.push(tier); return null; });
     expect(out.started).toEqual([`fac-${id}`]);

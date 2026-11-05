@@ -5,10 +5,10 @@ import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
-import { spentToday, runsToday, health, writeBaseline, suiteHistory, factorySnapshot, goalFacts } from "../gates/factory-status.ts";
+import { spentToday, runsToday, health, writeBaseline, suiteHistory, factorySnapshot, issueFacts } from "../gates/factory-status.ts";
 import { allJobs, loadRegistry, lock, readRun, writeRun } from "../records/ledger.ts";
 import { type Run } from "../records/ledger.ts";
-import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
+import { ctx, sh, newIssue, change, mk, setup, teardown } from "./factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(() => { setSystemTime(); teardown(); });
@@ -72,7 +72,7 @@ test("the day's spend counts every kind that records a cost", () => {
 });
 
 test("runStarts counts a goal's job starts in the hour, not its fix rounds, and matches the loop guard", () => {
-  const id = goal();
+  const id = newIssue();
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString();
   const { job } = mk(`fac-${id}`, "build", "failed", { started: ago(40) });
   mk(`fac-${id}`, "build", "failed", { job, started: ago(30) });
@@ -81,7 +81,7 @@ test("runStarts counts a goal's job starts in the hour, not its fix rounds, and 
   const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
   const jobs = allJobs();
   expect(factorySnapshot(NOW, jobs).runStarts).toBe(2);
-  expect(factorySnapshot(NOW, jobs).runStarts).toBe(goalFacts(loadRegistry().fac, item, jobs, NOW).startsInHour);
+  expect(factorySnapshot(NOW, jobs).runStarts).toBe(issueFacts(loadRegistry().fac, item, jobs, NOW).startsInHour);
 });
 
 test("an explain run has no repo; its cost counts in the day's spend, not in runsToday, and an old one adds nothing", () => {
@@ -139,7 +139,7 @@ test("a goal that shares only a quiet file with an open job starts", async () =>
 });
 
 test("stalled lists what could move: a goal, a new issue and a passed run, each until a gate or a live run explains it", () => {
-  const id = goal();
+  const id = newIssue();
   const fresh = writeList({ key: "fac" }, "add an issue", (doc) => issues.add(doc, "new thing").id, true)!.value;
   expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
   writeFileSync(join(ctx.base, "repos.json"), JSON.stringify({ fac: { path: join(ctx.base, "repo"), sandbox: true, autoland: true } }));
@@ -156,7 +156,7 @@ test("stalled lists what could move: a goal, a new issue and a passed run, each 
 test("stalled counts a red baseline until a later suite run is green, also after main moves", async () => {
   const repo = join(ctx.base, "repo");
   const head = () => Bun.spawnSync(["git", "-C", repo, "rev-parse", "origin/main"], { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
-  const id = goal();
+  const id = newIssue();
   const fresh = writeList({ key: "fac" }, "add a plan", (doc) => { const i = issues.add(doc, "plan me"); i.fm.plan = "true"; return i.id; }, true)!.value;
   await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
   sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "next");
@@ -187,8 +187,8 @@ await writeBaseline("b", () => ({ repo: "b", commit: "2", ok: true }));`], { env
 });
 
 test("a blocked goal does not stall; a live agent run leaves a ready goal out", async () => {
-  const blocker = goal();
-  const after = goal();
+  const blocker = newIssue();
+  const after = newIssue();
   await change(after, (item) => { item.fm.after = [`fac-${blocker}`]; });
   expect(stalled()).toEqual([`goal:fac-${blocker}`]);
   setSystemTime(NOW);
@@ -197,7 +197,7 @@ test("a blocked goal does not stall; a live agent run leaves a ready goal out", 
 });
 
 test("health says a stall only after 15 minutes of ticks, and stops when the work moves", async () => {
-  const id = goal();
+  const id = newIssue();
   const t0 = Date.parse("2026-11-01T12:00:00Z"), min = 60_000;
   const said = (at: number) => health(at).filter((l) => l.includes("can start"));
   // The sweep's ports start nothing: the goal stays ready.

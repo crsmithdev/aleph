@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { aleph, env, repo, seedGoal, seedItem, seedRun, setup, sh, teardown } from "../../cli.helpers";
+import { aleph, env, repo, seedPart, seedItem, seedRun, setup, sh, teardown } from "../../cli.helpers";
 import * as issues from "../../../issues/lib/todo.ts";
 import { loadRegistry } from "./ledger.ts";
 import { subjectOf } from "./stage.ts";
@@ -24,13 +24,13 @@ const ref = (n: number | string) => `fac-${n}`;
 let jobs = 0;
 /** A run on its item, as ref(). */
 const newRun = <T extends number | string>(id: T, run: Parameters<typeof seedRun>[1]) => { seedRun("fac", { on: ref(id), ...run }); return id; };
-const goal = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${++jobs}`, { kind: "goal", ...fm });
+const newIssue = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${++jobs}`, { kind: "goal", ...fm });
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
 
 const ISSUES_NEW: Row[] = [
   { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
     const n = issue();
-    seedGoal("fac", n, 1, { status: "done" }); seedGoal("fac", n, 2);
+    seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
   } },
   { name: "new issue: dropped while a trailer commit on main names it", stage: "dropped", build: async () => {
@@ -41,38 +41,38 @@ const ISSUES_NEW: Row[] = [
   } },
 ];
 
-const GOALS_NEW: Row[] = [
-  { name: "new goal: working", stage: "working", build: async () => newRun(goal(), { kind: "build", condition: "running" }) },
-  // GOALS_NEW[1] is the blocked goal that the `aleph status` test below reads.
-  { name: "new goal: blocked", stage: "blocked", why: /after fac-/, build: async () => goal({ after: [ref(goal())] }) },
-  { name: "new goal: planning", stage: "planning", build: async () => goal({ plan: "true" }) },
+const PARTS_NEW: Row[] = [
+  { name: "new goal: working", stage: "working", build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
+  // PARTS_NEW[1] is the blocked goal that the `aleph status` test below reads.
+  { name: "new goal: blocked", stage: "blocked", why: /after fac-/, build: async () => newIssue({ after: [ref(newIssue())] }) },
+  { name: "new goal: planning", stage: "planning", build: async () => newIssue({ plan: "true" }) },
 ];
 
-// A commit on origin/main that names goal `goalRef` (`<n>.<k>`) and its issue `n`, as the land of a goal does; returns its sha.
-const landGoal = (_n: number, goalRef: string): string => {
-  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(goalRef)}`);
+// A commit on origin/main that names goal `partRef` (`<n>.<k>`) and its issue `n`, as the land of a goal does; returns its sha.
+const landPart = (_n: number, partRef: string): string => {
+  sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(partRef)}`);
   sh(repo, "git", "push", "-q", "origin", "main");
   return sh(repo, "git", "rev-parse", "HEAD");
 };
 
-// Dotted goals: the goal `.k` of an issue, seeded through seedGoal.
-const GOALS_DOTTED: Row[] = [
+// Dotted goals: the goal `.k` of an issue, seeded through seedPart.
+const PARTS_DOTTED: Row[] = [
   { name: "dotted goal: done by its trailer commit while the store holds it open", stage: "done", why: /^commit [0-9a-f]{7} on /, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1); landGoal(n, `${n}.1`); return a;
+    const a = seedPart("fac", n, 1); landPart(n, `${n}.1`); return a;
   } },
   { name: "dotted goal: awaiting its Ask while a trailer commit on main names it", stage: "awaiting", why: /input: run-cap/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landGoal(n, `${n}.1`); return a;
+    const a = seedPart("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landPart(n, `${n}.1`); return a;
   } },
   { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    seedGoal("fac", n, 1, { status: "done" }); seedGoal("fac", n, 2);
+    seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
   } },
   { name: "dotted goal: working under a run on it", stage: "working", build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
-    const a = seedGoal("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", condition: "running" }); return a;
+    const a = seedPart("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", condition: "running" }); return a;
   } },
 ];
 
@@ -84,7 +84,7 @@ const statusOf = async (row: Row) => {
 };
 
 // The rows run one after another: each writes to the one store.
-for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new shape", GOALS_NEW], ["goals, dotted", GOALS_DOTTED]] as const) {
+for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new shape", PARTS_NEW], ["goals, dotted", PARTS_DOTTED]] as const) {
   describe(title, () => {
     for (const row of rows) {
       test(row.name, async () => {
@@ -98,10 +98,10 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new sha
 }
 
 test("aleph status prints the same stage as JSON and as one line, with the repo key cut from local refs", async () => {
-  const id = await idOf(GOALS_NEW[1]);
+  const id = await idOf(PARTS_NEW[1]);
   const r = await aleph(["status", ref(id), "--json"]);
   expect(r.code, r.stderr).toBe(0);
-  expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(GOALS_NEW[1]))));
+  expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(PARTS_NEW[1]))));
   expect(r.json.why).toMatch(/after fac-\d/);
   const text = await aleph(["status", ref(id)]);
   expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage}: ${r.json.why}`.replace(/\bfac-(?=\d)/g, ""));

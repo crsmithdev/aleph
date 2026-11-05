@@ -338,7 +338,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
  * Start the run for a goal: `aleph job` in-process, or `ALEPH_START_CMD` (tests) as a process.
  * A foreground unit is waited for, its output dropped. Returns the refusal, or null.
  */
-export async function startGoal(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {
+export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {
   const routed = tier !== undefined ? tier : await route(spec);
   const model = routed ? TIER_MODEL[routed] : null;
   factoryLog(`starting ${name} with model ${model ?? "default"}`);

@@ -18,11 +18,11 @@ describe("fate from git", () => {
 
 describe("prospective memory", () => {
   // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `after` on an old-shape item now. The tick below does the dispatching.
-  const addGoal = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
+  const addIssue = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
 
   test("a goal waiting on several items comes due once every one is done", async () => {
-    const a = await addGoal("wait a"), b = await addGoal("wait b");
-    const w = await addGoal("waits on two", "--after", `fac-${a},fac-${b}`);
+    const a = await addIssue("wait a"), b = await addIssue("wait b");
+    const w = await addIssue("waits on two", "--after", `fac-${a},fac-${b}`);
     await issueClose("fac", a, "done");
     expect(await reportText()).not.toContain(`fac-${w} waits on two`);
     await issueClose("fac", b, "done");

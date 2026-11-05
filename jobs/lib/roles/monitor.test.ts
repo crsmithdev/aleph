@@ -91,8 +91,8 @@ test("the Status panel and the report line show the newest report", async () => 
   expect(p.findings).toHaveLength(2);
   // The rows are JSON values, from a report with known rows.
   const kept: Report = JSON.parse(readFileSync(reportFile("2026-10-20"), "utf8"));
-  const win = (runs: number, items: number, cost: number, goals: number, hours: number) => ({
-    ...kept.table.today, stages: [{ stage: "build", runs, items, unusable: 1, cost, minutes: null }], holds: [{ kind: "stops", records: 2, goals, hours }],
+  const win = (runs: number, items: number, cost: number, held: number, hours: number) => ({
+    ...kept.table.today, stages: [{ stage: "build", runs, items, unusable: 1, cost, minutes: null }], holds: [{ kind: "stops", records: 2, goals: held, hours }],
   });
   kept.table.today = win(6, 3, 3, 2, 5); kept.table.trailing = win(14, 7, 14, 7, 14);
   writeFileSync(reportFile("2026-10-20"), JSON.stringify(kept));

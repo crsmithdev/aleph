@@ -164,8 +164,8 @@ const HOUR_MS = HOUR;
 const passedState = (st: string) => st === "passed" || st === "landed" || st === "done";
 
 /** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
-export function classify(runs: Run[], statusOf: (goal: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; issues: number; hours: number }; lost: { hours: number; share: number }; total: number } {
-  const goalOf = (r: Run) => `${r.repo}-${onOf(r)}`;
+export function classify(runs: Run[], statusOf: (ref: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; issues: number; hours: number }; lost: { hours: number; share: number }; total: number } {
+  const keyOf = (r: Run) => `${r.repo}-${onOf(r)}`;
   const t0 = (r: Run) => Date.parse(r.started);
   const agentsOf = new Map<string, Run[]>(), landsOf = new Map<string, Run[]>(), firstStart = new Map<string, number>();
   for (const r of runs) {
@@ -174,7 +174,7 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     if (issueOf(r) === undefined) continue;
     const m = isAgentRun(r.kind) ? agentsOf : r.kind === "land" && r.condition === "landed" ? landsOf : null;
     if (!m) continue;
-    const g = goalOf(r);
+    const g = keyOf(r);
     if (!m.has(g)) m.set(g, []);
     m.get(g)!.push(r);
   }
@@ -189,15 +189,15 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
       if (cand) { if (!landing.has(g)) landing.set(g, new Set()); landing.get(g)!.add(cand); }
     }
   }
-  type Row = { run: Run; goal: string; hours: number; week: number; cause: string };
+  type Row = { run: Run; issue: string; hours: number; week: number; cause: string };
   const rows = new Map<Class, Row[]>(CLASSES.map((c) => [c, []]));
   const skipped: Row[] = [];
   for (const r of runs) {
     if (!isAgentRun(r.kind) || issueOf(r) === undefined) continue;
     const a = t0(r), b = Date.parse(r.ended ?? "");
     if (!(a >= since) || a > now || !(b >= a) || b - a > MAX_RUN) continue;
-    const g = goalOf(r), reason = r.reason ?? "";
-    const row: Row = { run: r, goal: g, hours: (b - a) / 1000 / 3600, week: share(fit, r.cost, r.model)?.pct ?? 0, cause: "" };
+    const g = keyOf(r), reason = r.reason ?? "";
+    const row: Row = { run: r, issue: g, hours: (b - a) / 1000 / 3600, week: share(fit, r.cost, r.model)?.pct ?? 0, cause: "" };
     const lands = landing.get(g) ?? new Set<Run>();
     const mine = (agentsOf.get(g) ?? []);
     const startsBefore = mine.filter((o) => a - HOUR_MS <= t0(o) && t0(o) < a).length;
@@ -238,18 +238,18 @@ export function classify(runs: Run[], statusOf: (goal: string) => string | undef
     };
     const noWeek = ({ week: _w, ...m }: Measure): Omit<Measure, "week"> => m;
     const causes = [...group((r) => r.cause)].map(([name, x]) => ({ name, sum: sum(x) })).sort((a, b) => b.sum.hours - a.sum.hours).map((c) => ({ name: c.name, text: CAUSE_TEXT[c.name], ...noWeek(rd(c.sum)) }));
-    const top = [...group((r) => r.goal)].map(([goal, x]) => {
+    const top = [...group((r) => r.issue)].map(([issue, x]) => {
       const last = x.reduce((p, q) => (t0(q.run) > t0(p.run) ? q : p));
-      const m = goal.lastIndexOf("-");
-      return { goal, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: `#/issues/${encodeURIComponent(goal.slice(0, m))}/${goal.slice(m + 1)}` };
-    }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.goal, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
-    return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.goal)).size, causes, top };
+      const m = issue.lastIndexOf("-");
+      return { issue, sum: sum(x), reason: clip((last.run.reason ?? "").replace(/^agent run \S+:\s*/, "").trim(), 140), href: `#/issues/${encodeURIComponent(issue.slice(0, m))}/${issue.slice(m + 1)}` };
+    }).sort((a, b) => b.sum.hours - a.sum.hours).slice(0, 8).map((t) => ({ goal: t.issue, href: t.href, reason: t.reason, ...noWeek(rd(t.sum)) }));
+    return { key, name: CLASS_NAME[key], text: CLASS_TEXT[key], ...rd(sum(rs)), issues: new Set(rs.map((r) => r.issue)).size, causes, top };
   });
   const raw = CLASSES.map((c) => sum(rows.get(c)!).hours);
   const total = raw.reduce((x, y) => x + y, 0), lostH = raw.slice(2).reduce((x, y) => x + y, 0);
   return {
     classes,
-    notCounted: { runs: skipped.length, issues: new Set(skipped.map((r) => r.goal)).size, hours: round(skipped.reduce((x, y) => x + y.hours, 0), 2) },
+    notCounted: { runs: skipped.length, issues: new Set(skipped.map((r) => r.issue)).size, hours: round(skipped.reduce((x, y) => x + y.hours, 0), 2) },
     lost: { hours: round(lostH, 2), share: total ? round(lostH / total, 4) : 0 },
     total: round(total, 2),
   };
@@ -556,12 +556,12 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     issues.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
   const lists = reader({ fetch: false });
-  const statusOf = (goal: string): string | undefined => {
-    const m = goal.lastIndexOf("-");
-    const item = m < 0 ? undefined : lists.item(goal.slice(0, m), goal.slice(m + 1));
+  const statusOf = (ref: string): string | undefined => {
+    const m = ref.lastIndexOf("-");
+    const item = m < 0 ? undefined : lists.item(ref.slice(0, m), ref.slice(m + 1));
     if (item) return status(item);
     // An issue that is not in a readable list left the store.
-    return m >= 0 && lists.list(goal.slice(0, m)) ? GONE : undefined;
+    return m >= 0 && lists.list(ref.slice(0, m)) ? GONE : undefined;
   };
   const cls = classify(entries.map(activeEnd), statusOf, since.getTime(), now.getTime(), fit);
   for (const c of cls.classes) for (const t of c.top) {

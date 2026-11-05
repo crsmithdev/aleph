@@ -525,7 +525,7 @@ const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "bui
  * Parts (one row per part), After the parts (to the close). Without: one Work row. Notes are events at their time.
  */
 export function issueSegments(d, now = Date.now()) {
-  const id = `${d.repo}-${d.ref ?? d.id}`, goals = d.goals ?? [], open = !CLOSED.includes(d.status);
+  const id = `${d.repo}-${d.ref ?? d.id}`, parts = d.goals ?? [], open = !CLOSED.includes(d.status);
   const all = spans(d.timeline?.runs ?? [], now), filed = filedAt(d, all);
   const notes = (d.notes ?? []).map(noteEvent).filter(Boolean).map(noteItem);
   // A closed issue closes at its last stamped note after its runs, else at its last run.
@@ -538,17 +538,17 @@ export function issueSegments(d, now = Date.now()) {
   const state = d.derived?.stage ?? d.status;
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
-  if (!goals.length) {
+  if (!parts.length) {
     return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no run yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes, holds: holdsOf(id) })] }];
   }
-  const ofPart = (g) => all.filter((x) => x.r.on === g.id), partRuns = goals.flatMap(ofPart);
+  const ofPart = (g) => all.filter((x) => x.r.on === g.id), partRuns = parts.flatMap(ofPart);
   const first = partRuns.length ? Math.min(...partRuns.map((x) => x.start)) : Infinity;
   const own = all.filter((x) => !partRuns.includes(x)), before = own.filter((x) => x.start < first), after = own.filter((x) => x.start >= first);
   const split = Number.isFinite(ends(before)) ? ends(before) : filed, lastPart = ends(partRuns);
-  const done = goals.filter((g) => g.stage === "done").length;
+  const done = parts.filter((g) => g.stage === "done").length;
   const segments = [
-    { title: "Before the Split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${goals.length}`), events: notes.filter((n) => n.at < first), holds: holdsOf(id) })] },
-    { title: "Parts", aside: `${done} of ${goals.length} done`, rows: goals.map((g) => {
+    { title: "Before the Split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${parts.length}`), events: notes.filter((n) => n.at < first), holds: holdsOf(id) })] },
+    { title: "Parts", aside: `${done} of ${parts.length} done`, rows: parts.map((g) => {
       const runs = ofPart(g);
       const job = g.jobs?.at(-1), p = g.priority && g.priority !== "medium" ? ` ${priorityBadge(g.priority)}` : "";
       return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? `#/jobs/${encodeURIComponent(job.name)}` : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage), holds: holdsOf(job?.name) });
@@ -563,17 +563,17 @@ const title = (s) => String(s).replace(/^./, (c) => c.toUpperCase());
 
 /** The KPI strip of an issue: parts or stage, elapsed, waiting, cost and commits. */
 function issueKpis(d, segments, now = Date.now()) {
-  const goals = d.goals ?? [], open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
+  const parts = d.goals ?? [], open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
   const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
   const lo = Math.min(...times), hi = open ? now : Math.max(...times);
   // Waiting is the time no run ran, on the whole issue, so a part waiting beside a running part does not count.
   const all = spans(d.timeline?.runs ?? [], now), waits = times.length ? gaps(all, lo, hi) : [];
   const waited = waits.reduce((n, w) => n + w.end - w.start, 0), chris = waits.filter((w) => w.chris).reduce((n, w) => n + w.end - w.start, 0);
-  const runs = all.length, cost = all.reduce((n, x) => n + (x.r.cost ?? 0), 0), done = goals.filter((g) => g.stage === "done").length;
+  const runs = all.length, cost = all.reduce((n, x) => n + (x.r.cost ?? 0), 0), done = parts.filter((g) => g.stage === "done").length;
   const commits = d.commits ?? [];
   const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
   return renderKpis([
-    goals.length ? { k: "Parts done", v: esc(`${done} of ${goals.length}`), sub: esc(goals.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
+    parts.length ? { k: "Parts done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
       : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
     { k: open ? "Open for" : "Elapsed", v: esc(times.length ? dur((hi - lo) / 1000) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: esc(times.length ? dur(waited / 1000) : "–"), sub: chris ? esc(`${dur(chris / 1000)} for your answer`) : "" },
@@ -599,8 +599,8 @@ export function renderIssue(d) {
     `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
     `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;
   const blocked = d.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(d.blockers, d.repo, d.ref ?? d.id)}</div>` : "";
-  const goals = d.goals ?? [];
-  const part = (id, title, name, text) => (text || !goals.length
+  const partList = d.goals ?? [];
+  const part = (id, title, name, text) => (text || !partList.length
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");
   const noteRow = (n) => {

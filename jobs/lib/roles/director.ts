@@ -44,7 +44,7 @@ export const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */
 export const MAX_ACTIONS = 10;
 /** The reasons whose Ask the director decides once per goal: a second one on the same goal goes to Chris. */
-export const ONCE_PER_GOAL = ["run-cap", "rescue"];
+export const ONCE_PER_ISSUE = ["run-cap", "rescue"];
 /** Changed files that put a run's land on the escalation list besides the security paths. */
 export const HELD_FILES = ["bun.lock"];
 const TAIL = 40;
@@ -180,7 +180,7 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
  */
 export function escalation(c: Case, rec: Decision[] = readRecord()): string | null {
   if (c.at === "lesson" || c.ask.reason.startsWith("proposal-")) return "a memory proposal is Chris's";
-  if (ONCE_PER_GOAL.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
+  if (ONCE_PER_ISSUE.includes(c.ask.reason) && rec.some((d) => d.ref === refOf(c) && d.reason === c.ask.reason && d.outcome === "decided"))
     return `the director already decided a ${c.ask.reason} Ask on ${refOf(c)}; the second goes to Chris`;
   const b = actionsOf(c).includes("land") ? branchOf(c) : null;
   if (b) {

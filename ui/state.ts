@@ -4,7 +4,7 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { factorySnapshot, goalFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
+import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
@@ -474,7 +474,7 @@ export function state(now = new Date()): State {
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
       const red = redOf(repo);
       // The stage already says when an issue is to plan.
-      const w = issueDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
+      const w = issueDecision({ ...issueFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
         ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}), ...(w.kind === "busy-file" && w.on ? { on: w.on } : {}),
       };

@@ -5,13 +5,13 @@ import { dispatchIssues } from "../transitions/factory.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { askOf } from "../asks/ask.ts";
-import { goal, mk, ask, fakes, setup, teardown } from "../transitions/factory.helpers.ts";
+import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factory.helpers.ts";
 
 beforeEach(setup);
 afterEach(teardown);
 
 test("a run with a question waits for a spec edit: the Ask says so, and an edit drops the run, clears the Ask and starts the goal", async () => {
-  const id = goal();
+  const id = newIssue();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
   await dispatchIssues(f.start, undefined, f.rescue);
@@ -32,7 +32,7 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
 });
 
 test("a spec question run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {
-  const id = goal();
+  const id = newIssue();
   mk(`fac-${id}`, "build", "stuck", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
   // The real rescue path sets the plain question Ask and writes asked-spec.
