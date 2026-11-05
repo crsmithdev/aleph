@@ -379,8 +379,7 @@ export function nextStamp(s: string): string {
 export function newsLine(e: Entry, note?: string): string {
   const run = e.run;
   const needs = needsOf(askOf(run));
-  // The Ask's word for a held path is `held`; the sub set names it `protected`.
-  const sub = isWaiting(run.condition) ? (needs === "held" ? "protected" : needs)
+  const sub = isWaiting(run.condition) ? needs
     : run.condition === "failed" ? causeOf(run) : undefined;
   // A failed check's name is the content. The arrow marks it: `contentText` puts one before a file only after another field.
   const check = failedCheckOf(run);

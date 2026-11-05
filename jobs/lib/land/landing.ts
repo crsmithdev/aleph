@@ -49,7 +49,7 @@ export function landTerms(agent: Run): { manual: boolean; held: boolean; asked: 
   if (!isAgentRun(agent.kind)) return null;
   if (agent.condition === "passed") return { manual: agent.say !== undefined, held: false, asked: false };
   const needs = isWaiting(agent.condition) ? needsOf(askOf(agent)) : undefined;
-  if (needs === "held" || needs === "review") return { manual: false, held: true, asked: true };
+  if (needs === "protected" || needs === "review") return { manual: false, held: true, asked: true };
   return null;
 }
 

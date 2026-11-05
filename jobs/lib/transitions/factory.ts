@@ -461,7 +461,7 @@ function entry(e: Entry): string {
     const stat = repo ? git(repo.path, "show", "--shortstat", "--format=", r.commit).out : "";
     if (stat) lines.push(`  look: about ${lookMinutes(changedLinesOf(stat))} min (estimate)`);
   }
-  if (needs === "held" || needs === "review") {
+  if (needs === "protected" || needs === "review") {
     if (r.stat) lines.push(...r.stat.split("\n").map((l) => `  ${l}`));
     lines.push(`  aleph land ${r.name}   (lands it, with Held-by: Chris)`, `  aleph drop ${r.name}   (drops it; the item stays open)`);
   }

@@ -71,7 +71,7 @@ test("the table gives the kind, the wait and the plain Ask of a reason", () => {
   expect(kindOf("held-path")).toBe("approval");
   expect(kindOf("question", "approval")).toBe("approval");
   expect(kindOf("nope")).toBe("input");
-  expect(needsOf(plainAsk("held-path", "q"))).toBe("held");
+  expect(needsOf(plainAsk("held-path", "q"))).toBe("protected");
   expect(needsOf(plainAsk("no-commit", "q"))).toBeUndefined();
   expect(needsOf(undefined)).toBeUndefined();
   expect(plainAsk("review", "q", ["w"])).toEqual({ kind: "approval", reason: "review", question: "q", options: [], why: ["w"] });

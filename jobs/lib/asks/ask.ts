@@ -46,8 +46,8 @@ export interface Reason {
   actions: string[];
   /** The action the Always button takes. Empty: the factory has no rule that acts on this reason, so the card offers no auto-yes. */
   always: string;
-  /** The word a run's news and prompts use for this wait. */
-  needs?: "question" | "held" | "review";
+  /** The word a run's news and prompts use for this wait: a word of the sub set (lib/naming.ts). */
+  needs?: "question" | "protected" | "review";
 }
 export interface Granted { action: string; at: string }
 
@@ -58,7 +58,7 @@ const proposal: Reason = { kind: "approval", name: "Lesson", actions: ["approve"
  * because the spec names no new home for it: run-cap and the `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
-  "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "held" },
+  "held-path": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "protected" },
   "review": { kind: "approval", name: "Approval", actions: ["land", "drop"], always: "", needs: "review" },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
   "question": { kind: "input", name: "Question", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question" },
@@ -108,7 +108,7 @@ export const reasonOf = (given: string | undefined): string => (given && ASK_REA
 export const kindOf = (reason: string, given?: string): Ask["kind"] =>
   given === "input" || given === "approval" ? given : ASK_REASONS[reason]?.kind ?? "input";
 
-/** The kind of wait an ask is, from its reason: question, held or review; else none. */
+/** The kind of wait an ask is, from its reason: question, protected or review; else none. */
 export const needsOf = (ask: Ask | undefined): Reason["needs"] => (ask ? ASK_REASONS[ask.reason]?.needs : undefined);
 
 /** What an awaiting run waits on. A run with no ask of its own asks a question. */
