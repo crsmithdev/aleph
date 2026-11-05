@@ -17,8 +17,6 @@
 
 Aleph loads into each Claude Code session and adds memory, tracing and a few checks. It also runs a factory: it takes an open issue, writes a spec, builds the change in a worktree, tests it, reviews it and lands it on `main`. When it cannot decide something, it asks.
 
-It is built for one person on one machine. Use it as it is, or take the parts you want.
-
 ## Features
 
 - **Memory.** Notes live in an Obsidian vault. Each session starts with the core notes, and each prompt gets up to 3 more that fit it. [Vault](docs/vault.md)
@@ -70,4 +68,16 @@ ALEPH_LIVE=1 bun test tests/live   # needs a running Langfuse and a logged-in cl
 
 CI runs the type check and the suite on each push. Only the live tests prove that Langfuse kept a trace: a 200 from Langfuse does not.
 
-To learn how it fits together, read the [overview](docs/overview.md), [architecture](docs/architecture.md) and [data model](docs/data-model.md). Read [PRINCIPLES.md](PRINCIPLES.md) before you change the design.
+## Docs
+
+- [Overview](docs/overview.md): what aleph is, its parts and its terms
+- [Architecture](docs/architecture.md): the processes, folders and main flows
+- [Workflow](docs/workflow.md): how an issue gets to `main`, and where it can stop or go back
+- [Data model](docs/data-model.md): each file and store under `~/.aleph`
+- [Hooks](docs/hooks.md): each hook and what it allows or blocks
+- [Routing](docs/routing.md): which model does each job
+- [Factory](docs/factory.md): set-up, commands and settings
+- [Issues](docs/issues.md): the issue store and `aleph issue`
+- [Vault](docs/vault.md): the memory vault and its commands
+- [UI](docs/ui.md): run and extend `aleph-ui`
+- [Langfuse](docs/langfuse.md): set up tracing
