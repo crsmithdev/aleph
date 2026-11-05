@@ -90,11 +90,13 @@ const table = (labels, num, rows) => !rows.length ? empty("No row to show.") : p
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
   const scope = renderScope(jobs ?? [], { ...f, window: f.window ?? (f.days ? undefined : d.window) });
+  const plot = (has, k, text) => (has ? chartBox(k, text) : empty("No time to plot in this window."));
+  const timed = (d.times ?? []).filter((i) => i[key] > 0);
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: scope })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
-    `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p>${chartBox("trend", label(d, key, sentence(name), "p50 and p90 trend"))}`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
-    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome: its time across, its filing time up.</p>${chartBox("strip", label(d, key, sentence(name), "time per issue"))}`, { label: `${sentence(name)}: time per issue` }) +
-    card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p>${chartBox("slowest", label(d, key, sentence(name), "slowest 10"))}`) + `</div>` +
+    `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p>${plot(d.buckets.some((b) => b[key] > 0 || b.p90?.[key] > 0), "trend", label(d, key, sentence(name), "p50 and p90 trend"))}`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
+    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome: its time across, its filing time up.</p>${plot(timed.some((i) => i.filed != null), "strip", label(d, key, sentence(name), "time per issue"))}`, { label: `${sentence(name)}: time per issue` }) +
+    card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p>${plot(timed.length, "slowest", label(d, key, sentence(name), "slowest 10"))}`) + `</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Runs", "p50", "p90"], ["Runs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
     card("Build Time by Model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;

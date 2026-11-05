@@ -106,7 +106,9 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const scope = scopeBar(projectNow(), win), l = a ? labels(d) : null;
-  const box = (k) => chartBox(k, l[k]);
+  const spent = (d?.buckets ?? []).some((b) => Object.values(b.cost ?? {}).some((c) => c > 0));
+  const has = { live: a && timed(a).length, outcomes: a?.outcomes?.length, cost: spent };
+  const box = (k) => (has[k] ? chartBox(k, l[k]) : empty("Nothing to plot in this window."));
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
     (a ? `<div class="trio">${card("Agents Live by Role", box("live"), { label: "Agents live by role" })}${card("Outcomes by Role", box("outcomes"), { label: "Outcomes by role" })}${card("Cost by Model", box("cost"), { label: "Cost by model" })}</div>` : card("Agents", wait)) +
     card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;

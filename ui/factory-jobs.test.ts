@@ -23,6 +23,14 @@ const D: any = {
   models: [{ model: "unset", count: 2, p50: 480 }, { model: "opus", count: 1, p50: 700 }],
 };
 
+test("with no time for the stage the trend, strip and slowest boxes give way to the empty line", () => {
+  const none = renderFactoryJobs({ ...D, buckets: D.buckets.map((b: any) => ({ ...b, queue: null, p90: {} })), times: D.times.map((i: any) => ({ ...i, queue: null })) }, null, "queue");
+  expect(none).toContain('class="empty"');
+  for (const k of ["trend", "strip", "slowest"]) expect(none).not.toContain(`data-chart="${k}"`);
+  expect(none).toContain("<h2>Slowest 10</h2>");
+  for (const k of ["trend", "strip", "slowest"]) expect(renderFactoryJobs(D, null, "queue")).toContain(`data-chart="${k}"`);
+});
+
 test("five stage tiles come from the data, with the last 24h", () => {
   const h = renderFactoryJobs(D, { phases: { ...D.phases, lead: P(1, 1484, 1484) } }, "lead");
   expect([...h.matchAll(/data-tile="(\w+)"/g)].map((m) => m[1])).toEqual(["lead", "intake", "queue", "implement", "land"]);

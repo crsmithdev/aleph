@@ -87,6 +87,14 @@ test("the page has three chart boxes in one row, each with role img and an aria-
   expect(html.match(/class="chartbox"/g)!.length).toBe(3);
 });
 
+test("a chart with no outcomes or cost shows the empty line in place of its box", () => {
+  const html = renderFactoryAgents(S, { ...E, buckets: [{ at: buckets[0].at, cost: {} }], agents: { ...agents, outcomes: [] } });
+  const row = html.slice(html.indexOf('<div class="trio">'), html.indexOf('id="roles"'));
+  expect(row.match(/data-chart="(\w+)"/g)).toEqual(['data-chart="live"']);
+  expect(row.match(/class="empty"/g)!.length).toBe(2);
+  expect(row).toContain("<h2>Cost by Model</h2>");
+});
+
 test("the live option has one stacked series per timed role with the point values", () => {
   const o = liveOption(E, T);
   expect(o.series.map((s: any) => [s.name, s.stack, s.color, s.data])).toEqual([["Worker", "all", "#1", [1, 0]], ["Triage", "all", "#2", [0.5, 0]]]);

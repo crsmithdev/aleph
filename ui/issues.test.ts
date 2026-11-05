@@ -372,6 +372,13 @@ describe("views", () => {
     expect(page).not.toContain("30 days");
   });
 
+  test("a chart card with nothing to plot shows the empty line and no chart box", () => {
+    const page = v.renderIssues({ issues: [], tests: { f: [{ at: "2020-01-01T00:00:00Z", ran: 5, rerunPassed: 0 }] } }, { window: "week" });
+    expect(page).toContain("<h2>Tests</h2>");
+    for (const k of ["backlog", "close", "tests"]) expect(page).not.toContain(`data-chart="${k}"`);
+    expect(page.match(/class="empty"/g)!.length).toBeGreaterThanOrEqual(3);
+  });
+
   test("Time to close counts from the stored times and shows hours when every value is under 2 days", () => {
     const now = new Date("2026-11-04T16:00");
     const c = v.closeTimes([

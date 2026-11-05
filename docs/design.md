@@ -244,7 +244,7 @@ Columns of the main tables:
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:55`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:201`) |
-| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:633`) |
+| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:634`) |
 
 Gaps: a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:488`) over the table.
 

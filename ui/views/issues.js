@@ -353,10 +353,11 @@ function renderDetail(rows, o) {
   return "";
 }
 
+const plot = (has, k, text) => (has ? chartBox(k, text) : empty("Nothing to plot in this window."));
 /** The two charts under the tiles, on every tile. */
-const renderCharts = (o) => `<div class="trio">${card("Open Backlog, Filed and Closed", `<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p>${chartBox("backlog", "Open backlog by priority, filed and closed per bucket")}`, { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
-  `${card("Time to Close", `<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p>${chartBox("close", "Days from filed to closed: p50 bar and p90 tick")}`, { label: "Time to close" })}` +
-  `${card("Tests", `<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p>${chartBox("tests", "Tests per suite run and tests that passed only on rerun")}`, { cls: "wide" })}</div>`;
+const renderCharts = (o, rows, tests) => `<div class="trio">${card("Open Backlog, Filed and Closed", `<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p>${plot(rows.length, "backlog", "Open backlog by priority, filed and closed per bucket")}`, { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
+  `${card("Time to Close", `<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p>${plot(closeTimes(rows, o.window).p50.some((v) => v != null), "close", "Days from filed to closed: p50 bar and p90 tick")}`, { label: "Time to close" })}` +
+  `${card("Tests", `<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p>${plot(testsOption(tests, o.project, o.window).series.some((x) => x.data.length), "tests", "Tests per suite run and tests that passed only on rerun")}`, { cls: "wide" })}</div>`;
 
 // ---- The filters ----
 
@@ -381,7 +382,7 @@ export function renderFilters(rows, o = {}) {
 }
 
 /** The parts that change with the filters. The search box stays out of them, so it keeps the focus while the reader types. */
-function renderLive(projects, rows, o) {
+function renderLive(projects, rows, o, tests) {
   const shown = filterRows(rows, o).length;
   // The tiles and charts follow project, label, priority and search, not status, stage or the selected tile.
   const scoped = filterRows(rows, o, ["status", "stage", "tile"]);
@@ -389,7 +390,7 @@ function renderLive(projects, rows, o) {
     scope: renderProjects(projects, rows, o),
     filters: renderFilters(rows, o),
     numbers: renderTiles(stats(scoped, new Date(), WINDOW_DAYS[o.window] ?? 7), o.tile, o.window),
-    detail: renderCharts(o) + renderDetail(scoped, o),
+    detail: renderCharts(o, scoped, tests) + renderDetail(scoped, o),
     count: shown,
     window: `last ${o.window in WINDOW_DAYS ? o.window : "week"}`,
     table: renderTable(rows, o),
@@ -423,7 +424,7 @@ function draw(root) {
 function refill() {
   const root = live?.root;
   if (!root?.isConnected) return;
-  const parts = renderLive(live.projects, live.rows, live.o());
+  const parts = renderLive(live.projects, live.rows, live.o(), live.tests);
   for (const [id, html] of [["inv-scope", parts.scope], ["inv-filters", parts.filters], ["inv-numbers", parts.numbers], ["inv-detail", parts.detail], ["issues-table", parts.table]]) root.querySelector(`#${id}`).innerHTML = html;
   root.querySelector("header.ph .count").textContent = parts.window;
   root.querySelector('section[aria-label="Issues"] .sh .count').textContent = parts.count;
@@ -460,7 +461,7 @@ export function renderForm(rows, o = {}) {
 }
 
 export function renderIssues(d, o = {}) {
-  const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
+  const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o, d?.tests);
   return `<div class="page sp contents">${pageHead("Issues", { count: parts.window, aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
     renderForm(d?.issues ?? [], o) +
