@@ -102,3 +102,24 @@ test("an ask and a stuck run are one Alerts section, and the stuck card has the 
   expect(stuck).toContain('data-card="unstick"');
   expect(stuck).toMatch(/<div class="ask-box"><div class="ih">[^]*<details class="ask-fold"/);
 });
+
+/** The one error card of a state whose only trouble is in `factory`. */
+const errorCard = (o: object): string => {
+  const s = { ...state, asks: [], stuck: [], factory: { ...state.factory, health: [], ...o } };
+  return view.renderNeeds(s).match(/<article[^>]*data-kind="error"[^]*?<\/article>/)![0];
+};
+
+test("an error card for a red main says fix and the line, in place of the Fix prefix", () => {
+  const card = errorCard({ health: ["health: aleph main is red at abc1234: tsc"] });
+  expect(card).toContain("fix");
+  expect(card).toContain("aleph main is red at abc1234: tsc");
+  expect(card).not.toContain("Fix: ");
+  expect(card).not.toContain("Check: ");
+});
+
+test("an error card for a stopped tick says check and the line, in place of the Check prefix", () => {
+  const card = errorCard({ nextTick: null });
+  expect(card).toContain("check");
+  expect(card).toContain("the factory tick has stopped");
+  expect(card).not.toContain("Check: ");
+});

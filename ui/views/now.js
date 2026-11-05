@@ -404,8 +404,8 @@ export function askRow(i, now = new Date().toISOString()) {
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") + askDetails(i));
 }
 
-/** An error line as a card: the head alone, because the page has no action that fixes it. */
-const errorRow = (l) => alertCard("error", l, "", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "");
+/** An error line as a card: the action word and the line, because the page has no action that fixes it. */
+const errorRow = (l) => alertCard("error", l, "", `${/main is red/.test(l) ? "fix" : "check"} ${l}`, "");
 
 /** "10/28 14:05": the time of the state. */
 export const renderAsOf = (s) => when(s.now);
