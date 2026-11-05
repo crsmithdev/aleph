@@ -107,9 +107,12 @@ test("the Status panel and the report line show the newest report", async () => 
 test("the findings are the numbered lines of the reply; NOTHING gives none", () => {
   expect(findingsOf("1. one\n2) two\nnot a finding\n 3. three")).toEqual(["one", "two", "three"]);
   expect(findingsOf("NOTHING: all within the trailing range")).toEqual([]);
-  expect(readerPrompt("TABLE")).toEndWith("\nTABLE");
-  expect(readerPrompt("TABLE")).toContain("You only read.");
-  expect(readerPrompt("TABLE")).toContain("as **text**");
-  expect(readerPrompt("TABLE")).toContain("names at most 3 metrics, the most useful ones");
+  expect(readerPrompt("2026-11-03", "TABLE")).toEndWith("\nTABLE");
+  expect(readerPrompt("2026-11-03", "TABLE")).toContain("2026-11-03");
+  expect(readerPrompt("2026-11-03", "TABLE")).toContain("Name the day by its date");
+  expect(readerPrompt("2026-11-03", "TABLE")).toContain(`Do not write "today" or "yesterday"`);
+  expect(readerPrompt("2026-11-03", "TABLE")).toContain("You only read.");
+  expect(readerPrompt("2026-11-03", "TABLE")).toContain("as **text**");
+  expect(readerPrompt("2026-11-03", "TABLE")).toContain("names at most 3 metrics, the most useful ones");
 });
 
