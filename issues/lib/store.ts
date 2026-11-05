@@ -332,7 +332,7 @@ export function reopen(doc: Doc, item: Issue, since: string | null): void {
 }
 
 /** A new issue for `file` and `closeAndFile`; `spec` makes it buildable. */
-export interface Filing { title: string; kind?: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory" | "agent" }
+export interface Filing { title: string; kind?: string; labels?: string[]; areas?: string[]; request?: string; spec?: string; priority?: string; source?: "chris" | "worker" | "deps" | "memory" | "agent"; parked?: boolean }
 
 /**
  * Item `id` done with the note `text` (when `id` is given), and `filed` added,
@@ -358,6 +358,7 @@ export function closeAndFile(repo: Place, message: string, id: number | string |
       ids = filed.map((f) => {
         const item = issues.add(doc, f.title, { kind: f.kind, labels: f.labels, request: f.request, spec: f.spec, priority: f.priority ?? inherited, source: f.source });
         if (f.areas) item.fm.areas = f.areas;
+        if (f.parked) issues.setStatus(item, "parked");
         return item.id;
       });
       return true;

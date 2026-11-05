@@ -67,3 +67,14 @@ test("a long follow-up files a task with a title the rule accepts and the whole 
     expect(item.request).toContain(`FOLLOWUP: ${line}`);
   } finally { l.restore(); }
 });
+
+test("a worker follow-up files parked, and a repeat of a parked one is a note", async () => {
+  const l = listIn();
+  try {
+    const repo = { key: "fup" } as Repo;
+    await fileFollowups(repo, { name: "r1", repo: "fup" } as Run, ["Fix the first loose end in a.ts"]);
+    await fileFollowups(repo, { name: "r2", repo: "fup" } as Run, ["Fix the first loose end in a.ts"]);
+    const items = store.readList(repo)!.items;
+    expect(items.map((i) => issues.status(i))).toEqual(["parked"]);
+  } finally { l.restore(); }
+});

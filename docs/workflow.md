@@ -121,7 +121,7 @@ The worker is `claude -p` in `<repo>/.worktrees/job-<name>` on the branch `facto
 | Field | Becomes |
 |---|---|
 | `summary` | The run's `result.md` |
-| `followups[]` | New issues with `source: worker` |
+| `followups[]` | New parked issues with `source: worker` |
 | `flakes[]` | Notes on the flake tracker |
 | `defaults[]` | Lines in the report |
 | `already_met` | A claim that the issue holds on main; the baseline decides it |

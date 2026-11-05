@@ -682,11 +682,11 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
 
 /**
  * A worker's `followups` each become a `task` with `source: worker`: the title writer's title, and the run and the whole line in its request,
- * filed in one store commit. An empty line such as "none" files nothing, and a line on the topic of an open issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
+ * filed parked in one store commit, so Chris picks which to open. An empty line such as "none" files nothing, and a line on the topic of an open or parked issue is a note on that issue. This reverses the aleph-826 choice (a log and no issue), which the spec supersedes.
  */
 export async function fileFollowups(repo: Repo, run: Run, lines: string[]): Promise<void> {
   const lists = reader();
-  const open = (lists.list(repo.key)?.items ?? []).filter((i) => issues.status(i) === "open");
+  const open = (lists.list(repo.key)?.items ?? []).filter((i) => ["open", "parked"].includes(issues.status(i)));
   const fresh: string[] = [];
   for (const title of lines) {
     if (/^(none|n\/a|nothing)\.?$/i.test(title.trim())) continue;
@@ -701,7 +701,7 @@ export async function fileFollowups(repo: Repo, run: Run, lines: string[]): Prom
   const on = onOf(run);
   const priority = (on === undefined ? undefined : lists.item(repo.key, on)?.fm.priority as string | undefined) ?? "medium";
   const titles = await Promise.all(fresh.map(writeTitle));
-  fileIssues(repo, `followups from ${run.name}`, fresh.map((line, n) => ({ title: titles[n], kind: "task", priority, source: "worker" as const, request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${line}` })));
+  fileIssues(repo, `followups from ${run.name}`, fresh.map((line, n) => ({ title: titles[n], kind: "task", priority, source: "worker" as const, parked: true, request: `A follow-up the worker met in run ${run.name}:\n\nFOLLOWUP: ${line}` })));
 }
 
 const PATH = /[\w.-]+(?:\/[\w.-]+)+|[\w-]+\.(?:ts|js|md|json)\b/g;
