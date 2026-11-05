@@ -365,7 +365,7 @@ describe("render", () => {
 });
 
 describe("a worker round the reviewer sent back", () => {
-  test("reads sent back while a later worker run follows, stuck when it is the last", async () => {
+  test("reads returned while a later worker run follows, stuck when it is the last", async () => {
     const ids = ["20261102-000101-a", "20261102-000102-a", "20261102-000103-a"];
     const job = { job: "oth-sb", name: "oth-sb", repo: "oth", branch: "factory/oth-sb", failed: "review", started: ago(4), ended: ago(3.5) };
     run(ids[0], { ...job, condition: "stuck", reason: "needs work", next: "worker", round: 0 }, { "review.md": "Redo it.\nVERDICT: fail\n" });
@@ -375,8 +375,8 @@ describe("a worker round the reviewer sent back", () => {
       const j = await (await get("/api/jobs/oth-sb")).json();
       const cond = Object.fromEntries(j.runs.map((r: any) => [r.id, r.condition]));
       expect(cond).toEqual({
-        [ids[0]]: "sent back", [`${ids[0]}-review`]: "sent back",
-        [ids[1]]: "sent back", [`${ids[1]}-review`]: "sent back",
+        [ids[0]]: "returned", [`${ids[0]}-review`]: "returned",
+        [ids[1]]: "returned", [`${ids[1]}-review`]: "returned",
         [ids[2]]: "running",
       });
     } finally {

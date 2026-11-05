@@ -102,9 +102,9 @@ function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e, i) => {
     const r = e.run;
-    // A worker the reviewer sent back stays stored "stuck"; the job carries on with a later worker run, so it reads "sent back".
+    // A worker the reviewer sent back stays stored "stuck"; the job carries on with a later worker run, so it reads "returned".
     const back = isBuild(r.kind) && r.failed === "review" && r.condition === "stuck" && runs.slice(i + 1).some((n) => isBuild(n.run.kind));
-    const condition = back ? "sent back" : r.condition;
+    const condition = back ? "returned" : r.condition;
     const info: RunInfo = { id: e.id, kind: KIND[r.kind] ?? "worker", condition, started: r.started };
     if (r.ended) info.ended = r.ended;
     if (r.cost !== undefined) info.cost = r.cost;
