@@ -320,9 +320,9 @@ const jobDetails = (s, j) => details(s, j,
   (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : ""));
 
 const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
-/** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. */
+/** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. An empty `problem` leaves the situation line out. */
 const alertCard = (kind, key, meta, title, problem, body = "") =>
-  askShell(kind, `data-kind="${kind}" data-card="unstick"`, key, meta, kind === "error" ? "Error" : "Stuck", title, "", `<p class="situation">${esc(problem)}</p>`, body);
+  askShell(kind, `data-kind="${kind}" data-card="unstick"`, key, meta, kind === "error" ? "Error" : "Stuck", title, "", problem ? `<p class="situation">${esc(problem)}</p>` : "", body);
 /** The Ask card structure: the article with `cls` and `attrs`, then the box with `meta`, the fold of `label`, `title` and `tag` over `desc`, and `rest`. */
 const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =>
   `<article class="job-card small issue-row ${cls}" ${attrs}>` +

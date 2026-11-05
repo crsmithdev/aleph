@@ -123,3 +123,9 @@ test("an error card for a stopped tick says check and the line, in place of the 
   expect(card).toContain("the factory tick has stopped");
   expect(card).not.toContain("Check: ");
 });
+
+test("an error card has no situation line, because the line it would hold is empty", () => {
+  for (const o of [{ health: ["health: aleph main is red at abc1234: tsc"] }, { nextTick: null }]) {
+    expect(errorCard(o)).not.toContain('class="situation"');
+  }
+});
