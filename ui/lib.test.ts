@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -189,6 +189,17 @@ test("bar value labels take the theme ink, not ECharts' #333, in the dark and th
     expect(values.length, name).toBe(2);
     for (const el of values) expect(el.match(/fill="([^"]*)"/)?.[1], name).toBe(t.ink);
   }
+});
+
+test("meter draws one share or segments as a .meter with a role=img aria-label", () => {
+  const one = meter(42.5, "42.5 of the cap");
+  expect(one).toContain('class="meter"');
+  expect(one).toContain('role="img" aria-label="42.5 of the cap"');
+  expect(one).toContain('style="width:42.5%"');
+  const many = meter([{ pct: 10, cls: "c-use" }, { pct: 0 }, { pct: 30, cls: "c-err" }], "a & b");
+  expect([...many.matchAll(/width:([\d.]+)%/g)].map((m) => m[1])).toEqual(["10.0", "30.0"]);
+  expect(many).toContain('aria-label="a &amp; b"');
+  expect(meter(5)).toContain('aria-hidden="true"');
 });
 
 test("nextSort flips the current key and starts a new key by downFirst", () => {

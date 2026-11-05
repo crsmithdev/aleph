@@ -27,7 +27,7 @@ test("the left panel is the Stages table and the middle panel the Holds table, f
 
 const labels = (html: string) => [...html.matchAll(/<th[^>]*><button type="button" data-sort="([^"]+)">([^<]*)</g)].map((m) => [m[1], m[2]]);
 const firsts = (html: string) => [...html.matchAll(/<tr><td>([^<]*)<\/td>/g)].map((m) => m[1]);
-const widths = (html: string) => [...html.matchAll(/class="vbar"><i style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
+const widths = (html: string) => [...html.matchAll(/class="meter"[^>]*><i style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
 const many = {
   stages: ([["a", 1], ["b", 3], ["c", 2]] as [string, number][]).map(([stage, n]) => ({ stage, costPerItem: P(9, 9), runsPerItem: P(n, n), unusable: P(0, 0) })),
   holds: ([["x", 1], ["y", 4], ["z", 2]] as [string, number][]).map(([kind, n]) => ({ kind, goals: P(n, n), hours: P(5 - n, 1) })),

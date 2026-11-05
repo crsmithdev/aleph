@@ -1,5 +1,5 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { cardTrend, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
+import { cardTrend, meter, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
@@ -120,7 +120,7 @@ export function usageCard(s, link = { href: "#/factory/agents" }, note) {
   if (!cur) return statCard({ k: "Usage", v: "–", note: note && "usage unknown", ...link });
   const gone = weekGone(cur.seven_day_resets_at, s.now);
   const tip = gone === null ? "" : `${pct(gone)} of the week gone`;
-  const bar = `<div class="usebar"${tip ? ` title="${esc(tip)}" role="img" aria-label="${esc(tip)}"` : ""}><div style="width:${Math.min(100, cur.seven_day)}%"></div>${gone === null ? "" : `<i style="left:${gone}%"></i>`}</div>`;
+  const bar = meter([{ pct: Math.min(100, cur.seven_day), cls: "c-use" }], `${pct(cur.seven_day)} used${tip && `, ${tip}`}`, { mark: gone });
   return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link });
 }
 

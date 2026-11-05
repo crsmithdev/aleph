@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, loadingLine, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when } from "../lib.js";
+import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -189,7 +189,7 @@ function readChart(rows) {
     if (!of.length) return "";
     const week = of.filter((n) => n.read && noteStatusRead(n) === "use").length, older = of.filter((n) => n.read).length - week, never = of.length - week - older;
     const w = (x) => ((x / of.length) * 100).toFixed(2);
-    return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: `<span class="stack" role="img" aria-label="${week} in the last 7 days, ${older} earlier, ${never} never"><span class="c-use" style="width:${w(week)}%"></span><span class="c-stale" style="width:${w(older)}%"></span><span class="c-never" style="width:${w(never)}%"></span></span>` });
+    return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${week} in the last 7 days, ${older} earlier, ${never} never`) });
   }).join("");
   return `<h3>When Recall Last Returned Each Note</h3><div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div>${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
 }

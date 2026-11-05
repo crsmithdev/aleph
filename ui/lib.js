@@ -526,11 +526,20 @@ export const dataTable = (head, rows, { fit = false, id = "" } = {}) =>
 export const heads = (labels, num = []) => labels.map((l) => `<th${num.includes(l) ? ' class="num"' : ""}>${esc(l)}</th>`).join("");
 
 /**
+ * A 10px bar: `parts` is one share in percent, or segments `{pct, cls}` in percent of the whole bar. `label` (plain text)
+ * is the text alternative; with none the bar is hidden from assistive tech, for a bar beside its visible value.
+ * `mark` is a tick at that percent.
+ */
+export function meter(parts, label, { mark = null } = {}) {
+  const segs = (Array.isArray(parts) ? parts.filter((s) => s.pct > 0) : [{ pct: parts }]).map((s) => `<i${s.cls ? ` class="${s.cls}"` : ""} style="width:${Number(s.pct).toFixed(1)}%"></i>`).join("");
+  return `<span class="meter" ${label ? `role="img" aria-label="${esc(label)}" title="${esc(label)}"` : 'aria-hidden="true"'}>${segs}${mark === null ? "" : `<b style="left:${mark}%"></b>`}</span>`;
+}
+/**
  * One row of a bar list: a label (HTML), a bar and a value (HTML). `pct` is the bar's width, or `bar` is HTML in its place.
  * `top` marks the largest; with `key` the row is a selector, as a tile is.
  */
 export function barRow(label, pct, value, { top = false, key, on = false, bar } = {}) {
-  const inner = `<span class="bl">${label}</span><span class="bb">${bar ?? `<i style="width:${Number(pct).toFixed(1)}%"></i>`}</span><span class="bv">${value}</span>`;
+  const inner = `<span class="bl">${label}</span>${bar ?? meter(pct)}<span class="bv">${value}</span>`;
   const cls = `barrow${top ? " top" : ""}`;
   return key ? `<button type="button" class="${cls}" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>` : `<div class="${cls}">${inner}</div>`;
 }

@@ -90,7 +90,7 @@ test("the causes card is a table beside the issues card, with no intro and no Fi
   const causes = h.slice(h.indexOf('aria-label="Lost time causes"'), h.indexOf('aria-label="Lost time issues"'));
   expect([...causes.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1])).toEqual(["Cause", "Time", "Runs", "Bar"]);
   expect([...causes.matchAll(/<tr><td[^>]*>([^<]+)<\/td><td class="num">([^<]+)<\/td><td class="num">(\d+)</g)].map((m) => m.slice(1))).toEqual([["Issue had landed", "3.0h", "7"], ["No commit", "3.0h", "2"]]);
-  expect(causes).toContain('<td class="bb">');
+  expect(causes).toMatch(/<td><span class="meter" aria-hidden="true"><i style="width:[\d.]+%"><\/i>/);
   expect(h).toMatch(/<div class="pair"><section class="card"[^>]*aria-label="Lost time causes"/);
   for (const gone of ["together.", "File an issue", "data-file", 'id="filed"']) expect(h).not.toContain(gone);
 });

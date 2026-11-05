@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, tag, tone, when } from "../lib.js";
+import { card, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, tag, tone, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -47,7 +47,7 @@ const pctOf = (n) => (n === null ? "-" : `${Math.round(n * 100)}%`);
 const TRAIL = { stages: "Trailing 7 days", holds: "Mean per day over the trailing 7 days" };
 /** A cell: the day's value, a bar scaled to the table's largest day value (`max`, null for no bar), and the trailing 7 days in the tooltip. */
 const pairCell = (p, f, max, tip) =>
-  `<td class="num" title="${esc(`${tip}: ${f(p.trailing)}`)}">${max === null ? f(p.day) : `<span class="vpair"><span class="vbar"><i style="width:${max > 0 ? ((p.day ?? 0) / max * 100).toFixed(1) : 0}%"></i></span>${f(p.day)}</span>`}</td>`;
+  `<td class="num" title="${esc(`${tip}: ${f(p.trailing)}`)}">${max === null ? f(p.day) : `<span class="vpair">${meter(max > 0 ? ((p.day ?? 0) / max) * 100 : 0)}${f(p.day)}</span>`}</td>`;
 
 /** The rows by `sort` ({key, dir}), at most 10. `cols` maps a sort key to the row's value. */
 function sorted(rows, cols, sort) {

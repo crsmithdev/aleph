@@ -1,5 +1,5 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { card, sentence, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope } from "../lib.js";
+import { card, meter, sentence, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope } from "../lib.js";
 import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
@@ -36,7 +36,7 @@ function scorecard(d, key) {
 const causeBars = (s) => {
   const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0;
   return dataTable(heads(["Cause", "Time", "Runs", "Bar"], ["Time", "Runs"]), s.causes.map((x) =>
-    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${x.hours === undefined ? "" : esc(hours(x.hours))}</td><td class="num">${x.runs}</td><td class="bb"><i style="width:${(max > 0 ? (size(x) / max) * 100 : 0).toFixed(1)}%"></i></td></tr>`).join(""));
+    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${x.hours === undefined ? "" : esc(hours(x.hours))}</td><td class="num">${x.runs}</td><td>${meter(max > 0 ? (size(x) / max) * 100 : 0)}</td></tr>`).join(""));
 };
 
 const topTable = (rows) => dataTable(heads(["Issue", "Why", "Hours", "Runs"], ["Hours", "Runs"]), rows.map((x) =>
