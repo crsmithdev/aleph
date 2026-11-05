@@ -8,12 +8,12 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui --summary` 
 |---|---|---|
 | colour | literal | 5 |
 | colour | token-def | 98 |
-| effect | literal | 49 |
-| effect | token-use | 7 |
+| effect | literal | 46 |
+| effect | token-use | 10 |
 | format | helper-bypass | 66 |
-| size | literal | 211 |
+| size | literal | 138 |
 | size | token-def | 18 |
-| size | token-use | 410 |
+| size | token-use | 478 |
 | type | literal | 26 |
 | type | token-def | 31 |
 | type | token-use | 44 |
