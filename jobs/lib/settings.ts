@@ -61,7 +61,8 @@ export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.flo
 /** The most local-backend agent runs live at once, apart from the live cap: the one GPU serves one gpt-oss call. */
 export const LOCAL_CAP = 1;
 /** The most agent runs one goal starts in any 60 minutes, whatever the trigger: the next start is an Ask. */
-export const RUN_CAP = () => cap("ALEPH_RUN_CAP", "run", 3);
+export const RUN_CAP_DEFAULT = 3;
+export const RUN_CAP = () => cap("ALEPH_RUN_CAP", "run", RUN_CAP_DEFAULT);
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 export const INTAKE_CAP = () => num("ALEPH_INTAKE_CAP", 5);

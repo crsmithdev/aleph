@@ -70,3 +70,6 @@ export function ancestorArgvs(depth = 6): string[][] {
 export function sessionEnvironment(): string {
   return classifyEnvironment(ancestorArgvs());
 }
+
+/** The command whose output is the user gh-guard compares owners with when `ALEPH_GH_USER` is unset. */
+export const GH_USER_CMD = ["gh", "api", "user", "-q", ".login"];

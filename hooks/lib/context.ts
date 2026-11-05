@@ -22,7 +22,7 @@ import { join } from "node:path";
 
 const HEADROOM = 33_000;
 const DEFAULT_WINDOW = 1_000_000;
-const DEFAULT_WARN = 0.75;
+export const DEFAULT_WARN = 0.75;
 
 export interface Reading {
   fill: number;

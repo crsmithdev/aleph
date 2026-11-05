@@ -55,7 +55,7 @@ A check, a worker and a land start only while the 1-minute load average is under
 
 ## Settings
 
-The live cap and the run cap are read from their variables (`ALEPH_LIVE_CAP`, `ALEPH_RUN_CAP`) first, then from `~/.aleph/factory/caps.json` (`{ "live": 5, "run": 3 }`), then the default. The run cap is the number of starts of one goal in 60 minutes before a `run-cap` Ask; its default is 3. `ALEPH_DISPATCH=off` stops every detached dispatch, intake, director and suite.
+The live cap and the run cap are read from their variables (`ALEPH_LIVE_CAP`, `ALEPH_RUN_CAP`) first, then from `~/.aleph/factory/caps.json` (`{ "live": 5, "run": 3 }`), then the default. The run cap is the number of starts of one goal in 60 minutes before a `run-cap` Ask; `ALEPH_RUN_CAP` (3) is the default. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops every detached dispatch, intake, director and suite.
 
 | Variable | Default | Does |
 |---|---|---|

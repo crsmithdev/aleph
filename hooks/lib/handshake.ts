@@ -19,7 +19,7 @@ export interface Handshake {
   lastTraceId?: string;
 }
 
-function spoolDir(): string {
+export function spoolDir(): string {
   return process.env.ALEPH_SPOOL ?? join(homedir(), ".aleph", "spool");
 }
 

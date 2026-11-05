@@ -36,7 +36,7 @@ claude -p --strict-mcp-config --disable-slash-commands \
 
 The worker's environment (`agentEnv`) rewrites a push to `git@github.com:` to a dead remote, gives `gh` a private config with no token, and sets `ALEPH_JOB_ID` and `ALEPH_JOB_RUN`.
 
-`jobs/lib/launch.ts` starts `aleph intake`, `dispatch`, `director` and `suite` as transient systemd units (`systemd-run --user`). `ALEPH_JOB_FOREGROUND=1` runs them as child processes. `ALEPH_DISPATCH=off` stops all of them.
+`jobs/lib/launch.ts` starts `aleph intake`, `dispatch`, `director` and `suite` as transient systemd units (`systemd-run --user`). `ALEPH_JOB_FOREGROUND=1` runs them as child processes. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops all of them.
 
 ## Skills in roles
 
@@ -78,7 +78,7 @@ The local model is `llama-server` on `127.0.0.1:8012`, run by `jobs/systemd/alep
 
 ## Judge
 
-`judgeChoice()` reads `ALEPH_JUDGE` when it is set, then the file `~/.aleph/judge`; with neither, the judge is `jev`. `aleph judge [jev|haiku]` sets it.
+`judgeChoice()` reads `ALEPH_JUDGE` when it is set, then the file `~/.aleph/judge`; with neither, `ALEPH_JUDGE`, else `jev`. `aleph judge [jev|haiku]` sets it.
 
 - **Jev** is `typesafe/jev-1.13` through OpenRouter's decisions endpoint (`hooks/lib/jev.ts`), with `OPENROUTER_API_KEY`. It answers typed questions only: `choice` or `noul` (a probability). It never denies a turn.
 - **Haiku** is `claude -p --model haiku --setting-sources "" --max-turns 1 --tools ""` with a rubric as the system prompt, up to 2 tries.

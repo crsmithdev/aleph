@@ -75,7 +75,7 @@ To skip the scan, put `ALEPH_SKIP_SCAN=1` in the command text.
 
 ### gh-guard
 
-`hooks/gh-guard.ts` finds `gh` writes: a write verb (`gh pr create`, `gh issue comment`, …) or a `gh api` call with a non-GET method, `-f`/`-F` fields or a `mutation`. It finds the owner from `-R`/`--repo`, a github.com URL, `repos/<owner>/`, or the `origin` of the directory after each `cd`. When the owner is not the user, or the guard cannot find the owner, it returns `permissionDecision: "ask"`. The user is `ALEPH_GH_USER` when it is set, or the login that `gh api user` returns.
+`hooks/gh-guard.ts` finds `gh` writes: a write verb (`gh pr create`, `gh issue comment`, …) or a `gh api` call with a non-GET method, `-f`/`-F` fields or a `mutation`. It finds the owner from `-R`/`--repo`, a github.com URL, `repos/<owner>/`, or the `origin` of the directory after each `cd`. When the owner is not the user, or the guard cannot find the owner, it returns `permissionDecision: "ask"`. The user is `ALEPH_GH_USER`, else `gh api user -q .login`: the login that command prints.
 
 ## Gates
 
@@ -96,7 +96,7 @@ A deny is `{decision: "block", reason: "Verify gate: …"}`. A judge that cannot
 
 `hooks/context-gate.ts`, with its logic in `hooks/lib/context.ts`, measures fill against the window minus 33k tokens. The window is `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, else `autoCompactWindow` in `~/.claude/settings.json`, else 1M.
 
-- At 0.75 of that threshold, it prints a `systemMessage` warning. `ALEPH_CONTEXT_WARN` changes the fraction.
+- At 0.75 of that threshold, it prints a `systemMessage` warning. `ALEPH_CONTEXT_WARN` (0.75) changes the fraction.
 - After the session's first compaction, it blocks once and asks for a handoff.
 
 The design is in [the context gate decision](context-gate.md).
@@ -117,8 +117,8 @@ The design is in [the context gate decision](context-gate.md).
 |---|---|---|
 | Turn tracing on; read from the environment or `~/.aleph/.env` | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | Tracing is off |
 | The Langfuse server | `LANGFUSE_BASE_URL` | `http://127.0.0.1:3010` |
-| The environment label: `headless` or `interactive` | `ALEPH_ENV` | Read from the parent process |
-| Hand-off files between hooks; pruned after 1 day | `ALEPH_SPOOL` | `~/.aleph/spool` |
+| The environment label: `headless` or `interactive` | `ALEPH_ENV` | `ALEPH_ENV`, else `interactive`; `headless` when an ancestor process is `claude -p` |
+| Hand-off files between hooks; pruned after 1 day | `ALEPH_SPOOL` | `ALEPH_SPOOL`, else `~/.aleph/spool` |
 
 Setup and the trace contents are in [Langfuse](langfuse.md).
 

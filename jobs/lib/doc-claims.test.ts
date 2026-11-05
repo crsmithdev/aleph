@@ -16,6 +16,13 @@ describe("a doc that does not match fails, quoting the claim", () => {
   const t = (): Truth => ({ ...repoTruth(), defaults: { ALEPH_JOB_TIMEOUT: () => 1800, ALEPH_STALL_SECONDS: () => 600, ALEPH_UI_PORT: () => "3020" } });
   const one = (text: string) => docProblems([{ file: "docs/x.md", text }], t());
 
+  test("a wrong default for a hook or routing setting names that setting", () => {
+    const bad = (text: string) => docProblems([{ file: "docs/x.md", text }], repoTruth());
+    expect(bad("`ALEPH_SPOOL`, else `~/.spool`")).toEqual([expect.stringMatching(/ALEPH_SPOOL defaults to "~\/\.spool", the code has "~\/\.aleph\/spool"/)]);
+    expect(bad("`ALEPH_RUN_CAP` (4)")).toEqual([expect.stringMatching(/ALEPH_RUN_CAP defaults to 4, the code has 3/)]);
+    expect(bad("`ALEPH_SPOOL`, else `~/.aleph/spool`; `ALEPH_RUN_CAP` (3); `ALEPH_JUDGE`, else `jev`; `ALEPH_DISPATCH`, else `on`; `ALEPH_ENV`, else `interactive`; `ALEPH_CONTEXT_WARN` (0.75)")).toEqual([]);
+  });
+
   test("a file:line past the end of the file, or a bare name no file has", () => {
     expect(one("`jobs/lib/settings.ts:99999`, `settings.ts:1`, `jobs/lib/settings.ts:2-3`, `nosuchfile.ts:5`")).toEqual([
       expect.stringMatching(/^docs\/x\.md:1: "`jobs\/lib\/settings\.ts:99999`" cites line 99999 of jobs\/lib\/settings\.ts, which has \d+ lines$/),

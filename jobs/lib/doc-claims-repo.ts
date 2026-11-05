@@ -10,6 +10,11 @@ import { docProblems, type Doc, type Truth } from "./doc-claims.ts";
 import * as s from "./settings.ts";
 import { stallSeconds } from "./agent-run.ts";
 import { JEV_PASS_BELOW } from "../../hooks/lib/judge.ts";
+import { judgeChoice } from "../../hooks/lib/jev.ts";
+import { spoolDir } from "../../hooks/lib/handshake.ts";
+import { classifyEnvironment, GH_USER_CMD } from "../../hooks/lib/env.ts";
+import { DEFAULT_WARN } from "../../hooks/lib/context.ts";
+import { homedir, tmpdir } from "node:os";
 
 export const ROOT = resolve(import.meta.dir, "..", "..");
 
@@ -60,6 +65,13 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_WORKER_CMD: plain("ALEPH_WORKER_CMD", s.workerCmd),
   ALEPH_REVIEWER_CMD: () => bare("ALEPH_REVIEWER_CMD", () => s.reviewerCmd() === "worker-sentinel" ? "the worker command" : s.reviewerCmd(), { ALEPH_WORKER_CMD: "worker-sentinel" }),
   ALEPH_JEV_PASS_BELOW: plain("ALEPH_JEV_PASS_BELOW", JEV_PASS_BELOW),
+  ALEPH_RUN_CAP: () => s.RUN_CAP_DEFAULT,
+  ALEPH_CONTEXT_WARN: () => DEFAULT_WARN,
+  ALEPH_GH_USER: () => GH_USER_CMD.join(" "),
+  ALEPH_JUDGE: () => bare("ALEPH_JUDGE", judgeChoice, { ALEPH_JUDGE_FILE: join(tmpdir(), "no-such-judge-file") }),
+  ALEPH_SPOOL: () => bare("ALEPH_SPOOL", spoolDir).replace(homedir(), "~"),
+  ALEPH_ENV: () => bare("ALEPH_ENV", () => classifyEnvironment([])),
+  ALEPH_DISPATCH: () => bare("ALEPH_DISPATCH", s.dispatchOn) ? "on" : "off",
 };
 
 /** What the docs of `root` are compared with: its source, its CLI source, its files and DEFAULTS. */

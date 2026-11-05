@@ -12,6 +12,7 @@
  * its verdict exits 2 (deny) with its name and the error on stderr.
  */
 import { resolve } from "node:path";
+import { GH_USER_CMD } from "./lib/env.ts";
 
 try {
   const input = JSON.parse(await Bun.stdin.text());
@@ -69,7 +70,7 @@ try {
   if (owners.length === 0) process.exit(0);
 
   const user = process.env.ALEPH_GH_USER
-    || Bun.spawnSync(["gh", "api", "user", "-q", ".login"], { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
+    || Bun.spawnSync(GH_USER_CMD, { stdout: "pipe", stderr: "ignore" }).stdout.toString().trim();
   const foreign = owners.filter((o) => o === null || o.toLowerCase() !== user.toLowerCase());
   if (foreign.length === 0) process.exit(0);
 
