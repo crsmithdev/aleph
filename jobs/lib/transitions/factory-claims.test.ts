@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node
 import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { dispatchIssues } from "./factory.ts";
 import { factoryDir } from "../gates/factory-status.ts";
 import { readRun, writeRun, allJobs, allRuns, lock } from "../records/ledger.ts";
@@ -66,7 +67,7 @@ test("no commit, the item open, first time: dropped with no fate and the goal re
   expect(allRuns().find((r) => r.run.condition === "dropped")!.run.fate).toBeUndefined();
 });
 
-const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(issues.addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." })), true)!.value;
+const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." })), true)!.value;
 const dotted = (ref: string) => readList({ key: "fac" })!.items.find((i) => issues.refOf(i) === ref)!;
 
 test("a dotted goal's rescue note reaches the goal, and a second no-commit run asks Chris on it", async () => {

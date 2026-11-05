@@ -151,9 +151,6 @@ export const nextId = (doc: Doc): number => Math.max(doc.items.reduce((m, i) => 
 const SOURCES = ["chris", "worker", "deps", "memory", "agent"] as const;
 export type Source = (typeof SOURCES)[number];
 
-/** The next free `k` for a part `<n>.<k>` under issue `n`, above any part of closed work. */
-export const nextSub = (doc: Doc, n: number): number => Math.max(doc.items.reduce((m, i) => (i.id === n && i.sub !== undefined ? Math.max(m, i.sub) : m), 0), doc.floor?.parts[String(n)] ?? 0) + 1;
-
 /** Add an issue: `source` (chris unless the caller or a label says otherwise; this reads no environment) and `areas`, with its request and, when given, its spec. */
 /** Labels that say a source or an old state, never an area. */
 const NOT_AREAS = ["deps", "memory", "followup", "goal", "needs-chris", "triaged", "planned", "proposal", "live-check"];
@@ -199,26 +196,6 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   };
   doc.items.push(item);
   return item;
-}
-
-/** Add an old part `<n>.<k>` under issue `issue` (`k` the next free number), with `after`, the issue's priority and a `source`: the issue's when it is not chris, else agent. Only tests call it now: they make the parts that old stores hold. */
-export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string; after?: string[]; now?: Date }): Issue {
-  const bad = titleProblem(o.title, { part: true });
-  if (bad) throw new Error(bad);
-  const day = today(o.now);
-  const sub = nextSub(doc, issue.id);
-  const part: Issue = {
-    id: issue.id,
-    sub,
-    title: o.title,
-    fm: { id: `${issue.id}.${sub}`, created: day, created_time: minute(o.now), updated: day, updated_time: minute(o.now), kind: (issue.fm.kind as string) ?? "task", priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
-    request: "",
-    spec: o.spec,
-    notes: [],
-  };
-  touch(issue, o.now);
-  doc.items.push(part);
-  return part;
 }
 
 /** Append-only: an existing note line is never rewritten, which is the lost update this format exists to stop. */
@@ -320,7 +297,7 @@ const areaList = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : t
 /** Repair what is mechanically repairable. Returns what it changed. */
 export function fix(doc: Doc, now = new Date()): string[] {
   const fixed: string[] = [];
-  // A part with no kind area takes its parent's kind, as addPart gives it; so parents go first.
+  // A part with no kind area takes its parent's kind, as an old part holds it; so parents go first.
   for (const item of [...doc.items].sort((a, b) => (a.sub === undefined ? 0 : 1) - (b.sub === undefined ? 0 : 1))) {
     const areas = areaList(item.fm.areas);
     if (!item.fm.kind || kindProblem(String(item.fm.kind))) {

@@ -5,6 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
+import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import type { Ask } from "../asks/ask.ts";
 import type { Ports } from "./director.ts";
@@ -136,4 +137,4 @@ export const alwaysFile = (s: object) => {
 };
 
 /** Goal `.1` under issue `id`, as `fresh` files none: the goal a drop or an answer can wait for. */
-export const addIssue = (id: number) => writeList({ key }, "a goal", (doc) => { issues.addPart(doc, issues.find(doc, id)!, { title: "blocker goal", spec: "Do it." }); return true; });
+export const addIssue = (id: number) => writeList({ key }, "a goal", (doc) => { addPart(doc, issues.find(doc, id)!, { title: "blocker goal", spec: "Do it." }); return true; });

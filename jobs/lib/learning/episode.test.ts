@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
 import { loadRegistry, writeRun, type Run } from "../records/ledger.ts";
 import { factoryRepos, vault } from "../../../tests/git-fixture.ts";
@@ -136,7 +137,7 @@ test(`a page older than ${KEEP_DAYS} days is deleted, and a goal whose last run 
 const addParts = (titles: string[]): number => {
   const parent = writeList({ key: "fac" }, "add", (doc) => {
     const top = issues.add(doc, "the big one", { spec: "## Goal\nShip it." });
-    for (const title of titles) issues.addPart(doc, top, { title, spec: "## Goal\nShip it." });
+    for (const title of titles) addPart(doc, top, { title, spec: "## Goal\nShip it." });
     return top.id;
   }, true)!.value;
   titles.forEach((_, i) => {

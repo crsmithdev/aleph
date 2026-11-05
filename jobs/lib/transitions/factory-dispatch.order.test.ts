@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { readList } from "../../../issues/lib/store.ts";
 import { ctx, fakes, withChecks, setup, teardown } from "./factory.helpers.ts";
 import { baselineConfig } from "./factory.ts";
@@ -21,7 +22,7 @@ const redBaseline = () => {
 };
 const doneParent = (): number => writeList({ key: "fac" }, "add", (doc) => {
   const i = issues.add(doc, "parent");
-  issues.setStatus(issues.addPart(doc, i, { title: "g", spec: "Do it." }), "done");
+  issues.setStatus(addPart(doc, i, { title: "g", spec: "Do it." }), "done");
   return i.id;
 }, true)!.value;
 const parentStatus = (id: number) => issues.status(readList({ key: "fac" })!.items.find((i) => i.id === id)!);

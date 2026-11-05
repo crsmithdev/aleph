@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "./todo.ts";
+import { addPart } from "./parts.fixture.ts";
 import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
 import { askChris, askOf, setAsk, refIn } from "../../jobs/lib/asks/ask.ts";
@@ -47,7 +48,7 @@ describe("parked", () => {
 
   test("a part of a parked parent is not buildable; reopen keeps the parent parked", () => {
     const r = repo([{ title: "p" }]);
-    store.writeList(r, "part", (doc) => { issues.addPart(doc, issues.find(doc, 1)!, { title: "part", spec: "Do it." }); return true; });
+    store.writeList(r, "part", (doc) => { addPart(doc, issues.find(doc, 1)!, { title: "part", spec: "Do it." }); return true; });
     const buildable = () => store.isBuildable(store.readList(r)!, item(r, "1.1" as any));
     expect(buildable()).toBe(true);
     store.writeList(r, "park", (doc) => { issues.setStatus(issues.find(doc, 1)!, "parked"); return true; });
@@ -182,9 +183,9 @@ describe("the writers of the new shape", () => {
     const r = repo();
     store.writeList(r, "x", (doc) => {
       const issue = issues.add(doc, "big", { priority: "high" });
-      issues.addPart(doc, issue, { title: "p1", spec: "a" });
-      issues.addPart(doc, issue, { title: "p2", spec: "b" });
-      const p3 = issues.addPart(doc, issue, { title: "p3", spec: "c" });
+      addPart(doc, issue, { title: "p1", spec: "a" });
+      addPart(doc, issue, { title: "p2", spec: "b" });
+      const p3 = addPart(doc, issue, { title: "p3", spec: "c" });
       issues.setStatus(p3, "done");
       return true;
     });
@@ -203,8 +204,8 @@ describe("the writers of the new shape", () => {
     const before = commits();
     store.writeList(r, "x", (doc) => {
       const issue = issues.add(doc, "big", { priority: "high" });
-      const g1 = issues.addPart(doc, issue, { title: "part one", spec: "Do one." });
-      const g2 = issues.addPart(doc, issue, { title: "part two", spec: "Do two.", after: [`${r.key}-1.1`] });
+      const g1 = addPart(doc, issue, { title: "part one", spec: "Do one." });
+      const g2 = addPart(doc, issue, { title: "part two", spec: "Do two.", after: [`${r.key}-1.1`] });
       issues.add(doc, "another issue");
       return [g1.sub, g2.sub];
     });
@@ -226,7 +227,7 @@ describe("an issue's children", () => {
   test("are the issues whose from names it and its old parts; each finds the issue as its parent; a child round-trips and lints clean", () => {
     const doc = { items: [] } as unknown as issues.Doc;
     const top = issues.add(doc, "big");
-    const old = issues.addPart(doc, top, { title: "old part", spec: "x" });
+    const old = addPart(doc, top, { title: "old part", spec: "x" });
     const child = issues.add(doc, "[Big] new child", { spec: "x", from: "r-1", after: ["r-1.1"] });
     issues.add(doc, "other");
     expect(child.id).toBe(2);
@@ -245,9 +246,9 @@ describe("a part's source", () => {
     const doc = { items: [] } as unknown as issues.Doc;
     const a = issues.add(doc, "from chris");
     const b = issues.add(doc, "from worker", { source: "worker" });
-    expect(issues.addPart(doc, a, { title: "p", spec: "x" }).fm.source).toBe("agent");
-    expect(issues.addPart(doc, b, { title: "p", spec: "x" }).fm.source).toBe("worker");
-    const old = issues.addPart(doc, a, { title: "old", spec: "x" });
+    expect(addPart(doc, a, { title: "p", spec: "x" }).fm.source).toBe("agent");
+    expect(addPart(doc, b, { title: "p", spec: "x" }).fm.source).toBe("worker");
+    const old = addPart(doc, a, { title: "old", spec: "x" });
     delete old.fm.source;
     expect(store.sourceOf(old)).toBe("agent");
     expect(store.sourceOf(a)).toBe("chris");

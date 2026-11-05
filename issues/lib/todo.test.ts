@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import * as issues from "./todo.ts";
+import { addPart } from "./parts.fixture.ts";
 import { setCodes } from "../../lib/naming.ts";
 
 test("titleProblem passes a part title with its group and refuses length, a final period and a prefix", () => {
@@ -18,8 +19,8 @@ test("add and edit refuse a bad title, and addPart refuses one over 60 with its 
     expect(() => issues.edit(issues.add(doc, "Fix the lane"), { title: bad })).toThrow();
   }
   const parent = issues.add(doc, "Lay out the status page");
-  expect(issues.addPart(doc, parent, { title: "[Status layout] Put the metrics on the left", spec: "x" }).title).toBe("[Status layout] Put the metrics on the left");
-  expect(() => issues.addPart(doc, parent, { title: `[Status layout] ${"a".repeat(45)}`, spec: "x" })).toThrow("60");
+  expect(addPart(doc, parent, { title: "[Status layout] Put the metrics on the left", spec: "x" }).title).toBe("[Status layout] Put the metrics on the left");
+  expect(() => addPart(doc, parent, { title: `[Status layout] ${"a".repeat(45)}`, spec: "x" })).toThrow("60");
 });
 
 test("add stores kind task by default, refuses an unknown kind, and addPart copies the parent's kind", () => {
@@ -27,7 +28,7 @@ test("add stores kind task by default, refuses an unknown kind, and addPart copi
   expect(issues.add(doc, "A").fm.kind).toBe("task");
   expect(() => issues.add(doc, "B", { kind: "epic" })).toThrow(issues.KINDS.join(", "));
   const bug = issues.add(doc, "C", { kind: "bug" });
-  expect(issues.addPart(doc, bug, { title: "[C] part", spec: "x" }).fm.kind).toBe("bug");
+  expect(addPart(doc, bug, { title: "[C] part", spec: "x" }).fm.kind).toBe("bug");
 });
 
 test("lint names the bad title of an open or parked item and a missing or unknown kind; fix moves kind areas into kind", () => {
@@ -42,7 +43,7 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   item("Fix red main", { areas: ["red-main", "check"] });
   item("Old goal", { kind: "goal", areas: ["deps"] });
   const bug = item("Fix the bug", { areas: ["bug"] });
-  const part = issues.addPart(doc, bug, { title: "[Bug] Find the cause", spec: "x" });
+  const part = addPart(doc, bug, { title: "[Bug] Find the cause", spec: "x" });
   part.title = "[Bug] Find the cause: first";
   delete part.fm.kind;
   const found = (id: string) => issues.lint(doc).filter((f) => f.id === id).map((f) => f.problem);
@@ -66,7 +67,7 @@ test("add and addPart store the filing time next to the day, and setStatus store
   const doc: issues.Doc = { items: [] } as any;
   const a = issues.add(doc, "Do a thing", { now: new Date(2026, 10, 4, 14, 5) });
   expect(a.fm).toMatchObject({ created: "2026-11-04", created_time: "2026-11-04 14:05" });
-  const p = issues.addPart(doc, a, { title: "[C] part", spec: "x", now: new Date(2026, 10, 4, 14, 5) });
+  const p = addPart(doc, a, { title: "[C] part", spec: "x", now: new Date(2026, 10, 4, 14, 5) });
   expect(p.fm).toMatchObject({ created: "2026-11-04", created_time: "2026-11-04 14:05" });
   issues.setStatus(a, "done", new Date(2026, 10, 4, 15, 30));
   expect(a.fm).toMatchObject({ closed_at: "2026-11-04", closed_time: "2026-11-04 15:30" });
