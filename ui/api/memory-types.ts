@@ -41,7 +41,11 @@ function working() {
   const current = existsSync(join(dir, "current.md")) ? read("current.md") : null;
   const archived = files(dir, /^\d{4}-\d{2}-\d{2}-.*\.md$/).sort().reverse();
   const latest = archived.slice(0, 10).map((f) => ({ ...read(f), date: f.slice(0, 10) }));
-  return { current, archived: latest, total: archived.length + (current ? 1 : 0), last: newest([current?.at, latest[0]?.at]) };
+  const projects = files(join(dir, "projects"), /\.md$/).sort().map((f) => {
+    const text = readFileSync(join(dir, "projects", f), "utf8");
+    return { name: f.replace(/\.md$/, ""), text: text.match(/^summary:[ \t]*(.+)/)?.[1].trim() || intent(text), at: mtime(join(dir, "projects", f)) };
+  });
+  return { current, archived: latest, projects, total: archived.length + (current ? 1 : 0) + projects.length, last: newest([current?.at, latest[0]?.at, ...projects.map((x) => x.at)]) };
 }
 
 function semantic(root: string, wiki: Note[], all: Note[]) {

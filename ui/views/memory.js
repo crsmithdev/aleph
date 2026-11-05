@@ -64,7 +64,7 @@ function renderWorking(w) {
   const cur = w.current
     ? `<p><strong>Current</strong> ${q(ago(w.current.at))} ${esc(w.current.intent || "(no intent line)")}</p>`
     : `<p class="quiet">No current handoff.</p>`;
-  return cur + (w.archived.length ? sub("Archived", w.archived.length, `<ul class="tight">${w.archived.map((h) => li(`<span class="time">${esc(h.date)}</span> ${esc(h.intent || h.name)}`)).join("")}</ul>`) : "");
+  return cur + (w.projects?.length ? sub("Projects", w.projects.length, `<ul class="tight">${w.projects.map((h) => li(`<code>${esc(h.name)}</code> ${q(ago(h.at))} ${esc(h.text)}`)).join("")}</ul>`) : "") + (w.archived.length ? sub("Archived", w.archived.length, `<ul class="tight">${w.archived.map((h) => li(`<span class="time">${esc(h.date)}</span> ${esc(h.intent || h.name)}`)).join("")}</ul>`) : "");
 }
 
 function renderSemantic(m, s) {
@@ -125,7 +125,7 @@ function renderGates(g) {
 }
 
 const EMPTY_TYPES = {
-  working: { total: 0, archived: [], current: null, last: "" },
+  working: { total: 0, archived: [], projects: [], current: null, last: "" },
   semantic: { memory: null, notes: [], start: {}, last: "" },
   episodic: { episodes: [], keepDays: 0, daily: { total: 0, latest: [] }, sessions: null, last: "" },
   procedural: { skills: [], claudeMd: null, hooks: [], last: "" },

@@ -256,6 +256,24 @@ test("prospective issues carry their priority, medium when they have none, and t
   }
 });
 
+test("working lists the per-project handoffs", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "proj-"));
+  mkdirSync(join(dir, "projects"));
+  writeFileSync(join(dir, "projects", "aleph.md"), "summary: Fix the memory tab\n\nBody.\n");
+  const restore = withEnv({ ALEPH_HANDOFFS_DIR: dir });
+  try {
+    const t: any = await memoryTypes(join(base, "vault"), [], null);
+    expect(t.working.projects.map((x: any) => [x.name, x.text])).toEqual([["aleph", "Fix the memory tab"]]);
+    expect(t.working.total).toBe(1);
+    const h = v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: t }, {}, new URLSearchParams("type=working"));
+    expect(h).toContain("Fix the memory tab");
+    expect(h).not.toContain("No handoff yet.");
+  } finally {
+    restore();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("typeTiles writes the unrounded returned share", async () => {
   // @ts-ignore plain JS shared with the page
   const { typeTiles } = await import("./views/memory.js");
