@@ -3,16 +3,19 @@
  * (read 2026-09-03); the three 5.5 models from https://claude.com/pricing (read 2026-10-27).
  * These are API list prices. Chris's runs use the claude.ai subscription, so a
  * cost from this table is an API-equivalent estimate. Where Claude Code reports
- * a cost (`total_cost_usd` in a `claude -p` result), that cost wins; the table
- * is for transcript turns only. Langfuse's public models API keeps only input/output
+ * a cost (`total_cost_usd` in a `claude -p` result), that cost wins for a Claude
+ * model; the table prices transcript turns, and the runs of the models in
+ * jobs/lib/routing/models.ts that Claude does not serve, whose prices Claude Code does not know. Langfuse's public models API keeps only input/output
  * prices, and cache reads are most of a Claude Code request, so the hook
  * prices each generation itself and sends cost_details.
  */
-interface Rate { input: number; output: number; cacheRead: number; cacheWrite: number }
+import { MODELS, type Rate } from "../../jobs/lib/routing/models.ts";
+
 /** `long` replaces the base rate for a request whose prompt (input + cache read + cache write) exceeds `above` tokens. */
 type Price = Rate & { long?: { above: number; rate: Rate } };
 const PER_MILLION: Record<string, Price> = {
-  "gpt-oss-20b": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, // local llama-server
+  // The local and OpenRouter models, by name and by the id a transcript carries.
+  ...Object.fromEntries(Object.entries(MODELS).flatMap(([name, m]) => (m.price ? [[name, m.price], [m.id, m.price]] : []))),
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
   "claude-haiku-5-5": {

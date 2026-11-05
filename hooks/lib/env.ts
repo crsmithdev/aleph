@@ -11,6 +11,15 @@ export interface LangfuseConfig {
 /** The dotenv file: ALEPH_ENV_FILE, else ~/.aleph/.env. */
 export const envFile = (): string => process.env.ALEPH_ENV_FILE ?? join(homedir(), ".aleph", ".env");
 
+/** OPENROUTER_API_KEY from the environment, else that one key from the dotenv file; null when neither has it. */
+export function openRouterKey(): string | null {
+  if (process.env.OPENROUTER_API_KEY) return process.env.OPENROUTER_API_KEY;
+  let text: string;
+  try { text = readFileSync(envFile(), "utf8"); } catch { return null; }
+  const m = text.match(/^\s*(?:export\s+)?OPENROUTER_API_KEY=(.*)$/m);
+  return m ? m[1].trim().replace(/^(["'])(.*)\1$/, "$2") : null;
+}
+
 /**
  * Hooks inherit the shell, not a dotenv; read the dotenv file (`envFile()`) ourselves. process.env wins.
  * Only LANGFUSE_* keys, plus any `extra` names the caller asks for (the UI server asks for its password): the file also holds model API keys, and a nested `claude -p`

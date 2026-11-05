@@ -4,7 +4,7 @@
  * command. Both end with state.json, then `exit`, then the news.
  */
 import * as jobRecord from "../records/record.ts";
-import { NO_SKILLS, skillSection } from "./role-skill.ts";
+import { skillSection } from "./role-skill.ts";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
@@ -25,7 +25,8 @@ import { gates } from "../gates/factory-status.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
-import { LOCAL, LOCAL_ENV, readModels, WORKER_TIER } from "../routing/models.ts";
+import { modelArgv, modelEnv, readModels, viaOf, WORKER_TIER } from "../routing/models.ts";
+import { costDetails } from "../../../hooks/lib/pricing.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
 import { oracleCommands, outsideSurface } from "./goal-spec.ts";
 import { docClaimProblems } from "../../../hooks/lib/docclaims.ts";
@@ -349,16 +350,17 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   }
 
   const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
-  const local = tier !== undefined && readModels()[tier].model === LOCAL.model;
-  if (local) { updateRun(folder, { model: LOCAL.model, tier: run.model }); run = { ...run, model: LOCAL.model }; }
-  const argv = [workerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
+  // A tier set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
+  const pick = tier !== undefined ? readModels()[tier].model : undefined;
+  if (pick !== undefined && viaOf(pick) !== "claude") { updateRun(folder, { model: pick, tier: run.model }); run = { ...run, model: pick }; }
+  const argv = modelArgv(workerCmd(), run.model, ["--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-    ...(run.model ? ["--model", run.model] : []), ...(repo.sandbox ? schemaFlags(WORKER_SCHEMA) : [])];
+    ...(repo.sandbox ? schemaFlags(WORKER_SCHEMA) : [])]);
   const text = brief(id, folder, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
   const w = await agentCall("worker", argv, {
-    cwd: wt, env: { ...agentEnv(env, folder), ...(local ? LOCAL_ENV : {}) }, stdin: text, stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
+    cwd: wt, env: { ...agentEnv(env, folder), ...modelEnv(run.model) }, stdin: text, stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
     limit: workSeconds(run), stall: stallSeconds(), onSpawn: (p) => { child = p; },
   });
   child = null;
@@ -405,7 +407,9 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   const o = w.outcome;
   const reply = parseWorker(structuredOf(readFileSync(runFile(folder, "output.log"), "utf8")));
   writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? o.result : reply.summary);
-  const facts: Partial<Outcome> = run.model === LOCAL.model ? { cost: 0 } : o.cost !== undefined ? { cost: o.cost } : {};
+  // Claude Code knows Claude's prices only: a run on another model is priced from its tokens.
+  const cost = viaOf(run.model) === "claude" ? o.cost : costDetails(run.model!, o.usage ?? { input: 0, output: 0 })?.total;
+  const facts: Partial<Outcome> = cost !== undefined ? { cost } : {};
   if (typeof reply !== "string") {
     Object.assign(facts, { defaults: reply.defaults, followups: reply.followups }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
     await fileFollowups(repo, run, reply.followups);
@@ -644,8 +648,8 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
   const diff = reviewDiff(repo.path, range, reviewDiffMax());
   const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
   writeFileSync(runFile(folder, "review-prompt.md"), text);
-  const argv = [reviewerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-    "--tools", "Read", "Grep", "Glob", "Bash", "--model", OPUS_MODEL, ...schemaFlags(REVIEW_SCHEMA)];
+  const argv = modelArgv(reviewerCmd(), OPUS_MODEL, ["--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+    "--tools", "Read", "Grep", "Glob", "Bash", ...schemaFlags(REVIEW_SCHEMA)]);
   const log = runFile(folder, "review.log");
   const err = runFile(folder, "review.err");
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;

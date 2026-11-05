@@ -17,8 +17,8 @@ function scorecard(s, a, w) {
 /** A success rate under this line (0 to 1) shows in the warn tone. */
 export const WARN_RATE = 0.7;
 
-/** Each tier's name and its Claude model; the other model each tier offers is gpt-oss-20b. */
-const TIERS = { "worker-low": ["Worker low", "haiku"], "worker-medium": ["Worker medium", "sonnet"], merge: ["Merge", "haiku"], title: ["Title", "haiku"], judge: ["Judge", "haiku"] };
+/** Each tier's name; the models it offers come from /api/models. */
+const TIERS = { "worker-low": "Worker low", "worker-medium": "Worker medium", merge: "Merge", title: "Title", judge: "Judge" };
 /** The roles whose model is fixed, and that model. */
 const FIXED = [["Intake", "opus"], ["Review", "opus"], ["Monitor", "opus"], ["Director", "fable"]];
 
@@ -26,7 +26,6 @@ function roles(a, m) {
   const num = ["Runs", "Success", "p50", "Cost", "First Pass", "Reviewer Pass", "Pass", "Fail"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const cell = (v) => `<td class="num">${v == null ? "–" : count(v)}</td>`;
-  const up = m?.local === "up";
   const outs = a.outcomes ?? [];
   // The outcome row for a config row: the one of its role and current model, when no other config row claims it.
   const claims = [];
@@ -46,10 +45,10 @@ function roles(a, m) {
   // Two config rows on one role and model leave that outcome unmerged.
   const shared = (role, model) => tierRows.filter(([t]) => roleOf(t) === role && shortModel(m.tiers[t]?.model) === shortModel(model)).length > 1;
   const merged = (role, model) => (shared(role, model) ? undefined : find(role, model));
-  const pick = ([tier, [name, claude]]) => {
+  const pick = ([tier, name]) => {
     const t = m.tiers[tier], box = tier.startsWith("worker") ? `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${esc(name)} enabled"${t?.enabled ? " checked" : ""}> ` : "";
     return `<tr><td>${esc(name)}</td><td>${box}<select data-tier="${esc(tier)}" aria-label="${esc(name)} model">` +
-      [claude, "gpt-oss-20b"].map((v) => `<option value="${v}"${t?.model === v ? " selected" : ""}${v === "gpt-oss-20b" && !up ? " disabled" : ""}>${v}</option>`).join("") + `</select></td>${stats(merged(roleOf(tier), t?.model))}</tr>`;
+      m.offers[tier].map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(v)}</option>`).join("") + `</select></td>${stats(merged(roleOf(tier), t?.model))}</tr>`;
   };
   const config = m ? tierRows.map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${stats(find(n.toLowerCase(), model))}</tr>`).join("") : "";
   const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");

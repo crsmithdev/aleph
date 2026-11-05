@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { OFFERS } from "../jobs/lib/routing/models.ts";
 // @ts-ignore plain JS shared with the page
 import { costOption, liveOption, outcomesOption, renderFactoryAgents } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
@@ -40,7 +41,7 @@ test("an outcome on a full model id joins the row of its short model; an unset m
   const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, stuck: 0, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
   const row = (h: string, name: string) => h.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
   const outcomes = [o("intake", "claude-opus-5-5", 151), o("worker", "claude-haiku-4-5-20251001", 7), o("reviewer", "unset", 3)];
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">151<\/td>/);
   expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
   expect(row(h, "Worker low")).toMatch(/<select.*<td class="num">7<\/td>/);
@@ -111,12 +112,13 @@ test("the title is the sidebar name, whatever the data", () => {
 const tiers = (low: string, medium: string) => ({ "worker-low": { enabled: true, model: low }, "worker-medium": { enabled: false, model: medium }, merge: { enabled: true, model: "haiku" }, title: { enabled: true, model: "haiku" }, judge: { enabled: true, model: "haiku" } });
 
 test("the Roles table carries the model choice: no Models card, a select per tier, fixed text for the rest, one Success column", () => {
-  const html = renderFactoryAgents(S, E, "live", "week", { tiers: tiers("haiku", "gpt-oss-20b"), local: "up" });
+  const html = renderFactoryAgents(S, E, "live", "week", { tiers: tiers("haiku", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
   expect(html).not.toContain(">Models<");
   const row = (name: string) => html.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
   const opts = (r: string) => [...r.matchAll(/<option value="([^"]+)"/g)].map((x) => x[1]);
-  expect(opts(row("Worker low"))).toEqual(["haiku", "gpt-oss-20b"]);
-  expect(opts(row("Worker medium"))).toEqual(["sonnet", "gpt-oss-20b"]);
+  expect(opts(row("Worker low"))).toEqual(OFFERS["worker-low"]);
+  expect(opts(row("Worker medium"))).toEqual(OFFERS["worker-medium"]);
+  expect(OFFERS["worker-low"]).toContain("deepseek-v4.1-flash");
   expect(row("Worker low")).toContain('type="checkbox" data-tier="worker-low" aria-label="Worker low enabled" checked');
   expect(row("Worker medium")).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
   expect(row("Worker medium")).toContain('<option value="gpt-oss-20b" selected>');
@@ -127,25 +129,25 @@ test("the Roles table carries the model choice: no Models card, a select per tie
 });
 
 test("the Roles card says the local server is up or down and disables gpt-oss-20b to match", () => {
-  const down = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down" });
+  const down = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] });
   expect(down).toContain("Local server: down");
   expect(down.match(/<option value="gpt-oss-20b" disabled>/g)!.length).toBe(5);
-  const up = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  const up = renderFactoryAgents(S, D, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(up).toContain("Local server: up");
   expect(up).not.toContain("disabled");
-  expect(renderFactoryAgents(S, null, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down" })).toContain("Local server: down");
+  expect(renderFactoryAgents(S, null, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server: down");
 });
 
 test("an outcome joins the tier or fixed row of its role and model; one that matches none or several stays its own row", () => {
   const o = (role: string, model: string, rate: number) => ({ role, model, runs: 10, succeeded: rate * 10, failed: 10 - rate * 10, stuck: 0, rate, p50: 60, cost: 1.5, baseline: 0.7 });
   const row = (h: string, name: string) => h.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "haiku", 0.9), o("worker", "sonnet", 0.8), o("intake", "opus", 0.95)] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "haiku", 0.9), o("worker", "sonnet", 0.8), o("intake", "opus", 0.95)] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Worker low")).toMatch(/<select.*<td class="num">10<\/td><td class="num">90%/);
   expect(row(h, "Worker medium")).toMatch(/<select.*<td class="num">10<\/td><td class="num">80%/);
   expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">10<\/td><td class="num">95%/);
   expect(h).not.toContain("<td>Worker</td>");
   expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
-  const both = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "gpt-oss-20b", 0.6)] } }, "live", "week", { tiers: tiers("gpt-oss-20b", "gpt-oss-20b"), local: "up" });
+  const both = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "gpt-oss-20b", 0.6)] } }, "live", "week", { tiers: tiers("gpt-oss-20b", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
   expect(row(both, "Worker")).toMatch(/<td>gpt-oss-20b<\/td><td class="num">10<\/td><td class="num warn">60%.*role=worker&condition=failed/);
   expect(row(both, "Worker low")).not.toContain("60%");
 });
@@ -165,7 +167,7 @@ test("a Roles count goes through count()", () => {
 });
 
 test("a Roles row with no outcome shows a dash in every cell, with num on the number cells", () => {
-  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(html).toContain(`<tr><td>Director</td><td>fable</td>${'<td class="num">–</td>'.repeat(8)}<td>–</td></tr>`);
 });
 
@@ -192,7 +194,7 @@ test("the cost axis labels go through money()", () => {
 });
 
 test("Worker slots shows a dash for a missing cap, and the Usage card is the Status one", () => {
-  const html = renderFactoryAgents({ ...S, factory: { ...S.factory, liveCap: undefined } }, { ...D, agents }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  const html = renderFactoryAgents({ ...S, factory: { ...S.factory, liveCap: undefined } }, { ...D, agents }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(html).toContain("<b>1<em> / –</em></b>");
   expect(html).not.toContain("undefined");
   expect(html).toContain(usageCard(S));

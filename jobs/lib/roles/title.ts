@@ -3,10 +3,9 @@
  * `FOLLOWUP:` line, a lesson, a landing's manual check) becomes a title that
  * `titleProblem` accepts. The source text goes into the request, not the title.
  */
-import { NO_SKILLS } from "./role-skill.ts";
 import { titleProblem, TITLE_RULE } from "../../../issues/lib/todo.ts";
 import { ruleCmd } from "../infra/settings.ts";
-import { LOCAL, LOCAL_ENV, readModels } from "../routing/models.ts";
+import { modelArgv, modelEnv, onGpu, readModels } from "../routing/models.ts";
 import { gpuSlot } from "../gates/factory-status.ts";
 import { factoryLog } from "../infra/layout.ts";
 
@@ -26,15 +25,16 @@ export async function writeLine(system: string, input: string, max: number): Pro
   delete env.ANTHROPIC_API_KEY;
   env.MAX_THINKING_TOKENS = "0";
   // A local call waits for the GPU slot within its time box, then falls back to Claude.
+  const pick = readModels().title.model;
   let release: (() => void) | null = null;
-  if (readModels().title.model === LOCAL.model) {
+  if (onGpu(pick)) {
     release = await gpuSlot(BOX);
     if (!release) factoryLog(`title: the GPU slot stayed taken for ${BOX / 1000} s; the call falls back to Claude`);
   }
-  const local = release !== null;
-  if (local) Object.assign(env, LOCAL_ENV);
+  const model = onGpu(pick) && !release ? "haiku" : pick;
+  Object.assign(env, modelEnv(model));
   try {
-    const proc = Bun.spawn([cmd, "-p", "--strict-mcp-config", NO_SKILLS, "--model", local ? LOCAL.model : "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const proc = Bun.spawn(modelArgv(cmd, model, ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input]), { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
     const timer = setTimeout(() => proc.kill(), BOX);
     const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = await proc.exited;

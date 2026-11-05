@@ -5,7 +5,7 @@
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
  * `agentCall` is the other kind: a `claude` call that works in a git worktree (the worker and the reviewer).
  */
-import { NO_SKILLS } from "./role-skill.ts";
+import { modelArgv, modelEnv } from "../routing/models.ts";
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { outcome, replyOf, type Outcome } from "../gates/gate.ts";
@@ -37,9 +37,9 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
 
 async function spawn(c: Call, input: string): Promise<{ output: string; text: string; data?: unknown; cost?: number; session?: string; failure?: string }> {
   const role = c.role.toUpperCase();
-  const argv = [roleCmd(role), "-p", "--strict-mcp-config", NO_SKILLS, "--output-format", "stream-json", "--verbose", "--model", c.model, ...c.flags, ...(c.schema ? schemaFlags(c.schema) : [])];
+  const argv = modelArgv(roleCmd(role), c.model, ["--output-format", "stream-json", "--verbose", ...c.flags, ...(c.schema ? schemaFlags(c.schema) : [])]);
   // A process group of its own, so the time box ends the call's children too: one that kept the pipes open would hold the reads.
-  const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", detached: true });
+  const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(c.model) }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", detached: true });
   let timedOut = false;
   let kill: Timer | undefined;
   const timer = setTimeout(() => {

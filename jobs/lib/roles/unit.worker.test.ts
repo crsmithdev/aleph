@@ -38,6 +38,19 @@ describe("a factory run", () => {
     await drop("fclaude");
   }, 60_000);
 
+  test("a worker-medium tier set to an OpenRouter model runs the worker on OpenRouter with the key, and prices the run from the table, not Claude Code's cost", async () => {
+    mkdirSync(join(base, "factory"), { recursive: true });
+    writeFileSync(join(base, "factory", "models.json"), JSON.stringify({ "worker-medium": { enabled: true, model: "deepseek-v4.1-flash" } }));
+    const r = await aleph(["job", "fac", "frouted", "--spec", "-", "--model", "sonnet"], { ALEPH_FIX_ROUNDS: "0", OPENROUTER_API_KEY: "sk-or-test" }, "Goal: frouted\nACTION: commit frouted.txt\n");
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--model deepseek/deepseek-v4.1-flash");
+    const env = readFileSync(join(fakeLog, "env"), "utf8");
+    expect(env).toContain("ANTHROPIC_BASE_URL=https://openrouter.ai/api");
+    expect(env).toContain("ANTHROPIC_AUTH_TOKEN=sk-or-test");
+    // The fake reports 1M input and 1M output tokens and $0.01: the table's $0.045 + $0.50 wins.
+    expect(state(r.json.run)).toMatchObject({ model: "deepseek-v4.1-flash", tier: "sonnet", cost: 0.545 });
+    await drop("frouted");
+  }, 30_000);
+
   test("a worker.haiku slot set to local leaves a run record with model gpt-oss-20b and tier haiku", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     writeFileSync(join(base, "factory", "models.json"), JSON.stringify({ "worker.haiku": "local" }));

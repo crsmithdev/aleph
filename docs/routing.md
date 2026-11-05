@@ -1,6 +1,6 @@
 # Routing
 
-This page states which model or command does each piece of work, with which tools, where, and for how long. Every agent role is `claude -p` on the Claude subscription, except the judge's first pass, which is Jev on OpenRouter. A local `gpt-oss-20b` can take some tiers.
+This page states which model or command does each piece of work, with which tools, where, and for how long. Every agent role is `claude -p` on the Claude subscription, except the judge's first pass, which is Jev on OpenRouter. A local `gpt-oss-20b` or a model on OpenRouter can take some tiers.
 
 ## Roles
 
@@ -56,25 +56,41 @@ Jev's answer counts when its probability is at least 0.6. Otherwise, or when Jev
 
 The dispatch also routes when the live cap holds a goal: if a tier on the local model has room, the goal starts there.
 
-## Local model
+## Models other than Claude's
 
-`~/.aleph/factory/models.json` maps each tier to `{enabled, model}` (`jobs/lib/routing/models.ts`). Each tier offers its Claude model or `gpt-oss-20b`:
+`MODELS` in `jobs/lib/routing/models.ts` lists every model a tier can use. Each row names who serves it (`claude`, `local` or `openrouter`), the id passed to `--model`, and, for a model Claude does not serve, its price per million tokens. Every call is `claude -p`, built by `modelArgv()`; a model Claude does not serve differs only in the env `modelEnv()` adds. To add a model, add a row.
 
-| Tier | Offers |
+| Model | Served by | Id |
+|---|---|---|
+| `haiku`, `sonnet` | Claude, on the subscription | `haiku`, `sonnet` |
+| `gpt-oss-20b` | `llama-server` on `127.0.0.1:8012` | `gpt-oss-20b` |
+| `deepseek-v4.1-flash` | OpenRouter | `deepseek/deepseek-v4.1-flash` |
+| `gpt-6-luna` | OpenRouter | `openai/gpt-6-luna` |
+| `minimax-m3.1-flash` | OpenRouter | `minimax/minimax-m3.1-flash` |
+| `step-3.5-flash` | OpenRouter | `stepfun/step-3.5-flash` |
+| `mimo-v2.6-flash` | OpenRouter | `xiaomi/mimo-v2.6-flash` |
+
+`~/.aleph/factory/models.json` maps each tier to `{enabled, model}`. Each tier offers its Claude model first, then every model Claude does not serve:
+
+| Tier | Claude model |
 |---|---|
-| `worker-low` | `haiku`, `gpt-oss-20b` |
-| `worker-medium` | `sonnet`, `gpt-oss-20b` |
-| `merge` | `haiku`, `gpt-oss-20b` |
-| `title` | `haiku`, `gpt-oss-20b` |
-| `judge` | `haiku`, `gpt-oss-20b` |
+| `worker-low` | `haiku` |
+| `worker-medium` | `sonnet` |
+| `merge` | `haiku` |
+| `title` | `haiku` |
+| `judge` | `haiku` |
 
 ```bash
 aleph models                          # show the tiers
-aleph models set worker-low gpt-oss-20b
+aleph models set worker-low deepseek-v4.1-flash
 aleph models disable worker-medium    # only the worker tiers can be off
 ```
 
-The local model is `llama-server` on `127.0.0.1:8012`, run by `jobs/systemd/aleph-gpt-oss.service` through `jobs/lib/routing/gpt-oss-start.ts`, which sets the CPU offload from the free VRAM. A run on it gets `ANTHROPIC_BASE_URL` pointed at the server, a 40,960-token window and 4,096 output tokens. One GPU means one local run at a time: `LOCAL_CAP` is 1 and the `gpu` lock holds the rest. Local runs do not count against the live cap. A title or judge call that cannot get the GPU in time falls back to Claude Haiku. The measurements are in [the gpt-oss finding](findings/2026-11-04-gpt-oss-20b-llama-server.md).
+A run on a worker tier set to another model records that model as `model` and its Claude model as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `hooks/lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
+
+**OpenRouter.** A call gets `ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `OPENROUTER_API_KEY` as `ANTHROPIC_AUTH_TOKEN` (from the environment or `~/.aleph/.env`), an empty `ANTHROPIC_API_KEY`, and the model's id in the default-model variables. OpenRouter runs count against the live cap and take no GPU slot. Without a key, the Agents page disables the OpenRouter models.
+
+**Local.** `llama-server` is run by `jobs/systemd/aleph-gpt-oss.service` through `jobs/lib/routing/gpt-oss-start.ts`, which sets the CPU offload from the free VRAM. A call on it gets `ANTHROPIC_BASE_URL` pointed at the server, a 40,960-token window and 4,096 output tokens. One GPU means one local run at a time: `LOCAL_CAP` is 1 and the `gpu` lock holds the rest. Local runs do not count against the live cap. A title or judge call that cannot get the GPU in time falls back to Claude Haiku. The measurements are in [the gpt-oss finding](findings/2026-11-04-gpt-oss-20b-llama-server.md).
 
 ## Judge
 

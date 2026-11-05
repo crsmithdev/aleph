@@ -11,7 +11,7 @@
  * docs/verify-gate.md "Jev screen".
  */
 import { decide, judgeChoice } from "./jev.ts";
-import { LOCAL, LOCAL_ENV, readModels } from "../../jobs/lib/routing/models.ts";
+import { modelArgv, modelEnv, onGpu, readModels } from "../../jobs/lib/routing/models.ts";
 import { gpuSlot } from "../../jobs/lib/gates/factory-status.ts";
 import { factoryLog } from "../../jobs/lib/infra/layout.ts";
 
@@ -83,19 +83,20 @@ async function haiku(digestText: string, left: () => number, started: number): P
   delete env.CLAUDE_CODE_ENTRYPOINT;
   delete env.ANTHROPIC_API_KEY; // the judge runs on the subscription, never the API
   // A local call waits for the GPU slot within its time box, then falls back to Claude.
+  const pick = readModels().judge.model;
   let release: (() => void) | null = null;
-  if (readModels().judge.model === LOCAL.model) {
+  if (onGpu(pick)) {
     release = await gpuSlot(left());
     if (!release) factoryLog(`judge: the GPU slot stayed taken for budget; the call falls back to Claude`);
   }
-  const local = release !== null;
-  if (local) Object.assign(env, LOCAL_ENV);
+  const model = onGpu(pick) && !release ? "haiku" : pick;
+  Object.assign(env, modelEnv(model));
   env.MAX_THINKING_TOKENS = "0"; // measured: 3 s without thinking, 15-45 s with it, same verdicts
   try {
     let error = "";
     for (let attempt = 1; attempt <= 2; attempt++) {
       if (left() <= 0) return { verdict: null, error: `judge budget spent${error ? `: ${error}` : ""}`, ms: Date.now() - started };
-      const proc = Bun.spawn([cmd, "-p", "--model", local ? LOCAL.model : "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", RUBRIC, digestText], {
+      const proc = Bun.spawn(modelArgv(cmd, model, ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", RUBRIC, digestText]), {
         env, stdout: "pipe", stderr: "pipe", stdin: "ignore",
       });
       const timer = setTimeout(() => proc.kill(), Math.max(left(), 0));

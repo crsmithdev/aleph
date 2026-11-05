@@ -19,7 +19,7 @@ import { isLive, isStarting } from "../infra/process.ts";
 import { causeOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
-import { LOCAL, readModels, WORKER_TIER, type Setting, type Tier } from "../routing/models.ts";
+import { onGpu, readModels, WORKER_TIER, type Setting, type Tier } from "../routing/models.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -97,10 +97,10 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
 export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
 
-/** Whether a build run is on the local backend: unit.ts sets its model to the local one, and before that its tier's model is the local one. */
+/** Whether a build run is on the local backend: unit.ts sets its model to its tier's, and before that its tier's model is the local one. */
 export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, Setting>): boolean => {
   const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
-  return run.model === LOCAL.model || (tier !== undefined && models[tier].model === LOCAL.model);
+  return onGpu(run.model) || (tier !== undefined && onGpu(models[tier].model));
 };
 
 /** Live agent runs on Claude, the count the live cap checks: a local-backend run counts against LOCAL_CAP only. */

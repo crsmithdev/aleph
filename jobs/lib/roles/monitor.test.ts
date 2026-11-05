@@ -53,7 +53,7 @@ test("the tick's step reads yesterday's table with a tool-less reader once a day
   const prompt = readFileSync(join(base, "prompt.md"), "utf8");
   expect(prompt).toContain("# Factory monitor 2026-10-20");
   expect(prompt).toContain("## Stages");
-  expect(readFileSync(join(base, "args"), "utf8")).toContain("--model claude-opus-5-5 --tools ");
+  expect(readFileSync(join(base, "args"), "utf8")).toContain("--model claude-opus-5-5 --output-format stream-json --verbose --tools ");
   const runs = allRuns().filter((e) => e.run.kind === "monitor");
   expect(runs).toHaveLength(1);
   expect(runs[0].run).toMatchObject({ condition: "done", reason: "2 findings", name: "monitor-2026-10-20" });

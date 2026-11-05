@@ -241,7 +241,7 @@ case $action in
     gh auth status > /dev/null 2>&1; echo $? > "$FAKE_LOG/gh.code" ;;
 esac
 echo '{"type":"assistant","message":{"content":[{"type":"text","text":"working"}]}}'
-echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"result":"did '"$action"'","structured_output":{"summary":"did '"$action"'","defaults":[],"followups":[],"flakes":[],"already_met":null,"question":null}}'
+echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"usage":{"input_tokens":1000000,"output_tokens":1000000,"cache_read_input_tokens":0,"cache_creation_input_tokens":0},"result":"did '"$action"'","structured_output":{"summary":"did '"$action"'","defaults":[],"followups":[],"flakes":[],"already_met":null,"question":null}}'
 `;
 
 /** Pids (not this process) whose cmdline, environ or cwd holds `dir`. */

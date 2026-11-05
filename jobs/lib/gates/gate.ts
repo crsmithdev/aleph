@@ -4,8 +4,10 @@
  */
 import { git } from "../infra/git.ts";
 import { NO_OUTPUT } from "../roles/structured.ts";
+import type { Usage } from "../../../hooks/lib/pricing.ts";
 
-export interface Outcome { ok: boolean; line: string; result: string; cost?: number }
+/** `usage` is the result event's tokens, in the shape `costDetails` takes. */
+export interface Outcome { ok: boolean; line: string; result: string; cost?: number; usage?: Usage }
 
 const lifecycle = (line: string): boolean => {
   try { return JSON.parse(line)?.type === "command_lifecycle"; } catch { return false; }
@@ -24,7 +26,11 @@ export function outcome(stdout: string): Outcome {
   const result = typeof ev?.result === "string" ? ev.result : "";
   const cost = typeof ev?.total_cost_usd === "number" ? ev.total_cost_usd : undefined;
   const ok = ev?.type === "result" && ev.is_error === false;
-  return { ok, line: ok ? "" : (result || line).slice(0, 300), result, cost };
+  const u = ev?.usage;
+  const usage = typeof u?.input_tokens === "number" && typeof u?.output_tokens === "number"
+    ? { input: u.input_tokens, output: u.output_tokens, cache_read_input_tokens: u.cache_read_input_tokens ?? 0, cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0 }
+    : undefined;
+  return { ok, line: ok ? "" : (result || line).slice(0, 300), result, cost, ...(usage ? { usage } : {}) };
 }
 
 /**

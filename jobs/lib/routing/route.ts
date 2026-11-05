@@ -5,7 +5,7 @@ import { readModels } from "./models.ts";
 
 export const TIERS = ["worker-low", "worker-medium", "opus"] as const;
 export type Tier = (typeof TIERS)[number];
-/** The Claude model a tier's run asks for; unit.ts puts a worker tier set to gpt-oss-20b on that model. */
+/** The Claude model a tier's run asks for; unit.ts runs a worker tier set to a model Claude does not serve on that model. */
 export const TIER_MODEL = { "worker-low": "haiku", "worker-medium": "sonnet", opus: "opus" } as const;
 const CUT = 0.6;
 

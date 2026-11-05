@@ -25,7 +25,7 @@ Aleph is a Claude Code plugin for one person on one machine. It does two jobs.
 - TypeScript on [Bun](https://bun.sh): the runtime, the package manager and the test runner. No build step.
 - Claude Code 2.1 or later, through `claude -p` on the subscription for every agent run.
 - Jev on OpenRouter for cheap typed judgments: is this a claim of completion, does this note bear on the prompt, which model tier fits this spec.
-- An optional local `gpt-oss-20b` under `llama-server` for small tiers.
+- An optional local `gpt-oss-20b` under `llama-server`, or a model on OpenRouter, for the small tiers.
 - git for the work store and the vault, JSON and JSONL files for the rest of the state, SQLite only for the vault's search index.
 - systemd user units for the timers and the UI.
 - The UI is plain ES modules and ECharts, served by `Bun.serve`.
