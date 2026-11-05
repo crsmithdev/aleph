@@ -10,7 +10,7 @@
 
 - The model is the Ollama blob `~/.ollama/models/blobs/sha256-8ecb5d4a...`. The unit reads it through the symlink `~/.local/share/gpt-oss-20b.gguf`. The blob stays in place.
 - The blob carries a ChatML template, not the gpt-oss one. With it, the model prints raw harmony text and the `Read` tool call fails. The unit passes `--chat-template-file models/templates/openai-gpt-oss-120b.jinja` from the llama.cpp clone. With that file, `claude -p` with `--allowedTools Read` prints `# aleph`.
-- Flags: `--jinja --ctx-size 32768 --n-gpu-layers 99 --n-cpu-moe 11 --reasoning-budget 0`. The value 11 is chosen below.
+- Flags: `--jinja --ctx-size 32768 --n-gpu-layers 99 --n-cpu-moe N --reasoning-budget 0`. The unit picks N at each start, as described under "Choice at start".
 - The Anthropic API treats a request without `thinking` as thinking off. llama-server defaults to an unlimited reasoning budget, so a `max_tokens: 16` request spent all 16 tokens on reasoning and returned only a `thinking` block. `--reasoning-budget 0` makes the default match the API: such a request returns a `text` block. A request with `thinking.budget_tokens` gets that budget and returns a `thinking` block and a `text` block.
 - `claude -p --allowedTools Read "<prompt>"` reads the prompt as a second tool name and exits with `Input must be provided`. Put the prompt before the flag, or write `--allowedTools=Read`.
 
@@ -51,6 +51,10 @@ Speed, tokens per second, one entry per run:
 | 10 | 1,579, 1,711, 1,551 (median 1,579) | 42.3, 43.0, 43.7 (median 43.0) |
 
 The fourth run at 11 is the one through the restarted unit. Value 10 is the lower value tried and failed the margin. Speeds vary by up to 2x between identical runs, so the gain from 12 to 11 (about 8 percent in generation) is within the noise of three runs.
+
+## Choice at start
+
+The unit runs `jobs/lib/gpt-oss-start.ts`, which reads the free VRAM with `nvidia-smi --query-gpu=memory.free` and runs llama-server with the smallest `--n-cpu-moe` from 0 to 24 that fits. The GPU share of llama-server is modelled as 3,600 MiB plus 400 MiB per layer on the GPU (fitted to the table above), and the start keeps 1,536 MiB free after the load. So N = 24 - floor((free - 1,536 - 3,600) / 400), limited to 0..24. A larger free amount never gives a larger N. At 10,600 MiB free the value is 11. When the `nvidia-smi` read fails or is unparsable, N is 12. The other flags are as listed under Setup.
 
 ## Stop first
 
