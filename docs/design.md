@@ -280,7 +280,7 @@ Cards with their own markup, because `card()` would add a heading or change the 
 - Memory browse table (`#mem-table`) and inspector (`#mem-inspector`): the table card has no heading, and the inspector is an `aside` with `aria-live`.
 - Sessions (`ui/views/sessions.js`): its head is the redrawn `#ag-sess-head`, not a section head.
 - Issues (`ui/views/issues.js`): the section has no heading; `#inv-count` is its head.
-- Causes (`ui/views/now.js`): the section is the redraw target, and `renderCauses()` writes its whole content.
+- Stages and Holds (`ui/views/now.js`): the sections hold the monitor tables from `monitor.stages` and `monitor.holds`, at most 10 rows each, drawn by `renderStages()` and `renderHolds()`.
 
 These references were chosen by reading the code, not by looking at the pages. Gap: no view is a reference for a chart's empty or loading state.
 

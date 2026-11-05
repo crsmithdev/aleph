@@ -64,51 +64,23 @@ test("the Landed card shows the clean share, then the clean count, and trends on
   expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
 });
 
-test("the causes merge across the lost classes, largest first, and leave out the classes that reached main", () => {
-  const h = view.renderCauses(WEEK);
-  expect([...h.matchAll(/efficiency">([^<]+)</g)].map((m) => m[1])).toEqual(["Issue had landed", "No commit"]);
-  expect(h).toContain("3.0h · 4 runs");
-  expect(h).toContain("The first cause is 50% of the loss: Issue had landed, 4 runs.");
-  expect(h.match(/class="barrow top"/g)?.length).toBe(1);
-  expect(view.renderCauses(null)).toContain(`<p class="quiet" role="status">Loading the causes…</p>`);
-  expect(view.renderCauses({ error: "no <data>" })).toContain("no &lt;data&gt;");
-  expect(view.renderCauses({ classes: [] })).toContain("No agent time was lost");
+test("the Status page puts the Stages, Holds and Monitor panels in one row above the lanes", () => {
+  const monitor = { day: "2026-11-04", findings: ["one"], stages: [], holds: [] };
+  const page = view.view.render({ ...state, usage: USAGE, factory: { ...state.factory, monitor } }, {}, new URLSearchParams());
+  const at = ['class="insights"', 'id="stages"', 'id="holds"', 'id="monitor"', 'class="lanes"'].map((x) => page.indexOf(x));
+  expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
 });
 
-test("mountStatus fetches the week and the day and fills the scorecard and the causes", async () => {
+test("mountStatus fetches the week and fills the scorecard and the outcome bar, and no other panel from /api/speed", async () => {
   // @ts-ignore plain JS shared with the page
   const { resetSpeed } = await import("./views/speed.js");
   resetSpeed();
-  const tiles = { innerHTML: "" }, causes = { innerHTML: "" };
+  const tiles = { innerHTML: "" }, outcome = { innerHTML: "" }, other = { innerHTML: "" };
   const urls: string[] = [];
-  await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#causes" ? causes : null) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: BASE }) }; });
+  await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#outcome" ? outcome : s === ".ph" ? null : other) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: BASE }) }; });
   expect(urls).toEqual(["/api/speed?window=week&baseline=1"]);
   expect(tiles.innerHTML).toContain("<b>38%<em> / 6.0h</em></b>");
-  expect(causes.innerHTML).toContain("Issue had landed");
-  resetSpeed();
-});
-
-test("the slowness panel ranks the phases by p90, and the Status page puts the row above the lanes", async () => {
-  const P = (p90: number) => ({ count: 3, p50: 1, p90 });
-  const h = view.renderSlowness({ phases: { intake: P(258), queue: P(1716), implement: P(272), land: P(100) } });
-  const order = ["queue", "implement", "intake", "land"].map((n) => h.indexOf(`<span class="bl">${n}</span>`));
-  expect(order.every((i) => i >= 0) && [...order].sort((a, b) => a - b).join() === order.join()).toBe(true);
-  expect(view.renderSlowness(null)).toContain("Loading the phases");
-  expect(view.renderSlowness({ error: "no <data>" })).toContain("no &lt;data&gt;");
-  expect(view.renderSlowness({ phases: {} })).toContain("No work ended in the window");
-  const monitor = { day: "2026-11-04", findings: ["one"], table: "t" };
-  const page = view.view.render({ ...state, usage: USAGE, factory: { ...state.factory, monitor } }, {}, new URLSearchParams());
-  const at = ['class="insights"', 'id="causes"', 'id="slowness"', 'id="monitor"', 'class="lanes"'].map((x) => page.indexOf(x));
-  expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
-  const row = page.slice(at[0], at[4]);
-  expect(row.includes('id="causes"') && row.includes('id="slowness"') && row.includes('id="monitor"')).toBe(true);
-  // @ts-ignore plain JS shared with the page
-  const { resetSpeed } = await import("./views/speed.js");
-  resetSpeed();
-  const slow = { innerHTML: "" };
-  await view.mountStatus({ querySelector: (s: string) => (s === "#slowness" ? slow : null) }, { ...state, usage: USAGE }, async () => ({ ok: true, json: async () => ({ ...WEEK, phases: { queue: P(1716), land: P(100) } }) }));
-  expect(slow.innerHTML.indexOf('<span class="bl">queue</span>')).toBeGreaterThanOrEqual(0);
-  expect(slow.innerHTML.indexOf('<span class="bl">queue</span>')).toBeLessThan(slow.innerHTML.indexOf('<span class="bl">land</span>'));
+  expect(other.innerHTML).toBe("");
   resetSpeed();
 });
 

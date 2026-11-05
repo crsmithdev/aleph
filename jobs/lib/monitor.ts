@@ -29,6 +29,7 @@ export function readerPrompt(table: string): string {
     "Each finding gives its numbers from the table: the day's value and the trailing value it differs from.",
     "Look for a stage whose runs per item, runs with no usable result or cost per item rose against the trailing 7 days,",
     "an Ask reason or a hold kind that grew, and a rise in reopens. A small count is noise: say so rather than rank it high.",
+    "Mark each significant find in a finding as **text**, the few words that say what is off.",
     "You only read. Do not suggest that you file, answer or change anything.",
     "",
     "Reply with at most 7 lines, each `<rank>. <finding>` in one sentence. When nothing looks off, reply one line `NOTHING: <why>`.",

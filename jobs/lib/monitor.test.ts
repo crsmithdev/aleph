@@ -89,7 +89,16 @@ test("the Status panel and the report line show the newest report", async () => 
   const p = monitorPanel()!;
   expect(p.day).toBe("2026-10-20");
   expect(p.findings).toHaveLength(2);
-  expect(p.table).toContain("## Stages");
+  // The rows are JSON values, from a report with known rows.
+  const kept: Report = JSON.parse(readFileSync(reportFile("2026-10-20"), "utf8"));
+  const win = (runs: number, items: number, cost: number, goals: number, hours: number) => ({
+    ...kept.table.today, stages: [{ stage: "build", runs, items, unusable: 1, cost, minutes: null }], holds: [{ kind: "stops", records: 2, goals, hours }],
+  });
+  kept.table.today = win(6, 3, 3, 2, 5); kept.table.trailing = win(14, 7, 14, 7, 14);
+  writeFileSync(reportFile("2026-10-20"), JSON.stringify(kept));
+  const q = monitorPanel()!;
+  expect(q.stages).toEqual([{ stage: "build", costPerItem: { day: 1, trailing: 2 }, runsPerItem: { day: 2, trailing: 2 }, unusable: { day: 1 / 6, trailing: 1 / 14 } }]);
+  expect(q.holds).toEqual([{ kind: "stops", goals: { day: 2, trailing: 1 }, hours: { day: 5, trailing: 2 } }]);
   expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 names 2 things that look off; first: Build runs with no usable result rose to 38% from 20%.");
   // A report older than 3 days is no longer said.
   expect(reportLine(new Date("2026-10-25T08:00:00").getTime())).toBeNull();
@@ -100,5 +109,6 @@ test("the findings are the numbered lines of the reply; NOTHING gives none", () 
   expect(findingsOf("NOTHING: all within the trailing range")).toEqual([]);
   expect(readerPrompt("TABLE")).toEndWith("\nTABLE");
   expect(readerPrompt("TABLE")).toContain("You only read.");
+  expect(readerPrompt("TABLE")).toContain("as **text**");
 });
 

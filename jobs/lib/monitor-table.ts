@@ -418,11 +418,34 @@ export function latestReport(): Report | null {
   return null;
 }
 
-/** What the Status panel shows of the newest report. */
-export function monitorPanel(): { day: string; findings: string[]; error?: string; table: string } | null {
+/** A value of the day and the same value over the trailing 7 days; null when the data does not say. */
+export interface Pair { day: number | null; trailing: number | null }
+
+/** What the Status panel shows of the newest report. Rates are fractions; a count in the trailing value is the mean per day. */
+export function monitorPanel(): {
+  day: string; findings: string[]; error?: string;
+  stages: { stage: string; costPerItem: Pair; runsPerItem: Pair; unusable: Pair }[];
+  holds: { kind: string; goals: Pair; hours: Pair }[];
+} | null {
   const r = latestReport();
   if (!r) return null;
-  return { day: r.day, findings: r.findings, ...(r.error ? { error: r.error } : {}), table: renderTable(r.table) };
+  const d = r.table.today, w = r.table.trailing;
+  const ratio = (a: number | null, b: number) => (a !== null && b ? a / b : null);
+  const stage = (s: StageRow | undefined) => ({
+    costPerItem: ratio(s?.cost ?? null, s?.items ?? 0), runsPerItem: ratio(s?.runs ?? 0, s?.items ?? 0), unusable: ratio(s?.unusable ?? null, s?.runs ?? 0),
+  });
+  const stages = STAGES.flatMap((name) => {
+    const a = d.stages.find((s) => s.stage === name), b = w.stages.find((s) => s.stage === name);
+    if (!a && !b) return [];
+    const x = stage(a), y = stage(b);
+    return [{ stage: name, costPerItem: { day: x.costPerItem, trailing: y.costPerItem }, runsPerItem: { day: x.runsPerItem, trailing: y.runsPerItem }, unusable: { day: x.unusable, trailing: y.unusable } }];
+  });
+  const kinds = [...new Set([...d.holds.map((h) => h.kind), ...w.holds.map((h) => h.kind)])];
+  const holds = kinds.map((kind) => {
+    const a = d.holds.find((h) => h.kind === kind), b = w.holds.find((h) => h.kind === kind);
+    return { kind, goals: { day: a?.goals ?? 0, trailing: (b?.goals ?? 0) / 7 }, hours: { day: a?.hours ?? 0, trailing: (b?.hours ?? 0) / 7 } };
+  });
+  return { day: r.day, findings: r.findings, ...(r.error ? { error: r.error } : {}), stages, holds };
 }
 
 /** The report's line in `aleph report`: the newest report of the last 2 days and its first finding. */

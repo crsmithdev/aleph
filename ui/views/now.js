@@ -1,8 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { barList, barRow, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
-import { bar, causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
+import { card, dataTable, heads, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
+import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -15,7 +15,7 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time by outcome">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section><section id="slowness" class="card" aria-label="Causes of slowness">${renderSlowness(speedOf(w))}</section>${renderMonitor(s)}</div>${renderLanes(s)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time by outcome">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="stages" class="card" aria-label="Stages">${renderStages(s)}</section><section id="holds" class="card" aria-label="Holds">${renderHolds(s)}</section>${renderMonitor(s)}</div>${renderLanes(s)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -40,55 +40,54 @@ export function renderOutcome(d) {
   return `${title}${bar(d)}`;
 }
 
-/** The ranked causes of lost time, largest first. `d` is null while it loads, `{ error }` on a failed load. */
-export function renderCauses(d, win = d?.window ?? "week") {
-  const title = `<h2>Causes of lost time, largest first</h2>`;
-  if (!d) return `${title}${loadingLine("the causes")}`;
-  if (d.error) return `${title}<p>${esc(d.error)}</p>`;
-  const cs = mergeCauses(d);
-  if (!cs.length) return `${title}<p>No agent time was lost in the last ${period({ window: win })}.</p>`;
-  const sum = cs.reduce((a, x) => a + x.hours, 0), first = cs[0];
-  return `${title}<p>The first cause is ${pctText(first.hours / sum)} of the loss: ${esc(first.name)}, ${first.runs} ${first.runs === 1 ? "run" : "runs"}.</p>${barList(cs.map((x, i) => causeRow(`<a href="${keep(EFFICIENCY, win)}">${esc(x.name)}</a>`, x, first.hours, i === 0)).join(""))}`;
+const MONITOR_ROWS = 10;
+const numText = (n) => (n === null ? "-" : Number.isInteger(n) ? String(n) : n.toFixed(1));
+const costText = (n) => (n === null ? "-" : `$${n.toFixed(2)}`);
+const pctOf = (n) => (n === null ? "-" : `${Math.round(n * 100)}%`);
+const pairCell = (p, f) => `<td class="num">${f(p.day)} <small>(${f(p.trailing)})</small></td>`;
+
+/** The monitor's Stages table: the day's value, then the trailing 7 days in brackets. At most 10 rows. */
+export function renderStages(s) {
+  const rows = (s.factory?.monitor?.stages ?? []).slice(0, MONITOR_ROWS).map((r) =>
+    `<tr><td>${esc(r.stage)}</td>${pairCell(r.costPerItem, costText)}${pairCell(r.runsPerItem, numText)}${pairCell(r.unusable, pctOf)}</tr>`).join("");
+  const head = heads(["stage", "cost per item", "runs per item", "no usable result"], ["cost per item", "runs per item", "no usable result"]);
+  return `<h2>Stages</h2>${rows ? dataTable(head, rows) : `<p class="quiet">No stage ran.</p>`}`;
 }
 
-const PHASES = ["intake", "queue", "implement", "land"];
-/** The four phases of lead time, largest p90 first, each as its share of the four p90 seconds. `d` is null while it loads, `{ error }` on a failed load. */
-export function renderSlowness(d) {
-  const title = `<h2>Causes of slowness, largest first</h2>`;
-  if (!d) return `${title}${loadingLine("the phases")}`;
-  if (d.error) return `${title}<p>${esc(d.error)}</p>`;
-  const ps = PHASES.filter((n) => d.phases?.[n]?.count).map((n) => ({ n, p90: d.phases[n].p90 })).sort((a, b) => b.p90 - a.p90);
-  if (!ps.length) return `${title}<p>No work ended in the window.</p>`;
-  const sum = ps.reduce((a, x) => a + x.p90, 0);
-  return `${title}${barList(ps.map((x, i) => barRow(esc(x.n), (x.p90 / ps[0].p90) * 100, `${esc(dur(x.p90))} · ${pctText(x.p90 / sum)}`, { top: i === 0 })).join(""))}`;
+/** The monitor's Holds table: the day's value, then the trailing 7 days (the mean per day) in brackets. At most 10 rows. */
+export function renderHolds(s) {
+  const rows = (s.factory?.monitor?.holds ?? []).slice(0, MONITOR_ROWS).map((r) =>
+    `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, numText)}${pairCell(r.hours, numText)}</tr>`).join("");
+  const head = heads(["hold record kind", "goals", "hours in the state"], ["goals", "hours in the state"]);
+  return `<h2>Holds</h2>${rows ? dataTable(head, rows) : `<p class="quiet">No hold record.</p>`}`;
 }
 
-/**
- * The monitor's newest daily report: the reader's findings in rank order, and the whole table behind a fold. Nothing before the first report.
- */
+/** A finding as HTML: **text** and each number or percentage in bold; all other text escaped. */
+export function findingHtml(text) {
+  return esc(text).split(/\*\*(.+?)\*\*/).map((part, i) => i % 2 ? `<b>${part}</b>`
+    : part.replace(/(&#?\w+;)|(\$?\d+(?:[.,]\d+)*%?)/g, (m, entity) => (entity ? m : `<b>${m}</b>`))).join("");
+}
+
+/** The monitor's newest daily report: the reader's findings in rank order. Nothing before the first report. */
 export function renderMonitor(s) {
   const m = s.factory?.monitor;
   if (!m) return "";
   const said = m.error ? `<p class="quiet">No reading: ${esc(m.error)}</p>`
-    : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ol>`
+    : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`
     : `<p class="quiet">Nothing looks off.</p>`;
-  return card(`Monitor, ${m.day}`, said +
-    `<details class="more" data-keep="more:monitor"><summary>Table</summary><pre class="monitor-table">${esc(m.table)}</pre></details>`, { id: "monitor" });
+  return card(`Monitor, ${m.day}`, said, { id: "monitor" });
 }
 
-/** Fetch the window with its baseline in one request, then fill the scorecard and the causes. */
+/** Fetch the window with its baseline in one request, then fill the scorecard. */
 export async function mountStatus(root, s, fetcher = fetch, q) {
   const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
   keepWindow(w);
   wireScope(root);
   await loadSpeed(w, fetcher, true);
-  const tiles = root.querySelector("#scorecard"), causes = root.querySelector("#causes");
+  const tiles = root.querySelector("#scorecard");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
-  if (causes) causes.innerHTML = renderCauses(speedOf(w), w);
   const outcome = root.querySelector("#outcome");
   if (outcome) outcome.innerHTML = renderOutcome(speedOf(w));
-  const slowness = root.querySelector("#slowness");
-  if (slowness) slowness.innerHTML = renderSlowness(speedOf(w));
 }
 
 /** The count of a section: `N / cap` where a cap applies. */
