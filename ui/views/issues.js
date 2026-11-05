@@ -1,8 +1,9 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, storeWindow, tile, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
+import { statCard } from "./speed.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
@@ -64,7 +65,7 @@ const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STA
 export function hashOptions(q = new URLSearchParams()) {
   return {
     limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
-    status: statusOf(q.get("status")), project: q.get("project") ?? "", stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open",
+    status: statusOf(q.get("status")), project: q.get("project") ?? "", stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: windowOf(q),
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
 }
@@ -164,7 +165,7 @@ export function markHits(title, hits = []) {
 /** The rows that pass every filter but the ones named in `skip`, each with its search `score` and `hits`. */
 export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
-  const q = (o.q ?? "").trim(), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - 7 * DAY;
+  const q = (o.q ?? "").trim(), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[o.window] ?? 7)) * DAY;
   const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? inDays(r.created, from, end) : o.tile === "closed" ? CLOSED.includes(r.status) && inDays(r.closed, from, end) : true);
   return rows.flatMap((r) => {
     if (!inTile(r)) return [];
@@ -251,9 +252,10 @@ const median = (xs) => {
 const inDays = (s, from, to) => { const t = dayMs(s); return t >= from && t < to; };
 
 /** The numbers over `rows`: what the status and stage filters leave out still counts here, so the tiles do not empty when the table narrows. */
-export function stats(rows, now = new Date()) {
+export function stats(rows, now = new Date(), days = 7) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), end = today + DAY;
-  const week = today - 6 * DAY, before = week - 7 * DAY;
+  // The store keeps whole dates, so the window is whole days back from tonight, at least today.
+  const span = Math.max(1, Math.ceil(days)) * DAY, week = end - span, before = week - span;
   const open = rows.filter((r) => r.status === "open");
   const ages = open.map((r) => dayMs(r.created)).filter(Boolean).map((t) => (today - t) / DAY);
   const closedIn = (from, to) => rows.filter((r) => CLOSED.includes(r.status) && inDays(r.closed, from, to));
@@ -270,15 +272,15 @@ export function stats(rows, now = new Date()) {
 }
 
 /** The change from the week before, with no good or bad colour on a count that can go either way. */
-const change = (now, before) => (now === before ? small("same as the week before") : `<small>${now > before ? "▲" : "▼"} ${Math.abs(now - before)} from the week before</small>`);
+const change = (now, before, w) => (now === before ? small(`same as the ${w} before`) : `<small>${now > before ? "▲" : "▼"} ${Math.abs(now - before)} from the ${w} before</small>`);
 
-export function renderTiles(s, key = "open") {
-  const stages = Object.entries(s.stages).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} ${k}`).join(", ");
+export function renderTiles(s, key = "open", win = "week") {
+  const w = win in WINDOW_DAYS ? win : "week";
   const on = (k) => ({ key: k, on: key === k });
   return tiles("Issue numbers",
-    tile({ k: "Open", v: String(s.open), body: small(`of ${s.total} in the store`) + (stages ? small(stages) : ""), ...on("open") }) +
-    tile({ k: "Filed, 7 days", v: String(s.filed), body: change(s.filed, s.filedBefore), ...on("filed") }) +
-    tile({ k: "Closed, 7 days", v: String(s.closed), body: small(`${s.done} done, ${s.dropped} dropped`) + change(s.closed, s.closedBefore), ...on("closed") }) +
+    statCard({ k: "Open", v: String(s.open), note: `of ${s.total} in the store`, ...on("open") }) +
+    tile({ k: `Filed, last ${w}`, v: String(s.filed), body: change(s.filed, s.filedBefore, w), ...on("filed") }) +
+    tile({ k: `Closed, last ${w}`, v: String(s.closed), body: small(`${s.done} done, ${s.dropped} dropped`) + change(s.closed, s.closedBefore, w), ...on("closed") }) +
     tile({ k: "Median open age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)}d`, body: s.oldest === null ? "" : small(`oldest ${Math.round(s.oldest)}d`), ...on("age") }) +
     tile({ k: "Runs", v: String(s.runs), body: small(`${money(s.cost)} recorded`), ...on("runs") }));
 }
@@ -361,7 +363,7 @@ const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medi
 /** The project filter scopes the tiles too: a select in the page head, each option with the count the other filters leave. */
 export function renderProjects(projects, rows, o = {}) {
   const left = filterRows(rows, o, ["project"]);
-  return filterBar([{ label: "Project", name: "project", data: true, value: o.project ?? "", options: [{ value: "", label: `All ${left.length}` }, ...projects.map((p) => ({ value: p, label: `${p} ${left.filter((r) => r.project === p).length}` }))] }]);
+  return filterBar([{ label: "Project", name: "project", data: true, value: o.project ?? "", options: [{ value: "", label: `All (${left.length})` }, ...projects.map((p) => ({ value: p, label: `${p} (${left.filter((r) => r.project === p).length})` }))] }, { name: "window", value: o.window ?? "week", options: WINDOWS }]);
 }
 
 export function renderFilters(rows, o = {}) {
@@ -383,7 +385,7 @@ function renderLive(projects, rows, o) {
   return {
     scope: renderProjects(projects, rows, o),
     filters: renderFilters(rows, o),
-    numbers: renderTiles(stats(scoped), o.tile),
+    numbers: renderTiles(stats(scoped, new Date(), WINDOW_DAYS[o.window] ?? 7), o.tile, o.window),
     detail: renderCharts() + renderDetail(scoped, o),
     count: sectionHead("Issues", { count: shown }),
     table: renderTable(rows, o),
@@ -470,10 +472,10 @@ export function renderIssues(d, o = {}) {
   const rows = issueRows(d), parts = renderLive(projectsOf(d), rows, o);
   return `<div class="page sp contents">${pageHead("Issues", { aside: `<div id="inv-scope">${parts.scope}</div>` })}` +
     `<div id="inv-numbers">${parts.numbers}</div><div id="inv-detail">${parts.detail}</div>` +
+    renderForm(d?.issues ?? [], o) +
     `<section class="card" aria-label="Issues"><div id="inv-count">${parts.count}</div>${searchBox("inv-search", o.q, "Search titles, ids, projects, labels")}` +
     `<div id="inv-filters" data-ui="contents-filter">${parts.filters}</div>` +
-    `<div id="issues-table">${parts.table}</div></section>` +
-    renderForm(d?.issues ?? [], o) + `</div>`;
+    `<div id="issues-table">${parts.table}</div></section></div>`;
 }
 
 /** The body as the page shows it: the `## Request` heading goes, because the section has its own heading. */
@@ -663,6 +665,8 @@ if (typeof document !== "undefined") {
     }
     const seg = t?.closest("#inv-filters .seg button");
     if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" });
+    const win = t?.closest("#inv-scope .seg button");
+    if (win) { storeWindow(win.dataset.value); return setQuery({ window: win.dataset.value }); }
     const more = t?.closest("#issues-table button[data-more]");
     if (more) setQuery({ limit: String(here().limit + Number(more.dataset.more)) });
   });
