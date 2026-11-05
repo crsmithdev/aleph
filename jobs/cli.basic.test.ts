@@ -175,12 +175,12 @@ describe("run", () => {
 });
 
 describe("models", () => {
-  test("set title local is printed by models; a bad slot exits non-zero", async () => {
-    expect((await aleph(["models", "set", "title", "local"])).code).toBe(0);
+  test("set title gpt-oss-20b is printed by models; a bad tier exits non-zero", async () => {
+    expect((await aleph(["models", "set", "title", "gpt-oss-20b"])).code).toBe(0);
     const r = await aleph(["models"]);
-    expect(r.json).toMatchObject({ title: "local", merge: "claude" });
-    const bad = await aleph(["models", "set", "intake", "local"]);
+    expect(r.json).toMatchObject({ title: { enabled: true, model: "gpt-oss-20b" }, merge: { enabled: true, model: "haiku" } });
+    const bad = await aleph(["models", "set", "intake", "gpt-oss-20b"]);
     expect(bad.code).not.toBe(0);
-    expect(bad.stderr).toContain("unknown slot");
+    expect(bad.stderr).toContain("unknown tier");
   });
 });

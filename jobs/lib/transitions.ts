@@ -20,7 +20,7 @@ import { refuse } from "./refusal.ts";
 import { gates, liveEntries, onLocal } from "./factory-status.ts";
 import { readModels } from "./models.ts";
 import { factoryLog } from "./layout.ts";
-import { route, type Tier } from "./route.ts";
+import { route, TIER_MODEL, type Tier } from "./route.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import * as store from "../../todo/lib/store.ts";
@@ -339,7 +339,8 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
  * A foreground unit is waited for, its output dropped. Returns the refusal, or null.
  */
 export async function startGoal(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {
-  const model = tier !== undefined ? tier : await route(spec);
+  const routed = tier !== undefined ? tier : await route(spec);
+  const model = routed ? TIER_MODEL[routed] : null;
   factoryLog(`starting ${name} with model ${model ?? "default"}`);
   const start = startCmd();
   if (start) {

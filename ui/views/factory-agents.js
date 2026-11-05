@@ -75,16 +75,17 @@ const labels = (d) => {
   };
 };
 
-const SLOT_NAMES = { "worker.haiku": "Worker haiku", "worker.sonnet": "Worker sonnet", merge: "Merge", title: "Title", judge: "Judge" };
+/** Each tier's name and its Claude model; the other model each tier offers is gpt-oss-20b. */
+const TIERS = { "worker-low": ["Worker low", "haiku"], "worker-medium": ["Worker medium", "sonnet"], merge: ["Merge", "haiku"], title: ["Title", "haiku"], judge: ["Judge", "haiku"] };
 const FIXED = ["Intake", "Review", "Monitor", "Director"];
 
-/** The Models card: a Claude | Local control per slot, the fixed roles, and the local server's state. `m` is /api/models, or null while it loads. */
+/** The Models card: a Claude | Local control per tier, the fixed roles, and the local server's state. `m` is /api/models, or null while it loads. */
 function models(m) {
   if (!m) return card("Models", loadingLine("the models"), { id: "models" });
   const up = m.local === "up";
-  const row = ([slot, name]) => `<div class="cap-row"><b>${esc(name)}</b><div class="seg" role="group" aria-label="${esc(name)} backend" data-slot="${esc(slot)}">` +
-    [["claude", "Claude"], ["local", "Local"]].map(([v, l]) => `<button type="button" data-value="${v}" aria-pressed="${m.slots[slot] === v}"${v === "local" && !up ? " disabled" : ""}>${l}</button>`).join("") + `</div></div>`;
-  return card("Models", `<p class="quiet">Local server: ${up ? "up" : "down"}</p><div class="caps">` + Object.entries(SLOT_NAMES).map(row).join("") +
+  const row = ([tier, [name, claude]]) => `<div class="cap-row"><b>${esc(name)}</b><div class="seg" role="group" aria-label="${esc(name)} model" data-tier="${esc(tier)}">` +
+    [[claude, "Claude"], ["gpt-oss-20b", "Local"]].map(([v, l]) => `<button type="button" data-value="${v}" aria-pressed="${m.tiers[tier]?.model === v}"${l === "Local" && !up ? " disabled" : ""}>${l}</button>`).join("") + `</div></div>`;
+  return card("Models", `<p class="quiet">Local server: ${up ? "up" : "down"}</p><div class="caps">` + Object.entries(TIERS).map(row).join("") +
     FIXED.map((n) => `<div class="cap-row"><b>${n}</b><span>Claude, fixed</span></div>`).join("") + `</div>`, { id: "models" });
 }
 
@@ -128,7 +129,7 @@ export const view = {
     root.onclick = async (e) => {
       const b = e.target.closest?.("#models .seg button");
       if (!b || b.disabled) return;
-      const res = await post({ slot: b.parentElement.dataset.slot, backend: b.dataset.value });
+      const res = await post({ tier: b.parentElement.dataset.tier, model: b.dataset.value });
       if (res.ok) { modelsNow = await res.json(); draw(usable(windowNow())); }
     };
     keepWindow(windowNow());

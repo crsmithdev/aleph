@@ -1,5 +1,5 @@
-/** The Models card's routes: which backend serves each model slot, and the local server's state. */
-import { BACKENDS, LOCAL, SLOTS, readModels, setModel } from "../../jobs/lib/models.ts";
+/** The model routes: each tier's enable and model, and the local server's state. */
+import { LOCAL, readModels, setModel } from "../../jobs/lib/models.ts";
 import { sameSite, text } from "../http.ts";
 import type { Routes } from "../server.ts";
 
@@ -7,7 +7,7 @@ import type { Routes } from "../server.ts";
 const health = async (): Promise<"up" | "down"> => {
   try { return (await fetch(`${LOCAL.baseUrl}/health`, { signal: AbortSignal.timeout(2000) })).ok ? "up" : "down"; } catch { return "down"; }
 };
-const body = async () => ({ slots: readModels(), local: await health() });
+const body = async () => ({ tiers: readModels(), local: await health() });
 
 export const routes: Routes = {
   "GET /api/models": async () => Response.json(await body()),
@@ -15,10 +15,11 @@ export const routes: Routes = {
     if (!sameSite(req)) return text("forbidden", 403);
     const b: any = await req.json().catch(() => null);
     const bad = (error: string) => Response.json({ error }, { status: 422 });
-    if (!SLOTS.includes(b?.slot)) return bad(`unknown slot; slots: ${SLOTS.join(", ")}`);
-    if (!BACKENDS.includes(b?.backend)) return bad(`unknown backend; backends: ${BACKENDS.join(", ")}`);
-    if (b.backend === "local" && (await health()) === "down") return bad("the local server is down");
-    setModel(b.slot, b.backend);
+    if (b?.model !== undefined && typeof b.model !== "string") return bad("model is not a string");
+    if (b?.enabled !== undefined && typeof b.enabled !== "boolean") return bad("enabled is not a boolean");
+    if (b?.model === LOCAL.model && (await health()) === "down") return bad("the local server is down");
+    const e = setModel(String(b?.tier), { ...(b?.model !== undefined ? { model: b.model } : {}), ...(b?.enabled !== undefined ? { enabled: b.enabled } : {}) });
+    if (e) return bad(e);
     return Response.json(await body());
   },
 };

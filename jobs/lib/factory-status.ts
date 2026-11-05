@@ -19,7 +19,7 @@ import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "./settings.ts";
-import { LOCAL, readModels, type Backend, type Slot } from "./models.ts";
+import { LOCAL, readModels, WORKER_TIER, type Setting, type Tier } from "./models.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -97,9 +97,11 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
 export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
 
-/** Whether a build run is on the local backend: unit.ts sets its model to the local one, and before that its slot's backend is local. */
-export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Slot, Backend>): boolean =>
-  run.model === LOCAL.model || models[(run.merge ? "merge" : `worker.${run.model}`) as Slot] === "local";
+/** Whether a build run is on the local backend: unit.ts sets its model to the local one, and before that its tier's model is the local one. */
+export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, Setting>): boolean => {
+  const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
+  return run.model === LOCAL.model || (tier !== undefined && models[tier].model === LOCAL.model);
+};
 
 /** Live agent runs on Claude, the count the live cap checks: a local-backend run counts against LOCAL_CAP only. */
 export const liveRuns = (runs?: Entry[]): number => { const models = readModels(); return liveEntries(runs).filter((e) => !onLocal(e.run, models)).length; };

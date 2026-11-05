@@ -438,8 +438,9 @@ try {
       break;
     }
     case "models": {
-      if (positional[0] === "set") { const bad = setModel(positional[1] ?? "", positional[2] ?? ""); if (bad) refuse(bad); }
-      else if (positional[0] !== undefined) refuse("usage: aleph models [set <slot> <claude|local>]");
+      const change = positional[0] === "set" ? { model: positional[2] ?? "" } : positional[0] === "enable" || positional[0] === "disable" ? { enabled: positional[0] === "enable" } : undefined;
+      if (change) { const bad = setModel(positional[1] ?? "", change); if (bad) refuse(bad); }
+      else if (positional[0] !== undefined) refuse("usage: aleph models [set <tier> <model> | enable <tier> | disable <tier>]");
       out(readModels());
       break;
     }

@@ -25,7 +25,7 @@ import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { buildChecks } from "./related.ts";
-import { LOCAL, LOCAL_ENV, readModels } from "./models.ts";
+import { LOCAL, LOCAL_ENV, readModels, WORKER_TIER } from "./models.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "./continuation.ts";
 import { oracleCommands, outsideSurface } from "./goal-spec.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
@@ -348,8 +348,8 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     writeFileSync(marker, "");
   }
 
-  const slot = run.merge ? "merge" : run.model === "haiku" ? "worker.haiku" : run.model === "sonnet" ? "worker.sonnet" : undefined;
-  const local = slot !== undefined && readModels()[slot] === "local";
+  const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
+  const local = tier !== undefined && readModels()[tier].model === LOCAL.model;
   if (local) { run = { ...run, model: LOCAL.model }; updateRun(folder, { model: LOCAL.model }); }
   const argv = [workerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { route } from "./route.ts";
+import { setModel } from "./models.ts";
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;
@@ -26,4 +27,13 @@ test("a Jev 500 gives no model and writes no line", async () => {
   reply = { status: 500, body: { error: { message: "down" } } };
   expect(await route("x")).toBeNull();
   expect(logLines()).toEqual([]);
+});
+
+test("a low pick at p >= 0.6 gives worker-low, worker-medium when worker-low is disabled, and opus when both are disabled", async () => {
+  reply = { status: 200, body: { answers: { tier: { type: "choice", choice: "worker-low", probabilities: { "worker-low": 0.7 } } }, cost: 0, model: "m" } };
+  expect(await route("x")).toBe("worker-low");
+  expect(setModel("worker-low", { enabled: false })).toBeNull();
+  expect(await route("x")).toBe("worker-medium");
+  expect(setModel("worker-medium", { enabled: false })).toBeNull();
+  expect(await route("x")).toBe("opus");
 });

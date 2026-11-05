@@ -62,7 +62,7 @@ test("the first dispatch after the resume starts a next step the pause kept, onc
 
 test("with one live local-backend run a second local run is held by the local cap, a Claude run still starts, and the live cap leaves the local run out", () => {
   process.env.ALEPH_LIVE_CAP = "1";
-  expect(setModel("worker.haiku", "local")).toBeNull();
+  expect(setModel("worker-low", { model: LOCAL.model })).toBeNull();
   const NOW = Date.parse("2026-11-04T00:00:00Z");
   setSystemTime(NOW);
   try {
@@ -78,7 +78,7 @@ test("with one live local-backend run a second local run is held by the local ca
 });
 
 test("while a title or judge call holds the GPU slot, a local agent run is held by the local cap and a Claude run still starts", async () => {
-  expect(setModel("worker.haiku", "local")).toBeNull();
+  expect(setModel("worker-low", { model: LOCAL.model })).toBeNull();
   const release = (await gpuSlot(0))!;
   try {
     expect(gates({ run: { model: "haiku" } })).toMatchObject({ gate: "live-cap", why: "a local call holds the GPU", text: "Waiting for the GPU slot (1 of 1 running)" });
@@ -90,10 +90,10 @@ test("while a title or judge call holds the GPU slot, a local agent run is held 
 });
 
 test("with the live cap full of Claude runs and the GPU free, the dispatch starts a goal whose tier is on the local backend", async () => {
-  const server = Bun.serve({ port: 0, fetch: () => Response.json({ answers: { tier: { type: "choice", choice: "haiku", probabilities: { haiku: 1 } } } }) });
+  const server = Bun.serve({ port: 0, fetch: () => Response.json({ answers: { tier: { type: "choice", choice: "worker-low", probabilities: { "worker-low": 1 } } } }) });
   const saved = { url: process.env.ALEPH_JEV_URL, key: process.env.OPENROUTER_API_KEY };
   Object.assign(process.env, { ALEPH_LIVE_CAP: "1", ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
-  expect(setModel("worker.haiku", "local")).toBeNull();
+  expect(setModel("worker-low", { model: LOCAL.model })).toBeNull();
   const NOW = Date.parse("2026-11-04T00:00:00Z");
   setSystemTime(NOW);
   try {
@@ -102,7 +102,7 @@ test("with the live cap full of Claude runs and the GPU free, the dispatch start
     const tiers: unknown[] = [];
     const out = await dispatchIssues(async (_r, _n, _id, _spec, tier) => { tiers.push(tier); return null; });
     expect(out.started).toEqual([`fac-${id}`]);
-    expect(tiers).toEqual(["haiku"]);
+    expect(tiers).toEqual(["worker-low"]);
   } finally {
     setSystemTime();
     server.stop(true);
@@ -130,7 +130,7 @@ function stubUnit(): () => void {
 const folders = () => (existsSync(runsDir()) ? readdirSync(runsDir()).filter((d) => !d.startsWith(".")) : []);
 
 test("while a local run's start is before its run record, gpuSlot returns null, and after the start the run is live local", async () => {
-  expect(setModel("worker.haiku", "local")).toBeNull();
+  expect(setModel("worker-low", { model: LOCAL.model })).toBeNull();
   const undo = stubUnit();
   try {
     let probe: Promise<unknown> | undefined;
@@ -147,7 +147,7 @@ test("while a local run's start is before its run record, gpuSlot returns null, 
 });
 
 test("when gpuSlot takes the slot just after a local run's start checks the gate, the start is refused and makes no run folder, and a Claude run starts", async () => {
-  expect(setModel("worker.haiku", "local")).toBeNull();
+  expect(setModel("worker-low", { model: LOCAL.model })).toBeNull();
   const undo = stubUnit();
   let call: Promise<(() => void) | null> | undefined;
   // gpuSlot takes the lock at once, so it holds the slot from the gate's check on.

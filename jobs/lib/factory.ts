@@ -27,7 +27,7 @@ import { baselineChecks, type CheckTask, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { startKept } from "./unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
-import { route, TIERS, type Tier } from "./route.ts";
+import { route, TIER_MODEL, TIERS, type Tier } from "./route.ts";
 import { appendSuiteHistory, mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
 export { setPaused };
 
@@ -149,9 +149,9 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       let d = goalDecision({ ...facts, ...factoryGates(jobs) });
       let tier: Tier | null | undefined;
       // The live cap held the goal, but a tier on the local backend has room: rate the goal, and check its tier's cap.
-      if (d.kind === "live-cap" && TIERS.some((t) => !factoryGates(jobs, { model: t })["live-cap"])) {
+      if (d.kind === "live-cap" && TIERS.some((t) => !factoryGates(jobs, { model: TIER_MODEL[t] })["live-cap"])) {
         tier = await route(goalBrief(item, name, jobs).spec);
-        if (tier) d = goalDecision({ ...facts, ...factoryGates(jobs, { model: tier }) });
+        if (tier) d = goalDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
       }
       if (d.kind !== "ready" && d.kind !== "loop-guard") { skip(name, d.kind, d.why); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.

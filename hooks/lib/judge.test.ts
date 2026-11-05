@@ -84,11 +84,11 @@ test("a judge slot set to local runs claude on gpt-oss-20b at the local base URL
   writeFileSync(join(dir, "record"), `#!/bin/sh\necho "$@" > ${join(dir, "args")}\nenv > ${join(dir, "env")}\necho '{"result":"{\\"verdict\\":\\"pass\\",\\"reason\\":\\"ok\\"}"}'\n`, { mode: 0o755 });
   process.env.ALEPH_JUDGE_CMD = join(dir, "record");
   try {
-    expect(setModel("judge", "local")).toBeNull();
+    expect(setModel("judge", { model: "gpt-oss-20b" })).toBeNull();
     await judge("TURN: x", "x");
     expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model gpt-oss-20b");
     expect(readFileSync(join(dir, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8012");
-    expect(setModel("judge", "claude")).toBeNull();
+    expect(setModel("judge", { model: "haiku" })).toBeNull();
     await judge("TURN: x", "x");
     expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model haiku");
     expect(readFileSync(join(dir, "env"), "utf8")).not.toContain("ANTHROPIC_BASE_URL");

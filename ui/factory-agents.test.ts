@@ -95,18 +95,19 @@ test("the title is the sidebar name, whatever the data", () => {
   expect(renderFactoryAgents({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
 });
 
-test("the Models card has a Claude | Local control per slot and four fixed rows; the card says up or down and the Local buttons follow", () => {
-  const slots = { "worker.haiku": "claude", "worker.sonnet": "local", merge: "claude", title: "claude", judge: "local" };
-  const down = renderFactoryAgents(S, D, "live", "week", { slots, local: "down" });
+test("the Models card has a Claude | Local control per tier and four fixed rows; the card says up or down and the Local buttons follow", () => {
+  const on = (model: string) => ({ enabled: true, model });
+  const tiers = { "worker-low": on("haiku"), "worker-medium": on("gpt-oss-20b"), merge: on("haiku"), title: on("haiku"), judge: on("gpt-oss-20b") };
+  const down = renderFactoryAgents(S, D, "live", "week", { tiers, local: "down" });
   expect(down).toContain("Local server: down");
-  expect(down.match(/<button type="button" data-value="local" aria-pressed="(true|false)" disabled>/g)!.length).toBe(5);
-  const up = renderFactoryAgents(S, D, "live", "week", { slots, local: "up" });
+  expect(down.match(/<button type="button" data-value="gpt-oss-20b" aria-pressed="(true|false)" disabled>/g)!.length).toBe(5);
+  const up = renderFactoryAgents(S, D, "live", "week", { tiers, local: "up" });
   expect(up).toContain("Local server: up");
   expect(up).not.toContain("disabled");
-  const group = (slot: string) => up.match(new RegExp(`data-slot="${slot}">(.*?)</div>`))![1];
-  expect(group("worker.sonnet")).toContain('data-value="local" aria-pressed="true"');
-  expect(group("worker.sonnet")).toContain('data-value="claude" aria-pressed="false"');
-  expect(group("merge")).toContain('data-value="claude" aria-pressed="true"');
+  const group = (tier: string) => up.match(new RegExp(`data-tier="${tier}">(.*?)</div>`))![1];
+  expect(group("worker-medium")).toContain('data-value="gpt-oss-20b" aria-pressed="true"');
+  expect(group("worker-medium")).toContain('data-value="sonnet" aria-pressed="false"');
+  expect(group("merge")).toContain('data-value="haiku" aria-pressed="true"');
   expect([...up.matchAll(/<b>(\w+)<\/b><span>Claude, fixed/g)].map((x) => x[1])).toEqual(["Intake", "Review", "Monitor", "Director"]);
   expect(renderFactoryAgents(S, D)).toContain("Loading the models");
 });

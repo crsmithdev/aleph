@@ -83,7 +83,7 @@ async function haiku(digestText: string, timeoutMs: number, started: number): Pr
   delete env.ANTHROPIC_API_KEY; // the judge runs on the subscription, never the API
   // A local call waits for the GPU slot within its time box, then falls back to Claude.
   let release: (() => void) | null = null;
-  if (readModels().judge === "local") {
+  if (readModels().judge.model === LOCAL.model) {
     release = await gpuSlot(timeoutMs);
     if (!release) factoryLog(`judge: the GPU slot stayed taken for ${timeoutMs / 1000} s; the call falls back to Claude`);
   }

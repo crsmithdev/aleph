@@ -27,7 +27,7 @@ export async function writeLine(system: string, input: string, max: number): Pro
   env.MAX_THINKING_TOKENS = "0";
   // A local call waits for the GPU slot within its time box, then falls back to Claude.
   let release: (() => void) | null = null;
-  if (readModels().title === "local") {
+  if (readModels().title.model === LOCAL.model) {
     release = await gpuSlot(BOX);
     if (!release) factoryLog(`title: the GPU slot stayed taken for ${BOX / 1000} s; the call falls back to Claude`);
   }

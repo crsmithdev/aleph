@@ -19,22 +19,34 @@ beforeAll(async () => {
 });
 afterAll(() => { globalThis.fetch = realFetch; stop(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
 
-test("POST /api/models writes a valid slot and backend to models.json", async () => {
+test("GET /api/models answers each tier with enabled and model plus the local state", async () => {
   healthy = true;
-  const res = await post({ slot: "merge", backend: "local" });
-  expect(res.status).toBe(200);
-  expect(JSON.parse(readFileSync(file(), "utf8")).merge).toBe("local");
-  expect(((await post({ slot: "merge", backend: "claude" }).then((r) => r.json())) as any).slots.merge).toBe("claude");
+  rmSync(file(), { force: true });
+  const b: any = await at("/api/models").then((r) => r.json());
+  expect(b.local).toBe("up");
+  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "merge", "title", "judge"]);
+  expect(b.tiers["worker-medium"]).toEqual({ enabled: true, model: "sonnet" });
 });
 
-test("a missing header gives 403, a bad slot or backend 422, and local while /health is down is refused; models.json stays", async () => {
+test("POST /api/models writes a tier's model or enable to models.json", async () => {
   healthy = true;
-  writeFileSync(file(), '{"title":"claude"}');
-  expect((await post({ slot: "title", backend: "local" }, {})).status).toBe(403);
-  expect((await post({ slot: "intake", backend: "local" })).status).toBe(422);
-  expect((await post({ slot: "title", backend: "gemini" })).status).toBe(422);
+  const res = await post({ tier: "merge", model: "gpt-oss-20b" });
+  expect(res.status).toBe(200);
+  expect(JSON.parse(readFileSync(file(), "utf8")).merge).toEqual({ enabled: true, model: "gpt-oss-20b" });
+  expect(((await post({ tier: "merge", model: "haiku" }).then((r) => r.json())) as any).tiers.merge.model).toBe("haiku");
+  expect(((await post({ tier: "worker-low", enabled: false }).then((r) => r.json())) as any).tiers["worker-low"]).toEqual({ enabled: false, model: "haiku" });
+});
+
+test("a missing header gives 403; a bad tier, a model the tier does not offer, and gpt-oss-20b while /health is down give 422; models.json stays", async () => {
+  healthy = true;
+  const kept = '{"title":{"enabled":true,"model":"haiku"}}';
+  writeFileSync(file(), kept);
+  expect((await post({ tier: "title", model: "gpt-oss-20b" }, {})).status).toBe(403);
+  expect((await post({ tier: "intake", model: "haiku" })).status).toBe(422);
+  expect((await post({ tier: "worker-low", model: "sonnet" })).status).toBe(422);
+  expect((await post({ tier: "title", enabled: false })).status).toBe(422);
   healthy = false;
-  expect((await post({ slot: "title", backend: "local" })).status).toBe(422);
-  expect(readFileSync(file(), "utf8")).toBe('{"title":"claude"}');
-  expect((await post({ slot: "title", backend: "claude" })).status).toBe(200);
+  expect((await post({ tier: "title", model: "gpt-oss-20b" })).status).toBe(422);
+  expect(readFileSync(file(), "utf8")).toBe(kept);
+  expect((await post({ tier: "title", model: "haiku" })).status).toBe(200);
 });
