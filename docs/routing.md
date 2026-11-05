@@ -78,7 +78,7 @@ The local model is `llama-server` on `127.0.0.1:8012`, run by `jobs/systemd/alep
 
 ## Judge
 
-`judgeChoice()` reads `ALEPH_JUDGE` when it is set, then the file `~/.aleph/judge`; with neither, `ALEPH_JUDGE`, else `jev`. `aleph judge [jev|haiku]` sets it.
+`judgeChoice()` reads `ALEPH_JUDGE` first. If it is not set, `judgeChoice()` reads the file `~/.aleph/judge`. If neither is set, the default is `ALEPH_JUDGE`, else `jev`. `aleph judge [jev|haiku]` sets it.
 
 - **Jev** is `typesafe/jev-1.13` through OpenRouter's decisions endpoint (`hooks/lib/jev.ts`), with `OPENROUTER_API_KEY`. It answers typed questions only: `choice` or `noul` (a probability). It never denies a turn.
 - **Haiku** is `claude -p --model haiku --setting-sources "" --max-turns 1 --tools ""` with a rubric as the system prompt, up to 2 tries.
