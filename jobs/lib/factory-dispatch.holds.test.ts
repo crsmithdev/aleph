@@ -81,3 +81,44 @@ describe("each skip in the goal loop gets one hold record", () => {
   });
 
 });
+
+describe("the done checker's copy of the store was read before a goal existed", () => {
+  /** The read number `at` returns `old`, the done checker's; the other reads see the store. */
+  const staleOnce = (old: ReturnType<typeof store.readList>, at: number) => {
+    const real = store.readList;
+    let n = 0;
+    return spyOn(store, "readList").mockImplementation((place) => (n++ === at ? old : real(place)));
+  };
+
+  test("a goal the list names as open, with no commit on main, stays open with no note", async () => {
+    goal();
+    const old = store.readList({ key: "fac" });
+    const id = goal();
+    const spy = staleOnce(old, 1);
+    try {
+      await dispatchIssues(async () => null, undefined, undefined, undefined);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(issues.status(store.readList({ key: "fac" })!.items.find((i) => i.id === id)!)).toBe("open");
+    expect(notes(id)).not.toMatch(/its work is on origin/);
+  });
+
+  test("a parent whose only parts are new open goals is not closed", async () => {
+    const parent = goal();
+    const old = store.readList({ key: "fac" });
+    writeList({ key: "fac" }, "split", (doc) => {
+      const p = issues.find(doc, parent)!;
+      const part = { ...issues.add(doc, "part"), id: parent, sub: 1, spec: "Do it." } as issues.Issue;
+      doc.items = [...doc.items.filter((i) => i.id !== part.id || i.sub !== undefined || i === p).filter((i) => i.sub !== 1 || i.id !== parent), part];
+      return true;
+    });
+    const spy = staleOnce(old, 0);
+    try {
+      await dispatchIssues(async () => null, undefined, undefined, undefined);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(notes(parent)).not.toMatch(/its parts are done/);
+  });
+});

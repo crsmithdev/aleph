@@ -41,8 +41,11 @@ import { INTAKE_CAP, goalLockWaitMs, rescueOn } from "./settings.ts";
 /** The buildable issues of each factory repo. */
 export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos(), lists);
 
-/** Whether `<repo>-<n>` is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched. */
-export function doneChecker(fetch = true): (ref: string) => boolean {
+/**
+ * Whether `<repo>-<n>` is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched.
+ * An item that its one read lacks is looked up in `later`, a newer read: an item that read has is not absent.
+ */
+export function doneChecker(fetch = true, later?: (repo: string, id: number | string) => issues.Issue | undefined): (ref: string) => boolean {
   const reg = loadRegistry();
   const known = new Map<string, { doc: issues.Doc | null; stages: Map<string, string>; read: boolean }>();
   return (ref) => {
@@ -59,7 +62,8 @@ export function doneChecker(fetch = true): (ref: string) => boolean {
       known.set(r.repo, k);
     }
     const { doc, stages, read } = known.get(r.repo)!;
-    return refDone(doc ? issues.find(doc, r.id) : undefined, read, stages.get(`${r.repo}-${r.id}`));
+    const item = (doc ? issues.find(doc, r.id) : undefined) ?? (read ? later?.(r.repo, r.id) : undefined);
+    return refDone(item, read, stages.get(`${r.repo}-${r.id}`));
   };
 }
 
@@ -100,7 +104,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   const skipped: string[] = [];
   const planned: string[] = [];
   const redOf = mainRed();
-  const done = doneChecker();
+  const done = doneChecker(true, (key, id) => reader({ fetch: false }).item(key, id));
   // A parent whose parts all landed closes without a green main.
   for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
   const goals = openGoals();
