@@ -1,5 +1,5 @@
 // The director: every new Ask goes to it; it decides with actions code applies, or escalates with case text. The escalation
-// list, the action bound, the once-per-goal rerun and the record are code's, whatever the fake replies.
+// list, the action bound, the once-per-issue rerun and the record are code's, whatever the fake replies.
 import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -177,7 +177,7 @@ test(`at most ${MAX_ACTIONS} actions: the 11th is refused`, async () => {
   expect(awaitsChris(`${key}-1`)).toBe(true);
 });
 
-test("a run-cap Ask: the director reruns the goal once; the second run-cap Ask on it goes to Chris", async () => {
+test("a run-cap Ask: the director reruns the issue once; the second run-cap Ask on it goes to Chris", async () => {
   fresh([{ title: "loops", specced: true, ask: plainAsk("run-cap", "3 starts in an hour") }]);
   reply([{ do: "rerun" }]);
   const [first] = await direct();
@@ -221,9 +221,9 @@ test("a paused factory starts no director run", async () => {
   expect(calls()).toBe(0);
 });
 
-test("a drop reason that names another goal of this repo on main gets the fate duplicate; another repo's goal does not", async () => {
+test("a drop reason that names another issue of this repo on main gets the fate duplicate; another repo's issue does not", async () => {
   fresh([{ title: "goal", specced: true }]);
-  // origin/main names another goal of this repo: the work the drop is a duplicate of.
+  // origin/main names another issue of this repo: the work the drop is a duplicate of.
   writeFileSync(join(repoPath(), "z.ts"), "1\n");
   sh(repoPath(), "git", "add", "-A");
   sh(repoPath(), "git", "commit", "-q", "-m", `z\n\nIssue: ${key}-2.1`);

@@ -25,7 +25,7 @@ describe("a factory run", () => {
       startCmd = join(base, "start-cmd");
       startScript(startCmd, jobsDir);
     });
-    // A run writes its passed state before its run-end dispatch: that dispatch may still start the next goal. Wait it out.
+    // A run writes its passed state before its run-end dispatch: that dispatch may still start the next issue. Wait it out.
     beforeEach(async () => { await untilQuiet(() => quiet(startLog)); rmSync(startLog, { force: true }); });
     afterAll(async () => {
       for (const n of ["d", "e", "f"]) writeFileSync(gate(n), "");
@@ -38,7 +38,7 @@ describe("a factory run", () => {
     });
 
     // Two `aleph dispatch` processes at once: the lock between processes is what these cases test.
-    test("two dispatches at once start each goal once", async () => {
+    test("two dispatches at once start each issue once", async () => {
       const d = await issue("d");
       ids.push(d);
       const [x, y] = await Promise.all([aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" })), aleph(["dispatch"], on({ ALEPH_LIVE_CAP: "5" }))]);
@@ -49,7 +49,7 @@ describe("a factory run", () => {
     }, 60_000);
 
     // flaky: tests/flaky.md#dispatch-once-cap-1
-    test.skip("two dispatches at once with a live cap of 1 start only one goal", async () => {
+    test.skip("two dispatches at once with a live cap of 1 start only one issue", async () => {
       const e = await issue("e");
       const f = await issue("f");
       ids.push(e, f);

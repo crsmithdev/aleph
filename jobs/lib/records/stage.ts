@@ -1,5 +1,5 @@
 /**
- * stage(): the one place that says where an issue or a goal stands, from the
+ * stage(): the one place that says where an issue or a part stands, from the
  * work-model spec (docs/specs/2026-10-31-work-model.md). The CLI,
  * Incoming, the lanes and `aleph status` read it.
  *

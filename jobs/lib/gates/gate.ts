@@ -170,7 +170,7 @@ export function securityChange(cwd: string, base: string, tip: string): string |
  * What the diff does to tests, one finding each: an existing test deleted or
  * renamed, a removed or changed `test`, `it`, `describe` or `expect` line, or
  * a `.skip`, `.only` or `.todo` added. A run that only adds tests gives none.
- * The reviewer judges them against the goal; they do not hold the run.
+ * The reviewer judges them against the issue; they do not hold the run.
  */
 export function testFindings(cwd: string, base: string, tip: string): string[] {
   const rows = git(cwd, "diff", "--name-status", "-M", base, tip).out.split("\n").filter(Boolean).map((l) => l.split("\t"));

@@ -10,7 +10,7 @@ import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factor
 beforeEach(setup);
 afterEach(teardown);
 
-test("a run with a question waits for a spec edit: the Ask says so, and an edit drops the run, clears the Ask and starts the goal", async () => {
+test("a run with a question waits for a spec edit: the Ask says so, and an edit drops the run, clears the Ask and starts the issue", async () => {
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });
   const f = fakes();
@@ -50,7 +50,7 @@ test("a spec question run, then the director's answer: the job keeps its Ask or 
   const c = pendingCases([loadRegistry().fac]).find((x) => x.on === `fac-${id}`)!;
   if (c.at === "lesson") throw new Error("not an item case");
   const r = await applyActions(c, [{ do: "answer", note: "the grep wins" }], { land: async () => null, drop: f.rescue.drop });
-  // The next dispatch: the director's answer must not leave the goal open with no Ask and no run.
+  // The next dispatch: the director's answer must not leave the issue open with no Ask and no run.
   await dispatchIssues(f.start, undefined, f.rescue);
   const hasAsk = ask(id) !== null;
   const started = f.specs.length > 0;

@@ -43,28 +43,28 @@ const ISSUES_NEW: Row[] = [
 ];
 
 const PARTS_NEW: Row[] = [
-  { name: "new goal: working", stage: "working", action: "running", on: /^fac-\d+#1$/, why: /^running fac-\d+#1$/, build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
-  // PARTS_NEW[1] is the held goal that the `aleph status` test below reads.
-  { name: "new goal: held", stage: "held", action: "after", why: /^after fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
-  { name: "new goal: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
+  { name: "new issue: working", stage: "working", action: "running", on: /^fac-\d+#1$/, why: /^running fac-\d+#1$/, build: async () => newRun(newIssue(), { kind: "build", condition: "running" }) },
+  // PARTS_NEW[1] is the held issue that the `aleph status` test below reads.
+  { name: "new issue: held", stage: "held", action: "after", why: /^after fac-\d/, build: async () => newIssue({ after: [ref(newIssue())] }) },
+  { name: "new issue: working while intake splits it", stage: "working", build: async () => newIssue({ plan: "true" }) },
   // A record from before docs/naming.md keeps `stuck`: a stuck run that nothing sent back reads `failed`.
-  { name: "new goal: failed under an old stuck run", stage: "failed", build: async () => newRun(newIssue(), { kind: "build", condition: "stuck" as never }) },
+  { name: "new issue: failed under an old stuck run", stage: "failed", build: async () => newRun(newIssue(), { kind: "build", condition: "stuck" as never }) },
 ];
 
-// A commit on origin/main that names goal `partRef` (`<n>.<k>`) and its issue `n`, as the land of a goal does; returns its sha.
+// A commit on origin/main that names part `partRef` (`<n>.<k>`) and its parent issue `n`, as the land of an issue does; returns its sha.
 const landPart = (_n: number, partRef: string): string => {
   sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `work\n\nIssue: ${ref(partRef)}`);
   sh(repo, "git", "push", "-q", "origin", "main");
   return sh(repo, "git", "rev-parse", "HEAD");
 };
 
-// Dotted goals: the goal `.k` of an issue, seeded through seedPart.
+// Dotted issues: the part `.k` of an issue, seeded through seedPart.
 const PARTS_DOTTED: Row[] = [
-  { name: "dotted goal: done by its trailer commit while the store holds it open", stage: "done", action: "landed", on: /^[0-9a-f]{7}$/, why: /^landed [0-9a-f]{7}$/, build: async () => {
+  { name: "dotted issue: done by its trailer commit while the store holds it open", stage: "done", action: "landed", on: /^[0-9a-f]{7}$/, why: /^landed [0-9a-f]{7}$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); landPart(n, `${n}.1`); return a;
   } },
-  { name: "dotted goal: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /^waiting → human$/, build: async () => {
+  { name: "dotted issue: waiting on its Ask while a trailer commit on main names it", stage: "waiting", why: /^waiting → human$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landPart(n, `${n}.1`); return a;
   } },
@@ -73,7 +73,7 @@ const PARTS_DOTTED: Row[] = [
     seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
   } },
-  { name: "dotted goal: working under a run on it", stage: "working", build: async () => {
+  { name: "dotted issue: working under a run on it", stage: "working", build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); seedRun("fac", { on: ref(a), kind: "build", condition: "running" }); return a;
   } },
@@ -87,7 +87,7 @@ const statusOf = async (row: Row) => {
 };
 
 // The rows run one after another: each writes to the one store.
-for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new shape", PARTS_NEW], ["goals, dotted", PARTS_DOTTED]] as const) {
+for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["parts, new shape", PARTS_NEW], ["parts, dotted", PARTS_DOTTED]] as const) {
   describe(title, () => {
     for (const row of rows) {
       test(row.name, async () => {
@@ -117,7 +117,7 @@ test("aleph status prints the same stage as JSON and as one line, with the short
 describe("subjectOf", () => {
   const item = (id: number, sub?: number): issues.Issue => ({ id, ...(sub === undefined ? {} : { sub }), title: "t", fm: {}, request: "", spec: "", notes: [] });
   const doc: issues.Doc = { items: [] };
-  test("a dotted goal is keyed by its dotted id, a plain item by its number", () => {
+  test("a dotted issue is keyed by its dotted id, a plain item by its number", () => {
     expect(subjectOf(item(5, 1), "proj", doc).id).toBe("proj-5.1");
     expect(subjectOf(item(5), "proj", doc).id).toBe("proj-5");
   });

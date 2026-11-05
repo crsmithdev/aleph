@@ -341,13 +341,13 @@ function pending(store: Store, id: string, verb: string): Lesson | string {
   return l;
 }
 
-/** Reopens the proposal's own issue with the goal spec; its ref, or a refusal string. Writes no CLAUDE.md, skill or check. */
+/** Reopens the proposal's own issue with the issue spec; its ref, or a refusal string. Writes no CLAUDE.md, skill or check. */
 export function approve(id: string, repo: Place): string {
   const store = readStore();
   const l = pending(store, id, "approved");
   if (typeof l === "string") return l;
   const kind = l.kind ?? "skill";
-  // A claude-md goal names its line, its file in the filing repo and a command that proves the line is there.
+  // A claude-md issue names its line, its file in the filing repo and a command that proves the line is there.
   const path = l.target === "identity/CLAUDE.md" ? l.target : "CLAUDE.md";
   const sections = kind !== "claude-md" ? [] : [
     "## Goal", `Add this line to ${path}: ${l.sentence}`, "",

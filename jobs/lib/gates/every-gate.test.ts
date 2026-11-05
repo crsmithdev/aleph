@@ -1,4 +1,4 @@
-// One file that shows each gate that stops a goal start or a land: it holds or refuses.
+// One file that shows each gate that stops an issue start or a land: it holds or refuses.
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +14,7 @@ import { writeRun } from "../records/ledger.ts";
 
 setDefaultTimeout(120_000);
 
-// ---- Dispatch gates: the start port is not called for the goal, and a hold record says why.
+// ---- Dispatch gates: the start port is not called for the issue, and a hold record says why.
 beforeEach(setup);
 afterEach(teardown);
 {

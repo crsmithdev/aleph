@@ -37,7 +37,7 @@ test("gates returns the first factory gate, in the order pause, live cap", () =>
   expect(gates({ jobs: [], only: ["live-cap"] })?.gate).toBe("live-cap");
 });
 
-test("a stuck or failed run stops no gate: its open job keeps only its own goal not ready", () => {
+test("a stuck or failed run stops no gate: its open job keeps only its own issue not ready", () => {
   expect(gates({ jobs: [[entry("build", "failed")]] as any })).toBeNull();
 });
 
@@ -89,7 +89,7 @@ test("while a title or judge call holds the GPU slot, a local agent run is held 
   expect(gates({ run: { model: "haiku" } })).toBeNull();
 });
 
-test("with the live cap full of Claude runs and the GPU free, the dispatch starts a goal whose tier is on the local backend", async () => {
+test("with the live cap full of Claude runs and the GPU free, the dispatch starts an issue whose tier is on the local backend", async () => {
   const server = Bun.serve({ port: 0, fetch: () => Response.json({ answers: { tier: { type: "choice", choice: "worker-low", probabilities: { "worker-low": 1 } } } }) });
   const saved = { url: process.env.ALEPH_JEV_URL, key: process.env.OPENROUTER_API_KEY };
   Object.assign(process.env, { ALEPH_LIVE_CAP: "1", ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });

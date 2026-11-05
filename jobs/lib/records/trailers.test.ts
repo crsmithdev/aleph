@@ -24,13 +24,13 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
-test("landedIndex reads Issue:; a commit that names a goal lands the goal, not its issue", () => {
+test("landedIndex reads Issue:; a commit that names a part lands the part, not its issue", () => {
   const index = landedIndex(dir, "main", "k");
   expect([...index.keys()].sort()).toEqual(["1", "2", "3.1"]);
   expect(index.has("3")).toBe(false);
 });
 
-test("k-3.1 and k-3.2 are separate entries; a reverted goal is in revertedIn and its sibling is not", () => {
+test("k-3.1 and k-3.2 are separate entries; a reverted part is in revertedIn and its sibling is not", () => {
   commit("goal two\n\nIssue: k-4.1\nJob: j4");
   const first = git("rev-parse", "HEAD");
   commit("goal two b\n\nIssue: k-4.2\nJob: j5");

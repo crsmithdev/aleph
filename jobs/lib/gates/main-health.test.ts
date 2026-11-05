@@ -33,7 +33,7 @@ function repo(): Repo & { commit: () => string } {
   return { key: "fac", path, main: "main", commit } as unknown as Repo & { commit: () => string };
 }
 
-test("a red baseline stops goals after main moves, until a later baseline is green", async () => {
+test("a red baseline stops issues after main moves, until a later baseline is green", async () => {
   const r = repo();
   const old = r.commit();
   await writeBaseline("fac", () => ({ repo: "fac", commit: old, ok: false, failed: "tests" }));

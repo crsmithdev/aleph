@@ -17,7 +17,7 @@ afterEach(teardown);
 const BEFORE_BOOT = "2020-01-01T00:00:00.000Z";
 const killedRun = (name: string, kind: Run["kind"] = "build", files: Record<string, string> = { pid: "999999999" }) => mk(name, kind, "running", { started: BEFORE_BOOT }, files);
 
-test("a run killed by a host restart is dropped, its goal starts at once, and no Ask or rescue mark is left", async () => {
+test("a run killed by a host restart is dropped, its issue starts at once, and no Ask or rescue mark is left", async () => {
   const id = newIssue();
   const r = killedRun(`fac-${id}`);
   const f = fakes();
@@ -49,7 +49,7 @@ test("a build a host restart killed, with a commit ahead of main, starts a reche
   expect(rescuedOf(r)).toBe("");
 });
 
-test("a recheck a host restart killed, with a commit ahead of main, starts a new recheck of its branch and no new goal run, and uses no rerun", async () => {
+test("a recheck a host restart killed, with a commit ahead of main, starts a new recheck of its branch and no new issue run, and uses no rerun", async () => {
   const id = newIssue();
   const repo = join(ctx.base, "repo");
   sh(repo, "git", "checkout", "-q", "-b", "work");
@@ -67,7 +67,7 @@ test("a recheck a host restart killed, with a commit ahead of main, starts a new
   expect(rescuedOf(r)).toBe("");
 });
 
-test("a goal whose run a host restart killed keeps its rerun: the next no commit reruns it with no Ask", async () => {
+test("an issue whose run a host restart killed keeps its rerun: the next no commit reruns it with no Ask", async () => {
   const id = newIssue();
   killedRun(`fac-${id}`);
   const f = fakes();
@@ -114,7 +114,7 @@ test("a run from before this boot whose pid's process names its folder is live a
 // A lost run: `running`, started in this boot, its process gone with no `exit` written.
 const lostRun = (name: string, kind: Run["kind"] = "build", extra: Partial<Run> = {}) => mk(name, kind, "running", extra, { pid: "999999999" });
 
-test("a lost run is marked failed and the goal reruns once; a second lost run of the goal is a rescue Ask", async () => {
+test("a lost run is marked failed and the issue reruns once; a second lost run of the issue is a rescue Ask", async () => {
   const id = newIssue();
   const r = lostRun(`fac-${id}`);
   const f = fakes();
@@ -136,7 +136,7 @@ test("a lost run is marked failed and the goal reruns once; a second lost run of
   expect(f.calls).toEqual([`drop fac-${id}`, `start fac-${id}`]);
 });
 
-test("a lost land is marked failed and lands again, and the goal does not start over", async () => {
+test("a lost land is marked failed and lands again, and the issue does not start over", async () => {
   const id = newIssue();
   const first = mk(`fac-${id}`, "build", "passed", { branch: "b" });
   const l = lostRun(`fac-${id}`, "land", { job: first.job, branch: "b" });
@@ -147,7 +147,7 @@ test("a lost land is marked failed and lands again, and the goal does not start 
   expect(readRun(l.folder)).toMatchObject({ condition: "failed", reason: "lost: its process ended with no end written" });
 });
 
-test("a land killed by a host restart fails and lands again, and the goal does not start over", async () => {
+test("a land killed by a host restart fails and lands again, and the issue does not start over", async () => {
   const id = newIssue();
   const first = mk(`fac-${id}`, "build", "passed", { branch: "b", started: BEFORE_BOOT });
   const l = mk(`fac-${id}`, "land", "running", { job: first.job, branch: "b", started: BEFORE_BOOT }, { pid: "999999999" });

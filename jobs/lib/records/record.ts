@@ -30,7 +30,7 @@ export interface JobRecord {
   askRun?: string;
   /** Every Ask the record held, oldest first: when it was set and, once it is gone, when it was cleared. */
   asks?: { set: string; cleared?: string; reason?: string; recommended?: string }[];
-  /** Why the goal waits to start, or null. */
+  /** Why the issue waits to start, or null. */
   wait: { kind: string; reason: string; since: string } | null;
   /** The fix rounds of the newest job: its build runs that a check or the reviewer sent back. */
   rounds: number;
@@ -306,7 +306,7 @@ const jobIdOfRun = (run: RunRecord): string => jobId(subjectOf(run), run.n ?? 1)
 /**
  * The next step of the job. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
  * whether the worker or a land follows; a passed run with no `next` waits for a land by hand; a returned or failed run
- * goes to the rescue, unless the factory asked Chris about it; a landed, done or dropped job does nothing; a goal
+ * goes to the rescue, unless the factory asked Chris about it; a landed, done or dropped job does nothing; an issue
  * with no open run waits for its `wait`, else starts. The run that counts is the newest one that is not a facts or
  * director run and not a land that lost the lock race (job.ts `lastReal`): a director run changes the step through
  * the Ask and the `director` event it writes, never as the run that counts.

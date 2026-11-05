@@ -76,14 +76,14 @@ export const issueRuns = (id: string | number): string[] => (existsSync(jobsDir)
 /** The runs of the job `name`, oldest first, only those of `kind` when given: a folder name has the subject, not the job's name or kind. */
 export const jobRuns = (name: string, kind?: string): string[] => allRuns().filter((e) => e.run.name === name && (!kind || e.run.kind === kind)).map((e) => e.id);
 
-/** Every run of the goal has passed, and at least one exists: the start log comes before the run folder, so an empty list is not settled. */
+/** Every run of the issue has passed, and at least one exists: the start log comes before the run folder, so an empty list is not settled. */
 export const passed = (startLog: string, id: string | number): boolean => {
   const runs = issueRuns(id);
   return !starting(startLog) && runs.length > 0 && runs.every((r) => stateNow(r).condition === "passed");
 };
 
 const tail = (f: string, n = 15) => (existsSync(f) ? readFileSync(f, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "(none)");
-/** What a failed concurrency test needs to name its cause: the runs of the given goal ids with their pid and exit, and the factory logs. */
+/** What a failed concurrency test needs to name its cause: the runs of the given issue ids with their pid and exit, and the factory logs. */
 export function diagnose(label: string, ids: number[], ...results: { code: number; stdout: string; stderr: string }[]): string {
   const runs = existsSync(jobsDir) ? readdirSync(jobsDir).sort().filter((r) => ids.some((id) => issueRuns(id).includes(r)))
     .map((r) => `--- ${r}: pid ${tail(join(jobsDir, r, "pid"), 1)}, exit ${tail(join(jobsDir, r, "exit"), 1)}`) : [];
@@ -94,7 +94,7 @@ const tail_ = (s: string) => s.trimEnd().split("\n").slice(-15).join("\n");
 
 /**
  * Waits up to 30 s for `f`. When it fails, the error holds the tails of the factory's tick.log (every dispatch
- * writes why it skipped a goal there) and dispatch.log, and of the run-end dispatch logs, so a flake names its cause.
+ * writes why it skipped an issue there) and dispatch.log, and of the run-end dispatch logs, so a flake names its cause.
  */
 export async function until(f: () => boolean): Promise<void> {
   // Under the 30 s test timeout, so that a timeout here reports the logs below.
@@ -169,7 +169,7 @@ export const file = (run: string, f: string) => readFileSync(join(jobsDir, run, 
 export const worktree = (name: string) => join(repo, ".worktrees", `job-${name}`);
 export const branchExists = (name: string) => Bun.spawnSync(["git", "-C", repo, "rev-parse", "--verify", "-q", `job/${name}`]).exitCode === 0;
 
-// The reviewer: it keeps its prompt, then answers as the prompt's item asks (REVIEW: in the goal) with structured output, else passes.
+// The reviewer: it keeps its prompt, then answers as the prompt's item asks (REVIEW: in the issue) with structured output, else passes.
 // REVIEW:none gives text with no structured output.
 export const REVIEWER = `#!/bin/bash
 prompt=$(cat)
@@ -437,7 +437,7 @@ export function seedItem(repoKey: string, title: string, fm: Record<string, unkn
   return id;
 }
 
-/** Files the goal `<repo>-<n>.<k>` of issue `<repo>-<n>` in one commit on the test store's origin/main; returns `"<n>.<k>"`. */
+/** Files the part `<repo>-<n>.<k>` of issue `<repo>-<n>` in one commit on the test store's origin/main; returns `"<n>.<k>"`. */
 export function seedPart(repoKey: string, n: number, k: number, fm: Record<string, unknown> = {}, title = "Goal", body = "Body."): string {
   pullItems();
   const dir = join(items, repoKey, "backlog", "tasks");
@@ -465,7 +465,7 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
 /**
  * Files an old-shape item the way `aleph issue add <repo> <title> <flags> --body -` did before the store wrote only the new
  * shape: `--labels` with `goal` becomes `kind: "goal"`, the other labels `areas`, `--after a,b` becomes `after: ["a", "b"]`, `--due` its field, `action` the body. No verb of `aleph issue`
- * writes that shape now, so the item is seeded; an open goal then gets the dispatch that `add` ran, with `env` (which may turn it off).
+ * writes that shape now, so the item is seeded; an open issue then gets the dispatch that `add` ran, with `env` (which may turn it off).
  */
 export async function addOld(title: string, action: string, extra: string[] = [], env: Record<string, string> = {}): Promise<number> {
   const flag = (n: string) => { const i = extra.indexOf(`--${n}`); return i >= 0 ? extra[i + 1] : undefined; };

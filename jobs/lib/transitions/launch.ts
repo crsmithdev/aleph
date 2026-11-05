@@ -104,7 +104,7 @@ export async function runLogged(args: string[], log: string): Promise<number | n
 
 /**
  * Start `aleph dispatch` detached, for a transition that may free a slot, clear a hold or ready a
- * goal: the caller never waits for the baseline checks, and a failure never reaches it. Off when
+ * issue: the caller never waits for the baseline checks, and a failure never reaches it. Off when
  * `ALEPH_DISPATCH=off`; the tick's sweep still dispatches what it finds missed.
  */
 export function dispatchDetached(): void {

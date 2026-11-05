@@ -26,13 +26,13 @@ export const factoryDir = () => layout().factory;
 
 const pauseFile = () => join(factoryDir(), "paused");
 
-/** One record of why a goal waits: `kind` is the gate that bound, or `started`; `event` its log event, which older records lack. Records from before v6 name older kinds. */
+/** One record of why an issue waits: `kind` is the gate that bound, or `started`; `event` its log event, which older records lack. Records from before v6 name older kinds. */
 export interface HoldRecord { at: string; name: string; kind: string; text: string; event?: Event }
 
-/** The hold record kinds from before the 7 gates that did not stop a start: the goal was done, or its job was open. */
+/** The hold record kinds from before the 7 gates that did not stop a start: the issue was done, or its job was open. */
 const OLD_NOT_HELD = new Set(["open", "start", "done"]);
 
-/** Whether a record stopped a goal that could have started: not `started`, not a done goal, not a goal whose job is open. */
+/** Whether a record stopped an issue that could have started: not `started`, not a done issue, not an issue whose job is open. */
 export const stopsStart = (r: HoldRecord): boolean =>
   r.kind !== "started" && !OLD_NOT_HELD.has(r.kind) && !(r.kind === "not-ready" && /^(its job is |the item is already done$)/.test(r.text));
 
@@ -49,16 +49,16 @@ export function allHolds(): HoldRecord[] {
   return record.all().flatMap(holdsOf).sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
-/** The hold records of the given goals, oldest first. */
+/** The hold records of the given issues, oldest first. */
 export function readHolds(names: string[]): HoldRecord[] {
   return [...new Set(names)].flatMap((n) => { const r = record.read(n); return r ? holdsOf(r) : []; })
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 }
 
 /**
- * Records why a goal waits (or, with kind `started`, that it no longer does) in its job record: an event, unless it
+ * Records why an issue waits (or, with kind `started`, that it no longer does) in its job record: an event, unless it
  * repeats the last one, and `wait`, which a record that stops a start sets and any other clears. `ev` gives the hold's
- * log event, by `gate` on the goal.
+ * log event, by `gate` on the issue.
  */
 export function recordHold(name: string, kind: Gate | "started", text: string, ev?: Hold): void {
   const at = new Date().toISOString();
@@ -180,7 +180,7 @@ export async function gpuSlot(waitMs: number): Promise<(() => void) | null> {
 
 const PAUSED: Bound = { why: "paused", text: "The factory is paused", ev: { action: "paused" } };
 
-/** The gates of the whole factory, in the order of GATES: the others are each goal's own. */
+/** The gates of the whole factory, in the order of GATES: the others are each issue's own. */
 export const FACTORY_GATES = ["pause", "backend", "live-cap"] as const satisfies readonly Gate[];
 
 export type FactoryGate = (typeof FACTORY_GATES)[number];
@@ -306,7 +306,7 @@ export function redMains(): RedMain[] {
 }
 
 /**
- * The red line that stops a goal start, per repo: its last baseline failed. The full suite runs on its own timer, so a
+ * The red line that stops an issue start, per repo: its last baseline failed. The full suite runs on its own timer, so a
  * red record stays until a later suite run is green, also when main has moved since.
  */
 export function mainRed(): (repo: Repo) => string | null {
@@ -409,7 +409,7 @@ const BUSY_CONFLICTS = 3;
 
 const BUSY_MS = 7 * 86_400_000;
 
-/** The first open job of the repo, not waiting for Chris, whose issue `shares` something with the goal; `file` says what. */
+/** The first open job of the repo, not waiting for Chris, whose issue `shares` something with the issue; `file` says what. */
 function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => { file: string; what: string } | undefined): { why: string; on: string; file: string } | null {
   const lists = reader({ fetch: false });
   for (const j of jobs) {
@@ -428,7 +428,7 @@ const usesGptOss = (item: issues.Issue): boolean =>
   /aleph-gpt-oss|127\.0\.0\.1:8012/.test(item.spec) || areasOf(item).includes("local-model");
 
 /**
- * Why a goal waits for an open job: both name the same busy file in their Edit surface, so one
+ * Why an issue waits for an open job: both name the same busy file in their Edit surface, so one
  * of the two lands would conflict; or both use the gpt-oss server, which runs one build at a time.
  * A job waiting for Chris does not count, as it can wait for hours.
  */
@@ -445,15 +445,15 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
 }
 
 /**
- * The run a goal would start next: its newest build run, whose model says which backend the goal runs on. Null when the
- * goal has no run yet, so a gate that asks the run to start reads nothing.
+ * The run an issue would start next: its newest build run, whose model says which backend the issue runs on. Null when the
+ * issue has no run yet, so a gate that asks the run to start reads nothing.
  */
 export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null {
   return jobs.flat().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind))
     .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started)).at(-1)?.run ?? null;
 }
 
-/** The facts of a goal that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
+/** The facts of an issue that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
 export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
   const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat(), open = openJob(name, null, jobs);
   return {
@@ -468,18 +468,18 @@ export function issueFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Da
   };
 }
 
-/** Marks now as when the streak set an Ask on the goal's item: a `streak` event in its job record. */
+/** Marks now as when the streak set an Ask on the issue's item: a `streak` event in its job record. */
 export function markStreak(name: string): void {
   record.addEvent(name, { kind: "streak", what: "the no-commit streak set an Ask" });
 }
 
-/** When the streak last set an Ask on the goal's item (ms), or null. Runs before it no longer count. */
+/** When the streak last set an Ask on the issue's item (ms), or null. Runs before it no longer count. */
 const streakMark = (name: string): number | null => {
   const e = record.lastEvent(name, "streak");
   return e ? Date.parse(e.at) : null;
 };
 
-/** How many of the goal's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
+/** How many of the issue's newest agent runs since the streak's last Ask, in a row, ended with no commit. */
 function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   const mark = streakMark(name) ?? -Infinity;
   const runs = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
@@ -489,7 +489,7 @@ function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   return n;
 }
 
-/** Marks that the cap's Ask was set for the goal: a `cap` event in its job record. */
+/** Marks that the cap's Ask was set for the issue: a `cap` event in its job record. */
 export function markCap(name: string): void {
   record.addEvent(name, { kind: "cap", what: "the run cap set an Ask" });
 }
@@ -499,18 +499,18 @@ export function clearCap(name: string): void {
   if (capMarked(name)) record.addEvent(name, { kind: "cap-cleared", what: "a start followed the Ask" });
 }
 
-/** Whether the cap's Ask was set for the goal and no start has followed: its newest `cap` event has no `cap-cleared` after it. */
+/** Whether the cap's Ask was set for the issue and no start has followed: its newest `cap` event has no `cap-cleared` after it. */
 const capMarked = (name: string): boolean =>
   record.read(name)?.events.findLast((e) => e.kind === "cap" || e.kind === "cap-cleared")?.kind === "cap";
 
-/** How long ago the goal's newest build run that ended with the API credit error ended, or null when it has none. */
+/** How long ago the issue's newest build run that ended with the API credit error ended, or null when it has none. */
 function creditWait(repoKey: string, name: string, all: Entry[], now: number): number | null {
   const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.ended && causeOf(e.run) === "credit")
     .sort((a, b) => Date.parse(a.run.ended!) - Date.parse(b.run.ended!)).at(-1);
   return last ? now - Date.parse(last.run.ended!) : null;
 }
 
-/** How many jobs of the goal started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not, and a first run that ended with the API credit error did no work, so it does not count. */
+/** How many jobs of the issue started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not, and a first run that ended with the API credit error did no work, so it does not count. */
 function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: number): number {
   return jobs.filter((j) => {
     const first = j.find((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind));
@@ -518,7 +518,7 @@ function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: numb
   }).length;
 }
 
-/** The most job starts any one goal made in the last 60 minutes, by the rule the loop guard uses. */
+/** The most job starts any one issue made in the last 60 minutes, by the rule the loop guard uses. */
 function maxStartsInHour(now: number, jobs: Job[]): number {
   const issues = new Map<string, { repo: string; name: string }>();
   for (const e of jobs.flat()) if (e.run.repo && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000) issues.set(`${e.run.repo}/${e.run.name}`, { repo: e.run.repo, name: e.run.name });

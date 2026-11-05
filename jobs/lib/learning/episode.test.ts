@@ -105,7 +105,7 @@ test("an unreachable Langfuse does not block the page", async () => {
   expect(readFileSync(join(episodes(), pages()[0]), "utf8")).toContain("Langfuse unreachable");
 });
 
-test("a done goal gets a page in the factory's episodes folder and no vault commit", async () => {
+test("a done issue gets a page in the factory's episodes folder and no vault commit", async () => {
   const id = add("ship it");
   land(id);
   run("20261028-100000-fac-1-agent", { on: `fac-${id}` });
@@ -117,7 +117,7 @@ test("a done goal gets a page in the factory's episodes folder and no vault comm
   expect(existsSync(join(base, "vault", "wiki", "episodes"))).toBe(false);
 });
 
-test(`a page older than ${KEEP_DAYS} days is deleted, and a goal whose last run ended before then gets no page`, async () => {
+test(`a page older than ${KEEP_DAYS} days is deleted, and an issue whose last run ended before then gets no page`, async () => {
   const old = add("old one"), fresh = add("fresh one");
   land(old);
   land(fresh);

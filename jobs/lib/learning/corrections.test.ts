@@ -164,7 +164,7 @@ describe("standing proposals", () => {
     writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: true } }));
   };
 
-  test("approve files the goal at once", async () => {
+  test("approve files the issue at once", async () => {
     grant("approve");
     pickFirst = true;
     await mine(NOW);

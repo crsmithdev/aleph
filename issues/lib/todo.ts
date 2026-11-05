@@ -315,7 +315,7 @@ export function fix(doc: Doc, now = new Date()): string[] {
   return fixed;
 }
 
-/** The text under `## <name>` in a goal body, up to the next `##` heading; empty when there is none. */
+/** The text under `## <name>` in an issue body, up to the next `##` heading; empty when there is none. */
 export function section(body: string, name: string): string {
   const parts = body.split(/^##[ \t]+(.+?)[ \t]*$/m);
   for (let i = 1; i < parts.length; i += 2) if (parts[i].toLowerCase().startsWith(name.toLowerCase())) return parts[i + 1].trim();

@@ -177,7 +177,7 @@ describe("rescue of a stuck or failed run", () => {
   });
 });
 
-describe("the goal's brief", () => {
+describe("the issue's brief", () => {
   test("the rerun note goes in once under its own heading; drops come newest first", () => {
     const item = { title: "Do it", spec: "The spec.\n", notes: ["- a note"] };
     const dropped = (reason: string): Entry[] => [entry(`d-${reason}`, { name: "fac-7", condition: "dropped", reason })];

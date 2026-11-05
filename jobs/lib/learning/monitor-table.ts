@@ -61,7 +61,7 @@ export interface Window {
   stages: StageRow[];
   asks: Record<string, number>;
   holds: HoldRow[];
-  /** Goals with a hold record of a kind that stops a start, of all goals with a record. */
+  /** Issues with a hold record of a kind that stops a start, of all issues with a record. */
   held: { goals: number; seen: number };
   reopens: number;
   /** The seven-day usage, in percent, at the end of the window. */
@@ -177,7 +177,7 @@ function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRo
         seen.add(name);
         if (stopsStart(h)) held.add(name);
       }
-      // A state lasts until the goal's next record; the last record of a goal has no known end and counts no time.
+      // A state lasts until the issue's next record; the last record of an issue has no known end and counts no time.
       const next = list[i + 1];
       if (!next) return;
       const ms = Math.min(Date.parse(next.at), to) - Math.max(at, from);

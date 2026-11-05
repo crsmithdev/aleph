@@ -36,7 +36,7 @@ test("three jobs whose first runs started in the last hour are three starts; a j
   expect(facts(id)).toBe(3);
 });
 
-test("a first run that ended with the API credit error is no start, and the goal waits for credit from the newest such run", () => {
+test("a first run that ended with the API credit error is no start, and the issue waits for credit from the newest such run", () => {
   const id = newIssue();
   const credit = { cause: "credit", reason: "API Error: 402 This request would exceed your available credits" } as const;
   mk(`fac-${id}`, "build", "failed", { started: ago(50 * MIN), ended: ago(45 * MIN), ...credit });

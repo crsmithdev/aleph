@@ -74,7 +74,7 @@ describe("labels", () => {
 
 describe("the read", () => {
 
-  test("goals come critical first, then by repo and number; an unknown priority ranks as medium", () => {
+  test("issues come critical first, then by repo and number; an unknown priority ranks as medium", () => {
     const a = repo([{ title: "a1", labels: ["goal"] }, { title: "a2", labels: ["goal"] }, { title: "a3", labels: ["goal"] }]);
     const b = repo([{ title: "b1", labels: ["goal"] }, { title: "b2", labels: ["goal"] }]);
     store.writeList(a, "prio", (doc) => { issues.find(doc, 1)!.fm.priority = "low"; issues.find(doc, 2)!.fm.priority = "critical"; issues.find(doc, 3)!.fm.priority = "weird"; return true; });

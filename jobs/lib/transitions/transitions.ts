@@ -116,7 +116,7 @@ export interface JobArgs {
   name: string;
   /** The spec of a new job, or the note of a follow-up. */
   spec: string;
-  /** The issue or goal the run is on: its number (`7`, or `7.1` for a goal). */
+  /** The issue or part the run is on: its number (`7`, or `7.1` for a part). */
   on?: number | string;
   model?: string;
   land?: boolean;
@@ -334,7 +334,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
 }
 
 /**
- * Start the run for a goal: `aleph job` in-process, or `ALEPH_START_CMD` (tests) as a process.
+ * Start the run for an issue: `aleph job` in-process, or `ALEPH_START_CMD` (tests) as a process.
  * A foreground unit is waited for, its output dropped. Returns the refusal, or null.
  */
 export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {

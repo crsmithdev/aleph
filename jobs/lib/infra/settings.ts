@@ -60,7 +60,7 @@ export const LIVE_CAP_DEFAULT = "cores / 6, at least 1";
 export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.floor(availableParallelism() / 6)));
 /** The most local-backend agent runs live at once, apart from the live cap: the one GPU serves one gpt-oss call. */
 export const LOCAL_CAP = 1;
-/** The most agent runs one goal starts in any 60 minutes, whatever the trigger: the next start is an Ask. */
+/** The most agent runs one issue starts in any 60 minutes, whatever the trigger: the next start is an Ask. */
 export const RUN_CAP_DEFAULT = 3;
 export const RUN_CAP = () => cap("ALEPH_RUN_CAP", "run", RUN_CAP_DEFAULT);
 /** The most director runs one tick starts, one per Ask. */
@@ -80,7 +80,7 @@ export const suiteBudgetSeconds = () => num("ALEPH_SUITE_BUDGET_S", 120);
 export const reviewSeconds = () => num("ALEPH_REVIEW_TIMEOUT", 600);
 export const reviewDiffMax = () => num("ALEPH_REVIEW_DIFF_MAX", 200000);
 export const fixRounds = () => num("ALEPH_FIX_ROUNDS", 2);
-/** How long a dispatch waits for another dispatch's goal lock before it skips the goal. */
+/** How long a dispatch waits for another dispatch's issue lock before it skips the issue. */
 export const issueLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;

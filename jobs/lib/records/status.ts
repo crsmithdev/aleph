@@ -14,7 +14,7 @@ export interface Facts {
   repo: string; main: string;
   /** The repo has `sandbox: true`: it is a factory repo. */
   sandbox: boolean;
-  /** Item number to its status, kind, after, goals and ask kind. */
+  /** Item number to its status, kind, after, issues and ask kind. */
   items: Record<string, Subject>;
   /** Item number to its jobs, each as its last run: the open run state is in there. */
   runs: Record<string, RunView[]>;
@@ -35,7 +35,7 @@ export function facts(repo: Repo, doc: issues.Doc | null = readList(repo), jobs:
     const item = issue(job);
     if (item === undefined || job[0].run.repo !== repo.key) continue;
     // An intake run (a triage or planner run before it) marks its item in the store and does not land:
-    // neither is a factory run working on the item, so a goal they close in the store is done.
+    // neither is a factory run working on the item, so an issue they close in the store is done.
     if (typeof item === "number" && repo.sandbox && job.some((e) => e.run.kind !== "intake" && e.run.kind !== "triage" && e.run.kind !== "plan")) touched.add(item);
     (runs[item] ??= []).push(runViewOf(job));
     if (isOpen(job)) open[item] = stateOf(job);

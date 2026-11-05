@@ -77,7 +77,7 @@ test("facts carry what stage() needs: status, spec, after, parts, ask kind and e
   expect(f.runs[21]).toEqual([{ id: "demo-21#1", kind: "build", condition: "waiting", open: true, ask: { kind: "input", reason: "question" } }]);
 });
 
-test("a dotted ref in after, parts and on resolves to the goal, its runs and its status", () => {
+test("a dotted ref in after, parts and on resolves to the issue, its runs and its status", () => {
   const part = (sub: number, fm: Record<string, unknown>) => ({ id: 5, sub, title: `g${sub}`, fm: { ...fm } as Issue["fm"], request: "", spec: "s", notes: [] });
   const mk = (g1: string): Doc => ({
     items: [

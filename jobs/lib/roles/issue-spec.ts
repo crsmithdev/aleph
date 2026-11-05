@@ -1,12 +1,12 @@
 /**
- * A goal's spec: the Markdown sections a goal issue must have, the paths of its Edit surface, and
+ * An issue's spec: the Markdown sections an issue must have, the paths of its Edit surface, and
  * its version. Intake, the director, the rescue, the reviewer and the busy-file wait all
  * read a spec through this module.
  */
 import { createHash } from "node:crypto";
 import { section, type Issue } from "../../../issues/lib/todo.ts";
 
-/** The sections a goal's spec has. */
+/** The sections an issue's spec has. */
 const REQUIRED = ["Goal", "Edit surface", "Oracle"] as const;
 
 /** The required sections that are absent or empty in `body`, in order. */
@@ -33,14 +33,14 @@ export function outsideSurface(body: string, files: string[]): string[] {
 
 const hash = (text: string): string => createHash("sha256").update(text).digest("hex").slice(0, 12);
 
-/** The text of a goal that an edit changes: its title, request and spec. */
+/** The text of an issue that an edit changes: its title, request and spec. */
 const textOf = (item: Issue): string => JSON.stringify([item.title, item.request, item.spec]);
 
-/** The version of a goal's spec: a short hash of its title, request and spec. An edit of any of them makes a new version. */
+/** The version of an issue's spec: a short hash of its title, request and spec. An edit of any of them makes a new version. */
 export const specVersion = (item: Issue): string => hash(textOf(item));
 
 /**
- * Whether `recorded`, a version written earlier, is the goal's version now. Notes and run folders
+ * Whether `recorded`, a version written earlier, is the issue's version now. Notes and run folders
  * written before this module hold older forms: the old spec check's hash of the trimmed spec, and the
  * rescue's JSON text of the title, request and spec. Both still count.
  */

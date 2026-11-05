@@ -150,7 +150,7 @@ function jobs(): void {
   });
 }
 
-/** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
+/** After `aleph issue add` or `edit` of an open issue in a factory repo: a dispatch, so the issue starts at once. It never fails the write. */
 function dispatchAfterIssue(repo: Repo, item: issues.Issue): void {
   if (!repo.sandbox || !store.buildableIssue(repo, issues.idOf(item))) return;
   dispatchDetached();
@@ -255,7 +255,7 @@ async function todoCmd(): Promise<void> {
       const c = verbs.close(repo, id, sub, text);
       warn(c.follow);
       out(c.result);
-      // A goal that waited on this issue can start, and a dropped part can set its parent's Ask: the dispatch takes both.
+      // An issue that waited on this issue can start, and a dropped part can set its parent's Ask: the dispatch takes both.
       if (repo.sandbox) dispatchDetached();
       return;
     }
@@ -305,7 +305,7 @@ async function intakeCmd(): Promise<void> {
   out(await intakeNow(repo, ref.id));
 }
 
-/** `aleph dispatch`: start every ready goal up to the live cap. A run's end and `aleph issue` call it. */
+/** `aleph dispatch`: start every ready issue up to the live cap. A run's end and `aleph issue` call it. */
 async function dispatchCmd(): Promise<void> {
   out(await runDispatch());
 }

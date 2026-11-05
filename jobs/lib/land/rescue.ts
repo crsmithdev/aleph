@@ -1,15 +1,15 @@
 /**
  * The safe default actions for returned and failed runs, taken by the dispatch that sees them: a duplicate
- * is dropped; a no-commit run whose worker says the goal is already met is checked on main, and closed when
+ * is dropped; a no-commit run whose worker says the issue is already met is checked on main, and closed when
  * the checks pass there; no commit and checks that fail after a land merge and a land that hits a merge conflict drop the run for one rerun
- * of the goal, with a note; a time box drops the run and sends the issue to intake to split it, with no rerun, and an Ask
+ * of the issue, with a note; a time box drops the run and sends the issue to intake to split it, with no rerun, and an Ask
  * (input, rescue) instead when the issue is a part or has been split already; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
- * case hits one goal, sets an Ask (input, rescue) on the issue, which goes to the director. A run the API refused
- * for credit did no work, so no case covers it: the rescue leaves it, and the goal waits for the backend. A run that a host
+ * case hits one issue, sets an Ask (input, rescue) on the issue, which goes to the director. A run the API refused
+ * for credit did no work, so no case covers it: the rescue leaves it, and the issue waits for the backend. A run that a host
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
- * the goal; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, and no host
- * restart explains it) is marked failed and gets the same action, once per goal; a second lost run of the goal sets the Ask.
+ * the issue; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, and no host
+ * restart explains it) is marked failed and gets the same action, once per issue; a second lost run of the issue sets the Ask.
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
 import { readFileSync } from "node:fs";
@@ -87,7 +87,7 @@ const lost = (jobs: Job[]): Job[] => {
 
 /**
  * The open jobs of factory repos whose next step is the rescue, with the unit of the last real run not live.
- * A run the API refused for credit is no case: the rescue leaves it, so the goal waits for the backend.
+ * A run the API refused for credit is no case: the rescue leaves it, so the issue waits for the backend.
  */
 const stuckJobs = (jobs: Job[]): Job[] => {
   const keys = new Set(sandboxRepos().map((r) => r.key));
@@ -172,7 +172,7 @@ export async function rescueStuck(act: Rescue, land?: Land, checkMain?: CheckMai
   }
 }
 
-/** The open jobs whose last run waits for a spec edit and whose goal's spec is no longer the one it asked about. */
+/** The open jobs whose last run waits for a spec edit and whose issue's spec is no longer the one it asked about. */
 export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
   const last = lastReal(runs), r = last.run;
   const waits = waitsForSpecEdit(last);
@@ -183,7 +183,7 @@ export const editedWaits = (jobs: Job[]): Job[] => jobs.filter((runs) => {
 });
 
 /**
- * A run that ended with no commit and a question waits for a spec edit. When the goal's spec is no longer the one it asked
+ * A run that ended with no commit and a question waits for a spec edit. When the issue's spec is no longer the one it asked
  * about, the run is dropped and the Ask comes off the item, so the next dispatch starts a run on the edited spec.
  */
 async function releaseEdited(act: Rescue): Promise<void> {
@@ -208,7 +208,7 @@ async function releaseEdited(act: Rescue): Promise<void> {
   }
 }
 
-/** The run a rescue acts on, and what its goal is. */
+/** The run a rescue acts on, and what its issue is. */
 type Stuck = StuckRun & { name: string; issue: number | string | undefined };
 
 /** The commit of this job or this item on main, or `{ onMain: null }` when the item is closed without one; null when neither. */
@@ -260,7 +260,7 @@ function sendToIntake(repo: Repo, issue: number): string | null {
   }
 }
 
-/** Choose the rescue of one job, and do it. The once-only rule is here: a mark on the run counts the case against the goal. */
+/** Choose the rescue of one job, and do it. The once-only rule is here: a mark on the run counts the case against the issue. */
 async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckMain): Promise<void> {
   const last = lastReal(runs);
   const r = last.run;
@@ -284,7 +284,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const specQuestion = asked !== null;
   // `spec`: the run asked about this issue's spec, so it waits for a spec edit.
   const chris = async (question: string, ask: Ask, spec?: issues.Issue) => {
-    // An Always rule to take the recommendation: Rerun drops the run, and the goal reruns. Not for a run that asked a question.
+    // An Always rule to take the recommendation: Rerun drops the run, and the issue reruns. Not for a run that asked a question.
     if (!specQuestion && ask.recommended === "Rerun" && always("rescue")?.action === "recommended") {
       const why = await act.drop(name, question);
       if (!why) {
@@ -346,8 +346,8 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
 
   const earlier = allRuns().some((e) => e.run.repo === r.repo && e.run.name === name && e.folder !== last.folder && rescued(e) === key);
   if (key === "claimed") {
-    // The worker says the goal is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
-    // the goal with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
+    // The worker says the issue is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
+    // the issue with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
     const main: Baseline = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
     if (main.state === "unchecked" || main.state === "running") { factoryLog(`${name}: the claim waits: ${main.line}`); return; }
     // An issue a red CI started is met only when GitHub CI on main is green too: the checks here may pass where CI fails.
@@ -363,7 +363,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
     return take(duplicateStep(stuck, found?.onMain));
   }
   if (key === "timeout") {
-    // No rerun of the same goal: a plain issue goes to intake to be split; a part, or an issue split already, asks.
+    // No rerun of the same issue: a plain issue goes to intake to be split; a part, or an issue split already, asks.
     if (earlier || splitAlready(stuck)) return chris(`${name} ran out of its time box again, and it cannot be split further (${earlier ? "an earlier run hit the time box too" : "it is a part, or it has been split already"}). Drop it, or change the goal?`, choice(`${name} ran out of its time box and cannot be split: how should the factory go on?`, ["Intake cannot split it again"]));
     markRescued(last, key);
     const why = await act.drop(name, `time box ran out in ${r.kind} run ${last.id}; the issue goes to intake to split`);

@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { aleph, base, dispatching, itemsRemote, jobsDir, sh, setup, teardown, until } from "./cli.helpers";
 import { issueAdd, issueClose, issueShow } from "./inproc";
 
-// Acceptance criterion 14 at the CLI seam: `aleph issue add <repo> "<title>" --goal -` files the issue and its goal `.1`
+// Acceptance criterion 14 at the CLI seam: `aleph issue add <repo> "<title>" --goal -` files the issue and its part `.1`
 // in one store commit, with no intake, and starts the dispatch itself. The first case is the CLI test of
 // `aleph issue add`; the others call the verb in-process.
 beforeAll(setup);
@@ -12,7 +12,7 @@ afterAll(teardown);
 const SPEC = "## Goal\n\nAdd a line.\n\n## Oracle\n\n`bun test`\n\n## Time box\n\n10 minutes\n";
 const commits = () => Number(sh(base, "git", "--git-dir", itemsRemote, "rev-list", "--count", "main"));
 const file = (name: string) => sh(base, "git", "--git-dir", itemsRemote, "show", `main:fac/backlog/tasks/${name}.md`);
-// A goal left open is one the next dispatch runs first: the dispatch test then waits on all of them.
+// An issue left open is one the next dispatch runs first: the dispatch test then waits on all of them.
 const dropIssue = (n: number) => issueClose("fac", n, "drop", "test over");
 const intakeRuns = () => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((d) => d.includes("-intake-")) : []);
 

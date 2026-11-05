@@ -75,17 +75,17 @@ type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?
 export type Checks = (repo: Repo, commit: string, logs: string, record?: CheckTask["record"]) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
- * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
+ * Start every ready issue, in order, until the live cap. It runs when a run ends, when an issue is added or edited,
  * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
  * steps a pause kept (`startKept`), the rescue of returned, failed, killed and lost runs, the lands and the close of parents whose parts are done.
- * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 7 gates of issueDecision in
- * order; the first that binds skips it, and its hold record names that gate. Between Busy file and Loop guard a goal whose last build run ended with the
+ * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each issue meets the 7 gates of issueDecision in
+ * order; the first that binds skips it, and its hold record names that gate. Between Busy file and Loop guard an issue whose last build run ended with the
  * API credit error (`API Error: 402`) less than 10 minutes ago (`CREDIT_WAIT_MS`) waits out its credit wait with a `credit-wait` hold; the credit wait is
- * not one of the 7 gates, because the goal's own last run decides it. The run a gate reads is the goal's newest build run (`nextRun`),
- * whose model names the backend the goal runs on. A goal no gate holds starts. Each start
- * holds a lock on its goal and re-reads the jobs under it, so two dispatches at once start a goal once. `start`
- * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts goals
- * only: an issue is closed as done once its goals are all done (`closeIssues`). Intake (intake.ts) took each goal in
+ * not one of the 7 gates, because the issue's own last run decides it. The run a gate reads is the issue's newest build run (`nextRun`),
+ * whose model names the backend the issue runs on. An issue no gate holds starts. Each start
+ * holds a lock on its issue and re-reads the jobs under it, so two dispatches at once start an issue once. `start`
+ * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts issues
+ * only: an issue is closed as done once its parts are all done (`closeIssues`). Intake (intake.ts) took each issue in
  * before: an issue to plan (`plan` set) goes to an intake run, started detached by `intake`; the dispatch does not wait for it.
  */
 export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue, intake: (repo: Repo, id: number) => void = intakeDetached): Promise<{ started: string[]; skipped: string[]; paused?: true; landed?: string[]; planned?: string[] }> {
@@ -112,7 +112,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   // A parent whose parts all landed closes without a green main.
   for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
   const ready = openIssues();
-  // An issue to plan goes to intake, which splits it. Intake starts an agent run, so the baseline gate holds it as it holds a goal.
+  // An issue to plan goes to intake, which splits it. Intake starts an agent run, so the baseline gate holds it as it holds an issue.
   const planners: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
     if (redOf(repo)) continue;
@@ -123,9 +123,9 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     intake(repo, item.id);
     planned.push(issueJob(repo, item.id));
   }
-  /** Records the hold and the skip line of a goal no start reached. */
+  /** Records the hold and the skip line of an issue no start reached. */
   const skip = (name: string, kind: Gate, why: string, ev: Hold) => { recordHold(name, kind, why, ev); skipped.push(`${name}: ${why}`); };
-  /** Skips a goal that a gate holds; a red main's event names its commit, and the note its failed checks. */
+  /** Skips an issue that a gate holds; a red main's event names its commit, and the note its failed checks. */
   const held = (name: string, repo: Repo, d: IssueDecision) => {
     const b = d.kind === "baseline" ? baselines()[repo.key] : undefined;
     skip(name, d.kind as Gate, d.why, b ? { action: "red", on: [b.commit.slice(0, 7)], note: b.failed } : d.ev!);
@@ -134,7 +134,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     const ref = issues.idOf(listed);
     const name = issueJob(repo, ref);
     const red = redOf(repo);
-    // An open goal whose work is on main is done: the store closes it, so no dispatch lists it again.
+    // An open issue whose work is on main is done: the store closes it, so no dispatch lists it again.
     if (done(name)) {
       const bad = note(repo, ref, `its work is on origin/${repo.main}: ${itemOnMain(repo, ref) ?? "no commit"}`, { done: true });
       if (bad) factoryLog(`${name}: not closed: ${bad}`);
@@ -143,8 +143,8 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
     // The cheap facts first: the pause was asked above.
     const first = issueDecision({ name, item: listed, done, red });
     if (first.kind !== "ready") { held(name, repo, first); continue; }
-    // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
-    // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
+    // Wait for a dispatch that holds the issue: it may skip it (an open job a drop is closing right now), and a
+    // dispatch that skipped here too would leave the issue until the next tick. Under the lock all is read again.
     const release = await lock(`goal-${name}`, issueLockWaitMs());
     if (!release) { skip(name, "not-ready", "another dispatch is starting it", { action: "starting" }); continue; }
     try {
@@ -158,12 +158,12 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       const run = nextRun(repo.key, name, jobs);
       let d = issueDecision({ ...facts, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { backend: heldGoal(name) }) });
       let tier: Tier | null | undefined;
-      // A goal with no run yet starts on its tier's backend: while a backend is held, rate the goal, and check that backend.
+      // An issue with no run yet starts on its tier's backend: while a backend is held, rate the issue, and check that backend.
       if (!run && d.kind === "ready" && backendHold()) {
         tier = await route(issueBrief(item, name, jobs).spec);
         d = issueDecision({ ...facts, ...factoryGates(jobs, tier ? { model: TIER_MODEL[tier] } : {}) });
       }
-      // The live cap held the goal, but a tier on the local backend has room: rate the goal, and check its tier's cap.
+      // The live cap held the issue, but a tier on the local backend has room: rate the issue, and check its tier's cap.
       if (d.kind === "live-cap" && tier === undefined && TIERS.some((t) => !factoryGates(jobs, { model: TIER_MODEL[t] })["live-cap"])) {
         tier = await route(issueBrief(item, name, jobs).spec);
         if (tier) d = issueDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
@@ -315,7 +315,7 @@ export function directIfNew(start: () => void = directorDetached, runs: Entry[] 
 
 /**
  * `aleph director` (director.ts): one run for each new Ask. `directIfNew` starts it where an Ask is set. Under the
- * pause alone: a decision can let a goal start. An error is logged, never thrown.
+ * pause alone: a decision can let an issue start. An error is logged, never thrown.
  */
 export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
   if (gates({ only: ["pause"] })) return [];
@@ -324,7 +324,7 @@ export async function directorStep(ports?: DirectorPorts): Promise<Decision[]> {
   return d;
 }
 
-/** The tick's episode pages for goals that finished (episode.ts); never throws. */
+/** The tick's episode pages for issues that finished (episode.ts); never throws. */
 export async function episodeStep(): Promise<string[]> {
   try {
     if (gates({ only: ["pause"] })) return [];
@@ -398,7 +398,7 @@ export async function baseline(repo: Repo, checks: Checks): Promise<Baseline> {
 /**
  * `aleph suite`, from its own timer: the full checks on origin/<main> of each factory repo whose main moved since
  * the last record (`baseline`). While the factory is paused it does nothing. A repo that turns green starts a
- * dispatch, so the goals its red or unchecked main held start at once.
+ * dispatch, so the issues its red or unchecked main held start at once.
  */
 export async function suiteStep(checks: Checks = baselineChecks): Promise<Record<string, string>> {
   if (gates({ only: ["pause"] })) return {};
@@ -415,7 +415,7 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
 
 /**
  * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
- * land live; a goal that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
+ * land live; an issue that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
  */
 export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()): string[] {
   if (gates({ only: ["pause"], jobs })) return [];
@@ -595,11 +595,11 @@ const dropIssue = (name: string, reason: string, fate?: Fate) => refusal(() => d
 const recheckIssue = (name: string) => refusal(async () => { await (await recheck(name, { output: "ignore" })).child?.exited; });
 
 /**
- * `aleph dispatch`: one dispatch of the ready goals, then the intake queue and the director for an Ask that the
+ * `aleph dispatch`: one dispatch of the ready issues, then the intake queue and the director for an Ask that the
  * dispatch or the run before it set. A run's end calls it, so an intake the live cap held starts when a slot frees.
  */
 export async function runDispatch(p: Starts = starts): Promise<Awaited<ReturnType<typeof dispatchIssues>> & { intaking?: string[] }> {
-  // `ALEPH_RESCUE=off` leaves a returned or failed run as it is: its open job keeps its goal not ready.
+  // `ALEPH_RESCUE=off` leaves a returned or failed run as it is: its open job keeps its issue not ready.
   const d = await dispatchIssues(startIssue, landPart, !rescueOn() ? undefined : { drop: dropIssue, recheck: recheckIssue });
   if (d.paused) return d;
   const intaking = intakeQueued(p.intake);

@@ -60,7 +60,7 @@ test("a deleted episode page leaves the seen file, and a page still on disk is n
   expect(seen).toContain("fac-4 Kept");
 });
 
-test("a dispatch with checks, three factory repos and no open goals fetches the work store at most twice", async () => {
+test("a dispatch with checks, three factory repos and no open issues fetches the work store at most twice", async () => {
   const items = join(ctx.base, "items");
   writeFileSync(join(ctx.base, "repos.json"), JSON.stringify(Object.fromEntries(["fac", "fac2", "fac3"].map((k) => [k, { path: join(ctx.base, "repo"), sandbox: true, autoland: false }]))));
   const log = join(ctx.base, "fetch.log");
@@ -87,7 +87,7 @@ test("the day's spend counts every kind that records a cost", () => {
   expect(spentToday()).toBe(23);
 });
 
-test("runStarts counts a goal's job starts in the hour, not its fix rounds, and matches the loop guard", () => {
+test("runStarts counts an issue's job starts in the hour, not its fix rounds, and matches the loop guard", () => {
   const id = newIssue();
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString();
   const { job } = mk(`fac-${id}`, "build", "failed", { started: ago(40) });
@@ -109,7 +109,7 @@ test("an explain run has no repo; its cost counts in the day's spend, not in run
   expect(runsToday().filter((e) => e.run.kind === "explain")).toEqual([]);
 });
 
-test("a goal that names a busy file an open job also names waits; a job waiting for Chris does not count", async () => {
+test("an issue that names a busy file an open job also names waits; a job waiting for Chris does not count", async () => {
   const surface = "## Edit surface\n- jobs/busy.ts (the change)\n- jobs/other.ts\n";
   const withSurface = () => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec: surface }); return item.id; }, true)!.value;
   for (const n of [901, 902, 903]) mk(`fac-${n}`, "land", "dropped", { conflicts: ["jobs/busy.ts"] });
@@ -126,7 +126,7 @@ test("a goal that names a busy file an open job also names waits; a job waiting 
   expect(calls).toEqual([`fac-${second}`]);
 });
 
-test("a goal that uses the gpt-oss server waits for an open job that uses it; a goal that does not is not held", async () => {
+test("an issue that uses the gpt-oss server waits for an open job that uses it; an issue that does not is not held", async () => {
   const add = (spec: string) => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec }); return item.id; }, true)!.value;
   const first = add("Call the model on 127.0.0.1:8012.\n");
   const second = add("Start aleph-gpt-oss first.\n");
@@ -142,7 +142,7 @@ test("a goal that uses the gpt-oss server waits for an open job that uses it; a 
   expect(calls).toContain(`fac-${second}`);
 });
 
-test("a goal that shares only a quiet file with an open job starts", async () => {
+test("an issue that shares only a quiet file with an open job starts", async () => {
   const body = "## Edit surface\n- jobs/quiet.ts\n";
   const add = () => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec: body }); return item.id; }, true)!.value;
   mk("fac-901", "land", "dropped", { conflicts: ["jobs/quiet.ts"] });
@@ -154,7 +154,7 @@ test("a goal that shares only a quiet file with an open job starts", async () =>
   expect(calls).toEqual([`fac-${second}`]);
 });
 
-test("stalled lists what could move: a goal, a new issue and a passed run, each until a gate or a live run explains it", () => {
+test("stalled lists what could move: a ready issue, a new issue and a passed run, each until a gate or a live run explains it", () => {
   const id = newIssue();
   const fresh = writeList({ key: "fac" }, "add an issue", (doc) => issues.add(doc, "new thing").id, true)!.value;
   expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
@@ -165,7 +165,7 @@ test("stalled lists what could move: a goal, a new issue and a passed run, each 
   expect(stalled()).toEqual([]);
   setPaused(false);
   writeRun(folder, { ...readRun(folder)!, condition: "failed", next: undefined });
-  // A stuck run holds only its own goal, which its open job keeps not ready; the new issue can still move.
+  // A stuck run holds only its own issue, which its open job keeps not ready; the new issue can still move.
   expect(stalled()).toEqual([`ingest:fac-${fresh}`]);
 });
 
@@ -202,7 +202,7 @@ await writeBaseline("b", () => ({ repo: "b", commit: "2", ok: true }));`], { env
   expect(Object.keys(JSON.parse(readFileSync(file, "utf8"))).sort()).toEqual(["a", "b"]);
 });
 
-test("a blocked goal does not stall; a live agent run leaves a ready goal out", async () => {
+test("a blocked issue does not stall; a live agent run leaves a ready issue out", async () => {
   const blocker = newIssue();
   const after = newIssue();
   await change(after, (item) => { item.fm.after = [`fac-${blocker}`]; });
@@ -216,7 +216,7 @@ test("health says a stall only after 15 minutes of ticks, and stops when the wor
   const id = newIssue();
   const t0 = Date.parse("2026-11-01T12:00:00Z"), min = 60_000;
   const said = (at: number) => health(at).filter((l) => l.includes("can start"));
-  // The sweep's ports start nothing: the goal stays ready.
+  // The sweep's ports start nothing: the issue stays ready.
   const stallStep = (at: number) => sweep(at, readTick(), { dispatch: async () => {}, suite: () => {} });
   await stallStep(t0);
   await stallStep(t0 + 5 * min);

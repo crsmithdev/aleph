@@ -1,4 +1,4 @@
-// The dispatch and a goal that changes while it runs: while an earlier goal starts.
+// The dispatch and an issue that changes while it runs: while an earlier issue starts.
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -8,8 +8,8 @@ import { newIssue, change, mk, fakes, dispatch, setup, teardown } from "./factor
 beforeEach(setup);
 afterEach(teardown);
 
-// An "already met" drop closes a factory item with no commit that names it; the goals that wait on it still start.
-test("a goal waiting on a factory item the store says done, with no commit naming it, starts", async () => {
+// An "already met" drop closes a factory item with no commit that names it; the issues that wait on it still start.
+test("an issue waiting on a factory item the store says done, with no commit naming it, starts", async () => {
   const blocker = writeList({ key: "fac" }, "add the blocker", (doc) => issues.add(doc, "met elsewhere").id, true)!.value;
   mk(`fac-${blocker}`, "build", "dropped", { reason: "the goal is already met" });
   await change(blocker, (item) => issues.setStatus(item, "done"));
@@ -21,8 +21,8 @@ test("a goal waiting on a factory item the store says done, with no commit namin
   expect(out.skipped).toEqual([]);
 });
 
-// The label gap is between the read of the list and a goal's lock: an earlier goal's start removes it.
-test("a goal turned back into an issue while an earlier goal starts is not started", async () => {
+// The label gap is between the read of the list and an issue's lock: an earlier issue's start removes it.
+test("an issue turned back into a plain issue while an earlier issue starts is not started", async () => {
   const first = newIssue();
   const second = newIssue();
   const calls: string[] = [];

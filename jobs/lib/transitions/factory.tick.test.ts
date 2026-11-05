@@ -12,7 +12,7 @@ afterAll(teardown);
 describe("a factory run", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   // flaky: tests/flaky.md#tick-one-run-per-goal
-  test.skip("a tick starts one run per open goal, lands it, and then has nothing to start", async () => {
+  test.skip("a tick starts one run per open issue, lands it, and then has nothing to start", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
     const id = seedItem("fac", "ship the goal", { kind: "goal" }, "ACTION: commit goal.txt\n".trim());
     const t = await tick();

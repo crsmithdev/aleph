@@ -45,7 +45,7 @@ export const DIRECTOR_MODEL = OPUS_MODEL;
 export const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */
 export const MAX_ACTIONS = 10;
-/** The reasons whose Ask the director decides once per goal: a second one on the same goal goes to Chris. */
+/** The reasons whose Ask the director decides once per issue: a second one on the same issue goes to Chris. */
 export const ONCE_PER_ISSUE = ["run-cap", "rescue"];
 /** Changed files that put a run's land on the escalation list besides the security paths. */
 export const HELD_FILES = ["bun.lock"];
@@ -106,7 +106,7 @@ export function pendingCases(repos: Repo[] = factoryRepos(), runs: Entry[] = all
 /** What the case asks: an Ask's question, a lesson's sentence. */
 const questionOf = (c: Case): string => (c.at === "lesson" ? c.lesson.sentence : c.ask.question);
 const reasonName = (c: Case): string => (c.at === "lesson" ? `proposal-${c.lesson.kind}` : c.ask.reason);
-/** The goal or thing the case is about, as the log names it: the item's ref, a run's item or job, a lesson's id. */
+/** The issue or thing the case is about, as the log names it: the item's ref, a run's item or job, a lesson's id. */
 export const refOf = (c: Case): string => (c.at === "run" ? c.entry.run.on ?? c.entry.run.name : c.on);
 
 /** The actions Chris's card offers, each owed an effect: the reason's actions, with `decide` as one `decide:<label>` per option. */
@@ -183,7 +183,7 @@ function branchOf(c: Case): { repo: Repo; branch?: string } | null {
 /**
  * Why this Ask is on the escalation list, or null when the director may decide it. Fixed rules, not the model's
  * judgement: a memory proposal, a land of a run that changes a security path or bun.lock (or a held run whose branch
- * cannot be read), and a second run-cap or rescue Ask on a goal the director already
+ * cannot be read), and a second run-cap or rescue Ask on an issue the director already
  * decided once. Closing or dropping an issue Chris filed is refused per action (`chrisOwns`).
  */
 export function escalation(c: Case, rec: Decision[] = readRecord()): { why: string; file?: string } | null {
@@ -492,7 +492,7 @@ const fallback = (why: string): Text => ({ situation: `The director did not deci
 export interface Ports {
   land: (name: string) => Promise<string | null>;
   drop: (name: string, reason: string, fate?: Fate) => Promise<string | null>;
-  /** Starts a dispatch; a new spec starts its goal at once. */
+  /** Starts a dispatch; a new spec starts its issue at once. */
   dispatch?: () => void;
 }
 export const defaultPorts: Ports = {
@@ -547,7 +547,7 @@ async function applyOne(c: Exclude<Case, { at: "lesson" }>, a: Action, ports: Po
       reason = `The director answered the worker's question "${c.ask.question}": ${a.note}`;
     } else {
       reason = a.reason;
-      // The reply may leave the fate off: a goal whose own commit is on origin/main is met; a reason naming another goal already on main is work that goal did.
+      // The reply may leave the fate off: an issue whose own commit is on origin/main is met; a reason naming another issue already on main is work that issue did.
       const other = idsIn(a.reason).filter((r) => r.startsWith(`${repo.key}-`)).map((r) => r.slice(repo.key.length + 1)).find((x) => x !== String(issue) && itemOnMain(repo, x));
       fate = a.fate ?? (onMain(repo, { job: last.run.job, item: issue, fetch: false }) ? "met" : other ? "duplicate" : undefined);
     }

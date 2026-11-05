@@ -12,7 +12,7 @@ const live = { why: "12 agent runs are live", text: "Waiting for a slot (12 of 1
 const backend = { why: "waits for OpenRouter: the API credit ran out", text: "Waiting for OpenRouter: the API credit ran out" };
 const MIN = 60_000;
 
-test("a goal with no fact against it is ready, and a fact not read stops nothing", () => {
+test("an issue with no fact against it is ready, and a fact not read stops nothing", () => {
   expect(issueDecision(facts())).toEqual({ kind: "ready", why: "ready", text: "Starts at the next dispatch" });
 });
 
@@ -48,7 +48,7 @@ test("Baseline lets the red-main fix through, and the later gates still bind on 
   expect(kind({ item: fix, red: "main is red at abc1234: tests", "live-cap": live })).toBe("live-cap");
 });
 
-test("Not ready covers a done goal, an after ref and an open job, in that order", () => {
+test("Not ready covers a done issue, an after ref and an open job, in that order", () => {
   const all: Partial<IssueFacts> = { done: (r) => r === "fac-9", item: item({ after: ["fac-1"] }), open: "running" };
   expect(issueDecision(facts(all)).why).toBe("the item is already done");
   expect(issueDecision(facts({ ...all, done: () => false })).why).toBe("after fac-1");
@@ -68,7 +68,7 @@ test("Loop guard binds at its limits; an answered run cap skips the hour count",
   expect(kind({ startsInHour: 3, capHeld: true })).toBe("ready");
 });
 
-test("a run that ended with the API credit error holds the goal for its wait and sets no run-cap Ask; past the wait the goal is ready", () => {
+test("a run that ended with the API credit error holds the issue for its wait and sets no run-cap Ask; past the wait the issue is ready", () => {
   const waiting = issueDecision(facts({ creditWait: 3 * MIN, startsInHour: 4 }));
   expect(waiting.kind).toBe("credit-wait");
   expect(waiting.ev).toEqual({ action: "credit" });

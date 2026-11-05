@@ -25,7 +25,7 @@ describe("every transition dispatches at once", () => {
     await dispatch(on(env));
     return id;
   };
-  // An old-shape goal, seeded: no verb of `aleph issue` writes one. `aleph dispatch` starts it.
+  // An old-shape issue, seeded: no verb of `aleph issue` writes one. `aleph dispatch` starts it.
   const seed = async (title: string, action: string, fm: Record<string, unknown> = { kind: "goal" }, env: Record<string, string> = {}) => {
     const id = seedItem("fac", title, fm, `ACTION: ${action}`);
     await dispatch(on(env));
@@ -61,9 +61,9 @@ describe("every transition dispatches at once", () => {
     rmSync(startLog, { force: true });
   }, 120_000);
 
-  test("an edit that sets the status back to open starts the goal", async () => {
-    // A dispatch left by an earlier test's run may still be alive. It starts any open goal it sees, so the
-    // goal is seeded already dropped.
+  test("an edit that sets the status back to open starts the issue", async () => {
+    // A dispatch left by an earlier test's run may still be alive. It starts any open issue it sees, so the
+    // issue is seeded already dropped.
     const x = track(await seed("dropped, then reopened", open("reopen"), { kind: "goal", status: "dropped" }, { ALEPH_DISPATCH: "off" }));
     await until(() => !dispatching());
     expect(started()).toEqual([]);
@@ -71,7 +71,7 @@ describe("every transition dispatches at once", () => {
     await until(() => started().includes(`fac-${x}`));
   }, 60_000);
 
-  test("a stuck run holds only its own goal: the next goal starts beside it", async () => {
+  test("a stuck run holds only its own issue: the next issue starts beside it", async () => {
     // The safe default actions would release the run; without them it stays stuck.
     process.env.ALEPH_RESCUE = "off";
     try {

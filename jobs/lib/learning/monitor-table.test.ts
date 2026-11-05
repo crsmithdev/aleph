@@ -72,7 +72,7 @@ describe("Asks, reopens and holds", () => {
     { at: at(DAY, 9), name: "p-1", kind: "spec-check", text: "" },
     { at: at(DAY, 11), name: "p-1", kind: "started", text: "" },
     { at: at(DAY, 9), name: "p-2", kind: "open", text: "" },
-    // The last record of a goal has no known end: it counts as a record and as no time.
+    // The last record of an issue has no known end: it counts as a record and as no time.
     { at: at(DAY, 10), name: "p-3", kind: "busy", text: "" },
   ];
   const t = measure({ ...empty, storeLog, runs, holds }, DAY, Date.parse(at(DAY, 23)));
@@ -86,7 +86,7 @@ describe("Asks, reopens and holds", () => {
     expect(t.today.reopens).toBe(1);
   });
 
-  test("a hold kind's records, goals and hours until the goal's next record; the held share leaves out open and started", () => {
+  test("a hold kind's records, issues and hours until the issue's next record; the held share leaves out open and started", () => {
     expect(t.today.holds).toEqual([
       { kind: "spec-check", records: 1, goals: 1, hours: 2 },
       { kind: "started", records: 1, goals: 1, hours: 0 },
@@ -96,7 +96,7 @@ describe("Asks, reopens and holds", () => {
     expect(t.today.held).toEqual({ goals: 2, seen: 3 });
   });
 
-  test("the 7 gate kinds count as the old kinds did: not-ready on an open job or a done goal holds nothing, the other gates hold", () => {
+  test("the 7 gate kinds count as the old kinds did: not-ready on an open job or a done issue holds nothing, the other gates hold", () => {
     const rec = (name: string, kind: string, text: string) => ({ at: at(DAY, 10), name, kind, text });
     const v6 = measure({ ...empty, holds: [
       rec("g-1", "not-ready", "its job is running"), rec("g-2", "not-ready", "the item is already done"),

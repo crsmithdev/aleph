@@ -21,7 +21,7 @@ describe("prospective memory", () => {
   // Old-shape items, seeded: no verb of `aleph issue` sets `goal` or `after` on an old-shape item now. The tick below does the dispatching.
   const addIssue = (title: string, ...more: string[]) => addOld(title, "", more, { ALEPH_DISPATCH: "off" });
 
-  test("a goal waiting on several items comes due once every one is done", async () => {
+  test("an issue waiting on several items comes due once every one is done", async () => {
     const a = await addIssue("wait a"), b = await addIssue("wait b");
     const w = await addIssue("waits on two", "--after", `fac-${a},fac-${b}`);
     await issueClose("fac", a, "done");

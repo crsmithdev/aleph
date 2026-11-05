@@ -63,9 +63,9 @@ const busy = (runs: Entry[], kind: string, on: string) => runs.some((e) => e.run
 
 /**
  * The safety net. It records what could move now and does not, each key with the time a tick first saw it: `stalled`
- * (land, goal, ingest), an Ask with no case text and no director run (`ask:`), and a job to rescue (`rescue:`). A key
+ * (land, issue, ingest), an Ask with no case text and no director run (`ask:`), and a job to rescue (`rescue:`). A key
  * that a tick saw before is missed. Each missed key is logged once as `missed: <key>` and one dispatch starts them all:
- * its lands, rescues and goals, then the intake queue and the director. A red main that moved since its record (a fix
+ * its lands, rescues and issues, then the intake queue and the director. A red main that moved since its record (a fix
  * by hand) starts the suite once per commit. It reads the store and the repos as last fetched. Returns the missed keys.
  */
 export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPorts): Promise<string[]> {

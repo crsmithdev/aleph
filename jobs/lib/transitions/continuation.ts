@@ -5,9 +5,9 @@
  * it: nextStep, afterLand, askedQuestion, rescueCase,
  * and the rescue steps but rerunStep. The briefs and notes read the run folders.
  *
- * It owns two markers: the rerun note at <factory>/rerun/<name>.md, which the goal's
+ * It owns two markers: the rerun note at <factory>/rerun/<name>.md, which the issue's
  * next run reads, and `rescued` in a run folder, which counts a rescue case against
- * the goal. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
+ * the issue. The Ask markers (`asked`, `asked-spec`) stay in ask.ts.
  */
 import { skillSection } from "../roles/role-skill.ts";
 import { existsSync, readFileSync } from "node:fs";
@@ -102,7 +102,7 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
 }
 
 /**
- * The spec of a goal's next job: the title, the spec, the reasons of the earlier drops (newest first), the notes on
+ * The spec of an issue's next job: the title, the spec, the reasons of the earlier drops (newest first), the notes on
  * the issue, and the rerun note when a rescue or the director left one. `rerun` says a rerun
  * note went in: the factory clears it once the run starts.
  */
@@ -114,13 +114,13 @@ export function issueBrief(item: { title: string; spec: string; notes: string[] 
 }
 
 // ---------------------------------------------------------------------------
-// The rerun note: what the goal's next run reads, under "Note on the last run"
+// The rerun note: what the issue's next run reads, under "Note on the last run"
 
-/** Leave the note in the goal's job record: a `rerun` event. */
+/** Leave the note in the issue's job record: a `rerun` event. */
 export function writeRerun(name: string, note: string): void {
   record.addEvent(name, { kind: "rerun", what: note });
 }
-/** The goal's rerun note: its newest `rerun` event, unless a `rerun-cleared` event came after it. */
+/** The issue's rerun note: its newest `rerun` event, unless a `rerun-cleared` event came after it. */
 const rerunNote = (name: string): string => {
   const e = record.read(name)?.events.findLast((x) => x.kind === "rerun" || x.kind === "rerun-cleared");
   return e?.kind === "rerun" ? e.what.trim() : "";
@@ -185,7 +185,7 @@ export function bounceNote(run: Run): string {
 
 /**
  * The whole brief of a merge run: the conflicted paths, the last commit on main that touched each,
- * and the goal's title when the store has one. No spec text, no notes.
+ * and the issue's title when the store has one. No spec text, no notes.
  */
 function mergeBrief(land: Run, repo: Repo, title?: string): string {
   const main = `origin/${repo.main}`;
@@ -299,17 +299,17 @@ export type Step = { action: "drop" | "land again" | "recheck"; rerun?: string; 
 /** The run a rescue acts on: its entry, its repo, its job name, and why it stopped. */
 export type Stuck = { last: Entry; r: Run; repo: Repo; reason: string };
 
-/** The step for a run that a host restart killed. `hasWork`: its branch has commits ahead of main. The goal did not cause this: no rescue mark, so the goal keeps its rerun. */
+/** The step for a run that a host restart killed. `hasWork`: its branch has commits ahead of main. The issue did not cause this: no rescue mark, so the issue keeps its rerun. */
 export function killedStep({ last, r }: Stuck, hasWork: boolean): Step {
   const text = `a host restart killed ${r.kind} run ${last.id}`;
-  // The branch passed, and the land may have pushed: a new land finds that, and a new goal run would do the work twice.
+  // The branch passed, and the land may have pushed: a new land finds that, and a new issue run would do the work twice.
   if (r.kind === "land") return { action: "land again", noted: `${text}: landed again`, told: `${text}: landing again` };
   // A build or recheck with commits ahead of main has finished work: a recheck of its branch keeps it, and no new run is started.
   if (isAgentRun(r.kind) && hasWork) return { action: "recheck", noted: `${text}: rechecked, its branch has the worker's commits`, told: `${text}: rechecking its branch` };
   return { action: "drop", dropReason: `${text}. The goal did not cause this. Run the goal again from the start.`, noted: `${text}: dropped, and the goal starts again`, told: `${text}: the goal starts again` };
 }
 
-/** The step for a lost run: a host restart's step, as the goal did not cause it either. The rescue counts it once per goal. */
+/** The step for a lost run: a host restart's step, as the issue did not cause it either. The rescue counts it once per issue. */
 export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
   const text = `${r.kind} run ${last.id} was lost: its process ended with no end written`;
   if (r.kind === "land") return { action: "land again", noted: `${text}: landed again, once`, told: `${text}: landing again` };
@@ -317,7 +317,7 @@ export function lostStep({ last, r }: Stuck, hasWork: boolean): Step {
   return { action: "drop", dropReason: `${text}. Run the goal again from the start.`, noted: `${text}: dropped, and the goal reruns once`, told: `${text}: the goal reruns` };
 }
 
-/** The step for a worker's claim that the goal is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
+/** The step for a worker's claim that the issue is met, by `red`, the red line of main. `failure` is the red CI's failure, which the rerun quotes. */
 export function claimStep({ last, r, repo }: Stuck, claim: string | null, red: string | null, failure?: string): Step {
   const said = `${r.kind} run ${last.id} says the goal is already met (${claim})`;
   if (!red) return { action: "drop", noted: `${said}, and the checks pass on origin/${repo.main}: dropped, and the item is done`, done: true, fate: "met" };

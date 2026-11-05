@@ -1,8 +1,8 @@
 /**
- * The report writer: one episode page per done goal, built from git, the job
+ * The report writer: one episode page per done issue, built from git, the job
  * ledger and Langfuse, and written to `<factoryDir()>/episodes/`. It never
  * reads a run's result.md or any other worker claim. A page older than
- * KEEP_DAYS is deleted, and a goal whose last run ended before then gets no
+ * KEEP_DAYS is deleted, and an issue whose last run ended before then gets no
  * page, so a deleted page is not written again.
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -32,7 +32,7 @@ function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {
   return item.sub !== undefined && pages.includes(`${titleUnder(`${repo.key}-${item.id}`, item)}${MD}`);
 }
 
-/** The repo's done goals with a ledger run in the last KEEP_DAYS and no episode page yet. */
+/** The repo's done issues with a ledger run in the last KEEP_DAYS and no episode page yet. */
 export function doneIssues(repo: Repo, now = Date.now()): issues.Issue[] {
   const doc = readList(repo);
   if (!doc) return [];
@@ -78,7 +78,7 @@ export function episodeTitle(repo: Repo, item: issues.Issue): string {
 export interface Commit { sha: string; subject: string; stat: string }
 export type Langfuse = { error: string } | { traces: { id: string; tokens: number | null }[] };
 
-/** The land commits of the goal; a parent has those of its parts. */
+/** The land commits of the issue; a parent has those of its parts. */
 function commitsOf(repo: Repo, item: issues.Issue): Commit[] {
   fetchOrigin(repo.path);
   const main = `origin/${repo.main}`;
@@ -176,7 +176,7 @@ export function pruneEpisodes(now = Date.now()): void {
   }
 }
 
-/** The done goals of `repos`, the one whose last run ended longest ago first, at most `cap` pages. */
+/** The done issues of `repos`, the one whose last run ended longest ago first, at most `cap` pages. */
 export async function writeEpisodes(repos: Repo[], cap = 10): Promise<{ written: string[]; failed: string[] }> {
   pruneEpisodes();
   const todo: { repo: Repo; item: issues.Issue; at: number }[] = [];

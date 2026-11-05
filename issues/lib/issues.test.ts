@@ -102,7 +102,7 @@ describe("issue verbs without argv", () => {
     expect(item(r, 1).title).toBe("parent");
   });
 
-  test("decide needs an issue with an Ask, clears it and makes no goal", () => {
+  test("decide needs an issue with an Ask, clears it and makes no issue", () => {
     const r = repo([{ title: "a" }, { title: "b" }]);
     for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, n)!), { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });
     store.writeList(r, "ask", (doc) => { const i = issues.add(doc, "c"); setAsk(refIn(doc.repo!, i), { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });

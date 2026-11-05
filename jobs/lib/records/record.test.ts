@@ -131,7 +131,7 @@ test("next: a stuck run the factory asked Chris about waits", () => {
   expect(record.next(rec([{ condition: "failed" }], { events })).step).toBe("wait");
 });
 
-test("next: a goal with no run waits for its hold, else starts", () => {
+test("next: an issue with no run waits for its hold, else starts", () => {
   expect(record.next(rec([], { wait: { kind: "after", reason: "after aleph-6", since: AT } }))).toEqual({ step: "wait", action: "waiting" });
   expect(record.next(rec([])).step).toBe("start");
 });

@@ -224,7 +224,7 @@ export async function unit(folder: string): Promise<void> {
   if (run.kind !== "plain" && dispatchOn()) await dispatchFree(folder);
 }
 
-/** A run ended, so a slot may be free: `aleph dispatch` starts the ready goals. Its output goes to dispatch.log. */
+/** A run ended, so a slot may be free: `aleph dispatch` starts the ready issues. Its output goes to dispatch.log. */
 async function dispatchFree(folder: string): Promise<void> {
   await runLogged(["dispatch"], runFile(folder, "dispatch.log"));
 }
@@ -488,7 +488,7 @@ export function branchPorts(folder: string, run: Run, repo: Repo, base: string, 
 }
 
 /**
- * The goal's Oracle commands, run on the branch in a detached worktree, the last step of Verify.
+ * The issue's Oracle commands, run on the branch in a detached worktree, the last step of Verify.
  * A command the run's checks already ran is skipped; one that fails runs once more.
  * Returns the reason of the first that fails twice, or null. A command that could not run to a verdict (`infra`: its
  * setup failed, or a clock or a signal ended it) stops the Oracle with no verdict: it is neither a pass nor a failure.
@@ -612,7 +612,7 @@ change on main and this job's change. The job's own work was reviewed in an earl
 
 /**
  * The reviewer's prompt: the instructions, the test findings if any, the files outside the Edit surface if any,
- * the goal and the diff. A merge run's diff is the merge commit's only (`merge`).
+ * the issue and the diff. A merge run's diff is the merge commit's only (`merge`).
  */
 export function reviewPrompt(name: string, spec: string, diff: string, findings: string[], o: { outside?: string[]; merge?: boolean } = {}): string {
   const tests = findings.length ? `\n\n## Test changes\n\n${TESTS}\n\n${findings.map((f) => `- The diff ${f}`).join("\n")}` : "";

@@ -23,7 +23,7 @@ let saved: Record<string, string | undefined>;
 /** The test's temp directory. `dir` is reassigned per test, so tests read it through this getter, never a copy. */
 export const ctx = { get base(): string { return dir; } };
 
-// Each test gets its own factory repo, work store and registry, so the baseline and the goal list start empty.
+// Each test gets its own factory repo, work store and registry, so the baseline and the issue list start empty.
 export function setup(): void {
   dir = mkdtempSync(join(tmpdir(), "aleph-factory-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
@@ -45,7 +45,7 @@ export function teardown(): void {
 }
 
 
-/** A new open goal in the store's factory list `key` (default `fac`), with the given areas; returns its id. */
+/** A new open issue in the store's factory list `key` (default `fac`), with the given areas; returns its id. */
 export const newIssue = (areas: string[] = [], key = "fac"): number =>
   writeList({ key }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { labels: areas, spec: "Do the thing." }); return item.id; }, true)!.value;
 
@@ -93,7 +93,7 @@ export function fakes() {
 export const dispatch = (f: ReturnType<typeof fakes>) => dispatchIssues(f.start, f.land, f.rescue);
 
 
-// A claim that the goal is met is checked on origin/main: a new commit there, so the baseline is run again.
+// A claim that the issue is met is checked on origin/main: a new commit there, so the baseline is run again.
 export const claimed = (name: string, evidence: string) => {
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `main for ${name}`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");

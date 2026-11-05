@@ -52,7 +52,7 @@ export const isLost = (folder: string): boolean => processState({ folder, run: {
 
 /**
  * The unit process is alive, whether or not it wrote `exit`: the unit writes `exit` and then awaits its run-end
- * dispatch, which may still start goals or hold the dispatch locks.
+ * dispatch, which may still start issues or hold the dispatch locks.
  */
 export function unitAlive(folder: string): boolean {
   const pid = pidOf(folder);

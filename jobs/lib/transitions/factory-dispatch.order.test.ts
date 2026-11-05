@@ -1,4 +1,4 @@
-// The dispatch's order and baseline: one start per goal, the live cap, intake order for an issue to plan, a green baseline, and parents closed on a red or held baseline.
+// The dispatch's order and baseline: one start per issue, the live cap, intake order for an issue to plan, a green baseline, and parents closed on a red or held baseline.
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

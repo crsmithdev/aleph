@@ -53,7 +53,7 @@ test("aleph-1206: the local checks pass but GitHub CI on main is red, so the cla
   expect(f.specs[0]).toContain(failure);
 });
 
-test("no commit, the item open, first time: dropped with no fate and the goal reruns once, with the last 20 lines of result.md", async () => {
+test("no commit, the item open, first time: dropped with no fate and the issue reruns once, with the last 20 lines of result.md", async () => {
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { reason: "no commit" }, { "result.md": lines(30) });
   const f = fakes();
@@ -70,7 +70,7 @@ test("no commit, the item open, first time: dropped with no fate and the goal re
 const dottedPart = (): string => writeList({ key: "fac" }, "add a dotted goal", (doc) => issues.refOf(addPart(doc, issues.add(doc, "parent"), { title: "g", spec: "Do the thing." })), true)!.value;
 const dotted = (ref: string) => readList({ key: "fac" })!.items.find((i) => issues.refOf(i) === ref)!;
 
-test("a dotted goal's rescue note reaches the goal, and a second no-commit run asks Chris on it", async () => {
+test("a dotted issue's rescue note reaches the issue, and a second no-commit run asks Chris on it", async () => {
   const ref = dottedPart();
   mk(`fac-${ref}`, "build", "failed", { reason: "no commit" });
   const f = fakes();
@@ -108,7 +108,7 @@ test("the second no-commit run with no claim asks Chris: no drop and the issue s
   expect(notes(id)).toContain("hit the same case again");
 });
 
-test("a second infrastructure failure of one goal gets an Ask", async () => {
+test("a second infrastructure failure of one issue gets an Ask", async () => {
   const id = newIssue();
   const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { reason: "fetch failed", job: a.job });
@@ -123,7 +123,7 @@ test("a second infrastructure failure of one goal gets an Ask", async () => {
   expect(ask(id)).not.toBeNull();
 });
 
-test("a land that failed with a merge conflict is dropped and the goal reruns; the second one gets an Ask", async () => {
+test("a land that failed with a merge conflict is dropped and the issue reruns; the second one gets an Ask", async () => {
   const id = newIssue();
   const a = mk(`fac-${id}`, "build", "passed", { land: true });
   mk(`fac-${id}`, "land", "failed", { reason: "merge conflict", conflicts: ["a.ts", "b.ts"], job: a.job });

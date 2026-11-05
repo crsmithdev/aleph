@@ -1,4 +1,4 @@
-// The hold record of a goal the dispatch skips: one per reason, for each reason the goal loop has.
+// The hold record of an issue the dispatch skips: one per reason, for each reason the issue loop has.
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -11,7 +11,7 @@ import { ctx, newIssue, notes, setup, sh, teardown } from "./factory.helpers.ts"
 beforeEach(setup);
 afterEach(teardown);
 
-test("a goal that a red main holds gets one hold record; the suite runs main's checks once for its commit", async () => {
+test("an issue that a red main holds gets one hold record; the suite runs main's checks once for its commit", async () => {
   const id = newIssue();
   let checksRun = 0;
   const red = async () => { checksRun++; return { cause: "check" as const, checkName: "tests", reason: "tests failed" }; };
@@ -29,7 +29,7 @@ test("a goal that a red main holds gets one hold record; the suite runs main's c
   expect(recs[0].kind).toBe("baseline");
 });
 
-test("a red main holds goals after main moves, until a suite run on the new commit is green", async () => {
+test("a red main holds issues after main moves, until a suite run on the new commit is green", async () => {
   const id = newIssue();
   await suiteStep(async () => ({ cause: "check" as const, checkName: "tests", reason: "tests failed" }));
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", "a fix");
@@ -41,7 +41,7 @@ test("a red main holds goals after main moves, until a suite run on the new comm
   expect(out.started).toEqual([`fac-${id}`]);
 });
 
-test("an open goal whose work is on main closes as done, and no later dispatch lists it", async () => {
+test("an open issue whose work is on main closes as done, and no later dispatch lists it", async () => {
   const id = newIssue();
   sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${id}`);
   sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
@@ -62,15 +62,15 @@ test("a parent whose sub-issues are all done closes with a note that names them"
   expect(notes(parent)).toMatch(new RegExp(`its sub-issues are done: fac-${child} \\([0-9a-f]{7}\\)$`, "m"));
 });
 
-test("a main that no suite run has checked, or whose checks gave no verdict, does not hold a goal", async () => {
+test("a main that no suite run has checked, or whose checks gave no verdict, does not hold an issue", async () => {
   const id = newIssue();
   expect(await suiteStep(async () => ({ cause: "infra" as const, reason: "no runner" }))).toEqual({ fac: "main is unchecked: no runner" });
   const out = await dispatchIssues(async () => null, undefined, undefined, undefined);
   expect(out.started).toEqual([`fac-${id}`]);
 });
 
-describe("each skip in the goal loop gets one hold record", () => {
-  test("a goal parked after the first read", async () => {
+describe("each skip in the issue loop gets one hold record", () => {
+  test("an issue parked after the first read", async () => {
     const id = newIssue();
     const name = `fac-${id}`;
     // Park it between the read under the lock and the last read before the start.
@@ -91,7 +91,7 @@ describe("each skip in the goal loop gets one hold record", () => {
 
 });
 
-describe("the done checker's copy of the store was read before a goal existed", () => {
+describe("the done checker's copy of the store was read before an issue existed", () => {
   /** The read number `at` returns `old`, the done checker's; the other reads see the store. */
   const staleOnce = (old: ReturnType<typeof store.readList>, at: number) => {
     const real = store.readList;
@@ -99,7 +99,7 @@ describe("the done checker's copy of the store was read before a goal existed", 
     return spyOn(store, "readList").mockImplementation((place) => (n++ === at ? old : real(place)));
   };
 
-  test("a goal the list names as open, with no commit on main, stays open with no note", async () => {
+  test("an issue the list names as open, with no commit on main, stays open with no note", async () => {
     newIssue();
     const old = store.readList({ key: "fac" });
     const id = newIssue();
@@ -113,7 +113,7 @@ describe("the done checker's copy of the store was read before a goal existed", 
     expect(notes(id)).not.toMatch(/its work is on origin/);
   });
 
-  test("a parent whose only parts are new open goals is not closed", async () => {
+  test("a parent whose only parts are new open issues is not closed", async () => {
     const parent = newIssue();
     const old = store.readList({ key: "fac" });
     writeList({ key: "fac" }, "split", (doc) => {

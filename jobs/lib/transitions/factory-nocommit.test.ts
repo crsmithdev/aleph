@@ -47,7 +47,7 @@ const chrisNotes = (id: number) => notes(id).split("asks Chris:").length - 1;
 
 test("answering the Ask restarts the no-commit streak; three more no-commit runs give it another Ask", async () => {
   const id = newIssue();
-  // Two hours back: outside the run cap's hour, so only the streak holds the goal.
+  // Two hours back: outside the run cap's hour, so only the streak holds the issue.
   noCommitRuns(id, 3, 7200);
   const f = fakes();
   expect((await dispatch(f)).started).toEqual([]);
@@ -77,9 +77,9 @@ test("while the Ask stays on the item, dispatches start nothing and write one no
   expect(chrisNotes(id)).toBe(1);
 });
 
-// The run cap: a fourth agent run of a goal in 60 minutes is not started; one Ask note says so.
+// The run cap: a fourth agent run of an issue in 60 minutes is not started; one Ask note says so.
 const RUN_CAP_NOTE = "the factory started this goal 3 times in the last hour; it stops starting it until Chris reruns it";
-test("a fourth start in an hour is skipped with one Ask note, and the goal is not started", async () => {
+test("a fourth start in an hour is skipped with one Ask note, and the issue is not started", async () => {
   const id = newIssue();
   for (let i = 0; i < 3; i++) mk(`fac-${id}`, "build", "dropped", { reason: "time box", started: ago((i + 1) * 60_000) });
   const f = fakes();

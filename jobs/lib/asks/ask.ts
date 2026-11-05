@@ -1,5 +1,5 @@
 /**
- * The Ask module: what a run, an issue or a goal needs from Chris, and its whole lifecycle. It holds the reasons and
+ * The Ask module: what a run, an issue or a part needs from Chris, and its whole lifecycle. It holds the reasons and
  * what each one offers, sets an Ask on an issue, says which actor (Chris or the director) may take which action on it,
  * and says what clears it. Every new Ask goes to the director first (director.ts); it reaches Chris when the director escalates it. Callers do not read the Ask fields or test reason names for these rules.
  *

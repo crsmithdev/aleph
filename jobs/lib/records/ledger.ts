@@ -60,7 +60,7 @@ export interface Run {
   check?: "open" | "done";
   /** The issue that holds an open manual check. */
   checkItem?: number;
-  /** New shape: the goal or issue the run is on, `<repo>-<n>`. */
+  /** New shape: the issue or part the run is on, `<repo>-<n>`. */
   on?: string;
   /** New shape: what the run waits on. */
   ask?: Ask;
@@ -84,7 +84,7 @@ export interface Run {
   defaults?: string[];
   /** A factory run: the titles of the worker's `followups`. */
   followups?: string[];
-  /** A factory run: the worker's evidence that the goal is already met, when it says so. */
+  /** A factory run: the worker's evidence that the issue is already met, when it says so. */
   alreadyMet?: string;
   /** An agent or land run: each check that ran, skipped `when` checks left out. */
   checks?: CheckResult[];
@@ -265,7 +265,7 @@ export const isBuild = (kind: Run["kind"]): boolean => kind === "build";
 /** A run of the job's agent: a build or a recheck. */
 export const isAgentRun = (kind: Run["kind"]): boolean => kind === "build" || kind === "recheck";
 
-/** The number of the run's `on` (`<repo>-<n>`, for the run's repo). A dotted `on` gives the goal's `<n>.<m>` as a string. */
+/** The number of the run's `on` (`<repo>-<n>`, for the run's repo). A dotted `on` gives the issue's `<n>.<m>` as a string. */
 export function onOf(run: Run): number | string | undefined {
   if (run.on === undefined) return undefined;
   const m = run.on.match(/^(.+)-(\d+(?:\.\d+)?)$/);
