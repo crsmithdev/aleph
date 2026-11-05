@@ -95,13 +95,14 @@ describe("the writes", () => {
     expect(text.match(/<!-- notes -->/g)).toHaveLength(1);
   });
 
-  test("note with a label, after askChris set an ask", () => {
+  test("note leaves labels unset, after askChris set an ask", () => {
     const r = repo([{ title: "one", labels: ["goal"] }]);
     const ask = { kind: "input" as const, reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], recommended: "A", why: ["w"] };
     expect(askChris(r, 1, ask, "asked")).toBeNull();
-    expect(store.note(r, 1, "asked", { label: "ui" })).toBeNull();
-    expect(store.note(r, 1, "asked again", { label: "ui" })).toBeNull();
-    expect(store.labels(item(r, 1))).toEqual(["ui"]);
+    expect(store.note(r, 1, "asked")).toBeNull();
+    expect(store.note(r, 1, "asked again")).toBeNull();
+    expect(item(r, 1).fm.labels).toBeUndefined();
+    expect((store as any).label).toBeUndefined();
     expect(askOf(`${r.key}-1`)?.question).toBe("A or B?");
   });
 

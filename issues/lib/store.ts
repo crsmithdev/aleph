@@ -8,7 +8,7 @@
  *
  * It is the Issues module: the predicates (`isBuildable`, `isSorted`,
  * `awaitsChris`), one read of a repo's list (`reader`), and the named writes
- * (`note`, `close`, `label`, `closeAndFile`, `file`). Callers do not read
+ * (`note`, `close`, `closeAndFile`, `file`). Callers do not read
  * `fm.labels` or name a task's path.
  */
 import * as record from "../../jobs/lib/record.ts";
@@ -219,13 +219,6 @@ export const isSorted = (doc: Doc, item: Issue, repo: Place = { key: "" }): bool
   asks(doc, item, repo) || item.sub !== undefined || isTracker(item)
   || (!planSet(item) && (partsOf(doc, item).length > 0 || takenIn(item) || (!repo.author && !!item.spec.trim())));
 
-/** Add the labels `add` the item lacks and take out `remove`, as one edit; no edit when nothing changes. */
-export function label(item: Issue, add: string[], remove: string[] = []): void {
-  const had = labels(item);
-  const next = [...new Set([...had, ...add])].filter((l) => !remove.includes(l));
-  if (next.join("\0") !== had.join("\0")) issues.edit(item, { labels: next });
-}
-
 // The read.
 
 /** Lists by repo key, each read from the store once for the reader's life. */
@@ -290,17 +283,15 @@ export function goal(repo: Place, id: number | string): Issue | null {
 const why = (e: any): string => e?.message ?? String(e);
 
 /**
- * A note on item `id`, as one commit; with `done` the item is done too, with
- * `label` it gains that label.
+ * A note on item `id`, as one commit; with `done` the item is done too.
  * Returns why it could not, or null.
  */
-export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean; label?: string; unlabel?: string } = {}): string | null {
+export function note(repo: Place, id: number | string, text: string, opts: { done?: boolean } = {}): string | null {
   try {
     const w = writeList(repo, `todo: item ${id}: ${text}`, (doc) => {
       const item = issues.find(doc, id);
       if (!item) return null;
       if (opts.done) issues.setStatus(item, "done");
-      if (opts.label || opts.unlabel) label(item, opts.label ? [opts.label] : [], opts.unlabel ? [opts.unlabel] : []);
       return issues.note(item, text);
     });
     return w ? null : `no issue ${id}`;

@@ -72,3 +72,11 @@ test("add and addPart store the filing time next to the day, and setStatus store
   issues.setStatus(a, "open");
   expect(a.fm.closed_time).toBeUndefined();
 });
+
+test("edit leaves labels unset and lint reports no retired labels finding", () => {
+  const doc = issues.blank("r");
+  const item = issues.add(doc, "Fix the lane");
+  issues.edit(item, { title: "Fix the lane height", priority: "high", areas: ["ui"], labels: ["ui"] } as any);
+  expect(item.fm.labels).toBeUndefined();
+  expect(issues.lint(doc).filter((f) => f.problem.includes("labels is retired"))).toEqual([]);
+});
