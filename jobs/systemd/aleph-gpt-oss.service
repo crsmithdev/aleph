@@ -17,6 +17,8 @@ ExecStart=%h/.bun/bin/bun %h/aleph/jobs/lib/gpt-oss-start.ts
 Restart=always
 RestartSec=2
 TimeoutStopSec=10
+# Below-normal CPU priority: factory runs and tests get the CPU first under contention.
+Nice=10
 
 [Install]
 WantedBy=default.target
