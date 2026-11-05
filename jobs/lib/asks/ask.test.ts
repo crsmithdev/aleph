@@ -192,7 +192,11 @@ test("askIfPartDropped asks on the parent once its last open part is dropped", (
   expect(askOf(refIn("fac", parent))).toBeNull();
   issues.setStatus(b, "dropped");
   askIfPartDropped(doc, b, "too big");
-  expect(askOf(refIn("fac", parent))).toMatchObject({ reason: "part-dropped", question: `Part fac-${parent.id}.2 was dropped: too big. What now?` });
+  const a2 = askOf(refIn("fac", parent));
+  expect(a2).toMatchObject({ reason: "part-dropped", question: `Sub-issue fac-${parent.id}.2 was dropped: too big. What now?` });
+  const lines = (a2?.options ?? []).map((o) => o.line).join("\n");
+  expect(lines).toContain("sub-issue");
+  expect(lines).not.toContain("part");
 });
 
 test("askFromRun marks the run asked, and with a spec the run waits for a spec edit", () => {

@@ -287,7 +287,7 @@ export function askIfPartDropped(doc: issues.Doc, part: issues.Issue, reason: st
   const issue = parentOf(doc, part);
   if (!issue || !doc.repo || issues.status(issue) !== "open" || awaitsChris(refIn(doc.repo, issue))) return;
   if (partsOf(doc, issue).some((g) => g !== part && issues.status(g) === "open")) return;
-  askPartDropped(doc.repo, issue, `Part ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
+  askPartDropped(doc.repo, issue, `Sub-issue ${doc.repo}-${issues.refOf(part)} was dropped: ${reason}. What now?`);
 }
 
 /** Put the part-dropped Ask on a parent. */
@@ -297,8 +297,8 @@ export function askPartDropped(key: string, issue: issues.Issue, question: strin
     reason: "part-dropped",
     question,
     options: [
-      { label: "Close with what landed", line: "Close the issue: the parts that landed are enough." },
-      { label: PLAN_REST, line: "Plan a new part for what the dropped part was to do." },
+      { label: "Close with what landed", line: "Close the issue: the sub-issues that landed are enough." },
+      { label: PLAN_REST, line: "Plan a new sub-issue for what the dropped sub-issue was to do." },
     ],
     why: [],
   });
