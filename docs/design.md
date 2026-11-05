@@ -213,7 +213,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:540`) with `heads()` (`ui/lib.js:543`) or `sortHead()` (`ui/lib.js:663`), styled by `table.tbl` (`ui/app.css:442`). Every table goes through `dataTable()`.
+The one table is `dataTable()` (`ui/lib.js:540`) with `heads()` (`ui/lib.js:543`) or `sortHead()` (`ui/lib.js:676`), styled by `table.tbl` (`ui/app.css:442`). Every table goes through `dataTable()`.
 
 Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:442`):
 
@@ -240,10 +240,10 @@ Columns of the main tables:
 | Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
 | Hooks | Last, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
 | Denials | When, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
-| Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
+| Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
-| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:201`) |
-| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:638`) |
+| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:201`) |
+| Commits | Date, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:638`) |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
 
@@ -347,7 +347,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:665`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:505`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:678`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:505`).
 
 ## Components
 

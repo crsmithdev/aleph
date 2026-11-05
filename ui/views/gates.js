@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -98,7 +98,7 @@ export function renderMonitor(d) {
 /** The tick, the suite and the monitor: when each last ran and what came of it. */
 export function renderSchedules(d) {
   const rows = d.schedules.map((s) => `<tr><td>${s.last ? when(s.last) : "has not run"}</td><td>${esc(s.name)}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
-  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${dataTable(heads(["Last Run", "Schedule", "Result"]), rows)}</section>`;
+  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${rows ? dataTable(heads(["Last Run", "Schedule", "Result"]), rows) : empty("No schedule.")}</section>`;
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
@@ -111,9 +111,9 @@ export function renderWaiting(d) {
 /** Each kind of Ask that Chris answered the same way 3 or more times, with a button that makes the answer the rule when it is the reason's automatic mode. */
 export function renderRepeats(d) {
   const rows = d.repeats.map((r) => `<tr><td>${esc(REASONS[r.reason]?.[0] ?? r.reason)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
-    (r.mode ? `<button class="act" type="button" data-rule="${esc(r.reason)}" data-mode="${esc(r.mode)}" data-label="Make it a rule">Make it a rule</button>` : "") + `</td></tr>`).join("");
+    (r.mode ? `<button class="act" type="button" data-rule="${esc(r.reason)}" data-mode="${esc(r.mode)}" data-label="Make it a rule">Make it a rule</button>` : "") + `</td></tr>`);
   return `<section id="gates-repeats" aria-label="Repeat answers">${sectionHead("Repeat Answers", { count: d.repeats.length })}` +
-    (rows ? dataTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
+    (rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
 }
 
 /** One row per Ask reason: who decides it. Ask me, or the reason's one automatic mode. */
@@ -135,7 +135,7 @@ export function renderRules(d) {
     const dec = r.decided, out = r.outcome;
     return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
   }).join("");
-  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who Decides", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"]), rows, { id: "rules-table" })}</section>`;
+  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${!rows ? empty("No rule.") : dataTable(heads(["Rule", "Who Decides", "Fired", "Decided by (Rule / Director / Manual)", "Outcome (Fixed / No Change)"]), rows, { id: "rules-table" })}</section>`;
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */

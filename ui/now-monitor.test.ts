@@ -55,6 +55,8 @@ test("the runs per item and goals cells hold a bar that scales with the value", 
 });
 
 test("each table shows at most 10 rows", () => {
+  expect(view.renderStages({ factory: { monitor: { ...monitor, stages: [] } } })).toContain('class="empty"');
+  expect(view.renderHolds({ factory: { monitor: { ...monitor, holds: [] } } })).toContain('class="empty"');
   const rows = Array.from({ length: 12 }, (_, i) => ({ stage: `s${i}`, costPerItem: P(1, 1), runsPerItem: P(1, 1), unusable: P(0, 0) }));
   const hs = Array.from({ length: 12 }, (_, i) => ({ kind: `k${i}`, goals: P(1, 1), hours: P(1, 1) }));
   expect(view.renderStages({ factory: { monitor: { ...monitor, stages: rows } } }).match(/<tr><td>/g)).toHaveLength(10);

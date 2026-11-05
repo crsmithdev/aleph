@@ -711,6 +711,13 @@ describe("the Issue page shows the ask row", () => {
     expect(h).toContain(`<tr><td class="time">${when(date)}</td><td><code>abcdef1</code></td>`);
   });
 
+  test("renderIssue shows empty() for no commits and pages the Commits table at 50", async () => {
+    const d = await getJson(`/api/issues/fac/1`);
+    expect(v.renderIssue({ ...d, commits: [] })).toContain("No commit on main names this issue");
+    const commits = Array.from({ length: 51 }, (_, i) => ({ hash: `abcdef${i}0000`, subject: `s${i}`, date: "2026-11-02T09:00:00Z" }));
+    expect(v.renderIssue({ ...d, commits })).toContain("50 of 51");
+  });
+
   test("renderIssue shows one row with the situation, effects and buttons, and no ask fields in the front matter", async () => {
     const n = seed(true);
     const d = await getJson(`/api/issues/fac/${n}`);

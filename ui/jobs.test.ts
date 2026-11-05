@@ -338,3 +338,12 @@ describe("a worker round the reviewer sent back", () => {
     }
   });
 });
+
+test("the job check-log table is empty() with no checks and pages at 50", () => {
+  const j = { name: "fac-9", repo: "fac", runs: [], checks: [] };
+  expect(v.renderJob(j)).toContain('class="empty"');
+  const c = Array.from({ length: 51 }, (_, i) => ({ name: `c${i}`, ok: true, seconds: 1, tests: { ran: 1, passed: 1, failed: 0, skipped: 0 } }));
+  const h = v.renderJob({ ...j, checks: c });
+  expect(h).toContain("50 of 51");
+  expect(h).toContain('<th class="num">Ran</th>');
+});

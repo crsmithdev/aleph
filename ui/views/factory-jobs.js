@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chartBox, mountCharts, day, sentence, dataTable, dur, error, esc, failMessage, hashQuery, heads, legend, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chartBox, mountCharts, day, sentence, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, legend, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
@@ -84,7 +84,7 @@ const label = (d, key, name, what) => {
   return `${name} ${what}: ${times.length} issues in the ${lastPeriod(d)}` + (times.length ? `, from ${dur(Math.min(...times.map((i) => i[key])))} to ${dur(Math.max(...times.map((i) => i[key])))}` : "");
 };
 
-const table = (labels, num, rows) => dataTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`).join(""));
+const table = (labels, num, rows) => !rows.length ? empty("No row to show.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`));
 
 /** The page body for a stage. `day` is /api/speed for the last 24h, or null. `jobs` is /api/jobs for the window, or null while it loads; `f` is the route query. */
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {

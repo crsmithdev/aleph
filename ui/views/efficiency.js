@@ -1,5 +1,5 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { card, empty, meter, sentence, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope } from "../lib.js";
+import { card, empty, meter, sentence, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope, pagedTable } from "../lib.js";
 import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
@@ -35,15 +35,15 @@ function scorecard(d, key) {
 
 const causeBars = (s) => {
   const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0;
-  return dataTable(heads(["Cause", "Took", "Runs", "Bar"], ["Took", "Runs"]), s.causes.map((x) =>
-    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${x.hours === undefined ? "" : esc(hours(x.hours))}</td><td class="num">${x.runs}</td><td>${meter(max > 0 ? (size(x) / max) * 100 : 0)}</td></tr>`).join(""));
+  return pagedTable(heads(["Cause", "Took", "Runs", "Bar"], ["Took", "Runs"]), s.causes.map((x) =>
+    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${x.hours === undefined ? "" : esc(hours(x.hours))}</td><td class="num">${x.runs}</td><td>${meter(max > 0 ? (size(x) / max) * 100 : 0)}</td></tr>`));
 };
 
 const topTable = (rows) => dataTable(heads(["Issue", "Why", "Took", "Runs"], ["Took", "Runs"]), rows.map((x) =>
   `<tr><td>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="wide" title="${esc(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`)}">${x.title ? `${esc(x.title)}. ` : ""}${esc(x.reason || "No reason recorded.")}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${x.runs}</td></tr>`).join(""));
 
-const usageTable = (rows) => dataTable(heads(["Issue", "Usage", "Runs"], ["Usage", "Runs"]), rows.map((x) =>
-  `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(weekText(x.week))}</td><td class="num">${x.runs}</td></tr>`).join(""));
+const usageTable = (rows) => pagedTable(heads(["Issue", "Usage", "Runs"], ["Usage", "Runs"]), rows.map((x) =>
+  `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(weekText(x.week))}</td><td class="num">${x.runs}</td></tr>`));
 
 function usagePage(d, key) {
   const total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted, s = selection(d, key);

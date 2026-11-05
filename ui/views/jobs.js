@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { sectionHead, blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
+import { sectionHead, blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -91,7 +91,7 @@ export function wireJobs(root, jobsNow) {
   root.onclick = (e) => {
     const seg = e.target.closest?.(".card .seg button");
     if (seg) return goQuery({ [seg.parentElement.dataset.name]: seg.dataset.value });
-    table(e);
+    if (!e.target.closest?.(".paged")) table(e);
   };
 }
 
@@ -198,8 +198,8 @@ export function renderJob(j) {
       (more > 0 ? `<p class="quiet">${esc(plural(more, "more failed test"))} of ${esc(c.name)} not recorded.</p>` : "");
   }).join("");
   const checks = j.checks?.length
-    ? `<div class="dp-logs" data-logs>${dataTable('<th>Check</th><th>Result</th><th class="num">Ran</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Took</th><th>Log</th>', j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join(""))}${failures}<div class="logbody" hidden></div></div>`
-    : "";
+    ? `<div class="dp-logs" data-logs>${pagedTable(heads(["Check", "Result", "Ran", "Passed", "Failed", "Skipped", "Took", "Log"], ["Ran", "Passed", "Failed", "Skipped", "Took"]), j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`))}${failures}<div class="logbody" hidden></div></div>`
+    : empty("No check ran.");
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
     `<header class="ph"><h1>${esc(j.item?.title || j.name)}</h1>${nav ? `<div class="aside">${nav}</div>` : ""}</header>${pills}${blocked}` +
@@ -210,7 +210,7 @@ export function renderJob(j) {
     (j.result ? panel("result", "Result", `<div class="md">${md(j.result)}</div>`) : "") +
     `<div class="dp-detail">${sectionHead("Detail")}` +
     (j.review ? fold("Review", verdict ? tag(verdict, verdict === "pass" ? "done" : "stuck") : "", `<div class="md">${md(j.review)}</div>`) : "") +
-    (checks ? fold("Checks", tag(`${passed} / ${j.checks.length}`, passed === j.checks.length ? "done" : "stuck"), checks) : "") +
+    (j.checks ? fold("Checks", tag(`${passed} / ${j.checks.length}`, passed === j.checks.length ? "done" : "stuck"), checks) : "") +
     fold("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<div class="diff-panel" id="diff" data-job="${esc(j.name)}">${loadingLine("the diff")}</div>`) +
     `</div></div>`;
 }

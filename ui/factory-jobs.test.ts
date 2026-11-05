@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { redirect, renderFactoryJobs, slowestOption, stripOption, trendOption } from "./views/factory-jobs.js";
 // @ts-ignore plain JS shared with the page
+import { wireJobs } from "./views/jobs.js";
+// @ts-ignore plain JS shared with the page
 import { xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { day } from "./lib.js";
@@ -116,4 +118,25 @@ test("#/jobs redirects to the merged page with its query; a Job page does not", 
   expect(redirect("#/jobs?repo=fac")).toBe("#/factory/jobs?repo=fac");
   expect(redirect("#/jobs")).toBe("#/factory/jobs");
   expect(redirect("#/jobs/aleph-1")).toBeNull();
+});
+
+test("the Checks and Models tables show empty() with no rows and page at 50", () => {
+  expect(renderFactoryJobs({ ...D, checks: [], models: [] }, null, "lead").match(/class="empty"/g)!.length).toBe(2);
+  const checks = Array.from({ length: 51 }, (_, i) => ({ name: `c${i}`, count: 1, p50: 1, p90: 2 }));
+  expect(renderFactoryJobs({ ...D, checks }, null, "lead")).toContain("50 of 51");
+});
+
+test("Show more under the Checks table reveals rows in place and leaves the Jobs table's limit alone", () => {
+  const was = { location: globalThis.location, history: globalThis.history };
+  const set: string[] = [];
+  Object.assign(globalThis, { location: { hash: "#/factory/jobs" }, history: { replaceState: (_s: unknown, _t: string, url: string) => set.push(url) } });
+  try {
+    const root: any = {};
+    wireJobs(root, () => null);
+    const click = (paged: boolean) => root.onclick({ target: { closest: (s: string) => (s === "button[data-more]" ? { dataset: { more: "50" } } : s === ".paged" && paged ? {} : null) } });
+    click(true);
+    expect(set).toEqual([]);
+    click(false);
+    expect(set).toEqual(["#/factory/jobs?limit=100"]);
+  } finally { Object.assign(globalThis, was); }
 });

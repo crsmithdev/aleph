@@ -548,3 +548,12 @@ test("the Held time card reads hours() and the Automation rate reads pct()", () 
   expect(h).toContain("<b>3513h<em>");
   expect(h).toContain(`<b>${pct(12.5)}<em>`);
 });
+
+test("Schedules, Repeat Answers, Rules and Log show empty() with no rows; Repeat Answers and Log page at 50", () => {
+  expect(gates.renderLog({ log: { entries: [] } } as any)).toContain('class="empty"');
+  expect(gates.renderLog({ log: { entries: Array.from({ length: 51 }, (_, i) => ({ at: new Date(NOW - i * 1000).toISOString(), by: "Rule", item: "x-1", what: `t${i}` })) } } as any)).toContain("50 of 51");
+  expect(gates.renderSchedules({ schedules: [] })).toContain('class="empty"');
+  expect(gates.renderRules({ rules: [] })).toContain('class="empty"');
+  expect(gates.renderRepeats({ repeats: [] })).toContain('class="empty"');
+  expect(gates.renderRepeats({ repeats: Array.from({ length: 51 }, (_, i) => ({ reason: `r${i}`, answer: "a", count: 3 })) })).toContain("50 of 51");
+});

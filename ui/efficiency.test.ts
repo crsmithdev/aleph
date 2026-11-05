@@ -139,3 +139,12 @@ test("a click on a card selects its class", () => {
   press("Lost time");
   expect(picked).toEqual(["landed", "all"]);
 });
+
+test("the Usage, Causes and Issues tables show empty() with no rows; Usage and Causes page at 50 rows", () => {
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, usage: [] } }, "usage")).toContain('class="empty"');
+  expect(renderEfficiency(D, "dropped").match(/class="empty"/g)!.length).toBe(2);
+  const usage = Array.from({ length: 51 }, (_, i) => ({ goal: `fac-${i}`, week: 0.01, runs: 1 }));
+  expect(renderEfficiency({ ...D, issues: { ...D.issues, usage } }, "usage")).toContain("50 of 51");
+  const causes = Array.from({ length: 51 }, (_, i) => ({ name: `c${i}`, hours: 1, runs: 1 }));
+  expect(renderEfficiency({ ...D, flakes: causes.map((c) => ({ name: c.name, count: 1 })) }, "flakes")).toContain("50 of 51");
+});

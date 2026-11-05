@@ -659,6 +659,19 @@ export function pager(shown, total, step = 50, { cls = "", attr = "data-more", v
   return `<div class="pager${cls ? ` ${cls}` : ""}">${more > 0 ? `<button type="button" class="act" ${attr}="${value(more, n)}">Show ${more} more</button>` : ""}<span class="of">${n} of ${total}</span></div>`;
 }
 
+/** A `dataTable` that shows `step` rows and a pager; the "Show more" button reveals the rest in place. `rows` is an array of `<tr>` strings. */
+export const pagedTable = (head, rows, step = 50) =>
+  `<div class="paged">${dataTable(head, rows.map((r, i) => (i < step ? r : r.replace("<tr", "<tr hidden"))).join(""))}${pager(step, rows.length, step)}</div>`;
+if (typeof document !== "undefined") {
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest?.(".paged button[data-more]");
+    if (!b) return;
+    const box = b.closest(".paged"), rows = [...box.querySelectorAll("tbody tr")], step = Number(b.dataset.more), n = rows.filter((r) => !r.hidden).length + step;
+    rows.forEach((r, i) => { r.hidden = i >= n; });
+    box.querySelector(".pager").outerHTML = pager(n, rows.length, step);
+  });
+}
+
 /** A sortable header cell; `sort` is `{key, dir}` (dir 1 up, -1 down). Every table shows the same arrow. */
 export function sortHead(label, key, sort, { num = false } = {}) {
   const on = sort?.key === key;

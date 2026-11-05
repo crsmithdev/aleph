@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, crumb, dataTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -207,7 +207,7 @@ export function renderTable(rows, o = {}) {
   if (!all.length) return empty("Nothing matches.", "Loosen the filters, or file an issue below.");
   const shown = all.slice(0, o.limit ?? PAGE);
   const sort = o.sort ?? ((o.q ?? "").trim() ? null : UPDATED);
-  const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : `<th>${esc(label)}</th>`)).join("");
+  const head = COLUMNS.map(([k, label, c]) => (SORT[k] ? sortHead(label, k, sort, c) : heads([label], c?.num ? [label] : []))).join("");
   return `${dataTable(head, shown.map(renderRow).join(""))}${pager(shown.length, all.length, PAGE)}`;
 }
 
@@ -635,10 +635,10 @@ export function renderIssue(d) {
   const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + fold_ : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
-    ? dataTable(`<th>Date</th><th>Commit</th><th>Subject</th>${parts ? "<th>Part</th>" : ""}`, d.commits.map((c) => {
+    ? pagedTable(heads(["Date", "Commit", "Subject", ...(parts ? ["Part"] : [])]), d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
       return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}</tr>`;
-    }).join(""))
+    }))
     : empty("No commit on main names this issue in its trailers.");
   const segments = issueSegments(d);
   return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askRow(d.ask) : "") +
