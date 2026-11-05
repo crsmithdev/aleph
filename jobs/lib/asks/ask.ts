@@ -13,7 +13,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryLog, layout } from "../infra/layout.ts";
-import { specVersion } from "../roles/goal-spec.ts";
+import { specVersion } from "../roles/issue-spec.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { parentOf, partsOf, writeList, type Place } from "../../../issues/lib/store.ts";
 import type { Entry } from "../records/ledger.ts";

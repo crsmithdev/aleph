@@ -27,7 +27,7 @@ import { allJobs, isOpen, issue as issueOf, lastReal, openJob, readFile } from "
 import { isLive, isStarting } from "../infra/process.ts";
 import { git } from "../infra/git.ts";
 import { securityChange } from "../gates/gate.ts";
-import { missingSections } from "./goal-spec.ts";
+import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { Runner } from "../gates/checks.ts";
 import { nextBrief } from "../transitions/continuation.ts";
 import { git } from "../infra/git.ts";
-import { outsideSurface } from "./goal-spec.ts";
+import { outsideSurface } from "./issue-spec.ts";
 import { readRun, type Repo, type Run, writeRun } from "../records/ledger.ts";
 import { branchPorts, reviewDiff, reviewPrompt, reviewRange } from "./unit.ts";
 import { workerVerdict } from "../gates/worker-verdict.ts";

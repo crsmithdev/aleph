@@ -11,7 +11,7 @@ import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
 import { setPaused, writeBaseline } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
-import { specVersion } from "../roles/goal-spec.ts";
+import { specVersion } from "../roles/issue-spec.ts";
 import { loadRegistry, writeRun, type Repo } from "../records/ledger.ts";
 import { due, readTick, sweep, type SweepPorts } from "./tick.ts";
 

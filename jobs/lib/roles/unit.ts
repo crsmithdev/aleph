@@ -28,7 +28,7 @@ import { buildChecks } from "../gates/related.ts";
 import { modelArgv, modelEnv, readModels, viaOf, WORKER_TIER } from "../routing/models.ts";
 import { costDetails } from "../../../hooks/lib/pricing.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
-import { oracleCommands, outsideSurface } from "./goal-spec.ts";
+import { oracleCommands, outsideSurface } from "./issue-spec.ts";
 import { docClaimProblems } from "../../../hooks/lib/docclaims.ts";
 import { postTrace } from "../learning/trace.ts";
 import { runLogged, runPath, startUnit } from "../transitions/launch.ts";

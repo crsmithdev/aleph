@@ -76,8 +76,8 @@ The modules of `jobs/lib/`, one folder per concern:
 |---|---|---|
 | Records and runs | `records/` | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts`, `status.ts`, `jobdiff.ts` |
 | Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `tick.ts`, `launch.ts`, `refusal.ts` |
-| Agent roles | `roles/` | `agent-run.ts`, `agent-call.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `structured.ts`, `goal-spec.ts`, `role-skill.ts` |
-| Gates and checks | `gates/` | `goal-decision.ts`, `factory-status.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
+| Agent roles | `roles/` | `agent-run.ts`, `agent-call.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `structured.ts`, `issue-spec.ts`, `role-skill.ts` |
+| Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
 | Land and recovery | `land/` | `landing.ts`, `rescue.ts`, `firefighter.ts`, `doctor.ts` |
 | Routing | `routing/` | `route.ts`, `models.ts`, `gpt-oss-start.ts` |
 | Asks | `asks/` | `ask.ts`; the director (`jobs/lib/roles/director.ts`) answers the asks |

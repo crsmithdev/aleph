@@ -22,7 +22,7 @@ export type Gate = (typeof GATES)[number];
 export interface Bound { why: string; text: string }
 
 /** A fact left out is not read yet and stops nothing, so a caller can decide from the cheap facts first. */
-export interface GoalFacts {
+export interface IssueFacts {
   name: string;
   item: issues.Issue;
   done: (ref: string) => boolean;
@@ -42,7 +42,7 @@ export interface GoalFacts {
 }
 
 /** `why` is the line in the dispatch's skipped list; `text` is the line Chris reads on the Queued lane. */
-export type GoalDecision = Bound & (
+export type IssueDecision = Bound & (
   | { kind: "ready" | "pause" | "baseline" | "live-cap" }
   /** `on`: the id of the issue whose open job holds the busy file. */
   | { kind: "busy-file"; on?: string }
@@ -65,7 +65,7 @@ export const refDone = (item: issues.Issue | undefined, listRead: boolean, stage
   (item !== undefined && issues.status(item) === "done") || stage === "done" || (listRead && item === undefined);
 
 /** Why the goal is not ready: it is done, waits on an `after` ref, or has an open job; else null. */
-function notReady(f: GoalFacts): Extract<GoalDecision, { kind: "not-ready" }> | null {
+function notReady(f: IssueFacts): Extract<IssueDecision, { kind: "not-ready" }> | null {
   const not = (why: string, text: string) => ({ kind: "not-ready" as const, why, text });
   if (f.done(f.name)) return not("the item is already done", "The item is already done");
   const ids = pendingWaits(afterOf(f.item), f.done);
@@ -75,7 +75,7 @@ function notReady(f: GoalFacts): Extract<GoalDecision, { kind: "not-ready" }> | 
 }
 
 /** The first gate that binds, in the order of GATES, or `ready`. */
-export function goalDecision(f: GoalFacts): GoalDecision {
+export function issueDecision(f: IssueFacts): IssueDecision {
   if (f.pause) return { kind: "pause", ...f.pause };
   // The fix of a red main is the one goal a red baseline lets through: it is how main gets green again.
   // `add` writes the label into `areas`; an older issue may carry it in `labels`, as the firefighter's isRedMain reads.

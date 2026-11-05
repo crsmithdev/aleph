@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readList } from "../../../issues/lib/store.ts";
 import { section, titleProblem } from "../../../issues/lib/todo.ts";
 import { approve, explainLesson, mine, proposals, readStore } from "./corrections.ts";
-import { missingSections } from "../roles/goal-spec.ts";
+import { missingSections } from "../roles/issue-spec.ts";
 import { storeRepos } from "../../../tests/git-fixture.ts";
 import { writeRun } from "../records/ledger.ts";
 

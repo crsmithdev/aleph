@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "bun:test";
-import { isVersion, missingSections, oracleCommands, specVersion, surfacePaths } from "./goal-spec.ts";
+import { isVersion, missingSections, oracleCommands, specVersion, surfacePaths } from "./issue-spec.ts";
 
 const SPEC = "## Goal\nShip it.\n\n## Edit surface (the files the run may change)\n- `jobs/lib/infra/layout.ts` (new)\n- ui/views/now.js: the row.\n- README.md\n\n## Oracle\n- `bun test jobs/lib/infra/layout.test.ts` passes.\n";
 const item = (over: { title?: string; request?: string; spec?: string } = {}) => ({ title: "T", request: "R", spec: SPEC, ...over }) as any;
@@ -30,9 +30,9 @@ test("specVersion is short and changes with the title, the request or the spec",
 test("isVersion takes the version now and the older forms, and refuses a version of another text", () => {
   const i = item();
   expect(isVersion(i, specVersion(i) + "\n")).toBe(true);
-  // The spec check's notes before goal-spec.ts: a hash of the trimmed spec.
+  // The spec check's notes before issue-spec.ts: a hash of the trimmed spec.
   expect(isVersion(i, createHash("sha256").update(SPEC.trim()).digest("hex").slice(0, 12))).toBe(true);
-  // The rescue's asked-spec files before goal-spec.ts: the JSON text of the title, request and spec.
+  // The rescue's asked-spec files before issue-spec.ts: the JSON text of the title, request and spec.
   expect(isVersion(i, JSON.stringify(["T", "R", SPEC]))).toBe(true);
   expect(isVersion(i, specVersion(item({ request: "S" })))).toBe(false);
   expect(isVersion(i, JSON.stringify(["T", "S", SPEC]))).toBe(false);

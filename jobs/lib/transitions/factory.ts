@@ -31,7 +31,7 @@ import { route, TIER_MODEL, TIERS, type Tier } from "../routing/route.ts";
 import { appendSuiteHistory, mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
-import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from "../gates/goal-decision.ts";
+import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from "../gates/issue-decision.ts";
 
 /** A start refused because the live cap filled: the line `gates` gives for it. */
 const LIVE_REFUSAL = / agent runs are live/;
@@ -77,7 +77,7 @@ type Land = (name: string) => Promise<string | null>;
  * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
  * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
  * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands and the close of parents whose parts are done.
- * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 6 gates of goalDecision in
+ * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 6 gates of issueDecision in
  * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds starts. Each start
  * holds a lock on its goal and re-reads the jobs under it, so two dispatches at once start a goal once. `start`
  * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts goals
@@ -132,7 +132,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       continue;
     }
     // The cheap facts first: the pause was asked above.
-    const first = goalDecision({ name, item: listed, done, red });
+    const first = issueDecision({ name, item: listed, done, red });
     if (first.kind !== "ready") { skip(name, first.kind, first.why); continue; }
     // Wait for a dispatch that holds the goal: it may skip it (an open job a drop is closing right now), and a
     // dispatch that skipped here too would leave the goal until the next tick. Under the lock all is read again.
@@ -146,12 +146,12 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       if (!item) { skip(name, "not-ready", "not a goal"); continue; }
       const facts = { ...goalFacts(repo, item, jobs), done, red };
       // A pass that began before a pause must not start a run after it.
-      let d = goalDecision({ ...facts, ...factoryGates(jobs) });
+      let d = issueDecision({ ...facts, ...factoryGates(jobs) });
       let tier: Tier | null | undefined;
       // The live cap held the goal, but a tier on the local backend has room: rate the goal, and check its tier's cap.
       if (d.kind === "live-cap" && TIERS.some((t) => !factoryGates(jobs, { model: TIER_MODEL[t] })["live-cap"])) {
         tier = await route(goalBrief(item, name, jobs).spec);
-        if (tier) d = goalDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
+        if (tier) d = issueDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
       }
       if (d.kind !== "ready" && d.kind !== "loop-guard") { skip(name, d.kind, d.why); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
@@ -409,7 +409,7 @@ export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()
   if (!liveRuns(runs)) {
     for (const { repo, item } of openGoals(lists)) {
       const facts = goalFacts(repo, item, jobs);
-      if (goalDecision({ ...facts, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
+      if (issueDecision({ ...facts, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
     }
   }
   if (!live("intake") && !gates({ only: ["live-cap"], jobs })) {

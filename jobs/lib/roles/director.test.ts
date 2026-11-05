@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { markAsked, plainAsk, setAsk, awaitsChris } from "../asks/ask.ts";
-import { specVersion } from "./goal-spec.ts";
+import { specVersion } from "./issue-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";
 import { directorStep } from "../transitions/factory.ts";
 import { allRuns, loadRegistry, readRun } from "../records/ledger.ts";

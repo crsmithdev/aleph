@@ -13,7 +13,7 @@
  */
 import { readFileSync } from "node:fs";
 import * as issues from "../../../issues/lib/todo.ts";
-import { isVersion } from "../roles/goal-spec.ts";
+import { isVersion } from "../roles/issue-spec.ts";
 import { note, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "../asks/ask.ts";
 import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "../gates/factory-status.ts";

@@ -6,7 +6,7 @@
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { factorySnapshot, goalFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
-import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/gates/goal-decision.ts";
+import { issueDecision, pendingWaits, refDone, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
@@ -98,7 +98,7 @@ export interface State {
   /** Everything that waits for Chris: one entry per awaiting run, issue, goal and proposal, with its kind (input or approval) and reason. */
   asks: AskItem[];
   /** Queued and blocked goals (and old items): the Queued lane. */
-  queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; why: string; kind: GoalDecision["kind"];
+  queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; why: string; kind: IssueDecision["kind"];
     waits?: { id: string; href: string; state: string | null }[]; /** The id of the issue whose job holds a busy file this one needs. */ on?: string }[];
   /** Issues in Running: each with its goals nested and "n of m issues". */
   runningIssues: RunningIssue[];
@@ -474,7 +474,7 @@ export function state(now = new Date()): State {
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
       const red = redOf(repo);
       // The stage already says when an issue is to plan.
-      const w = goalDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
+      const w = issueDecision({ ...goalFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
         ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}), ...(w.kind === "busy-file" && w.on ? { on: w.on } : {}),
       };

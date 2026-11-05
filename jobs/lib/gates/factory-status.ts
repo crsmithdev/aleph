@@ -8,10 +8,10 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync
 import { join } from "node:path";
 import { areasOf, reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { surfacePaths } from "../roles/goal-spec.ts";
+import { surfacePaths } from "../roles/issue-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
-import type { Bound, Gate } from "./goal-decision.ts";
+import type { Bound, Gate } from "./issue-decision.ts";
 import { layout, readFactoryLog } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { allRuns, held, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
@@ -385,7 +385,7 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
   return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? "both use the gpt-oss server" : undefined) : null);
 }
 
-/** The facts of a goal that the jobs and the factory's marks give; `goalDecision` takes them with the caller's own. */
+/** The facts of a goal that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
 export function goalFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()) {
   const name = issueJob(repo, issues.idOf(item)), runs = jobs.flat();
   return {

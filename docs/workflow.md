@@ -96,7 +96,7 @@ Each dispatch first does its steps, in this order:
 4. close parents whose parts are done (`closeIssues`);
 5. send `plan` issues to intake to split.
 
-Then it asks each queued goal 6 gates, in order (`goal-decision.ts`, `factory-status.ts`). The first gate that binds skips the goal for this dispatch and adds a `hold` event, naming the gate, to the goal's job record in `~/.aleph/jobs/`. The next dispatch asks again.
+Then it asks each queued goal 6 gates, in order (`issue-decision.ts`, `factory-status.ts`). The first gate that binds skips the goal for this dispatch and adds a `hold` event, naming the gate, to the goal's job record in `~/.aleph/jobs/`. The next dispatch asks again.
 
 | Gate | Binds when | Result |
 |---|---|---|
