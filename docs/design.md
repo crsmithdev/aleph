@@ -124,7 +124,7 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 | Kind | Format | Example | Helper | Missing |
 |---|---|---|---|---|
 | Absolute time | mm/dd hh:mm, 24-hour; `YYYY-MM-DD` in another year | 10/28 14:05 | `when()` (`ui/lib.js:300`) | empty string |
-| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:315`), `dateText()` (`ui/views/issues.js:181`) | empty string |
+| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:315`), `dateText()` (`ui/views/issues.js:177`) | empty string |
 | Axis hour | 12-hour, `a` or `p` | 4a, 1:36p | `hourLabel()` (`ui/lib.js:309`), for a chart axis only | none |
 | Clock | 24-hour time | 14:05 | `clock()` | empty string |
 | Duration | seconds, minutes, hours; `durMs()` writes `850ms` under a second; `span()` in `ui/views/now.js` writes `2d4h` from 24 hours, a form `dur()` has no day for | 43s, 4m 05s, 1h 02m, 850ms | `dur()`, `durMs()`, `span()`, `elapsed()`; `lifespan()` (`ui/timeline.js:10`) for the timeline | `–` from `dur()`, empty from `durMs()` |
@@ -147,7 +147,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 |---|---|
 | `ui/lib.js` (`pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `dur`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
 | `ui/api/activity.ts:20`, `ui/api/speed.ts:477-478` | Local-day date arithmetic for bucket starts, not display. |
-| `getDate()` (`ui/views/issues.js:141`), `getDate()` (`ui/views/issues.js:234`), `getDate()` (`ui/views/issues.js:269`), `getDate()` (`ui/views/issues.js:273`), `getDate()` (`ui/views/issues.js:311`) | Local-day date arithmetic for windows and age bins, not display. |
+| `getDate()` (`ui/views/issues.js:141`), `getDate()` (`ui/views/issues.js:230`), `getDate()` (`ui/views/issues.js:265`), `getDate()` (`ui/views/issues.js:269`), `getDate()` (`ui/views/issues.js:307`) | Local-day date arithmetic for windows and age bins, not display. |
 | `toFixed()` (`ui/views/jobs.js:11`) | Rounds a window length to a stable number, not display. |
 | `style` (`ui/views/session.js:150`), `ui/timeline.js:154`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
@@ -173,19 +173,19 @@ Columns of the main tables:
 
 | Table | Columns, in order | Source |
 |---|---|---|
-| Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:215`) |
-| Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:86`) |
-| Sessions | Started, Last, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:120`) |
+| Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:211`) |
+| Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:83`) |
+| Sessions | Started, Last, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:117`) |
 | Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:261`) |
 | Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
 | Observations | Kind, Name, Detail, Duration (num) | `dataTable()` (`ui/views/session.js:273`) |
 | Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
-| Hooks | Last, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:104`) |
-| Denials | When, Reason | `dataTable()` (`ui/views/sessions.js:107`) |
+| Hooks | Last, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
+| Denials | When, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
 | Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
-| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:210`) |
-| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:640`) |
+| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:201`) |
+| Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:638`) |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. No table has a row action column. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
 
@@ -257,7 +257,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Section head ids and levels:** `sectionHead()` and `card()` take `id` (the heading gets `id="h-<id>"`) and `level` (2 by default, 3 for a sub-head). These headings do not come from the helpers: Status lane card titles (`ui/views/cards.js`), session waterfall row heads (`ui/views/session.js`), the Memory note inspector title (`ui/views/memory.js`) and detail-page `.dp-ph` panel heads (`ui/views/issues.js`, `ui/timeline.js`).
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:285`); a priority is `critical`, `high`, `medium` or `low`.
-- **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:67`). Gates shows `empty()` (`ui/views/gates.js:108`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:77`) as "No job matches." with "Widen the window or clear a filter."
+- **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:67`). Gates shows `empty()` (`ui/views/gates.js:108`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:74`) as "No job matches." with "Widen the window or clear a filter."
 - **Loading:** `loadingLine()` (`ui/lib.js:83`) draws the inline line, `Loading <what>…`; `loading()` (`ui/lib.js:85`) draws a view's first-load state, `Loading <title>…`.
 - **Error:** `error()` (`ui/lib.js:88`) says what failed, and the default hint is "Check that aleph-ui is running, then reload."
 - **Offline:** "The server is unreachable. Showing the last data." (`ui/index.html:31`).
@@ -300,15 +300,15 @@ Reference view = the view that follows the rules best.
 |---|---|---|
 | Page header | `pageHead()` | `ui/views/jobs.js` |
 | Card | `card()` | `ui/views/factory-agents.js` |
-| Table | `dataTable()`, `sortHead()` | `dataTable()` (`ui/views/jobs.js:86`) |
+| Table | `dataTable()`, `sortHead()` | `dataTable()` (`ui/views/jobs.js:83`) |
 | Badge | `badge()` | `ui/views/jobs.js` |
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
 | Chart | `chart()`, `barsOption()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
-| Pager | `pager()` | `pager()` (`ui/views/issues.js:215`) |
-| Empty state | `empty()` | `empty()` (`ui/views/jobs.js:77`) |
+| Pager | `pager()` | `pager()` (`ui/views/issues.js:211`) |
+| Empty state | `empty()` | `empty()` (`ui/views/jobs.js:74`) |
 
 Cards with their own markup, because `card()` would add a heading or change the element:
 

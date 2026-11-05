@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, setQuery, shortModel, sortHead, span, WINDOW_DAYS, windowOf, when, wkText } from "../lib.js";
+import { blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -65,17 +65,14 @@ const sortOf = (f) => (f.sort && SORT[f.sort] ? { key: f.sort, dir: f.dir === "a
 
 /** The jobs the search keeps, in the sort's order. */
 export function shownJobs(jobs, f = {}) {
-  const q = (f.q ?? "").trim().toLowerCase(), sort = sortOf(f), by = SORT[sort.key];
-  return jobs.filter((j) => !q || `${j.name} ${titleOf(j)}`.toLowerCase().includes(q)).sort((a, b) => {
-    const x = by(a), y = by(b);
-    return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * sort.dir;
-  });
+  const q = (f.q ?? "").trim().toLowerCase(), sort = sortOf(f);
+  return sortRows(jobs.filter((j) => !q || `${j.name} ${titleOf(j)}`.toLowerCase().includes(q)), SORT, sort);
 }
 
 export function renderJobsTable(jobs, f = {}) {
   const all = shownJobs(jobs, f);
   if (!all.length) return empty("No job matches.", "Widen the window or clear a filter.");
-  const shown = all.slice(0, Math.max(PAGE, Number.parseInt(f.limit, 10) || PAGE)), sort = sortOf(f);
+  const shown = all.slice(0, limitOf(f, PAGE)), sort = sortOf(f);
   const h = (label, key, c) => sortHead(label, key, sort, c);
   // Columns: started, id, title, state, project, model, then took and cost: the Issues table's order.
   const rows = shown.map((j) => {
@@ -89,19 +86,13 @@ export function renderJobsTable(jobs, f = {}) {
 /** Wire the state filter (it fetches again), the search, the sort and the pager; the last three redraw the table once `jobsNow()` gives the jobs. */
 export function wireJobs(root, jobsNow) {
   const redraw = () => { const jobs = jobsNow(); if (jobs) root.querySelector("#jobs-table").innerHTML = renderJobsTable(jobs, Object.fromEntries(hashQuery())); };
+  wireTable(root, { redraw, sortOf, downFirst: DOWN_FIRST, page: PAGE, search: "jobs-search" });
+  const table = root.onclick;
   root.onclick = (e) => {
     const seg = e.target.closest?.(".card .seg button");
     if (seg) return goQuery({ [seg.parentElement.dataset.name]: seg.dataset.value });
-    const s = e.target.closest?.("button[data-sort]");
-    if (s) {
-      const key = s.dataset.sort, cur = sortOf(Object.fromEntries(hashQuery()));
-      setQuery({ sort: key, dir: (cur.key === key ? -cur.dir : DOWN_FIRST.has(key) ? -1 : 1) > 0 ? "asc" : "desc" });
-      return redraw();
-    }
-    const m = e.target.closest?.("[data-more]");
-    if (m) { setQuery({ limit: String(Math.max(PAGE, Number.parseInt(hashQuery().get("limit"), 10) || PAGE) + Number(m.dataset.more)) }); redraw(); }
+    table(e);
   };
-  root.oninput = (e) => { if (e.target.matches?.('[data-ui="jobs-search"]')) { setQuery({ q: e.target.value, limit: "" }); redraw(); } };
 }
 
 const TRANSCRIPT = new Set(["output.log", "review.log"]);

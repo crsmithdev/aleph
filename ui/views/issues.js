@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -37,7 +37,7 @@ const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STA
 /** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&limit=100. With a search and no sort, the best match comes first. */
 export function hashOptions(q = new URLSearchParams()) {
   return {
-    limit: Math.max(PAGE, Number.parseInt(q.get("limit"), 10) || PAGE),
+    limit: limitOf(q, PAGE),
     status: statusOf(q.get("status")), project: projectOf(q), stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: windowOf(q),
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
@@ -166,12 +166,8 @@ const UPDATED = { key: "updated", dir: -1 };
 
 /** The rows ordered by `sort` = { key, dir } (dir 1 up, -1 down). Ties keep newest first; rows that tie on that too keep their order going down and reverse it going up. */
 export function sortRows(rows, sort = UPDATED) {
-  const f = SORT[sort.key] ?? SORT.updated, at = new Map(rows.map((r, i) => [r, i]));
-  return [...rows].sort((a, b) => {
-    const x = f(a), y = f(b);
-    const c = typeof x === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
-    return c * sort.dir || ms(b.at) - ms(a.at) || (at.get(a) - at.get(b)) * -sort.dir;
-  });
+  const at = new Map(rows.map((r, i) => [r, i]));
+  return sortBy(rows, SORT, { key: SORT[sort.key] ? sort.key : "updated", dir: sort.dir }, (a, b) => ms(b.at) - ms(a.at) || (at.get(a) - at.get(b)) * -sort.dir);
 }
 
 /** With a search and no chosen sort, the best match first. */
@@ -436,8 +432,10 @@ function refill() {
 
 /** Draws the charts, keeps the data for the filters, and fills the form's Project select from the registry's keys. */
 export async function mount(root, d) {
-  live = { root, tests: d?.tests, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? "")) };
+  live = { root, tests: d?.tests, rows: issueRows(d), projects: projectsOf(d), o: () => hashOptions(hashQuery()) };
   if (root.querySelector?.(".chartbox")) draw(root);
+  const table = root.querySelector?.('section[aria-label="Issues"]');
+  if (table) wireTable(table, { redraw: refill, sortOf: (h) => hashOptions(new URLSearchParams(h)).sort ?? ((h.q ?? "").trim() ? null : UPDATED), downFirst: DOWN_FIRST, page: PAGE, search: "inv-search" });
   onTile(root.querySelector?.("#inv-numbers"), (k) => {
     setQuery(TILE_FILTER[k]);
     root.querySelector(`button[data-tile="${k}"]`)?.focus();
@@ -652,31 +650,17 @@ export function renderIssue(d) {
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
 // listens on the document. Filters live in the route's query, the form posts.
 if (typeof document !== "undefined") {
-  const here = () => hashOptions(new URLSearchParams(location.hash.split("?")[1] ?? ""));
+  const here = () => hashOptions(hashQuery());
   document.addEventListener("click", (e) => {
     const t = e.target.closest ? e.target : null;
-    const sort = t?.closest("#issues-table button[data-sort]");
-    if (sort) {
-      const key = sort.dataset.sort, cur = here().sort ?? ((here().q ?? "").trim() ? null : UPDATED);
-      const dir = cur?.key === key ? -cur.dir : DOWN_FIRST.has(key) ? -1 : 1;
-      return setQuery({ sort: key, dir: dir > 0 ? "asc" : "desc" });
-    }
     const seg = t?.closest("#inv-filters .seg button");
     if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" });
     const win = t?.closest("#inv-scope .seg button");
     if (win) { storeWindow(win.dataset.value); return setQuery({ window: win.dataset.value }); }
-    const more = t?.closest("#issues-table button[data-more]");
-    if (more) setQuery({ limit: String(here().limit + Number(more.dataset.more)) });
   });
   document.addEventListener("change", (e) => {
     const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
     if (f) { if (f.name === "project") storeProject(f.value); setQuery({ [f.name]: f.value, limit: "" }); }
-  });
-  let typing = 0;
-  document.addEventListener("input", (e) => {
-    if (!e.target.matches?.('[data-ui="inv-search"]')) return;
-    clearTimeout(typing);
-    typing = setTimeout(() => setQuery({ q: e.target.value, limit: "" }), 120);
   });
   // Edit mode: the page shows the editors in place of the values; Cancel puts the saved values back.
   document.addEventListener("click", (e) => {

@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/agents. The session and skill detail routes stay in their own views.
-import { barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, filterBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when, wireScope } from "../lib.js";
+import { barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, filterBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope } from "../lib.js";
 
 export const view = {
   path: "/sessions",
@@ -31,7 +31,7 @@ const STEP = 50, ROWS = 10, MIN_FOR_RATE = 5;
 
 /** The state from the route's query: ?days=7&project=x&pick=tool:Bash&q=text&sort=cost&dir=desc&limit=100. */
 export function options(q = new URLSearchParams()) {
-  return { days: q.get("days") || "7", project: q.get("project") ?? "", pick: q.get("pick") ?? "", q: q.get("q") ?? "", sort: { key: q.get("sort") || "cost", dir: q.get("dir") === "asc" ? 1 : -1 }, limit: Math.max(STEP, Number.parseInt(q.get("limit"), 10) || STEP) };
+  return { days: q.get("days") || "7", project: q.get("project") ?? "", pick: q.get("pick") ?? "", q: q.get("q") ?? "", sort: { key: q.get("sort") || "cost", dir: q.get("dir") === "asc" ? 1 : -1 }, limit: limitOf(q, STEP) };
 }
 
 const skillHref = (name) => `#/skills/${encodeURIComponent(name)}`;
@@ -56,13 +56,10 @@ const SORT = { cost: (s) => s.cost ?? 0, turns: (s) => s.turns ?? 0, start: (s) 
 
 /** The sessions the selection and search keep, in the sort's order; ties newest first. */
 export function shownSessions(d, o) {
-  const keep = o.pick ? sessionIds(d, o.pick) : null, q = o.q.trim().toLowerCase(), f = SORT[o.sort.key] ?? SORT.cost;
-  return (d?.sessions?.sessions ?? [])
-    .filter((s) => (!o.pick || keep?.has(s.id)) && (!q || `${s.firstPrompt ?? ""} ${s.project ?? ""} ${s.id} ${s.label ?? ""}`.toLowerCase().includes(q)))
-    .sort((a, b) => {
-      const x = f(a), y = f(b);
-      return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * o.sort.dir || SORT.last(b) - SORT.last(a);
-    });
+  const keep = o.pick ? sessionIds(d, o.pick) : null, q = o.q.trim().toLowerCase();
+  return sortRows((d?.sessions?.sessions ?? [])
+    .filter((s) => (!o.pick || keep?.has(s.id)) && (!q || `${s.firstPrompt ?? ""} ${s.project ?? ""} ${s.id} ${s.label ?? ""}`.toLowerCase().includes(q))),
+    SORT, { key: SORT[o.sort.key] ? o.sort.key : "cost", dir: o.sort.dir }, (a, b) => SORT.last(b) - SORT.last(a));
 }
 
 const rate = (r) => pct(r.rate * 100);
@@ -144,12 +141,13 @@ const renderLive = (d, o) => renderFails(d, o) + `<div class="pair">${toolsCard(
   `<section class="card" aria-label="Sessions"><div id="ag-sess-head">${sessionsHead(d, o)}</div>${searchBox("ag-search", o.q, "Search the sessions")}<div id="ag-sessions">${renderSessionsTable(d, o)}</div></section>` + hooksCard(d);
 
 let live = null;
-const here = () => options(new URLSearchParams(location.hash.split("?")[1] ?? ""));
+const here = () => options(hashQuery());
 
 /** Keeps the data for the selection, the sort and the search, which change the page in place. */
 function mount(root, d) {
   live = { root, d };
   wireScope(root);
+  wireTable(root, { redraw: () => redraw(false), sortOf: (h) => options(new URLSearchParams(h)).sort, downFirst: new Set(["cost", "turns", "start", "last"]), page: STEP, search: "ag-search" });
   // A second press on the selected tile or rank clears it, and "Show all sessions" says "" outright.
   onTile(root.querySelector("#ag-live"), (v) => { setQuery({ pick: here().pick === v ? "" : v, limit: "" }); redraw(true); });
 }
@@ -160,25 +158,4 @@ function redraw(all) {
   const o = here();
   if (all) live.root.querySelector("#ag-live").innerHTML = renderLive(live.d, o);
   else { live.root.querySelector("#ag-sess-head").innerHTML = sessionsHead(live.d, o); live.root.querySelector("#ag-sessions").innerHTML = renderSessionsTable(live.d, o); }
-}
-
-if (typeof document !== "undefined") {
-  document.addEventListener("click", (e) => {
-    const t = e.target.closest ? e.target : null;
-    if (!t?.closest(".agents")) return;
-    const sort = t.closest("#ag-sessions button[data-sort]");
-    if (sort) {
-      const key = sort.dataset.sort, cur = here().sort;
-      setQuery({ sort: key, dir: (cur.key === key ? -cur.dir : key === "project" || key === "prompt" ? 1 : -1) > 0 ? "asc" : "desc" });
-      return void redraw(false);
-    }
-    const more = t.closest("#ag-sessions button[data-more]");
-    if (more) { setQuery({ limit: String(here().limit + Number(more.dataset.more)) }); redraw(false); }
-  });
-  let typing = 0;
-  document.addEventListener("input", (e) => {
-    if (!e.target.matches?.('[data-ui="ag-search"]')) return;
-    clearTimeout(typing);
-    typing = setTimeout(() => { setQuery({ q: e.target.value, limit: "" }); redraw(false); }, 120);
-  });
 }
