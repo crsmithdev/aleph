@@ -374,11 +374,11 @@ function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: numb
   }).length;
 }
 
-/** The most agent runs any one goal started in the last 60 minutes. */
-function maxStartsInHour(now: number, runs: Entry[]): number {
-  const n = new Map<string, number>();
-  for (const e of runs) if (isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000) n.set(`${e.run.repo}/${e.run.name}`, (n.get(`${e.run.repo}/${e.run.name}`) ?? 0) + 1);
-  return Math.max(0, ...n.values());
+/** The most job starts any one goal made in the last 60 minutes, by the rule the loop guard uses. */
+function maxStartsInHour(now: number, jobs: Job[]): number {
+  const goals = new Map<string, { repo: string; name: string }>();
+  for (const e of jobs.flat()) if (e.run.repo && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000) goals.set(`${e.run.repo}/${e.run.name}`, { repo: e.run.repo, name: e.run.name });
+  return Math.max(0, ...[...goals.values()].map((g) => agentStartsInHour(g.repo, g.name, jobs, now)));
 }
 
 /** What the Status page shows of the factory, and the gate and the baselines its Queued lane reads. */
@@ -389,7 +389,7 @@ export function factorySnapshot(now: number, jobs: Job[]) {
     liveCap: LIVE_CAP(),
     liveRuns: liveRuns(runs),
     runCap: RUN_CAP(),
-    runStarts: maxStartsInHour(now, runs),
+    runStarts: maxStartsInHour(now, jobs),
     runsToday: runsToday(now, runs).length,
     costToday: spentToday(now, runs),
     health: health(now, { jobs }),

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { writeList } from "../../todo/lib/store.ts";
+import { readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
-import { spentToday, runsToday, health, writeBaseline } from "./factory-status.ts";
-import { lock, readRun, writeRun } from "./ledger.ts";
+import { spentToday, runsToday, health, writeBaseline, factorySnapshot, goalFacts } from "./factory-status.ts";
+import { allJobs, loadRegistry, lock, readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
 
@@ -69,6 +69,19 @@ test("a dispatch with checks, three factory repos and no open goals fetches the 
 test("the day's spend counts every kind that records a cost", () => {
   for (const [name, kind, cost] of [["fac-1", "build", 1], ["fac-2", "triage", 2], ["fac-3", "plan", 4], ["fac-5", "firefighter", 16]] as const) mk(name, kind, "done", { cost });
   expect(spentToday()).toBe(23);
+});
+
+test("runStarts counts a goal's job starts in the hour, not its fix rounds, and matches the loop guard", () => {
+  const id = goal();
+  const ago = (min: number) => new Date(NOW - min * 60_000).toISOString();
+  const { job } = mk(`fac-${id}`, "build", "failed", { started: ago(40) });
+  mk(`fac-${id}`, "build", "failed", { job, started: ago(30) });
+  mk(`fac-${id}`, "build", "passed", { job, started: ago(10) });
+  mk(`fac-${id}`, "build", "passed", { started: ago(5) });
+  const item = readList({ key: "fac" })!.items.find((i) => i.id === id)!;
+  const jobs = allJobs();
+  expect(factorySnapshot(NOW, jobs).runStarts).toBe(2);
+  expect(factorySnapshot(NOW, jobs).runStarts).toBe(goalFacts(loadRegistry().fac, item, jobs, NOW).startsInHour);
 });
 
 test("an explain run has no repo; its cost counts in the day's spend, not in runsToday, and an old one adds nothing", () => {
