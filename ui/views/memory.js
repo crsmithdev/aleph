@@ -15,7 +15,6 @@ export const view = {
 };
 
 const link = (title) => `<a href="#/memory/${encodeURIComponent(title)}">${esc(title)}</a>`;
-const head = (id, title, n) => `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${n === undefined ? "" : `<span class="count">${n}</span>`}</div>`;
 
 const table = ([key, val], rows, none = "") => rows.length
   ? dataTable(heads([key, val], [val]), rows.map(([k, v]) => `<tr><td class="wide">${esc(k === "" ? "(none)" : k)}</td><td class="num">${v}</td></tr>`).join("")) : empty(none);
@@ -25,21 +24,21 @@ const paged = (head, rows) =>
 
 export function renderHome(m) {
   const secs = m.home.map((s) =>
-    `<h3>${esc(s.heading)}</h3>` + (s.entries.length
+    sectionHead(s.heading, { level: 3 }) + (s.entries.length
       ? `<ul>${s.entries.map((e) => `<li>${link(e.title)}${e.hook ? ` <span class="quiet">${esc(e.hook)}</span>` : ""}</li>`).join("")}</ul>`
       : empty("Nothing indexed."))).join("");
-  return head("home", "Home") + (secs || empty("Home has no sections.", "Home.md is the vault's map."));
+  return sectionHead("Home", { id: "home" }) + (secs || empty("Home has no sections.", "Home.md is the vault's map."));
 }
 
 export function renderHealth(m) {
   const f = (x) => `<li><code>${esc(x.rule)}</code> ${x.note ? link(x.note) : ""} <span class="quiet">${esc(x.detail)}</span></li>`;
   const { refuse, warn } = m.lint;
   const med = m.misses;
-  return head("health", "Health") +
-    (refuse.length ? `<h3>Refusals<span class="count">${refuse.length}</span></h3><ul>${refuse.map(f).join("")}</ul>` : "") +
-    (warn.length ? `<h3>Warnings<span class="count">${warn.length}</span></h3><ul>${warn.map(f).join("")}</ul>` : "") +
+  return sectionHead("Health", { id: "health" }) +
+    (refuse.length ? sectionHead("Refusals", { count: refuse.length, level: 3 }) + `<ul>${refuse.map(f).join("")}</ul>` : "") +
+    (warn.length ? sectionHead("Warnings", { count: warn.length, level: 3 }) + `<ul>${warn.map(f).join("")}</ul>` : "") +
     (!refuse.length && !warn.length ? empty("Lint finds nothing.") : "") +
-    (med ? `<h3>Recall Misses, ${esc(med.days)} Days</h3>` + table(["Measure", "Count"], [
+    (med ? sectionHead(`Recall Misses, ${med.days} Days`, { level: 3 }) + table(["Measure", "Count"], [
       ["Recalls", med.recalls], ["Empty", `${med.empty} (${pct(med.empty_share * 100)})`],
       ["Reformulated", med.reformulated], ["Reads not offered", med.unoffered_reads]]) : "");
 }
@@ -53,7 +52,6 @@ export function renderWrites(m) {
 const ROWS = 10;
 const li = (html) => `<li>${html}</li>`;
 const ago = (ts) => (ts ? esc(when(ts) || String(ts).slice(0, 10)) : "never");
-const sub = (title, n, body) => `<div class="sub"><h3>${esc(title)}${n === undefined ? "" : `<span class="count">${n}</span>`}</h3>${body}</div>`;
 /** The first ROWS rows of a list; the rest sit under a fold. */
 const fold = (items, row, n = ROWS) => {
   const ul = (xs) => `<ul class="tight">${xs.map((x) => li(row(x))).join("")}</ul>`;
@@ -66,7 +64,7 @@ function renderWorking(w) {
   const cur = w.current
     ? `<p><strong>Current</strong> ${q(ago(w.current.at))} ${esc(w.current.intent || "(no intent line)")}</p>`
     : empty("No current handoff.");
-  return cur + (w.projects?.length ? sub("Projects", w.projects.length, `<ul class="tight">${w.projects.map((h) => li(`<code>${esc(h.name)}</code> ${q(ago(h.at))} ${esc(h.text)}`)).join("")}</ul>`) : "") + (w.archived.length ? sub("Archived", w.archived.length, `<ul class="tight">${w.archived.map((h) => li(`<span class="time">${esc(h.date)}</span> ${esc(h.intent || h.name)}`)).join("")}</ul>`) : "");
+  return cur + (w.projects?.length ? `<div class="sub">${sectionHead("Projects", { count: w.projects.length, level: 3 })}<ul class="tight">${w.projects.map((h) => li(`<code>${esc(h.name)}</code> ${q(ago(h.at))} ${esc(h.text)}`)).join("")}</ul></div>` : "") + (w.archived.length ? `<div class="sub">${sectionHead("Archived", { count: w.archived.length, level: 3 })}<ul class="tight">${w.archived.map((h) => li(`<span class="time">${esc(h.date)}</span> ${esc(h.intent || h.name)}`)).join("")}</ul></div>` : "");
 }
 
 function renderSemantic(m, s) {
@@ -81,7 +79,7 @@ function renderSemantic(m, s) {
   const start = Object.entries(s.start ?? {}).map(([scope, x]) =>
     `<details><summary>Core lines, ${esc(scope)} <span class="count">${x.bytes} / ${x.budget} bytes</span></summary>${x.cut ? `<p class="quiet">${x.cut} cut.</p>` : ""}${x.core.length ? fold(x.core, (c) => `${link(c.title)} ${q(esc(c.core))}`) : `<p class="quiet">None.</p>`}</details>`).join("");
   if (!m.exists) return mem + empty("No vault yet.", "Run <code>vault init</code> to make one.");
-  return mem + start + `<h3>Notes by Kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
+  return mem + start + sectionHead("Notes by Kind", { count: s.notes.length, level: 3 }) + `<div class="kinds">${lists}</div>` +
     `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(["Kind", "Notes"], Object.entries(m.byKind), "No notes by kind.")}</div><div>${table(["Scope", "Notes"], Object.entries(m.byScope), "No notes by scope.")}</div></div></details>` +
     `<details><summary>Home</summary>${renderHome(m)}</details>`;
 }
@@ -92,7 +90,7 @@ function renderEpisodic(e) {
   const sess = e.sessions === null ? empty("Sessions are not available.", "Langfuse keys fill this.")
     : e.sessions.length ? fold(e.sessions, (x) => `<a href="#/sessions/${encodeURIComponent(x.id)}">${esc(x.firstPrompt || x.id)}</a> ${q(esc(`${x.project} · ${x.turns} turns · ${ago(x.last)}`))}`)
     : empty("No session in 7 days.", "Claude Code sessions traced to Langfuse fill this.");
-  return `<div class="kinds">${sub("Episode Pages", e.episodes.length, eps)}${sub("Daily Pages", e.daily.total, daily)}${sub("Latest Sessions", e.sessions?.length, sess)}</div><p class="hint"><a href="#/sessions">All sessions</a></p>`;
+  return `<div class="kinds"><div class="sub">${sectionHead("Episode Pages", { count: e.episodes.length, level: 3 })}${eps}</div><div class="sub">${sectionHead("Daily Pages", { count: e.daily.total, level: 3 })}${daily}</div><div class="sub">${sectionHead("Latest Sessions", { count: e.sessions?.length, level: 3 })}${sess}</div></div><p class="hint"><a href="#/sessions">All sessions</a></p>`;
 }
 
 function renderProcedural(p) {
@@ -101,21 +99,21 @@ function renderProcedural(p) {
   const hooks = p.hooks.length
     ? paged(heads(["Event", "Command", "Calls"], ["Calls"]), p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide" title="${esc(h.command)}"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`))
     : empty("No hooks in ~/.claude/settings.json.", "The hooks entry of that file fills this, with calls from Langfuse.");
-  return `<div class="kinds">${sub("Skills", p.skills.length, skills + `<p class="hint"><a href="#/skills">Skill use</a></p>`)}${sub("Rules", undefined, claude)}${sub("Hooks, Calls in 7 Days", p.hooks.length, hooks)}</div>`;
+  return `<div class="kinds"><div class="sub">${sectionHead("Skills", { count: p.skills.length, level: 3 })}${skills}<p class="hint"><a href="#/skills">Skill use</a></p></div><div class="sub">${sectionHead("Rules", { level: 3 })}${claude}</div><div class="sub">${sectionHead("Hooks, Calls in 7 Days", { count: p.hooks.length, level: 3 })}${hooks}</div></div>`;
 }
 
 function renderRetrieval(r) {
   if (!r.stats) return empty("No recall data.", "<code>vault misses</code> reads Langfuse; set its keys to fill this.");
   const s = r.stats;
   const rows = r.missed.length ? fold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : empty("No query missed.");
-  return `<div class="kinds">${sub(`Recalls, ${s.days} Days`, s.recalls, table(["Measure", "Count"], [["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest Misses", r.missed.length, rows)}</div>`;
+  return `<div class="kinds"><div class="sub">${sectionHead(`Recalls, ${s.days} Days`, { count: s.recalls, level: 3 })}${table(["Measure", "Count"], [["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]])}</div><div class="sub">${sectionHead("Latest Misses", { count: r.missed.length, level: 3 })}${rows}</div></div>`;
 }
 
 function renderProspective(p) {
   const issues = p.issues.length
     ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${priorityBadge(i.priority)} ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
     : empty("No open issue has an after.", "<code>aleph issue edit</code> with <code>--after</code> fills this.");
-  return `<div class="kinds">${sub("Open Issues With a Wait", p.issues.length, issues)}</div>`;
+  return `<div class="kinds"><div class="sub">${sectionHead("Open Issues With a Wait", { count: p.issues.length, level: 3 })}${issues}</div></div>`;
 }
 
 const renderParametric = () =>
@@ -123,7 +121,7 @@ const renderParametric = () =>
 
 function renderGates(g) {
   const lessons = (xs, what, fills) => (xs.length ? fold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : empty(`No ${what} yet.`, fills));
-  return `<div class="kinds">${sub("Corrections", g.corrections.length, lessons(g.corrections, "correction", "The correction miner (aleph-353) fills this."))}${sub("Proposals", g.proposals.length, lessons(g.proposals, "proposal", "A correction seen 3 times (aleph-353) becomes one."))}</div>`;
+  return `<div class="kinds"><div class="sub">${sectionHead("Corrections", { count: g.corrections.length, level: 3 })}${lessons(g.corrections, "correction", "The correction miner (aleph-353) fills this.")}</div><div class="sub">${sectionHead("Proposals", { count: g.proposals.length, level: 3 })}${lessons(g.proposals, "proposal", "A correction seen 3 times (aleph-353) becomes one.")}</div></div>`;
 }
 
 const EMPTY_TYPES = {
@@ -190,7 +188,7 @@ function readChart(rows) {
     const w = (x) => ((x / of.length) * 100).toFixed(2);
     return barRow(esc(k), 0, `${week} · ${older} · ${never} never`, { bar: meter([{ pct: w(week), cls: "c-use" }, { pct: w(older), cls: "c-stale" }, { pct: w(never), cls: "c-never" }], `${week} in the last 7 days, ${older} earlier, ${never} never`) });
   }).join("");
-  return `<h3>When Recall Last Returned Each Note</h3><div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div>${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
+  return sectionHead("When Recall Last Returned Each Note", { level: 3 }) + `<div class="key"><span><i class="c-use"></i>Last 7 days</span><span><i class="c-stale"></i>Earlier</span><span><i class="c-never"></i>Never</span></div>${barList(lines)}<p class="hint">The recall log keeps the last return date of each note. Its oldest date is ${esc(shortDay(oldest(rows)) || "none")}, so "never" means never since then.</p>`;
 }
 const oldest = (rows) => rows.map((n) => n.read).filter(Boolean).sort()[0] ?? "";
 /** The recency alone, for a note with a refusal too. */
@@ -384,6 +382,6 @@ export function renderNote(n) {
     `<p class="hint"><code>${esc(n.path)}</code></p>` +
     (fm ? `<dl class="facts">${fm}</dl>` : "") +
     `<article class="note">${md(n.body)}</article>` +
-    `<section id="links">${head("links", "Links to", n.links.length)}${crumbs(n.links)}</section>` +
-    `<section id="backlinks">${head("backlinks", "Linked From", n.backlinks.length)}${crumbs(n.backlinks)}</section></div>`;
+    `<section id="links">${sectionHead("Links to", { id: "links", count: n.links.length })}${crumbs(n.links)}</section>` +
+    `<section id="backlinks">${sectionHead("Linked From", { id: "backlinks", count: n.backlinks.length })}${crumbs(n.backlinks)}</section></div>`;
 }

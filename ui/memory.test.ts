@@ -99,9 +99,10 @@ test("a note has its links and backlinks; a missing note is 404", async () => {
 test("the views render and the note route is wired", () => {
   expect(noteView.path).toBe("/memory/:title");
   expect(noteView.api({ title: "A b" })).toBe("/api/memory/note?title=A%20b");
-  const h = v.renderMemory({ exists: true, total: 1, byKind: { decision: 1 }, byScope: { aleph: 1 }, home: [{ heading: "Decisions", entries: [{ title: "Use Bun", hook: "h" }] }], lint: { refuse: [], warn: [] }, writes: [], misses: { days: 7, recalls: 2, empty: 1, empty_share: 0.5, reformulated: 0, unoffered_reads: 0 } });
+  const h = v.renderMemory({ exists: true, total: 1, byKind: { decision: 1 }, byScope: { aleph: 1 }, home: [{ heading: "Decisions", entries: [{ title: "Use Bun", hook: "h" }] }], lint: { refuse: [], warn: [] }, writes: [], misses: { days: 7, recalls: 2, empty: 1, empty_share: 0.5, reformulated: 0, unoffered_reads: 0 },
+    types: { semantic: { memory: null, notes: [{ title: "Use Bun", kind: "decision", scope: "aleph" }], start: {}, last: "" } } });
   for (const t of ["Use Bun", "#/memory/Use%20Bun", "Counts by kind and scope", "50%", "Search titles, aliases and bodies"]) expect(h).toContain(t);
-  for (const t of ["<h3>When Recall Last Returned Each Note</h3>", "<h3>Notes by Kind ", "<h3>Recall Misses, 7 Days</h3>", "<h2>Factory Memory Gates</h2>", "<h2>Recent Writes</h2>", 'aria-label="Factory memory gates"', 'aria-label="Recent writes"']) expect(h).toContain(t);
+  for (const t of ["<h3>When Recall Last Returned Each Note</h3>", '<h3>Notes by Kind</h3><span class="count">1</span>', "<h3>Recall Misses, 7 Days</h3>", "<h2>Factory Memory Gates</h2>", "<h2>Recent Writes</h2>", 'aria-label="Factory memory gates"', 'aria-label="Recent writes"']) expect(h).toContain(t);
   const nh = v.renderNote({ title: "T", path: "wiki/x/T.md", archived: false, frontmatter: { kind: "gotcha" }, body: "see [[U]]", links: [], backlinks: [{ title: "V", kind: "gotcha", scope: "a" }] });
   expect(nh).toContain('href="#/memory/U"');
   expect(nh).toContain("Linked From");

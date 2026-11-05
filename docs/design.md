@@ -176,7 +176,7 @@ Columns of the main tables:
 | Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:211`) |
 | Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:83`) |
 | Sessions | Started, Last, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:117`) |
-| Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:261`) |
+| Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:259`) |
 | Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
 | Observations | Kind, Name, Detail, Duration (num) | `dataTable()` (`ui/views/session.js:273`) |
 | Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
