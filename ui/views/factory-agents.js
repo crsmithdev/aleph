@@ -10,6 +10,7 @@ function scorecard(s, a, key, w) {
   return usageCard(s, on("usage"), usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window")) +
     statCard({ k: "Runs today", v: String(f.runsToday), v2: money(f.costToday), q: ["runs", "recorded cost"], ...on("runs") }) +
     statCard({ k: "Worker slots", v: String(f.liveRuns ?? 0), v2: String(f.liveCap), q: ["in use", "cap"], ...on("slots") }) +
+    statCard({ k: "Local slot", v: String(f.liveLocal ?? 0), v2: String(f.localCap), q: ["in use", "cap"] }) +
     statCard({ k: "Agents live", v: a ? mean(a.mean) : "–", ...(a ? { v2: String(a.peak), q: ["mean", "peak"] } : { note: "loading the agents" }), ...on("live") });
 }
 

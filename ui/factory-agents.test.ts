@@ -4,7 +4,7 @@ import { liveOption, renderFactoryAgents, totals } from "./views/factory-agents.
 // @ts-ignore plain JS shared with the page
 import { pace, weekGone } from "./views/speed.js";
 
-const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, liveRuns: 1, liveCap: 5 } };
+const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, liveRuns: 1, liveCap: 5, liveLocal: 1, localCap: 1 } };
 const agents = {
   live: 1, workers: 1, cap: 5, mean: 1.5, peak: 4,
   roles: [
@@ -38,8 +38,8 @@ test("the Roles table has a row per role and model, with the warn tone under 70%
 
 test("the tiles come from the state and the agents", () => {
   const h = renderFactoryAgents(S, D);
-  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Usage", "Runs today", "Worker slots", "Agents live"]);
-  for (const t of ["<em> / $71.94</em>", "<b>1<em> / 5</em></b>", "<em> / 4</em>", "<span>mean</span><span class=\"m\"> / peak</span>"]) expect(h).toContain(t);
+  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Usage", "Runs today", "Worker slots", "Local slot", "Agents live"]);
+  for (const t of ["<em> / $71.94</em>", "<b>1<em> / 5</em></b>", "<b>1<em> / 1</em></b>", "<em> / 4</em>", "<span>mean</span><span class=\"m\"> / peak</span>"]) expect(h).toContain(t);
 });
 
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {

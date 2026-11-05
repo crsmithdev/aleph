@@ -105,7 +105,7 @@ const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Slot, Backend
 export const liveRuns = (runs?: Entry[]): number => { const models = readModels(); return liveEntries(runs).filter((e) => !onLocal(e.run, models)).length; };
 
 /** Live agent runs on the local backend, the count LOCAL_CAP checks. */
-const liveLocal = (runs?: Entry[], models = readModels()): number => liveEntries(runs).filter((e) => onLocal(e.run, models)).length;
+export const liveLocal = (runs?: Entry[], models = readModels()): number => liveEntries(runs).filter((e) => onLocal(e.run, models)).length;
 
 /**
  * Takes the GPU slot for one local call: no local agent run is live and the `gpu` lock is free. Waits up to `waitMs`;
@@ -423,6 +423,8 @@ export function factorySnapshot(now: number, jobs: Job[]) {
     paused: paused(),
     liveCap: LIVE_CAP(),
     liveRuns: liveRuns(runs),
+    liveLocal: liveLocal(runs),
+    localCap: LOCAL_CAP,
     runCap: RUN_CAP(),
     runStarts: maxStartsInHour(now, jobs),
     runsToday: runsToday(now, runs).length,
