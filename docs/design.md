@@ -396,7 +396,6 @@ Each deviation is a value or pattern in the code that a rule above does not allo
 |---|---|---|---|
 | Duration formats outside `dur()`: `durShort()`, `cardDur()`, `lifespan()`, `timeText()`, `span()` | `ui/views/speed.js:5`, `83`; `ui/timeline.js:10`, `188`; `ui/views/now.js:220` | Duration; one `dur()` helper | aleph-1370 (pending) |
 | Time column names differ: `Started`, `Updated`, `Last`, `When`, `Date`, `Written` | Tables | Column order, time column | aleph-1360 (pending) |
-| Detail page heads built by hand (`<header class="ph">`) | `ui/views/jobs.js:205`, `ui/views/issues.js:494` | Page head | none; follow-up (aleph-1362 is done and left them) |
 | Issues and Sessions heads without `scopeBar()` | `ui/views/issues.js`, `ui/views/sessions.js` | Page-head controls | aleph-1363 (pending) |
 | Chart boxes without `role="img"` or `aria-label` | `ui/views/issues.js` (`backlog`, `close`, `tests`) | Charts: each chart box | aleph-1364 (pending) |
 | Two classes for one result line (`.act-msg`, `.form-msg`) | `ui/app.css:341`; `ui/views/issues.js:467` | Form messages | aleph-1372 (pending) |
