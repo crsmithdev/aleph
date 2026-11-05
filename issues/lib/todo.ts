@@ -66,7 +66,7 @@ export function parseRef(s: string): { repo: string; id: number } | null {
 }
 
 /** `<repo>-<n>` or a part's `<repo>-<n>.<m>` split into its parts: the id is a number for the first, `"n.m"` for the second. Null for neither. */
-export function parseGoalRef(s: string): { repo: string; id: number | string } | null {
+export function parseIssueRef(s: string): { repo: string; id: number | string } | null {
   const m = /^(.+)-(\d+(?:\.\d+)?)$/.exec(s);
   return m ? { repo: m[1], id: m[2].includes(".") ? m[2] : Number(m[2]) } : null;
 }

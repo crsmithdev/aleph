@@ -258,7 +258,7 @@ export function byPriority<T extends { item: Issue }>(entries: T[]): T[] {
 }
 
 /** The buildable issues of all repos, critical first, then repo then number order within a priority. A repo whose list cannot be read has none. */
-export function goals<R extends Place>(repos: R[], lists: Reader = reader()): { repo: R; item: Issue }[] {
+export function buildableIssues<R extends Place>(repos: R[], lists: Reader = reader()): { repo: R; item: Issue }[] {
   return byPriority(repos.flatMap((repo) => {
     const doc = lists.list(repo.key);
     return (doc?.items ?? []).filter((i) => isBuildable(doc!, i, repo)).map((item) => ({ repo, item }));
@@ -270,7 +270,7 @@ export function goals<R extends Place>(repos: R[], lists: Reader = reader()): { 
  * may have been closed or had a note added since the list was read. A store
  * that cannot be read counts as not buildable.
  */
-export function goal(repo: Place, id: number | string): Issue | null {
+export function buildableIssue(repo: Place, id: number | string): Issue | null {
   const r = reader();
   const doc = r.list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;

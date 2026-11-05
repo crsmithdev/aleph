@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { goals, isBuildable, isSorted, readList, writeList } from "../../../issues/lib/store.ts";
+import { buildableIssues, isBuildable, isSorted, readList, writeList } from "../../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
 import { readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
@@ -223,7 +223,7 @@ describe("a repo with author", () => {
     expect(isBuildable(doc, item(1), repo)).toBe(false);
     expect(isSorted(doc, item(1), repo)).toBe(false);
     expect(isSorted(doc, item(1), { key: repo.key })).toBe(true);
-    expect(goals([repo], { list: () => readList(repo), item: (_k, id) => item(id) })).toEqual([]);
+    expect(buildableIssues([repo], { list: () => readList(repo), item: (_k, id) => item(id) })).toEqual([]);
     expect((await run()).counts).toEqual({ build: 1 });
     expect(prompt(repo, { ...item(1), spec: "## Goal\nOld." } as issues.Issue)).toContain("# Its spec now\n\n## Goal\nOld.");
     expect(isBuildable(readList(repo)!, item(1), repo)).toBe(true);

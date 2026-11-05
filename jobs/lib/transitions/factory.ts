@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
+import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { factoryLog } from "../infra/layout.ts";
@@ -39,7 +39,7 @@ import { INTAKE_CAP, goalLockWaitMs, rescueOn } from "../infra/settings.ts";
 
 
 /** The buildable issues of each factory repo. */
-export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => goals(sandboxRepos(), lists);
+export const openGoals = (lists?: Reader): { repo: Repo; item: issues.Issue }[] => buildableIssues(sandboxRepos(), lists);
 
 /**
  * Whether `<repo>-<n>` is done, by `refDone`. It fetches each repo once; with `fetch` false it reads what was last fetched.
@@ -49,7 +49,7 @@ export function doneChecker(fetch = true, later?: (repo: string, id: number | st
   const reg = loadRegistry();
   const known = new Map<string, { doc: issues.Doc | null; stages: Map<string, string>; read: boolean }>();
   return (ref) => {
-    const r = issues.parseGoalRef(ref);
+    const r = issues.parseIssueRef(ref);
     const repo = r && reg[r.repo];
     if (!r || !repo) return false;
     if (!known.has(r.repo)) {
@@ -142,7 +142,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       const jobs = allJobs();
       const open = openJob(name, null, jobs);
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
-      const item = open ? listed : goal(repo, ref);
+      const item = open ? listed : buildableIssue(repo, ref);
       if (!item) { skip(name, "not-ready", "not a goal"); continue; }
       const facts = { ...goalFacts(repo, item, jobs), done, red };
       // A pass that began before a pause must not start a run after it.
@@ -443,7 +443,7 @@ function entry(e: Entry): string {
   const r = e.run;
   const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
   const lane = laneOf(e);
-  const prio = (lane === "delivered" || lane === "needs you") && r.repo && r.on ? reader().item(r.repo, issues.parseGoalRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
+  const prio = (lane === "delivered" || lane === "needs you") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
   const head = `${r.repo}/${r.name} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.condition === "landed" && r.commit) {

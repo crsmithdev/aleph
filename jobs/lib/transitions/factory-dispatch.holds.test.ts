@@ -65,8 +65,8 @@ describe("each skip in the goal loop gets one hold record", () => {
     const id = goal();
     const name = `fac-${id}`;
     // Park it between the read under the lock and the last read before the start.
-    const real = store.goal;
-    const spy = spyOn(store, "goal").mockImplementation((place, ref) => {
+    const real = store.buildableIssue;
+    const spy = spyOn(store, "buildableIssue").mockImplementation((place, ref) => {
       const item = real(place, ref);
       writeList({ key: "fac" }, "park", (doc) => { issues.setStatus(issues.find(doc, ref)!, "parked"); return true; });
       return item;

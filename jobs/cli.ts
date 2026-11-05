@@ -151,7 +151,7 @@ function jobs(): void {
 
 /** After `aleph issue add` or `edit` of an open goal in a factory repo: a dispatch, so the goal starts at once. It never fails the write. */
 function dispatchAfterGoal(repo: Repo, item: issues.Issue): void {
-  if (!repo.sandbox || !store.goal(repo, issues.idOf(item))) return;
+  if (!repo.sandbox || !store.buildableIssue(repo, issues.idOf(item))) return;
   dispatchDetached();
 }
 

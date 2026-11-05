@@ -12,7 +12,7 @@ import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from 
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
-import { idOf, parseGoalRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
+import { idOf, parseIssueRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
@@ -265,12 +265,12 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
   };
   // The dispatch's test, from this build's lists and stages: it fetches no project repo, as the stages above do not.
   const isDone = (ref: string): boolean => {
-    const r = parseGoalRef(ref), repo = r ? registry[r.repo] : undefined;
+    const r = parseIssueRef(ref), repo = r ? registry[r.repo] : undefined;
     if (!r || !repo) return false;
     return refDone(lists.item(r.repo, r.id), !!lists.list(r.repo), stagesOf(repo).get(String(r.id))?.stage);
   };
   const blocker = (id: string): Wait => {
-    const r = parseGoalRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
+    const r = parseIssueRef(id), found = r ? lists.item(r.repo, r.id) : undefined;
     return {
       id, href: r ? hrefOf({ key: r.repo } as Repo, String(r.id)) : "", title: found?.title ?? "",
       state: r && found && registry[r.repo] ? stagesOf(registry[r.repo]).get(String(r.id))?.stage ?? status(found) : null,
