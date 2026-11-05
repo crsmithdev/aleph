@@ -85,7 +85,7 @@ export function assess(reading: Reading, limit: number, blocked: boolean, retry:
   if (reading.compacted && !blocked && !retry) {
     return {
       kind: "gate",
-      reason: `this session has compacted, so its context is now a summary. Write the handoff with the aleph:handoff skill, then tell Chris to run /clear and /aleph:pickup. Do not start new work in this session.`,
+      reason: `this session has compacted, so its context is now a summary. Write the handoff with the aleph:handoff skill, then tell Chris to run /clear; the next session picks the handoff up. Do not start new work in this session.`,
     };
   }
   const fraction = Number(process.env.ALEPH_CONTEXT_WARN ?? DEFAULT_WARN);

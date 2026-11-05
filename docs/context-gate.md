@@ -54,5 +54,6 @@ is the shape `Stop` honors, as with the verify gate.
 
 - Delegate read-heavy and search-heavy sweeps. Measured: 3% of the tokens, 0.3k
   back into the parent.
-- `/aleph:handoff` then `/clear` then `/aleph:pickup` is the session boundary.
+- `/aleph:handoff` then `/clear` is the session boundary; the next session picks
+  the handoff up (`hooks/handoff-start.ts`).
   The gate only decides when.

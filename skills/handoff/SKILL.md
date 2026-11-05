@@ -5,11 +5,20 @@ description: >
   user asks for a handoff, or when context is about to be cleared mid-task.
 ---
 
-Write a complete handoff for the next session to `~/.aleph/handoffs/<name>.md`. `<name>` is the argument, if one is given (the Sidetone bridge passes `sidetone`), and `current` if not. The next session will read this verbatim with no other context. Assume the reader knows nothing about what we've been doing.
+Write a complete handoff for the next session. The next session will read this verbatim with no other context. Assume the reader knows nothing about what we've been doing.
 
-Create the directory first if it doesn't exist (`mkdir -p ~/.aleph/handoffs`).
+- With an argument `<name>` (the Sidetone bridge passes `sidetone`): write `~/.aleph/handoffs/<name>.md`.
+- With no argument: write the project's handoff, `~/.aleph/handoffs/projects/<scope>.md`. `<scope>` is the name of the main repo's directory, or of the current directory outside git:
 
-The file must contain these sections, in this order:
+  ```
+  d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"
+  ```
+
+Create the directory first if it doesn't exist (`mkdir -p`).
+
+The first line of the file is `summary: <what the next session does, in one line of at most 100 characters>`. The session start shows this line to the user.
+
+Then the file must contain these sections, in this order:
 
 ## Intent
 One short paragraph: what is the user trying to accomplish in this thread, and why. Include the original ask if it's still load-bearing.
@@ -28,7 +37,7 @@ A single paragraph addressed to the next instance of yourself. Tell it: where to
 
 After writing the file, output exactly this and nothing else. With no argument:
 
-> Handoff saved to `~/.aleph/handoffs/current.md`. Run `/clear` then `/aleph:pickup` in the new session.
+> Handoff saved to `~/.aleph/handoffs/projects/<scope>.md`. Run `/clear`; the next session picks it up on your first prompt.
 
 With an argument, a program starts the next session, so output only:
 

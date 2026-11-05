@@ -65,7 +65,7 @@ Invoke a skill as `/aleph:<name>`. Claude can also start one by itself, except t
 | `humanizer` | Rewrites prose so it does not read as written by AI |
 | `writing-for-agents` | How to write a skill, an `AGENTS.md` or a `CLAUDE.md` |
 | `vault` | Reads and writes the memory vault |
-| `handoff` / `pickup` | Saves a session to `~/.aleph/handoffs/` and resumes it in a fresh context |
+| `handoff` / `pickup` | Saves a session to `~/.aleph/handoffs/projects/<repo>.md`; the next session in that repo picks it up |
 | `retro` † | Reads a session's trace and transcript and proposes fixes to identity, skills, hooks and vault |
 
 ### Hooks
