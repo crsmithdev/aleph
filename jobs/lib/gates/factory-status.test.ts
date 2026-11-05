@@ -72,7 +72,7 @@ test("the hold lifts when the probe answers, and stays when the probe fails", as
   expect(backendHold()).toBeNull();
 });
 
-test("a goal with no run that the hold held stays held with no new routing, until the hold lifts", async () => {
+test("an issue with no run that the hold held stays held with no new routing, until the hold lifts", async () => {
   await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
   recordHold("fac-1", "backend", "waits for OpenRouter: API Error: 402 This request would exceed your available credits");
   recordHold("fac-2", "live-cap", "3 agent runs are live");

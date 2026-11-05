@@ -80,7 +80,7 @@ test("a factory gate gives the dispatch its why and Chris its text", () => {
   expect(issueDecision(facts({ "live-cap": live }))).toEqual({ kind: "live-cap", ...live });
 });
 
-test("a goal whose run is on the held backend gets the hold decision, not a start", async () => {
+test("an issue whose run is on the held backend gets the hold decision, not a start", async () => {
   const was = process.env.ALEPH_FACTORY_DIR, url = process.env.SIDETONE_TELL_URL, dir = mkdtempSync(join(tmpdir(), "hold-"));
   process.env.ALEPH_FACTORY_DIR = dir;
   process.env.SIDETONE_TELL_URL = "http://127.0.0.1:1/tell";

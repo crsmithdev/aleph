@@ -35,7 +35,7 @@ export interface IssueFacts {
   item: issues.Issue;
   done: (ref: string) => boolean;
   pause?: Bound | null;
-  /** The backend hold, when the run the goal would start is on the backend the factory holds. */
+  /** The backend hold, when the run the issue would start is on the backend the factory holds. */
   backend?: Bound | null;
   /** The line of the repo's baseline when it is red, still running or unchecked. */
   red?: string | null;

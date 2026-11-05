@@ -100,8 +100,8 @@ const holdBound = (h: BackendHold): Bound =>
   ({ why: `waits for ${BACKENDS[h.via]}: ${h.why}`, text: `Waiting for ${BACKENDS[h.via]}: ${h.why}`, ev: { action: "waiting", count: `for ${BACKENDS[h.via]}` } });
 
 /**
- * The backend hold of a goal with no run yet, whose backend only routing names: it binds when this hold already held
- * the goal, so the dispatch does not route the goal again while the hold lasts.
+ * The backend hold of an issue with no run yet, whose backend only routing names: it binds when this hold already held
+ * the issue, so the dispatch does not route the issue again while the hold lasts.
  */
 export function heldGoal(name: string): Bound | null {
   const h = backendHold(), w = record.read(name)?.wait;

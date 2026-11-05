@@ -106,7 +106,7 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
   const out: Record<string, unknown> = {};
   const c = await correctionsStep(now);
   if (c) out.corrections = c;
-  // Before the sweep, so the goals a lifted hold frees are keys it starts this tick.
+  // Before the sweep, so the issues a lifted hold frees are keys it starts this tick.
   const lifted = await probeHold();
   if (lifted) out.hold = lifted;
   try {
