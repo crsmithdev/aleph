@@ -8,10 +8,10 @@ effort: low
 
 Write a handoff for the next session. The next session reads it with no other context.
 
-Path:
+Path, where `<handoffs dir>` is `$ALEPH_HANDOFFS_DIR` if set, else `~/.aleph/handoffs`:
 
-- With an argument `<name>` (the Sidetone bridge passes `sidetone`): `~/.aleph/handoffs/<name>.md`.
-- With no argument: `~/.aleph/handoffs/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`.
+- With an argument `<name>` (the Sidetone bridge passes `sidetone`): `<handoffs dir>/<name>.md`.
+- With no argument: `<handoffs dir>/projects/!`d=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && basename "$(dirname "$d")" || basename "$PWD"`.md`.
 
 Speed matters: the user waits for this file.
 
