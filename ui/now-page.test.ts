@@ -84,14 +84,17 @@ test("mountStatus fetches the week and fills the scorecard and the outcome bar, 
   resetSpeed();
 });
 
-test("the lanes: Running shows live agent runs of the cap and lists every open run; Latest done has two at most", () => {
+test("the lanes: Running shows live agent runs of the cap and lists every open run; Done lists every done item", () => {
   const mk = (n: number, kind: string) => job({ name: `${kind}-${n}`, run: { kind, started: "2026-10-30T09:00:00Z" } });
   const running = [...Array.from({ length: 12 }, (_, i) => mk(i, "agent")), mk(1, "land"), mk(2, "land")];
   const h = view.renderLanes({ ...full, running, factory: { ...full.factory, liveCap: 12, liveRuns: 12 }, done: [] });
   expect(h).toContain('<h2 id="h-running">Running</h2><span class="count">12 of 12</span>');
   expect((h.match(/class="[^"]*run-row/g) ?? []).length).toBe(14);
   const d = (n: number) => ({ id: `aleph-${n}`, title: `D${n}`, href: "#/x", jobs: [] });
-  expect((view.renderLanes({ ...full, done: [d(1), d(2), d(3)] }).match(/done-row/g) ?? []).length).toBe(2);
+  const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)) });
+  expect((done.match(/done-row/g) ?? []).length).toBe(10);
+  expect(done).toContain('<h2 id="h-done">Done</h2>');
+  expect(done).not.toContain("Latest done");
 });
 
 test("an ask keeps its action buttons on the page", () => {

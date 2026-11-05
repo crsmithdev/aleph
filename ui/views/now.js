@@ -214,12 +214,11 @@ function laneCard(cls, row, title, href, below = "") {
 const lane = (id, title, n, rows, none, cap = 0) =>
   `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
 
-const LATEST_DONE = 2;
-/** Latest done: the last done parts and issues, newest first, each its own card. */
+/** Done: the done parts and issues /api/state sends, newest first, each its own card. */
 function doneLane(s) {
-  const rows = (s.done ?? []).slice(0, LATEST_DONE).map((i) =>
+  const rows = (s.done ?? []).map((i) =>
     laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
-  return lane("done", "Latest done", null, rows, "Nothing is done yet.");
+  return lane("done", "Done", null, rows, "Nothing is done yet.");
 }
 
 function queuedLane(s) {
@@ -249,7 +248,7 @@ function runningLane(s) {
   return lane("running", "Running", s.factory.liveRuns ?? runningCount(s), rows, "Nothing is running.", s.factory.liveCap ?? 0);
 }
 
-/** The three lanes: Running, Queued, Latest done. */
+/** The three lanes: Running, Queued, Done. */
 export function renderLanes(s) {
   return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s)}</div>`;
 }

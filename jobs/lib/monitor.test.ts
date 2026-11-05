@@ -110,5 +110,6 @@ test("the findings are the numbered lines of the reply; NOTHING gives none", () 
   expect(readerPrompt("TABLE")).toEndWith("\nTABLE");
   expect(readerPrompt("TABLE")).toContain("You only read.");
   expect(readerPrompt("TABLE")).toContain("as **text**");
+  expect(readerPrompt("TABLE")).toContain("names at most 3 metrics, the most useful ones");
 });
 
