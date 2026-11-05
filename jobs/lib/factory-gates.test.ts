@@ -1,13 +1,20 @@
-import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { afterEach, beforeEach, expect, mock, setSystemTime, test } from "bun:test";
+import { chmodSync, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { dispatchIssues, setPaused } from "./factory.ts";
-import { gates, gpuSlot, liveRuns } from "./factory-status.ts";
+import { gates, gpuSlot, liveEntries, liveRuns } from "./factory-status.ts";
 import { LOCAL, setModel } from "./models.ts";
 import { waitingToLand } from "./landing.ts";
-import type { Run } from "./ledger.ts";
+import * as ledger from "./ledger.ts";
+import { held, runsDir, updateRun, type Run } from "./ledger.ts";
+import { startJob } from "./transitions.ts";
 import { startKept } from "./unit.ts";
 import { ctx, goal, mk, setup, teardown } from "./factory.helpers.ts";
+
+/** Called after each `held` check, the gate's check of the `gpu` lock among them: a test sets it to act in that gap. */
+let afterHeld: ((name: string) => void) | undefined;
+const real = { ...ledger };
+mock.module("./ledger.ts", () => ({ ...real, held: (name: string) => { const r = real.held(name); afterHeld?.(name); return r; } }));
 
 beforeEach(setup);
 afterEach(teardown);
@@ -101,5 +108,80 @@ test("with the live cap full of Claude runs and the GPU free, the dispatch start
     server.stop(true);
     process.env.ALEPH_JEV_URL = saved.url;
     process.env.OPENROUTER_API_KEY = saved.key;
+  }
+});
+
+/** A `systemd-run` that does nothing, first on PATH, so a start reaches its run record and starts no unit. */
+function stubUnit(): () => void {
+  const bin = join(ctx.base, "bin");
+  mkdirSync(bin);
+  writeFileSync(join(bin, "systemd-run"), "#!/bin/sh\nexit 0\n");
+  chmodSync(join(bin, "systemd-run"), 0o755);
+  const saved = { PATH: process.env.PATH, fg: process.env.ALEPH_JOB_FOREGROUND, wait: process.env.ALEPH_PID_WAIT_MS };
+  Object.assign(process.env, { PATH: `${bin}:${saved.PATH}`, ALEPH_PID_WAIT_MS: "50" });
+  delete process.env.ALEPH_JOB_FOREGROUND;
+  return () => {
+    process.env.PATH = saved.PATH;
+    if (saved.fg !== undefined) process.env.ALEPH_JOB_FOREGROUND = saved.fg;
+    if (saved.wait === undefined) delete process.env.ALEPH_PID_WAIT_MS; else process.env.ALEPH_PID_WAIT_MS = saved.wait;
+  };
+}
+
+const folders = () => (existsSync(runsDir()) ? readdirSync(runsDir()).filter((d) => !d.startsWith(".")) : []);
+
+test("while a local run's start is before its run record, gpuSlot returns null, and after the start the run is live local", async () => {
+  expect(setModel("worker.haiku", "local")).toBeNull();
+  const undo = stubUnit();
+  try {
+    let probe: Promise<unknown> | undefined;
+    // The spec is read in the start's prep step, before the run record is written.
+    const a = { repo: "fac", name: "x", get spec() { probe = gpuSlot(0); return "s"; }, model: "haiku" };
+    await startJob(a);
+    expect(await probe).toBeNull();
+    expect(held("gpu")).toBe(false);
+    expect(liveEntries()).toHaveLength(1);
+    expect(liveRuns()).toBe(0);
+  } finally {
+    undo();
+  }
+});
+
+test("when gpuSlot takes the slot just after a local run's start checks the gate, the start is refused and makes no run folder, and a Claude run starts", async () => {
+  expect(setModel("worker.haiku", "local")).toBeNull();
+  const undo = stubUnit();
+  let call: Promise<(() => void) | null> | undefined;
+  // gpuSlot takes the lock at once, so it holds the slot from the gate's check on.
+  afterHeld = (name) => { if (name === "gpu" && !call) call = gpuSlot(0); };
+  try {
+    await expect(startJob({ repo: "fac", name: "x", spec: "s", model: "haiku" })).rejects.toThrow(/^a local call holds the GPU$/);
+    afterHeld = undefined;
+    expect(folders()).toEqual([]);
+    const release = await call;
+    expect(release).not.toBeNull();
+    await startJob({ repo: "fac", name: "y", spec: "s", model: "sonnet" });
+    expect(folders()).toHaveLength(1);
+    release!();
+  } finally {
+    afterHeld = undefined;
+    undo();
+  }
+});
+
+test("when a local run starts while gpuSlot takes the free gpu lock, gpuSlot returns null and leaves the lock free until the run ends", async () => {
+  const NOW = Date.parse("2026-11-04T00:00:00Z");
+  setSystemTime(NOW);
+  try {
+    expect(held("gpu")).toBe(false);
+    const probe = gpuSlot(0);
+    // Made just now with no pid yet: the run is starting.
+    const run = mk("local-1", "build", "running", { model: LOCAL.model, made: NOW });
+    expect(await probe).toBeNull();
+    expect(held("gpu")).toBe(false);
+    updateRun(run.folder, { condition: "failed" });
+    const release = await gpuSlot(0);
+    expect(release).not.toBeNull();
+    release!();
+  } finally {
+    setSystemTime();
   }
 });

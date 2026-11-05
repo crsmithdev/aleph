@@ -17,7 +17,8 @@ import { agentOf, landTerms, removeBranch } from "./landing.ts";
 import { git } from "./git.ts";
 import { onMain } from "./status.ts";
 import { refuse } from "./refusal.ts";
-import { gates, liveEntries } from "./factory-status.ts";
+import { gates, liveEntries, onLocal } from "./factory-status.ts";
+import { readModels } from "./models.ts";
 import { factoryLog } from "./layout.ts";
 import { route, type Tier } from "./route.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
@@ -63,10 +64,15 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   if (!release) refuse("another dispatch holds the lock");
   let child: ReturnType<typeof Bun.spawn> | undefined;
   let id: string;
+  let gpu: (() => void) | null = null; // a local run holds the GPU slot from its cap check until its run record is written
   try {
     if (isBuild(run.kind)) {
       const full = gates({ only: ["live-cap"], run });
       if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
+      if (onLocal(run, readModels())) {
+        gpu = await lock("gpu", 0);
+        if (!gpu) refuse("a local call holds the GPU");
+      }
     }
     mkdirSync(runsDir(), { recursive: true });
     // Runs sort by folder name, so a run's stamp comes after the stamp of each earlier run of its tag: a follow-up
@@ -81,6 +87,8 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
     // `made` orders the land queue: never below an earlier run's, so a clock stepped back keeps the order.
     const made = Math.max(Date.now(), ...allRuns().map((e) => (e.run.made ?? 0) + 1));
     writeRun(folder, { ...run, job: run.job ?? id, made } as Run);
+    gpu?.();
+    gpu = null;
 
     // A factory run's unit is the backstop for its time box: systemd stops the whole cgroup.
     const factory = isBuild(run.kind) && run.repo && loadRegistry()[run.repo]?.sandbox;
@@ -98,6 +106,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
       console.error(`warn: ${id} wrote no pid: ${why}`);
     }
   } finally {
+    gpu?.();
     release!();
   }
   return { started: { run: id!, job: run.job ?? id!, folder: join(runsDir(), id!) }, child };

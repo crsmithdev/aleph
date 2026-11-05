@@ -98,7 +98,7 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
 
 /** Whether a build run is on the local backend: unit.ts sets its model to the local one, and before that its slot's backend is local. */
-const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Slot, Backend>): boolean =>
+export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Slot, Backend>): boolean =>
   run.model === LOCAL.model || models[(run.merge ? "merge" : `worker.${run.model}`) as Slot] === "local";
 
 /** Live agent runs on Claude, the count the live cap checks: a local-backend run counts against LOCAL_CAP only. */
@@ -114,9 +114,11 @@ export const liveLocal = (runs?: Entry[], models = readModels()): number => live
 export async function gpuSlot(waitMs: number): Promise<(() => void) | null> {
   const deadline = Date.now() + waitMs;
   for (;;) {
-    if (liveLocal() < LOCAL_CAP) {
-      const release = await lock("gpu", 0);
-      if (release) return release;
+    // Take the lock first: a local run's start holds it from its cap check until its run record is written.
+    const release = await lock("gpu", 0);
+    if (release) {
+      if (liveLocal() < LOCAL_CAP) return release;
+      release();
     }
     if (Date.now() >= deadline) return null;
     await Bun.sleep(100);
