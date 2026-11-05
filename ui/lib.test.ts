@@ -1,6 +1,6 @@
-import { expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -293,4 +293,34 @@ test("sectionHead takes an id and a level, and card passes both through", () => 
   expect(sectionHead("Done", { id: "done", count: 2 })).toBe('<div class="sh"><h2 id="h-done">Done</h2><span class="count">2</span></div>');
   expect(sectionHead("Sub", { level: 3 })).toBe('<div class="sh"><h3>Sub</h3></div>');
   expect(card("Done", "", { id: "done", level: 3 })).toContain('<div class="sh"><h3 id="h-done">Done</h3></div>');
+});
+
+describe("loadDiff", () => {
+  const real = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = real; });
+  const stub = (f: any) => { globalThis.fetch = f; };
+  test("fills the element with diffHtml on a 200: + - @@ and +++ lines get their classes, and an empty diff says so", async () => {
+    const t = "+++ b/f\n@@ -1 +1 @@\n-old\n+new";
+    stub(async () => new Response(t));
+    const el: any = {};
+    expect(await loadDiff(el, "/x")).toBe(t);
+    expect(el.innerHTML).toBe(diffHtml(t));
+    expect(el.innerHTML).toContain('<span class="l d-meta">+++ b/f</span>');
+    expect(el.innerHTML).toContain('<span class="l d-hunk">@@ -1 +1 @@</span>');
+    expect(el.innerHTML).toContain('<span class="l d-del">-old</span>');
+    expect(el.innerHTML).toContain('<span class="l d-add">+new</span>');
+    stub(async () => new Response(""));
+    expect(await loadDiff(el, "/x")).toBe("");
+    expect(el.innerHTML).toBe(diffHtml(""));
+    expect(el.innerHTML).toContain("No changes from the merge base.");
+  });
+  test("fills a .msg line on a 404 and on a thrown error", async () => {
+    stub(async () => new Response("No diff was recorded", { status: 404 }));
+    const el: any = {};
+    expect(await loadDiff(el, "/x")).toBeNull();
+    expect(el.innerHTML).toBe('<p class="msg">No diff was recorded</p>');
+    stub(async () => { throw new Error("down"); });
+    expect(await loadDiff(el, "/x")).toBeNull();
+    expect(el.innerHTML).toBe('<p class="msg">The diff failed to load: down</p>');
+  });
 });

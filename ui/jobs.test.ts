@@ -262,7 +262,7 @@ describe("render", () => {
     for (const t of [">Failed<", ">Passed<", ">Landed<", ">Default<", ">Follow-up<", "a? -&gt; b", "tidy"]) expect(h).toContain(t);
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
-    expect(h).toContain('<pre class="diff" id="diff" data-job="fac-9"><p class="quiet" role="status">Loading the diff…</p></pre>');
+    expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9"><p class="quiet" role="status">Loading the diff…</p></div>');
   });
   test("the Detail head is a sectionHead inside the dp-detail block", () => {
     const h = v.renderJob(job);

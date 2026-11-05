@@ -215,8 +215,8 @@ export function chart(el, option) {
   };
 }
 
-// Now fills `.diff-panel[data-diff-for]`; Jobs fills `pre#diff` and removes its `[data-diff]` button once the diff is in.
-const PANELS = "[data-diff-for], pre.diff";
+// Now fills `.diff-panel[data-diff-for]`; Jobs fills `.diff-panel#diff` and removes its `[data-diff]` button once the diff is in.
+const PANELS = "[data-diff-for], .diff-panel#diff";
 const panelKey = (p) => p.getAttribute?.("data-diff-for") ?? "diff";
 const FIELDS = "input, textarea, select";
 
@@ -280,6 +280,19 @@ export const diffHtml = (t) => String(t ?? "").trim()
       return `<span class="l d-${c}">${esc(l)}</span>`;
     }).join("")}</pre>`
   : empty("No changes from the merge base.");
+
+/** Fetch a diff from `url` into `el`: a loading line, then the diff or a `.msg` line. Returns the diff text, or null on a failure. */
+export async function loadDiff(el, url) {
+  el.innerHTML = loadingLine("the diff");
+  const msg = (m) => { el.innerHTML = `<p class="msg">${esc(m)}</p>`; return null; };
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    const t = await res.text();
+    if (!res.ok) return msg(t.trim() || `The diff failed to load (${res.status}).`);
+    el.innerHTML = diffHtml(t);
+    return t;
+  } catch (err) { return msg(`The diff failed to load: ${err.message}`); }
+}
 
 /** The job states, as the ledger names them (jobs/lib/records/ledger.ts State), in the order the filters list them. */
 export const STATES = ["running", "passed", "awaiting", "failed", "stuck", "done", "landed", "dropped"];

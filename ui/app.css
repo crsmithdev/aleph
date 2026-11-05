@@ -862,9 +862,6 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
 .dp-aside { font: var(--fw-text) var(--fs-sm) var(--sans); color: var(--muted); }
 .dp-body { padding: var(--sp-10) var(--sp-18) var(--sp-14); }
 .dp-body pre { margin: 0 0 var(--sp-8); padding: var(--sp-10) var(--sp-12); max-height: 70vh; overflow: auto; background: var(--sunk); border-radius: var(--r-tag); font: var(--fs-xs)/1.55 var(--mono); color: var(--ink-2); }
-pre.diff span.add, pre.diff span.del { display: inline-block; min-width: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; }
-pre.diff span.add { background: var(--done-bg); color: var(--add); }
-pre.diff span.del { background: var(--stuck-bg); color: var(--del); }
 @media (max-width: 720px) {
   .dp-kpi { border-left: 0; border-top: 1px solid var(--rule-2); }
   .dp-ev { grid-template-columns: 52px minmax(0, 1fr); }

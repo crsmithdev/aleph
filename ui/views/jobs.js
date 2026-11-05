@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { sectionHead, blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
+import { sectionHead, blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -211,27 +211,16 @@ export function renderJob(j) {
     `<div class="dp-detail">${sectionHead("Detail")}` +
     (j.review ? fold("Review", verdict ? tag(verdict, verdict === "pass" ? "done" : "stuck") : "", `<div class="md">${md(j.review)}</div>`) : "") +
     (checks ? fold("Checks", tag(`${passed} / ${j.checks.length}`, passed === j.checks.length ? "done" : "stuck"), checks) : "") +
-    fold("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<pre class="diff" id="diff" data-job="${esc(j.name)}">${loadingLine("the diff")}</pre>`) +
+    fold("Diff", c ? esc(c.lines) : "", `${j.stat ? `<pre class="trailers">${esc(j.stat)}</pre>` : ""}<div class="diff-panel" id="diff" data-job="${esc(j.name)}">${loadingLine("the diff")}</div>`) +
     `</div></div>`;
-}
-
-/** Colour a unified diff's lines. */
-export function renderDiff(text) {
-  return String(text).split("\n").map((l) => {
-    const c = l.startsWith("+") && !l.startsWith("+++") ? "add" : l.startsWith("-") && !l.startsWith("---") ? "del" : "";
-    return c ? `<span class="${c}">${esc(l)}</span>` : esc(l);
-  }).join("\n");
 }
 
 /** The Job page's mount: load the diff into the Diff panel, once. */
 export async function mountJob(root) {
-  const out = root.querySelector?.("pre#diff[data-job]");
+  const out = root.querySelector?.("#diff[data-job]");
   if (!out || out.dataset.loaded) return;
   out.dataset.loaded = "1";
-  try {
-    const res = await fetch(`/api/jobs/${encodeURIComponent(out.dataset.job)}/diff`);
-    out.innerHTML = res.ok ? renderDiff(await res.text()) : esc(res.status === 404 ? "No diff was recorded for this job." : `The diff failed to load (${res.status}).`);
-  } catch (err) { out.textContent = `The diff failed to load: ${err.message}`; }
+  await loadDiff(out, `/api/jobs/${encodeURIComponent(out.dataset.job)}/diff`);
 }
 
 // Loads a log file when its button is clicked: the page itself carries only names and sizes.
