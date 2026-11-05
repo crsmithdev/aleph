@@ -22,10 +22,10 @@ const WEEK = {
   buckets: [{ at: "2026-10-27T00:00:00", lead: 1000 }, { at: "2026-10-28T00:00:00", lead: null }],
   issues: { landed: 7, firstPass: 0.91, fixRounds: 0, week: 0.02 }, lost: { hours: 6, share: 0.38 },
   classes: [
-    { key: "landed", name: "Landed", hours: 8, causes: [{ name: "First run", hours: 8, runs: 8 }] }, { key: "fixed", name: "Fixed", hours: 2, causes: [{ name: "Checks failed", hours: 2, runs: 2 }] },
-    { key: "nothing", name: "Late", hours: 2, causes: [{ name: "Issue had landed", hours: 2, runs: 3 }] },
-    { key: "restarted", name: "Restarted", hours: 4, causes: [{ name: "Issue had landed", hours: 1, runs: 1 }, { name: "No commit", hours: 3, runs: 2 }] },
-    { key: "dropped", name: "Dropped", hours: 0, causes: [] },
+    { key: "landed", name: "landed", hours: 8, causes: [{ name: "First run", hours: 8, runs: 8 }] }, { key: "returned", name: "returned", hours: 2, causes: [{ name: "Checks failed", hours: 2, runs: 2 }] },
+    { key: "failed", name: "failed", hours: 2, causes: [{ name: "Issue had landed", hours: 2, runs: 3 }] },
+    { key: "reran", name: "reran", hours: 4, causes: [{ name: "Issue had landed", hours: 1, runs: 1 }, { name: "No commit", hours: 3, runs: 2 }] },
+    { key: "dropped", name: "dropped", hours: 0, causes: [] },
   ],
 };
 
@@ -159,8 +159,8 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   expect(h.indexOf('<span class="obk">Reached main</span>')).toBeLessThan(h.indexOf("seg-landed"));
   expect(sep).toBeGreaterThan(h.indexOf("seg-landed"));
   expect(h.indexOf('<span class="obk">Did not reach main</span>')).toBeGreaterThan(sep);
-  expect(h.lastIndexOf("seg-fixed")).toBeLessThan(sep);
-  expect(h.indexOf("seg-nothing")).toBeGreaterThan(sep);
+  expect(h.lastIndexOf("seg-returned")).toBeLessThan(sep);
+  expect(h.indexOf("seg-failed")).toBeGreaterThan(sep);
   const needs = view.renderNeeds({ ...state, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
   expect(needs).toContain('<h2 id="h-needs">Alerts</h2>');
   expect(needs).not.toContain("<h3>");

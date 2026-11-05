@@ -57,7 +57,7 @@ All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), 
 | `--good`, `--hot` | #437018, #C2521F | #C3E88D, #F78C6C | a trend that improves; the largest cause |
 | `--raised` | #ECEAF6 | #32374D | a selected metric card |
 | `--approve`, `--decide`, `--unstick` | see `ui/app.css:34-36` | see `ui/app.css:131-133` | the three Ask cards, each with `-bg` and `-ring` |
-| `--seg-landed`, `-fixed`, `-nothing`, `-restarted`, `-dropped` | `ui/app.css:38` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
+| `--seg-landed`, `-returned`, `-failed`, `-reran`, `-dropped` | `ui/app.css:38` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
 | `--fill-run`, `--fill-stuck`, `--fill-done`, `--fill-aux` | `ui/app.css:40-43` | same in both themes (not re-set in dark) | Timeline bar fills (`.dp-bar`), under white text |
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #1BAF7A, #EDA100, #E87BA4 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #C792EA, #89DDFF | extra chart series |
@@ -345,7 +345,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--run` on `--run-bg` | 4.99 | 4.61 |
 | `--hot` on `--surface` | 4.65 | 5.80 |
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
-| white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
+| white on `--seg-reran` (the lowest of the five) | 4.70 | 4.70 |
 
 All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:684`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:529`).
 

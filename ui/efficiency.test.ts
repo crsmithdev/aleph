@@ -53,11 +53,11 @@ const cls = (key: string, name: string, h: number, causes: any[], top: any[] = [
 const D: any = {
   window: "week", flaky: 4, issues: { landed: 2, firstPass: 0.5, fixRounds: 1, week: 0.02, usage: [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", week: 0.5, runs: 3 }, { goal: "fx-2", week: 0.1, runs: 1 }] }, lost: { hours: 6, share: 0.3 }, notCounted: { runs: 11, issues: 4, hours: 0.4 },
   classes: [
-    cls("landed", "Landed", 10, [{ name: "First run", hours: 10, runs: 5 }]),
-    cls("fixed", "Fixed", 4, [{ name: "Checks failed", hours: 4, runs: 3 }]),
-    cls("nothing", "Late", 2, [{ name: "Issue had landed", hours: 2, runs: 6 }], [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", reason: "already met", hours: 2, runs: 6 }]),
-    cls("restarted", "Restarted", 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ goal: "fx-2", reason: "", hours: 3, runs: 2 }]),
-    cls("dropped", "Dropped", 0, []),
+    cls("landed", "landed", 10, [{ name: "First run", hours: 10, runs: 5 }]),
+    cls("returned", "returned", 4, [{ name: "Checks failed", hours: 4, runs: 3 }]),
+    cls("failed", "failed", 2, [{ name: "Issue had landed", hours: 2, runs: 6 }], [{ goal: "fx-1", href: "#/issues/fx/1", title: "One", reason: "already met", hours: 2, runs: 6 }]),
+    cls("reran", "reran", 4, [{ name: "No commit", hours: 3, runs: 2 }, { name: "Issue had landed", hours: 1, runs: 1 }], [{ goal: "fx-2", reason: "", hours: 3, runs: 2 }]),
+    cls("dropped", "dropped", 0, []),
   ],
 };
 
@@ -82,7 +82,7 @@ test("All lost time: the causes sum to lost.hours", () => {
   expect(s.causes.reduce((a: number, x: any) => a + x.hours, 0)).toBe(D.lost.hours);
   expect(renderEfficiency(D, "all")).toContain("<h2>Lost Time Causes</h2>");
   expect(renderEfficiency(D, "all")).toContain("<h2>Lost Time Issues</h2>");
-  for (const k of ["all", "flakes", "usage", "fixed"]) expect(Object.keys(selection(D, k))).toEqual(["title", "causes", "top"]);
+  for (const k of ["all", "flakes", "usage", "returned"]) expect(Object.keys(selection(D, k))).toEqual(["title", "causes", "top"]);
 });
 
 test("the causes card is a table beside the issues card, with no intro and no File an issue button", () => {
@@ -103,9 +103,11 @@ test("the top table heads are Issue, Why, Took, Runs", () => {
 
 test("selecting a class shows its causes; selecting Lost time again restores the merged list", () => {
   const all = renderEfficiency(D, "all");
-  const one = renderEfficiency(D, "fixed");
-  expect(one).toContain("<h2>Fixed Causes</h2>");
-  expect(one).toContain('data-tile="fixed" style="flex:4" aria-pressed="true"');
+  const one = renderEfficiency(D, "returned");
+  expect(one).toContain("<h2>returned Causes</h2>");
+  expect(all).toContain('data-tile="returned"');
+  for (const w of ["fixed", "Late", "Restarted"]) expect(all).not.toContain(w);
+  expect(one).toContain('data-tile="returned" style="flex:4" aria-pressed="true"');
   expect(one).not.toContain("No commit");
   expect(renderEfficiency(D, "all")).toBe(all);
   expect(all).toContain('data-tile="all" aria-pressed="true"');
@@ -118,7 +120,7 @@ test("the First pass tile and the Landed segment select the landed class, and a 
 });
 
 test("an issue with no link shows its id as text, and a run with no reason says so", () => {
-  const h = renderEfficiency(D, "restarted");
+  const h = renderEfficiency(D, "reran");
   expect(h).toContain("fx-2");
   expect(h).toContain("No reason recorded.");
   expect(h).not.toContain("undefined");

@@ -23,13 +23,13 @@ export function selection(d, key) {
 }
 
 function scorecard(d, key) {
-  const fixed = (d.classes ?? []).find((c) => c.key === "fixed"), f = figuresOf(d);
+  const returned = (d.classes ?? []).find((c) => c.key === "returned"), f = figuresOf(d);
   const pct = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
   const usage = d.issues.week;
   return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: windowTrend(d, "lost", f.lost, { ...pct, lowerIsGood: true }), key: ALL, on: key === ALL }) +
     statCard({ k: "First pass", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...pct, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
     statCard({ k: "Reruns", v: count(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
-    statCard({ k: "Fix rounds", v: count(fixed?.runs ?? 0), note: `${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`, key: "fixed", on: key === "fixed" }) +
+    statCard({ k: "Fix rounds", v: count(returned?.runs ?? 0), note: `${hours(returned?.hours ?? 0)} on ${plural(returned?.issues ?? 0, "issue")}`, key: "returned", on: key === "returned" }) +
     statCard({ k: "Usage per issue", v: usage === null ? "–" : weekText(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 

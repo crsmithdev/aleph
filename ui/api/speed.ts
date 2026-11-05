@@ -99,14 +99,14 @@ export interface Agents {
 
 /** What `classify`'s `statusOf` returns for an issue that is no longer in the store: closed issues left it, so one with no landing was closed without landing. */
 export const GONE = "gone";
-export const CLASSES = ["landed", "fixed", "nothing", "restarted", "dropped"] as const;
+export const CLASSES = ["landed", "returned", "failed", "reran", "dropped"] as const;
 export type Class = (typeof CLASSES)[number];
-export const CLASS_NAME: Record<Class, string> = { landed: "Landed", fixed: "Fixed", nothing: "Late", restarted: "Restarted", dropped: "Dropped" };
+export const CLASS_NAME: Record<Class, string> = { landed: "landed", returned: "returned", failed: "failed", reran: "reran", dropped: "dropped" };
 export const CLASS_TEXT: Record<Class, string> = {
   landed: "The run whose work landed on main.",
-  fixed: "A run of the landing job before the run that landed: a fix round the issue needed.",
-  nothing: "A run that started after its issue had landed, or found the work already on main.",
-  restarted: "A run that a later start replaced: another job of the same issue landed, or the issue started 4 or more times inside an hour.",
+  returned: "A run of the landing job before the run that landed: a fix round the issue needed.",
+  failed: "A run that started after its issue had landed, or found the work already on main.",
+  reran: "A run that a later start replaced: another job of the same issue landed, or the issue started 4 or more times inside an hour.",
   dropped: "A run of an issue that was then dropped or closed without landing.",
 };
 /** The breakdown's name of each stated cause that has one. */
@@ -205,15 +205,15 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     const afterLand = lastLand.has(g) && a > lastLand.get(g)!;
     let cls: Class | null = null;
     if (lands.has(r)) cls = "landed";
-    else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "fixed";
-    else if (afterLand || r.fate === "already-met" || r.fate === "duplicate") cls = "nothing";
-    else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "restarted";
+    else if ([...lands].some((l) => l.job === r.job && t0(l) > a)) cls = "returned";
+    else if (afterLand || r.fate === "already-met" || r.fate === "duplicate") cls = "failed";
+    else if (startsBefore >= 3 || [...lands].some((l) => l.job !== r.job && (firstStart.get(l.job) ?? Infinity) > (firstStart.get(r.job) ?? Infinity))) cls = "reran";
     else if (["done", "dropped", GONE].includes(statusOf(g) ?? "")) cls = "dropped";
     if (!cls) { skipped.push(row); continue; }
     const stated = CAUSE_NAME[causeOf(r) ?? "other"];
     if (cls === "landed") row.cause = mine.some((o) => o.job === r.job && t0(o) < a) ? "After fix rounds" : "First run of the job";
-    else if (cls === "nothing") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
-    else if (cls === "restarted" && startsBefore >= 3) row.cause = "Restart loop";
+    else if (cls === "failed") row.cause = afterLand ? "Issue had landed" : "Work on main from another issue";
+    else if (cls === "reran" && startsBefore >= 3) row.cause = "Restart loop";
     else if (r.condition === "awaiting") row.cause = "Needed Chris";
     else if (r.failed === "review") row.cause = "Reviewer sent back";
     else if (r.failed) row.cause = "Checks failed";

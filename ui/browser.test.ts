@@ -334,7 +334,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
       await page.width(w);
       await page.go("#/");
       const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/views/speed.js").then((v) => {
-        const classes = [["landed", "Landed", 40], ["fixed", "Fixed", 20], ["nothing", "Late", 1.6], ["restarted", "Restarted", 10], ["dropped", "Dropped", 8]].map(([key, name, hours]) => ({ key, name, hours, text: name }));
+        const classes = [["landed", 40], ["returned", 20], ["failed", 1.6], ["reran", 10], ["dropped", 8]].map(([key, hours]) => ({ key, name: key, hours, text: key }));
         const host = document.createElement("div");
         host.id = "obar-probe";
         document.querySelector("#view").prepend(host);

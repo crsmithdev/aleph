@@ -35,7 +35,7 @@
   --decide: #6D3FB0; --decide-bg: #F1EBFA; --decide-ring: #DCCDF2;
   --unstick: #B42F3A; --unstick-bg: #FBEBEC; --unstick-ring: #F0CDD0;
   /* Outcomes in the Efficiency bar: dark enough for white text in both themes. */
-  --seg-landed: #3B4A36; --seg-fixed: #5C7052; --seg-nothing: #9A6347; --seg-restarted: #BC5252; --seg-dropped: #8A4F7A;
+  --seg-landed: #3B4A36; --seg-returned: #5C7052; --seg-failed: #9A6347; --seg-reran: #BC5252; --seg-dropped: #8A4F7A;
   /* Timeline bar fills: one value in both themes, because the dark theme's fills are too light for --on-fill text. */
   --fill-run: #3B5FC8;
   --fill-stuck: #C0304C;
@@ -886,9 +886,9 @@ details.dp-fold[open] > summary { border-bottom: 1px solid var(--rule-2); }
 .obar button { cursor: pointer; }
 .obar button[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }
 .seg-landed { background: var(--seg-landed); }
-.seg-fixed { background: var(--seg-fixed); }
-.seg-nothing { background: var(--seg-nothing); }
-.seg-restarted { background: var(--seg-restarted); }
+.seg-returned { background: var(--seg-returned); }
+.seg-failed { background: var(--seg-failed); }
+.seg-reran { background: var(--seg-reran); }
 .seg-dropped { background: var(--seg-dropped); }
 @media (max-width: 1100px) { .browse, .split, .trio { grid-template-columns: minmax(0, 1fr); } .trio > .wide { grid-column: auto; } .ins { position: static; max-height: none; } }
 @media (max-width: 720px) {

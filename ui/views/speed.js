@@ -120,7 +120,7 @@ export function usageCard(s, link = { href: "#/factory/agents" }) {
   return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, note, ...link });
 }
 
-const LANDED = ["landed", "fixed"];
+const LANDED = ["landed", "returned"];
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/speed for the window. */
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);

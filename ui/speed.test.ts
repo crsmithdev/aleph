@@ -142,11 +142,12 @@ test("classify: one run of each class, with its cause", () => {
   const status = (g: string) => (g === "fx-3" ? "dropped" : "open");
   const out = classify(runs, status, new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   const by = (k: string) => out.classes.find((c) => c.key === k)!;
-  expect(out.classes.map((c) => c.key)).toEqual([...CLASSES]);
   expect(by("landed").causes.map((c) => c.name)).toEqual(["After fix rounds"]);
-  expect(by("fixed").causes.map((c) => c.name)).toEqual(["Checks failed"]);
-  expect(by("restarted").causes.map((c) => c.name).sort()).toEqual(["Restart loop", "Stalled or timed out"]);
-  expect(by("nothing").causes.map((c) => c.name)).toEqual(["Issue had landed"]);
+  expect(out.classes.map((c) => c.key)).toEqual(["landed", "returned", "failed", "reran", "dropped"]);
+  expect(out.classes.map((c) => c.name)).toEqual(["landed", "returned", "failed", "reran", "dropped"]);
+  expect(by("returned").causes.map((c) => c.name)).toEqual(["Checks failed"]);
+  expect(by("reran").causes.map((c) => c.name).sort()).toEqual(["Restart loop", "Stalled or timed out"]);
+  expect(by("failed").causes.map((c) => c.name)).toEqual(["Issue had landed"]);
   expect(by("dropped").causes.map((c) => c.name)).toEqual(["No commit"]);
   expect(by("dropped").top[0]).toMatchObject({ goal: "fx-3", href: "#/issues/fx/3" });
   for (const c of out.classes) {
@@ -179,7 +180,7 @@ test("a build run counts as an agent run", () => {
   expect(out.classes.find((c) => c.key === "landed")!.causes.map((c) => c.name)).toEqual(["After fix rounds"]);
 });
 
-test("classify: a held run that later landed is landed, its earlier held rounds are fixed", () => {
+test("classify: a held run that later landed is landed, its earlier held rounds are returned", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (o: Record<string, unknown>) => ({ kind: "build", job: "h", name: "h", repo: "fx", on: "fx-1", condition: "awaiting", reason: "held path package.json", ...o }) as any;
   const land = (job: string, state: string, h: number) => ({ kind: "land", job, name: job, repo: "fx", on: "fx-1", condition: state, started: t(h, 20), ended: t(h, 25) }) as any;
@@ -192,10 +193,10 @@ test("classify: a held run that later landed is landed, its earlier held rounds 
     r({ job: "other", started: t(3, 1), ended: t(3, 5) }),
   ], () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   const runs = (k: string) => out.classes.find((c) => c.key === k)!.runs;
-  expect([runs("landed"), runs("fixed"), runs("dropped")]).toEqual([1, 1, 1]);
+  expect([runs("landed"), runs("returned"), runs("dropped")]).toEqual([1, 1, 1]);
 });
 
-test("classify: a drop's fate, not its prose, sets the nothing class and the Needed Chris cause", () => {
+test("classify: a drop's fate, not its prose, sets the failed class and the Needed Chris cause", () => {
   const t = (h: number, m = 0) => new Date(2026, 9, 28, h, m).toISOString();
   const r = (todo: number, o: Record<string, unknown>) =>
     ({ kind: "build", job: `j${todo}`, name: `j${todo}`, repo: "fx", on: `fx-${todo}`, condition: "stuck", started: t(todo), ended: t(todo, 10), ...o }) as any;
@@ -212,8 +213,8 @@ test("classify: a drop's fate, not its prose, sets the nothing class and the Nee
   ];
   const out = classify(runs, () => "dropped", new Date(2026, 9, 27).getTime(), new Date(2026, 9, 28, 15).getTime(), null);
   const by = (k: string) => out.classes.find((c) => c.key === k)!;
-  expect(by("nothing").runs).toBe(2);
-  expect(by("nothing").causes.map((c) => c.name)).toEqual(["Work on main from another issue"]);
+  expect(by("failed").runs).toBe(2);
+  expect(by("failed").causes.map((c) => c.name)).toEqual(["Work on main from another issue"]);
   expect(by("dropped").runs).toBe(5);
   expect(by("dropped").causes.map((c) => c.name).sort()).toEqual(["Needed Chris", "Other"]);
   expect(by("dropped").causes.find((c) => c.name === "Needed Chris")!.runs).toBe(1);
