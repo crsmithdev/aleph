@@ -264,4 +264,28 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
       expect(new Set(font).size).toBe(1);
     }, 30_000);
   }
+
+  for (const w of [1100, 420]) {
+    test(`at ${w} px the outcome bar shows the whole label of a 2% segment and the page does not scroll sideways`, async () => {
+      await page.width(w);
+      await page.go("#/");
+      const m = await page.ev<{ clip: boolean[]; widths: number[]; page: number }>(`import("/views/speed.js").then((v) => {
+        const classes = [["landed", "Landed", 40], ["fixed", "Fixed", 20], ["nothing", "Late", 1.6], ["restarted", "Restarted", 10], ["dropped", "Dropped", 8]].map(([key, name, hours]) => ({ key, name, hours, text: name }));
+        const host = document.createElement("div");
+        host.id = "obar-probe";
+        document.querySelector("#view").prepend(host);
+        host.innerHTML = v.bar({ classes }, "");
+        const segs = [...host.querySelectorAll(".obar > *")];
+        return {
+          clip: segs.flatMap((s) => [...s.querySelectorAll("b, span")].map((e) => e.scrollWidth > e.clientWidth)),
+          widths: segs.map((s) => s.getBoundingClientRect().width),
+          page: document.documentElement.scrollWidth,
+        };
+      })`);
+      expect(m.clip).not.toContain(true);
+      expect(m.widths[0]!).toBeGreaterThan(m.widths[2]!);
+      expect(m.page).toBeLessThanOrEqual(w);
+      await page.ev('document.querySelector("#obar-probe").remove()');
+    }, 30_000);
+  }
 });

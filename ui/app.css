@@ -914,7 +914,7 @@ pre.diff span.del { background: var(--stuck-bg); color: var(--del); }
 .usebar div { height: 10px; background: var(--run); border-radius: var(--r-ctl); }
 .usebar i { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--ink); }
 .obar { display: flex; gap: var(--sp-2); }
-.obar > * { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: 56px; padding: var(--sp-8) var(--sp-10); overflow: hidden; border: 0; color: var(--on-fill); font: inherit; font-size: var(--fs-sm); text-align: left; }
+.obar > * { display: flex; flex-direction: column; justify-content: center; min-width: max-content; min-height: 56px; padding: var(--sp-8) var(--sp-10); overflow: hidden; border: 0; color: var(--on-fill); font: inherit; font-size: var(--fs-sm); text-align: left; }
 .obar > :first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); }
 .obar > :last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
 .obar span { font-size: var(--fs-xs); white-space: nowrap; }
@@ -929,7 +929,7 @@ pre.diff span.del { background: var(--stuck-bg); color: var(--del); }
 @media (max-width: 720px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .obar { flex-wrap: wrap; }
-  .obar > * { min-width: 96px; border-radius: 0; }
+  .obar > * { border-radius: 0; }
 }
 ul.logs { list-style: none; padding: 0; }
 ul.logs .logbody { margin: var(--sp-6) 0 var(--sp-12); max-height: 70vh; overflow: auto; }
