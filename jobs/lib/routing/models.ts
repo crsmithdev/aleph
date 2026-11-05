@@ -40,10 +40,13 @@ export const viaOf = (model: string | undefined): Via => (model && MODELS[model]
 /** Whether a model's calls take the GPU slot. */
 export const onGpu = (model: string | undefined): boolean => viaOf(model) === "local";
 
-/** The env a call on `model` adds. A Claude model adds nothing: the call runs on the subscription. */
-export function modelEnv(model: string | undefined): Record<string, string> {
+const MODEL_VARS = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL",
+  "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_AUTO_COMPACT_WINDOW", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"];
+
+/** The env a call on `model` adds. A Claude model clears the variables that point a call at another model, so the call runs on the subscription. */
+export function modelEnv(model: string | undefined): Record<string, string | undefined> {
   const m = model ? MODELS[model] : undefined;
-  if (!m || m.via === "claude") return {};
+  if (!m || m.via === "claude") return Object.fromEntries(MODEL_VARS.map((k) => [k, undefined]));
   const ids = { ANTHROPIC_DEFAULT_HAIKU_MODEL: m.id, ANTHROPIC_DEFAULT_SONNET_MODEL: m.id, ANTHROPIC_DEFAULT_OPUS_MODEL: m.id, CLAUDE_CODE_SUBAGENT_MODEL: m.id };
   if (m.via === "local") return {
     ANTHROPIC_BASE_URL: LOCAL_URL, ANTHROPIC_AUTH_TOKEN: "local", ANTHROPIC_API_KEY: "", ...ids,

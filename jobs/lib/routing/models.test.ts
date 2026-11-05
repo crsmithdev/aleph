@@ -43,8 +43,14 @@ test("a tier set to a model it offers reads back; a model it does not offer, an 
 test("a Claude model adds no env; gpt-oss-20b adds the local server and takes the GPU slot; an OpenRouter model adds OpenRouter, the key and an empty API key", () => {
   process.env.OPENROUTER_API_KEY = "sk-or-test";
   try {
-    expect(modelEnv("haiku")).toEqual({});
-    expect(modelEnv("claude-opus-5-5")).toEqual({});
+    process.env.ANTHROPIC_BASE_URL = "https://openrouter.ai/api";
+    process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = "deepseek/deepseek-v4.1-flash";
+    for (const name of ["haiku", "claude-opus-5-5"]) {
+      const env = { ...process.env, ...modelEnv(name) };
+      expect(env.ANTHROPIC_BASE_URL).toBeUndefined();
+      expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBeUndefined();
+    }
+    expect({ ...process.env, ...modelEnv("gpt-oss-20b") }.ANTHROPIC_BASE_URL).toBe("http://127.0.0.1:8012");
     expect(onGpu("haiku")).toBe(false);
     expect(modelEnv("gpt-oss-20b")).toMatchObject({ ANTHROPIC_BASE_URL: "http://127.0.0.1:8012", ANTHROPIC_AUTH_TOKEN: "local" });
     expect(onGpu("gpt-oss-20b")).toBe(true);
@@ -53,6 +59,8 @@ test("a Claude model adds no env; gpt-oss-20b adds the local server and takes th
     expect(viaOf("deepseek-v4.1-flash")).toBe("openrouter");
   } finally {
     delete process.env.OPENROUTER_API_KEY;
+    delete process.env.ANTHROPIC_BASE_URL;
+    delete process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
   }
 });
 
