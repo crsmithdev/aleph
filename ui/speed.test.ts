@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -408,4 +408,28 @@ test("asks: the window counts the Asks set, and those that came to Chris, in the
   expect(figures(s)).toMatchObject({ asks: 2 });
   expect(figures(speed("hour", new Date(2026, 8, 1)))).toMatchObject({ asks: 0 });
   expect(averageFigures([figures(s)]).asks).toBe(2);
+});
+
+test("GET /api/speed?project= counts only that repo's runs and issues, in the answer and the baseline", async () => {
+  clearCache();
+  // 60 days back (this week) and 67 days back (the week before), so no other test's window sees these runs.
+  const land = (daysAgo: number, repo: string, i: number) => run({ kind: "land", condition: "landed", repo, on: `${repo}-${i}`, ...secs(daysAgo, 9, 60) });
+  land(60, "alpha", 1); land(60, "beta", 1); land(60, "beta", 2);
+  run({ kind: "build", condition: "passed", repo: "alpha", on: "alpha-1", ...secs(60, 8, 300) });
+  run({ kind: "build", condition: "passed", repo: "beta", on: "beta-1", ...secs(60, 8, 300) });
+  run({ kind: "build", condition: "passed", repo: "beta", on: "beta-2", ...secs(60, 8, 300) });
+  land(67, "alpha", 3); land(67, "beta", 3); land(67, "beta", 4);
+  setSystemTime(new Date(2026, 9, 28 - 60, 15));
+  try {
+    const get = async (q: string) => (await routes["GET /api/speed"](new Request(`http://x/api/speed${q}`), {}, new URL(`http://x/api/speed${q}`))).json();
+    const a = await get("?window=week&project=alpha");
+    expect(a.done).toBe(1);
+    expect(a.kinds.agent.count).toBe(1);
+    const both = await get("?window=week");
+    expect(both.done).toBe(3);
+    expect(both.kinds.agent.count).toBe(3);
+    const b = await get("?window=week&project=alpha&baseline=1");
+    expect(b.baseline.prev.landed).toBe(1);
+    expect((await get("?window=week&baseline=1")).baseline.prev.landed).toBe(3);
+  } finally { setSystemTime(); }
 });
