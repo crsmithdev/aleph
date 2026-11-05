@@ -1,9 +1,12 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
+import { setCodes } from "../lib/naming.ts";
 import { job, state } from "./fixtures/status-state.ts";
 import { asksOf, withAttn, issue, full, rows, problem, prop } from "./test-now.ts";
+
+afterEach(() => setCodes({}));
 
 test("issues that wait for triage are not rows and not in the status line: triage is the factory's", () => {
   const s = { ...full, asks: [], stuck: [], factory: { ...full.factory, health: [], paused: false } };
@@ -50,6 +53,37 @@ test("the deny and answer inputs render hidden", () => {
     expect(inputs.length).toBeGreaterThan(0);
     for (const i of inputs) expect(i).toMatch(/\shidden/);
   }
+});
+
+/** The one stuck card of a state whose only stuck job is `j`. */
+const stuckCard = (j: object): string => {
+  const s = { ...state, asks: [], stuck: [job(j)], factory: { ...state.factory, health: [] } };
+  return view.renderNeeds(s).match(/<article[^>]*data-kind="stuck"[^]*?<\/article>/)![0];
+};
+/** The card's HTML outside its one Details fold, and that fold. */
+const outsideDetails = (card: string): [string, string] => {
+  const [outside, inside] = card.split('<details class="more"');
+  return [outside!, inside ?? ""];
+};
+
+test("a failed job's situation line is its state and cause, and its reason sentence moves into Details", () => {
+  const card = stuckCard({ name: "aleph-30", condition: "failed", cause: "timeout", reason: "the run hit its time box after 40m" });
+  expect(problem(card)).toBe("failed timeout");
+  expect(problem(card)).not.toContain(":");
+  expect(card).not.toContain("Failed with");
+  const [, inside] = outsideDetails(card);
+  expect(inside).toContain("the run hit its time box after 40m");
+});
+
+test("a stuck job with a blocker shows the hold action and the blocker id, and the blocker title only in Details", () => {
+  setCodes({ aleph: "a" });
+  const card = stuckCard({ name: "aleph-30", condition: "failed", cause: "check", reason: "its checks failed", item: { id: 30, title: "T" },
+    blocker: { id: "aleph-9", title: "Old work", href: "#/issues/aleph/9" } });
+  expect(problem(card)).toBe("after a9");
+  expect(card).not.toContain("Waits on");
+  const [outside, inside] = outsideDetails(card);
+  expect(outside).not.toContain("Old work");
+  expect(inside).toContain("Old work");
 });
 
 test("an ask and a stuck run are one Alerts section, and the stuck card has the Ask card structure in the red tone", () => {

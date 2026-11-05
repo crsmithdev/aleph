@@ -6,9 +6,10 @@
 import { judgeChoice } from "../hooks/lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
-import { issueDecision, pendingWaits, refDone, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
+import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { askOf as runAsk, isWaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
+import { causeOf, type Cause } from "../jobs/lib/records/outcome.ts";
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
@@ -56,6 +57,8 @@ export interface Job {
   outcome?: string;
   /** Stuck: the open issue this job waits on or its last run names; the row offers Wait instead of Re-check. */
   blocker?: Blocker;
+  /** Stuck or failed: why its last run stopped, the sub word the card shows beside its state. */
+  cause?: Cause;
 }
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
@@ -99,6 +102,8 @@ export interface State {
   asks: AskItem[];
   /** Queued and blocked goals (and old items): the Queued lane. */
   queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; why: string; kind: IssueDecision["kind"];
+    /** The hold event the dispatch stores in the record: the action word and the content the card shows. */
+    ev?: Hold;
     waits?: { id: string; href: string; state: string | null }[]; /** The id of the issue whose job holds a busy file this one needs. */ on?: string }[];
   /** Issues in Running: each with its goals nested and "n of m issues". */
   runningIssues: RunningIssue[];
@@ -230,6 +235,8 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       if (url) job.commitUrl = url;
     }
     if (v.condition === "waiting" && v.stat) job.stat = v.stat;
+    // A stuck or failed job's card shows the word of what stopped its last run.
+    if (v.condition === "returned" || v.condition === "failed") job.cause = causeOf(lastReal(runs).run);
     // A waiting run with no ask of its own asks a question, as stage() reads it.
     const stored = isWaiting(lastReal(runs).run.condition) ? runAsk(lastReal(runs).run) : undefined;
     const asked = isWaiting(lastReal(runs).run.condition) ? (stored ?? plainAsk("question", "")) : undefined;
@@ -476,7 +483,7 @@ export function state(now = new Date()): State {
       // The stage already says when an issue is to plan.
       const w = issueDecision({ ...issueFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
       return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
-        ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}), ...(w.kind === "busy-file" && w.on ? { on: w.on } : {}),
+        ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}), ...(w.kind === "busy-file" && w.on ? { on: w.on } : {}),
       };
     }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q),
   };

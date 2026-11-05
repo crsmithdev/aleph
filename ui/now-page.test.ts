@@ -178,17 +178,19 @@ test("the Status view is at / in the Factory group", () => {
   expect(view.view.group).toBe("factory");
 });
 
-test("a blocked Queued card ends its meta row with the id it waits on, with no wait text and no status chip", () => {
+test("a held Queued card ends its meta row with its hold event: the action word and the content, with no wait text and no status chip", () => {
+  setCodes({ r: "r" });
   const w = { repo: "r", title: "t", stage: "held", why: "Waits on r-9", at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z" };
   const html = view.renderLanes({ ...state, queued: [
-    { ...w, id: 1, kind: "not-ready", waits: [{ id: "r-9", href: "#/issues/r/9", state: "working", dead: null }] },
-    { ...w, id: 2, kind: "busy-file", why: "waits for r-7: both change the busy file a.ts", on: "r-7" },
+    { ...w, id: 1, kind: "not-ready", ev: { action: "after", on: ["r-9"] }, waits: [{ id: "r-9", href: "#/issues/r/9", state: "working", dead: null }] },
+    { ...w, id: 2, kind: "busy-file", why: "waits for r-7: both change the busy file a.ts", on: "r-7", ev: { action: "busy", on: ["r-7"], file: "a.ts" } },
   ] });
-  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">blocked: r-9<\/span><\/div>/);
-  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">blocked: r-7<\/span><\/div>/);
-  expect(html).not.toContain("Waits");
+  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">after r9<\/span><\/div>/);
+  expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">busy r7 → a\.ts<\/span><\/div>/);
+  expect(html).not.toContain("blocked: ");
+  expect(html).not.toContain("Waits on");
   expect(html).not.toContain("waits for");
-  expect(html).not.toContain("badge stuck");
+  expect(html).not.toContain('class="badge quiet">held');
   expect(html).not.toContain(">blocked</span>");
 });
 

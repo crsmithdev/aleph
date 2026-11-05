@@ -278,7 +278,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
         const long = ${JSON.stringify(long)}, at = "2026-11-02T11:56:00Z";
         const run = (kind) => ({ name: "j-" + kind, repo: "r", item: { priority: "low", title: long }, started: at, run: { kind, started: at } });
         const s = { now: "2026-11-02T12:00:00Z", factory: {}, runningIssues: [], running: [run("land"), run("build")],
-          queued: [{ repo: "r", id: "1", priority: "low", title: long, stage: "held", kind: "busy-file", why: "waits", on: "r-7", at, since: at }],
+          queued: [{ repo: "r", id: "1", priority: "low", title: long, stage: "held", kind: "busy-file", why: "waits", on: "r-7", ev: { action: "busy", on: ["r-7"], file: "a.ts" }, at, since: at }],
           done: [{ id: "r-3", title: long, href: "#/x", priority: "low", finished: at, since: at, jobs: [] }] };
         document.querySelector("#view .lanes").outerHTML = renderLanes(s);
       })()`);

@@ -1,9 +1,8 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actButton, codeText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
-import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
 export const view = {
@@ -224,10 +223,13 @@ export function span(since, to) {
 /** The "3/4" link of a part to its parent; "" for a card that is no part. */
 const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Part ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
 
-/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration. `chips` is HTML. */
-function metaRow({ id, chips, part, at, since, now, end, blocked }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${blocked ? `<span class="blocked">blocked: ${esc(blocked)}</span>` : ""}</div>`;
+/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, the hold. `chips` is HTML. */
+function metaRow({ id, chips, part, at, since, now, end, hold }) {
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked">${esc(hold)}</span>` : ""}</div>`;
 }
+
+/** What a card's line says for a hold: the action word and the event's content, as `busy a1372 → issues.js` or `after a9`. */
+const holdLine = (ev) => (ev ? [ev.action, contentText(ev)].filter(Boolean).join(" ") : "");
 
 /** The title of a card: one line, an ellipsis after that. */
 const titleOf = (title, href) => (href ? `<a href="${esc(href)}" class="t" title="${esc(title)}">${esc(title)}</a>` : `<span class="t" title="${esc(title)}">${esc(title)}</span>`);
@@ -254,8 +256,8 @@ function queuedLane(s) {
   const rows = (s.queued ?? []).map((w) => {
     const dead = (w.waits ?? []).filter((b) => b.dead);
     const id = repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo);
-    const blocked = w.waits?.[0]?.id ?? w.on;
-    return laneCard("queued-row", metaRow({ id, chips: (blocked ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, blocked }), w.title, "",
+    const hold = holdLine(w.ev);
+    return laneCard("queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
   return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
@@ -312,8 +314,10 @@ function errorLines(s) {
 /** The agent line of a held or stuck job: a live run exists for it. */
 const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` : "");
 /** One Jobs card in the compact size: the id, the title, one sentence of why, the buttons; `jobDetails` is the one Details behind it. */
-/** The one Details behind a stuck row: the whole reason, then the job's details. */
-const jobDetails = (s, j) => details(s, j, j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
+/** The one Details behind a stuck row: the blocker, the whole reason, then the job's details. */
+const jobDetails = (s, j) => details(s, j,
+  (j.blocker ? `<p class="quiet q">Blocker <a href="${esc(j.blocker.href)}">${esc(j.blocker.id)}</a>: ${esc(j.blocker.title)}</p>` : "") +
+  (j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : ""));
 
 const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
 /** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. */
@@ -326,13 +330,13 @@ const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =>
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
-  const why = b ? `Waits on ${blocker}: ${b.title}.` : `${j.condition === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
+  const hold = b ? holdLine({ action: "after", on: [b.id] }) : [j.condition, j.cause].filter(Boolean).join(" ");
   const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : act("recheck", j.name, "Re-check");
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;
-  return alertCard("stuck", j.name, meta, j.item?.title || j.name, why,
+  return alertCard("stuck", j.name, meta, j.item?.title || j.name, hold,
     `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
-    agentLine(j) + (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + jobDetails(s, j));
+    agentLine(j) + jobDetails(s, j));
 };
 
 /** The options, recommended mark and context of a decision with fields. */
