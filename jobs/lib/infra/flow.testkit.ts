@@ -1,11 +1,10 @@
 /**
  * The in-process calls that jobs/inproc.ts does not have, for the run tests: a plain run, a drop with a fate, the
- * report's text, a tick, an item's notes, the status line and the pause. Each runs under the CLI's environment
+ * report's text, a tick, an item's notes and the pause. Each runs under the CLI's environment
  * (`asCli`) and calls the library functions that jobs/cli.ts calls, in the same order.
  */
 import { base } from "../../cli.helpers";
-import { asCli, call, issueShow, status, type Result } from "../../inproc.ts";
-import * as issues from "../../../issues/lib/todo.ts";
+import { asCli, call, issueShow, type Result } from "../../inproc.ts";
 import { behind, report } from "../transitions/factory.ts";
 import { runTick } from "../transitions/tick.ts";
 import { health, setPaused } from "../gates/factory-status.ts";
@@ -49,9 +48,3 @@ export const resume = () => asCli({}, () => setPaused(false));
 
 /** The notes that `aleph issue show <repo> <id>` prints. */
 export const issueNotes = async (key: string, id: number | string): Promise<string> => (await issueShow(key, id)).json.notes.join("\n");
-
-/** `aleph status <repo>-<n>`: the line it prints. */
-export async function statusLine(key: string, n: number): Promise<string> {
-  const s = (await status(`${key}-${n}`)).json;
-  return issues.localRefs(key, [s.id, s.stage, s.why].filter(Boolean).join(" "));
-}
