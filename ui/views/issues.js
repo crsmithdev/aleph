@@ -4,7 +4,7 @@
 import { xLabel } from "./speed.js";
 import { count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
-import { barsOf, costText, fold, fromTo, gaps, localMs, noteEvent, renderKpis, renderTimeline, spans, waitEvent } from "../timeline.js";
+import { barsOf, costText, detailPanel, fromTo, gaps, localMs, noteEvent, renderKpis, renderTimeline, spans, waitEvent } from "../timeline.js";
 
 export const view = {
   path: "/issues",
@@ -628,8 +628,8 @@ export function renderIssue(d) {
     return `<li class="dp-ev"><span class="dp-at">${esc(e ? when(new Date(e.at)) : "")}</span><span>${tag(it.tag, it.tone)}</span><div class="dp-evt">${it.html}</div></li>`;
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));
-  const fold_ = folded.length ? `<details class="notes-fold"><summary>${folded.length} machine ${folded.length === 1 ? "note" : "notes"}</summary><ul class="notes">${folded.map(noteRow).join("")}</ul></details>` : "";
-  const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + fold_ : empty("No notes.")) + renderNoteForm(d, ref);
+  const machineNotes = folded.length ? `<details class="notes-fold"><summary>${folded.length} machine ${folded.length === 1 ? "note" : "notes"}</summary><ul class="notes">${folded.map(noteRow).join("")}</ul></details>` : "";
+  const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
     ? pagedTable(heads(["Committed", "Commit", "Subject", ...(parts ? ["Part"] : [])]), d.commits.map((c) => {
@@ -641,7 +641,7 @@ export function renderIssue(d) {
   return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askRow(d.ask) : "") +
     issueKpis(d, segments) + renderTimeline(segments) +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
-    `<div class="dp-detail">${fold("Notes", esc(d.notes.length), notes)}${fold("Commits", esc(d.commits.length), commits)}</div></div>`;
+    `<div class="dp-detail">${detailPanel("Notes", esc(d.notes.length), notes)}${detailPanel("Commits", esc(d.commits.length), commits)}</div></div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view

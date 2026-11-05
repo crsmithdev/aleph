@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { clamp, moreFold, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -369,4 +369,13 @@ describe("projectKeysOnce", () => {
 
 test("dur writes seconds, minutes, hours and days", () => {
   expect([43, 245, 3720, 187200, null].map(dur)).toEqual(["43s", "4m 05s", "1h 02m", "2d 04h", "–"]);
+});
+
+test("clamp() puts a button with aria-expanded after the clamped text, and moreFold() folds the rows after n", () => {
+  expect(clamp("<b>x</b>")).toMatch(/^<div class="clamp"><b>x<\/b><\/div><button[^>]*type="button"[^>]*aria-expanded="false"[^>]*>Show more<\/button>$/);
+  const row = (n: number) => `r${n}`;
+  const h = moreFold([1, 2, 3, 4, 5], row, 3);
+  expect(h.match(/<li>/g)?.length).toBe(5);
+  expect(h).toContain("<ul class=\"tight\"><li>r1</li><li>r2</li><li>r3</li></ul><details><summary>2 more</summary><ul");
+  expect(moreFold([1, 2, 3], row, 3)).not.toContain("<details");
 });

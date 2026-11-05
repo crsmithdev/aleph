@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 
 describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
@@ -87,6 +89,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.until('document.querySelector("#mem-table tr.nrow[aria-selected=true]")');
     expect(all).toBeGreaterThan(0);
   }, 30_000);
+
+  test("Automation: a log row's clamp button opens and closes the text from the keyboard", async () => {
+    const own = await startRig((env) => { mkdirSync(env.ALEPH_FACTORY_DIR, { recursive: true }); writeFileSync(join(env.ALEPH_FACTORY_DIR, "tick.log"), `${new Date().toISOString()} director: aleph-1: why: decided: ${"word ".repeat(60)}\n`); });
+    try {
+      const pg = await own.open("#/automation");
+      const btn = "#gates-log .clamp-btn";
+      await pg.until(`document.querySelector("${btn}")`);
+      await pg.ev('document.querySelector("#gates-log").scrollIntoView()');
+      for (let i = 0; i < 80 && !(await pg.ev<boolean>(`document.activeElement?.matches("${btn}")`)); i++) await pg.key("Tab");
+      const state = () => pg.ev<[string, boolean]>(`[document.activeElement.getAttribute("aria-expanded"), document.activeElement.previousElementSibling.classList.contains("clamp")]`);
+      expect(await state()).toEqual(["false", true]);
+      await pg.key("Enter");
+      expect(await state()).toEqual(["true", false]);
+      await pg.key("Enter");
+      expect(await state()).toEqual(["false", true]);
+    } finally { own.stop(); }
+  }, 60_000);
 
   test("the sidebar collapses, keeps its links, and remembers it over a reload", async () => {
     await click("#collapse");

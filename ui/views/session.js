@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, when } from "../lib.js";
+import { clamp, chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, sectionHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -29,11 +29,8 @@ export const CHAT_PAGE = 20;
 const CLIP_LINES = 20, CLIP_CHARS = 1600, TOOLS_SHOWN = 5, TOOLS_FOLD = 12;
 const INDENT_STEP = 14;
 
-/** Long text shows its first lines under a fade, and a "Show all" button the mount wires. */
-const clip = (text, html) => {
-  const long = text.length > CLIP_CHARS || text.split("\n").length > CLIP_LINES;
-  return long ? `<div class="clip cut">${html}</div><button type="button" class="unclip">Show all</button>` : html;
-};
+/** Long text shows its first lines under a fade, with the clamp button. */
+const clip = (text, html) => (text.length > CLIP_CHARS || text.split("\n").length > CLIP_LINES ? clamp(html) : html);
 
 /** A system part as a one-line chip: the tag, and its summary or first line; it opens to the whole text. */
 function sysChip({ tag, body }) {
@@ -56,10 +53,10 @@ function toolList(tools) {
   const early = tools.length > TOOLS_FOLD ? tools.slice(0, tools.length - TOOLS_SHOWN) : [];
   const late = tools.slice(early.length);
   const errs = early.filter((c) => c.error).length;
-  const fold = early.length
+  const earlyTools = early.length
     ? `<details class="tools-early"><summary>${early.length} earlier tool calls${errs ? ` <span class="terr">${errs} failed</span>` : ""}</summary>${early.map(toolLine).join("")}</details>`
     : "";
-  return `<div class="tools">${fold}${late.map(toolLine).join("")}</div>`;
+  return `<div class="tools">${earlyTools}${late.map(toolLine).join("")}</div>`;
 }
 
 /** The tool calls with the assistant's text blocks between them: each text follows the calls that started before it. */
@@ -213,12 +210,6 @@ export function mountSession(root, d, query = new URLSearchParams()) {
       location.hash = `#/sessions/${encodeURIComponent(d.id)}${seg.dataset.value === "chat" ? "" : `?view=${seg.dataset.value}`}`;
       return;
     }
-    const un = e.target.closest?.("button.unclip");
-    if (un) {
-      const cut = un.previousElementSibling?.classList.toggle("cut");
-      un.textContent = cut ? "Show all" : "Show less";
-      return;
-    }
     const more = e.target.closest?.("#turn-table button[data-more]");
     if (more) {
       turns += Number(more.dataset.more);
@@ -250,9 +241,9 @@ function obsRows(o, depth) {
     o.model ? esc(shortModel(o.model)) : "",
     o.error ? `Error: ${esc(o.error)}` : "",
   ].filter(Boolean).join("; ");
-  const fold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
+  const ioFold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
   return `<tr><td>${tag(o.kind, o.error ? "stuck" : "quiet")}</td>` +
-    `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${fold("Input", o.input)}${fold("Output", o.output)}</td>` +
+    `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${ioFold("Input", o.input)}${ioFold("Output", o.output)}</td>` +
     `<td class="wide">${detail}</td><td class="num">${esc(dur(o.durationMs))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }
 

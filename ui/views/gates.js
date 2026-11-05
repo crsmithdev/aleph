@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { clamp, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -162,7 +162,8 @@ export function renderLog(d, by, limit = PAGE) {
   const entries = d.log.entries.filter((e) => pick === "All" || e.by === pick);
   const rows = entries.slice(0, limit).map((e) => {
     const m = /^([^:]+): ([\s\S]*)$/.exec(e.what);
-    return `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td>${m ? esc(m[1]) : "–"}</td><td class="what"><div class="dp-txt clamp">${esc(m ? m[2] : e.what)}</div></td><td class="num">${e.count || 1}</td></tr>`;
+    const what = m ? m[2] : e.what;
+    return `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td>${m ? esc(m[1]) : "–"}</td><td class="what">${what.length > 180 ? clamp(esc(what)) : esc(what)}</td><td class="num">${e.count || 1}</td></tr>`;
   }).join("");
   return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}${filter}` +
     (rows ? dataTable(heads(["Logged", "By", "Item", "Action", "What", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
@@ -213,8 +214,6 @@ export function mount(root) {
       setQuery({ limit: String(limitOf(hashQuery(), PAGE) + Number(more.dataset.more)) });
       return redraw(root);
     }
-    const txt = e.target.closest?.("#gates-log .dp-txt");
-    if (txt) return void txt.classList.toggle("clamp");
     const r = e.target.closest?.("button[data-rule]");
     if (r) {
       if (r.getAttribute("aria-pressed") === "true") return;

@@ -153,8 +153,8 @@ describe("the issue page's tidy-up", () => {
   });
   test("a long event is clamped with a button to read the rest; a short one is not", () => {
     const seg = (text: string) => renderTimeline([{ title: "t", rows: [{ head: "h", bars: [], waits: [], events: [{ at: 1, tag: "x", html: text }] }] }]);
-    expect(seg("word ".repeat(60))).toContain('class="dp-txt clamp"');
-    expect(seg("short")).not.toContain("dp-more");
+    expect(seg("word ".repeat(60))).toContain(`<div class="dp-evt"><div class="clamp">${"word ".repeat(60)}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></div>`);
+    expect(seg("short")).not.toContain("clamp-btn");
   });
 });
 

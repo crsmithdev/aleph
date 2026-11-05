@@ -618,7 +618,7 @@ pre.stat b { color: var(--need); }
 .chat .tline a:hover, .chat .tline a:focus-visible { color: var(--ink); text-decoration: underline; }
 .chat .tline .dot { color: var(--rule); }
 .chat .msg { font-size: var(--fs-md); line-height: 1.6; overflow-wrap: anywhere; }
-.chat .msg > :first-child, .chat .msg .clip > :first-child { margin-top: 0; }
+.chat .msg > :first-child, .chat .msg .clamp > :first-child { margin-top: 0; }
 .chat .msg p { margin: 0 0 var(--sp-8); }
 .chat .msg ul, .chat .msg ol { margin: 0 0 var(--sp-8); padding-left: var(--indent-list); }
 .chat .msg :last-child { margin-bottom: 0; }
@@ -629,10 +629,8 @@ pre.stat b { color: var(--need); }
 .chat .msg.user .md pre, .chat .msg.user pre { background: var(--surface); }
 .chat .msg.reply { margin-top: var(--sp-10); color: var(--ink); }
 .chat .msg.reply.quiet { color: var(--muted); font-size: var(--fs-sm); }
-.chat .clip.cut { max-height: 24em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
-.chat button.unclip { all: unset; cursor: pointer; margin-top: var(--sp-4); font: var(--fw-mid) var(--fs-xs) var(--sans); color: var(--run); }
-.chat button.unclip:hover { text-decoration: underline; }
-.chat button.unclip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--r-tag); }
+.chat .clamp { display: block; max-height: 24em; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.chat button.clamp-btn { margin-top: var(--sp-4); }
 .chat .sys { display: grid; gap: var(--sp-2); margin: 0 0 var(--sp-10); }
 .chat details { margin: 0; padding: 0; border: 0; min-width: 0; }
 .chat details.sysc > summary { display: flex; align-items: baseline; gap: var(--sp-6); min-width: 0; font-size: var(--fs-xs); color: var(--muted); }
@@ -686,8 +684,8 @@ pre.stat b { color: var(--need); }
 .wf-detail h3 { margin: 0 0 var(--sp-6); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .wf-detail h4 { margin: var(--sp-8) 0 var(--sp-2); font: var(--fw-strong) var(--fs-xs) var(--sans); color: var(--muted); }
 .wf-detail pre { margin: 0; padding: var(--sp-8) var(--sp-10); background: var(--sunk); border-radius: var(--r-tag); font: var(--fs-xs)/1.55 var(--mono); color: var(--ink-2); white-space: pre-wrap; overflow-wrap: anywhere; }
-.wf-detail .clip.cut { max-height: 18em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
-.wf-detail button.unclip { all: unset; cursor: pointer; margin-top: var(--sp-4); font: var(--fw-mid) var(--fs-xs) var(--sans); color: var(--run); }
+.wf-detail .clamp { display: block; max-height: 18em; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.wf-detail button.clamp-btn { margin-top: var(--sp-4); }
 .wf-detail .terr { color: var(--stuck); }
 @media (max-width: 720px) {
   .wf { grid-template-columns: minmax(0, 1fr); }
@@ -845,8 +843,8 @@ a.dp-bar:hover, a.dp-bar:focus-visible { filter: brightness(1.15); outline-offse
 .dp-ev { display: grid; grid-template-columns: 88px 96px minmax(0, 1fr); gap: var(--sp-12); align-items: baseline; padding: var(--sp-4) 0; font-size: var(--fs-sm); line-height: 1.5; }
 .dp-at { font-size: var(--fs-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .dp-evt { min-width: 0; overflow-wrap: anywhere; }
-.dp-txt.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
-.dp-more { font-size: var(--fs-xs); }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; }
+button.clamp-btn { font-size: var(--fs-xs); }
 .dp-evt code, .dp-head code { font: var(--fs-xs) var(--mono); background: var(--sunk); padding: 1px var(--sp-4); border-radius: var(--r-tag); }
 .dp-logs { display: block; margin-top: var(--sp-2); font-size: var(--fs-xs); }
 button.link { all: unset; cursor: pointer; color: var(--run); }

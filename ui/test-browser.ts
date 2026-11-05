@@ -79,6 +79,8 @@ export interface Page {
   /** Goes to a hash in the page already open, the way a link does. */
   go(hash: string): Promise<void>;
   reload(): Promise<void>;
+  /** Presses and releases one key ("Tab" or "Enter") on the keyboard of the page. */
+  key(name: "Tab" | "Enter"): Promise<void>;
   /** Sets the viewport width, in CSS pixels. */
   width(px: number): Promise<void>;
   /** Saves a PNG of the viewport at its current width to `path` (folders made). */
@@ -151,6 +153,11 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
         const { data } = await cdp.send("Page.captureScreenshot", { format: "png" }, sessionId);
         mkdirSync(dirname(path), { recursive: true });
         writeFileSync(path, Buffer.from(data, "base64"));
+      },
+      key: async (name) => {
+        const k = name === "Tab" ? { key: "Tab", code: "Tab", windowsVirtualKeyCode: 9 } : { key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r" };
+        await cdp.send("Input.dispatchKeyEvent", { type: "keyDown", ...k }, sessionId);
+        await cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...k }, sessionId);
       },
       reload: async () => { await cdp.send("Page.reload", {}, sessionId); await Bun.sleep(50); await until(loaded); },
     };

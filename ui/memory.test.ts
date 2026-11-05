@@ -110,7 +110,7 @@ test("the views render and the note route is wired", () => {
   expect(nh).toContain("Linked From");
 });
 
-test("the Writes, counts and hooks tables show empty() with no rows and page at 50", () => {
+test("the Writes, counts and hooks tables show empty() with no rows; Writes and the type lists fold after 10 and hooks page at 50", () => {
   const base = { exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, notes: [] };
   const hooks = (n: number) => ({ procedural: { skills: [], claudeMd: null, hooks: Array.from({ length: n }, (_, i) => ({ event: "Stop", matcher: "", command: `c${i}`, calls: i })), last: "" } });
   const one = '<div class="empty"><p>';
@@ -118,9 +118,12 @@ test("the Writes, counts and hooks tables show empty() with no rows and page at 
   const sem = v.renderMemory({ ...base, writes: [] }, v.options(new URLSearchParams("type=semantic")));
   for (const t of ["No notes by kind.", "No notes by scope."]) expect(sem).toContain(`${one}${t}`);
   expect(v.renderMemory({ ...base, writes: [], types: hooks(0) }, v.options(new URLSearchParams("type=procedural")))).toContain(`${one}No hooks in`);
-  const w = v.renderWrites({ writes: Array.from({ length: 51 }, (_, i) => ({ text: `w${i}`, date: "2026-11-01", time: "10:00" })) });
-  expect(w).toContain("50 of 51");
-  expect(w.match(/<tr hidden>/g)?.length).toBe(1);
+  const writes = (n: number) => v.renderWrites({ writes: Array.from({ length: n }, (_, i) => ({ text: `w${i}`, date: "2026-11-01", time: "10:00" })) });
+  expect(writes(51)).toContain("<summary>41 more</summary>");
+  expect(writes(10)).not.toContain("<details");
+  const eps = (n: number) => v.renderMemory({ ...base, writes: [], types: { episodic: { episodes: Array.from({ length: n }, (_, i) => ({ title: `e${i}`, scope: "aleph", updated: "2026-11-01" })), keepDays: 0, daily: { total: 0, latest: [] }, sessions: [], last: "" } } }, v.options(new URLSearchParams("type=episodic")));
+  expect(eps(11)).toContain("<summary>1 more</summary>");
+  expect(eps(10)).not.toContain(" more</summary>");
   const h = v.renderMemory({ ...base, writes: [], types: hooks(51) }, v.options(new URLSearchParams("type=procedural")));
   expect(h).toContain('<th>Event</th><th>Command</th><th class="num">Calls</th>');
   expect(h).toContain("50 of 51");
@@ -211,7 +214,7 @@ test("the page is the board, then broad health, then the note browser; the type 
     lint: { refuse: [{ note: "B", rule: "schema", detail: "no confidence" }, { note: "B", rule: "dangling", detail: "x" }], warn: [{ note: "A", rule: "orphan", detail: "y" }] },
     notes: [row({ title: "A" }), row({ title: "B", read: "2026-10-01", problems: [{ rule: "schema", detail: "no confidence" }] })] };
   const h = v.renderMemory({ ...m, writes: [{ text: "w", date: "2026-11-01", time: "10:00" }] });
-  expect(h).toContain("<th>Written</th><th>Write</th>");
+  expect(h).toContain(`<li><span class="quiet">`);
   expect(h).toMatch(/data-sort="updated">Written<.*?data-sort="title">Title</s);
   expect(h).toContain('<header class="ph"><h1>Memory</h1></header>');
   expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('aria-label="Lint"'));

@@ -213,7 +213,12 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toContain("set to recommended");
   expect(h).not.toContain("rescue: recommended<");
   expect(h).toContain('<tr><th>Logged</th><th>By</th><th>Item</th><th>Action</th><th>What</th><th class="num">Times</th></tr>');
-  expect(h).toContain('<div class="dp-txt clamp">');
+  expect(h).not.toContain("clamp");
+  const d = data();
+  d.log.entries.push({ at: ago(3), by: "You", item: "r-6", what: `why: ${"word ".repeat(60)}` });
+  const long = gates.renderLog(d, "you");
+  expect(long).toContain(`<td class="what"><div class="clamp">${"word ".repeat(60)}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
+  expect(long.match(/clamp-btn/g)?.length).toBe(1);
 });
 
 test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {

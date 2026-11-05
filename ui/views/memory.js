@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { badge, legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
+import { moreFold, badge, legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -45,18 +45,12 @@ export function renderHealth(m) {
 
 export function renderWrites(m) {
   return (m.writes.length
-    ? paged(heads(["Written", "Write"]), m.writes.map((w) => `<tr><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td></tr>`))
+    ? moreFold(m.writes, (w) => `${q(esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`))} ${md(w.text).replace(/^<p>|<\/p>$/g, "")}`)
     : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
 }
 
-const ROWS = 10;
-const li = (html) => `<li>${html}</li>`;
 const ago = (ts) => (ts ? esc(when(ts) || String(ts).slice(0, 10)) : "never");
-/** The first ROWS rows of a list; the rest sit under a fold. */
-const fold = (items, row, n = ROWS) => {
-  const ul = (xs) => `<ul class="tight">${xs.map((x) => li(row(x))).join("")}</ul>`;
-  return ul(items.slice(0, n)) + (items.length > n ? `<details><summary>${items.length - n} more</summary>${ul(items.slice(n))}</details>` : "");
-};
+const li = (html) => `<li>${html}</li>`;
 const q = (s) => `<span class="quiet">${s}</span>`;
 
 function renderWorking(w) {
@@ -74,10 +68,10 @@ function renderSemantic(m, s) {
   const kinds = Object.keys(m.byKind ?? {}).filter((k) => k !== "none");
   const lists = kinds.map((k) => {
     const xs = s.notes.filter((n) => n.kind === k);
-    return `<details><summary>${esc(k)} <span class="count">${xs.length}</span></summary>${xs.length ? fold(xs, (n) => `${link(n.title)} ${q(esc(n.scope))}`) : `<p class="quiet">None.</p>`}</details>`;
+    return `<details><summary>${esc(k)} <span class="count">${xs.length}</span></summary>${xs.length ? moreFold(xs, (n) => `${link(n.title)} ${q(esc(n.scope))}`) : `<p class="quiet">None.</p>`}</details>`;
   }).join("");
   const start = Object.entries(s.start ?? {}).map(([scope, x]) =>
-    `<details><summary>Core lines, ${esc(scope)} <span class="count">${x.bytes} / ${x.budget} bytes</span></summary>${x.cut ? `<p class="quiet">${x.cut} cut.</p>` : ""}${x.core.length ? fold(x.core, (c) => `${link(c.title)} ${q(esc(c.core))}`) : `<p class="quiet">None.</p>`}</details>`).join("");
+    `<details><summary>Core lines, ${esc(scope)} <span class="count">${x.bytes} / ${x.budget} bytes</span></summary>${x.cut ? `<p class="quiet">${x.cut} cut.</p>` : ""}${x.core.length ? moreFold(x.core, (c) => `${link(c.title)} ${q(esc(c.core))}`) : `<p class="quiet">None.</p>`}</details>`).join("");
   if (!m.exists) return mem + empty("No vault yet.", "Run <code>vault init</code> to make one.");
   return mem + start + sectionHead("Notes by Kind", { count: s.notes.length, level: 3 }) + `<div class="kinds">${lists}</div>` +
     `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(["Kind", "Notes"], Object.entries(m.byKind), "No notes by kind.")}</div><div>${table(["Scope", "Notes"], Object.entries(m.byScope), "No notes by scope.")}</div></div></details>` +
@@ -85,10 +79,10 @@ function renderSemantic(m, s) {
 }
 
 function renderEpisodic(e) {
-  const eps = e.episodes.length ? fold(e.episodes, (n) => `${esc(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : empty("No episode page yet.", "The factory's tick writes one per done goal.");
-  const daily = e.daily.total ? fold(e.daily.latest.map((d) => ({ d })), (x) => link(x.d)) : empty("No daily page yet.", "The vault CLI starts one at the first write of a day.");
+  const eps = e.episodes.length ? moreFold(e.episodes, (n) => `${esc(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : empty("No episode page yet.", "The factory's tick writes one per done goal.");
+  const daily = e.daily.total ? moreFold(e.daily.latest.map((d) => ({ d })), (x) => link(x.d)) : empty("No daily page yet.", "The vault CLI starts one at the first write of a day.");
   const sess = e.sessions === null ? empty("Sessions are not available.", "Langfuse keys fill this.")
-    : e.sessions.length ? fold(e.sessions, (x) => `<a href="#/sessions/${encodeURIComponent(x.id)}">${esc(x.firstPrompt || x.id)}</a> ${q(esc(`${x.project} · ${x.turns} turns · ${ago(x.last)}`))}`)
+    : e.sessions.length ? moreFold(e.sessions, (x) => `<a href="#/sessions/${encodeURIComponent(x.id)}">${esc(x.firstPrompt || x.id)}</a> ${q(esc(`${x.project} · ${x.turns} turns · ${ago(x.last)}`))}`)
     : empty("No session in 7 days.", "Claude Code sessions traced to Langfuse fill this.");
   return `<div class="kinds"><div class="sub">${sectionHead("Episode Pages", { count: e.episodes.length, level: 3 })}${eps}</div><div class="sub">${sectionHead("Daily Pages", { count: e.daily.total, level: 3 })}${daily}</div><div class="sub">${sectionHead("Latest Sessions", { count: e.sessions?.length, level: 3 })}${sess}</div></div><p class="hint"><a href="#/sessions">All sessions</a></p>`;
 }
@@ -105,13 +99,13 @@ function renderProcedural(p) {
 function renderRetrieval(r) {
   if (!r.stats) return empty("No recall data.", "<code>vault misses</code> reads Langfuse; set its keys to fill this.");
   const s = r.stats;
-  const rows = r.missed.length ? fold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : empty("No query missed.");
+  const rows = r.missed.length ? moreFold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : empty("No query missed.");
   return `<div class="kinds"><div class="sub">${sectionHead(`Recalls, ${s.days} Days`, { count: s.recalls, level: 3 })}${table(["Measure", "Count"], [["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]])}</div><div class="sub">${sectionHead("Latest Misses", { count: r.missed.length, level: 3 })}${rows}</div></div>`;
 }
 
 function renderProspective(p) {
   const issues = p.issues.length
-    ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${priorityBadge(i.priority)} ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
+    ? moreFold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${priorityBadge(i.priority)} ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
     : empty("No open issue has an after.", "<code>aleph issue edit</code> with <code>--after</code> fills this.");
   return `<div class="kinds"><div class="sub">${sectionHead("Open Issues With a Wait", { count: p.issues.length, level: 3 })}${issues}</div></div>`;
 }
@@ -120,7 +114,7 @@ const renderParametric = () =>
   `<p>The model weights. Aleph does not store them. <a href="#/memory/${encodeURIComponent("Seven Agent Memory Types Mapped Onto Aleph")}">The rule</a>: keep what the model already knows out of the vault.</p>`;
 
 function renderGates(g) {
-  const lessons = (xs, what, fills) => (xs.length ? fold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : empty(`No ${what} yet.`, fills));
+  const lessons = (xs, what, fills) => (xs.length ? moreFold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : empty(`No ${what} yet.`, fills));
   return `<div class="kinds"><div class="sub">${sectionHead("Corrections", { count: g.corrections.length, level: 3 })}${lessons(g.corrections, "correction", "The correction miner (aleph-353) fills this.")}</div><div class="sub">${sectionHead("Proposals", { count: g.proposals.length, level: 3 })}${lessons(g.proposals, "proposal", "A correction seen 3 times (aleph-353) becomes one.")}</div></div>`;
 }
 
@@ -225,8 +219,7 @@ function renderBroad(m) {
   const t = { ...EMPTY_TYPES, ...(m.types ?? {}) };
   const gates = card("Factory Memory Gates", legendHtml([[`${t.gates.corrections.length} corrections`], [`${t.gates.proposals.length} proposals`]]) +
     `<details class="fold" id="gates"><summary>Corrections and proposals</summary>${renderGates(t.gates)}</details>`, { label: "Factory memory gates" });
-  const writes = card("Recent Writes", renderWrites({ writes: (m.writes ?? []).slice(0, 5) }) +
-    ((m.writes ?? []).length > 5 ? `<details class="fold"><summary>${m.writes.length - 5} more</summary>${renderWrites({ writes: m.writes.slice(5) })}</details>` : ""), { count: (m.writes ?? []).length, label: "Recent writes" });
+  const writes = card("Recent Writes", renderWrites({ writes: m.writes ?? [] }), { count: (m.writes ?? []).length, label: "Recent writes" });
   return `<div class="pair">${lintCard}${gates}</div>${writes}`;
 }
 

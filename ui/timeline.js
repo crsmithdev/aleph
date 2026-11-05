@@ -1,7 +1,7 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
+import { clamp, legendHtml, dur, esc, money, shortModel, tag, when } from "./lib.js";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -149,7 +149,7 @@ export function renderTimeline(segments) {
     (r.marks ?? []).map((m) => `<span class="dp-mark t-${m.tone}" style="left:${pct(x(m.at))}%" title="${esc(m.tip ?? "")}"></span>`).join("") + `</div>`;
   // An event of more than about 3 lines (and with no log opening inside it) is clamped, with a button to read the rest.
   const evt = (html) => (!html.includes("data-logs") && html.replace(/<[^>]*>/g, "").length > 180
-    ? `<div class="dp-evt"><div class="dp-txt clamp">${html}</div><button class="link dp-more" type="button" aria-expanded="false">Show more</button></div>`
+    ? `<div class="dp-evt">${clamp(html)}</div>`
     : `<div class="dp-evt">${html}</div>`);
   const events = (evs) => {
     const list = [...(evs ?? [])].sort((a, b) => (a.at ?? Infinity) - (b.at ?? Infinity));
@@ -166,7 +166,7 @@ export function renderTimeline(segments) {
 export const renderKpis = (items) => `<section class="dp-panel dp-kpis" aria-label="Summary">${items.map((i) => `<div class="dp-kpi"><span class="dp-k">${esc(i.k)}</span><span class="dp-v${i.text ? " text" : ""}">${i.v}</span>${i.sub ? `<span class="dp-sub">${i.sub}</span>` : ""}</div>`).join("")}</section>`;
 
 /** A Detail panel, open: its title, an aside (HTML) beside it, and its body. */
-export const fold = (title, aside, body) => `<details class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
+export const detailPanel = (title, aside, body) => `<details class="dp-panel dp-fold" open><summary><span>${esc(title)}</span>${aside ? `<span class="dp-aside">${aside}</span>` : ""}</summary><div class="dp-body">${body}</div></details>`;
 
 /** A panel with a heading: the Spec, the Result, the Description. `body` is HTML; `aside` is HTML. */
 export const panel = (id, title, body, aside = "") => `<section class="dp-panel dp-prose" aria-labelledby="h-${esc(id)}"><div class="dp-ph"><h2 id="h-${esc(id)}">${esc(title)}</h2>${aside ? `<span class="quiet">${aside}</span>` : ""}</div>${body}</section>`;
@@ -175,13 +175,3 @@ export const panel = (id, title, body, aside = "") => `<section class="dp-panel 
 export const costText = (n) => (n ? money(n) : "–");
 /** "08:11 to 08:39" for a span in one day, else with the dates. */
 export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
-
-if (typeof document !== "undefined") {
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest?.(".dp-more");
-    if (!b) return;
-    const open = b.previousElementSibling.classList.toggle("clamp") === false;
-    b.setAttribute("aria-expanded", String(open));
-    b.textContent = open ? "Show less" : "Show more";
-  });
-}

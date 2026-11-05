@@ -689,3 +689,22 @@ export const sectionHead = (title, { count, aside, id, level = 2 } = {}) =>
 
 /** A Title Case heading in sentence case, for an aria label: "Lead Time" is "Lead time". */
 export const sentence = (t) => t[0] + t.slice(1).toLowerCase();
+
+/** Long text, clamped, with a button that opens and closes it. `html` is HTML. */
+export const clamp = (html) => `<div class="clamp">${html}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button>`;
+
+/** The first `n` rows of a list; the rest sit under a "N more" fold. `row` returns the HTML inside one `<li>`. */
+export const moreFold = (items, row, n = 10) => {
+  const ul = (xs) => `<ul class="tight">${xs.map((x) => `<li>${row(x)}</li>`).join("")}</ul>`;
+  return ul(items.slice(0, n)) + (items.length > n ? `<details><summary>${items.length - n} more</summary>${ul(items.slice(n))}</details>` : "");
+};
+
+if (typeof document !== "undefined") {
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest?.(".clamp-btn");
+    if (!b) return;
+    const open = b.previousElementSibling.classList.toggle("clamp") === false;
+    b.setAttribute("aria-expanded", String(open));
+    b.textContent = open ? "Show less" : "Show more";
+  });
+}

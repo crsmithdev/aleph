@@ -211,7 +211,8 @@ test("the chat is the default: messages in Markdown, folded tool calls, one turn
   expect(h).toContain('<details class="tool err"><summary><span class="tn">Read</span><span class="terr">Error</span>');
   expect(h).toContain('<p class="tline"><a href="#/sessions/s1/turns/1">Turn 1</a><span class="dot">·</span>opus<span class="dot">·</span>12.0s<span class="dot">·</span>$0.50');
   expect(h).toContain(`<span class="time">${when(d.turns[0].start)}</span>`);
-  expect(h).toContain('<div class="clip cut">');
+  expect(h).toContain('<div class="clamp">')
+  expect(h).toContain('aria-expanded="false">Show more</button>');
   expect(h).toContain('<span class="of">2 of 2</span>');
   expect(v.renderSession(d, { id: "s1" }, TABLE)).toContain('<th>Started</th><th class="num">Turn</th>');
   expect(h).not.toContain("data-chat-from");
