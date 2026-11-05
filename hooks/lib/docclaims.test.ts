@@ -51,6 +51,12 @@ describe("docClaimProblems", () => {
     expect(docClaimProblems(e, "Docs match the code (jobs/lib/store.ts:242).")).toEqual([]);
     expect(docClaimProblems(e, "Docs match the code (jobs/lib/store.ts:300).").join()).toContain("store.ts:300");
   });
+  test("a cited file:line in the middle of a long Bash output counts as shown", () => {
+    const filler = (n: number) => Array.from({ length: n }, (_, i) => `docs/design.md:${i + 1}: unrelated line of the grep output`).join("\n");
+    const out = `${filler(30)}\nui/views/gates.js:112 | empty("Nothing waits for you.")\n${filler(30)}`;
+    const e = [...edit(), ...bash("grep -n empty docs/design.md ui/views/gates.js", out)];
+    expect(docClaimProblems(e, "docs/design.md matches the code: ui/views/gates.js:112 is the empty line.")).toEqual([]);
+  });
   test("a code file named with no tool call on it is named", () => {
     const e = [...edit(), ...bash("grep -n X jobs/lib/a.ts", "1:X")];
     const p = docClaimProblems(e, "Docs match; `dispatchIssues` in `jobs/lib/factory.ts` is as the code on main has them.");

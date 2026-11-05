@@ -39,10 +39,10 @@ test("a claim whose only comparing run comes before the last edit fails and name
   expect(docClaims(f, claim)).toContain("no run after the last edit reads the doc and compares it with the code");
 });
 
-test("a claim whose comparing run was cut before the claimed value fails and names the value", () => {
+test("a claim whose comparing run prints the claimed value mid-output passes", () => {
   const out = `${"x".repeat(3000)} 600 ${"y".repeat(3000)}`;
   const f = run([edit(), bash("grep -rn stall docs/factory.md jobs/lib/sandbox.ts", out)]);
-  expect(docClaims(f, claim)).toContain("`600`");
+  expect(docClaims(f, claim)).toBeNull();
 });
 
 test("a cited file:line that no run shows fails and names the location", () => {

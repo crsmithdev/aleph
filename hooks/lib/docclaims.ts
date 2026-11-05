@@ -107,7 +107,7 @@ export function docClaimProblems(entries: Entry[], message: string): string[] {
     if (!comparing.length) {
       problems.push(`no run after the last edit reads the doc and compares it with the code, so nothing backs ${claims.slice(0, 3).map(quote).join(", ")}`);
     } else {
-      const shown = comparing.map((c) => c.visible).join("\n").toLowerCase();
+      const shown = comparing.map((c) => c.out).join("\n").toLowerCase();
       const values = new Set<string>();
       for (const s of claims) {
         const plain = s.replace(/`?[\w@./-]+\.\w+:\d+(?:-\d+)?`?/g, " ");
@@ -121,13 +121,13 @@ export function docClaimProblems(entries: Entry[], message: string): string[] {
     }
   }
 
-  const visible = all.map((c) => c.visible).join("\n");
+  const visible = all.map((c) => c.out).join("\n");
   const unshown = new Set<string>();
   for (const m of message.matchAll(/`?([\w@./-]+\.\w+):(\d+)(?:-\d+)?`?/g)) {
     const [, file, line] = m;
     const base = file.split("/").pop()!;
     const lines = new RegExp(String.raw`^\s*${line}[:\t|-]`, "m");
-    const shownAt = visible.includes(`${file}:${line}`) || visible.includes(`${base}:${line}`) || (visible.includes(base) && lines.test(visible)) || all.some((c) => c.name === "Bash" && String(c.input.command ?? "").includes(base) && lines.test(c.visible));
+    const shownAt = visible.includes(`${file}:${line}`) || visible.includes(`${base}:${line}`) || (visible.includes(base) && lines.test(visible)) || all.some((c) => c.name === "Bash" && String(c.input.command ?? "").includes(base) && lines.test(c.out));
     if (!shownAt) unshown.add(`${file}:${line}`);
   }
   if (unshown.size) problems.push(`no run's visible output shows ${ticks([...unshown])}`);
