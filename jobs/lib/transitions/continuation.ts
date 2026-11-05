@@ -70,7 +70,7 @@ and set \`already_met.evidence\` to the files, lines and commit on \`${main}\` t
 else \`already_met\` is null. If you cannot do the goal, make no commit and give the reason
 in \`summary\`.
 
-${checksSentence(checks)} Chrome is at \`/usr/bin/google-chrome\`, so the repo's browser tests run. For a screenshot of a page that
+${checksSentence(checks)} Chrome is at \`/usr/bin/google-chrome\`. The tests that start Chrome run only with \`ALEPH_BROWSER_TESTS=1\` (\`bun run test:all\` sets it); a plain \`bun test\` skips them, and the factory's checks set it. For a screenshot of a page that
 your own server serves on \`http://127.0.0.1:<port>\`, run \`google-chrome --headless=new --password-store=basic --window-size=1440,900 --screenshot=<out.png> <url>\`
 with a path inside the repo, and commit the PNG.
 To install or link a systemd unit, link it from the repo's main checkout path (for aleph, \`~/aleph/jobs/systemd/...\`), never from the worktree.
