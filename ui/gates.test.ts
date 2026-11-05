@@ -533,3 +533,11 @@ test("a cap save keeps the Monitor fold open through the Automation redraw", asy
     rmSync(dir, { recursive: true });
   }
 });
+
+test("every seg group on the Automation page has an accessible name, rule toggles included", () => {
+  const h = gates.renderGates(data());
+  const groups = h.match(/<div class="seg"[^>]*>/g)!;
+  expect(groups.length).toBeGreaterThan(2);
+  for (const g of groups) expect(g).toMatch(/aria-label="[^"]+"/);
+  expect(h).toContain('aria-label="Who decides ');
+});

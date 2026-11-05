@@ -151,9 +151,9 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:523`) with `heads()` (`ui/lib.js:526`) or `sortHead()` (`ui/lib.js:636`), styled by `table.tbl` (`ui/app.css:451`). Every table goes through `dataTable()`.
+The one table is `dataTable()` (`ui/lib.js:527`) with `heads()` (`ui/lib.js:530`) or `sortHead()` (`ui/lib.js:640`), styled by `table.tbl` (`ui/app.css:451`). Every table goes through `dataTable()`.
 
-Rules, as the code states them (`ui/lib.js:523`, `ui/app.css:451`):
+Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:451`):
 
 - **Column order:** time first, then id or name, title, state badge, project, labels, numbers. A duration is a number and stays among the numbers.
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:443`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
@@ -191,7 +191,7 @@ Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Writte
 Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `chart()` (`ui/lib.js:190`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:180`) and redraws on a colour-scheme change.
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
-- **Bars:** `barsOption()` (`ui/lib.js:550`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `barsOption()` (`ui/views/factory-agents.js:87`).
+- **Bars:** `barsOption()` (`ui/lib.js:554`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `barsOption()` (`ui/views/factory-agents.js:87`).
 - **Stacked areas:** `stackedAreaOption()` (`ui/lib.js`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `stackedAreaOption()` (`ui/views/factory-agents.js:64`).
 - **Range bars:** `rangeBarOption()` (`ui/lib.js`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: p50 and p90 areas per bucket, with 0 for a bucket with no time; a strip with one dot per issue linking to the issue, with the time on a base-60 log axis that starts at 1m unless a time is under a minute and the filing time on the vertical axis (an issue with no filing time has no dot); and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue, each linking to the issue (for Lead Time an issue has a row per slow stage). Each chart box has `role="img"` and an `aria-label` that states its data.
@@ -286,7 +286,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:177`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:638`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:177`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:642`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
 
 ## Components
 

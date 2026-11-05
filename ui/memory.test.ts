@@ -321,3 +321,10 @@ test("semantic lists each scope's core lines and the start-context bytes against
     for (const t of ["Core A", "Core G", "Core O"]) rmSync(join(root, "wiki", "decisions", `${t}.md`));
   }
 });
+
+test("every seg group in the notes filters has an accessible name", () => {
+  const h = v.renderMemory({ exists: true, total: 1, byKind: { gotcha: 1 }, byScope: { aleph: 1 }, home: [], writes: [], lint: { refuse: [], warn: [] }, notes: [row({ title: "A" })] });
+  const groups = h.slice(h.indexOf('id="mem-filters"')).match(/<div class="seg"[^>]*>/g)!;
+  expect(groups.length).toBeGreaterThan(0);
+  for (const g of groups) expect(g).toMatch(/aria-label="[^"]+"/);
+});

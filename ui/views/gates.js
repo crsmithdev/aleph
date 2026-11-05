@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, keepProject, keepWindow, pager, pageHead, projectNow, recordState, restoreState, scopeBar, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, keepProject, keepWindow, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -126,8 +126,8 @@ export function renderRules(d) {
       hint = r.places.length ? `Granted for ${r.places.join(", ")}.` : "";
       control = `<p class="quiet note">Set per target from the proposal.</p>`;
     } else {
-      const seg = (mode, label, on) => `<button type="button" data-rule="${esc(r.reason)}" data-mode="${esc(mode)}" aria-pressed="${on}">${esc(label)}</button>`;
-      control = `<div class="seg" role="group" aria-label="Who decides ${esc(name)}">${seg("", "Ask me", !g)}${r.mode ? seg(r.mode, modeLabel(r.mode), g?.action === r.mode) : ""}</div>`;
+      const btn = (mode, label, on) => ({ label, on, attrs: ` data-rule="${esc(r.reason)}" data-mode="${esc(mode)}"` });
+      control = seg(`Who decides ${name}`, [btn("", "Ask me", !g), ...(r.mode ? [btn(r.mode, modeLabel(r.mode), g?.action === r.mode)] : [])]);
       if (!r.mode) hint = "The director decides first and sends the rest to you.";
       if (g && g.action !== r.mode) hint = `always.json grants ${g.action}. Ask me removes it${r.mode ? `; ${modeLabel(r.mode)} replaces it` : ""}.`;
     }

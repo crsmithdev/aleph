@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -247,4 +247,14 @@ test("the legend of the Tests and the Live chart ends above the grid at 390 and 
     ec.dispose();
     expect(box.y + box.height, `${name} at ${width}px`).toBeLessThanOrEqual(grid.y);
   }
+});
+
+test("seg draws a labelled group, and scopeBar names its window group", () => {
+  const h = seg("Who", [{ label: "A", on: false, attrs: ' data-x="1"' }, { label: "B", on: true, attrs: "" }]);
+  expect(h).toContain('<div class="seg" role="group" aria-label="Who">');
+  expect(h.match(/aria-pressed="(true|false)"/g)).toEqual(['aria-pressed="false"', 'aria-pressed="true"']);
+  const groups = scopeBar("", "week").match(/<div class="seg"[^>]*>/g)!;
+  expect(groups.length).toBe(1);
+  expect(groups[0]).toMatch(/aria-label="[^"]+"/);
+  expect(scopeBar("", "week")).not.toContain('class="fl">Window');
 });

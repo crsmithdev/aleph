@@ -365,9 +365,13 @@ export const chipRow = (html, el = "span") => `<${el} class="chips">${html}</${e
 /** Labels as small rounded chips; "" for none. */
 export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(labelName(l))).join("")) : "");
 
+/** A segmented control. `label` names the group for assistive tech; `items` are `{label, on, attrs}`, `attrs` the button's own attributes. */
+export const seg = (label, items, attrs = "") =>
+  `<div class="seg" role="group" aria-label="${esc(label)}"${attrs}>${items.map((i) => `<button type="button"${i.attrs} aria-pressed="${i.on}">${esc(i.label)}</button>`).join("")}</div>`;
+
 const opt = (o) => (typeof o === "object" && o ? { value: String(o.value), label: String(o.label ?? o.value) } : { value: String(o), label: String(o) });
 /**
- * One row of filter controls, all 28px high. Each group is `{label, name, options, value, data}`. A fixed set of
+ * One row of filter controls, all 28px high. Each group is `{label, name, options, value, data, bare}`; `bare` keeps the label as the accessible name only. A fixed set of
  * options is a segmented control; `data: true` says the options come from the data, and they make a `<select>`.
  * The first option of a filter says All. Options are strings or `{value, label}`. The view wires the events:
  * a segmented button carries `data-name` on its group and `data-value`, pressed is `aria-pressed="true"`.
@@ -377,10 +381,10 @@ export function filterBar(groups) {
     const name = esc(g.name ?? "");
     const opts = (g.options ?? []).map(opt);
     const cur = String(g.value ?? opts[0]?.value ?? "");
-    if (!g.data) return `<div class="seg" role="group" aria-label="${esc(g.label ?? "")}" data-name="${name}">${opts.map((o) => `<button type="button" data-value="${esc(o.value)}" aria-pressed="${o.value === cur}">${esc(o.label)}</button>`).join("")}</div>`;
+    if (!g.data) return seg(g.label, opts.map((o) => ({ label: o.label, on: o.value === cur, attrs: ` data-value="${esc(o.value)}"` })), ` data-name="${name}"`);
     return `<select name="${name}" aria-label="${esc(g.label ?? "")}">${opts.map((o) => `<option value="${esc(o.value)}"${o.value === cur ? " selected" : ""}>${esc(o.label)}</option>`).join("")}</select>`;
   };
-  return `<div class="fbar">${groups.map((g) => `<div class="fg">${g.label ? `<span class="fl">${esc(g.label)}</span>` : ""}${control(g)}</div>`).join("")}</div>`;
+  return `<div class="fbar">${groups.map((g) => `<div class="fg">${g.label && !g.bare ? `<span class="fl">${esc(g.label)}</span>` : ""}${control(g)}</div>`).join("")}</div>`;
 }
 
 /** The search field over a table. It stays out of what the filters redraw, so it keeps the focus while the reader types. */
@@ -471,7 +475,7 @@ export const withProject = (url, q) => { const p = projectOf(q); return p ? `${u
 /** The head's scope: the Project select, then the window control. `more` adds project names the page knows. */
 export const scopeBar = (project, win, more = []) => filterBar([
   { label: "Project", name: "project", data: true, value: project, options: [{ value: "", label: "All" }, ...projectChoices(project, more)] },
-  { name: "window", value: win, options: WINDOWS },
+  { label: "Window", bare: true, name: "window", value: win, options: WINDOWS },
 ]);
 
 // ---------- the blocks of a page: tile, card, table, bar list ----------

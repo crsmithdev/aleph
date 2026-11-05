@@ -270,7 +270,7 @@ function renderNoteTable(rows, o, hits) {
 function renderNoteTools(rows, o) {
   const inKind = ofKind(rows, o.kind), c = statusCounts(inKind), scopes = [...new Set(rows.map((n) => n.scope).filter(Boolean))].sort(), kinds = [...new Set(rows.map((n) => n.kind))].filter((k) => !KNOWLEDGE.includes(k)).sort();
   return filterBar([
-    { label: "", name: "status", value: o.status, options: [{ value: "", label: `All ${inKind.length}` }, ...Object.entries(STATUS).map(([k, v]) => ({ value: k, label: `${k === "lint" ? "Lint" : v} ${c[k]}` }))] },
+    { label: "Status", bare: true, name: "status", value: o.status, options: [{ value: "", label: `All ${inKind.length}` }, ...Object.entries(STATUS).map(([k, v]) => ({ value: k, label: `${k === "lint" ? "Lint" : v} ${c[k]}` }))] },
     { label: "Kind", name: "kind", data: true, value: o.kind, options: [{ value: "", label: "Knowledge" }, ...KNOWLEDGE, ...kinds] },
     { label: "Scope", name: "scope", data: true, value: o.scope, options: [{ value: "", label: "All" }, ...scopes] },
   ]);
