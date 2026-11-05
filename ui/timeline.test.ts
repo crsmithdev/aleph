@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import { axisTimes, compactScale, gaps, fromTo, noteEvent, renderTimeline, spans, waitEvent } from "./timeline.js";
+import { axisTimes, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
 // @ts-ignore
 import { dur } from "./lib.js";
 // @ts-ignore
@@ -74,6 +74,38 @@ describe.skip("the issue timeline", () => {
     expect(two.waits.map((w: any) => dur((w.end - w.start) / 1000))).toEqual(["10m 00s"]);
     expect(after.marks.map((m: any) => m.tone)).toEqual(["done"]);
     expect(after.events.map((e: any) => e.tag)).toEqual(["Waiting", "note"]);
+  });
+});
+
+describe("the event tags", () => {
+  const iso = (min: number) => new Date(Date.parse("2026-11-01T10:00:00Z") + min * 60_000).toISOString();
+  const runTag = (over: object) => runEvent(spans([run("worker", iso(0), iso(5), over)])[0], "build 1");
+  const tagTone = (e: any) => [e.tag, e.tone];
+
+  test("a run's tag is its job state: returned for a sent-back run, failed for a broken one", () => {
+    expect(tagTone(runTag({ condition: "stuck", failed: "review" }))).toEqual(["returned", "stuck"]);
+    expect(tagTone(runTag({ condition: "stuck" }))).toEqual(["failed", "stuck"]);
+    expect(tagTone(runTag({ condition: "awaiting" }))).toEqual(["waiting", "need"]);
+    expect(tagTone(runTag({ condition: "landed" }))).toEqual(["landed", "done"]);
+  });
+
+  test("a wait's tag is waiting, for the factory's wait and yours", () => {
+    const w = { start: Date.parse(iso(0)), end: Date.parse(iso(9)) };
+    expect(tagTone(waitEvent({ ...w, chris: false }))).toEqual(["waiting", "need"]);
+    expect(tagTone(waitEvent({ ...w, chris: true }))).toEqual(["waiting", "need"]);
+  });
+
+  test("no event tag of a lane row has an upper-case letter", () => {
+    const runs = [
+      run("worker", iso(0), iso(5), { condition: "stuck", failed: "review" }),
+      run("worker", iso(5.5), iso(10), { condition: "stuck" }),
+      run("worker", iso(30), iso(35), { condition: "awaiting", reason: "which one?" }),
+      run("worker", iso(60), iso(65), { condition: "failed" }),
+      run("worker", iso(65.5), iso(70), { condition: "dropped" }),
+    ];
+    const row = laneRow({ head: "h", runs: spans(runs), from: Date.parse(iso(0)) });
+    expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "returned", "failed", "waiting", "failed", "dropped"]);
+    expect(row.events.filter((e: any) => /[A-Z]/.test(e.tag))).toEqual([]);
   });
 });
 
