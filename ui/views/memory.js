@@ -76,8 +76,10 @@ function renderSemantic(m, s) {
     const xs = s.notes.filter((n) => n.kind === k);
     return `<details><summary>${esc(k)} <span class="count">${xs.length}</span></summary>${xs.length ? fold(xs, (n) => `${link(n.title)} ${q(esc(n.scope))}`) : `<p class="quiet">None.</p>`}</details>`;
   }).join("");
+  const start = Object.entries(s.start ?? {}).map(([scope, x]) =>
+    `<details><summary>Core lines, ${esc(scope)} <span class="count">${x.bytes} / ${x.budget} bytes</span></summary>${x.cut ? `<p class="quiet">${x.cut} cut.</p>` : ""}${x.core.length ? fold(x.core, (c) => `${link(c.title)} ${q(esc(c.core))}`) : `<p class="quiet">None.</p>`}</details>`).join("");
   if (!m.exists) return mem + none("No vault yet.", "Run <code>vault init</code> to make one.");
-  return mem + `<h3>Notes by kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
+  return mem + start + `<h3>Notes by kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
     `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(Object.entries(m.byKind))}</div><div>${table(Object.entries(m.byScope)) || empty("No notes.")}</div></div></details>` +
     `<details><summary>Home</summary>${renderHome(m)}</details>`;
 }
@@ -124,7 +126,7 @@ function renderGates(g) {
 
 const EMPTY_TYPES = {
   working: { total: 0, archived: [], current: null, last: "" },
-  semantic: { memory: null, notes: [], last: "" },
+  semantic: { memory: null, notes: [], start: {}, last: "" },
   episodic: { episodes: [], keepDays: 0, daily: { total: 0, latest: [] }, sessions: null, last: "" },
   procedural: { skills: [], claudeMd: null, hooks: [], last: "" },
   retrieval: { stats: null, missed: [], last: "" },

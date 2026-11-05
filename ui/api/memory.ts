@@ -120,7 +120,7 @@ async function overview(url: URL): Promise<Response> {
   body.notes = noteRows(wiki, root, lint.refuse);
   const m = await slow;
   if (m) { body.misses = m.value; body.cachedAt = m.cachedAt; }
-  body.types = await memoryTypes(root, wiki, m?.value);
+  body.types = await memoryTypes(root, wiki, m?.value, all);
   return json(body);
 }
 

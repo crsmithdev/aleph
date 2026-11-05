@@ -8,7 +8,7 @@ import { episodesDir, KEEP_DAYS } from "../../jobs/lib/episode.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { afterOf, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
-import type { Note } from "../../vault/lib/vault.ts";
+import { coreNotes, START_BUDGET, startContext, type Note } from "../../vault/lib/vault.ts";
 import { activity } from "./activity.ts";
 import { skillsDir } from "./skills.ts";
 import { config, traces } from "../langfuse.ts";
@@ -44,14 +44,19 @@ function working() {
   return { current, archived: latest, total: archived.length + (current ? 1 : 0), last: newest([current?.at, latest[0]?.at]) };
 }
 
-function semantic(root: string, wiki: Note[]) {
+function semantic(root: string, wiki: Note[], all: Note[]) {
   const file = join(root, "MEMORY.md");
   const text = existsSync(file) ? readFileSync(file, "utf8") : null;
   const kinds = ["decision", "concept", "entity", "project", "gotcha"];
   const notes = wiki.filter((n) => kinds.includes(String(n.fm.kind)))
     .map((n) => ({ title: n.title, kind: String(n.fm.kind), scope: String(n.fm.scope ?? ""), updated: String(n.fm.updated ?? "") }))
     .sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title));
+  const start = Object.fromEntries(["aleph", "global"].map((scope) => {
+    const { text, cut } = startContext(root, all, scope);
+    return [scope, { core: coreNotes(all, scope).map((n) => ({ title: n.title, core: String(n.fm.core).trim() })), bytes: Buffer.byteLength(text), budget: START_BUDGET, cut }];
+  }));
   return {
+    start,
     memory: text === null ? null : { lines: text.split("\n").length, first: oneLine(text.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? ""), at: mtime(file) },
     notes, last: newest([text === null ? "" : mtime(file), ...notes.map((n) => n.updated)]),
   };
@@ -157,10 +162,10 @@ function gates() {
   };
 }
 
-export async function memoryTypes(root: string, wiki: Note[], misses: unknown) {
+export async function memoryTypes(root: string, wiki: Note[], misses: unknown, all: Note[] = wiki) {
   const [live, proc] = await Promise.all([sessions(), procedural()]);
   return {
-    working: working(), semantic: semantic(root, wiki), episodic: episodic(root, live), procedural: proc,
+    working: working(), semantic: semantic(root, wiki, all), episodic: episodic(root, live), procedural: proc,
     retrieval: retrieval(misses), prospective: prospective(), gates: gates(),
   };
 }

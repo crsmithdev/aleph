@@ -24,9 +24,9 @@ let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const at = (p: string) => fetch(`http://127.0.0.1:${server.port}${p}`);
 const today = new Date(NOW).toISOString().slice(0, 10);
 
-function note(dir: string, title: string, kind: string, scope: string, body: string) {
+function note(dir: string, title: string, kind: string, scope: string, body: string, core = "") {
   writeFileSync(join(base, "vault", "wiki", dir, `${title}.md`),
-    `---\nkind: ${kind}\nscope: ${scope}\nconfidence: measured\nupdated: ${today}\nsupersedes: []\nsources: [trace:abc123]\n---\n${body}\n`);
+    `---\nkind: ${kind}\nscope: ${scope}\nconfidence: measured\nupdated: ${today}\n${core ? `core: ${core}\n` : ""}supersedes: []\nsources: [trace:abc123]\n---\n${body}\n`);
 }
 
 beforeAll(async () => {
@@ -257,4 +257,29 @@ test("typeTiles writes the unrounded returned share", async () => {
   const { typeTiles } = await import("./views/memory.js");
   const rows = Array.from({ length: 1000 }, (_, i) => ({ kind: "decision", read: i < 3 ? "2026-11-01" : null }));
   expect(typeTiles({ exists: true }, rows).find((t: any) => t.id === "semantic").v2).toBe("0.3%");
+});
+
+test("semantic lists each scope's core lines and the start-context bytes against the budget", async () => {
+  const { loadVault, startContext, coreNotes } = await import("../vault/lib/vault.ts");
+  const root = join(base, "vault");
+  const core = (dir: string, title: string, scope: string, line: string) => note(dir, title, "decision", scope, "**Claim.** x", line);
+  core("decisions", "Core A", "aleph", "line for aleph");
+  core("decisions", "Core G", "global", "line for global");
+  core("decisions", "Core O", "other", "line for other");
+  try {
+    const all = await loadVault(root);
+    const t: any = await memoryTypes(root, [], null, all);
+    for (const scope of ["aleph", "global"]) {
+      const s = t.semantic.start[scope];
+      expect(s.core.map((c: any) => c.title)).toEqual(coreNotes(all, scope).map((n: any) => n.title));
+      expect(s.bytes).toBe(Buffer.byteLength(startContext(root, all, scope).text));
+    }
+    expect(t.semantic.start.aleph.core.map((c: any) => c.core).sort()).toEqual(["line for aleph", "line for global"]);
+    expect(JSON.stringify(t.semantic.start)).not.toContain("line for other");
+    const h = v.view.render({ exists: true, total: 0, byKind: {}, byScope: {}, home: [], lint: { refuse: [], warn: [] }, writes: [], types: t }, {}, new URLSearchParams("type=semantic"));
+    for (const l of ["line for aleph", "line for global"]) expect(h).toContain(l);
+    for (const scope of ["aleph", "global"]) expect(h).toContain(`${t.semantic.start[scope].bytes} / 6000 bytes`);
+  } finally {
+    for (const t of ["Core A", "Core G", "Core O"]) rmSync(join(root, "wiki", "decisions", `${t}.md`));
+  }
 });
