@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/agents. The session and skill detail routes stay in their own views.
-import { barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, scopeBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope } from "../lib.js";
+import { actButton, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, scopeBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope } from "../lib.js";
 
 export const view = {
   path: "/sessions",
@@ -121,7 +121,7 @@ function sessionsHead(d, o) {
   const name = o.pick.slice(o.pick.indexOf(":") + 1), n = shownSessions(d, o).length;
   const title = o.pick ? `Sessions That Used ${name}` : "Sessions";
   const open = o.pick.startsWith("skill:") ? `<a href="${esc(skillHref(name))}">Open the skill</a>` : "";
-  return { count: count(n), aside: `${open}${o.pick ? `<button type="button" class="act" data-tile="">Show all sessions</button>` : ""}`, id: "ag-sess", title };
+  return { count: count(n), aside: `${open}${o.pick ? actButton("Show all sessions", { tile: "" }) : ""}`, id: "ag-sess", title };
 }
 
 const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];

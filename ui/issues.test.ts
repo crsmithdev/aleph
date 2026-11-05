@@ -116,7 +116,7 @@ describe("GET /api/issues", () => {
     try {
       const h = v.renderIssue(d);
       expect(h.match(/<header class="ph">/g)).toHaveLength(1);
-      expect(h).toContain(`<!--pageHead--><header class="ph"><h1 class="view-only">${d.title}</h1><input class="edit-only title-edit" name="title" form="issue-edit" required aria-label="Title" value="${d.title}"><div class="aside"><button type="button" class="act view-only" data-edit="start">Edit</button>`);
+      expect(h).toContain(`<!--pageHead--><header class="ph"><h1 class="view-only">${d.title}</h1><input class="edit-only title-edit" name="title" form="issue-edit" required aria-label="Title" value="${d.title}"><div class="aside"><button class="act view-only" type="button" data-edit="start">Edit</button>`);
     } finally {
       mock.module("./lib.js", () => real);
     }

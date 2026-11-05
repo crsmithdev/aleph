@@ -55,7 +55,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
+  import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
@@ -98,7 +98,7 @@
 
   $("logout").addEventListener("click", async (e) => {
     e.preventDefault();
-    await fetch("/api/logout", { method: "POST", headers: { "X-Aleph-UI": "1" } }).catch(() => {});
+    await postJson("/api/logout").catch(() => {});
     location.reload();
   });
 
@@ -267,7 +267,7 @@
     if (!b) return;
     const { act, label } = b.dataset;
     const name = b.dataset.name ?? (act === "approve" || act === "decline" ? b.dataset.id : undefined);
-    const note = (m) => { let n = b.parentElement.querySelector(".act-msg"); if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); b.parentElement.append(n); } n.textContent = m; if (name) actMessages.set(name, m); };
+    const note = (m) => { say(b.parentElement.lastElementChild, m); if (name) actMessages.set(name, m); };
     if (act === "diff") {
       const panel = b.closest("article").querySelector(".diff-panel");
       if (!panel.hidden) { panel.hidden = true; openDiffs.delete(name); return; }
@@ -297,15 +297,12 @@
       return;
     }
     clearTimeout(b._t);
-    const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
     if (act === "always") {
       // Grant the standing permission, then click the row's first action (its second-click confirm applies).
       const { reason, action, first } = b.dataset;
       b.disabled = true;
       try {
-        const res = await post(`/api/standing/${encodeURIComponent(reason)}`, { action });
-        const r = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(r.error || res.statusText);
+        await postJson(`/api/standing/${encodeURIComponent(reason)}`, { action });
       } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
       const next = [...b.closest("article").querySelectorAll("button.act:not(.always)")].find((x) => x.dataset.act === first);
       b.disabled = false;
@@ -317,9 +314,7 @@
       const { repo, id } = b.dataset;
       b.disabled = true;
       try {
-        const res = await post(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "close" ? "drop" : act}`, act === "close" ? { reason: "Chris closed it" } : {});
-        const r = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(r.error || res.statusText);
+        await postJson(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "close" ? "drop" : act}`, act === "close" ? { reason: "Chris closed it" } : {});
       } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
       b.closest("article.issue-row")?.remove();
       if (shown) load(shown, false);
@@ -332,10 +327,8 @@
       const bs = [...b.closest(".actions").querySelectorAll("button.act")];
       bs.forEach((x) => { x.disabled = true; });
       try {
-        const res = await fetch(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "deny" ? "drop" : "decide"}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" },
-          body: JSON.stringify(act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : approve ? { approve: true } : recommendation ? { recommendation: true } : { label: option }) });
-        const r = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(r.error || res.statusText);
+        await postJson(`/api/issues/${encodeURIComponent(repo)}/${encodeURIComponent(id)}/${act === "deny" ? "drop" : "decide"}`,
+          act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : approve ? { approve: true } : recommendation ? { recommendation: true } : { label: option });
         denyReasons.delete(`${repo}-${id}`);
       } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
       b.closest("article.issue-row")?.remove();
@@ -345,10 +338,9 @@
     b.disabled = true;
     if (name) actMessages.delete(name);
     try {
-      const res = await fetch(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {}) });
-      const r = await res.json().catch(() => ({ code: res.status, stderr: res.statusText }));
+      const r = await postJson(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {});
       if (r.code !== 0) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${(r.error || r.stderr || r.stdout || `code ${r.code}`).trim().split("\n").pop()}`); return; }
-    } catch (err) { b.disabled = false; note(err.message); return; }
+    } catch (err) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${err.message}`); return; }
     b.closest("article.issue-row")?.remove();
     if (shown) load(shown, false);
   });

@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { clamp, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { clamp, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -59,7 +59,7 @@ function capForm(f, key, label, value) {
   const env = CAP_ENV[key], over = !!f.capEnv?.[key];
   return `<form class="capform" data-cap="${key}"><label class="sr-only" for="cap-${key}">${esc(label)}</label>` +
     `<input id="cap-${key}" name="${key}" type="number" min="1" step="1" inputmode="numeric" value="${esc(value)}" required>` +
-    `<button class="act" type="submit" data-label="Save">Save</button>` +
+    actButton("Save", { label: "Save" }, { type: "submit" }) +
     (over ? `<small class="cap-env">${esc(env)} is set: an edit has no effect while that variable is set.</small>` : "") + `</form>`;
 }
 
@@ -111,7 +111,7 @@ export function renderWaiting(d) {
 /** Each kind of Ask that Chris answered the same way 3 or more times, with a button that makes the answer the rule when it is the reason's automatic mode. */
 export function renderRepeats(d) {
   const rows = d.repeats.map((r) => `<tr><td>${esc(REASONS[r.reason]?.[0] ?? r.reason)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
-    (r.mode ? `<button class="act" type="button" data-rule="${esc(r.reason)}" data-mode="${esc(r.mode)}" data-label="Make it a rule">Make it a rule</button>` : "") + `</td></tr>`);
+    (r.mode ? actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" }) : "") + `</td></tr>`);
   return `<section id="gates-repeats" aria-label="Repeat answers">${sectionHead("Repeat Answers", { count: d.repeats.length })}` +
     (rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
 }
@@ -169,8 +169,6 @@ export function renderLog(d, by, limit = PAGE) {
     (rows ? dataTable(heads(["Logged", "By", "Item", "Action", "What", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
 }
 
-const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
-
 /** Load /api/gates again and draw the page with it. */
 async function redraw(root) {
   const res = await fetch(view.api(null, hashQuery()), { cache: "no-store" });
@@ -179,13 +177,6 @@ async function redraw(root) {
   root.innerHTML = renderGates(await res.json(), hashQuery());
   restoreState(root, saved);
   wireScope(root);
-}
-
-/** A message beside the element, for a failed action. */
-function say(el, text) {
-  let n = el.parentElement.querySelector(".act-msg");
-  if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); el.after(n); }
-  n.textContent = text;
 }
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
@@ -200,9 +191,7 @@ export function mount(root) {
     const key = form.dataset.cap, btn = form.querySelector("button");
     btn.disabled = true;
     try {
-      const res = await post("/api/gates/caps", { [key]: Number(form.elements[key].value) });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error || res.statusText);
+      await postJson("/api/gates/caps", { [key]: Number(form.elements[key].value) });
     } catch (err) { btn.disabled = false; say(btn, `Could not save the cap: ${err.message}`); return; }
     await redraw(root);
   };
@@ -221,9 +210,7 @@ export function mount(root) {
       buttons.forEach((b) => { b.disabled = true; });
       const { rule, mode } = r.dataset;
       try {
-        const res = mode ? await post(`/api/standing/${encodeURIComponent(rule)}`, { action: mode }) : await post(`/api/gates/revoke/${encodeURIComponent(rule)}`);
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(j.error || res.statusText);
+        await (mode ? postJson(`/api/standing/${encodeURIComponent(rule)}`, { action: mode }) : postJson(`/api/gates/revoke/${encodeURIComponent(rule)}`));
       } catch (err) { buttons.forEach((b) => { b.disabled = false; }); say(seg, `Could not change the rule: ${err.message}`); return; }
       await redraw(root);
       return;

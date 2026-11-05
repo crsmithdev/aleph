@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, cardTrend, chartBox, mountCharts, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, legend, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { postJson, barsOption, card, cardTrend, chartBox, mountCharts, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, legend, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { lastPeriod, loadSpeed, usable, usageCard, xLabel } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
@@ -119,7 +119,6 @@ export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/statu
 
 const windowNow = () => windowOf(hashQuery());
 let drawn = [], modelsNow = null;
-const post = (body) => fetch("/api/models", { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export const view = {
   path: "/factory/agents",
@@ -143,8 +142,8 @@ export const view = {
     root.onchange = async (e) => {
       const b = e.target.closest?.("#roles [data-tier]");
       if (!b || e.type !== "change") return;
-      const res = await post({ tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) });
-      if (res.ok) { modelsNow = await res.json(); draw(usable(windowNow())); }
+      const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch(() => null);
+      if (m) { modelsNow = m; draw(usable(windowNow())); }
     };
     keepWindow(windowNow());
     keepProject(projectNow());

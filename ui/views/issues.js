@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { actButton, postJson, say, count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, detailPanel, fromTo, gaps, localMs, noteEvent, renderKpis, renderTimeline, spans, waitEvent } from "../timeline.js";
 
@@ -457,7 +457,7 @@ export function renderForm(rows, o = {}) {
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
     `<label><input type="checkbox" name="spec"> The text is a spec: build it in the factory</label>` +
     `<label>After <input name="after" placeholder="repo-n, repo-n.k"></label>` +
-    `<button type="submit" class="act primary">File issue</button> <span class="form-msg" role="status"></span></form></details>`;
+    `${actButton("File issue", {}, { primary: true, type: "submit" })} <span class="act-msg" role="status"></span></form></details>`;
 }
 
 export function renderIssues(d, o = {}) {
@@ -486,13 +486,13 @@ const FORM = 'form="issue-edit"';
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
 const issueHead = (d, ref) => pageHead(d.title, { cls: "view-only",
   after: `<input class="edit-only title-edit" name="title" ${FORM} required aria-label="Title" value="${esc(d.title)}">`,
-  aside: `<button type="button" class="act view-only" data-edit="start">Edit</button>` +
-  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="form-msg" role="status"></span> <button type="button" class="act" data-edit="cancel">Cancel</button> <button type="submit" class="act primary">Save</button></form>` });
+  aside: actButton("Edit", { edit: "start" }, { cls: "view-only" }) +
+  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { edit: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
 
 /** The form that appends a note. */
 const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
   `<label>Add a note <textarea name="text" rows="3" required></textarea></label>` +
-  `<button type="submit" class="act">Add note</button> <span class="form-msg" role="status"></span></form>`;
+  `${actButton("Add note", {}, { type: "submit" })} <span class="act-msg" role="status"></span></form>`;
 
 /** Machine note prefixes, matched after the `- ` and the stamp are removed. */
 const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
@@ -676,15 +676,10 @@ if (typeof document !== "undefined") {
     const body = edit
       ? { title: el.title.value, priority: el.priority.value, source: el.source.value, areas: el.areas.value, description: el.request?.value ?? "", spec: el.spec?.value ?? "" }
       : { text: el.text.value };
-    const msg = form.querySelector(".form-msg");
     try {
-      const res = await fetch(`/api/issues/${encodeURIComponent(form.dataset.repo)}/${encodeURIComponent(form.dataset.ref)}/${edit ? "edit" : "note"}`, {
-        method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `answered ${res.status}`);
+      await postJson(`/api/issues/${encodeURIComponent(form.dataset.repo)}/${encodeURIComponent(form.dataset.ref)}/${edit ? "edit" : "note"}`, body);
       location.reload();
-    } catch (err) { msg.textContent = `Could not save it: ${err.message}`; }
+    } catch (err) { say(form.querySelector("button"), `Could not save it: ${err.message}`); }
   });
   document.addEventListener("submit", async (e) => {
     const form = e.target.closest && e.target.closest('form[data-ui="issue-form"]');
@@ -693,15 +688,9 @@ if (typeof document !== "undefined") {
     const v = (n) => form.elements[n].value.trim();
     const labels = v("labels").split(",").map((s) => s.trim()).filter(Boolean);
     if (form.elements.spec.checked && !labels.includes("spec")) labels.push("spec");
-    const msg = form.querySelector(".form-msg");
     try {
-      const res = await fetch("/api/issues", {
-        method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" },
-        body: JSON.stringify({ repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after") }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `answered ${res.status}`);
+      const data = await postJson("/api/issues", { repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after") });
       location.hash = `/issues/${encodeURIComponent(v("repo"))}/${data.added}`;
-    } catch (err) { msg.textContent = `Could not file it: ${err.message}`; }
+    } catch (err) { say(form.querySelector("button"), `Could not file it: ${err.message}`); }
   });
 }

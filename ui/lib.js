@@ -335,7 +335,7 @@ export function blockersHtml(waits, repo, id) {
   const dead = waits.filter((b) => b.dead);
   if (!dead.length) return rows;
   const label = `Stop waiting on ${dead.map((b) => localId(b.id, repo)).join(", ")}`;
-  return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> <button class="act" type="button" data-act="unblock" data-repo="${esc(repo)}" data-id="${esc(id)}" data-label="${esc(label)}">${esc(label)}</button></div>`;
+  return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> ${actButton(label, { act: "unblock", repo, id, label })}</div>`;
 }
 
 export const idLink = (id, href, { title } = {}) => `<a class="idl"${title === undefined ? "" : ` title="${esc(title)}"`} href="${esc(safeHref(href))}">${esc(id)}</a>`;
@@ -662,7 +662,7 @@ export function wireTable(root, opts) {
 /** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */
 export function pager(shown, total, step = 50, { cls = "", attr = "data-more", value = more => more } = {}) {
   const n = Math.min(shown, total), more = Math.min(step, total - n);
-  return `<div class="pager${cls ? ` ${cls}` : ""}">${more > 0 ? `<button type="button" class="act" ${attr}="${value(more, n)}">Show ${more} more</button>` : ""}<span class="of">${n} of ${total}</span></div>`;
+  return `<div class="pager${cls ? ` ${cls}` : ""}">${more > 0 ? actButton(`Show ${more} more`, { [attr.slice(5)]: value(more, n) }) : ""}<span class="of">${n} of ${total}</span></div>`;
 }
 
 /** A `dataTable` that shows `step` rows and a pager; the "Show more" button reveals the rest in place. `rows` is an array of `<tr>` strings. */
@@ -708,3 +708,23 @@ if (typeof document !== "undefined") {
     b.textContent = open ? "Show less" : "Show more";
   });
 }
+
+/** POSTs `body` as JSON with the header the server wants. Resolves to the JSON reply; throws its `error` text when the reply is not ok. */
+export async function postJson(url, body) {
+  const res = await fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText || `answered ${res.status}`);
+  return data;
+}
+
+/** Shows `text` in the `.act-msg` line beside `el`, and makes the line when there is none. */
+export function say(el, text) {
+  let n = el.parentElement.querySelector(".act-msg");
+  if (!n) { n = document.createElement("span"); n.className = "act-msg"; n.setAttribute("role", "alert"); el.after(n); }
+  n.textContent = text;
+}
+
+/** An `.act` button: `data` becomes data attributes; `o` has `primary`, `cls` (more classes) and `type` (default button). */
+export const actButton = (label, data = {}, o = {}) =>
+  `<button class="act${o.primary ? " primary" : ""}${o.cls ? ` ${o.cls}` : ""}" type="${o.type ?? "button"}"` +
+  Object.entries(data).map(([k, v]) => ` data-${esc(k)}="${esc(v)}"`).join("") + `>${esc(label)}</button>`;

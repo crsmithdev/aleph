@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -378,4 +378,25 @@ test("clamp() puts a button with aria-expanded after the clamped text, and moreF
   expect(h.match(/<li>/g)?.length).toBe(5);
   expect(h).toContain("<ul class=\"tight\"><li>r1</li><li>r2</li><li>r3</li></ul><details><summary>2 more</summary><ul");
   expect(moreFold([1, 2, 3], row, 3)).not.toContain("<details");
+});
+
+
+test("postJson posts the JSON body with the UI header and throws the error text of a failed reply", async () => {
+  const real = globalThis.fetch, seen: { url: unknown; init: any }[] = [];
+  let reply = () => Response.json({ added: 7 });
+  globalThis.fetch = (async (url: unknown, init: any) => { seen.push({ url, init }); return reply(); }) as any;
+  try {
+    expect(await postJson("/api/x", { a: 1 })).toEqual({ added: 7 });
+    expect(seen[0].url).toBe("/api/x");
+    expect(seen[0].init.method).toBe("POST");
+    expect(seen[0].init.headers["X-Aleph-UI"]).toBe("1");
+    expect(seen[0].init.body).toBe('{"a":1}');
+    reply = () => Response.json({ error: "it cannot wait" }, { status: 422 });
+    await expect(postJson("/api/x", {})).rejects.toThrow("it cannot wait");
+  } finally { globalThis.fetch = real; }
+});
+
+test("actButton makes an .act button with the data attributes and label, and primary when asked", () => {
+  expect(actButton("Land <it>", { act: "land", name: "a&b" })).toBe('<button class="act" type="button" data-act="land" data-name="a&amp;b">Land &lt;it&gt;</button>');
+  expect(actButton("Save", {}, { primary: true, type: "submit" })).toBe('<button class="act primary" type="submit">Save</button>');
 });
