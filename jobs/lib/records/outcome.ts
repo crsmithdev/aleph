@@ -7,7 +7,7 @@
 import type { Run } from "./ledger.ts";
 
 export type Cause =
-  | "no-commit" | "timeout" | "stalled" | "infra" | "locked"
+  | "no-commit" | "timeout" | "stalled" | "infra" | "locked" | "credit"
   | "check" | "conflict" | "moved" | "review" | "unanswered" | "other";
 
 /**
@@ -25,6 +25,7 @@ const SENTENCES: [RegExp, Cause][] = [
   [/^no commit$/, "no-commit"],
   [/^time box$/, "timeout"],
   [/^job lock busy$/, "locked"],
+  [/^API Error: 402/, "credit"],
   [/^(fetch failed|systemd-run failed|worktree gone|checkout failed|bundle failed)/, "infra"],
   [/^merge conflict/, "conflict"],
   [/^main moved during the land; land again$/, "moved"],

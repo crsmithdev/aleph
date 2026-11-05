@@ -153,7 +153,7 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
 export type AgentRole = "worker" | "reviewer";
 
 /** Why a call gave no usable reply, and its kind. */
-export interface AgentCause { kind: "stalled" | "timeout" | "other"; reason: string }
+export interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string }
 
 /** How a call ended: its exit code, and whether the time box or the stall watch stopped it. */
 export interface Step { code: number; timedOut: boolean; stalled: boolean }
@@ -166,11 +166,14 @@ export const stallReason = (): string => {
   return `stalled: no output for ${s % 60 === 0 ? `${s / 60} minutes` : `${s} seconds`}`;
 };
 
-/** The cause the call states: a stall, the time box, or a reply that is not ok; null when the reply is ok. */
+/** The API credit error the CLI reports when the account has no credit: the call did no work. */
+const CREDIT_ERROR = /API Error: 402/;
+
+/** The cause the call states: a stall, the time box, the API credit error, or a reply that is not ok; null when the reply is ok. */
 export function agentCause(r: Step, o: Outcome): AgentCause | null {
   if (r.stalled) return { kind: "stalled", reason: stallReason() };
   if (r.timedOut) return { kind: "timeout", reason: "time box" };
-  if (!o.ok) return { kind: "other", reason: o.line || `exit ${r.code}` };
+  if (!o.ok) return CREDIT_ERROR.test(o.line) ? { kind: "credit", reason: o.line } : { kind: "other", reason: o.line || `exit ${r.code}` };
   return null;
 }
 

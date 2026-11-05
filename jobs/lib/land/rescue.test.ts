@@ -31,6 +31,15 @@ test("a run with a question waits for a spec edit: the Ask says so, and an edit 
   expect(f.specs.length).toBe(1);
 });
 
+test("a run the API refused for credit waits: the rescue starts no rerun, recheck or drop, and writes no Ask", async () => {
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { cause: "credit", reason: "API Error: 402 This request would exceed your available credits" });
+  const f = fakes();
+  await dispatchIssues(f.start, undefined, f.rescue);
+  expect(f.calls).toEqual([]);
+  expect(ask(id)).toBeNull();
+});
+
 test("a spec question run, then the director's answer: the job keeps its Ask or is started again, never open with neither", async () => {
   const id = newIssue();
   mk(`fac-${id}`, "build", "failed", { reason: "no commit", question: "which wins?" }, { "result.md": "Stopped." });

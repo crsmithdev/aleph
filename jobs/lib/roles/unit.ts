@@ -372,6 +372,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   // The state rule: the first match wins.
   if (w.step.stalled) return fail("stalled", stallReason());
   if (w.step.timedOut) return fail("stalled", "timed out: worker");
+  if (w.cause?.kind === "credit") return fail("credit", w.cause.reason);
   if (w.step.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
   const question = questionOf(result);
   if (question !== undefined) return { outcome: { ...waiting("question", question), question }, code: 0 };

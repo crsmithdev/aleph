@@ -5,7 +5,8 @@
  * of the goal, with a note; a time box drops the run and sends the issue to intake to split it, with no rerun, and an Ask
  * (input, rescue) instead when the issue is a part or has been split already; an infrastructure failure is rechecked or landed again, once. Each action
  * writes its reason to the run, the issue note and the news. Anything else, or the second time one
- * case hits one goal, sets an Ask (input, rescue) on the issue, which goes to the director. A run that a host
+ * case hits one goal, sets an Ask (input, rescue) on the issue, which goes to the director. A run the API refused
+ * for credit did no work, so no case covers it: the rescue leaves it, and the goal waits for the backend. A run that a host
  * restart killed comes first: a build or recheck with commits ahead of main rechecks its branch; any other build or recheck is dropped for a new run of
  * the goal; a land lands again. None of them uses up a rerun. A lost run (its process ended with no end written, and no host
  * restart explains it) is marked failed and gets the same action, once per goal; a second lost run of the goal sets the Ask.
@@ -84,12 +85,16 @@ const lost = (jobs: Job[]): Job[] => {
   });
 };
 
-/** The open jobs of factory repos whose next step is the rescue, with the unit of the last real run not live. */
+/**
+ * The open jobs of factory repos whose next step is the rescue, with the unit of the last real run not live.
+ * A run the API refused for credit is no case: the rescue leaves it, so the goal waits for the backend.
+ */
 const stuckJobs = (jobs: Job[]): Job[] => {
   const keys = new Set(sandboxRepos().map((r) => r.key));
   return jobs.filter((j) => {
     const last = lastReal(j);
-    return isOpen(j) && !!last.run.repo && keys.has(last.run.repo) && !isLive(last.folder) && stepOf(j).step === "rescue";
+    return isOpen(j) && !!last.run.repo && keys.has(last.run.repo) && !isLive(last.folder) && stepOf(j).step === "rescue"
+      && causeOf(last.run) !== "credit";
   });
 };
 

@@ -30,6 +30,12 @@ test.each([
   expect(failedCheckOf(run({ reason }))).toBe(check);
 });
 
+test("a run the API refused for credit has the credit cause, stated or in its sentence", () => {
+  const line = "API Error: 402 This request would exceed your available credits";
+  expect(causeOf(run({ cause: "credit", reason: line }))).toBe("credit");
+  expect(causeOf(run({ reason: line }))).toBe("credit");
+});
+
 test("an old dropped run keeps its no-commit mark, and free prose states no cause", () => {
   expect(causeOf(run({ condition: "dropped", noCommit: true, reason: "a duplicate" }))).toBe("no-commit");
   expect(causeOf(run({ condition: "dropped", reason: "the work has no commit and a time box" }))).toBeUndefined();
