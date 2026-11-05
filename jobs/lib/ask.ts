@@ -190,8 +190,12 @@ function readJson(f: string): Record<string, Granted> | null {
   return null;
 }
 
-/** always.json. A missing or bad file is empty. */
-export const readAlways = (): Record<string, Granted> => readJson(alwaysFile()) ?? {};
+const reasonFor = (reason: string): Reason | undefined => ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
+const allows = (r: Reason, action: string): boolean => r.actions.includes(action) || action === r.always;
+
+/** always.json. A missing or bad file is empty. An entry that grant() would refuse is ignored. */
+export const readAlways = (): Record<string, Granted> =>
+  Object.fromEntries(Object.entries(readJson(alwaysFile()) ?? {}).filter(([reason, g]) => { const r = reasonFor(reason); return r && allows(r, g?.action); }));
 
 function write(s: Record<string, Granted>): void {
   mkdirSync(layout().factory, { recursive: true });
@@ -205,9 +209,9 @@ export const always = (reason: string): Granted | null => readAlways()[reason] ?
 
 /** Let the factory take `action` for `reason` without asking. Returns why it could not, or null. */
 export function grant(reason: string, action: string): string | null {
-  const r = ASK_REASONS[reason.startsWith("proposal-") ? reason.replace(/:[^:]*$/, "") : reason];
+  const r = reasonFor(reason);
   if (!r) return `unknown reason ${reason}; known: ${Object.keys(ASK_REASONS).join(", ")}`;
-  if (!r.actions.includes(action) && action !== r.always) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
+  if (!allows(r, action)) return `${reason} has no action ${action}; actions: ${[...new Set([...r.actions, r.always])].join(", ")}`;
   write({ ...readAlways(), [reason]: { action, at: new Date().toISOString() } });
   return null;
 }

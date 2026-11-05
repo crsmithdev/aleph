@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../todo/lib/todo.ts";
@@ -128,6 +128,16 @@ test("aleph always grant, list and revoke work on always.json", () => {
 test("no reason can be handed to the firefighter: an Ask is the director's, then Chris's", () => {
   for (const reason of Object.keys(ASK_REASONS)) expect(grant(reason, "firefighter")).not.toBeNull();
   expect(readAlways()).toEqual({});
+});
+
+test("readAlways ignores a grant that grant() would refuse, and the next write drops it", () => {
+  const at = "2026-11-04T12:00:00Z";
+  const dead = Object.fromEntries(["held-path", "review", "no-commit", "run-cap"].map((k) => [k, { action: "firefighter", at }]));
+  writeFileSync(join(dir, "always.json"), JSON.stringify({ ...dead, rescue: { action: "recommended", at } }));
+  expect(Object.keys(readAlways())).toEqual(["rescue"]);
+  expect(always("held-path")).toBeNull();
+  expect(grant("rescue", "recommended")).toBeNull();
+  expect(Object.keys(JSON.parse(readFileSync(join(dir, "always.json"), "utf8")))).toEqual(["rescue"]);
 });
 
 const choice: Ask = { kind: "input", reason: "question", question: "A or B?", options: [{ label: "A", line: "a" }, { label: "B", line: "b" }], why: [] };

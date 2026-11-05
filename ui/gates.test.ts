@@ -317,6 +317,20 @@ test("rules() has one row per Ask reason; renderRules is one table with a row pe
   expect(h.match(/<tr class="rule" data-reason="/g)!.length).toBe(r.length);
 });
 
+test("a stored firefighter grant for held-path is dead: rules() shows no grant and the row has only Ask me", () => {
+  const f = join(base, "factory", "always.json");
+  const saved = readFileSync(f, "utf8");
+  try {
+    writeFileSync(f, JSON.stringify({ "held-path": { action: "firefighter", at: ago(5) } }));
+    const row = rules().find((x) => x.reason === "held-path")!;
+    expect(row.granted).toBeNull();
+    const h = gates.renderRules({ rules: [row] });
+    expect(h).not.toContain("always.json grants");
+    expect(h.match(/<button/g)!.length).toBe(1);
+    expect(h).toContain(">Ask me</button>");
+  } finally { writeFileSync(f, saved); }
+});
+
 test("rules() counts each reason's Asks in the window by who decided them and what followed; renderRules shows the counts", () => {
   const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
   const ask = (n: number, cleared = true) => ({ set: at(n * 10), ...(cleared ? { cleared: at(n * 10 + 1) } : {}), reason: "question" });
