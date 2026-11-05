@@ -82,7 +82,7 @@ test("All lost time: the causes sum to lost.hours", () => {
   expect(s.causes.reduce((a: number, x: any) => a + x.hours, 0)).toBe(D.lost.hours);
   expect(renderEfficiency(D, "all")).toContain("<h2>Lost time causes</h2>");
   expect(renderEfficiency(D, "all")).toContain("<h2>Lost time issues</h2>");
-  expect(s.text).toContain("Late and Restarted together.");
+  for (const k of ["all", "flakes", "usage", "fixed"]) expect(Object.keys(selection(D, k))).toEqual(["title", "causes", "top"]);
 });
 
 test("the causes card is a table beside the issues card, with no intro and no File an issue button", () => {

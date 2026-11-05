@@ -1,6 +1,6 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
 import { card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
-import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, pctText, plural, statCard, weekText, windowTrend } from "./speed.js";
+import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, statCard, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
 const ALL = "all", FLAKES = "flakes", USAGE = "usage";
@@ -9,17 +9,14 @@ const ALL = "all", FLAKES = "flakes", USAGE = "usage";
 export function selection(d, key) {
   if (key === FLAKES) {
     const rows = d.flakes ?? [];
-    return { title: "Reruns", text: "Tests, or whole checks, that failed and then passed on a rerun of the same tree.", size: `${plural(d.flaky, "rerun")}.`, causes: rows.map((f) => ({ name: f.name, runs: f.count })), top: [] };
+    return { title: "Reruns", causes: rows.map((f) => ({ name: f.name, runs: f.count })), top: [] };
   }
-  if (key === USAGE) return { title: "Usage per issue", text: "Landed issues by the share of the weekly limit their agent runs took.", size: `${plural((d.issues?.usage ?? []).length, "issue")}.`, causes: [], top: d.issues?.usage ?? [] };
+  if (key === USAGE) return { title: "Usage per issue", causes: [], top: d.issues?.usage ?? [] };
   const c = key !== ALL && (d.classes ?? []).find((x) => x.key === key);
-  if (c) return { title: c.name, text: c.text, size: `${plural(c.runs, "run")} on ${plural(c.issues, "issue")}.`, causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
-  const causes = mergeCauses(d), lost = lostClasses(d), first = causes[0], sum = causes.reduce((a, x) => a + x.hours, 0);
-  const names = lost.filter((x) => x.hours > 0).map((x) => x.name);
+  if (c) return { title: c.name, causes: [...(c.causes ?? [])].sort((a, b) => b.hours - a.hours), top: (c.top ?? []).slice(0, TOP_ISSUES) };
+  const causes = mergeCauses(d), lost = lostClasses(d);
   return {
     title: "Lost time",
-    text: `${names.join(", ").replace(/, ([^,]*)$/, " and $1") || "Nothing"} together.${first ? ` The first cause is ${pctText(first.hours / sum)} of the loss.` : ""}`,
-    size: `${plural(lost.reduce((a, x) => a + x.runs, 0), "run")}.`,
     causes,
     top: lost.flatMap((x) => x.top ?? []).sort((a, b) => b.hours - a.hours).slice(0, TOP_ISSUES),
   };
