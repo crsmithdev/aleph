@@ -117,7 +117,7 @@ function renderSessionsTable(d, o) {
   const h = (label, key, c) => sortHead(label, key, o.sort, c);
   const rows = shown.map((s) => `<tr><td class="time">${esc(when(s.start))}</td><td class="time">${esc(when(s.last))}</td><td>${idLink(s.label ?? s.id.slice(0, 8), `#/sessions/${encodeURIComponent(s.id)}`).replace('<a class="idl"', `<a class="idl" title="${esc(s.id)}"`)}</td>` +
     `<td class="wide" title="${esc(s.firstPrompt)}">${esc(s.firstPrompt)}</td><td>${esc(s.project)}</td><td title="${esc(s.taskTypes.join(", "))}">${chips(s.taskTypes.slice(0, 2))}${s.taskTypes.length > 2 ? ` <span class="quiet">+${s.taskTypes.length - 2}</span>` : ""}</td><td class="num">${s.turns}</td><td class="num">${costHtml(s.cost, s.wk)}</td></tr>`).join("");
-  return dataTable(`${h("Started", "start")}${h("Last", "last")}<th>Session</th>${h("First Prompt", "prompt")}${h("Project", "project")}<th>Kinds</th>${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}`, rows) + pager(shown.length, all.length, STEP);
+  return dataTable(`${h("Started", "start")}${h("Last", "last")}${heads(["Session"])}${h("First Prompt", "prompt")}${h("Project", "project")}${heads(["Kinds"])}${h("Turns", "turns", { num: true })}${h("Cost", "cost", { num: true })}`, rows) + pager(shown.length, all.length, STEP);
 }
 
 function sessionsHead(d, o) {

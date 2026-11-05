@@ -146,7 +146,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 | `ui/api/activity.ts:20`, `ui/api/speed.ts:477-478` | Local-day date arithmetic for bucket starts, not display. |
 | `getDate()` (`ui/views/issues.js:141`), `getDate()` (`ui/views/issues.js:234`), `getDate()` (`ui/views/issues.js:269`), `getDate()` (`ui/views/issues.js:273`), `getDate()` (`ui/views/issues.js:311`) | Local-day date arithmetic for windows and age bins, not display. |
 | `toFixed()` (`ui/views/jobs.js:11`) | Rounds a window length to a stable number, not display. |
-| `style` (`ui/views/memory.js:192`), `style` (`ui/views/sessions.js:74`), `style` (`ui/views/session.js:148`), `ui/timeline.js:154`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
+| `style` (`ui/views/memory.js:192`), `style` (`ui/views/sessions.js:74`), `style` (`ui/views/session.js:150`), `ui/timeline.js:154`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
 
 ## Tables
@@ -174,8 +174,8 @@ Columns of the main tables:
 | Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:86`) |
 | Sessions | Started, Last, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:120`) |
 | Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:266`) |
-| Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num) | `dataTable()` (`ui/views/session.js:23`) |
-| Observations | Kind, Name, Detail, Duration (num) | `dataTable()` (`ui/views/session.js:259`) |
+| Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
+| Observations | Kind, Name, Detail, Duration (num) | `dataTable()` (`ui/views/session.js:273`) |
 | Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
 | Hooks | Last, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:104`) |
 | Denials | When, Reason | `dataTable()` (`ui/views/sessions.js:107`) |

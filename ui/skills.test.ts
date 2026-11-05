@@ -191,3 +191,12 @@ test("the skill detail uses section heads and fit tables", async () => {
   expect(detail).not.toContain("<h3>");
   expect(detail).not.toContain("<style");
 });
+
+test("the skill detail shows empty() for each table with no rows and pages Sessions at 50", () => {
+  const base = { name: "x", uses: 1, days: 7, since: "2026-11-01", perDay: [1], sessions: [], errors: [], tools: [], projects: [] };
+  expect(v.renderSkill(base).match(/class="empty"/g)).toHaveLength(4);
+  const sessions = Array.from({ length: 51 }, (_, i) => ({ id: `s${i}abcdefgh`, time: "2026-11-01T00:00:00Z", prompt: "p", project: "a", via: "slash" }));
+  const h = v.renderSkill({ ...base, sessions });
+  expect(h).toContain("50 of 51");
+  expect(v.renderSkill({ ...base, sessions }, { sessions: 100 })).toContain("51 of 51");
+});

@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, idLink, md, pager, pageHead, shortModel, tag, when } from "../lib.js";
+import { chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, heads, idLink, md, pager, pageHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;
@@ -14,13 +14,15 @@ const sessionLink = (s) =>
   idLink(s.label ?? s.id.slice(0, 8), href(`/sessions/${encodeURIComponent(s.id)}`)).replace('<a class="idl"', `<a class="idl" title="${esc(s.id)}"`);
 
 /** The turn table: the session page's `?view=table`. */
-function turnTable(d) {
+const TURN_PAGE = 50;
+function turnTable(d, limit = TURN_PAGE) {
+  if (!d.turns.length) return empty("No turn in this session.");
   // Columns: time, turn (id), prompt (title), output, model, numbers.
-  const rows = d.turns.map((t) =>
+  const rows = d.turns.slice(0, limit).map((t) =>
     `<tr><td class="time">${esc(when(t.start))}</td><td class="num"><a href="${esc(href(`/sessions/${encodeURIComponent(d.id)}/turns/${t.n}`))}">${t.n}</a></td>` +
     `<td class="wide" title="${esc(t.prompt)}">${esc(t.prompt)}</td><td>${esc(line(t.output))}</td><td>${esc(shortModel(t.model))}</td><td class="num">${t.tools}</td>` +
     `<td class="num">${esc(dur(t.durationMs))}</td><td class="num">${costHtml(t.cost, t.wk)}</td></tr>`).join("");
-  return dataTable('<th>Started</th><th class="num">Turn</th><th>Prompt</th><th>Output</th><th>Model</th><th class="num">Tools</th><th class="num">Duration</th><th class="num">Cost</th>', rows);
+  return dataTable(heads(["Started", "Turn", "Prompt", "Output", "Model", "Tools", "Duration", "Cost"], ["Turn", "Tools", "Duration", "Cost"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
 }
 
 export const CHAT_PAGE = 20;
@@ -178,14 +180,14 @@ export function renderSession(d, _params, query = new URLSearchParams()) {
   return `<div class="page">${crumb("#/sessions", [["sessions", "#/sessions"], [d.project], [d.id.slice(0, 8)]])}${pageHead(`Session ${d.id.slice(0, 8)}`, { count: table ? d.turns.length : d.total, aside })}` +
     `${d.taskTypes?.length ? `<p>${chips(d.taskTypes)}</p>` : ""}` +
     filterBar([{ label: "", name: "view", options: [{ value: "chat", label: "Chat" }, { value: "table", label: "Table" }, { value: "waterfall", label: "Waterfall" }], value: table ? "table" : wf ? "waterfall" : "chat" }]) +
-    (table ? turnTable(d) : wf ? `<div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}` : chatBody(d)) + `</div>`;
+    (table ? `<div id="turn-table">${turnTable(d)}</div>` : wf ? `<div class="wf-wrap">${wfBody(wfRows(d.turns), null)}</div>${chatPager(d.from - 1 + d.turns.length, d.total)}` : chatBody(d)) + `</div>`;
 }
 
 // The toggle writes the hash; "Show all" uncuts a long message; "Show 20 more" appends the next turns in place.
 export function mountSession(root, d, query = new URLSearchParams()) {
   if (!d || d.error) return;
   const wf = isWaterfall(query);
-  let loaded = [...d.turns], sel = null;
+  let loaded = [...d.turns], sel = null, turns = TURN_PAGE;
   const redrawWf = () => {
     const w = root.querySelector(".wf-wrap");
     if (w) w.innerHTML = wfBody(wfRows(loaded), sel);
@@ -217,6 +219,12 @@ export function mountSession(root, d, query = new URLSearchParams()) {
       un.textContent = cut ? "Show all" : "Show less";
       return;
     }
+    const more = e.target.closest?.("#turn-table button[data-more]");
+    if (more) {
+      turns += Number(more.dataset.more);
+      root.querySelector("#turn-table").innerHTML = turnTable(d, turns);
+      return;
+    }
     const b = e.target.closest?.("button[data-chat-from]");
     if (!b || isTable(query)) return;
     const pager = b.closest(".chat-pager");
@@ -245,7 +253,7 @@ function obsRows(o, depth) {
   const fold = (label, text) => (text ? `<details><summary>${label}</summary><pre>${esc(text)}</pre></details>` : "");
   return `<tr><td>${tag(o.kind, o.error ? "stuck" : "quiet")}</td>` +
     `<td style="padding-left:${depth * INDENT_STEP}px"><strong>${esc(o.name)}</strong>${fold("Input", o.input)}${fold("Output", o.output)}</td>` +
-    `<td>${detail}</td><td class="num">${esc(dur(o.durationMs))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
+    `<td class="wide">${detail}</td><td class="num">${esc(dur(o.durationMs))}</td></tr>` + o.children.map((c) => obsRows(c, depth + 1)).join("");
 }
 
 export function renderTurn(d) {
@@ -256,10 +264,28 @@ export function renderTurn(d) {
     pageHead(`Turn ${d.n} of ${d.total}`, { aside: [nav(d.n - 1, "Previous"), nav(d.n + 1, "Next"), langfuse(d.base, d.traceId)].filter(Boolean).join(" ") }) +
     `<dl class="facts"><div><dt>Started</dt><dd>${esc(when(d.start))}</dd></div><div><dt>Cost</dt><dd>${costHtml(d.cost, d.wk)}</dd></div><div><dt>Duration</dt><dd>${esc(dur(d.durationMs))}</dd></div></dl>` +
     `<h2>Prompt</h2><pre>${esc(d.prompt)}</pre><h2>Output</h2><pre>${esc(d.output)}</pre><h2>Observations</h2>` +
-    (d.observations.length ? dataTable('<th>Kind</th><th>Name</th><th>Detail</th><th class="num">Duration</th>', d.observations.map((o) => obsRows(o, 0)).join("")) : empty("No observation in this turn.")) + `</div>`;
+    `<div id="obs-table">${obsTable(d)}</div></div>`;
+}
+
+/** The observations of a turn: `limit` top-level ones with their children, and a pager. */
+function obsTable(d, limit = TURN_PAGE) {
+  if (!d.observations.length) return empty("No observation in this turn.");
+  return dataTable(heads(["Kind", "Name", "Detail", "Duration"], ["Duration"]), d.observations.slice(0, limit).map((o) => obsRows(o, 0)).join("")) + pager(limit, d.observations.length, TURN_PAGE);
+}
+
+// "Show 50 more" draws the next observations in place.
+function mountTurn(root, d) {
+  if (!d || d.error) return;
+  let shown = TURN_PAGE;
+  root.onclick = (e) => {
+    const more = e.target.closest?.("#obs-table button[data-more]");
+    if (!more) return;
+    shown += Number(more.dataset.more);
+    root.querySelector("#obs-table").innerHTML = obsTable(d, shown);
+  };
 }
 
 export const sessionView = { path: "/sessions/:id", title: "Session", group: "claude", order: 0,
   api: (params, q = new URLSearchParams()) => `/api/sessions/${encodeURIComponent(params.id)}${isTable(q) ? "" : `/chat?limit=${CHAT_PAGE}`}`,
   render: renderSession, mount: mountSession };
-export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", order: 0, api: "/api/sessions/:id/turns/:n", render: renderTurn };
+export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", order: 0, api: "/api/sessions/:id/turns/:n", render: renderTurn, mount: mountTurn };

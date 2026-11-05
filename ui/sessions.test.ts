@@ -9,6 +9,8 @@ import { idLink, pageHead, when } from "./lib.js";
 import { listSessions, routes } from "./api/sessions.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/session.js";
+// @ts-ignore plain JS, shared with the page
+import { options, renderSessions } from "./views/sessions.js";
 
 const trace = (id: string, session: string, name: string, at: string, extra: object = {}) =>
   ({ id, sessionId: session, name, timestamp: at, input: `prompt ${id}\nsecond line`, output: "x".repeat(600), totalCost: 0.5, latency: 12, metadata: { cwd: `/w/${name}`, task_type: "code_edit" }, ...extra });
@@ -251,4 +253,26 @@ test("generations: listed apart from tools with model, offsets, parent and cost;
     expect(det).toContain("100 in, 20 out");
     expect(det).toContain("generation");
   } finally { OBS.t2.splice(-extra.length); }
+});
+
+test("the turns, hooks and denials tables show empty() with no rows; the turns table pages at 50", async () => {
+  const d = await (await call("GET /api/sessions/:id", "/api/sessions/s1", { id: "s1" })).json() as any;
+  expect(v.renderSession({ ...d, turns: [] }, {}, TABLE)).toContain('class="empty"');
+  const h = v.renderSession({ ...d, turns: Array.from({ length: 51 }, (_, i) => ({ ...d.turns[0], n: i + 1 })) }, {}, TABLE);
+  expect(h).toContain("50 of 51");
+  expect(h).toContain("Show 1 more");
+  expect(h.match(/<tr><td class="time">/g)).toHaveLength(50);
+  const page = renderSessions({ window: 7, project: null, activity: { langfuse: "ok", tools: [], hooks: [], denials: { total: 0, recent: [] } }, skills: { projects: [], skills: [], unused: [] }, sessions: { projects: [], sessions: [] }, toolSessions: {} }, options(new URLSearchParams()));
+  expect(page).toContain('<div class="empty"><p>No hook calls in this period.</p>');
+  expect(page).toContain('<div class="empty"><p>The gate denied nothing in this period.</p>');
+});
+
+test("the Turn page pages observations at 50 and gives Detail td.wide", async () => {
+  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
+  const obs = Array.from({ length: 51 }, (_, i) => ({ id: `o${i}`, kind: "tool", name: `T${i}`, children: [], error: "boom" }));
+  const h = v.renderTurn({ ...t, observations: obs });
+  expect(h).toContain("50 of 51");
+  expect(h).toContain("Show 1 more");
+  expect(h).toContain('<td class="wide">Error: boom</td>');
+  expect(h).not.toContain("<strong>T50</strong>");
 });
