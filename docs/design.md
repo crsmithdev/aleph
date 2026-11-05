@@ -310,7 +310,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Voice and copy
 
-- **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Runs per Item`); CSS uppercases two keys (`text-transform: uppercase`, 2 rows: the nav group heads at `ui/app.css:573` and the metric card key at `ui/app.css:731`).
+- **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Jobs per Item`); CSS uppercases two keys (`text-transform: uppercase`, 2 rows: the nav group heads at `ui/app.css:573` and the metric card key at `ui/app.css:731`).
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case, from the word sets in [Naming](naming.md); a priority is `critical`, `high`, `medium` or `low`.
@@ -370,7 +370,7 @@ Reference view = the view that follows the rules best.
 Cards with their own markup, because `card()` would add a heading or change the element:
 
 - Memory browse table (`#mem-table`, `ui/views/memory.js:290`) and inspector (`#mem-inspector`): the table card has no heading, and the inspector is an `aside` with `aria-live`.
-- Stages and Holds (`ui/views/now.js`): the sections hold the monitor tables from `monitor.stages` and `monitor.holds`, at most 10 rows each, drawn by `renderStages()` and `renderHolds()`. Each header is a `sortHead` button; a click sorts again. Stages sorts by runs per item and Holds by goals (Affected Issues), descending, and each of those cells has a small bar scaled to the largest row. The trailing 7-day value is in each cell's tooltip.
+- Stages and Holds (`ui/views/now.js`): the sections hold the monitor tables from `monitor.stages` and `monitor.holds`, at most 10 rows each, drawn by `renderStages()` and `renderHolds()`. Each header is a `sortHead` button; a click sorts again. Stages sorts by jobs per item and Holds by goals (Affected Issues), descending, and each of those cells has a small bar scaled to the largest row. The trailing 7-day value is in each cell's tooltip.
 
 These references were chosen by reading the code, not by looking at the pages. Gap: no view is a reference for a chart's empty or loading state.
 
