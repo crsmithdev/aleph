@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gate.ts";
-import { LOG_MAX, gatesBody, log, metrics, rules, securityFacts } from "./api/gates.ts";
+import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -74,7 +74,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "metrics", "now", "repoHeld", "rules", "schedules"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "metrics", "now", "repeats", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
@@ -122,6 +122,7 @@ const data = () => ({
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
   asks: [askItem("run-cap", "r-1")],
+  repeats: [],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
   held: SECURITY_PATHS,
   repoHeld: [{ repo: "r", held: ["src/auth/**"] }],
@@ -134,7 +135,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="gt-head"><span>([^<]*)<\/span>/g)].map((m) => m[1]);
-  expect(tiles).toEqual(["Automation rate", "Gate catches", "Held time"]);
+  expect(tiles).toEqual(["Automation rate", "Gate catches", "Repeat answers", "Held time"]);
   expect(h).toContain("<b>75%</b>");
   expect(h).toContain("<b>6 / 2</b>");
   expect(h).toContain("<b>2 goals, 3 h</b>");
@@ -348,4 +349,24 @@ test("the body has the tick, the suite and the monitor with their last run from 
     rmSync(join(dir, "tick.json"));
     writeFileSync(logPath, was);
   }
+});
+
+test("repeats() lists the answers that Chris gave 3 times to one Ask reason; renderRepeats and the tile show them, the button carries the reason and the mode", () => {
+  const at = (m: number) => new Date(NOW + m * 60_000).toISOString();
+  const rec = (n: number, reason: string): any => ({ issue: `x-${n}`, asks: [{ set: at(n * 10), cleared: at(n * 10 + 1), reason }], runs: [], events: [] });
+  const records = [1, 2, 3].map((n) => rec(n, "intake-failed")).concat([4, 5].map((n) => rec(n, "question")));
+  const entries: any[] = [1, 2, 3, 4, 5].map((n) => ({ at: at(n * 10), by: "You", item: `x-${n}`, what: n < 4 ? "Chris: run intake again" : `Chris decided: My recommendation is plan ${n}.` }));
+  const r = repeats(entries, records, NOW + 3600_000);
+  expect(r).toEqual([{ reason: "intake-failed", answer: "retry", count: 3, mode: "retry" }]);
+  const rescue = [6, 7, 8].map((n) => rec(n, "rescue"));
+  const approved = [6, 7, 8].map((n) => ({ at: at(n * 10), by: "You", item: `x-${n}`, what: `Chris decided: My recommendation is fix ${n}.` }));
+  expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, mode: "recommended" }]);
+  const d = { ...data(), repeats: r };
+  const h = gates.renderRepeats(d);
+  expect(h).toContain("<h2>Repeat answers");
+  expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
+  expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><\/div><b>1<\/b>/);
+  const none = gates.renderRepeats(data());
+  expect(none).toContain("No answer repeats.");
+  expect(none).not.toContain("<button");
 });

@@ -57,6 +57,31 @@ export function rules(entries: LogEntry[] = [], records = record.all(), now = Da
   });
 }
 
+/** The action of each answer note that the UI writes (ui/api/issues.ts): `retriage`, `rerun` and the approved recommendation of a prose question. */
+const ANSWERS: [RegExp, string][] = [[/^Chris: run intake again$/, "retry"], [/^Chris: run it again$/, "rerun"], [/^Chris decided: My recommendation\b/i, "recommended"]];
+
+/**
+ * The answers that Chris gave 3 or more times to one Ask reason, in the window: his log entry inside an Ask's span on the same issue.
+ * The answer is the action its note names (ANSWERS), else the note without `Chris: ` or `Chris decided: `.
+ * `mode` is the answer when it is the reason's automatic mode, else "": only then can the answer become the rule.
+ */
+export function repeats(entries: LogEntry[], records = record.all(), now = Date.now()) {
+  const from = now - LOG_DAYS * DAY, SLACK = 60_000;
+  const counts = new Map<string, { reason: string; answer: string; count: number }>();
+  for (const rec of records) for (const a of rec.asks ?? []) {
+    if (!a.reason || !a.cleared || Date.parse(a.set) < from) continue;
+    const lo = Date.parse(a.set), hi = Date.parse(a.cleared) + SLACK;
+    const e = entries.find((x) => x.by === "You" && x.item === rec.issue && Date.parse(x.at) >= lo && Date.parse(x.at) <= hi);
+    if (!e) continue;
+    const answer = ANSWERS.find(([re]) => re.test(e.what))?.[1] ?? e.what.replace(/^Chris(?: decided)?: /, "");
+    const k = `${a.reason}\n${answer}`;
+    const c = counts.get(k) ?? { reason: a.reason, answer, count: 0 };
+    c.count++;
+    counts.set(k, c);
+  }
+  return [...counts.values()].filter((c) => c.count >= 3).map((c) => ({ ...c, mode: ASK_REASONS[c.reason]?.always === c.answer ? c.answer : "" }));
+}
+
 /** The held paths, from ui/security-facts.ts in a process of its own: the server imports no security path. */
 export async function securityFacts(): Promise<{ held: string[] }> {
   const p = Bun.spawn([process.execPath, join(import.meta.dir, "..", "security-facts.ts")], { stdout: "pipe", stderr: "pipe", env: process.env });
@@ -229,6 +254,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     goalGates: goalGates(state.queued ?? []),
     asks: state.asks,
     rules: rules(all),
+    repeats: repeats(all),
     ...security,
     repoHeld: repoHeld(),
     log: { days: LOG_DAYS, max: LOG_MAX, entries },

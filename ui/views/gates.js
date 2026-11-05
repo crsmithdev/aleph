@@ -50,7 +50,7 @@ export function renderGates(d, q = new URLSearchParams()) {
     ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
     : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
   return `<div class="page gates">${pageHead("Automation", { aside: ctl })}` +
-    renderNow(d) + renderCaps(d) + renderSchedules(d) + renderWaiting(d) + renderRules(d) +
+    renderNow(d) + renderCaps(d) + renderSchedules(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
     `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
@@ -72,6 +72,7 @@ export function renderNow(d) {
   const tilesHtml = [
     tile("Automation rate", m.rate ? `${m.rate.percent}%` : "–", m.rate ? `${m.rate.auto} of ${m.rate.total} Asks decided without Chris, ${win}` : `no Ask decided, ${win}`),
     tile("Gate catches", `${m.catches.fired} / ${m.catches.fixed}`, `checks and reviews that sent a build back, against those a later build fixed, ${win}`),
+    tile("Repeat answers", String(d.repeats.length), `kinds of Ask that Chris answered the same way 3 or more times, ${win}`),
     tile("Held time", `${m.held.goals} goals, ${m.held.hours} h`, `goals held, and hours in a hold, ${win}`),
   ].join("");
   return `<section id="gates-now" aria-label="Metrics"><div class="gtiles">${tilesHtml}</div></section>`;
@@ -97,6 +98,14 @@ export function renderWaiting(d) {
   const rows = d.asks.map((i) => askRow(i, d.now)).join("");
   return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for you", { count: d.asks.length })}` +
     (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;
+}
+
+/** Each kind of Ask that Chris answered the same way 3 or more times, with a button that makes the answer the rule when it is the reason's automatic mode. */
+export function renderRepeats(d) {
+  const rows = d.repeats.map((r) => `<tr><td>${esc(REASONS[r.reason]?.[0] ?? r.reason)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
+    (r.mode ? `<button class="act" type="button" data-rule="${esc(r.reason)}" data-mode="${esc(r.mode)}" data-label="Make it a rule">Make it a rule</button>` : "") + `</td></tr>`).join("");
+  return `<section id="gates-repeats" aria-label="Repeat answers">${sectionHead("Repeat answers", { count: d.repeats.length })}` +
+    (rows ? dataTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
 }
 
 /** One row per Ask reason: who decides it. Ask me, or the reason's one automatic mode. */
