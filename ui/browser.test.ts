@@ -143,6 +143,32 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       if (b.classList.contains("ask")) b.click();
     })()`);
     await page.until('document.querySelector("#view .act-msg")?.textContent.includes("it cannot wait")');
+    expect(await page.ev('document.querySelector("#view .act-msg").closest("article").isConnected')).toBe(true);
+    await page.reload(); // Takes the patched fetch away.
+  }, 30_000);
+
+  test("Enter in the reason box confirms a Deny, and the card leaves before any reload of the state", async () => {
+    await page.go("#/");
+    await page.until('document.querySelector("#view article.issue-row")');
+    // A real Ask card with a Deny, from the view's own renderer. After the POST every other fetch hangs, and the mark on #view shows that no render replaced it.
+    await page.ev(`import("/views/now.js").then(({ askRow }) => {
+      const f = window.fetch;
+      window.posts = [];
+      window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push([u, o.body]), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
+      document.querySelector("#view > *").dataset.mark = "1";
+      document.querySelector("#view > *").insertAdjacentHTML("afterbegin", askRow({ id: "tools-4", reason: "question", kind: "question", headline: "Support a second input file",
+        situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", args: { repo: "tools", id: "4" } }] }));
+      const b = document.querySelector('#view article.issue-row button.act[data-act="deny"]');
+      window.card = b.closest("article");
+      b.click();
+      const inp = b.closest(".choice").querySelector("input.reason");
+      inp.value = "not now";
+      inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    })`);
+    await page.until("!window.card.isConnected");
+    expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBe("1");
+    const posts = await page.ev<[string, string][]>("window.posts");
+    expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools/4/drop", { reason: "Chris denied: not now" }]]);
     await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 

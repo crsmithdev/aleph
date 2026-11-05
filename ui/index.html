@@ -258,6 +258,14 @@
     if (f) f.value ? denyReasons.set(`${f.dataset.repo}-${f.dataset.id}`, f.value) : denyReasons.delete(`${f.dataset.repo}-${f.dataset.id}`);
   });
 
+  // Enter in a reason or answer box does what the box's Confirm button does.
+  document.addEventListener("keydown", (e) => {
+    const f = e.key === "Enter" && e.target.closest && e.target.closest("input.reason");
+    if (!f) return;
+    e.preventDefault();
+    f.closest(".choice")?.querySelector("button.act[data-act]")?.click();
+  });
+
   // Diff, Land, Drop and Checked: each is an `aleph` command the server runs.
   // Land and Drop ask for a second click, then the view reloads.
   document.addEventListener("click", async (e) => {
@@ -324,6 +332,7 @@
         const r = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(r.error || res.statusText);
       } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
+      b.closest("article.issue-row")?.remove();
       if (shown) load(shown, false);
       return;
     }
@@ -340,6 +349,7 @@
         if (!res.ok) throw new Error(r.error || res.statusText);
         denyReasons.delete(`${repo}-${id}`);
       } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
+      b.closest("article.issue-row")?.remove();
       if (shown) load(shown, false);
       return;
     }
@@ -350,6 +360,7 @@
       const r = await res.json().catch(() => ({ code: res.status, stderr: res.statusText }));
       if (r.code !== 0) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${(r.error || r.stderr || r.stdout || `code ${r.code}`).trim().split("\n").pop()}`); return; }
     } catch (err) { b.disabled = false; note(err.message); return; }
+    b.closest("article.issue-row")?.remove();
     if (shown) load(shown, false);
   });
 
