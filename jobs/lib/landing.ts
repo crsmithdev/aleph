@@ -6,7 +6,7 @@
  * `LandPorts`, so tests land in-process with real git and a fake check.
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
-import { closeAndFile, note } from "../../todo/lib/store.ts";
+import { closeAndFile, note } from "../../issues/lib/store.ts";
 import { fetchOrigin, followMain, git } from "./git.ts";
 import { needsOf } from "./ask.ts";
 import { askOf, allRuns, isAwaiting, isAgentRun, lock, onOf, updateRun, type Check, type Entry, type Repo, type Run } from "./ledger.ts";

@@ -3,8 +3,8 @@ import { expect, test } from "bun:test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { land } from "./landing.ts";
-import * as issues from "../../todo/lib/todo.ts";
-import * as store from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import * as store from "../../issues/lib/store.ts";
 import * as record from "./record.ts";
 import { both, dir, given, job, landLog, mainFiles, ports, pushes, queued, remote, repo, sh, useLandingFixture } from "./landing.fixture.ts";
 

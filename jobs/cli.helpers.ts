@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { readRun, writeRun, type Run } from "./lib/ledger.ts";
 import { unitAlive } from "./lib/process.ts";
 export { unitAlive };
-import { config as storeConfig } from "../todo/lib/store.ts";
-import { parseItem, renderItem, setStatus, type Status } from "../todo/lib/todo.ts";
+import { config as storeConfig } from "../issues/lib/store.ts";
+import { renderItem } from "../issues/lib/todo.ts";
 import { waitFor } from "../tests/wait.ts";
 import { fixture } from "../tests/git-fixture.ts";
 
@@ -386,9 +386,6 @@ export function teardown(): void {
   if (base) rmSync(base, { recursive: true, force: true });
   delete process.env.ALEPH_RECORDS_DIR;
 }
-export function resetLf(): void { lfPosts = []; lfStatus = 200; }
-export function setLfStatus(n: number): void { lfStatus = n; }
-export function setOnTell(f: ((text: string) => void) | undefined): void { onTell = f; }
 export async function fjobFor(name: string, action: string, id: number) {
   return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--on", String(id)]);
 }
@@ -473,18 +470,3 @@ export async function addOld(title: string, action: string, extra: string[] = []
   return id;
 }
 
-/** Sets frontmatter fields of an item of the test store in one commit (a value of `undefined` removes the field): the edits no verb of `aleph issue` makes now, such as `after`. */
-export function patchItem(repoKey: string, id: number | string, fm: Record<string, unknown>): void {
-  pullItems();
-  const path = join(items, repoKey, "backlog", "tasks", `${repoKey}-${id}.md`);
-  const item = parseItem(readFileSync(path, "utf8"));
-  for (const [k, v] of Object.entries(fm)) {
-    if (k === "status") setStatus(item, v as Status);
-    else if (v === undefined) delete item.fm[k];
-    else item.fm[k] = v as any;
-  }
-  writeFileSync(path, renderItem(repoKey, item));
-  sh(items, "git", "add", "-A");
-  sh(items, "git", "commit", "-qm", `patch ${repoKey}-${id}`);
-  pushItems();
-}

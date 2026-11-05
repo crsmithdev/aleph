@@ -2,9 +2,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { writeList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
-import { readList } from "../../todo/lib/store.ts";
+import { writeList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import { readList } from "../../issues/lib/store.ts";
 import { ctx, fakes, withChecks, setup, teardown } from "./factory.helpers.ts";
 import { baselineConfig } from "./factory.ts";
 import { loadRegistry } from "./ledger.ts";

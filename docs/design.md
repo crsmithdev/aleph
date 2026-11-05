@@ -20,7 +20,7 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui` and `--sum
 
 ## What could not be determined
 
-- **Earlier decisions.** Absolute time is `10/28 14:05` (mm/dd hh:mm, 24-hour): Chris chose it on 2026-11-04 for aleph-1163, the same format as the aleph-199 decision (vault note "Triage Questions Go To Chris And Times Read mm-dd hh-mm"). A chart axis can keep a short form. No other UI decision outranks the code here.
+- **Earlier decisions.** Absolute time is `10/28 14:05` (mm/dd hh:mm, 24-hour), the same format as the aleph-199 decision. A chart axis can keep a short form. No other UI decision outranks the code here.
 - **Browser checks.** Chrome could not start in the sandbox of the run that wrote this page, so no page was rendered, in light or dark, at desktop or phone width. Responsive behaviour below is read from the media queries; chart empty and loading states, and whether a table scrolls or wraps at a phone width, are read from the code and not seen.
 - **Colour token uses.** The inventory has no `token-use` kind for colours: `var(--ink)` and the like are not counted, so a colour token has a definition count (three blocks) and no use count.
 - **Contrast.** Computed from the hex values in `ui/app.css` for the pairs below, not for every text and background pair that the CSS puts together. The pair `--muted` on `--rule-2` (4.41 light, 4.35 dark) was not traced to a use.
@@ -138,7 +138,7 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 
 **A unit follows its number with no space**: `850ms`, `3.2h`, `1.5KiB`, `12min`, `10d`. `dur()` puts a space only between two groups (`4m 05s`). Server log lines and health text from the factory keep their own form (`135 s`); they are not UI formats.
 
-Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()` (`ui/views/speed.js:23`)). The `format` group has 71 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`. Each stays for one of these reasons:
+Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()` (`ui/views/speed.js:22`)). The `format` group has 71 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`. Each stays for one of these reasons:
 
 | Rows | Reason it stays |
 |---|---|
@@ -151,7 +151,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:523`) with `heads()` (`ui/lib.js:526`) or `sortHead()` (`ui/lib.js:605`), styled by `table.tbl` (`ui/app.css:451`). Every table goes through `dataTable()`.
+The one table is `dataTable()` (`ui/lib.js:523`) with `heads()` (`ui/lib.js:526`) or `sortHead()` (`ui/lib.js:596`), styled by `table.tbl` (`ui/app.css:451`). Every table goes through `dataTable()`.
 
 Rules, as the code states them (`ui/lib.js:523`, `ui/app.css:451`):
 
@@ -197,7 +197,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `cha
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: p50 and p90 areas per bucket, with 0 for a bucket with no time; a strip with one dot per issue linking to the issue, with the time on a base-60 log axis that starts at 1m unless a time is under a minute and the filing time on the vertical axis (an issue with no filing time has no dot); and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue, each linking to the issue (for Lead Time an issue has a row per slow stage). Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Agents page:** three charts of the same height in one row (`liveOption`, `outcomesOption`, `costOption` in `ui/views/factory-agents.js`), drawn by `chart()` with the theme tokens: live agents by role as a stacked area, one series per timed role in `--series-1` to `--series-5`; outcomes by role as stacked horizontal bars of succeeded, failed and stuck; and cost by model as stacked columns per bucket, from `buckets[].cost` in `/api/speed`. Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Alerts section (Status page):** one section, "Alerts", holds the Asks and the stuck, failed and error cards. The cards are one full-width column, as the Asks are. Each card has the Ask card structure (`ask-box` with the meta row, then the fold, then the buttons); a stuck, failed or error card uses the red `unstick` tone. The id, priority, date and runtime sit inside the box and show while the fold is closed. The status line links `#awaiting` (Asks) and `#jobs-stuck` (stuck jobs) point at the two lists of the section.
-- **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:23`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
+- **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:22`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
 - **Bar lists:** `barRow()` (`ui/lib.js:532`) and `barList()` (`ui/lib.js:538`): label, bar, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:350`) and `priorityBadge()` (`ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
 - **Efficiency bar:** `.obar` (`ui/app.css:909`), in the five `--seg-*` colours under white text.
@@ -285,7 +285,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:177`) is visible on all controls. Motion stops under `prefers-reduced-motion` (`ui/app.css:427`). Sort headers set `aria-sort` (`ui/lib.js:607`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:177`) is visible on all controls. Motion stops under `prefers-reduced-motion` (`ui/app.css:427`). Sort headers set `aria-sort` (`ui/lib.js:598`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
 
 ## Components
 

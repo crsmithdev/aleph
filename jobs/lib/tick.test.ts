@@ -4,8 +4,8 @@ import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bu
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../todo/lib/todo.ts";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import { readList, writeList } from "../../issues/lib/store.ts";
 import { factoryRepos } from "../../tests/git-fixture.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "./ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";

@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../todo/lib/store.ts";
-import { add, addPart, setStatus, type Doc } from "../todo/lib/todo.ts";
-import * as todos from "../todo/lib/todo.ts";
+import { readList, writeList } from "../issues/lib/store.ts";
+import { add, addPart, setStatus, type Doc } from "../issues/lib/todo.ts";
+import * as todos from "../issues/lib/todo.ts";
 import { askOf, setAsk, refIn } from "../jobs/lib/ask.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page

@@ -2,8 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, setSystemTime, test 
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../todo/lib/todo.ts";
-import { goals, isBuildable, isSorted, readList, writeList } from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import { goals, isBuildable, isSorted, readList, writeList } from "../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
 import { readRun, stamp, writeRun, type Repo } from "./ledger.ts";

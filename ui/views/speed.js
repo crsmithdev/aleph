@@ -1,11 +1,10 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { barRow, cardTrend, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
+import { cardTrend, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
 export const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 export { hours };
-export const pctText = (w) => pct((w || 0) * 100);
 /** A percent of the weekly limit: one decimal, but a small nonzero value shows "<0.1%" rather than "0.0%". */
 export const weekText = (v) => pct(v);
 
@@ -60,10 +59,6 @@ export function mergeCauses(d) {
   }
   return [...by.values()].sort((a, b) => b.hours - a.hours);
 }
-
-/** One ranked cause row with its bar; the first is the hot one. `name` is HTML. */
-export const causeRow = (name, x, max, top) =>
-  barRow(name, max > 0 ? (x.hours / max) * 100 : 0, `${esc(hours(x.hours))} · ${esc(plural(x.runs, "run"))}`, { top });
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 /** The share of the usage week that is gone, 0 to 100; null with no reset time. */

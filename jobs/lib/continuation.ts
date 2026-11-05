@@ -11,7 +11,7 @@
  */
 import { skillSection } from "./role-skill.ts";
 import { existsSync, readFileSync } from "node:fs";
-import { reader } from "../../todo/lib/store.ts";
+import { reader } from "../../issues/lib/store.ts";
 import { needsOf } from "./ask.ts";
 import { git } from "./git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "./job.ts";

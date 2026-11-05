@@ -6,8 +6,8 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { areasOf, reader } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import { areasOf, reader } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "./job.ts";

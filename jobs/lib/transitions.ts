@@ -22,8 +22,8 @@ import { readModels } from "./models.ts";
 import { factoryLog } from "./layout.ts";
 import { route, TIER_MODEL, type Tier } from "./route.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
-import * as issues from "../../todo/lib/todo.ts";
-import * as store from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import * as store from "../../issues/lib/store.ts";
 import { jobSeconds, pidWaitMs, startCmd } from "./settings.ts";
 import { runFile } from "./run-files.ts";
 

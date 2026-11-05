@@ -14,8 +14,8 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { factoryLog, layout } from "./layout.ts";
 import { specVersion } from "./goal-spec.ts";
-import * as issues from "../../todo/lib/todo.ts";
-import { parentOf, partsOf, writeList, type Place } from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import { parentOf, partsOf, writeList, type Place } from "../../issues/lib/store.ts";
 import type { Entry } from "./ledger.ts";
 import * as record from "./record.ts";
 
@@ -126,14 +126,7 @@ export const plainAsk = (reason: AskReason, question: string, why: string[] = []
 const SEP = " :: ";
 const MAX_WHY = 4;
 const REF = /^[\w.-]+-\d+(\.\d+)?$/;
-/** The words that introduce an option's goal on disk. */
-const WAITS = " :: after ";
 const clean = (v: unknown): string => (typeof v === "string" ? v.replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").trim() : "");
-/** A flat value: cleaned, and with no `::` left, since `::` separates the parts of an effect and a recommendation. */
-
-/** One option as the line stored in `options`. */
-export const encodeOption = (o: { label: string; line: string; after?: string }): string =>
-  o.label + SEP + o.line + (o.after ? `${WAITS}${o.after}` : "");
 
 /**
  * An Ask from loose input (a verdict's JSON), or null when it has no usable question, 2–4 options, or a

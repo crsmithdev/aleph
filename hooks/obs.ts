@@ -26,7 +26,7 @@ const cfg = langfuseConfig();
 const sessionId: string | undefined = input.session_id;
 if (!cfg || !sessionId) process.exit(0);
 
-// `ALEPH_NOW` fixes the clock for tests, as in todo/lib/todo.ts `clock`.
+// `ALEPH_NOW` fixes the clock for tests, as in issues/lib/todo.ts `clock`.
 const now = process.env.ALEPH_NOW ? Date.parse(process.env.ALEPH_NOW) : Date.now();
 const event: string = input.hook_event_name ?? "unknown";
 const sessionKey = `session:${sessionId}`;

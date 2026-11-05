@@ -6,9 +6,9 @@
  * The dispatch asks the 7 gates in the order of GATES; the first that binds skips the goal,
  * and its name is the kind of the hold record.
  */
-import { afterOf, areasOf, labels } from "../../todo/lib/store.ts";
+import { afterOf, areasOf, labels } from "../../issues/lib/store.ts";
 import { RUN_CAP } from "./settings.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import * as issues from "../../issues/lib/todo.ts";
 
 /** Runs of one goal in a row that may end with no commit before the dispatch stops starting it. */
 export const NO_COMMIT_LIMIT = 3;

@@ -2,8 +2,8 @@
  * Item stage (seed milestone 2): stage() over the `Issue:` trailers on
  * origin/<main>, the work store and the ledger. Nothing writes it back to the store.
  */
-import { readFetched, readList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import { readFetched, readList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { fetchOrigin, git, jobCommit } from "./git.ts";
 import { allRuns, type Entry, type Repo, type State } from "./ledger.ts";
 import { allJobs, isOpen, issue, stateOf } from "./job.ts";

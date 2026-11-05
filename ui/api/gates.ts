@@ -14,7 +14,7 @@ import { allJobs } from "../../jobs/lib/job.ts";
 import * as record from "../../jobs/lib/record.ts";
 import { layout, readFactoryLog } from "../../jobs/lib/layout.ts";
 import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
-import { reader } from "../../todo/lib/store.ts";
+import { reader } from "../../issues/lib/store.ts";
 
 import { runCli } from "../cli.ts";
 import { sameSite, text } from "../http.ts";

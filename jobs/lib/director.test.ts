@@ -3,7 +3,7 @@
 import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../todo/lib/todo.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { markAsked, plainAsk, setAsk, awaitsChris } from "./ask.ts";
 import { specVersion } from "./goal-spec.ts";
 import { DIRECTOR_SCHEMA, directAll, MAX_ACTIONS, parseReply, pendingCases, readRecord } from "./director.ts";

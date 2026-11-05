@@ -16,7 +16,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
 try {
-  const { storeDir } = await import("../todo/lib/store.ts");
+  const { storeDir } = await import("../issues/lib/store.ts");
   const { vaultDir } = await import("../vault/lib/vault.ts");
 
   const input = JSON.parse(await Bun.stdin.text());

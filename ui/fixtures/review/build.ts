@@ -6,8 +6,8 @@
  */
 import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { writeList } from "../../../todo/lib/store.ts";
-import { add, addPart, note, setStatus } from "../../../todo/lib/todo.ts";
+import { writeList } from "../../../issues/lib/store.ts";
+import { add, addPart, note, setStatus } from "../../../issues/lib/todo.ts";
 import { putRun, setIssueAsk } from "../../../jobs/lib/record.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");

@@ -8,8 +8,8 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../todo/lib/todo.ts";
-import { areasOf, isSorted, labels, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import { areasOf, isSorted, labels, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../issues/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "./ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { facts, onMain, repoStages } from "./status.ts";
 import { writeRun } from "./ledger.ts";
 import type { Repo, Run } from "./ledger.ts";
-import type { Doc, Issue } from "../../todo/lib/todo.ts";
+import type { Doc, Issue } from "../../issues/lib/todo.ts";
 
 // The test's clock: the recent-runs window reads it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

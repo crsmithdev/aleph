@@ -14,8 +14,8 @@
 import { readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
-import * as issues from "../../todo/lib/todo.ts";
-import * as store from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import * as store from "../../issues/lib/store.ts";
 import { loadRegistry, type Repo } from "./ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";

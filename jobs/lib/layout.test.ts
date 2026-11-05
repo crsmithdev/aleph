@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLI } from "../cli.helpers.ts";
-import { renderItem } from "../../todo/lib/todo.ts";
-import { config, storeDir } from "../../todo/lib/store.ts";
+import { renderItem } from "../../issues/lib/todo.ts";
+import { config, storeDir } from "../../issues/lib/store.ts";
 import { runsDir, writeRun } from "./ledger.ts";
 import { layout } from "./layout.ts";
 

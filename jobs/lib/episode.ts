@@ -9,9 +9,9 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } f
 import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { fetchTrace, traceIdFor } from "../../hooks/lib/otlp.ts";
-import { partsOf, readList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
-import { section } from "../../todo/lib/todo.ts";
+import { partsOf, readList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import { section } from "../../issues/lib/todo.ts";
 import { factoryDir } from "./factory-status.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "./ledger.ts";

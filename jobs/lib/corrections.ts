@@ -15,10 +15,10 @@ import { factoryLog } from "./layout.ts";
 import { allRuns, loadRegistry, type Repo } from "./ledger.ts";
 import { always, logAlways, type Ask } from "./ask.ts";
 import { causeOf } from "./outcome.ts";
-import { file as fileIssues, type Place } from "../../todo/lib/store.ts";
+import { file as fileIssues, type Place } from "../../issues/lib/store.ts";
 import { PROPOSE_AT } from "./settings.ts";
 import { cutTitle, writeLine, writeTitle } from "./title.ts";
-import { titleProblem } from "../../todo/lib/todo.ts";
+import { titleProblem } from "../../issues/lib/todo.ts";
 
 export const CORRECTION_AT = 0.7;
 const WINDOW = 14 * 24 * 3600_000;

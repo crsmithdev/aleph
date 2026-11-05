@@ -2,8 +2,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeList } from "../todo/lib/store.ts";
-import { add, note } from "../todo/lib/todo.ts";
+import { writeList } from "../issues/lib/store.ts";
+import { add, note } from "../issues/lib/todo.ts";
 import { gatesBody, securityFacts } from "./api/gates.ts";
 import { withEnv } from "./test-server.ts";
 

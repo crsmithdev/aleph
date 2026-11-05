@@ -7,8 +7,13 @@ The `aleph` CLI (jobs/cli.ts) is the entry point for issues and the factory. `al
 ## Documentation
 
 - [README](https://github.com/crsmithdev/aleph/blob/main/README.md): What aleph does, install and quick start, and development
-- [Factory](https://github.com/crsmithdev/aleph/blob/main/docs/factory.md): Commands, how an issue becomes a commit, gates, Asks and settings
-- [Factory tasks](https://github.com/crsmithdev/aleph/blob/main/docs/factory-tasks.md): Each factory task, its trigger and what stops duplicate work
+- [Overview](https://github.com/crsmithdev/aleph/blob/main/docs/overview.md): What aleph is, its parts, its stack and its words
+- [Architecture](https://github.com/crsmithdev/aleph/blob/main/docs/architecture.md): Processes, folders, key flows and invariants
+- [Workflow](https://github.com/crsmithdev/aleph/blob/main/docs/workflow.md): The path from issue to main, with each gate, send-back, rescue and Ask
+- [Data model](https://github.com/crsmithdev/aleph/blob/main/docs/data-model.md): Each store and file under ~/.aleph and its fields
+- [Hooks](https://github.com/crsmithdev/aleph/blob/main/docs/hooks.md): Each hook, what it reads and what it decides
+- [Routing](https://github.com/crsmithdev/aleph/blob/main/docs/routing.md): The model, tools and time box of each agent role
+- [Factory](https://github.com/crsmithdev/aleph/blob/main/docs/factory.md): Set-up, commands, the tick, load and settings
 - [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The work store, issues and goals, the `aleph issue` commands and fields
 - [Vault](https://github.com/crsmithdev/aleph/blob/main/docs/vault.md): The memory vault, its commands and its note format
 - [UI](https://github.com/crsmithdev/aleph/blob/main/docs/ui.md): Run aleph-ui, log in, and add a page
@@ -24,5 +29,5 @@ The `aleph` CLI (jobs/cli.ts) is the entry point for issues and the factory. `al
 
 - [Start at boot](https://github.com/crsmithdev/aleph/blob/main/docs/start-at-boot.md): Start WSL, the UI and the tick after a Windows restart
 - [Langfuse compose](https://github.com/crsmithdev/aleph/blob/main/compose/README.md): Docker inside WSL2 and Langfuse API checks
-- [Specs](https://github.com/crsmithdev/aleph/tree/main/docs/specs): Design specs, one per feature
-- [Findings](https://github.com/crsmithdev/aleph/tree/main/docs/findings): Investigations of flakes and bugs
+- [Specs](https://github.com/crsmithdev/aleph/tree/main/docs/specs): Design specs that the code cites
+- [Findings](https://github.com/crsmithdev/aleph/tree/main/docs/findings): Measurements that the code and docs cite

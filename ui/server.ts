@@ -5,7 +5,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
+import { cacheFetches, uiFetchTtl } from "../issues/lib/store.ts";
 import { loadDotenv } from "../hooks/lib/env.ts";
 import { gateOn, gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";

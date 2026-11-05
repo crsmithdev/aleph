@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 
 import { join } from "node:path";
 
-import { readList } from "../todo/lib/store.ts";
+import { readList } from "../issues/lib/store.ts";
 
 import { routes as proposalRoutes } from "./api/proposals.ts";
 import { storeRepos } from "../tests/git-fixture.ts";

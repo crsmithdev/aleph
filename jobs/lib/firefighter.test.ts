@@ -3,9 +3,9 @@
 import { expect, test } from "bun:test";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../todo/lib/todo.ts";
-import * as store from "../../todo/lib/store.ts";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import * as store from "../../issues/lib/store.ts";
+import { readList, writeList } from "../../issues/lib/store.ts";
 import { askOf } from "./ask.ts";
 import { ciStep, type GhRun } from "./ci.ts";
 import { ciFailure, firefight, LOG_CHARS, type Ports } from "./firefighter.ts";

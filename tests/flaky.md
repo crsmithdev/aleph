@@ -1,6 +1,6 @@
 # Flaky tests
 
-Each test here is skipped with `// flaky: tests/flaky.md#<anchor>` (Chris, 2026-11-04). A test comes back when
+Each test here is skipped with `// flaky: tests/flaky.md#<anchor>`. A test comes back when
 its cause is fixed and it passes 5 runs in a row alone and one run under the full parallel suite. Then its
 section goes.
 

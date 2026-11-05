@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { writeList } from "../todo/lib/store.ts";
-import { add, addPart, setStatus } from "../todo/lib/todo.ts";
+import { writeList } from "../issues/lib/store.ts";
+import { add, addPart, setStatus } from "../issues/lib/todo.ts";
 import { state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { loadRegistry, writeRun } from "../jobs/lib/ledger.ts";

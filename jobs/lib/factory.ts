@@ -5,8 +5,8 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import * as issues from "../../todo/lib/todo.ts";
-import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../todo/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import { byPriority, afterOf, goal, goals, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../issues/lib/store.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "./ask.ts";
 import { factoryLog } from "./layout.ts";

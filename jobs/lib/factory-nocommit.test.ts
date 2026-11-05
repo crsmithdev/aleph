@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { join } from "node:path";
-import { readList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import { readList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { ctx, sh, goal, mk, notes, ask, fakes, dispatch, setup, teardown } from "./factory.helpers.ts";
 import { clearAsk } from "./ask.ts";
 

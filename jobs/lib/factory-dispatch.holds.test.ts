@@ -1,8 +1,8 @@
 // The hold record of a goal the dispatch skips: one per reason, for each reason the goal loop has.
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { writeList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
-import * as store from "../../todo/lib/store.ts";
+import { writeList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
+import * as store from "../../issues/lib/store.ts";
 import { join } from "node:path";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import { readHolds } from "./factory-status.ts";

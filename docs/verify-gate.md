@@ -74,5 +74,5 @@ Measured on 517 stored turns: the screen passes 71 of 392 turns Haiku passed. It
 - Tuning the rubric against real verdicts: needs a few weeks of scores.
 - Gating subagents (decision 6) if main-agent-only proves too loose.
 - No API-direct judge. The nested `claude -p` bills the subscription; with
-  thinking off it is about 3 s, and Chris wants no API spend here.
+  thinking off it is about 3 s, and the judge spends nothing on the API.
 - Changes in repos other than the cwd repo and its worktrees are not detected.

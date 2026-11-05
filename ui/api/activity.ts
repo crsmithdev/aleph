@@ -8,7 +8,7 @@ import { basename } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
-import { today } from "../../todo/lib/todo.ts";
+import { today } from "../../issues/lib/todo.ts";
 import { staleAsync } from "../stale.ts";
 import { uiCacheMs } from "../../jobs/lib/settings.ts";
 

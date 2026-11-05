@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readList, writeList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import { readList, writeList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { factoryDir } from "./factory-status.ts";
 import { readRun, writeRun, allJobs, allRuns, lock } from "./ledger.ts";

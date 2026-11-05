@@ -1,9 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readList, writeList } from "../../todo/lib/store.ts";
+import { readList, writeList } from "../../issues/lib/store.ts";
 import { askOf } from "./ask.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { dispatchIssues, suiteStep } from "./factory.ts";
 import type { Rescue } from "./rescue.ts";
 import { allJobs, writeRun, type Run } from "./ledger.ts";

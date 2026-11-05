@@ -5,7 +5,7 @@
  */
 import { base } from "../cli.helpers";
 import { asCli, call, issueShow, status, type Result } from "../inproc.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { behind, report } from "./factory.ts";
 import { runTick } from "./tick.ts";
 import { health, setPaused } from "./factory-status.ts";

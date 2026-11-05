@@ -8,7 +8,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { reader } from "../../todo/lib/store.ts";
+import { reader } from "../../issues/lib/store.ts";
 import { ciStep } from "./ci.ts";
 import { pendingCases } from "./director.ts";
 import { correctionsStep, directIfNew, doneChecker, episodeStep, runDispatch, stalled } from "./factory.ts";

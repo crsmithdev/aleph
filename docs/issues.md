@@ -4,9 +4,9 @@ Every repo in `~/.aleph/repos.json` has an issue list in the work store, a priva
 
 ## Issues and goals
 
-An **issue** is what someone asks for: Chris, a worker or the correction memory. The request stays as written under `## Request`. Intake makes one or more **goals** from it, numbered under it (`aleph-577.1`). A goal never has parts, and an issue never has build runs.
+An **issue** is what someone asks for: Chris, a worker or the correction memory. The request stays as written in the request part of the file. Intake writes a spec on it, or splits a large issue into **parts**, numbered under it (`aleph-577.1`), each with its own spec. A part never has parts.
 
-Each is one file: `<repo>/backlog/tasks/<repo>-<n>.md`, or `<repo>-<n>.<k>.md` for a goal. A file holds a small frontmatter header, free prose, and a list of notes. Status is a field, never a folder: a finished issue stays where it is and keeps its number, because commits, specs and the vault quote that number.
+Each is one file: `<repo>/backlog/tasks/<repo>-<n>.md`, or `<repo>-<n>.<k>.md` for a part. A file holds a small frontmatter header, free prose, and a list of notes. Status is a field, never a folder: a finished issue stays where it is and keeps its number, because commits, specs and the vault quote that number.
 
 ## Use it
 
@@ -45,17 +45,8 @@ Each `<repo>/` folder is a [Backlog.md](https://github.com/MrLesk/Backlog.md) pr
 
 ## Fields
 
-| Field | On | Holds |
-|---|---|---|
-| `id`, `title`, `status`, `created`, `updated`, `priority`, `repo` | both | The basics |
-| `kind` | both | `issue` or `goal` |
-| `source` | issue | `chris`, `worker`, `memory` or `agent` (filed from a Claude Code session, which sets `CLAUDECODE`); older issues can hold `deps` |
-| `areas` | both | Labels |
-| `goals` | issue | Its goals, when it has them |
-| `ask` | issue | What it asks Chris, when it waits |
-| `issue` | goal | Its issue |
-| `after` | goal | The goals it runs after, for order only |
+[Data model](data-model.md#work-store-issues) lists each frontmatter field and the file format. The status is a result of the fields: `closed_as` (`done` or `dropped`), else `parked`, else `open`. An Ask is not in the store; it is on the job record.
 
 Notes are append-only. That is the lost update this format prevents: two writers each add a line, and neither erases the other's.
 
-`lint` exits 1 on a missing or malformed key, an unknown status, a duplicate id, or a label or field of the old shape, and names the file and the field. `--fix` repairs a missing date, a stale `id`, or a bare scalar where a list belongs, and still exits 1 if anything is left.
+`lint` exits 1 on a missing or malformed key, an unknown status, a duplicate id, or a retired field, and names the file and the field. `--fix` repairs a missing date, a stale `id`, or a bare scalar where a list belongs, and still exits 1 if anything is left.

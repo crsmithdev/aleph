@@ -18,7 +18,7 @@ jobs/lib/unit.tz.test.ts
 tests/live/jobs.test.ts
 tests/live/langfuse.test.ts
 tests/wait.ts
-todo/cli.test.ts
+issues/cli.test.ts
 ui/browser.test.ts
 ui/fetch-ttl.test.ts
 ui/fixtures/review/build.ts

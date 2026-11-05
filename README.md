@@ -23,13 +23,13 @@ It is built for my machine and my habits. Use it as it is, or take the parts you
 
 - **Memory.** Notes live in an Obsidian vault. Each session starts with the core notes, and each prompt gets up to 3 more that fit it. [Vault](docs/vault.md)
 - **Verify gate.** Claude cannot say "done" after a code change unless a run after the last edit backs it up. [Verify gate](docs/verify-gate.md)
-- **Guards.** No edits on `main` outside a worktree. No commits with a secret or a stray `debugger`. A `gh` write to someone else's repo asks first.
+- **Guards.** No edits on `main` outside a worktree. No commits with a secret or a stray `debugger`. A `gh` write to someone else's repo asks first. [Hooks](docs/hooks.md)
 - **Handoffs.** A warning when the context fills up. After a compaction, Claude writes a handoff and the next session picks it up.
 - **Tracing.** Each turn is one Langfuse trace, with each tool call, subagent and model call and what it cost. [Langfuse](docs/langfuse.md)
 - **Issues.** One list per repo, kept in a private git repo. Only `aleph issue` writes to it. [Issues](docs/issues.md)
-- **Factory.** Intake writes a spec with a test that proves it. A worker builds it. Checks and a fresh reviewer decide if it lands. A failure goes back to the worker to fix. [Factory](docs/factory.md)
+- **Factory.** Intake writes a spec with a test that proves it. A worker builds it. Checks and a fresh reviewer decide if it lands. A failure goes back to the worker to fix. [Workflow](docs/workflow.md)
 - **Director.** An agent answers the factory's questions when it can, and passes the rest to me with a short case. An "Always" button turns an answer into a rule.
-- **Model routing.** Small changes go to Haiku or Sonnet, larger ones to Opus. Small tiers can run on a local model instead.
+- **Model routing.** Small changes go to Haiku or Sonnet, larger ones to Opus. Small tiers can run on a local model instead. [Routing](docs/routing.md)
 - **Web UI.** Status, issues, jobs, cost, agents, sessions and memory, in light and dark. [UI](docs/ui.md)
 - **Skills.** 23 skills: grill a plan, red-team it, write a spec, test first, debug, review a branch, clean up a repo, write docs, hand off a session. Run one with `/aleph:<name>`.
 
@@ -70,4 +70,4 @@ ALEPH_LIVE=1 bun test tests/live   # needs a running Langfuse and a logged-in cl
 
 CI runs the type check and the suite on each push. Only the live tests prove that Langfuse kept a trace: a 200 from Langfuse does not.
 
-Read [PRINCIPLES.md](PRINCIPLES.md) before you change the design.
+To learn how it fits together, read the [overview](docs/overview.md), [architecture](docs/architecture.md) and [data model](docs/data-model.md). Read [PRINCIPLES.md](PRINCIPLES.md) before you change the design.

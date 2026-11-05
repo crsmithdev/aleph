@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { writeList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import { writeList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { dispatchIssues } from "./factory.ts";
 import { applyActions, pendingCases } from "./director.ts";
 import { loadRegistry } from "./ledger.ts";

@@ -546,15 +546,6 @@ export const barsOption = (labels, series, { labels: showValues = false } = {}) 
   tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
   series: series.map((s) => ({ type: "bar", barMaxWidth: 64, name: s.name, data: s.data, ...(s.color ? { itemStyle: { color: s.color } } : {}), ...(showValues ? { label: { show: true, position: "top", textBorderWidth: 0, textBorderColor: "transparent" } } : {}) })),
 });
-/** The ECharts option for one line over categories, `area` filled. */
-export const lineOption = (labels, name, data, { interval = "auto", step = false, formatter, max } = {}) => ({
-  animation: false,
-  grid: { left: 32, right: 16, top: 8, bottom: 20 },
-  tooltip: { trigger: "axis", confine: true, ...(formatter ? { formatter } : {}) },
-  xAxis: { type: "category", boundaryGap: false, data: labels, axisTick: { show: false }, axisLabel: { interval, hideOverlap: true } },
-  yAxis: { type: "value", min: 0, ...(max ? { max } : {}), minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } },
-  series: [{ type: "line", name, step: step ? "end" : false, symbol: "none", lineStyle: { width: step ? 0 : 2 }, areaStyle: { opacity: step ? 0.85 : 0.15 }, data }],
-});
 
 /** The ECharts option for areas stacked over categories on the left axis, and `lines` over the same categories on the right axis. Each series is `{name, data}`; the first area is at the bottom. */
 export const stackedAreaOption = (labels, series, lines = []) => ({

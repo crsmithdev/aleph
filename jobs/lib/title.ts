@@ -4,7 +4,7 @@
  * `titleProblem` accepts. The source text goes into the request, not the title.
  */
 import { NO_SKILLS } from "./role-skill.ts";
-import { titleProblem, TITLE_RULE } from "../../todo/lib/todo.ts";
+import { titleProblem, TITLE_RULE } from "../../issues/lib/todo.ts";
 import { ruleCmd } from "./settings.ts";
 import { LOCAL, LOCAL_ENV, readModels } from "./models.ts";
 import { gpuSlot } from "./factory-status.ts";

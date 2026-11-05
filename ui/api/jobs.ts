@@ -11,8 +11,8 @@ import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/facto
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
-import { partsOf, readList } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import { partsOf, readList } from "../../issues/lib/store.ts";
+import * as todos from "../../issues/lib/todo.ts";
 
 export interface RunInfo { id: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "triage" | "plan" | "facts" | "firefighter" | "director" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */

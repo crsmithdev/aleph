@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
-import { uiFetchTtl } from "../../todo/lib/store.ts";
+import { uiFetchTtl } from "../../issues/lib/store.ts";
 import { clearTypesCache, memoryTypes } from "./memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";

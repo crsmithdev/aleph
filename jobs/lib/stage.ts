@@ -11,8 +11,8 @@ import { askOf, waitOf } from "./ask.ts";
 import { askOf as runAsk, isAwaiting, type Run, type State } from "./ledger.ts";
 import type { Job } from "./job.ts";
 import { isOpen, lastReal } from "./job.ts";
-import * as store from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import * as store from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 
 export type StageName = "dropped" | "done" | "awaiting" | "stuck" | "landing" | "working" | "blocked" | "planning" | "queued" | "new";
 export interface Stage { id: string; stage: StageName; why: string; of?: { n: number; m: number } }

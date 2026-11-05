@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { readList } from "../../todo/lib/store.ts";
+import { readList } from "../../issues/lib/store.ts";
 import { setup, teardown, mk, goal } from "./factory.helpers.ts";
 import { goalFacts } from "./factory-status.ts";
 import { allJobs, loadRegistry } from "./ledger.ts";

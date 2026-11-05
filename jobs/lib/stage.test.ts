@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { aleph, env, repo, seedGoal, seedItem, seedRun, setup, sh, teardown } from "../cli.helpers";
-import * as issues from "../../todo/lib/todo.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { loadRegistry } from "./ledger.ts";
 import { subjectOf } from "./stage.ts";
 import { repoStages } from "./status.ts";

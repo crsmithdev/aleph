@@ -4,13 +4,13 @@
  * cli.helpers, and gives the result in the shape of `aleph()`: the printed JSON, the exit code and the refusal.
  */
 import { base, env } from "./cli.helpers";
-import { loadRegistry, type Repo } from "./lib/ledger.ts";
+import { loadRegistry } from "./lib/ledger.ts";
 import { Refusal } from "./lib/refusal.ts";
 import { checked as checkedJob, drop as dropJob, jobCommand, land as landJob, recheck as recheckJob, startJob, type Start } from "./lib/transitions.ts";
 import { runDispatch } from "./lib/factory.ts";
 import { repoStages } from "./lib/status.ts";
 import { findJob, view } from "./lib/job.ts";
-import * as verbs from "../todo/lib/issues.ts";
+import * as verbs from "../issues/lib/issues.ts";
 
 export interface Result { code: number; json: any; stderr: string }
 
@@ -89,8 +89,6 @@ export const jobView = (name: string) => call(() => { const j = findJob(name); r
 /** `aleph dispatch`. */
 export const dispatch = (extra: Record<string, string> = {}) => call(() => runDispatch(), extra);
 
-/** The repo `key` of the registry the CLI reads. */
-export const repoNamed = (key: string): Promise<Repo> => asCli({}, () => loadRegistry()[key]!);
 const idOf = (ref: number | string) => (/^\d+\.\d+$/.test(String(ref)) ? String(ref) : Number(ref));
 
 /** `aleph issue add <repo> <title>` with its fields. */

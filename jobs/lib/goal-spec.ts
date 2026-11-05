@@ -4,7 +4,7 @@
  * read a spec through this module.
  */
 import { createHash } from "node:crypto";
-import { section, type Issue } from "../../todo/lib/todo.ts";
+import { section, type Issue } from "../../issues/lib/todo.ts";
 
 /** The sections a goal's spec has. */
 const REQUIRED = ["Goal", "Edit surface", "Oracle"] as const;

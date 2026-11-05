@@ -16,8 +16,8 @@ import { layout } from "./layout.ts";
 import { git } from "./git.ts";
 import { causeOf } from "./outcome.ts";
 import { usageFileSetting } from "./settings.ts";
-import { flakeTracker, reader, storeDir, type Reader } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import { flakeTracker, reader, storeDir, type Reader } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 
 const DAY = 24 * 3600_000;
 
@@ -104,13 +104,6 @@ export function addDays(day: string, n: number): string {
   return issues.today(d);
 }
 
-/** The time of a store note line (`- YYYY-MM-DD HH:MM: text`, local time), in ms, and its text; null when it is not one. */
-export function noteOf(line: string): { at: number; text: string } | null {
-  const m = /^- (\d{4}-\d\d-\d\d) (\d\d:\d\d): (.*)$/.exec(line);
-  if (!m) return null;
-  const at = new Date(`${m[1]}T${m[2]}`).getTime();
-  return Number.isNaN(at) ? null : { at, text: m[3] };
-}
 
 const median = (xs: number[]): number | null => {
   if (!xs.length) return null;

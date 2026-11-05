@@ -2,7 +2,7 @@
 
 The factory builds issues without you. It takes in each open issue as goals, starts a worker for each ready goal, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
 
-A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Factory tasks](factory-tasks.md) lists each task the factory runs, what starts it and what stops two runs from doing the same work. The design is in [the seed factory spec](specs/2026-10-26-seed-factory.md).
+A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps. The design is in [the seed factory spec](specs/2026-10-26-seed-factory.md).
 
 ## Set it up
 
@@ -33,127 +33,13 @@ The `aleph-tick` timer runs `aleph tick` every minute. The `aleph-suite` timer r
 | `aleph always <list\|grant <reason> <action>\|revoke <reason>>` | Lists or changes the Always rules |
 | `aleph doctor [--fix] [--json]` | After an outage: clocks, git objects, units, `aleph.home` and lost runs |
 | `aleph judge [jev\|haiku]` | Shows or sets the model that judges for the hooks |
+| `aleph models [set <tier> <model>\|enable <tier>\|disable <tier>]` | Shows or sets the model of each tier |
+| `aleph director` | Runs the director on the Asks that have no case text |
+| `aleph monitor` | Writes the monitor's report for a day |
 
 ## How an issue becomes a commit
 
-```text
-issue ──intake──▶ goal(s) ──dispatch──▶ worker run ──▶ checks ──▶ reviewer ──▶ land
-         │  ▲                               ▲             │           │
- a large │  └─ code checks the spec,        └─ fix round ─┴───────────┘
- issue   │     sends it back once              (at most ALEPH_FIX_ROUNDS)
-         └──▶ parts (goals)
-```
-
-### Intake
-
-Intake is the one agent run before work starts on an issue. An issue added with `aleph issue add`, a note on an issue that waits for you, and a worker's follow-up each start an intake at once, under the dispatch's gates. Each dispatch, and so each run's end, starts an intake for the open issues that are not sorted, oldest first, at most `ALEPH_INTAKE_CAP` (5), while live runs are under the live cap: an intake that the live cap held starts when a run ends. An intake run that gives no reply starts the next try at once. An issue is not sorted when it has no spec; in a repo with `"author": true` in the registry, an issue filed with a spec is not sorted either until intake takes it in. An issue with `plan` set (a run of it reached its time box, or you asked to plan the rest) goes to intake from the dispatch, to be split. An Ask that intake sets starts the director at once.
-
-Code decides first, with no run: an issue that a commit on main names in an `Issue:` trailer is done, and an issue of kind `flake` becomes a note on the flake tracker. Else intake is one read-only run (`claude-opus-5-5`, with Read, Grep and Glob, on a clone of `origin/main`) that returns a route as JSON:
-
-| Route | Does |
-|---|---|
-| `build` | Writes the issue's spec (Goal, Edit surface, Oracle) and sets `intake: build`; for a large issue, files 2 to 6 parts, each with its own spec |
-| `close` | Marks the issue done, with the reason as `closed_why` |
-| `done` | Marks the issue done; the commit must be on main |
-| `ask` | Sets an Ask with a question and options |
-
-Code then checks each spec: no empty section, no placeholder (`???`, `TBD`, `<name>`), each Edit surface path on main or marked new, an Oracle that names a command or a test file, no `bun test` path that bun reads as a name filter, each test file the Oracle names on main or in the Edit surface, part titles within the title rule, and `after` refs that exist. A failed check sends the run back once, in the same session, with the problems. A second failure sets an Ask with the reason `intake-failed`. A worker's follow-up whose Edit surface is only test files closes as a test-only follow-up.
-
-A run with no reply or a failed process leaves the issue unchanged. After `ALEPH_INTAKE_TRIES` (2) such runs, the issue gets an Ask with the reason `intake-failed`. The run's cost is in its state, as for the other roles.
-
-### The worker run
-
-The dispatch starts a build run for each ready goal, up to the live cap. Each start holds a lock on its goal, so two dispatches start it once.
-
-The worker is `claude -p` on the host, in the job's worktree `<repo>/.worktrees/job-<name>` on the branch `factory/<name>`. The first run of a job makes the worktree from `origin/main`; a fix round uses the same worktree. The worker's environment sends `git push` to github nowhere and gives `gh` no token. Only the branch's commits count: the checks and the reviewer read the branch, not the worktree. The ledger of runs is `~/.aleph/runs`.
-
-The worker ends with structured output (`--json-schema`, `WORKER_SCHEMA` in `jobs/lib/gate.ts`). Its fields:
-
-| Field | Becomes |
-|---|---|
-| `summary` | The run's `result.md` |
-| `followups[].title` | An issue with `source: worker`, at the priority of the issue it came from |
-| `flakes[]`: `file`, `name`, `what` | A note on the repo's flake tracker |
-| `defaults[]`: `choice`, `chose` | A line in the report |
-| `already_met.evidence` | The claim that the goal already holds, which the repo's checks on `origin/main` decide |
-| `question` | A question on a clause of the Oracle it cannot meet; with no commit, the goal waits for a spec edit |
-
-A run whose final event has no structured output, such as one that hit its turn limit or was stopped, is stuck.
-
-### Verify
-
-Verify is one station, with the run phase `verify`. In order, it runs:
-
-1. the repo's setup and checks in a detached worktree at the branch's tip;
-2. the doc-claims check of the worker's final message against its transcript;
-3. the keep-gate on the branch's new tests;
-4. the Oracle commands of the spec that the checks did not run.
-
-The checks run only the test files that the branch's change reaches, and every check that is not a test, such as `tsc`. Each check and the Oracle add one result to the run's `checks` list. The Oracle's result is `oracle`. Each writes its log to `checks.log`. The first failure stops Verify and names the check that failed. A check or an Oracle command that fails runs once more. A keep-gate or Oracle command whose setup fails, whose worktree git cannot add, or that a clock (`ALEPH_CHECK_TIMEOUT`) or a signal ended gives no verdict: it is neither a pass nor a failure. The run is stuck with the cause `infra` and a `noVerdict` result for `keep-gate` or `oracle`, and the rescue checks the branch again once, then asks. Each detached worktree goes when its step ends.
-
-### When a run is stuck
-
-A run is stuck when:
-
-- the last line of the worker's output is not a `result` event with `is_error` false;
-- it made no commit;
-- a check fails after the fix rounds;
-- a check gives no verdict: a clock (`ALEPH_CHECK_TIMEOUT`) or a signal ended it. Its cause is `infra`, it is not a fix round, and the rescue checks the branch again once;
-- it reaches the time box (`ALEPH_JOB_TIMEOUT`, 30 minutes). The factory drops it and sends the issue to intake to split, or asks you when it is a part or already split;
-- its output file does not grow for `ALEPH_STALL_SECONDS` (600). The reason is `stalled: no output for 10 minutes`.
-
-A failed check sends the job back to its worker on the same branch, with a note that names the check and holds the last 80 lines of its log. This happens at most `ALEPH_FIX_ROUNDS` (2) times a job. After the last round, the run stays stuck as `<check> failed after <n> fix rounds`.
-
-When a check fails on two runs in a row with the same failing tests, no further fix round starts. The run asks you, and quotes the failure, so you can tell a wrong test from a wrong branch.
-
-### Review
-
-When Verify passes, a fresh reviewer (`claude-opus-5-5`, in a detached worktree at the branch's tip) reads the goal and the diff, and checks the spec's Goal and Oracle. It ends with a verdict: `pass` or `hold <reason>`. There is one review: no second review follows it.
-
-- `hold` starts a fix round, like a failed check. The run record shows the round as `stuck` with `next: worker` until the next round starts. After the last round, the run asks you, with the reason `review`.
-- No verdict, an error or the time box (`ALEPH_REVIEW_TIMEOUT`, 10 minutes) runs the reviewer once more. A second miss asks you, with the reason `review`.
-- A diff over `ALEPH_REVIEW_DIFF_MAX` (200000) characters goes in as the `git diff --stat` plus the diff cut at that length.
-- A merge run, which only merges `origin/main` into the branch after a land conflict, gets a review of its merge commit only: the merge commit's diff against its first parent.
-
-A change that deletes or renames a test, changes a `test`, `it`, `describe` or `expect` line, or adds `.skip`, `.only` or `.todo` does not stop the run. The reviewer gets each one as a finding, and holds only when the goal does not call for it. The reviewer also gets the list of changed files that the spec's Edit surface does not name, and holds only when the goal does not need the change.
-
-### Held paths
-
-A diff that changes a path in the repo's `held` list or a security path (`SECURITY_PATHS` in `jobs/lib/gate.ts`), other than a test, runs Verify and the reviewer like any other. When the reviewer passes it, the run waits with a `held-path` Ask instead of landing. `aleph land <name>` lands it and `aleph drop <name>` drops it.
-
-### The land
-
-Lands of one repo go one at a time, in the order they became ready. A land merges the branch onto `origin/main` in memory (`git merge-tree`), runs the checks on that tree, and pushes that tree as one squash commit. A land does not run the full suite: `aleph suite` runs it on its own timer. The commit ends with `Issue: <repo>-<n>` when the run is on an issue, then `Job: <job>`. A held land also writes `Held-by:` with the name of the lander.
-
-- **Checks.** The land runs the test files that the change reaches, the test files that match the repo's `critical` globs in `~/.aleph/repos.json` (none by default), and every check that is not a test, such as `tsc`. A change to a file that is not a module, such as a doc, runs every test, as in a build. A failing test that the change does not reach does not stop the land.
-- **Batch.** The land that takes the lock also takes the passed runs queued behind it, up to `ALEPH_LAND_BATCH` (8). It checks the last commit once and pushes all of them in one push. If the checks fail, it splits the batch in half until it finds the run that fails. If the checks give no verdict, the batch does not split: each run fails with the cause `infra`, and the rescue lands it again.
-- **Critical tests only.** When `origin/main` is still the commit a run's checks passed on, the land runs only the critical tests, and pushes with no check when the repo has none.
-- **After the push.** The land fast-forwards the repo's main checkout if it is clean, and restarts `aleph-ui` when the change touches a file the server imports.
-
-## Gates
-
-Each dispatch first does its steps: it starts the next steps a pause kept, rescues stuck, failed, killed and lost runs, lands the passed runs, and closes parents whose parts are done. Then it asks each queued goal 6 gates, in this order. The first gate that binds skips the goal for this dispatch, and a record in `~/.aleph/factory/holds.jsonl` names that gate. The next dispatch asks again.
-
-| Gate | Binds when |
-|---|---|
-| Pause | `aleph pause` (`~/.aleph/factory/paused`), until `aleph resume`. A paused dispatch does nothing, not even its steps |
-| Baseline | The last `aleph suite` run failed (kept in `~/.aleph/factory/baseline.json`). It holds until a later suite run passes, also after main moves. A main that no suite run has checked does not hold |
-| Not ready | The goal is done, waits on an issue in its `after` list, or has an open job |
-| Live cap | `ALEPH_LIVE_CAP` runs are live |
-| Busy file | A file in the goal's Edit surface had 3 land conflicts in 7 days, and another open job names it |
-| Loop guard | The goal's last 3 runs made no commit, or it started 3 times in 60 minutes. The dispatch sets an Ask in place of a start |
-
-A goal that no gate holds starts. GitHub CI on main does not gate.
-
-A stuck or failed run holds only its own goal, through its open job. The rescue takes a safe action on it once per goal per case, or sets a `rescue` Ask. A lost run (its process ended and wrote no end) is marked failed and its goal reruns once; a second lost run of the goal sets a `rescue` Ask.
-
-The firefighter is code in the tick, every 5 minutes (`jobs/lib/firefighter.ts`); no agent runs. A failed baseline and a red GitHub CI on main each file one issue of priority `critical`, kind `bug` and label `red-main` per failing commit. The request names the commit (`Failing commit: <sha>`) and holds the last 200 lines of the log, at most 8000 characters: `checks.log` of the baseline, or `gh run view <id> --log-failed` of the CI run. A second tick, or a second source for the same commit, files nothing more. While the repo has an open `red-main` issue, a new failing commit is one note on that issue, not a second issue. A land live for 30 minutes or more gets a `rescue` Ask on its issue, once per land run, and the director decides.
-
-`aleph recheck <name>` is the way out of a stuck run that keeps its work, for example one that a flaky test on main stuck. It merges the current `origin/main` into the branch, runs the checks, the held rule and the reviewer, and lands like any passed run.
-
-## Asks and Always rules
-
-Whatever would wait for you is an Ask, of kind `input` or `approval`, with a reason, a question and options. Every new Ask goes to the director first, at once: the write that sets an Ask (a dispatch, a run's end, an intake, the corrections, the firefighter) starts `aleph director`. It is one read-only run of `claude-fable-5-1` per Ask, which decides it with actions that code checks and applies, or escalates it to you with its case text (situation, effects and recommendation). Code keeps an escalation list that the director cannot decide: a land that changes a security path or `bun.lock`, a memory proposal, a host check, a second run-cap or rescue Ask on the same goal, and closing or dropping an issue you filed. Each decision is a Director entry in the Automation page log. The Status page lists the Asks under "Awaiting you"; an Ask shows its buttons only once the director has escalated it. The Always button writes a rule to `~/.aleph/factory/always.json` that maps the reason to an action, and the next Ask with that reason takes the action without you. `aleph always` lists and changes the same rules.
+[Workflow](workflow.md) follows an issue from intake to `main`: the gates, checks, review, land, rescue, Asks and the director, with each send-back.
 
 ## The tick
 
@@ -169,7 +55,7 @@ A check, a worker and a land start only while the 1-minute load average is under
 
 ## Settings
 
-The live cap is read from its variable first, then from `~/.aleph/factory/caps.json` (`{ "live": 5 }`), then the default.
+The live cap and the run cap are read from their variables (`ALEPH_LIVE_CAP`, `ALEPH_RUN_CAP`) first, then from `~/.aleph/factory/caps.json` (`{ "live": 5, "run": 3 }`), then the default. The run cap is the number of starts of one goal in 60 minutes before a `run-cap` Ask; its default is 3. `ALEPH_DISPATCH=off` stops every detached dispatch, intake, director and suite.
 
 | Variable | Default | Does |
 |---|---|---|

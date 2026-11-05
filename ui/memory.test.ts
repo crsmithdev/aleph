@@ -6,8 +6,8 @@ import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { clearCache, warm } from "./api/memory.ts";
 import { memoryTypes } from "./api/memory-types.ts";
-import { writeList } from "../todo/lib/store.ts";
-import { add } from "../todo/lib/todo.ts";
+import { writeList } from "../issues/lib/store.ts";
+import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
 import { md, priorityBadge } from "./lib.js";
 // @ts-ignore

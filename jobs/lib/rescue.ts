@@ -12,9 +12,9 @@
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
 import { readFileSync } from "node:fs";
-import * as issues from "../../todo/lib/todo.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { isVersion } from "./goal-spec.ts";
-import { note, partsOf, reader, writeList } from "../../todo/lib/store.ts";
+import { note, partsOf, reader, writeList } from "../../issues/lib/store.ts";
 import { always, asked, askFromRun, clearAsk, logAlways, normalizeAsk, plainAsk, waitsForSpecEdit, type Ask, askOf } from "./ask.ts";
 import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "./factory-status.ts";
 import { fetchOrigin, git } from "./git.ts";

@@ -13,11 +13,11 @@ import { git } from "../../jobs/lib/git.ts";
 import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/ask.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
-import * as issues from "../../todo/lib/issues.ts";
+import * as issues from "../../issues/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, areasOf, parentOf, partsOf, readList, readLists } from "../../todo/lib/store.ts";
-import * as todos from "../../todo/lib/todo.ts";
+import { afterOf, areasOf, parentOf, partsOf, readList, readLists } from "../../issues/lib/store.ts";
+import * as todos from "../../issues/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, type NewIssue } from "../state.ts";

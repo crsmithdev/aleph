@@ -5,7 +5,7 @@
  * ledger before the request's change, so a request that arrives meanwhile waits for the build after it,
  * which every request arriving during the first one shares.
  */
-import { fetchReuse } from "../todo/lib/store.ts";
+import { fetchReuse } from "../issues/lib/store.ts";
 import type { State } from "./state.ts";
 import type { BuildReply, BuildRequest } from "./state-worker.ts";
 
@@ -25,8 +25,6 @@ let running: { id: number; to: Waiting } | null = null;
 /** The build that starts once the running one ends: the requests that arrived during that one wait for it. */
 let next: Waiting | null = null;
 
-/** How many builds this process has started. */
-export const stateBuilds = (): number => builds;
 
 function theWorker(): Worker {
   if (worker) return worker;

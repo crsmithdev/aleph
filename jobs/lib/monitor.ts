@@ -11,7 +11,7 @@ import { lock } from "./ledger.ts";
 import { factoryLog } from "./layout.ts";
 import { addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "./monitor-table.ts";
 import { monitorOn } from "./settings.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import * as issues from "../../issues/lib/todo.ts";
 
 /** The reader's time box, in seconds. */
 const SECONDS = 600;

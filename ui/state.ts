@@ -11,8 +11,8 @@ import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type CheckResult, type
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
 import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
-import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../todo/lib/store.ts";
-import { idOf, parseGoalRef, PRIORITIES, refOf, status } from "../todo/lib/todo.ts";
+import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
+import { idOf, parseGoalRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
 import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
 import type { Stage } from "../jobs/lib/stage.ts";
 import type { Wk } from "./usage.ts";

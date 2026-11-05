@@ -14,8 +14,8 @@ import { activeEnd, isLive, isStarting } from "../../jobs/lib/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
-import { reader, storeDir, uiFetchTtl } from "../../todo/lib/store.ts";
-import { status } from "../../todo/lib/todo.ts";
+import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
+import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/settings.ts";
 

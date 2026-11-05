@@ -11,7 +11,7 @@ import { latestJob } from "../../jobs/lib/job.ts";
 import { may } from "../../jobs/lib/ask.ts";
 import { runCli } from "../cli.ts";
 import { Refusal } from "../../jobs/lib/refusal.ts";
-import * as issues from "../../todo/lib/issues.ts";
+import * as issues from "../../issues/lib/issues.ts";
 import { sameSite, text } from "../http.ts";
 import type { Handler, Routes } from "../server.ts";
 

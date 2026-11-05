@@ -2,7 +2,7 @@ import { afterAll, expect, setSystemTime, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { titleProblem } from "../../todo/lib/todo.ts";
+import { titleProblem } from "../../issues/lib/todo.ts";
 import { gpuSlot } from "./factory-status.ts";
 import { readFactoryLog } from "./layout.ts";
 import { setModel } from "./models.ts";

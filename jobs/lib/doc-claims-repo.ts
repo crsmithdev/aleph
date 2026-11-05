@@ -66,7 +66,7 @@ export const DEFAULTS: Truth["defaults"] = {
 export function repoTruth(root = ROOT): Truth {
   const files = repoFiles(root);
   const read = (fs: string[]) => fs.map((f) => { try { return readFileSync(join(root, f), "utf8"); } catch { return ""; } }).join("\n");
-  const code = (f: string) => /^(hooks|jobs|todo|ui|vault|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
+  const code = (f: string) => /^(hooks|jobs|issues|ui|vault|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
   return {
     defaults: DEFAULTS,
     root,

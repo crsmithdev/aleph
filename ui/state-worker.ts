@@ -3,7 +3,7 @@
  * Each message carries the server's environment and its fetch setting, so the build reads what the server
  * would read. The worker lives as long as the server, so the caches of the store and of git outlive one build.
  */
-import { cacheFetches } from "../todo/lib/store.ts";
+import { cacheFetches } from "../issues/lib/store.ts";
 import { state } from "./state.ts";
 import { stateSlowMs } from "../jobs/lib/settings.ts";
 

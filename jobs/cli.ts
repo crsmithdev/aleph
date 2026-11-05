@@ -16,9 +16,9 @@ import { onMain } from "./lib/status.ts";
 import { removeBranch } from "./lib/landing.ts";
 import { fetchOrigin, git } from "./lib/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
-import * as issues from "../todo/lib/todo.ts";
-import * as store from "../todo/lib/store.ts";
-import * as verbs from "../todo/lib/issues.ts";
+import * as issues from "../issues/lib/todo.ts";
+import * as store from "../issues/lib/store.ts";
+import * as verbs from "../issues/lib/issues.ts";
 import { askOf, refIn, grant, readAlways, revoke } from "./lib/ask.ts";
 import { behind, directorStep, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/factory.ts";
 import { runTick } from "./lib/tick.ts";
@@ -157,7 +157,7 @@ function dispatchAfterGoal(repo: Repo, item: issues.Issue): void {
 
 /**
  * aleph issue <add|list|show|note|done|drop|lint> <repo> ... — every repo in the
- * registry has a list in the work store. The verbs are todo/lib/issues.ts; this
+ * registry has a list in the work store. The verbs are issues/lib/issues.ts; this
  * parses argv, prints, and starts the dispatch or intake a write calls for.
  */
 async function todoCmd(): Promise<void> {

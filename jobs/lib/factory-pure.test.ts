@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readList, writeList } from "../../todo/lib/store.ts";
-import * as issues from "../../todo/lib/todo.ts";
+import { readList, writeList } from "../../issues/lib/store.ts";
+import * as issues from "../../issues/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
 import { spentToday, runsToday, health, writeBaseline, suiteHistory, factorySnapshot, goalFacts } from "./factory-status.ts";
