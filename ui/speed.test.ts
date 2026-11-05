@@ -304,6 +304,29 @@ test("agents: each role's live, runs, hours and models, with a peak over all rol
   expect(a.points[2].triage).toBe(0.5);
 });
 
+test("agents: outcome rows per role and model, with first pass, reviewer verdicts and a baseline rate", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `o${n}`, id: `o${n++}`, run: { kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const runs = [
+    // Window 10..20: haiku has one pass that landed first time, one run sent back by the reviewer, one timed out; gpt-oss has one failed check.
+    e("build", 10, { model: "claude-haiku", cost: 1, job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
+    e("build", 11, { model: "claude-haiku", cost: 0.5, condition: "stuck", failed: "review", reason: "reviewer: no" }),
+    e("build", 13, { model: "claude-haiku", condition: "stuck", cause: "time-box" }),
+    e("build", 14, { model: "gpt-oss-20b", condition: "failed", failed: "tests", cost: 0.25 }),
+    e("triage", 15, { model: "gpt-oss-20b" }),
+    // The span before, 0..10: haiku one of two, gpt-oss none.
+    e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", condition: "failed" }),
+  ];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false, [[0, 10 * H]]);
+  const by = (role: string, model: string) => a.outcomes.find((x) => x.role === role && x.model === model)!;
+  expect(by("worker", "claude-haiku")).toMatchObject({ runs: 3, succeeded: 1, failed: 1, stuck: 1, rate: 0.3333, p50: 3600, cost: 1.5, firstPass: 1, reviewPass: 0.5, baseline: 0.5 });
+  expect(by("worker", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 0, failed: 1, stuck: 0, rate: 0, cost: 0.25, firstPass: 0, reviewPass: null, baseline: null });
+  expect(by("triage", "gpt-oss-20b")).toMatchObject({ runs: 1, succeeded: 1, rate: 1 });
+  expect(by("reviewer", "unset")).toMatchObject({ pass: 1, fail: 1, runs: 2, rate: 0.5 });
+  expect(a.outcomes.map((x) => x.role)).toEqual(["worker", "worker", "triage", "reviewer"]);
+});
+
 test("an unlanded run of an issue that left the store is Dropped", () => {
   const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
   const r = { job: "g", name: "g", repo: "fx", on: "fx-659", condition: "stuck", kind: "build", started: t(8), ended: t(9) } as any;

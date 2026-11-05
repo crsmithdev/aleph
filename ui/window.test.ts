@@ -25,7 +25,7 @@ const speed = (window: string): any => ({
   window, flaky: 1, lost: { hours: 1, share: 0.1 }, notCounted: { runs: 0, hours: 0 },
   issues: { landed: 1, firstPass: 0.5, fixRounds: 0, week: null, usage: [] }, classes: [],
   phases: { lead: P(1), intake: P(1), queue: P(1), implement: P(1), land: P(1) }, buckets: [{ at: new Date(2026, 9, 28).toISOString(), lead: 1 }],
-  checks: [], models: [], agents: { live: 0, workers: 0, cap: 5, mean: 1, peak: 2, roles: [], points: [{ at: new Date(2026, 9, 28).toISOString() }] },
+  checks: [], models: [], agents: { live: 0, workers: 0, cap: 5, mean: 1, peak: 2, roles: [], outcomes: [], points: [{ at: new Date(2026, 9, 28).toISOString() }] },
 });
 const S: any = { now: "2026-11-01T08:00:00Z", factory: { runsToday: 1, costToday: 1, liveRuns: 0, liveCap: 5 } };
 

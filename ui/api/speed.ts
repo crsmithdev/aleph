@@ -76,10 +76,20 @@ export interface Speed {
 
 /** One role of the factory's agents. `live` is the runs live now; `runs` started in the window; `hours` is their agent time inside it. A reviewer works inside a held run and records no times, so it has only `runs`: `live`, `hours` and `p50` are null. */
 export interface AgentRole { key: AgentKey | "reviewer"; name: string; live: number | null; runs: number; hours: number | null; p50: number | null; models: string[] }
+/**
+ * One role and model of the window with how its runs ended. `rate` is succeeded over the runs that ended (null with none); `baseline` is the same rate over the baseline's spans (null with no data). `cost` is the recorded cost of the runs (a reviewer records none, so 0).
+ * Worker rows add `firstPass` (runs of a landed job with no fix round) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
+ */
+export interface OutcomeRow {
+  role: AgentKey | "reviewer"; model: string; runs: number; succeeded: number; failed: number; stuck: number;
+  rate: number | null; p50: number | null; cost: number; baseline: number | null;
+  firstPass?: number; reviewPass?: number | null; pass?: number; fail?: number;
+}
 /** The agents over the window. `workers` and `cap` are the runs the live cap counts, now. `mean` and `peak` count all timed roles, and each point holds each role's mean live in its step. */
 export interface Agents {
   live: number; workers: number; cap: number; mean: number; peak: number;
   roles: AgentRole[];
+  outcomes: OutcomeRow[];
   points: ({ at: string } & Partial<Record<AgentKey, number>>)[];
 }
 
@@ -343,8 +353,66 @@ export type AgentKey = (typeof AGENT_ROLES)[number][0];
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
 const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
 
-/** The agents by role over `since`..`now`. A run with the condition running ends at `now` when `alive` says so, and does not count when not. `step` is the width of a point in ms. */
-export function agentStats(entries: Entry[], since: number, now: number, step: number, cap: number, alive: (e: Entry) => boolean = (e) => isLive(e.folder) || isStarting(e)): Agents {
+/**
+ * The rows of OutcomeRow for the runs that started in `since`..`now`, without `baseline`.
+ * What "succeeded" means, from what each role's run records:
+ * - Worker (build, older "agent"): the run ends `passed`, `awaiting` or `landed`: its checks passed and the reviewer did not send it back. A reviewer or check that sent it back sets `failed`: that is a fail, not stuck.
+ * - Intake, Triage, Planner, Firefighter, Director: the run ends `passed` or `done`: the role applied its route or wrote its answer. These roles set no `failed`.
+ * - Reviewer: it runs inside the build run and records no run, model or cost. Its verdict is read from the build: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `back`) is a fail; `review.call` of `land` is a pass. A reviewer that gave no verdict counts as neither. Its model is not recorded, so its row has the model "unset".
+ * Stuck is a run that ended `stuck` with no `failed`, or with the cause `time-box` or `stalled`. Failed is any other end that is not running. A running run counts in `runs` only.
+ */
+function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[] {
+  const order = (k: string) => AGENT_ROLES.findIndex(([r]) => r === k) + 1 || AGENT_ROLES.length + 1;
+  const rows = new Map<string, OutcomeRow & { secs: number[]; verdicts: number; landed: number }>();
+  const row = (role: OutcomeRow["role"], model: string) => {
+    const k = `${role}\0${model}`;
+    if (!rows.has(k)) rows.set(k, { role, model, runs: 0, succeeded: 0, failed: 0, stuck: 0, rate: null, p50: null, cost: 0, baseline: null, secs: [], verdicts: 0, landed: 0 });
+    return rows.get(k)!;
+  };
+  const runs = entries.map((e) => e.run as Run);
+  // A job landed when a land run of it landed; a job had a fix round when one of its runs was sent back.
+  const landedJobs = new Set(runs.filter((r) => r.kind === "land" && r.condition === "landed").map((r) => r.job));
+  const roundJobs = new Set(runs.filter((r) => r.failed).map((r) => r.job));
+  for (const r of runs) {
+    const a = Date.parse(r.started);
+    if (!(a >= since && a < now)) continue;
+    const ok = passedState(r.condition) || r.condition === "awaiting";
+    const cause = causeOf(r);
+    const stuck = !ok && r.condition !== "running" && (cause === "time-box" || cause === "stalled" || (r.condition === "stuck" && !r.failed));
+    const fail = !ok && !stuck && r.condition !== "running";
+    const build = isBuild(r.kind) || r.kind === "agent";
+    const role = build ? "worker" : AGENT_ROLES.find(([, , kind]) => kind === r.kind)?.[0];
+    if (role) {
+      const w = row(role, r.model || "unset");
+      w.runs++; w.cost += r.cost ?? 0;
+      if (ok) w.succeeded++; else if (stuck) w.stuck++; else if (fail) w.failed++;
+      const b = Date.parse(r.ended ?? "");
+      if (b >= a && b - a <= MAX_RUN) w.secs.push((b - a) / 1000);
+      if (ok && build && landedJobs.has(r.job) && !roundJobs.has(r.job)) w.firstPass = (w.firstPass ?? 0) + 1;
+    }
+    if (build) {
+      const back = r.failed === "review" || r.review?.call === "back", land = ok || r.review?.call === "land";
+      if (back || land) {
+        const v = row("reviewer", "unset");
+        v.runs++;
+        if (back) { v.fail = (v.fail ?? 0) + 1; v.failed++; } else { v.pass = (v.pass ?? 0) + 1; v.succeeded++; }
+        const w = row("worker", r.model || "unset");
+        w.verdicts++; w.landed += back ? 0 : 1;
+      }
+    }
+  }
+  return [...rows.values()].map(({ secs, verdicts, landed, ...x }) => {
+    const ended = x.succeeded + x.failed + x.stuck;
+    return {
+      ...x, cost: round(x.cost, 2), rate: ended ? round(x.succeeded / ended, 4) : null, p50: secs.length ? round(pct(secs, 0.5)) : null,
+      ...(x.role === "worker" ? { firstPass: x.firstPass ?? 0, reviewPass: verdicts ? round(landed / verdicts, 4) : null } : {}),
+      ...(x.role === "reviewer" ? { pass: x.pass ?? 0, fail: x.fail ?? 0 } : {}),
+    };
+  }).sort((p, q) => order(p.role) - order(q.role) || q.runs - p.runs || p.model.localeCompare(q.model));
+}
+
+/** The agents by role over `since`..`now`. `before` are the baseline's spans, each a [since, now] before the window. A run with the condition running ends at `now` when `alive` says so, and does not count when not. `step` is the width of a point in ms. */
+export function agentStats(entries: Entry[], since: number, now: number, step: number, cap: number, alive: (e: Entry) => boolean = (e) => isLive(e.folder) || isStarting(e), before: [number, number][] = []): Agents {
   const length = Math.ceil((now - since) / step);
   const edges: [number, number][] = [];
   const points: Agents["points"] = Array.from({ length }, (_, i) => ({ at: new Date(since + i * step).toISOString() }));
@@ -382,10 +450,17 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   for (const p of points) for (const [key] of AGENT_ROLES) if (p[key] !== undefined) p[key] = round(p[key]!, 2);
   const inWindow = entries.map((e) => e.run as Run).filter((r) => (isBuild(r.kind) || r.kind === "agent") && Date.parse(r.started) >= since && Date.parse(r.started) < now);
   const reviews = inWindow.reduce((n, r) => n + (r.review ? 1 : 0), 0);
+  // The baseline rate of a role and model: the mean of its rate over the spans that have data, as averageFigures takes it.
+  const prior = before.map(([a, b]) => outcomeRows(entries, a, b));
+  const outcomes = outcomeRows(entries, since, now).map((o) => {
+    const v = prior.map((p) => p.find((x) => x.role === o.role && x.model === o.model)?.rate).filter((n): n is number => n != null);
+    return { ...o, baseline: v.length ? round(v.reduce((x, y) => x + y, 0) / v.length, 4) : null };
+  });
   const span = now - since, hours = roles.reduce((n, r) => n + (r.hours ?? 0), 0);
   return {
     live: roles.reduce((n, r) => n + (r.live ?? 0), 0), workers: roles[0].live ?? 0, cap,
     mean: span ? round((hours * HOUR) / span, 1) : 0, peak,
+    outcomes,
     roles: [...roles, { key: "reviewer", name: "Reviewer", live: null, runs: reviews, hours: null, p50: null, models: [] }],
     points,
   };
@@ -514,7 +589,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     notCounted: cls.notCounted,
     lost: cls.lost,
     hasWeek: fit !== null,
-    agents: agentStats(entries, since.getTime(), now.getTime(), AGENT_STEP[window], LIVE_CAP()),
+    agents: agentStats(entries, since.getTime(), now.getTime(), AGENT_STEP[window], LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * BASELINE[window].step, now.getTime() - (i + 1) * BASELINE[window].step])),
     flaky: recent.length,
     flakes: [...Map.groupBy(recent.flatMap(flakeNames), (f) => f.name)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
