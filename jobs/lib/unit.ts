@@ -25,6 +25,7 @@ import { gates } from "./factory-status.ts";
 import { keepDiff } from "./jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "./landing.ts";
 import { buildChecks } from "./related.ts";
+import { LOCAL, LOCAL_ENV, readModels } from "./models.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "./continuation.ts";
 import { oracleCommands, outsideSurface } from "./goal-spec.ts";
 import { docClaimProblems } from "../../hooks/lib/docclaims.ts";
@@ -347,6 +348,9 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
     writeFileSync(marker, "");
   }
 
+  const slot = run.merge ? "merge" : run.model === "haiku" ? "worker.haiku" : run.model === "sonnet" ? "worker.sonnet" : undefined;
+  const local = slot !== undefined && readModels()[slot] === "local";
+  if (local) { run = { ...run, model: LOCAL.model }; updateRun(folder, { model: LOCAL.model }); }
   const argv = [workerCmd(), "-p", "--strict-mcp-config", NO_SKILLS, "--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
     "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     ...(run.model ? ["--model", run.model] : []), ...(repo.sandbox ? schemaFlags(WORKER_SCHEMA) : [])];
@@ -354,7 +358,7 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
   const w = await agentCall("worker", argv, {
-    cwd: wt, env: agentEnv(env, folder), stdin: text, stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
+    cwd: wt, env: { ...agentEnv(env, folder), ...(local ? LOCAL_ENV : {}) }, stdin: text, stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
     limit: workSeconds(run), stall: stallSeconds(), onSpawn: (p) => { child = p; },
   });
   child = null;
@@ -401,7 +405,7 @@ async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, 
   const o = w.outcome;
   const reply = parseWorker(structuredOf(readFileSync(runFile(folder, "output.log"), "utf8")));
   writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? o.result : reply.summary);
-  const facts: Partial<Outcome> = o.cost !== undefined ? { cost: o.cost } : {};
+  const facts: Partial<Outcome> = run.model === LOCAL.model ? { cost: 0 } : o.cost !== undefined ? { cost: o.cost } : {};
   if (typeof reply !== "string") {
     Object.assign(facts, { defaults: reply.defaults, followups: reply.followups }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
     await fileFollowups(repo, run, reply.followups);

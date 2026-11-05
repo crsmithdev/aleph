@@ -34,3 +34,6 @@ export function setModel(slot: string, backend: string): string | null {
   writeFileSync(file(), JSON.stringify({ ...readModels(), [slot]: backend }, null, 2) + "\n");
   return null;
 }
+
+/** The env a local slot's claude call adds: the local base URL and a dummy token. */
+export const LOCAL_ENV = { ANTHROPIC_BASE_URL: LOCAL.baseUrl, ANTHROPIC_AUTH_TOKEN: "local" };

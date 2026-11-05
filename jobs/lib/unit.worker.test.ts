@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
-import { jobsDir, state, setup, teardown } from "../cli.helpers";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { aleph, base, fakeLog, jobsDir, state, setup, teardown } from "../cli.helpers";
 import { actionJob, drop } from "../inproc.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
@@ -19,4 +20,21 @@ describe("a factory run", () => {
     expect(readdirSync(jobsDir).filter((d) => d.includes("-fac-fresult-")).map((d) => state(d).kind)).not.toContain("land");
     await drop("fresult");
   }, 30_000);
+
+  test("a worker.sonnet slot set to local runs the worker on gpt-oss-20b at the local base URL with cost 0, and a claude slot on sonnet", async () => {
+    const slot = (backend: string) => { mkdirSync(join(base, "factory"), { recursive: true }); writeFileSync(join(base, "factory", "models.json"), JSON.stringify({ "worker.sonnet": backend })); };
+    const spec = (n: string) => `Goal: ${n}\nACTION: commit ${n}.txt\n`;
+    slot("local");
+    const local = await aleph(["job", "fac", "flocal", "--spec", "-", "--model", "sonnet"], { ALEPH_FIX_ROUNDS: "0" }, spec("flocal"));
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--model gpt-oss-20b");
+    expect(readFileSync(join(fakeLog, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8081");
+    expect(state(local.json.run)).toMatchObject({ model: "gpt-oss-20b", cost: 0 });
+    slot("claude");
+    const claude = await aleph(["job", "fac", "fclaude", "--spec", "-", "--model", "sonnet"], { ALEPH_FIX_ROUNDS: "0" }, spec("fclaude"));
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--model sonnet");
+    expect(readFileSync(join(fakeLog, "env"), "utf8")).not.toContain("ANTHROPIC_BASE_URL");
+    expect(state(claude.json.run).model).toBe("sonnet");
+    await drop("flocal");
+    await drop("fclaude");
+  }, 60_000);
 });

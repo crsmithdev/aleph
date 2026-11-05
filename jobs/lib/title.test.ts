@@ -1,8 +1,9 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { titleProblem } from "../../todo/lib/todo.ts";
+import { setModel } from "./models.ts";
 import { writeTitle } from "./title.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "aleph-title-"));
@@ -30,4 +31,24 @@ test("writeTitle gives a title that titleProblem accepts, whatever the model say
   expect(await writeTitle(SOURCE)).toBe("Fix the gate that drops a changed test");
   stub(null);
   expect(await writeTitle(SOURCE)).toBe("the gate drops a test that the worker changed and nobody");
+});
+
+test("a title slot set to local runs claude on gpt-oss-20b at the local base URL, and a claude slot on haiku", async () => {
+  const saved = process.env.ALEPH_FACTORY_DIR;
+  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
+  const f = join(dir, "record");
+  writeFileSync(f, `#!/bin/sh\necho "$@" > ${join(dir, "args")}\nenv > ${join(dir, "env")}\nprintf '%s' '{"result":"A title"}'\n`, { mode: 0o755 });
+  process.env.ALEPH_RULE_CMD = f;
+  try {
+    expect(setModel("title", "local")).toBeNull();
+    await writeTitle(SOURCE);
+    expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model gpt-oss-20b");
+    expect(readFileSync(join(dir, "env"), "utf8")).toContain("ANTHROPIC_BASE_URL=http://127.0.0.1:8081");
+    expect(setModel("title", "claude")).toBeNull();
+    await writeTitle(SOURCE);
+    expect(readFileSync(join(dir, "args"), "utf8")).toContain("--model haiku");
+    expect(readFileSync(join(dir, "env"), "utf8")).not.toContain("ANTHROPIC_BASE_URL");
+  } finally {
+    if (saved === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = saved;
+  }
 });

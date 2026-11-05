@@ -6,6 +6,7 @@
 import { NO_SKILLS } from "./role-skill.ts";
 import { titleProblem, TITLE_RULE } from "../../todo/lib/todo.ts";
 import { ruleCmd } from "./settings.ts";
+import { LOCAL, LOCAL_ENV, readModels } from "./models.ts";
 
 const TITLE = 60;
 
@@ -20,8 +21,10 @@ export async function writeLine(system: string, input: string, max: number): Pro
   delete env.CLAUDE_CODE_ENTRYPOINT;
   delete env.ANTHROPIC_API_KEY;
   env.MAX_THINKING_TOKENS = "0";
+  const local = readModels().title === "local";
+  if (local) Object.assign(env, LOCAL_ENV);
   try {
-    const proc = Bun.spawn([cmd, "-p", "--strict-mcp-config", NO_SKILLS, "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const proc = Bun.spawn([cmd, "-p", "--strict-mcp-config", NO_SKILLS, "--model", local ? LOCAL.model : "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
     const timer = setTimeout(() => proc.kill(), 30_000);
     const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = await proc.exited;

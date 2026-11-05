@@ -11,6 +11,7 @@
  * docs/verify-gate.md "Jev screen".
  */
 import { decide, judgeChoice } from "./jev.ts";
+import { LOCAL, LOCAL_ENV, readModels } from "../../jobs/lib/models.ts";
 
 export interface Verdict { verdict: "pass" | "deny"; reason: string }
 
@@ -78,10 +79,12 @@ async function haiku(digestText: string, timeoutMs: number, started: number): Pr
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
   delete env.ANTHROPIC_API_KEY; // the judge runs on the subscription, never the API
+  const local = readModels().judge === "local";
+  if (local) Object.assign(env, LOCAL_ENV);
   env.MAX_THINKING_TOKENS = "0"; // measured: 3 s without thinking, 15-45 s with it, same verdicts
   let error = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const proc = Bun.spawn([cmd, "-p", "--model", "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", RUBRIC, digestText], {
+    const proc = Bun.spawn([cmd, "-p", "--model", local ? LOCAL.model : "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", RUBRIC, digestText], {
       env, stdout: "pipe", stderr: "pipe", stdin: "ignore",
     });
     const timer = setTimeout(() => proc.kill(), timeoutMs);
