@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
+import { card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -15,7 +15,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="stages" class="card" aria-label="Stages">${renderStages(s)}</section><section id="holds" class="card" aria-label="Holds">${renderHolds(s)}</section>${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section>${renderOutcome(speedOf(w))}<div class="insights">${renderStages(s)}${renderHolds(s)}${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -34,10 +34,10 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
 
 /** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
 export function renderOutcome(d) {
-  const title = `<h2>Agent Time</h2>`;
-  if (!d) return `${title}${loadingLine("the outcomes")}`;
-  if (d.error) return `${title}<p>${esc(d.error)}</p>`;
-  return `${title}${bar(d)}`;
+  const outcome = (body) => card("Agent Time", body, { id: "outcome", label: "Agent time" });
+  if (!d) return outcome(loadingLine("the outcomes"));
+  if (d.error) return outcome(`<p>${esc(d.error)}</p>`);
+  return outcome(bar(d));
 }
 
 const MONITOR_ROWS = 10;
@@ -66,7 +66,7 @@ export function renderStages(s, sort = SORTS.stages) {
     `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, numText, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
   const head = h("Stage", "stage") + h("Runs per Item", "runs", true) + h("No Usable Result", "unusable", true);
-  return `<h2>Stages</h2>${rows ? dataTable(head, rows) : empty("No stage ran.")}`;
+  return card("Stages", rows ? dataTable(head, rows) : empty("No stage ran."), { id: "stages" });
 }
 
 /** The monitor's Holds table: the day's value with a bar for goals; the trailing 7-day mean per day is in each cell's tooltip. At most 10 rows. */
@@ -77,7 +77,7 @@ export function renderHolds(s, sort = SORTS.holds) {
     `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, numText, max, TRAIL.holds)}${pairCell(r.hours, numText, null, TRAIL.holds)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
   const head = h("Kind", "kind") + h("Affected Issues", "goals", true) + h("Hours", "hours", true);
-  return `<h2>Holds</h2>${rows ? dataTable(head, rows) : empty("No hold record.")}`;
+  return card("Holds", rows ? dataTable(head, rows) : empty("No hold record."), { id: "holds" });
 }
 
 /** Sort a monitor table when its header is clicked: the same key flips the direction, a new text key goes up, a new number key down. */
@@ -87,7 +87,7 @@ function wireSorts(root, s) {
     if (!b) return;
     const id = b.closest("section").id, key = b.dataset.sort, cur = SORTS[id];
     SORTS[id] = nextSort(cur, key, new Set(["runs", "unusable", "goals", "hours"]));
-    root.querySelector(`#${id}`).innerHTML = (id === "stages" ? renderStages : renderHolds)(s, SORTS[id]);
+    root.querySelector(`#${id}`).outerHTML = (id === "stages" ? renderStages : renderHolds)(s, SORTS[id]);
   });
 }
 
@@ -104,7 +104,7 @@ export function renderMonitor(s) {
   const said = m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.")
     : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`
     : empty("Nothing looks off.");
-  return `<section class="card" id="monitor" aria-label="Monitor ${esc(m.day)}"><div class="sh"><h2>Monitor <span class="asof">${esc(m.day)}</span></h2></div>${said}</section>`;
+  return card("Monitor", said, { id: "monitor", aside: `<span class="asof">${esc(m.day)}</span>`, label: `Monitor ${m.day}` });
 }
 
 /** Fetch the window with its baseline in one request, then fill the scorecard. */
@@ -118,12 +118,12 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   const tiles = root.querySelector("#scorecard");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
   const outcome = root.querySelector("#outcome");
-  if (outcome) outcome.innerHTML = renderOutcome(speedOf(w));
+  if (outcome) outcome.outerHTML = renderOutcome(speedOf(w));
 }
 
 /** The count of a section: `N / cap` where a cap applies. */
 const section = (id, title, n, body, cap) =>
-  `<div class="sh"><h2 id="h-${id}">${esc(title)}</h2>${n === null ? "" : `<span class="count">${n}${cap > 0 ? ` of ${cap}` : ""}</span>`}</div>${body}`;
+  sectionHead(title, { id, count: n === null ? null : `${n}${cap > 0 ? ` of ${cap}` : ""}` }) + body;
 
 const STAT_FILES = 12;
 
@@ -296,7 +296,7 @@ export function renderNeeds(s) {
   const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
   if (!asks.length && !s.stuck.length) return "";
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
-  return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Alerts</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
+  return `<section id="needs" class="needs" aria-labelledby="h-needs">${sectionHead("Alerts", { id: "needs", count: asks.length + s.stuck.length })}` +
     group("awaiting", asks.length, asks.join(""), list) + group("jobs-stuck", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), list) + `</section>`;
 }
 

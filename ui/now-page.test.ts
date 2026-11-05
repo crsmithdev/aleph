@@ -75,7 +75,7 @@ test("mountStatus fetches the week and fills the scorecard and the outcome bar, 
   // @ts-ignore plain JS shared with the page
   const { resetSpeed } = await import("./views/speed.js");
   resetSpeed();
-  const tiles = { innerHTML: "" }, outcome = { innerHTML: "" }, other = { innerHTML: "" };
+  const tiles = { innerHTML: "" }, outcome = { outerHTML: "" }, other = { innerHTML: "" };
   const urls: string[] = [];
   await view.mountStatus({ querySelector: (s: string) => (s === "#scorecard" ? tiles : s === "#outcome" ? outcome : s === ".ph" ? null : other) }, { ...state, usage: USAGE, now: "2026-11-01T08:00:00Z" }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, baseline: BASE }) }; });
   expect(urls).toEqual(["/api/speed?window=week&baseline=1"]);
@@ -88,7 +88,9 @@ test("the lanes: Running shows live agent runs of the cap and lists every open r
   const mk = (n: number, kind: string) => job({ name: `${kind}-${n}`, run: { kind, started: "2026-10-30T09:00:00Z" } });
   const running = [...Array.from({ length: 12 }, (_, i) => mk(i, "agent")), mk(1, "land"), mk(2, "land")];
   const h = view.renderLanes({ ...full, running, factory: { ...full.factory, liveCap: 12, liveRuns: 12 }, done: [] });
-  expect(h).toContain('<h2 id="h-running">Running</h2><span class="count">12 of 12</span>');
+  expect(h).toContain('<div class="sh"><h2 id="h-running">Running</h2><span class="count">12 of 12</span></div>');
+  expect(view.renderStages(full)).toContain('<div class="sh"><h2 id="h-stages">Stages</h2></div>');
+  expect(view.renderHolds(full)).toContain('<div class="sh"><h2 id="h-holds">Holds</h2></div>');
   expect((h.match(/class="[^"]*run-row/g) ?? []).length).toBe(14);
   const d = (n: number) => ({ id: `aleph-${n}`, title: `D${n}`, href: "#/x", jobs: [] });
   const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)) });
@@ -146,12 +148,12 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   const at = ['id="scorecard"', 'id="outcome"', 'class="insights"'].map((x) => page.indexOf(x));
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
   expect(page).toContain("Loading the outcomes");
-  const outcome = { innerHTML: "" };
+  const outcome = { outerHTML: "" };
   const urls: string[] = [];
   await view.mountStatus({ querySelector: (s: string) => (s === "#outcome" ? outcome : null) }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, classes: [...WEEK.classes, { key: "idle", name: "Idle", hours: 0, causes: [] }] }) }; }, new URLSearchParams("window=week"));
-  expect(outcome.innerHTML).toContain('class="obar"');
-  const h = outcome.innerHTML;
-  expect(h).toContain("<h2>Agent Time</h2>");
+  expect(outcome.outerHTML).toContain('class="obar"');
+  const h = outcome.outerHTML;
+  expect(h).toContain("<h2 id=\"h-outcome\">Agent Time</h2>");
   expect(h).not.toContain("by outcome");
   const sep = h.indexOf('class="osep"');
   expect(h.indexOf('<span class="obk">Reached main</span>')).toBeLessThan(h.indexOf("seg-landed"));
@@ -163,7 +165,7 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   expect(needs).toContain('<h2 id="h-needs">Alerts</h2>');
   expect(needs).not.toContain("<h3>");
   expect(needs).not.toContain("Awaiting you");
-  expect(outcome.innerHTML.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
+  expect(outcome.outerHTML.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
   resetSpeed();
 });
 
