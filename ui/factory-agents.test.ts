@@ -146,6 +146,12 @@ test("the Roles card says the local server is up or down and disables gpt-oss-20
   expect(renderFactoryAgents(S, null, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "down", offers: OFFERS, down: ["gpt-oss-20b"] })).toContain("Local server: down");
 });
 
+test("the Roles card says OpenRouter is down when the flash model is down", () => {
+  const m = (down: string[]) => ({ tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down });
+  expect(renderFactoryAgents(S, D, "live", "week", m([]))).toContain("Local server: up · OpenRouter: up");
+  expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"]))).toContain("Local server: up · OpenRouter: down");
+});
+
 test("an outcome joins the tier or fixed row of its role and model; one that matches none or several stays its own row", () => {
   const o = (role: string, model: string, rate: number) => ({ role, model, runs: 10, succeeded: rate * 10, failed: 10 - rate * 10, stuck: 0, rate, p50: 60, cost: 1.5, baseline: 0.7 });
   const row = (h: string, name: string) => h.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];

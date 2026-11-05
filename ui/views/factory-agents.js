@@ -111,7 +111,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const box = (k) => (has[k] ? chartBox(k, l[k]) : empty("Nothing to plot in this window."));
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
     (a ? `<div class="trio">${card("Agents Live by Role", box("live"), { label: "Agents live by role" })}${card("Outcomes by Role", box("outcomes"), { label: "Outcomes by role" })}${card("Cost by Model", box("cost"), { label: "Cost by model" })}</div>` : card("Agents", wait)) +
-    card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
+    card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"} · OpenRouter: ${m.down.includes("deepseek-v4.1-flash") ? "down" : "up"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
 }
 
 /** The old address. */
