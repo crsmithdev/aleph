@@ -57,17 +57,6 @@ Tracing is off until you add Langfuse keys; everything else works without them. 
 
 A change to a `SKILL.md` applies at once. After you change a hook, run `/reload-plugins`. To try a checkout in one session only, run `claude --plugin-dir <path>`.
 
-## Development
-
-```bash
-bun run test        # the suite, in parallel, with a mock Langfuse
-bun run test:all    # also the slow tests that start Chrome, as CI runs it
-bunx tsc            # the type check
-ALEPH_LIVE=1 bun test tests/live   # needs a running Langfuse and a logged-in claude
-```
-
-CI runs the type check and the suite on each push. Only the live tests prove that Langfuse kept a trace: a 200 from Langfuse does not.
-
 ## Docs
 
 - [Overview](docs/overview.md): what aleph is, its parts and its terms
@@ -81,3 +70,14 @@ CI runs the type check and the suite on each push. Only the live tests prove tha
 - [Vault](docs/vault.md): the memory vault and its commands
 - [UI](docs/ui.md): run and extend `aleph-ui`
 - [Langfuse](docs/langfuse.md): set up tracing
+
+## Development
+
+```bash
+bun run test        # the suite, in parallel, with a mock Langfuse
+bun run test:all    # also the slow tests that start Chrome, as CI runs it
+bunx tsc            # the type check
+ALEPH_LIVE=1 bun test tests/live   # needs a running Langfuse and a logged-in claude
+```
+
+CI runs the type check and the suite on each push. Only the live tests prove that Langfuse kept a trace: a 200 from Langfuse does not.
