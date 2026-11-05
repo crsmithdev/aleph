@@ -131,6 +131,7 @@ See [Factory](docs/factory.md) and [Factory tasks](docs/factory-tasks.md).
 | `vault/cli.ts` | The memory vault's commands |
 | `ui/` | `aleph-ui`: the server, `ui/api/*.ts` routes and `ui/views/*.js` pages |
 | `identity/CLAUDE.md` | The global `CLAUDE.md` the hooks assume |
+| `identity/STYLE.md` | The global code style that `identity/CLAUDE.md` points to |
 | `compose/langfuse.yml` | Self-hosted Langfuse on `127.0.0.1:3010` |
 | `docs/` | Reference pages, decision records, specs and findings |
 | `tests/live/` | Tests against a running Langfuse and real headless sessions |

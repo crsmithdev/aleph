@@ -66,7 +66,8 @@ items and headers keep their fragments.
 Blog posts, essays, letters and other writing for people to read as writing
 are not STE: they keep the writer's voice. Run `aleph:humanizer` over them.
 
-Code: match the codebase's style; early returns; commands and errors in
+Code: follow `~/aleph/identity/STYLE.md`. A repo's own style guide wins over
+it, and an edit matches the style of its file. Commands and errors go in
 fenced blocks.
 
 ## Git
