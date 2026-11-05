@@ -210,6 +210,9 @@ export function putRun(id: string, run: Run): void {
   keys.set(id, key);
   update(key, (r) => {
     const i = r.runs.findIndex((x) => x.id === id);
+    // A build, land or recheck run of the same job that joins after the run that holds the Ask decides it: the Ask comes off.
+    const held = r.runs.find((x) => x.id === r.askRun);
+    if (i < 0 && held?.job === run.job && ["build", "land", "recheck"].includes(run.kind)) { r.ask = null; delete r.askRun; }
     const rec = takeAsk(r, { ...run, id } as RunRecord);
     if (i >= 0) r.runs[i] = rec; else r.runs.push(rec);
     r.runs.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));

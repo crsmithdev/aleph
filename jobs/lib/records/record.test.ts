@@ -130,3 +130,25 @@ test("an Ask set on a record and cleared keeps its set time and clear time, thro
     { set: "2026-11-04T11:00:00.000Z", cleared: "2026-11-04T11:30:00.000Z", reason: "question" },
   ]);
 });
+
+test("a land or build run of the job that joins after the run an Ask is on clears that Ask, a director run or another job's land does not, and the stuck run's reason is the next step", () => {
+  const ask = { kind: "input" as const, reason: "question", question: "the reviewer sent it back once: free-text column gets td.wide", options: [], why: [] };
+  setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
+  record.putRun("1", run({ condition: "awaiting", ask }));
+  setSystemTime(new Date("2026-11-04T10:02:00.000Z"));
+  record.putRun("2", run({ kind: "director", condition: "passed" }));
+  record.putRun("25", run({ kind: "land", job: "j2", condition: "landed" }));
+  expect(record.read("aleph-7")!.ask).toEqual(ask);
+  expect(record.next(record.read("aleph-7")!).step).toBe("ask");
+  setSystemTime(new Date("2026-11-04T10:05:00.000Z"));
+  record.putRun("3", run({ kind: "land", condition: "failed", failed: "conflict" }));
+  setSystemTime(new Date("2026-11-04T10:10:00.000Z"));
+  record.putRun("4", run({ condition: "stuck", reason: "doc claims: x after 2 fix rounds" }));
+  const r = record.read("aleph-7")!;
+  expect(r.ask).toBeNull();
+  expect(r.asks!.at(-1)!.cleared).toBe("2026-11-04T10:05:00.000Z");
+  const s = record.next(r);
+  expect(s.step).toBe("rescue");
+  expect(s.why).toContain("doc claims");
+  expect(s.why).not.toContain("the reviewer sent it back");
+});
