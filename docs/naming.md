@@ -74,7 +74,7 @@ Every value is lower case, in storage and on the page. A word means one thing in
 |---|---|---|
 | Issue status | yes | open, parked, done, dropped |
 | Job state | yes | running, waiting, passed, returned, failed, landed, dropped, done |
-| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered |
+| Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered |
 | Sub | yes | no-commit, timeout, stalled, infra, locked, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, other |
 | Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter |
 | Kind | yes, never shown | build, recheck, land, intake, director, monitor |
@@ -96,7 +96,7 @@ Old files keep their words. A reader maps each old word through `OLD` in `lib/na
 | Fate | already-met → met; by-hand → manual |
 | Review call | land → passed; back → returned; ask → waiting; pending → running; error → failed |
 | Ask reason | held-path → protected; review → returned; no-commit → failed; part-dropped → incomplete; intake-failed → failed; rescue → waiting; run-cap → capped; proposal-* → proposal |
-| Gate | pause → paused; baseline → red; live-cap → full; busy-file → busy; loop-guard → looping |
+| Gate | pause → paused; baseline → red; live-cap → full; busy-file → busy; loop-guard → looping; credit-wait → credit |
 | Report lane | delivered → landed; needs you → waiting; stuck → failed |
 | Speed class | fixed → returned; nothing → failed; restarted → reran |
 | Actor | You → human; Rule → rule; Gate → gate; Director → director; Firefighter → firefighter; triage, planner → intake |

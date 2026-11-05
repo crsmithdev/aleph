@@ -69,6 +69,7 @@ test("Loop guard binds at its limits; an answered run cap skips the hour count",
 test("a run that ended with the API credit error holds the goal for its wait and sets no run-cap Ask; past the wait the goal is ready", () => {
   const waiting = issueDecision(facts({ creditWait: 3 * MIN, startsInHour: 4 }));
   expect(waiting.kind).toBe("credit-wait");
+  expect(waiting.ev).toEqual({ action: "credit" });
   expect(waiting).not.toHaveProperty("ask");
   expect(issueDecision(facts({ creditWait: 12 * MIN })).kind).toBe("ready");
 });

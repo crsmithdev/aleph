@@ -8,7 +8,7 @@
 
 export const STATUSES = ["open", "parked", "done", "dropped"];
 export const STATES = ["running", "waiting", "passed", "returned", "failed", "landed", "dropped", "done"];
-export const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked"];
+export const HOLDS = ["paused", "red", "after", "full", "gpu", "busy", "looping", "starting", "parent", "parked", "credit"];
 export const ASKS = ["protected", "question", "incomplete", "capped", "proposal"];
 export const ACTIONS = [...STATES, ...HOLDS, ...ASKS, "reran", "filed", "escalated", "changed", "answered"];
 export const SUBS = [
@@ -36,7 +36,7 @@ export const OLD: Record<string, Record<string, string>> = {
     "held-path": "protected", review: "returned", "no-commit": "failed", "part-dropped": "incomplete",
     "intake-failed": "failed", rescue: "waiting", "run-cap": "capped",
   },
-  gate: { pause: "paused", baseline: "red", "live-cap": "full", "busy-file": "busy", "loop-guard": "looping" },
+  gate: { pause: "paused", baseline: "red", "live-cap": "full", "busy-file": "busy", "loop-guard": "looping", "credit-wait": "credit" },
   lane: { delivered: "landed", "needs you": "waiting", stuck: "failed" },
   speed: { fixed: "returned", nothing: "failed", restarted: "reran" },
   actor: { You: "human", Rule: "rule", Gate: "gate", Director: "director", Firefighter: "firefighter", triage: "intake", planner: "intake" },

@@ -97,7 +97,7 @@ export function issueDecision(f: IssueFacts): IssueDecision {
   if (f["live-cap"]) return { kind: "live-cap", ...f["live-cap"] };
   if (f.busy) return { kind: "busy-file", on: f.busy.on, why: f.busy.why, text: f.busy.why[0].toUpperCase() + f.busy.why.slice(1), ev: { action: "busy", on: [f.busy.on], file: f.busy.file } };
   // A run the API refused for credit did no work, so the goal waits instead of starting again at once, and no run-cap Ask goes out.
-  if ((f.creditWait ?? Infinity) < CREDIT_WAIT_MS) return { kind: "credit-wait", why: "waits for API credit", text: `Waits for API credit: the last run ended with the API credit error, so it starts again ${CREDIT_WAIT_MS / 60_000} minutes later`, ev: { action: "waiting", count: "for API credit" } };
+  if ((f.creditWait ?? Infinity) < CREDIT_WAIT_MS) return { kind: "credit-wait", why: "waits for API credit", text: `Waits for API credit: the last run ended with the API credit error, so it starts again ${CREDIT_WAIT_MS / 60_000} minutes later`, ev: { action: "credit" } };
   if ((f.noCommits ?? 0) >= NO_COMMIT_LIMIT) return { kind: "loop-guard", ask: "no-commit", why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director`, ev: { action: "looping", sub: "no-commit", count: `${f.noCommits} / ${NO_COMMIT_LIMIT}` } };
   const starts = f.capHeld ? 0 : f.startsInHour ?? 0;
   if (starts >= RUN_CAP()) return { kind: "loop-guard", ask: "run-cap", starts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director`, ev: { action: "looping", sub: "starts", count: `${starts} / 1h` } };
