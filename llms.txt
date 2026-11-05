@@ -6,7 +6,7 @@ The `aleph` CLI (jobs/cli.ts) is the entry point for issues and the factory. `al
 
 ## Documentation
 
-- [README](https://github.com/crsmithdev/aleph/blob/main/README.md): Install, quick start, the skills and hooks, and the repo layout
+- [README](https://github.com/crsmithdev/aleph/blob/main/README.md): What aleph does, install and quick start, and development
 - [Factory](https://github.com/crsmithdev/aleph/blob/main/docs/factory.md): Commands, how an issue becomes a commit, gates, Asks and settings
 - [Factory tasks](https://github.com/crsmithdev/aleph/blob/main/docs/factory-tasks.md): Each factory task, its trigger and what stops duplicate work
 - [Issues](https://github.com/crsmithdev/aleph/blob/main/docs/issues.md): The work store, issues and goals, the `aleph issue` commands and fields
