@@ -327,7 +327,7 @@ export function goalFacts(repo: Repo, item: issues.Issue, jobs: Job[], now = Dat
     busy: busyWait(repo, item, jobs, now),
     noCommits: noCommitStreak(repo.key, name, runs),
     capHeld: capMarked(name),
-    startsInHour: agentStartsInHour(repo.key, name, runs, now),
+    startsInHour: agentStartsInHour(repo.key, name, jobs, now),
   };
 }
 
@@ -366,9 +366,12 @@ export function clearCap(name: string): void {
 const capMarked = (name: string): boolean =>
   record.read(name)?.events.findLast((e) => e.kind === "cap" || e.kind === "cap-cleared")?.kind === "cap";
 
-/** How many agent runs of the goal started in the last 60 minutes. */
-function agentStartsInHour(repoKey: string, name: string, runs: Entry[], now: number): number {
-  return runs.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000).length;
+/** How many jobs of the goal started in the last 60 minutes: a job counts by its first build run, so its fix rounds do not. */
+function agentStartsInHour(repoKey: string, name: string, jobs: Job[], now: number): number {
+  return jobs.filter((j) => {
+    const first = j.find((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind));
+    return first !== undefined && now - Date.parse(first.run.started) < 3600_000;
+  }).length;
 }
 
 /** The most agent runs any one goal started in the last 60 minutes. */
