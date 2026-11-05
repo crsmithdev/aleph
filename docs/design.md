@@ -254,6 +254,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 - **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Runs per Item`); metric card keys are uppercased by CSS (`text-transform: uppercase`, 2 uses).
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
+- **Section head ids and levels:** `sectionHead()` and `card()` take `id` (the heading gets `id="h-<id>"`) and `level` (2 by default, 3 for a sub-head). These headings do not come from the helpers: Status lane card titles (`ui/views/cards.js`), session waterfall row heads (`ui/views/session.js`), the Memory note inspector title (`ui/views/memory.js`) and detail-page `.dp-ph` panel heads (`ui/views/issues.js`, `ui/timeline.js`).
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:285`); a priority is `critical`, `high`, `medium` or `low`.
 - **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:67`). Gates shows `empty()` (`ui/views/gates.js:108`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:77`) as "No job matches." with "Widen the window or clear a filter."

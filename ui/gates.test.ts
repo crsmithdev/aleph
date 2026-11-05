@@ -131,7 +131,7 @@ const data = () => ({
 
 test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Waiting for You", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
+  const order = ["Waiting for You", "Rules", "Controls", "Held Paths", "Log"].map((t) => h.indexOf(`>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="tile sc"><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
@@ -292,7 +292,7 @@ test("the Caps section holds one form each for the live cap and the run cap, wit
   expect(h).toContain("<span>5 / 5</span>");
   expect(h).toContain("<span>2 / 3</span>");
   expect(h).not.toContain("day");
-  expect(gates.renderGates(data())).toContain("<h2>Controls</h2>");
+  expect(gates.renderGates(data())).toContain(">Controls</h2>");
 });
 
 test("the view is Automation at #/automation in the Factory group; #/gates redirects; the By filter is buttons, not links", () => {

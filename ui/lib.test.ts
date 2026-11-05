@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -257,4 +257,10 @@ test("seg draws a labelled group, and scopeBar names its window group", () => {
   expect(groups.length).toBe(1);
   expect(groups[0]).toMatch(/aria-label="[^"]+"/);
   expect(scopeBar("", "week")).not.toContain('class="fl">Window');
+});
+
+test("sectionHead takes an id and a level, and card passes both through", () => {
+  expect(sectionHead("Done", { id: "done", count: 2 })).toBe('<div class="sh"><h2 id="h-done">Done</h2><span class="count">2</span></div>');
+  expect(sectionHead("Sub", { level: 3 })).toBe('<div class="sh"><h3>Sub</h3></div>');
+  expect(card("Done", "", { id: "done", level: 3 })).toContain('<div class="sh"><h3 id="h-done">Done</h3></div>');
 });
