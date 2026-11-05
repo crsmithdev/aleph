@@ -3,6 +3,7 @@ name: handoff
 description: >
   Save a session handoff so a fresh context can resume the work. Use when the
   user asks for a handoff, or when context is about to be cleared mid-task.
+effort: low
 ---
 
 Write a handoff for the next session. The next session reads it with no other context.
