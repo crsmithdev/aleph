@@ -5,13 +5,16 @@ import { hours, lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel
 /** Each point's total live agents over the timed roles. */
 export const totals = (a) => a.points.map((p) => a.roles.reduce((n, r) => n + (p[r.key] ?? 0), 0));
 
+const share = (v) => (v == null ? "–" : pct(v * 100));
+const rateCard = (k, v, base, note) => statCard({ k, v: share(v), note, trend: cardTrend(v, base, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(base)}` }) });
+
 function scorecard(s, a, key, w) {
   const f = s.factory, on = (k) => ({ key: k, on: key === k }), p = pace(s);
   return usageCard(s, on("usage"), usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window")) +
-    statCard({ k: "Runs today", v: String(f.runsToday), v2: money(f.costToday), q: ["runs", "recorded cost"], ...on("runs") }) +
     statCard({ k: "Worker slots", v: String(f.liveRuns ?? 0), v2: String(f.liveCap), q: ["in use", "cap"], ...on("slots") }) +
-    statCard({ k: "Local slot", v: String(f.liveLocal ?? 0), v2: String(f.localCap), q: ["in use", "cap"] }) +
-    statCard({ k: "Agents live", v: a ? mean(a.mean) : "–", ...(a ? { v2: String(a.peak), q: ["mean", "peak"] } : { note: "loading the agents" }), ...on("live") });
+    rateCard("Success rate", a?.rates?.success, a?.rates?.baseline, "ended runs, all roles") +
+    rateCard("Worker first pass", a?.rates?.firstPass, null, "landed builds, no fix round") +
+    rateCard("Local share", a?.rates?.local, null, "runs on gpt-oss-20b");
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */
@@ -20,7 +23,6 @@ export const WARN_RATE = 0.7;
 function roles(a) {
   const num = ["Runs", "Succeeded", "Failed", "Timed out or stuck", "Success", "p50", "Cost", "First pass", "Reviewer pass", "Pass", "Fail"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
-  const share = (v) => (v == null ? "–" : pct(v * 100));
   const cell = (v) => `<td class="num">${v ?? "–"}</td>`;
   const rows = (a.outcomes ?? []).map((o) => {
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });

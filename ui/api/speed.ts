@@ -78,18 +78,20 @@ export interface Speed {
 export interface AgentRole { key: AgentKey | "reviewer"; name: string; live: number | null; runs: number; hours: number | null; p50: number | null; models: string[] }
 /**
  * One role and model of the window with how its runs ended. `rate` is succeeded over the runs that ended (null with none); `baseline` is the same rate over the baseline's spans (null with no data). `cost` is the recorded cost of the runs (a reviewer records none, so 0).
- * Worker rows add `firstPass` (runs of a landed job with no fix round) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
+ * Worker rows add `built` (succeeded runs of a landed job), `firstPass` (those with no fix round) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
  */
 export interface OutcomeRow {
   role: AgentKey | "reviewer"; model: string; runs: number; succeeded: number; failed: number; stuck: number;
   rate: number | null; p50: number | null; cost: number; baseline: number | null;
-  firstPass?: number; reviewPass?: number | null; pass?: number; fail?: number;
+  firstPass?: number; built?: number; reviewPass?: number | null; pass?: number; fail?: number;
 }
 /** The agents over the window. `workers` and `cap` are the runs the live cap counts, now. `mean` and `peak` count all timed roles, and each point holds each role's mean live in its step. */
 export interface Agents {
   live: number; workers: number; cap: number; mean: number; peak: number;
   roles: AgentRole[];
   outcomes: OutcomeRow[];
+  /** Over the window, 0 to 1, null with no data: `success` is succeeded over ended runs of all roles but the reviewer, `baseline` the same over the baseline's spans, `firstPass` the share of landed worker builds with no fix round, `local` the share of runs on gpt-oss-20b. */
+  rates: { success: number | null; baseline: number | null; firstPass: number | null; local: number | null };
   points: ({ at: string } & Partial<Record<AgentKey, number>>)[];
 }
 
@@ -388,7 +390,10 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
       if (ok) w.succeeded++; else if (stuck) w.stuck++; else if (fail) w.failed++;
       const b = Date.parse(r.ended ?? "");
       if (b >= a && b - a <= MAX_RUN) w.secs.push((b - a) / 1000);
-      if (ok && build && landedJobs.has(r.job) && !roundJobs.has(r.job)) w.firstPass = (w.firstPass ?? 0) + 1;
+      if (ok && build && landedJobs.has(r.job)) {
+        w.built = (w.built ?? 0) + 1;
+        if (!roundJobs.has(r.job)) w.firstPass = (w.firstPass ?? 0) + 1;
+      }
     }
     if (build) {
       const back = r.failed === "review" || r.review?.call === "back", land = ok || r.review?.call === "land";
@@ -405,7 +410,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     const ended = x.succeeded + x.failed + x.stuck;
     return {
       ...x, cost: round(x.cost, 2), rate: ended ? round(x.succeeded / ended, 4) : null, p50: secs.length ? round(pct(secs, 0.5)) : null,
-      ...(x.role === "worker" ? { firstPass: x.firstPass ?? 0, reviewPass: verdicts ? round(landed / verdicts, 4) : null } : {}),
+      ...(x.role === "worker" ? { firstPass: x.firstPass ?? 0, built: x.built ?? 0, reviewPass: verdicts ? round(landed / verdicts, 4) : null } : {}),
       ...(x.role === "reviewer" ? { pass: x.pass ?? 0, fail: x.fail ?? 0 } : {}),
     };
   }).sort((p, q) => order(p.role) - order(q.role) || q.runs - p.runs || p.model.localeCompare(q.model));
@@ -456,11 +461,22 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
     const v = prior.map((p) => p.find((x) => x.role === o.role && x.model === o.model)?.rate).filter((n): n is number => n != null);
     return { ...o, baseline: v.length ? round(v.reduce((x, y) => x + y, 0) / v.length, 4) : null };
   });
+  const success = (rows: OutcomeRow[]) => {
+    const w = rows.filter((o) => o.role !== "reviewer"), ended = w.reduce((n, o) => n + o.succeeded + o.failed + o.stuck, 0);
+    return ended ? round(w.reduce((n, o) => n + o.succeeded, 0) / ended, 4) : null;
+  };
+  const base = prior.map(success).filter((n): n is number => n != null);
+  const own = outcomes.filter((o) => o.role !== "reviewer"), total = own.reduce((n, o) => n + o.runs, 0), built = outcomes.reduce((n, o) => n + (o.built ?? 0), 0);
+  const rates = {
+    success: success(outcomes), baseline: base.length ? round(base.reduce((x, y) => x + y, 0) / base.length, 4) : null,
+    firstPass: built ? round(outcomes.reduce((n, o) => n + (o.firstPass ?? 0), 0) / built, 4) : null,
+    local: total ? round(own.filter((o) => o.model === "gpt-oss-20b").reduce((n, o) => n + o.runs, 0) / total, 4) : null,
+  };
   const span = now - since, hours = roles.reduce((n, r) => n + (r.hours ?? 0), 0);
   return {
     live: roles.reduce((n, r) => n + (r.live ?? 0), 0), workers: roles[0].live ?? 0, cap,
     mean: span ? round((hours * HOUR) / span, 1) : 0, peak,
-    outcomes,
+    outcomes, rates,
     roles: [...roles, { key: "reviewer", name: "Reviewer", live: null, runs: reviews, hours: null, p50: null, models: [] }],
     points,
   };

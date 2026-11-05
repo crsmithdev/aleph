@@ -37,9 +37,14 @@ test("the Roles table has a row per role and model, with the warn tone under 70%
 });
 
 test("the tiles come from the state and the agents", () => {
-  const h = renderFactoryAgents(S, D);
-  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Usage", "Runs today", "Worker slots", "Local slot", "Agents live"]);
-  for (const t of ["<em> / $71.94</em>", "<b>1<em> / 5</em></b>", "<b>1<em> / 1</em></b>", "<em> / 4</em>", "<span>mean</span><span class=\"m\"> / peak</span>"]) expect(h).toContain(t);
+  const keys = (h: string) => [...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1]);
+  const rates = { success: 0.8, baseline: 0.7, firstPass: 0.5, local: 0.25 };
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, rates } });
+  expect(keys(h)).toEqual(["Usage", "Worker slots", "Success rate", "Worker first pass", "Local share"]);
+  for (const t of ["<b>1<em> / 5</em></b>", "<b>80%</b>", "<b>50%</b>", "<b>25%</b>"]) expect(h).toContain(t);
+  expect(h).toMatch(/Success rate<\/span><span class="tr good"/);
+  const none = renderFactoryAgents(S, { ...D, agents: { ...agents, rates: { success: null, baseline: null, firstPass: null, local: null } } });
+  expect(none.match(/<b>–<\/b>/g)!.length).toBe(3);
 });
 
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {

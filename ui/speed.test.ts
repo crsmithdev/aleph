@@ -327,6 +327,23 @@ test("agents: outcome rows per role and model, with first pass, reviewer verdict
   expect(a.outcomes.map((x) => x.role)).toEqual(["worker", "worker", "triage", "reviewer"]);
 });
 
+test("agents: the all-roles success rate, its baseline, the worker first pass and the local share", () => {
+  const H = 3600_000, iso = (h: number) => new Date(h * H).toISOString();
+  let n = 0;
+  const e = (kind: string, a: number, extra: object) => ({ folder: `r${n}`, id: `r${n++}`, run: { kind, job: `j${n}`, condition: "passed", started: iso(a), ended: iso(a + 1), ...extra } }) as any;
+  const runs = [
+    // Window 10..20: job a landed first time, job b landed after a fix round, a gpt-oss triage passed, a gpt-oss build failed.
+    e("build", 10, { model: "claude-haiku", job: "a" }), e("land", 12, { job: "a", condition: "landed" }),
+    e("build", 13, { model: "claude-haiku", job: "b", condition: "stuck", failed: "review" }), e("build", 14, { model: "claude-haiku", job: "b" }), e("land", 16, { job: "b", condition: "landed" }),
+    e("triage", 15, { model: "gpt-oss-20b" }), e("build", 17, { model: "gpt-oss-20b", condition: "failed", failed: "tests" }),
+    // The span before, 0..10: one of two ended runs succeeded.
+    e("build", 1, { model: "claude-haiku" }), e("build", 2, { model: "claude-haiku", condition: "failed" }),
+  ];
+  const a = agentStats(runs, 10 * H, 20 * H, H, 2, () => false, [[0, 10 * H]]);
+  expect(a.rates).toEqual({ success: 0.6, baseline: 0.5, firstPass: 0.5, local: 0.4 });
+  expect(agentStats(runs, 30 * H, 40 * H, H, 2, () => false).rates).toEqual({ success: null, baseline: null, firstPass: null, local: null });
+});
+
 test("an unlanded run of an issue that left the store is Dropped", () => {
   const t = (h: number) => new Date(2026, 9, 28, h).toISOString();
   const r = { job: "g", name: "g", repo: "fx", on: "fx-659", condition: "stuck", kind: "build", started: t(8), ended: t(9) } as any;
