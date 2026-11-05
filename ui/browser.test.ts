@@ -42,8 +42,10 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("a view's handlers do not outlive it", async () => {
     await page.go("#/factory/jobs");
     expect(await page.ev('typeof document.querySelector("#view").onclick')).toBe("function");
+    expect(await page.ev('typeof document.querySelector("#view").oninput')).toBe("function");
     await page.go("#/issues");
     expect(await page.ev('[document.querySelector("#view").onclick, document.querySelector("#view").onchange]')).toEqual([null, null]);
+    expect(await page.ev('document.querySelector("#view").oninput')).toBeNull();
     await click('#inv-filters .seg button[data-value="done"]');
     await page.until('location.hash === "#/issues?status=done"');
   }, 30_000);

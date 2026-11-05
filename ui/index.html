@@ -198,7 +198,7 @@
     nav(path);
     clearInterval(timer);
     // #view outlives its views, so a view's handlers on it must not reach the next one.
-    $("view").onclick = $("view").onchange = $("view").onkeydown = null;
+    $("view").onclick = $("view").onchange = $("view").onkeydown = $("view").oninput = null;
     const m = match(path, query);
     shown = m ?? { view: null };
     follow();
