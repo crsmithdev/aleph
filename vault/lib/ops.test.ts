@@ -47,10 +47,10 @@ async function run(env: Record<string, string>, ...args: string[]): Promise<Resu
   } finally {
     console.log = log;
     console.error = error;
-    // Bun reads a new TZ when it is set, not when it is deleted: set UTC back first.
-    process.env.TZ = "UTC";
     for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
     Object.assign(process.env, saved);
+    // Bun reads a new TZ when it is set, not when it is deleted: a deleted TZ leaves the machine zone, so set UTC last.
+    if (!saved.TZ) process.env.TZ = "UTC";
   }
   return parsed(code, stdout, stderr);
 }
