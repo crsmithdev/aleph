@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,6 +22,7 @@ let server: ReturnType<typeof Bun.serve>;
 let asked: string[];
 
 beforeEach(() => {
+  setSystemTime(NOW);
   base = mkdtempSync(join(tmpdir(), "aleph-episode-test-"));
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   asked = [];
@@ -44,6 +45,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  setSystemTime();
   server.stop(true);
   for (const k of KEYS) {
     if (saved[k] === undefined) delete process.env[k];
@@ -75,7 +77,8 @@ const run = (id: string, o: Partial<Run>): void => {
   writeRun(folder, { kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
 };
 
-const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+const NOW = new Date("2026-11-04T12:00:00Z").getTime();
+const hoursAgo = (h: number) => new Date(NOW - h * 3600_000).toISOString();
 const episodes = () => join(base, "factory", "episodes");
 const pages = () => readdirSync(episodes()).filter((f) => f.endsWith(".md"));
 const section = (text: string, name: string) => text.split(`## ${name}\n`)[1].split("\n## ")[0];
@@ -122,7 +125,7 @@ test(`a page older than ${KEEP_DAYS} days is deleted, and a goal whose last run 
   mkdirSync(episodes(), { recursive: true });
   const stale = join(episodes(), "fac-99 gone.md");
   writeFileSync(stale, "x\n");
-  const then = (Date.now() - (KEEP_DAYS + 1) * 86400_000) / 1000;
+  const then = (NOW - (KEEP_DAYS + 1) * 86400_000) / 1000;
   utimesSync(stale, then, then);
   const r = await writeEpisodes([loadRegistry().fac]);
   expect(r).toEqual({ written: [`fac-${fresh} fresh one`], failed: [] });
