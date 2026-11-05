@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { allRuns, writeRun, type Run } from "../records/ledger.ts";
 import { STARTING_MS } from "../infra/process.ts";
-import { startJob } from "./transitions.ts";
+import { recheck, startJob } from "./transitions.ts";
 import { Refusal } from "./refusal.ts";
 
 let base: string;
@@ -85,6 +85,16 @@ describe("land", () => {
 });
 
 describe("recheck", () => {
+  test("refuses a land as the last run: the refusal says job, not run, and hides the kind", async () => {
+    const job = "20261103-000004-fac-x-land";
+    const folder = join(base, "jobs", job);
+    mkdirSync(folder, { recursive: true });
+    writeRun(folder, { kind: "land", job, name: "x", repo: "fac", condition: "failed", started: "2026-11-03T00:00:00Z" } as Run);
+    const why = await refused(() => recheck("x"));
+    expect(why).toContain("job");
+    expect(why).not.toMatch(/\brun\b/);
+    expect(why).not.toContain("land");
+  });
 });
 
 describe("drop", () => {

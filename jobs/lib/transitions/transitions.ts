@@ -273,7 +273,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
     const last = runs.at(-1)!;
     if (isLive(last.folder)) refuse(`${name} is running as ${jobIdOf(last)}`);
     const r = last.run;
-    if (!isAgentRun(r.kind)) refuse(`${name}: the last run is a ${r.kind} run, not an agent run`);
+    if (!isAgentRun(r.kind)) refuse(`${name}: the last job is not an agent job`);
     if (r.condition !== "returned" && r.condition !== "failed") refuse(`${name} is ${r.condition}, not returned or failed`);
     const repo = loadRegistry()[r.repo ?? ""];
     if (!repo?.sandbox) refuse(`${name} is not a factory job`);
