@@ -1,0 +1,19 @@
+# gpt-oss-20b on 127.0.0.1:8012 from llama-server (CUDA build under ~/.local/src/llama.cpp).
+# Stop the hand-started Ollama serve and sidetone.service first; see
+# docs/findings/2026-11-04-gpt-oss-20b-llama-server.md.
+#   ln -sfn ~/.ollama/models/blobs/sha256-8ecb5d4ad6172c63f9cbf1a07a04e525985a8a11a6e516da02b674c4010de716 ~/.local/share/gpt-oss-20b.gguf
+#   systemctl --user link ~/aleph/jobs/systemd/aleph-gpt-oss.service
+#   systemctl --user enable --now aleph-gpt-oss.service
+#   journalctl --user -u aleph-gpt-oss -n 20
+[Unit]
+Description=gpt-oss-20b on 127.0.0.1:8012
+
+[Service]
+WorkingDirectory=%h/.local/src/llama.cpp
+Environment=PATH=%h/.local/bin:/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/src/llama.cpp/build/bin/llama-server --model %h/.local/share/gpt-oss-20b.gguf --alias gpt-oss-20b --host 127.0.0.1 --port 8012 --jinja --chat-template-file %h/.local/src/llama.cpp/models/templates/openai-gpt-oss-120b.jinja --ctx-size 32768 --n-gpu-layers 99 --n-cpu-moe 12 --reasoning-budget 0
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
