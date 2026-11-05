@@ -1000,6 +1000,10 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .capform input { width: 5em; font: inherit; font-family: var(--mono); padding: var(--sp-2) var(--sp-6); }
 .capform .cap-env { flex-basis: 100%; }
 .capform .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: var(--sp-10); margin-bottom: var(--sp-12); }
+.cap-row { display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-12) 14px; border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); }
+.cap-row span { font: var(--fw-mid) var(--fs-2xl)/1.2 var(--mono); }
+.cap-row small { font-size: var(--fs-xs); color: var(--muted); }
 
 /* Ask cards: four kinds; compact shows the title and the buttons, open adds the description, what each button does, and Technical details. */
 .issue-row[data-card] { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-6); padding: 0; border: 0; border-radius: 0; background: none; }

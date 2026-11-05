@@ -10,7 +10,7 @@ import { ASK_REASONS, readAlways } from "../../jobs/lib/ask.ts";
 import { allHolds, baselines, factoryRepos, gates, redLine } from "../../jobs/lib/factory-status.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
 import { readFactoryLog } from "../../jobs/lib/layout.ts";
-import { CAP_KEYS, LIVE_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
+import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
 import { reader } from "../../todo/lib/store.ts";
 
 import { runCli } from "../cli.ts";
@@ -142,7 +142,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
   const f = state.factory;
   return {
     now: state.now,
-    factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP") } },
+    factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP"), run: capEnvSet("ALEPH_RUN_CAP") } },
     gated: gates({ jobs }),
     baseline: baselineGate(),
     goalGates: goalGates(state.queued ?? []),
@@ -166,7 +166,7 @@ export const routes: Routes = {
     const patch: Record<string, unknown> = {};
     for (const k of CAP_KEYS) if (k in body) patch[k] = body[k];
     try { writeCaps(patch); } catch (e) { return Response.json({ error: (e as Error).message }, { status: 422 }); }
-    return Response.json({ live: LIVE_CAP() });
+    return Response.json({ live: LIVE_CAP(), run: RUN_CAP() });
   },
   "POST /api/gates/revoke/:reason": async (req, params) => {
     if (!sameSite(req)) return text("forbidden", 403);

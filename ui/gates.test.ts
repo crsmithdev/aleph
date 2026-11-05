@@ -69,13 +69,13 @@ afterAll(() => {
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
 const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", why: "w", kind }) as any;
-const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
+const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runCap: 3, runStarts: 0, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
   expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "now", "repoHeld", "rules"]);
-  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused"]);
+  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
@@ -115,7 +115,7 @@ const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, 
 
 const data = () => ({
   now: new Date(NOW).toISOString(),
-  factory: { paused: false, liveRuns: 5, liveCap: 5, capEnv: { live: false } },
+  factory: { paused: false, liveRuns: 5, liveCap: 5, runCap: 3, runStarts: 2, capEnv: { live: false, run: false } },
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
   goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
@@ -208,8 +208,26 @@ test("a cap post writes the live cap only and leaves the old day and awaiting ke
   writeFileSync(capsPath(), JSON.stringify({ day: 999, awaiting: 5 }));
   const r = await postCaps({ live: 3, day: 7 });
   expect(r.status).toBe(200);
-  expect(await r.json()).toEqual({ live: 3 });
+  expect(await r.json()).toEqual({ live: 3, run: 3 });
   expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ day: 999, awaiting: 5, live: 3 });
+});
+
+test("a cap post writes the run cap and refuses 0", async () => {
+  writeFileSync(capsPath(), "{}");
+  const r = await postCaps({ run: 5 });
+  expect(r.status).toBe(200);
+  expect((await r.json()).run).toBe(5);
+  expect(JSON.parse(readFileSync(capsPath(), "utf8")).run).toBe(5);
+  expect((await postCaps({ run: 0 })).status).toBe(422);
+});
+
+test("the Caps section holds one form each for the live cap and the run cap, with use against limit, and no day cap", () => {
+  const h = gates.renderCaps(data());
+  expect([...h.matchAll(/data-cap="([^"]*)"/g)].map((m) => m[1])).toEqual(["live", "run"]);
+  expect(h).toContain("<span>5 / 5</span>");
+  expect(h).toContain("<span>2 / 3</span>");
+  expect(h).not.toContain("day");
+  expect(gates.renderGates(data())).toContain("<h2>Caps</h2>");
 });
 
 test("the view is Automation at #/automation in the Factory group; #/gates redirects; the chips link to #/automation", () => {

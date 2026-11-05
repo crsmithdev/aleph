@@ -18,7 +18,7 @@ import { allRuns, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, typ
 import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
-import { LIVE_CAP, suiteBudgetSeconds } from "./settings.ts";
+import { LIVE_CAP, RUN_CAP, suiteBudgetSeconds } from "./settings.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -371,6 +371,13 @@ function agentStartsInHour(repoKey: string, name: string, runs: Entry[], now: nu
   return runs.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000).length;
 }
 
+/** The most agent runs any one goal started in the last 60 minutes. */
+function maxStartsInHour(now: number, runs: Entry[]): number {
+  const n = new Map<string, number>();
+  for (const e of runs) if (isBuild(e.run.kind) && now - Date.parse(e.run.started) < 3600_000) n.set(`${e.run.repo}/${e.run.name}`, (n.get(`${e.run.repo}/${e.run.name}`) ?? 0) + 1);
+  return Math.max(0, ...n.values());
+}
+
 /** What the Status page shows of the factory, and the gate and the baselines its Queued lane reads. */
 export function factorySnapshot(now: number, jobs: Job[]) {
   const runs = jobs.flat();
@@ -378,6 +385,8 @@ export function factorySnapshot(now: number, jobs: Job[]) {
     paused: paused(),
     liveCap: LIVE_CAP(),
     liveRuns: liveRuns(runs),
+    runCap: RUN_CAP(),
+    runStarts: maxStartsInHour(now, runs),
     runsToday: runsToday(now, runs).length,
     costToday: spentToday(now, runs),
     health: health(now, { jobs }),

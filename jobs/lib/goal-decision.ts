@@ -7,12 +7,11 @@
  * and its name is the kind of the hold record.
  */
 import { afterOf, areasOf, labels } from "../../todo/lib/store.ts";
+import { RUN_CAP } from "./settings.ts";
 import * as issues from "../../todo/lib/todo.ts";
 
 /** Runs of one goal in a row that may end with no commit before the dispatch stops starting it. */
 export const NO_COMMIT_LIMIT = 3;
-/** A goal starts at most this many agent runs in any 60 minutes, whatever the trigger: a fourth start is skipped. */
-export const MAX_RUNS_PER_HOUR = 3;
 
 /** The dispatch's gates, in the order it asks them. Loop guard is last, so it counts only goals that would start. */
 export const GATES = ["pause", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"] as const;
@@ -85,6 +84,6 @@ export function goalDecision(f: GoalFacts): GoalDecision {
   if (f.busy) return { kind: "busy-file", why: f.busy, text: f.busy[0].toUpperCase() + f.busy.slice(1) };
   if ((f.noCommits ?? 0) >= NO_COMMIT_LIMIT) return { kind: "loop-guard", ask: "no-commit", why: `${NO_COMMIT_LIMIT} runs in a row with no commit`, text: `The last ${NO_COMMIT_LIMIT} runs ended with no commit; the next dispatch asks the director` };
   const starts = f.capHeld ? 0 : f.startsInHour ?? 0;
-  if (starts >= MAX_RUNS_PER_HOUR) return { kind: "loop-guard", ask: "run-cap", starts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director` };
+  if (starts >= RUN_CAP()) return { kind: "loop-guard", ask: "run-cap", starts, why: `${starts} runs in the last hour`, text: `It started ${starts} times in the last hour; the next dispatch asks the director` };
   return { kind: "ready", why: "ready", text: "Starts at the next dispatch" };
 }

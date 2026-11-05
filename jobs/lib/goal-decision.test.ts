@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { GATES, goalDecision, refDone, type GoalFacts } from "./goal-decision.ts";
 
 const item = (fm: Record<string, unknown> = {}) => ({ fm, notes: [] }) as unknown as GoalFacts["item"];
@@ -72,4 +75,18 @@ test("refDone: an item absent from a read list is done; a list not read blocks",
   expect(refDone({ fm: {} } as any, true, undefined)).toBe(false);
   expect(refDone({ fm: {} } as any, true, "done")).toBe(true);
   expect(refDone({ fm: { parked: "true" } } as any, true, undefined)).toBe(false);
+});
+
+test("the run cap is the stored cap: 5 lets 4 starts through and binds at 5; unset, 3 binds", () => {
+  const was = process.env.ALEPH_FACTORY_DIR, dir = mkdtempSync(join(tmpdir(), "caps-"));
+  process.env.ALEPH_FACTORY_DIR = dir;
+  try {
+    expect(kind({ startsInHour: 3 })).toBe("loop-guard");
+    writeFileSync(join(dir, "caps.json"), JSON.stringify({ run: 5 }));
+    expect(kind({ startsInHour: 4 })).toBe("ready");
+    expect(goalDecision(facts({ startsInHour: 5 }))).toMatchObject({ kind: "loop-guard", ask: "run-cap", starts: 5 });
+  } finally {
+    if (was === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = was;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

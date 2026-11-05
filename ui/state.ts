@@ -84,7 +84,7 @@ export interface IncomingItem { id: string; title: string; href: string; created
 export interface State {
   now: string;
   factory: {
-    paused: boolean; judge: "jev" | "haiku"; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; runsToday: number; costToday: number;
+    paused: boolean; judge: "jev" | "haiku"; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; runCap: number; /** The most starts any one goal made in the last hour. */ runStarts: number; runsToday: number; costToday: number;
     nextTick: string | null;
     /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
     tickInProgress: boolean;

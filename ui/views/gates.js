@@ -50,7 +50,7 @@ export function renderGates(d, q = new URLSearchParams()) {
     ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
     : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
   return `<div class="page gates">${pageHead("Automation", { aside: ctl })}` +
-    renderNow(d) + renderWaiting(d) + renderRules(d) +
+    renderNow(d) + renderCaps(d) + renderWaiting(d) + renderRules(d) +
     `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
@@ -59,7 +59,7 @@ const gtile = (name, value, note, t, extra = "") =>
   `<div class="gtile"><div class="gt-head"><span>${esc(name)}</span><span class="gdot ${t}" role="img" aria-label="${t === "ok" ? "open" : t === "warn" ? "near its limit" : "closed"}"></span></div><b>${esc(value)}</b><small>${esc(note)}</small>${extra}</div>`;
 
 /** The environment variable that overrides each cap in caps.json. */
-const CAP_ENV = { live: "ALEPH_LIVE_CAP" };
+const CAP_ENV = { live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP" };
 /** A number input and a Save button for one cap; a note when its environment variable overrides caps.json. */
 function capForm(f, key, label, value) {
   const env = CAP_ENV[key], over = !!f.capEnv?.[key];
@@ -80,12 +80,21 @@ export function renderNow(d) {
     gtile("Pause", f.paused ? "paused" : "running", f.paused ? "no run starts or lands" : "not paused", tone(f.paused)),
     gtile("Baseline", red.length ? "red" : base.length ? "green" : "none", ((red.length ? red : base).map((b) => b.line).join(", ") || "no baseline yet") + held, tone(red.length > 0, !!g.baseline)),
     goalTile("Not ready", g["not-ready"], "done, waits on an issue, or has an open job"),
-    gtile("Live cap", `${f.liveRuns} / ${f.liveCap}`, `cap ${f.liveCap} at once`, tone(f.liveRuns >= f.liveCap), capForm(f, "live", "Live cap", f.liveCap)),
+    gtile("Live cap", `${f.liveRuns} / ${f.liveCap}`, `cap ${f.liveCap} at once`, tone(f.liveRuns >= f.liveCap)),
     goalTile("Busy file", g["busy-file"], "an open job changes the same busy file"),
-    goalTile("Loop guard", g["loop-guard"], "3 runs with no commit, or 3 starts in an hour: an Ask"),
+    goalTile("Loop guard", g["loop-guard"], "3 runs with no commit, or the run cap of starts in an hour: an Ask"),
   ].join("");
   const line = d.gated ? `Closed at ${d.gated.gate}: ${d.gated.text}.` : "";
   return `<section id="gates-now" aria-label="Gates now">${sectionHead("Gates now", { aside: esc(line) })}<div class="gtiles">${tilesHtml}</div></section>`;
+}
+
+/** The live cap and the run cap: each shows its use against its limit, with a form to edit it. */
+export function renderCaps(d) {
+  const f = d.factory;
+  const row = (key, label, use, limit, note) => `<div class="cap-row"><b>${esc(label)}</b><span>${esc(use)} / ${esc(limit)}</span><small>${esc(note)}</small>${capForm(f, key, label, limit)}</div>`;
+  return `<section id="gates-caps" aria-label="Caps">${sectionHead("Caps")}<div class="caps">` +
+    row("live", "Live cap", f.liveRuns, f.liveCap, "live runs against the cap") +
+    row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div></section>`;
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */

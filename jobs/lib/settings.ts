@@ -14,7 +14,7 @@ import { layout } from "./layout.ts";
 
 const num = (name: string, dflt: number): number => Number(process.env[name] ?? dflt);
 
-/** `caps.json` in the factory directory: `{ "live" }`. A missing or bad file is empty; other keys are left alone. */
+/** `caps.json` in the factory directory: `{ "live", "run" }`. A missing or bad file is empty; other keys are left alone. */
 function capsFile(): Record<string, unknown> {
   try {
     const c = JSON.parse(readFileSync(join(layout().factory, "caps.json"), "utf8"));
@@ -22,7 +22,7 @@ function capsFile(): Record<string, unknown> {
   } catch { return {}; }
 }
 
-export const CAP_KEYS = ["live"] as const;
+export const CAP_KEYS = ["live", "run"] as const;
 export type CapKey = (typeof CAP_KEYS)[number];
 
 /** Merges the given caps into caps.json: whole file to a temp file, then a rename. Throws on a value that is not an integer of 1 or more. */
@@ -58,6 +58,8 @@ function cap(envName: string, key: string, dflt: number): number {
 /** The live cap's default as the docs state it; the number depends on the machine. */
 export const LIVE_CAP_DEFAULT = "cores / 6, at least 1";
 export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.floor(availableParallelism() / 6)));
+/** The most agent runs one goal starts in any 60 minutes, whatever the trigger: the next start is an Ask. */
+export const RUN_CAP = () => cap("ALEPH_RUN_CAP", "run", 3);
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 export const INTAKE_CAP = () => num("ALEPH_INTAKE_CAP", 5);
