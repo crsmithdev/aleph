@@ -97,3 +97,13 @@ test("an Ask still with the director shows its title and fixed text, and no butt
   expect(row).toContain("With the director");
   expect(row).not.toContain("<button");
 });
+
+test("the id, priority, date and runtime sit inside the coloured box of an Ask card and of a stuck card", () => {
+  const stuck = view.renderNeeds({ asks: [], stuck: [job({ name: "aleph-30", condition: "stuck", item: { id: 30, title: "T", priority: "high" } })], factory: { health: [] }, now: "2026-10-27T17:00:00Z" });
+  for (const row of [view.askRow({ ...four()[0], priority: "high" }, "2026-10-27T17:00:00Z"), stuck]) {
+    const [before, box] = row.split('<div class="ask-box">');
+    expect(before).not.toContain('class="ih"');
+    const head = box.slice(0, box.indexOf("<details"));
+    for (const c of ['class="idl"', 'class="badge', 'class="num date"', 'class="num dur"']) expect(head).toContain(c);
+  }
+});

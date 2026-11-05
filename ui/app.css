@@ -276,9 +276,6 @@ section.wide .cards { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 720px) { .issue-row .choices { grid-template-columns: minmax(0, 1fr); } .choice { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-6); } .choice .act { justify-self: start; } }
 .job-card .ih .id { white-space: nowrap; flex: none; }
 .grp + .grp { margin-top: var(--sp-16); }
-#awaiting > h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* the section heading above already says it */
-.grp h3 { display: flex; align-items: baseline; gap: var(--sp-8); font: var(--fw-strong) var(--fs-sm)/1.3 var(--sans); color: var(--muted); margin: 0 0 var(--sp-8); }
-.grp h3 .count { font: var(--fw-mid) var(--fs-sm) var(--num); }
 .job-card.small .why { font-size: var(--fs-sm); color: var(--need); font-weight: var(--fw-strong); margin-right: var(--sp-6); }
 .job-card.small .run-meta { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-10); align-items: baseline; }
 .job-card.small .run-meta .agent { margin: 0; }
@@ -1010,7 +1007,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .issue-row[data-card="approve"] { --k: var(--approve); --k-bg: var(--approve-bg); --k-ring: var(--approve-ring); }
 .issue-row[data-card="decide"] { --k: var(--decide); --k-bg: var(--decide-bg); --k-ring: var(--decide-ring); }
 .issue-row[data-card="unstick"] { --k: var(--unstick); --k-bg: var(--unstick-bg); --k-ring: var(--unstick-ring); }
-.issue-row[data-card] > .ih { flex: none; }
+.ask-box > .ih { flex: none; padding: var(--sp-8) 18px 0; background: var(--k-bg); }
 .ask-box { background: var(--surface); border: 1px solid var(--k-ring); border-radius: var(--r-card); overflow: hidden; box-shadow: var(--lift); }
 .ask-fold { margin: 0; padding: 0; border: 0; }
 .ask-fold > summary::before, .ask-fold[open] > summary::before { content: none; }

@@ -144,3 +144,13 @@ test("a dead factory tick says the alert, in red", () => {
   for (const o of [{ nextTick: "2026-10-27T17:12:00Z" }, { nextTick: "2026-10-27T16:56:00Z" }, { nextTick: null, tickInProgress: true }, { nextTick: "2026-10-27T16:00:00Z", tickInProgress: true }]) expect(said(o)).toBe(fine);
   expect(said({ paused: true, nextTick: null })).toBe("Alert: the factory tick has stopped; the factory is paused.");
 });
+
+test("the status-line links point at anchors in the rendered Alerts section", () => {
+  const stuck = [job({ name: "aleph-1", condition: "stuck" })];
+  const lede = view.renderLede({ ...calmState, stuck, asks: [{ kind: "approval" }] });
+  const needs = view.renderNeeds({ ...calmState, stuck, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
+  const alerts = needs.split('<h2 id="h-needs">Alerts</h2>')[1] ?? "";
+  const ids = [...lede.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
+  expect(ids).toContain("jobs-stuck");
+  for (const id of ids) expect(alerts).toContain(`id="${id}"`);
+});

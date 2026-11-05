@@ -292,9 +292,9 @@ export function renderLanes(s, win = "week") {
 export function renderNeeds(s) {
   const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
   if (!asks.length && !s.stuck.length) return "";
-  const group = (id, t, n, html, wrap) => (n ? `<div class="grp" id="${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${wrap(html)}</div>` : "");
-  return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Asks</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
-    group("awaiting", "Asks", asks.length, asks.join(""), list) + group("jobs-stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
+  const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
+  return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Alerts</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
+    group("awaiting", asks.length, asks.join(""), list) + group("jobs-stuck", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
 }
 
 /** How long past due a next tick may be before the tick counts as dead: covers an old state and a late timer. */
@@ -317,18 +317,21 @@ const agentLine = (j) => (j?.agent ? `<span class="agent">Agent working</span>` 
 /** The one Details behind a stuck row: the whole reason, then the job's details. */
 const fold = (s, j) => details(s, j, j.reason ? `<p class="quiet q">${esc(j.reason)}</p>` : "");
 
-/** The fold under a card's 3 lines: closed by default, kept open across a re-render by its data-keep key. */
-const choiceFold = (key, body) => `<details class="cfold" data-keep="fold:${esc(key)}"><summary>Choices</summary><div class="body">${body}</div></details>`;
-
 const jobHref = (j) => `#/jobs/${encodeURIComponent(j.name)}`;
+/** A stuck, failed or error card in the Ask card structure and the red tone: `meta` and the fold sit inside the box; `body` follows the fold. */
+const alertCard = (kind, key, meta, title, problem, body = "") =>
+  `<article class="job-card small issue-row ${kind}" data-kind="${kind}" data-card="unstick">` +
+  `<div class="ask-box">${meta}<details class="ask-fold" data-keep="ask:${esc(key)}"><summary class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${kind === "error" ? "Error" : "Stuck"}:</b> <span class="ask-title">${esc(title)}</span></span></summary><p class="situation">${esc(problem)}</p></details>${body}</div></article>`;
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
   const why = b ? `Waits on ${blocker}: ${b.title}.` : `${j.condition === "failed" ? "Failed" : "Stuck"}${j.reason ? ` with ${oneSentence(j.reason).replace(/\.$/, "")}` : ""}.`;
   const first = b ? act("wait", j.name, `Wait for ${blocker}`, true).replace('data-label=', `data-on="${esc(b.id)}" data-label=`) : act("recheck", j.name, "Re-check");
-  return `<article class="job-card small issue-row stuck" data-kind="stuck">${needHead("stuck", j.name, jobHref(j), j.item?.title || "", why, j.repo, undefined, j.item?.priority, { at: j.run?.started ?? j.started, since: j.started, now: s.now, part: j.part })}` +
-    choiceFold(j.name, agentLine(j) + `<div class="actions choices">${choice(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${choice(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
-    (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j)) + `</article>`;
+  const meta = metaRow({ id: repoIdLink(j.name, jobHref(j), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
+  const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${code(hint)}</span></div></div>`;
+  return alertCard("stuck", j.name, meta, j.item?.title || j.name, why,
+    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(act("drop", j.name, "Drop"), "Discards the run's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    agentLine(j) + (b ? `<p class="quiet q">Waits on <a href="${esc(b.href)}">${esc(b.id)}</a>: ${esc(b.title)}</p>` : "") + fold(s, j));
 };
 /** Text with `inline code` as <code>, everything else escaped. */
 const code = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -363,16 +366,6 @@ function askDetails(i) {
   return body ? `<details class="more" data-keep="more:${esc(i.key ?? i.id)}"><summary>Technical details</summary><div class="body">${body}</div></details>` : "";
 }
 
-const KIND_TAG = { approval: "Approval", input: "Input", stuck: "Stuck", error: "Error" };
-/** The head of every Awaiting-you card: the kind's mark (input or approval), the id and title, the one sentence of the problem. */
-const needHead = (kind, id, href, title, problem, repo = "", para = `<p class="problem">${esc(localId(problem, repo))}</p>`, priority = "", at = {}) => {
-  const idHtml = !id ? "" : href ? repoIdLink(id, href, repo) : `<span class="id">${esc(id)}</span>`;
-  const row = metaRow({ id: idHtml, chips: `<span class="kind-tag">${KIND_TAG[kind]}</span>` + (priority ? priorityBadge(priority) : ""), part: at.part, at: at.at, since: at.since, now: at.now });
-  return row + (title ? `<span class="t">${esc(title)}</span>` : "") + para;
-};
-/** One choice of a card: the button, what it does, and any input that belongs to it. */
-const choice = (button, hint, input = "", recommended = false) =>
-  `<div class="choice"><div class="choice-text"><span class="effect">${code(hint)}</span>${recommended ? ` ${tag("Recommended", "run")}` : ""}${input}</div>${button}</div>`;
 
 /** The three kinds of Ask card and their labels. An item without a `card` reads as Approve for an approval, else Decide. */
 export const CARD_LABEL = { approve: "Approve", decide: "Decide", unstick: "Unstick" };
@@ -403,14 +396,14 @@ export function askRow(i, now = new Date().toISOString()) {
   const meta = metaRow({ id: idHtml, chips: i.priority ? priorityBadge(i.priority) : "", part: i.part, at: i.at, since: i.since, now });
   const head = `<summary class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(CARD_LABEL[card])}:</b> <span class="ask-title">${esc(localId(i.headline || i.title, i.repo))}</span></span>${i.tag ? `<span class="ask-tag">${esc(i.tag)}</span>` : ""}</summary>`;
   const desc = `<p class="situation">${esc(localId(i.situation ?? i.problem, i.repo))}${i.escalated === false ? ' <span class="muted">With the director: it decides this Ask or sends it to you with its case text.</span>' : ""}</p>`;
-  return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-card="${card}" data-reason="${esc(i.reason)}">${meta}` +
-    `<div class="ask-box"><details class="ask-fold" data-keep="ask:${esc(key)}">${head}${desc}</details>` +
+  return `<article class="job-card small issue-row ${esc(i.reason)}" data-kind="${esc(i.kind)}" data-card="${card}" data-reason="${esc(i.reason)}">` +
+    `<div class="ask-box">${meta}<details class="ask-fold" data-keep="ask:${esc(key)}">${head}${desc}</details>` +
     (choices.length || msg ? `<div class="actions choices">${choices.join("")}${msg}</div>` : "") +
     askDetails(i) + `</div></article>`;
 }
 
 /** An error line as a card: the head alone, because the page has no action that fixes it. */
-const errorRow = (l) => `<article class="job-card small issue-row error" data-kind="error">${needHead("error", "", "", "", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`)}</article>`;
+const errorRow = (l) => alertCard("error", l, "", `${/main is red/.test(l) ? "Fix" : "Check"}: ${l}`, "");
 
 /** "10/28 14:05": the time of the state. */
 export const renderAsOf = (s) => when(s.now);

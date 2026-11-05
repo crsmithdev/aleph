@@ -51,3 +51,13 @@ test("the deny and answer inputs render hidden", () => {
     for (const i of inputs) expect(i).toMatch(/\shidden/);
   }
 });
+
+test("an ask and a stuck run are one Alerts section, and the stuck card has the Ask card structure in the red tone", () => {
+  const s = { ...state, asks: asksOf([], [{ ...issue(152), title: "Which?", question: "q", ask: { kind: "input", reason: "question", question: "q", options: [], why: [], situation: "s" } }], []), stuck: [job({ name: "aleph-30", condition: "stuck", reason: "types failed" })], factory: { ...state.factory, health: [], paused: false } };
+  const h = view.renderNeeds(s);
+  expect(h).toContain('<h2 id="h-needs">Alerts</h2><span class="count">2</span>');
+  expect(h).not.toContain("Stuck or failed");
+  const stuck = h.match(/<article[^>]*data-kind="stuck"[^]*?<\/article>/)![0];
+  expect(stuck).toContain('data-card="unstick"');
+  expect(stuck).toMatch(/<div class="ask-box"><div class="ih">[^]*<details class="ask-fold"/);
+});

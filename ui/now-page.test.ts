@@ -149,8 +149,8 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   expect(h.lastIndexOf("seg-fixed")).toBeLessThan(sep);
   expect(h.indexOf("seg-nothing")).toBeGreaterThan(sep);
   const needs = view.renderNeeds({ ...state, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
-  expect(needs).toContain('<h2 id="h-needs">Asks</h2>');
-  expect(needs).toContain("<h3>Asks<span");
+  expect(needs).toContain('<h2 id="h-needs">Alerts</h2>');
+  expect(needs).not.toContain("<h3>");
   expect(needs).not.toContain("Awaiting you");
   expect(outcome.innerHTML.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
   resetSpeed();
