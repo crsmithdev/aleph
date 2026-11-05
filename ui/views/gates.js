@@ -47,7 +47,7 @@ export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: 
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation")}` +
-    renderNow(d) + renderSchedules(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
+    renderNow(d) + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
     `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
@@ -85,6 +85,17 @@ export function renderCaps(d) {
   return card("Controls", `<div class="caps">` +
     row("live", "Live cap", f.liveRuns, f.liveCap, "live runs against the cap") +
     row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div>${ctl}`, { id: "gates-caps" });
+}
+
+/** The newest monitor report: a summary that expands to every finding and the reader's reply, or why there is no reading. */
+export function renderMonitor(d) {
+  const m = d.monitor, head = sectionHead("Monitor");
+  if (!m) return `<section id="monitor" aria-label="Monitor">${head}<p>The monitor has not run.</p></section>`;
+  const n = m.findings.length, first = n ? ` First: ${esc(m.findings[0])}` : "";
+  const summary = `${esc(m.day)}: ${n} ${n === 1 ? "finding" : "findings"}.${first}`;
+  const body = (n ? `<ol class="findings">${m.findings.map((f) => `<li>${esc(f)}</li>`).join("")}</ol>` : "") +
+    (m.text ? `<pre class="reader">${esc(m.text)}</pre>` : m.error ? `<p>No reading: ${esc(m.error)}</p>` : "");
+  return `<section id="monitor" aria-label="Monitor">${head}<details><summary>${summary}</summary>${body}</details></section>`;
 }
 
 /** The tick, the suite and the monitor: when each last ran and what came of it. */

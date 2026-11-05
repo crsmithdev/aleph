@@ -765,6 +765,7 @@ a.tile .k::after, button.tile .k::after { content: " \203A"; }
 .card h3 { margin: var(--sp-4) 0 0; }
 .card details { margin-top: 0; }
 #monitor .findings { margin: 0; padding-left: 1.2em; color: var(--ink-2); line-height: 1.35; }
+#monitor .reader { white-space: pre-wrap; color: var(--ink-2); }
 #monitor .findings li + li { margin-top: var(--sp-4); }
 .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: var(--gap-in); }
 .split { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--gap-in); align-items: start; }

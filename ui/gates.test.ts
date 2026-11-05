@@ -74,7 +74,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "metrics", "now", "repeats", "repoHeld", "rules", "schedules"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "factory", "gated", "goalGates", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
   expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0 });
   expect(d.baseline).toEqual([]);
@@ -345,6 +345,24 @@ test("rules() takes an entry's missing reason from the run that awaited when it 
   expect(fired([{ issue: "x-2", asks: [{ set }], runs: [], events: [] }])).toEqual(base);
 });
 
+test("the Monitor panel says the monitor has not run with no report, and holds the newest report with the findings inside the part that expands", async () => {
+  const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
+  expect((await body()).monitor).toBeNull();
+  expect(gates.renderMonitor(await body())).toContain("The monitor has not run.");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(file, JSON.stringify({ day: "2026-11-03", table: {}, text: "READER-TEXT", findings: ["FIRST-ONE", "SECOND-ONE"] }));
+  try {
+    const d: any = await body();
+    expect(d.monitor).toMatchObject({ day: "2026-11-03", findings: ["FIRST-ONE", "SECOND-ONE"], text: "READER-TEXT" });
+    const [sum, rest] = gates.renderMonitor(d).split("</summary>");
+    for (const x of ["2026-11-03", "2 findings", "FIRST-ONE"]) expect(sum).toContain(x);
+    expect(sum).not.toContain("SECOND-ONE");
+    for (const x of ["FIRST-ONE", "SECOND-ONE", "READER-TEXT"]) expect(rest).toContain(x);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+});
+
 test("the body has the tick, the suite and the monitor with their last run from tick.json and tick.log; with no record each has not run", async () => {
   const dir = process.env.ALEPH_FACTORY_DIR!, logPath = join(dir, "tick.log"), was = readFileSync(logPath, "utf8");
   const none: any = (await body()).schedules;
@@ -357,7 +375,7 @@ test("the body has the tick, the suite and the monitor with their last run from 
   expect(tbody).toContain("<tr><td>tick</td><td>has not run</td><td></td></tr>");
   expect(h).not.toContain("tick,has not run");
   writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {} }));
-  writeFileSync(logPath, was + [`${ago(70)} suite plain: red`, `${ago(11)} suite plain: green`, `${ago(10)} suite held: green`, `${ago(50)} monitor 2026-11-03: 7 findings`].join("\n") + "\n");
+  writeFileSync(logPath, was + [`${ago(70)} suite plain: red`, `${ago(11)} suite plain: green`, `${ago(10)} suite held: green`, `${ago(50)} monitor 2026-11-03: 7 findings: FINDING-TEXT first`].join("\n") + "\n");
   try {
     const d: any = (await body()).schedules;
     expect(d).toEqual([
@@ -366,6 +384,9 @@ test("the body has the tick, the suite and the monitor with their last run from 
       { name: "monitor", last: ago(50), result: "7 findings" },
     ]);
     expect(gates.renderSchedules({ ...(await body()), schedules: d })).not.toContain("has not run");
+    const t = gates.renderSchedules({ ...(await body()), schedules: d });
+    expect(t).toContain("<td>7 findings</td>");
+    expect(t).not.toContain("FINDING-TEXT");
   } finally {
     rmSync(join(dir, "tick.json"));
     writeFileSync(logPath, was);

@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, readAlways } from "../../jobs/lib/ask.ts";
 import { allHolds, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/factory-status.ts";
+import { latestReport } from "../../jobs/lib/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/job.ts";
 import * as record from "../../jobs/lib/record.ts";
 import { layout, readFactoryLog } from "../../jobs/lib/layout.ts";
@@ -195,7 +196,7 @@ export function schedules(): { name: string; last: string | null; result: string
     const m = /^(\S+) (suite (\S+)|monitor \S+): (.*)$/.exec(l);
     if (!m) continue;
     if (m[3]) suite[m[3]] = { at: m[1], result: m[4] };
-    else monitor = { at: m[1], result: m[4] };
+    else monitor = { at: m[1], result: m[4].replace(/^(\d+ findings?|no reading|failed).*$/, "$1").replace(/^0 findings$/, "nothing looks off") };
   }
   const runs = Object.entries(suite).sort(([a], [b]) => (a < b ? -1 : 1));
   return [
@@ -252,6 +253,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP"), run: capEnvSet("ALEPH_RUN_CAP") } },
     metrics: metrics(all),
     schedules: schedules(),
+    monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
     gated: gates({ jobs }),
     baseline: baselineGate(),
     goalGates: goalGates(state.queued ?? []),
