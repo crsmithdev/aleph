@@ -166,12 +166,7 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     for (const r of kept ?? []) if (r === `${repo.key}-${issues.refOf(i)}`) refuse("an issue cannot wait for itself");
-    // On a child, a leading `[Group] ` takes the place of a `<words>: ` prefix, so only the length and the final period are checked.
-    const grouped = title !== undefined && issues.parentRef(i) !== undefined && /^\[[^\]]*\] /.test(title);
-    const bad = grouped ? issues.titleProblem(title.replaceAll(": ", "  ")) : null;
-    if (bad) refuse(bad);
-    issues.edit(i, { kind, title: grouped ? undefined : title, request, spec, priority, areas: labels });
-    if (grouped) i.title = title;
+    issues.edit(i, { kind, title, request, spec, priority, areas: labels });
     if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
     if (status === "open" && issues.status(i) === "parked") issues.setStatus(i, "open");

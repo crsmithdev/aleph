@@ -7,9 +7,13 @@ test("titleProblem passes a part title with its group and refuses length, a fina
   expect(issues.titleProblem("[Status layout] Put the metrics on the left", { part: true })).toBeNull();
   expect(issues.titleProblem("Fix the lane height")).toBeNull();
   expect(issues.titleProblem("[G] " + "a".repeat(57), { part: true })).toContain("60");
+  expect(issues.titleProblem("[G] Fix it.", { part: true })).toContain("period");
   expect(issues.titleProblem("a".repeat(60))).toBeNull();
   expect(issues.titleProblem("Check foo: bar")).not.toBeNull();
   expect(issues.titleProblem("Fix it.")).not.toBeNull();
+  expect(issues.titleProblem("[Group] Do the thing: now", { part: true })).toBeNull();
+  expect(issues.titleProblem("Do the thing: now", { part: true })).toContain("': ' prefix");
+  expect(issues.titleProblem("[Group] Do the thing: now")).toContain("': ' prefix");
 });
 
 test("add and edit refuse a bad title, and addPart refuses one over 60 with its group", () => {
@@ -53,7 +57,7 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   expect(found("4")).toEqual([]);
   expect(found("5")).toEqual(["kind is missing"]);
   expect(found("7")[0]).toContain('unknown kind "goal"');
-  expect(found("8.1")).toEqual(["kind is missing", expect.stringContaining("': ' prefix")]);
+  expect(found("8.1")).toEqual(["kind is missing"]);
 
   issues.fix(doc);
   expect(doc.items.map((i): unknown[] => [issues.refOf(i), i.fm.kind, i.fm.areas])).toEqual([

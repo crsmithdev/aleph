@@ -165,12 +165,12 @@ export type Kind = (typeof KINDS)[number];
 export const PREFIX = /: /;
 export const TITLE_RULE = "an imperative of at most 60 characters that says what changes, not how, with no final period and no `<words>: ` prefix";
 
-/** Null, or the one problem a title has: a length over 60, a final `.`, or a `<words>: ` prefix. A part's leading `[Group] ` is not tested for the prefix. */
+/** Null, or the one problem a title has: a length over 60, a final `.`, or a `<words>: ` prefix. A child's leading `[Group] ` takes the place of the prefix, so the rest of its title is not tested for one. */
 export function titleProblem(title: string, o: { part?: boolean } = {}): string | null {
   if (title.length > 60) return `the title is ${title.length} characters; the limit is 60 (${TITLE_RULE})`;
   if (title.endsWith(".")) return `the title ends with a period (${TITLE_RULE})`;
-  const body = o.part ? title.replace(/^\[[^\]]*\] /, "") : title;
-  if (PREFIX.test(body)) return `the title has a ': ' prefix (${TITLE_RULE})`;
+  if (o.part && /^\[[^\]]*\] /.test(title)) return null;
+  if (PREFIX.test(title)) return `the title has a ': ' prefix (${TITLE_RULE})`;
   return null;
 }
 
