@@ -703,11 +703,11 @@ describe("the Issue page shows the ask row", () => {
     return i.id;
   }, true)!.value;
 
-  test("renderIssue puts the Date first in the Commits table", async () => {
+  test("renderIssue puts the Committed time first in the Commits table", async () => {
     const d = await getJson(`/api/issues/fac/1`);
     const date = "2026-11-02T09:00:00Z";
     const h = v.renderIssue({ ...d, commits: [{ hash: "abcdef1234567", subject: "s", date }] });
-    expect(h).toContain("<th>Date</th><th>Commit</th><th>Subject</th>");
+    expect(h).toContain("<th>Committed</th><th>Commit</th><th>Subject</th>");
     expect(h).toContain(`<tr><td class="time">${when(date)}</td><td><code>abcdef1</code></td>`);
   });
 

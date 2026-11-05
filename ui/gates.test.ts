@@ -212,7 +212,7 @@ test("the log filter keeps one actor's entries", () => {
   expect(h).toContain("<td>rescue</td>");
   expect(h).toContain("set to recommended");
   expect(h).not.toContain("rescue: recommended<");
-  for (const t of ["When", "By", "Item", "Action", "What", "Times"]) expect(h).toContain(t);
+  expect(h).toContain('<tr><th>Logged</th><th>By</th><th>Item</th><th>Action</th><th>What</th><th class="num">Times</th></tr>');
   expect(h).toContain('<div class="dp-txt clamp">');
 });
 

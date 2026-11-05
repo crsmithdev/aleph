@@ -55,8 +55,8 @@ export function renderSkill(d, limits = {}) {
     pageHead(d.name, { count: d.uses, aside: `uses in the last ${d.days} days` }) + staleNote(d) +
     (d.uses ? card("Uses per Day", bars(d.name), { label: "Uses per day" }) : empty("This skill was not used in the window.", "Widen it with <code>?days=90</code> on the API.")) +
     card("Projects", table("projects", heads(["Project", "Uses"], ["Uses"]), projects, lim("projects"), "No project used this skill.")) +
-    card("Sessions", table("sessions", heads(["Time", "Session", "First Prompt Line", "Project", "Started by"]), sessions, lim("sessions"), "No session used this skill.")) +
+    card("Sessions", table("sessions", heads(["Started", "Session", "First Prompt Line", "Project", "Started by"]), sessions, lim("sessions"), "No session used this skill.")) +
     card("Tools Called After It, in the Same Turn", table("tools", heads(["Tool", "Calls"], ["Calls"]), tools, lim("tools"), "No tool ran after this skill in the same turn."), { label: "Tools called after it, in the same turn" }) +
-    card("Turns With Errors", table("errors", heads(["Time", "Session", "Error", "Project"]), errors, lim("errors"), "No turn with this skill had an error."), { count: d.errors.length, label: "Turns with errors" }) +
+    card("Turns With Errors", table("errors", heads(["Started", "Session", "Error", "Project"]), errors, lim("errors"), "No turn with this skill had an error."), { count: d.errors.length, label: "Turns with errors" }) +
     `</div>`;
 }

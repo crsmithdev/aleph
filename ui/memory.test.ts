@@ -211,7 +211,7 @@ test("the page is the board, then broad health, then the note browser; the type 
     lint: { refuse: [{ note: "B", rule: "schema", detail: "no confidence" }, { note: "B", rule: "dangling", detail: "x" }], warn: [{ note: "A", rule: "orphan", detail: "y" }] },
     notes: [row({ title: "A" }), row({ title: "B", read: "2026-10-01", problems: [{ rule: "schema", detail: "no confidence" }] })] };
   const h = v.renderMemory({ ...m, writes: [{ text: "w", date: "2026-11-01", time: "10:00" }] });
-  expect(h).toContain("<th>When</th><th>Write</th>");
+  expect(h).toContain("<th>Written</th><th>Write</th>");
   expect(h).toMatch(/data-sort="updated">Written<.*?data-sort="title">Title</s);
   expect(h).toContain('<header class="ph"><h1>Memory</h1></header>');
   expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('aria-label="Lint"'));

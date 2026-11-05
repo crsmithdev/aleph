@@ -218,6 +218,7 @@ The one table is `dataTable()` (`ui/lib.js:540`) with `heads()` (`ui/lib.js:543`
 Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:442`):
 
 - **Column order:** time first, then id or name, title, state badge, project, labels, numbers. A duration is a number and stays among the numbers; its header is always `Took`.
+- **Time column name:** one past-tense word for the event (`Started`, `Updated`, `Written`, `Committed`, `Logged`, `Denied`), or `Last` followed by the event (`Last Turn`, `Last Call`, `Last Run`) when a row stands for many events and shows the newest.
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:448`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:454`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `--sp-6 --sp-12 --sp-6 0`, a `--rule-2` line under each row, and `--sunk` on row hover (`ui/app.css:443`). Headers are `600 var(--fs-xs)` in `--muted`.
@@ -233,19 +234,19 @@ Columns of the main tables:
 |---|---|---|
 | Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:211`) |
 | Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:83`) |
-| Sessions | Started, Last, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:117`) |
+| Sessions | Started, Last Turn, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` (`ui/views/sessions.js:117`) |
 | Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` (`ui/views/memory.js:259`) |
 | Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Took (num), Cost (num) | `dataTable()` (`ui/views/session.js:25`) |
 | Observations | Kind, Name, Detail, Took (num) | `dataTable()` (`ui/views/session.js:273`) |
-| Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
-| Hooks | Last, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
-| Denials | When, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
+| Gates log | Logged, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
+| Hooks | Last Call, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
+| Denials | Denied, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:201`) |
-| Commits | Date, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:638`) |
+| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:638`) |
 
-Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
+Gaps: a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
 
 ## Charts and data displays
 
@@ -382,7 +383,7 @@ Use:
 - `--fs-xs`, `--fs-sm`, `--fs-md`, `--fs-lg` for font sizes, and `--r-card`, `--r-ctl`, `--r-tag` for radii;
 - `when()`, `day()`, `hourLabel()`, `clock()`, `dur()`, `durMs()`, `money()`, `count()`, `pct()` for times, durations, costs, counts and percents;
 - `dataTable()` with `heads()` or `sortHead()` for a table, `empty()` for an empty state, and `badge()` for a state;
-- the column order time (first in Issues and Jobs), id or name, title, state, project, labels, numbers;
+- the column order time (first), id or name, title, state, project, labels, numbers;
 - `--sp-*` for `gap`, `padding` and `margin`; `--dim` for a dimmed control, `--ctl-h` for a control height and `--bar-h` for a bar height.
 
 Never hard-code: a hex colour or shadow in CSS or in a view (except the allowed literals under Tokens), a font size, radius or `z-index` in a literal, a breakpoint other than 720px and one wide width, or a date, number or duration format written inline.

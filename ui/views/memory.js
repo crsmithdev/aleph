@@ -45,7 +45,7 @@ export function renderHealth(m) {
 
 export function renderWrites(m) {
   return (m.writes.length
-    ? paged(heads(["When", "Write"]), m.writes.map((w) => `<tr><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td></tr>`))
+    ? paged(heads(["Written", "Write"]), m.writes.map((w) => `<tr><td class="time">${esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`)}</td><td class="wide">${md(w.text).replace(/^<p>|<\/p>$/g, "")}</td></tr>`))
     : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
 }
 

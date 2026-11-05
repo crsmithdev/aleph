@@ -165,7 +165,7 @@ export function renderLog(d, by, limit = PAGE) {
     return `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td>${m ? esc(m[1]) : "–"}</td><td class="what"><div class="dp-txt clamp">${esc(m ? m[2] : e.what)}</div></td><td class="num">${e.count || 1}</td></tr>`;
   }).join("");
   return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}${filter}` +
-    (rows ? dataTable(heads(["When", "By", "Item", "Action", "What", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
+    (rows ? dataTable(heads(["Logged", "By", "Item", "Action", "What", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
 }
 
 const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });

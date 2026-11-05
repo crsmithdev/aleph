@@ -635,7 +635,7 @@ export function renderIssue(d) {
   const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + fold_ : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
-    ? pagedTable(heads(["Date", "Commit", "Subject", ...(parts ? ["Part"] : [])]), d.commits.map((c) => {
+    ? pagedTable(heads(["Committed", "Commit", "Subject", ...(parts ? ["Part"] : [])]), d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
       return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}</tr>`;
     }))
