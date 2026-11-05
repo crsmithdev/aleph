@@ -236,18 +236,9 @@ export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, projec
 
 /**
  * The last baseline of each repo, red or green, as baseline.json holds it. It reads no git: whether it is still the
- * baseline of origin/<main> is the Queued lane's to say, in `goalGates.baseline`. GitHub CI does not gate, so it is not here.
+ * baseline of origin/<main> is the Queued lane's to say. GitHub CI does not gate, so it is not here.
  */
 const baselineGate = () => Object.values(baselines()).map((b) => ({ repo: b.repo, state: b.ok ? "green" : "red", line: b.ok ? `${b.repo} ${b.commit.slice(0, 7)}` : `${b.repo} ${redLine(b)}` }));
-
-/** How many queued parts each per-part gate holds now, by the Queued lane's decision. */
-const issueGates = (queued: State["queued"]) => ({
-  baseline: queued.filter((q) => q.kind === "baseline").length,
-  "not-ready": queued.filter((q) => q.kind === "not-ready").length,
-  "busy-file": queued.filter((q) => q.kind === "busy-file").length,
-  "loop-guard": queued.filter((q) => q.kind === "loop-guard").length,
-  "credit-wait": queued.filter((q) => q.kind === "credit-wait").length,
-});
 
 /** The held globs each factory repo names in the registry (`repo.held`), repos with at least one, sorted by repo key. */
 export function repoHeld(): { repo: string; held: string[] }[] {
@@ -333,7 +324,6 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
     gated: gates({ jobs }),
     baseline: baselineGate(),
-    goalGates: issueGates(state.queued ?? []),
     asks: state.asks,
     rules: rules(all, records, Date.now(), ms),
     repeats: repeats(all, records, Date.now(), ms),

@@ -77,9 +77,8 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "codes", "factory", "gated", "goalGates", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "codes", "factory", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
-  expect(d.goalGates).toEqual({ baseline: 0, "not-ready": 2, "busy-file": 1, "loop-guard": 0, "credit-wait": 1 });
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
@@ -153,7 +152,6 @@ const data = () => ({
   metrics: { days: 7, rate: { auto: 3, total: 4, percent: 75 }, catches: { fired: 6, fixed: 2 }, held: { goals: 2, hours: 3 } },
   gated: { gate: "live-cap", why: "5 agent runs are live", text: "Waiting for a slot (5 of 5 running)" },
   baseline: [{ repo: "r", state: "green", line: "r abc1234" }],
-  goalGates: { baseline: 0, "not-ready": 2, "busy-file": 0, "loop-guard": 1 },
   asks: [askItem("run-cap", "r-1")],
   repeats: [],
   rules: Object.entries(ASK_REASONS).map(([reason, r]) => ({ reason, kind: r.kind, mode: r.always, fired: 0, decided: { rule: 0, director: 0, chris: 0 }, outcome: { fixed: 0, none: 0 }, granted: reason === "rescue" ? { action: "recommended", at: ago(1) } : null, ...(reason.startsWith("proposal-") ? { places: [] } : {}) })),
