@@ -36,6 +36,11 @@
   --unstick: #B42F3A; --unstick-bg: #FBEBEC; --unstick-ring: #F0CDD0;
   /* Outcomes in the Efficiency bar: dark enough for white text in both themes. */
   --seg-landed: #3B4A36; --seg-fixed: #5C7052; --seg-nothing: #9A6347; --seg-restarted: #BC5252; --seg-dropped: #8A4F7A;
+  /* Timeline bar fills: one value in both themes, because the dark theme's fills are too light for --on-fill text. */
+  --fill-run: #3B5FC8;
+  --fill-stuck: #C0304C;
+  --fill-done: #437018;
+  --fill-aux: #62688A;
   --display: 'Merriweather', Georgia, serif;
   --metric: 'Merriweather', Georgia, serif;  /* the big numbers on the Status metric cards */
   --brand: 'Merriweather', Georgia, serif;  /* the sidebar wordmark */
@@ -829,21 +834,14 @@ a.dp-bar { text-decoration: none; }
 a.dp-bar:hover, a.dp-bar:focus-visible { filter: brightness(1.15); outline-offset: 1px; }
 .dp-wait, .dp-key .t-wait i { background: repeating-linear-gradient(90deg, var(--rule) 0 5px, transparent 5px 9px); }
 .dp-wait.t-chris, .dp-key .t-chris i { background: repeating-linear-gradient(90deg, var(--need-bg) 0 5px, var(--need) 5px 7px); }
-.t-build.dp-bar, .dp-key .t-build i { background: var(--run); }
-.t-bad.dp-bar, .dp-key .t-bad i { background: var(--stuck); }
-.t-land.dp-bar, .dp-key .t-land i { background: var(--done); }
-.t-aux.dp-bar, .dp-key .t-aux i { background: var(--muted); }
-/* the dark theme's fills are too light for --on-fill, so the bars take the light theme's */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .t-build.dp-bar { background: #3B5FC8; }
-  :root:not([data-theme="light"]) .t-bad.dp-bar { background: #C0304C; }
-  :root:not([data-theme="light"]) .t-land.dp-bar { background: #437018; }
-  :root:not([data-theme="light"]) .t-aux.dp-bar { background: #62688A; }
-}
-:root[data-theme="dark"] .t-build.dp-bar { background: #3B5FC8; }
-:root[data-theme="dark"] .t-bad.dp-bar { background: #C0304C; }
-:root[data-theme="dark"] .t-land.dp-bar { background: #437018; }
-:root[data-theme="dark"] .t-aux.dp-bar { background: #62688A; }
+.t-build.dp-bar { background: var(--fill-run); }
+.t-bad.dp-bar { background: var(--fill-stuck); }
+.t-land.dp-bar { background: var(--fill-done); }
+.t-aux.dp-bar { background: var(--fill-aux); }
+.dp-key .t-build i { background: var(--run); }
+.dp-key .t-bad i { background: var(--stuck); }
+.dp-key .t-land i { background: var(--done); }
+.dp-key .t-aux i { background: var(--muted); }
 .dp-mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: var(--r-hair); }
 .t-made.dp-mark, .dp-key .t-made i { background: var(--muted); }
 .t-done.dp-mark, .dp-key .t-done i { background: var(--ink); }
