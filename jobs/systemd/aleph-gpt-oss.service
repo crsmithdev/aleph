@@ -16,6 +16,7 @@ Environment=PATH=%h/.local/bin:/usr/local/cuda/bin:/usr/lib/wsl/lib:/usr/local/b
 ExecStart=%h/.bun/bin/bun %h/aleph/jobs/lib/gpt-oss-start.ts
 Restart=always
 RestartSec=2
+TimeoutStopSec=10
 
 [Install]
 WantedBy=default.target

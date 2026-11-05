@@ -63,6 +63,10 @@ The server needs about 8.5 GB beyond the desktop. Stop these before `enable --no
 - The hand-started Ollama serve (`pkill -f 'ollama serve'`). It loads models into the GPU on demand.
 - `sidetone.service` (`systemctl --user stop sidetone.service`). It holds about 6 GB when active.
 
+## Stop
+
+On 2026-11-04 at 20:27, `systemctl --user stop` ended with SIGKILL after the 90 s default. The journal shows llama-server log `cleaning up before exit...` on the SIGTERM and then stay alive. The start script forwarded SIGTERM and waited for the exit, so nothing ended the hang. Now the start script sends SIGKILL to llama-server 5 s after a stop signal, and the unit has `TimeoutStopSec=10` as a limit. A stop takes 5 s when llama-server hangs.
+
 ## Context size 40960
 
 Goal: a local run compacts before it passes the context size of llama-server.

@@ -54,6 +54,11 @@ if (import.meta.main) {
   const args = serverArgs(home, free);
   console.log(`free VRAM ${free ?? "unknown"} MiB, --n-cpu-moe ${args[args.indexOf("--n-cpu-moe") + 1]}`);
   const child = spawn(`${home}/.local/src/llama.cpp/build/bin/llama-server`, args, { stdio: "inherit" });
-  for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => child.kill(sig));
+  /** llama-server stays in "cleaning up before exit" after a stop signal, so SIGKILL it after this long. */
+  const KILL_AFTER_MS = 5000;
+  for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => {
+    child.kill(sig);
+    setTimeout(() => child.kill("SIGKILL"), KILL_AFTER_MS).unref();
+  });
   child.on("exit", (code, sig) => process.exit(code ?? (sig ? 1 : 0)));
 }
