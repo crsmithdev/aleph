@@ -97,13 +97,14 @@ Type, size and effect tokens (`ui/app.css:47-71`):
 | `--z-overlay` | 50 | font picker |
 | `--gap-in` | 16px | between metric cards and side-by-side cards |
 | `--gap` | 24px | between page blocks |
+| `--indent-list` | 18px | `padding-left` of an indented list |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles |
 
 Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers, `--fw-strong` 600 for headings and table headers. 700 stays a literal on `.mark` (`ui/app.css:185`) and `.tile b` (`ui/app.css:728`).
 
 Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 11 times, `(max-width: 1100px)` 4 and `(min-width: 721px)` 1.
 
-Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. The steps 14px and 18px are not tokens; see Patterns. Widths and heights stay literal.
+Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. The steps 14px and 18px are not tokens; see Patterns. List indent is the token `--indent-list` (18px), used for every indented list. Widths and heights stay literal.
 
 Radii: the five `--r-*` tokens. Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` is tokens, `--z-rowlink` < `--z-sticky` < `--z-overlay`. Motion: 2 `transition` literals (`.15s ease-out`) and no CSS animation. The ECharts options set `animation: false` (8 rows).
 
@@ -119,7 +120,6 @@ These values repeat in the code with no token. Until a token lands, write the va
 | `--sp-14`, `--sp-18` | 14px and 18px spacing steps | 33 and 23 rows | see Patterns |
 | `--ls-display` | `letter-spacing: -0.01em` | 4 rows | `ui/app.css:185`, `211`, `212`, `484` |
 | `--ls-caps` | one tracking for uppercase keys | 2 rows (`.06em`, `.08em`) | `ui/app.css:567`, `727` |
-| `--indent-list` | 18px list indent | 2 rows | `ui/app.css:413`, `509` |
 
 ## Patterns
 
@@ -136,7 +136,6 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 | Spacing step | 18px | 23 rows in `gap`, `padding` and `margin` | `--sp-18` |
 | Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
 | Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`ui/lib.js:572`, `585`, `597`, `ui/views/factory-jobs.js:31`) | none; a rule |
-| List indent | `padding-left: 18px` on a list | 2 rows (`ui/app.css:413`, `509`) | `--indent-list` |
 | Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
 
 ### Spacing steps 14px and 18px
@@ -416,7 +415,6 @@ Each deviation is a value or pattern in the code that a rule above does not allo
 | Capitalised state badges (`In use`, `Stale`); `stateBadge()` and `statusBadge()` beside `badge()`; `idLink()` title patched by string replace | `ui/views/memory.js:139`; `ui/views/issues.js:50`; `ui/views/now.js:219`; `ui/views/session.js:14`, `ui/views/sessions.js:115` | States are lower case; `badge()` for a state | aleph-1365 (pending) |
 | Metric card without the qualifier rule (Lost time) | Status and Efficiency cards | Metric cards, row 3 | aleph-1368 (pending) |
 | Chart empty state drawn as an empty plot | Agents, Jobs and Issues charts | Chart empty state | none; follow-up |
-| List indent of 20px and 22px | `ui/app.css:235`, `624` | List indent (18px) | none; follow-up |
 | Login and font picker sizes as literals | `ui/auth.ts:53-57`; `ui/index.html:501-511` | Spacing and size tokens | none; follow-up |
 | Dates with no time: `Oct 28` in tables, `10/28` proposed | `ui/views/issues.js:177`; `ui/views/memory.js:140` | Absolute time and day | Chris's decision (see Formats) |
 

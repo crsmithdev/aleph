@@ -381,4 +381,21 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
     expect(await weight()).toBe("700");
     await page.ev('document.documentElement.style.removeProperty("--fw-strong")');
   }, 30_000);
+
+  test("every indented list takes its left padding from --indent-list", async () => {
+    await page.width(1200);
+    await page.go("#/");
+    const pads = await page.ev<string[]>(`(() => {
+      const mk = (parent, tag) => { const el = document.createElement(tag); parent.append(el); return el; };
+      const wrap = (cls) => { const d = document.createElement("div"); d.className = cls; document.body.append(d); return d; };
+      const row = wrap("issue-row"), dec = mk(row, "div"); dec.className = "decision";
+      const body = wrap("body"), tight = document.createElement("ul"); tight.className = "tight"; document.body.append(tight);
+      const chat = wrap("chat"), msg = mk(chat, "div"); msg.className = "msg";
+      const lists = [mk(dec, "ul"), mk(body, "ul"), tight, mk(msg, "ul"), mk(msg, "ol")];
+      const out = lists.map((l) => getComputedStyle(l).paddingLeft);
+      for (const e of [row, body, tight, chat]) e.remove();
+      return out;
+    })()`);
+    expect(pads).toEqual(["18px", "18px", "18px", "18px", "18px"]);
+  }, 30_000);
 });
