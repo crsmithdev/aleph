@@ -328,6 +328,15 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   for (const t of ["Fired", "Decided by", "Outcome", "<td class=\"num\">5</td>", "2 rule, 1 director, 1 Chris", "1 fixed, 3 no change"]) expect(h).toContain(t);
 });
 
+test("rules() takes an entry's missing reason from the run that awaited when it was set; with no such run the entry is not counted", () => {
+  const set = new Date(NOW).toISOString();
+  const fired = (records: any[]) => Object.fromEntries(rules([], records, NOW + 3600_000).map((x) => [x.reason, x.fired]));
+  const base = fired([]);
+  const awaiting: any = { id: "r1", kind: "build", condition: "awaiting", started: new Date(NOW - 60_000).toISOString(), ended: set };
+  expect(fired([{ issue: "x-1", asks: [{ set }], ask: { reason: "held-path" }, askRun: "r1", runs: [awaiting], events: [] }])["held-path"]).toBe(base["held-path"] + 1);
+  expect(fired([{ issue: "x-2", asks: [{ set }], runs: [], events: [] }])).toEqual(base);
+});
+
 test("the body has the tick, the suite and the monitor with their last run from tick.json and tick.log; with no record each has not run", async () => {
   const dir = process.env.ALEPH_FACTORY_DIR!, logPath = join(dir, "tick.log"), was = readFileSync(logPath, "utf8");
   const none: any = (await body()).schedules;
