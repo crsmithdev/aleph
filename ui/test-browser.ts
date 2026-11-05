@@ -99,14 +99,25 @@ export async function startRig(prepare?: (env: Record<string, string>) => void |
   const line = new TextDecoder().decode((await (server.stdout as ReadableStream<Uint8Array>).getReader().read()).value);
   const url = line.trim();
 
-  const profile = join(base, "profile");
-  mkdirSync(profile);
-  const argv = chromeArgv(profile);
-  const chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
-    env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
-  const cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
   // The first call waits for Chrome to start; 30 s, since a busy CI runner took over 15 s (runs 41675736380, cc2f927ff).
-  await cdp.send("Browser.getVersion", {}, undefined, 30_000);
+  // A Chrome that does not answer is killed and started once more, with a new profile.
+  const waits: string[] = [];
+  let chrome!: ReturnType<typeof spawn>;
+  let cdp!: Pipe;
+  for (let n = 1; n <= 2; n++) {
+    const profile = join(base, `profile${n}`);
+    mkdirSync(profile);
+    const argv = chromeArgv(profile);
+    chrome = spawn(argv[0]!, ["--no-sandbox", ...argv.slice(1)], { stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"],
+      env: { HOME: profile, TMPDIR: profile, PATH: "/usr/local/bin:/usr/bin:/bin", LANG: "C.UTF-8" } });
+    cdp = new Pipe(chrome.stdio[3] as NodeJS.WritableStream, chrome.stdio[4] as NodeJS.ReadableStream);
+    const t0 = Date.now();
+    try { await cdp.send("Browser.getVersion", {}, undefined, 30_000); break; } catch (e) {
+      chrome.kill("SIGKILL");
+      waits.push(`try ${n} waited ${Date.now() - t0} ms: ${(e as Error).message}`);
+      if (n === 2) { server.kill(); rmSync(base, { recursive: true, force: true }); throw new Error(`Chrome failed both tries; ${waits.join("; ")}`); }
+    }
+  }
 
   const open = async (hash = "#/"): Promise<Page> => {
     const { targetId } = await cdp.send("Target.createTarget", { url: "about:blank" });

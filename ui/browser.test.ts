@@ -3,7 +3,7 @@ import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 
 describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   let rig: Rig, page: Page;
-  beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 60_000);
+  beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 150_000);
   afterAll(() => rig?.stop());
 
   const hash = () => page.ev<string>("location.hash");
@@ -220,7 +220,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
 describe.skipIf(!chromeUsable)("Status lane cards", () => {
   let rig: Rig, page: Page;
-  beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 60_000);
+  beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 150_000);
   afterAll(() => rig?.stop());
 
   const long = "A title that is long enough to wrap onto a second line in a narrow lane card, and then some more words";
