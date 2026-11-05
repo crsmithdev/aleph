@@ -218,6 +218,19 @@ test("/api/memory lists the notes with their read date, and a page search logs n
   expect(JSON.parse(readFileSync(log, "utf8"))).toEqual({ "Use Bun": "2026-10-30" });
 });
 
+test("/api/memory lint gives no stale finding to an old note that the read log shows read lately", async () => {
+  const file = join(base, "vault", "wiki", "concepts", "Old idea.md");
+  const log = join(base, "vault", ".recall.json");
+  writeFileSync(file, `---\nkind: concept\nscope: aleph\nconfidence: measured\nupdated: 2025-01-01\nsupersedes: []\nsources: [trace:abc123]\n---\n**Claim.** Old.\n`);
+  const stale = async () => { clearCache(); return ((await (await at("/api/memory")).json() as any).lint.warn as any[]).filter((f) => f.rule === "stale" && f.note === "Old idea"); };
+  try {
+    writeFileSync(log, JSON.stringify({ "Old idea": "2026-11-02" }));
+    expect(await stale()).toEqual([]);
+    writeFileSync(log, "{}");
+    expect(await stale()).toHaveLength(1);
+  } finally { rmSync(file); rmSync(log, { force: true }); clearCache(); }
+});
+
 test("prospective issues carry their priority, medium when they have none, and the page shows the badge", async () => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({ pri: { path: base } }));
   try {

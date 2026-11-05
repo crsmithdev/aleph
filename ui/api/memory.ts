@@ -5,7 +5,8 @@ import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
 import { uiFetchTtl } from "../../todo/lib/store.ts";
 import { clearTypesCache, memoryTypes } from "./memory-types.ts";
-import { KINDS, linkTargets, links, lintVault, loadVault, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { trackedFiles } from "../../vault/lib/git.ts";
+import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { uiCacheMs } from "../../jobs/lib/settings.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
@@ -103,7 +104,8 @@ async function overview(url: URL): Promise<Response> {
   const keep = inScope(project);
   const wiki = wikiNotes(all).filter(keep);
   const names = new Set(wiki.map((n) => n.title));
-  const lint = lintVault(all);
+  const lint = lintVault(all, { read: readLog(root), tracked: trackedFiles(root, "wiki") });
+  lint.warn.push(...relativeDates(all));
   const mine = (f: { note: string }) => !project || names.has(f.note);
   const body: Record<string, unknown> = {
     project,
