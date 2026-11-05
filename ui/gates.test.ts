@@ -461,6 +461,9 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   const h = gates.renderRepeats(d);
   expect(h).toContain("<h2>Repeat Answers");
   expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
+  const bare = gates.renderNow({ ...d, metrics: { ...d.metrics, rate: null, held: undefined } });
+  expect(bare).not.toMatch(/undefined|NaN/);
+  expect(bare).toContain("<b>–</b>");
   expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><\/span><b>1<\/b>/);
   const none = gates.renderRepeats(data());
   expect(none).toContain("No answer repeats.");

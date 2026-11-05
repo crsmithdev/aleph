@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { costOption, liveOption, outcomesOption, renderFactoryAgents } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
-import { pace, weekGone } from "./views/speed.js";
+import { pace, usageCard, weekGone } from "./views/speed.js";
 
 const S: any = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } }, factory: { runsToday: 198, costToday: 71.94, liveRuns: 1, liveCap: 5, liveLocal: 1, localCap: 1 } };
 const agents = {
@@ -189,4 +189,11 @@ test("the chart cards are in Title Case and keep their aria labels", () => {
 
 test("the cost axis labels go through money()", () => {
   expect(costOption(E).yAxis.axisLabel.formatter(1.5)).toBe("$1.50");
+});
+
+test("Worker slots shows a dash for a missing cap, and the Usage card is the Status one", () => {
+  const html = renderFactoryAgents({ ...S, factory: { ...S.factory, liveCap: undefined } }, { ...D, agents }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  expect(html).toContain("<b>1<em> / –</em></b>");
+  expect(html).not.toContain("undefined");
+  expect(html).toContain(usageCard(S));
 });

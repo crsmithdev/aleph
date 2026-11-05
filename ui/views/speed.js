@@ -1,5 +1,5 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, projectNow, statCard, when } from "../lib.js";
+import { count, cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, projectNow, statCard, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
@@ -96,10 +96,10 @@ export function statusCards(s, d, { efficiency, performance }) {
   const base = d?.baseline?.base, prev = d?.baseline?.prev, basis = d?.baseline?.basis ?? "";
   const f = d && !d.error ? figuresOf(d) : null;
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
-  const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours) }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
+  const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
   const lead = statCard({ k: "Completion", v: cardDur(f?.leadP50), v2: cardDur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
-  const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: String(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
-  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : String(f.asks), ...(f ? { v2: String(d.asks?.manual ?? 0) } : {}), q: ["All", "Manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: String }), href: performance });
+  const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
+  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : count(f.asks), ...(f ? { v2: count(d.asks?.manual ?? 0) } : {}), q: ["All", "Manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: String }), href: performance });
   return lost + lead + landed + asks + usageCard(s);
 }
 
@@ -115,9 +115,9 @@ export function figuresOf(d) {
 }
 
 /** The Usage card: the 7-day value, the bar with the mark for the week gone, and an optional note. `link` is `{href}` or `{key, on}`. */
-export function usageCard(s, link = { href: "#/factory/agents" }, note) {
-  const cur = s.usage?.now;
-  if (!cur) return statCard({ k: "Usage", v: "–", note: note && "usage unknown", ...link });
+export function usageCard(s, link = { href: "#/factory/agents" }) {
+  const cur = s.usage?.now, p = pace(s), note = usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window");
+  if (!cur) return statCard({ k: "Usage", v: "–", note: "usage unknown", ...link });
   const gone = weekGone(cur.seven_day_resets_at, s.now);
   const tip = gone === null ? "" : `${pct(gone)} of the week gone`;
   const bar = meter([{ pct: Math.min(100, cur.seven_day), cls: "c-use" }], `${pct(cur.seven_day)} used${tip && `, ${tip}`}`, { mark: gone });

@@ -1,5 +1,5 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { card, empty, meter, sentence, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope, pagedTable } from "../lib.js";
+import { count, card, empty, meter, sentence, statCard, dataTable, esc, hashQuery, keepProject, projectNow, scopeBar, withProject, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, windowOf, wireScope, pagedTable } from "../lib.js";
 import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, plural, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
@@ -26,10 +26,10 @@ function scorecard(d, key) {
   const fixed = (d.classes ?? []).find((c) => c.key === "fixed"), f = figuresOf(d);
   const pct = { kind: "points", format: cardPct }, flaky = d.baseline?.base?.flaky;
   const usage = d.issues.week;
-  return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours) }), trend: windowTrend(d, "lost", f.lost, { ...pct, lowerIsGood: true }), key: ALL, on: key === ALL }) +
+  return statCard({ k: "Lost time", v: cardPct(f.lost), ...(f.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: windowTrend(d, "lost", f.lost, { ...pct, lowerIsGood: true }), key: ALL, on: key === ALL }) +
     statCard({ k: "First pass", v: cardPct(f.firstPass), note: f.firstPass === null ? "no issue landed" : "lands with no fix round", trend: windowTrend(d, "firstPass", f.firstPass, { ...pct, lowerIsGood: false }), key: "landed", on: key === "landed" }) +
-    statCard({ k: "Reruns", v: String(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
-    statCard({ k: "Fix rounds", v: String(fixed?.runs ?? 0), note: `${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`, key: "fixed", on: key === "fixed" }) +
+    statCard({ k: "Reruns", v: count(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
+    statCard({ k: "Fix rounds", v: count(fixed?.runs ?? 0), note: `${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`, key: "fixed", on: key === "fixed" }) +
     statCard({ k: "Usage per issue", v: usage === null ? "–" : weekText(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
 }
 

@@ -6,7 +6,7 @@ import { withEnv } from "./test-server.ts";
 import { agentStats, CLASSES, classify, clearCache, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { durShort, weekText, xLabel } from "./views/speed.js";
+import { durShort, statusCards, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { dur } from "./lib.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
@@ -462,4 +462,15 @@ test("a bucket's cost per model is the recorded cost of the agent runs that star
   expect(at9.cost).toEqual({ opus: 1.75, sonnet: 2 });
   expect(at11.cost).toEqual({ unset: 4 });
   expect(d.buckets.find((b) => b.at === h(12))!.cost).toEqual({});
+});
+
+test("every Status card with a second value has a qualifier, Lost time too, and none prints undefined", () => {
+  const d = { classes: [{ hours: 6 }], lost: { share: 0.3, hours: 6 }, phases: { lead: { count: 2, p50: 60, p90: 600 } }, asks: { count: 4, manual: 1 }, done: 5, issues: { firstPass: 0.8 } };
+  const s = { now: "2026-11-01T08:00:00Z", usage: { now: { seven_day: 7, seven_day_resets_at: "2026-11-07T08:00:00Z" } } };
+  for (const html of [statusCards(s, d, {}), statusCards({ now: s.now }, null, {})]) {
+    expect(html).not.toContain("undefined");
+    const cards = html.split(/(?=<(?:a|div|button) [^>]*class="tile sc")/);
+    for (const c of cards) if (c.includes("<em>")) expect(c).toContain('<span class="q">');
+  }
+  expect(statusCards(s, d, {})).toContain('<b>30%<em> / 6.0h</em></b><span class="q"><span>lost</span><span class="m"> / hours</span>');
 });

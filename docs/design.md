@@ -288,6 +288,8 @@ A card has 3 rows and nothing else:
 
 Uses: Status, Efficiency, Jobs, Agents, Automation, Issues, Memory, Sessions.
 
+Exception: the KPI strip of a detail page (`renderKpis()` in `ui/timeline.js`) is not a metric card. It is a row of facts about one job or issue (text, links, spans), not numbers with a trend, so it has no trend, no qualifier and no `statCard()`.
+
 The Roles table on Agents has one row per role and model ("Worker · haiku"). Its Success cell is the success rate with a `cardTrend()` marker (`kind: "points"`, against the baseline). A rate under 70% (`WARN_RATE` in `ui/views/factory-agents.js`) shows in the `--need` tone. The Jobs cell links to `#/factory/jobs?role=<role>&condition=failed`.
 
 ## Interaction
@@ -400,7 +402,6 @@ Each deviation is a value or pattern in the code that a rule above does not allo
 | Two classes for one result line (`.act-msg`, `.form-msg`) | `ui/app.css:341`; `ui/views/issues.js:466` | Form messages | aleph-1372 (pending) |
 | Long text clicks through a `.dp-txt` element, not a button | `ui/views/gates.js:216` | Long text clamp | aleph-1373 (pending) |
 | Code-span writer copied across views (`inline`) | `ui/views/jobs.js:120`, `ui/views/issues.js:536`, `ui/lib.js:99` | One helper per copy | aleph-1375 (pending) |
-| Metric card without the qualifier rule (Lost time) | Status and Efficiency cards | Metric cards, row 3 | aleph-1368 (pending) |
 | Chart empty state drawn as an empty plot | Agents, Jobs and Issues charts | Chart empty state | none; follow-up |
 | Login and font picker sizes as literals | `ui/auth.ts:53-57`; `ui/index.html:501-511` | Spacing and size tokens | none; follow-up |
 | Dates with no time: `Oct 28` in tables, `10/28` proposed | `ui/views/issues.js:176`; `ui/views/memory.js:140` | Absolute time and day | Chris's decision (see Formats) |

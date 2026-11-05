@@ -200,3 +200,8 @@ test("a land card has its own kind class, and the Done header counts the selecte
   expect(view.renderLanes(done, "day")).toContain('<span class="count">2 of 3</span>');
   expect(view.renderLanes(done, "month")).toContain('<span class="count">2 of 5</span>');
 });
+
+test("the Status page scorecard is a tiles section with the id scorecard", () => {
+  const page = view.view.render({ ...full, usage: undefined } as any, {}, new URLSearchParams()) as string;
+  expect(page).toContain('<section class="tiles" id="scorecard" aria-label="Scorecard">');
+});

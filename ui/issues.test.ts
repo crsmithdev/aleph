@@ -405,6 +405,9 @@ describe("views", () => {
     for (const k of ["Filed", "Closed", "Open Age"]) expect(html).toContain(`>${k}<`);
     for (const k of ["Filed, last", "Closed, last", "Median open age"]) expect(html).not.toContain(k);
     expect(html).toContain("<span>open</span><span class=\"m\"> / in store</span>");
+    const bare = v.renderTiles({ ...v.stats(rows, now, 1), medianAge: null, oldest: null, runs: undefined, cost: undefined } as any, "open", "day");
+    expect(bare).not.toMatch(/undefined|NaN/);
+    expect(bare).toContain("<b>–</b>");
     const up = v.renderTiles({ ...v.stats(rows, now, 1), filed: 3, filedBefore: 1, closed: 3, closedBefore: 1, medianAge: 2, oldest: 5 }, "open", "day");
     expect(up).toContain("<span>open age</span><span class=\"m\"> / oldest</span>");
     expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Closed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bgood\b/);

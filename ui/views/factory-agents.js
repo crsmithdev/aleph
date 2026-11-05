@@ -1,14 +1,14 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
 import { barsOption, card, cardTrend, chartBox, mountCharts, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, legend, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
-import { lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
+import { lastPeriod, loadSpeed, usable, usageCard, xLabel } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
 const rateCard = (k, v, base, note) => statCard({ k, v: share(v), note, trend: cardTrend(v, base, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(base)}` }) });
 
 function scorecard(s, a, w) {
-  const f = s.factory, p = pace(s);
-  return usageCard(s, {}, usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window")) +
-    statCard({ k: "Worker slots", v: String(f.liveRuns ?? 0), v2: String(f.liveCap), q: ["in use", "cap"] }) +
+  const f = s.factory;
+  return usageCard(s) +
+    statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: f.liveCap == null ? "–" : count(f.liveCap), q: ["in use", "cap"] }) +
     rateCard("Success rate", a?.rates?.success, a?.rates?.baseline, "ended runs, all roles") +
     rateCard("Worker first pass", a?.rates?.firstPass, null, "landed builds, no fix round") +
     rateCard("Local share", a?.rates?.local, null, "runs on gpt-oss-20b");

@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -15,7 +15,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section>${renderOutcome(speedOf(w))}<div class="insights">${renderStages(s)}${renderHolds(s)}${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}${renderOutcome(speedOf(w))}<div class="insights">${renderStages(s)}${renderHolds(s)}${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),

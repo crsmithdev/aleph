@@ -16,11 +16,11 @@ export const clock = (iso) => {
 /** A label as the page shows it. */
 export const labelName = (l) => l;
 export const money = (n) => ((n ?? 0) > 0 && n < 0.005 ? "<$0.01" : `$${(n ?? 0).toFixed(2)}`);
-export const count = (n) => Number(n).toLocaleString("en-US");
+export const count = (n) => (n == null || Number.isNaN(Number(n)) ? "–" : Number(n).toLocaleString("en-US"));
 /** A mean or other average: one decimal; "–" for none. */
 export const mean = (v) => (v == null ? "–" : Number(v).toFixed(1));
 /** Hours as "3.2h": one decimal under 10, whole from 10. */
-export const hours = (h) => `${h.toFixed(h < 10 ? 1 : 0)}h`;
+export const hours = (h) => (h == null || Number.isNaN(h) ? "–" : `${h.toFixed(h < 10 ? 1 : 0)}h`); export const days = (d) => (d == null || Number.isNaN(d) ? "–" : `${Math.round(d)}d`);
 /** A byte count as "512B", "1.5KiB" or "2.0MiB". */
 export const bytes = (n) => (n < 1024 ? `${n}B` : n < 1048576 ? `${(n / 1024).toFixed(1)}KiB` : `${(n / 1048576).toFixed(1)}MiB`);
 
@@ -528,7 +528,7 @@ export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key,
   if (key) return `<button type="button" class="tile sc" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
   return href ? `<a class="tile sc" href="${esc(href)}">${inner}</a>` : `<div class="tile sc">${inner}</div>`;
 }
-export const tiles = (label, html) => `<section class="tiles" aria-label="${esc(label)}">${html}</section>`;
+export const tiles = (label, html, id) => `<section class="tiles"${id ? ` id="${esc(id)}"` : ""} aria-label="${esc(label)}">${html}</section>`;
 /** Call `fn(key)` when a tile or another selector with `data-tile` under `el` is clicked. */
 export function onTile(el, fn) {
   el?.addEventListener("click", (e) => {

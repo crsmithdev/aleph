@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -251,11 +251,11 @@ export function renderTiles(s, key = "open", win = "week") {
   const w = win in WINDOW_DAYS ? win : "week";
   const on = (k) => ({ key: k, on: key === k });
   return tiles("Issue numbers",
-    statCard({ k: "Open", v: String(s.open), v2: String(s.total), q: ["open", "in store"], ...on("open") }) +
-    statCard({ k: "Filed", v: String(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${s.filedBefore} the ${w} before`, ...on("filed") }) +
-    statCard({ k: "Closed", v: String(s.closed), v2: String(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w, false), ...on("closed") }) +
-    statCard({ k: "Open Age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)}d`, ...(s.oldest === null ? {} : { v2: `${Math.round(s.oldest)}d`, q: ["open age", "oldest"] }), ...on("age") }) +
-    statCard({ k: "Runs", v: String(s.runs), v2: money(s.cost), q: ["runs", "recorded cost"], ...on("runs") }));
+    statCard({ k: "Open", v: count(s.open), v2: count(s.total), q: ["open", "in store"], ...on("open") }) +
+    statCard({ k: "Filed", v: count(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${s.filedBefore} the ${w} before`, ...on("filed") }) +
+    statCard({ k: "Closed", v: count(s.closed), v2: count(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w, false), ...on("closed") }) +
+    statCard({ k: "Open Age", v: days(s.medianAge), ...(s.oldest == null ? {} : { v2: days(s.oldest), q: ["open age", "oldest"] }), ...on("age") }) +
+    statCard({ k: "Runs", v: count(s.runs), v2: money(s.cost), q: ["runs", "recorded cost"], ...on("runs") }));
 }
 
 /** The window's buckets (60 minutes, 24 hours, 7 or 30 days): their labels and how many rows were filed and closed in each. A stored time counts to its minute; a row with only a day counts at the start of that day. */

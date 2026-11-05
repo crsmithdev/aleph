@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -67,10 +67,10 @@ function capForm(f, key, label, value) {
 export function renderNow(d) {
   const m = d.metrics;
   const tilesHtml = [
-    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: String(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "Asks"] } : { note: "no Ask decided" }) }),
-    statCard({ k: "Gate catches", v: String(m.catches.fired), v2: String(m.catches.fixed), q: ["sent back", "fixed later"] }),
-    statCard({ k: "Repeat answers", v: String(d.repeats.length), note: "Asks answered the same way 3+ times" }),
-    statCard({ k: "Held time", v: hours(m.held.hours), v2: String(m.held.goals), q: ["in a hold", "goals"] }),
+    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "Asks"] } : { note: "no Ask decided" }) }),
+    statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed later"] }),
+    statCard({ k: "Repeat answers", v: count(d.repeats.length), note: "Asks answered the same way 3+ times" }),
+    statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "goals"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }
