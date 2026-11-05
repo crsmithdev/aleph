@@ -60,3 +60,15 @@ test("lint names the bad title of an open or parked item and a missing or unknow
   ]);
   expect(issues.lint(doc).filter((f) => f.fixable)).toEqual([]);
 });
+
+test("add and addPart store the filing time next to the day, and setStatus stores the closing time and a reopen removes it", () => {
+  const doc: issues.Doc = { items: [] } as any;
+  const a = issues.add(doc, "Do a thing", { now: new Date(2026, 10, 4, 14, 5) });
+  expect(a.fm).toMatchObject({ created: "2026-11-04", created_time: "2026-11-04 14:05" });
+  const p = issues.addPart(doc, a, { title: "[C] part", spec: "x", now: new Date(2026, 10, 4, 14, 5) });
+  expect(p.fm).toMatchObject({ created: "2026-11-04", created_time: "2026-11-04 14:05" });
+  issues.setStatus(a, "done", new Date(2026, 10, 4, 15, 30));
+  expect(a.fm).toMatchObject({ closed_at: "2026-11-04", closed_time: "2026-11-04 15:30" });
+  issues.setStatus(a, "open");
+  expect(a.fm.closed_time).toBeUndefined();
+});

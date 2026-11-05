@@ -660,3 +660,22 @@ describe("the Issue timeline names why a wait waited", () => {
     expect(html(d(holds))).not.toContain("other job");
   });
 });
+
+describe("exact times in the Hour window", () => {
+  test("a row carries the stored times", async () => {
+    const [r] = await getJson("/api/issues?repo=fac");
+    expect(r.createdTime).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d$/);
+    expect((await getJson("/api/issues?repo=fac&status=done"))[0].closedTime).toMatch(/^\d{4}-\d\d-\d\d \d\d:\d\d$/);
+  });
+
+  test("the Hour window counts by the minute, and a row with only days counts by its day", () => {
+    const now = new Date("2026-11-04T16:00");
+    const rows = v.issueRows({ issues: [
+      { id: 1, repo: "f", title: "a", status: "done", labels: [], created: "2026-11-04", createdTime: "2026-11-04 15:30", closed: "2026-11-04", closedTime: "2026-11-04 15:45", runs: 0, cost: 0 },
+      { id: 2, repo: "f", title: "b", status: "done", labels: [], created: "2026-11-04", createdTime: "2026-11-04 09:00", closed: "2026-11-04", closedTime: "2026-11-04 08:00", runs: 0, cost: 0 },
+      { id: 3, repo: "f", title: "c", status: "done", labels: [], created: "2026-11-04", closed: "2026-11-04", runs: 0, cost: 0 },
+    ] });
+    expect(v.stats(rows, now, 1 / 24)).toMatchObject({ filed: 2, closed: 2 });
+    expect(v.stats(rows, now, 1)).toMatchObject({ filed: 3, closed: 3 });
+  });
+});

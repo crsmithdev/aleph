@@ -83,7 +83,7 @@ const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? Date.parse(`${S
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, closed: r.closed ?? null, at: r.updated, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, createdTime: r.createdTime ?? null, closed: r.closed ?? null, closedTime: r.closedTime ?? null, at: r.updated, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
 }
 
 // ---- Fuzzy search ----
@@ -166,7 +166,8 @@ export function markHits(title, hits = []) {
 export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
   const q = (o.q ?? "").trim(), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[o.window] ?? 7)) * DAY;
-  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? inDays(r.created, from, end) : o.tile === "closed" ? CLOSED.includes(r.status) && inDays(r.closed, from, end) : true);
+  const at = inSpan(now.getTime(), WINDOW_DAYS[o.window] ?? 7);
+  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? at(r.created, r.createdTime, 0, from, end) : o.tile === "closed" ? CLOSED.includes(r.status) && at(r.closed, r.closedTime, 0, from, end) : true);
   return rows.flatMap((r) => {
     if (!inTile(r)) return [];
     if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
@@ -250,22 +251,27 @@ const median = (xs) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 const inDays = (s, from, to) => { const t = dayMs(s); return t >= from && t < to; };
+/** For the hour window a row with a stored minute counts by that minute: `k` hours-windows back from `now`. Else by its day. */
+const inSpan = (now, days) => (day, time, k, from, to) => {
+  const t = days < 1 && time ? Date.parse(String(time).replace(" ", "T")) : NaN, span = Math.round(days * DAY);
+  return t === t ? t > now - (k + 1) * span && t <= now - k * span : inDays(day, from, to);
+};
 
 /** The numbers over `rows`: what the status and stage filters leave out still counts here, so the tiles do not empty when the table narrows. */
 export function stats(rows, now = new Date(), days = 7) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), end = today + DAY;
   // The store keeps whole dates, so the window is whole days back from tonight, at least today.
-  const span = Math.max(1, Math.ceil(days)) * DAY, week = end - span, before = week - span;
+  const span = Math.max(1, Math.ceil(days)) * DAY, week = end - span, before = week - span, at = inSpan(now.getTime(), days);
   const open = rows.filter((r) => r.status === "open");
   const ages = open.map((r) => dayMs(r.created)).filter(Boolean).map((t) => (today - t) / DAY);
-  const closedIn = (from, to) => rows.filter((r) => CLOSED.includes(r.status) && inDays(r.closed, from, to));
-  const closed = closedIn(week, end);
+  const closedIn = (k, from, to) => rows.filter((r) => CLOSED.includes(r.status) && at(r.closed, r.closedTime, k, from, to));
+  const closed = closedIn(0, week, end);
   const stages = {};
   for (const r of open) stages[r.stage] = (stages[r.stage] ?? 0) + 1;
   return {
     total: rows.length, open: open.length, stages,
-    filed: rows.filter((r) => inDays(r.created, week, end)).length, filedBefore: rows.filter((r) => inDays(r.created, before, week)).length,
-    closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(before, week).length,
+    filed: rows.filter((r) => at(r.created, r.createdTime, 0, week, end)).length, filedBefore: rows.filter((r) => at(r.created, r.createdTime, 1, before, week)).length,
+    closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(1, before, week).length,
     medianAge: median(ages), oldest: ages.length ? Math.max(...ages) : null,
     runs: rows.filter((r) => !r.part).reduce((n, r) => n + r.runs, 0), cost: rows.filter((r) => !r.part).reduce((n, r) => n + r.cost, 0),
   };
@@ -610,7 +616,7 @@ function issueKpis(d, segments, now = Date.now()) {
 }
 
 /** Front-matter keys the page shows elsewhere, or that are the store's own. */
-const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
+const HIDE = ["labels", "id", "closed_as", "parked", "closed_why", "closed_at", "closed_time", "created_time", "since", "ask", "reason", "question", "options", "recommended", "why", "plan", "intake", "tracker", "after", "created", "updated", "title", "headline", "situation", "details", "effects", "recommend", "priority", "source", "areas", "kind"];
 
 /** The Issue page: the header and its pills, the KPI strip, the Timeline, the Description and the Spec, then Notes and Commits. Shared with views/issue.js. */
 export function renderIssue(d) {

@@ -182,7 +182,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   const item: Issue = {
     id: nextId(doc),
     title,
-    fm: { id: String(nextId(doc)), created: day, updated: day, kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}) },
+    fm: { id: String(nextId(doc)), created: day, created_time: minute(o.now), updated: day, kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}) },
     request: o.request ?? "",
     spec: o.spec ?? "",
     notes: [],
@@ -201,7 +201,7 @@ export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string
     id: issue.id,
     sub,
     title: o.title,
-    fm: { id: `${issue.id}.${sub}`, created: day, updated: day, kind: (issue.fm.kind as string) ?? "task", priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
+    fm: { id: `${issue.id}.${sub}`, created: day, created_time: minute(o.now), updated: day, kind: (issue.fm.kind as string) ?? "task", priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
     request: "",
     spec: o.spec,
     notes: [],
@@ -242,10 +242,12 @@ export function setStatus(item: Issue, next: Status, now = new Date(), why?: str
     delete item.fm.closed_as;
     delete item.fm.closed_why;
     delete item.fm.closed_at;
+    delete item.fm.closed_time;
   } else {
     delete item.fm.parked;
     item.fm.closed_as = next;
     item.fm.closed_at = today(now);
+    item.fm.closed_time = minute(now);
     if (why) item.fm.closed_why = why;
   }
   item.fm.updated = today(now);
