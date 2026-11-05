@@ -113,7 +113,7 @@ Rules taken from the audit of 2026-11-04 (`docs/findings/2026-11-04-ui-design-au
 |---|---|---|---|
 | Dimmed control | `opacity: .6` | 3 (`ui/app.css:340`, `362`, `954`) | `--dim` |
 | Display type tracking | `letter-spacing: -0.01em` on the brand mark, page title and display text | 4 (`ui/app.css:185`, `211`, `212`, `484`) | none; a rule |
-| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:568`) and `.08em` (`ui/app.css:728`) | 2 | none; pick one when a third key comes |
+| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:567`) and `.08em` (`ui/app.css:727`) | 2 | none; pick one when a third key comes |
 | Control height | 28px | 9 (`min-height` 6, `height` 3) | `--ctl-h` |
 | Bar and meter height | 10px | 8 | `--bar-h` |
 
@@ -164,7 +164,7 @@ Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:442`):
 - **Cells:** `white-space: nowrap`, padding `6px 12px 6px 0`, a `--rule-2` line under each row, and `--sunk` on row hover. Headers are `600 var(--fs-xs)` in `--muted`.
 - **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼`.
 - **Pager:** `pager()` shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
-- **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:852`) and shows the rest on click.
+- **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:851`) and shows the rest on click.
 - **Page length:** a table paginates at 50 rows with `pager()`.
 - **Wide tables:** `.tscroll` (`ui/app.css:466`) scrolls sideways.
 - **Empty table:** `empty()` in place of the table.
@@ -204,12 +204,12 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `cha
 - **Meters:** `meter()` (`ui/lib.js`) draws every share bar, one share or segments, as `.meter` (`ui/app.css`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
 - **Bar lists:** `barRow()` and `barList()` (`ui/lib.js`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:350`) and `priorityBadge()` (`ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
-- **Efficiency bar:** `.obar` (`ui/app.css:879`), in the five `--seg-*` colours under white text.
+- **Efficiency bar:** `.obar` (`ui/app.css:878`), in the five `--seg-*` colours under white text.
 - **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it: `loadingLine()` (`ui/views/factory-agents.js:108`). Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:564`), and each option names its series.
 
 ## Metric cards
 
-A metric card is the standard data card. The Status scorecard set the design; every page with metric cards uses it. `statCard()` (`ui/lib.js`) draws one card, `tiles()` lays the cards out as an auto-fit grid of 150px minimum that stretches to fill the row, and the CSS is `.tile` (`ui/app.css:723`). Do not write card markup by hand.
+A metric card is the standard data card. The Status scorecard set the design; every page with metric cards uses it. `statCard()` (`ui/lib.js`) draws one card, `tiles()` lays the cards out as an auto-fit grid of 150px minimum that stretches to fill the row, and the CSS is `.tile` (`ui/app.css:722`). Do not write card markup by hand.
 
 A card has 3 rows and nothing else:
 
@@ -245,7 +245,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 ## Content
 
 - **Markdown:** `md()` (`ui/lib.js:118`) renders into `.md` (`ui/app.css:591`); headings are `600 var(--fs-lg)` in the sans face.
-- **Code:** `pre` (`ui/app.css:718`) and `code` (`ui/app.css:180`) use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:718`) or scroll (`.md pre`, `ui/app.css:593`).
+- **Code:** `pre` (`ui/app.css:717`) and `code` (`ui/app.css:180`) use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:717`) or scroll (`.md pre`, `ui/app.css:593`).
 - **Diffs:** `.diff-panel` (`ui/app.css:342`) on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`.diff-panel .d-hunk`, `ui/app.css:347`).
 - **Command box:** `cmd()` (`ui/lib.js:92`) renders `.cmd` (`ui/app.css:320`), a mono button that copies on click with a `.cp` control (`ui/app.css:331`); `primary` (`.cmd.primary`, `ui/app.css:328`) inverts it.
 - **Not determined:** the wrap rule of every long-text view was not traced.
@@ -268,7 +268,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Shell:** a sidebar (`#nav`, `ui/app.css:557`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:30`); the sidebar collapses to 48px on desktop (`ui/app.css:579`) and its state is kept in `localStorage`.
 - **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:209`, `ui/app.css:537`).
 - **Skeleton:** `pageHead()` (`ui/lib.js:295`) with the serif title and a muted count, then `card()` sections with a `sectionHead()`; Status has its own `.shead` (`ui/app.css:210`). A detail page starts with `crumb()` (`ui/lib.js:337`).
-- **Grid:** `.tiles` (`ui/app.css:722`) holds the metric cards (see Metric cards); `.lanes` (`ui/app.css:189`) is 3 columns, 2 at 1100px and below, 1 at 720px and below.
+- **Grid:** `.tiles` (`ui/app.css:721`) holds the metric cards (see Metric cards); `.lanes` (`ui/app.css:189`) is 3 columns, 2 at 1100px and below, 1 at 720px and below.
 - **Phone:** at 720px and below, 11 rules change the layout; tables scroll inside `.tscroll` (`ui/app.css:466`). What each table does at a phone width was not seen in a browser.
 
 ## Accessibility

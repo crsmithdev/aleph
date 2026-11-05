@@ -505,7 +505,6 @@ table.tbl .chips { white-space: nowrap; }
 .cards.types > a:hover { border-color: var(--ink-2); }
 .kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: var(--sp-4) 24px; }
 .kinds > * { min-width: 0; }
-.sub h3 .count { margin-left: var(--sp-8); font: var(--fw-mid) var(--fs-sm) var(--num); color: var(--muted); }
 ul.notes { overflow-wrap: anywhere; }
 ul.tight { margin: var(--sp-4) 0; padding-left: 18px; }
 ul.tight li { margin: 1px 0; overflow-wrap: anywhere; }
