@@ -1,5 +1,5 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, cardTrend, chart, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { barsOption, card, cardTrend, chart, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
 import { lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
@@ -31,7 +31,7 @@ function roles(a, m) {
   // The outcome row for a config row: the one of its role and current model, when no other config row claims it.
   const claims = [];
   const find = (role, model) => {
-    const o = outs.find((x) => x.role === role && x.model === model);
+    const o = outs.find((x) => x.role === role && shortModel(x.model) === model);
     if (o) claims.push(o);
     return o;
   };
@@ -44,7 +44,7 @@ function roles(a, m) {
   const tierRows = m ? Object.entries(TIERS) : [];
   const roleOf = (tier) => (tier.startsWith("worker") ? "worker" : tier);
   // Two config rows on one role and model leave that outcome unmerged.
-  const shared = (role, model) => tierRows.filter(([t]) => roleOf(t) === role && m.tiers[t]?.model === model).length > 1;
+  const shared = (role, model) => tierRows.filter(([t]) => roleOf(t) === role && shortModel(m.tiers[t]?.model) === shortModel(model)).length > 1;
   const merged = (role, model) => (shared(role, model) ? undefined : find(role, model));
   const pick = ([tier, [name, claude]]) => {
     const t = m.tiers[tier], box = tier.startsWith("worker") ? `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${esc(name)} enabled"${t?.enabled ? " checked" : ""}> ` : "";
@@ -52,7 +52,7 @@ function roles(a, m) {
       [claude, "gpt-oss-20b"].map((v) => `<option value="${v}"${t?.model === v ? " selected" : ""}${v === "gpt-oss-20b" && !up ? " disabled" : ""}>${v}</option>`).join("") + `</select></td>${stats(merged(roleOf(tier), t?.model))}</tr>`;
   };
   const config = m ? tierRows.map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${stats(find(n.toLowerCase(), model))}</tr>`).join("") : "";
-  const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${esc(o.model)}</td>${stats(o)}</tr>`).join("");
+  const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, "Jobs"], num), rows) : empty("No agent ran in this window.");
 }
 

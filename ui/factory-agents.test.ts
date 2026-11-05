@@ -33,7 +33,20 @@ test("the Roles table has a row per role and model, with the warn tone under 70%
   expect(row("Worker · gpt-oss-20b")).toMatch(/<td class="num">80%.*?class="tr[^"]*"/);
   expect(row("Worker · gpt-oss-20b")).not.toContain("warn");
   expect(row("Worker · gpt-oss-20b")).toContain('<td class="num">10</td><td class="num">80%');
-  expect(row("Reviewer · unset")).toContain('<td class="num">9</td><td class="num">1</td>');
+  expect(row("Reviewer · not recorded")).toContain('<td class="num">9</td><td class="num">1</td>');
+});
+
+test("an outcome on a full model id joins the row of its short model; an unset model reads not recorded", () => {
+  const o = (role: string, model: string, runs: number) => ({ role, model, runs, succeeded: runs, failed: 0, stuck: 0, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 });
+  const row = (h: string, name: string) => h.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
+  const outcomes = [o("intake", "claude-opus-5-5", 151), o("worker", "claude-haiku-4-5-20251001", 7), o("reviewer", "unset", 3)];
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up" });
+  expect(row(h, "Intake")).toMatch(/<td>opus<\/td><td class="num">151<\/td>/);
+  expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
+  expect(row(h, "Worker low")).toMatch(/<select.*<td class="num">7<\/td>/);
+  expect(h).not.toMatch(/<td>claude-/);
+  expect(row(h, "Reviewer")).toContain("<td>not recorded</td>");
+  expect(h).not.toMatch(/<td>unset<\/td>/);
 });
 
 test("the tiles come from the state and the agents", () => {
