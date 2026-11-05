@@ -60,3 +60,19 @@ test("the title is the sidebar name, whatever the data", () => {
   expect(renderFactoryAgents(S, D)).toContain('<header class="ph"><h1>Agents</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
   expect(renderFactoryAgents({ ...S, usage: undefined }, null)).toContain('<header class="ph"><h1>Agents</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
 });
+
+test("the Models card has a Claude | Local control per slot and four fixed rows; the card says up or down and the Local buttons follow", () => {
+  const slots = { "worker.haiku": "claude", "worker.sonnet": "local", merge: "claude", title: "claude", judge: "local" };
+  const down = renderFactoryAgents(S, D, "live", "week", { slots, local: "down" });
+  expect(down).toContain("Local server: down");
+  expect(down.match(/<button type="button" data-value="local" aria-pressed="(true|false)" disabled>/g)!.length).toBe(5);
+  const up = renderFactoryAgents(S, D, "live", "week", { slots, local: "up" });
+  expect(up).toContain("Local server: up");
+  expect(up).not.toContain("disabled");
+  const group = (slot: string) => up.match(new RegExp(`data-slot="${slot}">(.*?)</div>`))![1];
+  expect(group("worker.sonnet")).toContain('data-value="local" aria-pressed="true"');
+  expect(group("worker.sonnet")).toContain('data-value="claude" aria-pressed="false"');
+  expect(group("merge")).toContain('data-value="claude" aria-pressed="true"');
+  expect([...up.matchAll(/<b>(\w+)<\/b><span>Claude, fixed/g)].map((x) => x[1])).toEqual(["Intake", "Review", "Monitor", "Director"]);
+  expect(renderFactoryAgents(S, D)).toContain("Loading the models");
+});

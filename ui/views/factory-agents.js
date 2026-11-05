@@ -51,14 +51,27 @@ export function slotsOption(d, cap) {
 
 export const usageOption = (series) => lineOption(series.map((p) => when(p.at)), "Used, %", series.map((p) => Math.round(p.seven_day * 10) / 10), { max: 100 });
 
+const SLOT_NAMES = { "worker.haiku": "Worker haiku", "worker.sonnet": "Worker sonnet", merge: "Merge", title: "Title", judge: "Judge" };
+const FIXED = ["Intake", "Review", "Monitor", "Director"];
+
+/** The Models card: a Claude | Local control per slot, the fixed roles, and the local server's state. `m` is /api/models, or null while it loads. */
+function models(m) {
+  if (!m) return card("Models", loadingLine("the models"), { id: "models" });
+  const up = m.local === "up";
+  const row = ([slot, name]) => `<div class="cap-row"><b>${esc(name)}</b><div class="seg" role="group" aria-label="${esc(name)} backend" data-slot="${esc(slot)}">` +
+    [["claude", "Claude"], ["local", "Local"]].map(([v, l]) => `<button type="button" data-value="${v}" aria-pressed="${m.slots[slot] === v}"${v === "local" && !up ? " disabled" : ""}>${l}</button>`).join("") + `</div></div>`;
+  return card("Models", `<p class="quiet">Local server: ${up ? "up" : "down"}</p><div class="caps">` + Object.entries(SLOT_NAMES).map(row).join("") +
+    FIXED.map((n) => `<div class="cap-row"><b>${n}</b><span>Claude, fixed</span></div>`).join("") + `</div>`, { id: "models" });
+}
+
 /** The page body. `d` is /api/speed for the window, or null while it loads; `key` is the selected tile. */
-export function renderFactoryAgents(s, d, key = "live", window = "week") {
+export function renderFactoryAgents(s, d, key = "live", window = "week", m = null) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null, cur = DETAILS[key] ? key : "live";
   const wait = d?.error ? `<p>${esc(d.error)}</p>` : loadingLine("the agents");
   const scope = filterBar([{ name: "window", value: win, options: WINDOWS }]);
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, cur, w))}` +
     card(DETAILS[cur].title, a ? `<div class="chartbox" role="img" aria-label="${esc(DETAILS[cur].title)}"></div>` : wait) +
-    card("Roles", a ? roles(a) : wait) + `</div>`;
+    models(m) + card("Roles", a ? roles(a) : wait) + `</div>`;
 }
 
 /** The old address. */
@@ -66,7 +79,8 @@ export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/statu
 
 const windowNow = () => windowOf(hashQuery());
 const picked = () => hashQuery().get("tile") ?? "live";
-let drawn = null;
+let drawn = null, modelsNow = null;
+const post = (body) => fetch("/api/models", { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body) });
 
 export const view = {
   path: "/factory/agents",
@@ -79,7 +93,7 @@ export const view = {
   render: (s, _params, q) => renderFactoryAgents(s, usable(windowOf(q)), q?.get("tile") ?? "live", windowOf(q)),
   mount: async (root, s) => {
     const draw = (d) => {
-      root.innerHTML = renderFactoryAgents(s, d, picked(), windowNow());
+      root.innerHTML = renderFactoryAgents(s, d, picked(), windowNow(), modelsNow);
       wireScope(root);
       onTile(root.querySelector("#capacity"), (k) => { setQuery({ tile: k === "live" ? "" : k }); draw(d); root.querySelector(`button[data-tile="${k}"]`)?.focus(); });
       drawn?.dispose();
@@ -87,7 +101,15 @@ export const view = {
       const el = root.querySelector(".chartbox"), detail = DETAILS[picked()] ?? DETAILS.live;
       if (el && d?.agents && globalThis.echarts) drawn = chart(el, detail.option(s, d));
     };
+    root.onclick = async (e) => {
+      const b = e.target.closest?.("#models .seg button");
+      if (!b || b.disabled) return;
+      const res = await post({ slot: b.parentElement.dataset.slot, backend: b.dataset.value });
+      if (res.ok) { modelsNow = await res.json(); draw(usable(windowNow())); }
+    };
     keepWindow(windowNow());
+    draw(usable(windowNow()));
+    modelsNow = await fetch("/api/models").then((r) => r.json()).catch(() => null);
     draw(usable(windowNow()));
     const d = await loadSpeed(windowNow());
     if (root.querySelector("#capacity")) draw(d);
