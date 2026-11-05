@@ -9,9 +9,9 @@ function scorecard(s, a, w) {
   const f = s.factory;
   return usageCard(s) +
     statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: f.liveCap == null ? "–" : count(f.liveCap), q: ["in use", "cap"] }) +
-    rateCard("Success rate", a?.rates?.success, a?.rates?.baseline, "ended runs, all roles") +
+    rateCard("Success rate", a?.rates?.success, a?.rates?.baseline, "ended jobs, all roles") +
     rateCard("Worker first pass", a?.rates?.firstPass, null, "landed builds, no fix round") +
-    rateCard("Local share", a?.rates?.local, null, "runs on gpt-oss-20b");
+    rateCard("Local share", a?.rates?.local, null, "jobs on gpt-oss-20b");
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */
@@ -23,7 +23,7 @@ const TIERS = { "worker-low": "Worker low", "worker-medium": "Worker medium", me
 const FIXED = [["Intake", "opus"], ["Review", "opus"], ["Monitor", "opus"], ["Director", "fable"]];
 
 function roles(a, m) {
-  const num = ["Runs", "Success", "p50", "Cost", "First Pass", "Reviewer Pass", "Pass", "Fail"];
+  const num = ["Jobs", "Success", "p50", "Cost", "First Pass", "Reviewer Pass", "Pass", "Fail"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const cell = (v) => `<td class="num">${v == null ? "–" : count(v)}</td>`;
   const outs = a.outcomes ?? [];
@@ -38,7 +38,7 @@ function roles(a, m) {
     if (!o) return `${cell(null).repeat(num.length)}<td>–</td>`;
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed runs</a></td>`;
+    return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
   };
   const tierRows = m ? Object.entries(TIERS) : [];
   const roleOf = (tier) => (tier.startsWith("worker") ? "worker" : tier);
@@ -52,7 +52,7 @@ function roles(a, m) {
   };
   const config = m ? tierRows.map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${stats(find(n.toLowerCase(), model))}</tr>`).join("") : "";
   const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
-  return rows ? dataTable(heads(["Role", "Model", ...num, "Jobs"], num), rows) : empty("No agent ran in this window.");
+  return rows ? dataTable(heads(["Role", "Model", ...num, ""], num), rows) : empty("No agent ran in this window.");
 }
 
 const stacked = (o) => ({ ...o, grid: { ...o.grid, top: 28 }, legend, series: o.series.map((s) => ({ ...s, stack: "all" })) });

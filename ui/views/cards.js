@@ -11,7 +11,7 @@ export const checkFacts = (j) =>
   (j.checks || []).map((c) => [c.name.charAt(0).toUpperCase() + c.name.slice(1), `${esc(dur(c.seconds))} ${c.ok ? "✓" : "✗"}`]);
 /** "Oct 28 04:28" from a job folder id like 20261028-042822-aleph-aleph-240-agent: the id's own local time, as `when` shows it. */
 const idStart = (m, now) => when(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])), new Date(now));
-const KINDS = { agent: "agent run", land: "land", intake: "intake", triage: "triage", plan: "planner", firefighter: "firefighter", director: "director", explain: "explainer" };
+const KINDS = { agent: "agent job", land: "land", intake: "intake", triage: "triage", plan: "planner", firefighter: "firefighter", director: "director", explain: "explainer" };
 /** One trailer as text: Item shows its value alone; a Job ID (`a1375#6`) shows as it is, and an old Job folder id is parsed into its run kind and start; both link to the job page (raw id in the title). */
 const trailer = (t, j, now) => {
   if (t.key === "Item") return esc(t.value);

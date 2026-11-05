@@ -6,8 +6,8 @@ import { bucketOf, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./spee
 export const STAGES = [
   ["lead", "Lead Time", "From filing to the last land."],
   ["intake", "Intake", "From filing to the end of the first intake."],
-  ["queue", "Queue", "From intake to the first agent run. This includes waits for a slot or for another issue."],
-  ["implement", "Build", "From the first agent run to the last finish with work to land."],
+  ["queue", "Queue", "From intake to the first agent job. This includes waits for a slot or for another issue."],
+  ["implement", "Build", "From the first agent job to the last finish with work to land."],
   ["land", "Land", "From the finish to the land. This includes waits for a review or for Chris."],
 ];
 const PARTS = [["intake", "Intake"], ["queue", "Queue"], ["implement", "Build"], ["land", "Land"]];
@@ -97,8 +97,8 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
     `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p>${plot(d.buckets.some((b) => b[key] > 0 || b.p90?.[key] > 0), "trend", label(d, key, sentence(name), "p50 and p90 trend"))}`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
     card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome: its time across, its filing time up.</p>${plot(timed.some((i) => i.filed != null), "strip", label(d, key, sentence(name), "time per issue"))}`, { label: `${sentence(name)}: time per issue` }) +
     card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p>${plot(timed.length, "slowest", label(d, key, sentence(name), "slowest 10"))}`) + `</div>` +
-    `<div class="pair">${card("Checks", table(["Check", "Runs", "p50", "p90"], ["Runs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
-    card("Build Time by Model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
+    `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
+    card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
 }
 

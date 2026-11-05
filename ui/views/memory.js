@@ -79,7 +79,7 @@ function renderSemantic(m, s) {
 }
 
 function renderEpisodic(e) {
-  const eps = e.episodes.length ? moreFold(e.episodes, (n) => `${esc(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : empty("No episode page yet.", "The factory's tick writes one per done goal.");
+  const eps = e.episodes.length ? moreFold(e.episodes, (n) => `${esc(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : empty("No episode page yet.", "The factory's tick writes one per done issue.");
   const daily = e.daily.total ? moreFold(e.daily.latest.map((d) => ({ d })), (x) => link(x.d)) : empty("No daily page yet.", "The vault CLI starts one at the first write of a day.");
   const sess = e.sessions === null ? empty("Sessions are not available.", "Langfuse keys fill this.")
     : e.sessions.length ? moreFold(e.sessions, (x) => `<a href="#/sessions/${encodeURIComponent(x.id)}">${esc(x.firstPrompt || x.id)}</a> ${q(esc(`${x.project} · ${x.turns} turns · ${ago(x.last)}`))}`)

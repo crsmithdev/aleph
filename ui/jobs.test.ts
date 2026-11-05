@@ -342,6 +342,15 @@ describe("render", () => {
     expect(checks).toContain("Took");
     expect(checks).not.toContain("Time");
   });
+  test("the Job page of a sub-issue says sub-issue, and its work lane counts jobs", () => {
+    const parent = { id: "fac-9", href: "#/issues/fac/9", n: 1, of: 2, next: { id: "fac-10", href: "#/jobs/fac-10" } };
+    const h = v.renderJob({ ...job, parent, runs: [{ id: "1", kind: "triage", condition: "done", started: ago(3), ended: ago(2) }] });
+    expect(h).toContain("sub-issue 1 of 2 of");
+    expect(h).toContain("Next sub-issue: fac-10");
+    expect(h).toContain(">1 job<");
+    expect(h).not.toMatch(/\bparts?\b/i);
+    expect(h).not.toMatch(/\bruns?\b/i);
+  });
   test("the Review tag is the reviewer's JSON verdict, not a line of review.md", () => {
     const h = (o: object) => v.renderJob({ ...job, review: "Text says VERDICT: hold x.", ...o });
     expect(h({ verdict: "pass" })).toContain('class="badge done">pass<');

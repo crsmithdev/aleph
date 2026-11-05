@@ -121,6 +121,15 @@ test("the page lists the jobs with the search, the State filter and the Project 
   expect(renderFactoryJobs(D, null, "lead", null, {})).toContain("Loading jobs");
 });
 
+test("the Checks and Models tables head their count Jobs, and the stage line names jobs too", () => {
+  const h = renderFactoryJobs(D, null, "queue");
+  const heads = [...h.matchAll(/<th[^>]*>([^<]+)<\/th>/g)].map((m) => m[1].trim());
+  expect(heads.filter((t) => t === "Jobs")).toHaveLength(2);
+  expect(heads.filter((t) => /runs|goal|part/i.test(t))).toEqual([]);
+  expect(h).toContain("From intake to the first agent job.");
+  expect(h).not.toContain("agent run");
+});
+
 test("#/jobs redirects to the merged page with its query; a Job page does not", () => {
   expect(redirect("#/jobs?window=day")).toBe("#/factory/jobs?window=day");
   expect(redirect("#/jobs?repo=fac")).toBe("#/factory/jobs?repo=fac");

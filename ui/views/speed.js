@@ -124,7 +124,7 @@ const LANDED = ["landed", "returned"];
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/speed for the window. */
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return empty(`No agent run of an issue ended in the ${lastPeriod(d)}.`);
+  if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`);
   const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${esc(pct((c.hours / total) * 100))}</span></button>`;
   const group = (xs, t) => (xs.length ? `<div class="ogrp" style="flex:${xs.reduce((a, c) => a + c.hours, 0)}"><span class="obk">${t}</span><div class="osegs">${xs.map(seg).join("")}</div></div>` : "");
   const good = cs.filter((c) => LANDED.includes(c.key)), lost = cs.filter((c) => !LANDED.includes(c.key));

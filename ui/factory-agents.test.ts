@@ -176,6 +176,14 @@ test("the Roles headers are in Title Case, and every number header has num", () 
   expect(heads.filter(([, n]) => n).length).toBe(8);
 });
 
+test("the Roles table heads its job count Jobs, and no head keeps the old words", () => {
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } });
+  const names = th(h).map(([t]) => String(t));
+  expect(names).toContain("Jobs");
+  expect(names.filter((t) => /runs|goal|part/i.test(t))).toEqual([]);
+  expect(h).toContain(">Failed jobs</a>");
+});
+
 test("a Roles count goes through count()", () => {
   expect(renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [one] } })).toContain('<td class="num">1,234</td>');
 });

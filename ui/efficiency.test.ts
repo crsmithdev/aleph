@@ -72,7 +72,7 @@ test("the tiles and the head come from the data", () => {
   expect(h).not.toContain("vs 30-day average");
   expect(h).not.toContain("in the last 24h");
   expect(h).toContain("&lt;0.1%");
-  expect(h).toContain("20h counted · 11 runs, 0.4h, have no outcome yet");
+  expect(h).toContain("20h counted · 11 jobs, 0.4h, have no outcome yet");
   expect(renderEfficiency({ ...D, issues: { ...D.issues, week: null } }, "all")).toContain("needs 6 hours of usage snapshots");
 });
 
@@ -88,17 +88,26 @@ test("All lost time: the causes sum to lost.hours", () => {
 test("the causes card is a table beside the issues card, with no intro and no File an issue button", () => {
   const h = renderEfficiency(D, "all");
   const causes = h.slice(h.indexOf('aria-label="Lost time causes"'), h.indexOf('aria-label="Lost time issues"'));
-  expect([...causes.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1])).toEqual(["Cause", "Took", "Runs", "Bar"]);
+  expect([...causes.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1])).toEqual(["Cause", "Took", "Jobs", "Bar"]);
   expect([...causes.matchAll(/<tr><td[^>]*>([^<]+)<\/td><td class="num">([^<]+)<\/td><td class="num">(\d+)</g)].map((m) => m.slice(1))).toEqual([["Issue had landed", "3.0h", "7"], ["No commit", "3.0h", "2"]]);
   expect(causes).toMatch(/<td><span class="meter" aria-hidden="true"><i style="width:[\d.]+%"><\/i>/);
   expect(h).toMatch(/<div class="pair"><section class="card"[^>]*aria-label="Lost time causes"/);
   for (const gone of ["together.", "File an issue", "data-file", 'id="filed"']) expect(h).not.toContain(gone);
 });
 
-test("the top table heads are Issue, Why, Took, Runs", () => {
+test("the top table heads are Issue, Why, Took, Jobs", () => {
   const h = renderEfficiency(D, "all");
   const top = h.slice(h.indexOf('aria-label="Lost time issues"'));
-  expect([...top.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1]).slice(0, 4)).toEqual(["Issue", "Why", "Took", "Runs"]);
+  expect([...top.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1]).slice(0, 4)).toEqual(["Issue", "Why", "Took", "Jobs"]);
+});
+
+test("every table heads its job count Jobs, and no head keeps the old words", () => {
+  const heads = (h: string) => [...h.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1]);
+  for (const k of ["all", "usage"]) {
+    const hs = heads(renderEfficiency(D, k));
+    expect(hs).toContain("Jobs");
+    expect(hs.filter((t) => /runs|goal|part/i.test(t))).toEqual([]);
+  }
 });
 
 test("selecting a class shows its causes; selecting Lost time again restores the merged list", () => {

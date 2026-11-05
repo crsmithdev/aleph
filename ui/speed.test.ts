@@ -6,7 +6,7 @@ import { withEnv } from "./test-server.ts";
 import { agentStats, CLASSES, classify, clearCache, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
-import { statusCards, weekText, xLabel } from "./views/speed.js";
+import { bar, statusCards, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 import * as record from "../jobs/lib/records/record.ts";
@@ -355,6 +355,12 @@ test("an unlanded run of an issue that left the store is Dropped", () => {
 test("the shared formats", () => {
   expect([weekText(0.02), weekText(2.5)]).toEqual(["<0.1%", "3%"]);
   expect([xLabel(new Date(2026, 9, 28, 13, 36).toISOString(), "hour"), xLabel(new Date(2026, 9, 28).toISOString(), "week")]).toEqual(["1:36p", "Oct 28"]);
+});
+
+test("the outcome bar with no hours names a job, not a run", () => {
+  const h = bar({ window: "week", classes: [] }, "all");
+  expect(h).toContain("No agent job on an issue ended in the last 7 days.");
+  expect(h).not.toMatch(/\bruns?\b/i);
 });
 
 test("activeEnd pulls ended back to the last worker activity", () => {

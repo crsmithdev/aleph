@@ -147,7 +147,7 @@ export function jobSegments(j, now = Date.now()) {
   if (work.length) segments.push({
     title: "Work", aside: j.condition === "landed" ? "to the land" : "",
     rows: [laneRow({
-      head: `<span class="quiet">${esc([builds ? plural(builds, "build") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "run"))}</span>`,
+      head: `<span class="quiet">${esc([builds ? plural(builds, "build") : "", lands ? plural(lands, "land") : ""].filter(Boolean).join(", ") || plural(work.length, "job"))}</span>`,
       runs: work, from: work[0].start, result: badge(j.condition), cost: true, holds: j.holds ?? [], runEvents: () => events,
       events: [...(j.defaults ?? []).map((d) => ({ tag: "Default", tone: "need", html: codeText(d) })),
         ...(j.followups ?? []).map((f) => ({ tag: "Follow-up", tone: "need", html: codeText(f) }))],
@@ -176,8 +176,8 @@ export function renderJob(j) {
   // The issue the job works on: a part's parent, else the job's own item.
   const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: `#/issues/${encodeURIComponent(j.repo)}/${j.item.id}` });
   const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(iss.id, j.repo)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
-  const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next part: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
-  const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `part ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}` }) : ""}<span class="idp">${esc(localId(j.name, j.repo))}</span></div>`;
+  const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next sub-issue: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
+  const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `sub-issue ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}` }) : ""}<span class="idp">${esc(localId(j.name, j.repo))}</span></div>`;
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
   const checkRun = (j.runs ?? []).findLast((r) => r.logs?.some((l) => l.name === "checks.log"));
   const checkLog = checkRun ? `<button class="link" type="button" data-log="${esc(checkRun.id)}" data-job="${esc(j.name)}" data-file="checks.log">checks.log</button>` : "";
