@@ -66,7 +66,7 @@ export function renderStages(s, sort = SORTS.stages) {
   return card("Stages", rows ? dataTable(head, rows) : empty("No stage ran."), { id: "stages" });
 }
 
-/** The monitor's Holds table: the day's value with a bar for goals; the trailing 7-day mean per day is in each cell's tooltip. At most 10 rows. */
+/** The monitor's Holds table: the day's value with a bar for affected issues; the trailing 7-day mean per day is in each cell's tooltip. At most 10 rows. */
 export function renderHolds(s, sort = SORTS.holds) {
   const all = s.factory?.monitor?.holds ?? [];
   const max = Math.max(0, ...all.map((r) => r.goals.day ?? 0));

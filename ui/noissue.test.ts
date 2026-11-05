@@ -12,7 +12,7 @@ const noIssue = (html: string) => expect(visible(html)).not.toMatch(/goal/i);
 // Attributes the reader meets too: placeholders, titles and aria labels.
 const attrs = (html: string) => [...html.matchAll(/\b(?:title|placeholder|aria-label|data-label)="([^"]*)"/g)].map((m) => m[1]).join(" ");
 
-// The Issue page, the Issues page and the Status lanes use the work model's names, so they say goal (see state.test.ts and issues.test.ts); the pages below keep the old rule.
+// The Issue page, the Issues page and the Status lanes use the work model's names, so they say issue (see state.test.ts and issues.test.ts); the pages below keep the old rule.
 describe("the UI never says goal", () => {
   const pages: [string, string][] = [
     ["now issues", renderLanes({ stuck: [], issues: [{ id: 3, title: "x", repo: "aleph" }], factory: { health: [] } })],

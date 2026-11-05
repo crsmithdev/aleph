@@ -7,7 +7,7 @@ export { trailerLine } from "./views/cards.js";
 
 /** Fixtures and helpers shared by the ui/now-*.test.ts files, after ui/test-browser.ts. */
 
-// The asks the server builds from the awaiting runs, the issues and goals with an Ask, and the proposals.
+// The asks the server builds from the awaiting runs, the issues with an Ask, and the proposals.
 export const asksOf = (runs: any[] = [], issues: any[] = [], lessons: any[] = []) => attend({ runs, issues }, lessons).items;
 export const withAttn = (s: any) => view.renderNeeds(s) + view.renderLanes(s);
 export const issue = (n: number) => ({ id: `aleph-${n}`, title: `Issue ${n}`, status: "open", href: `#/issues/aleph/${n}`, labels: [], notes: 0, created: "2026-10-27", updated: "2026-10-27" });

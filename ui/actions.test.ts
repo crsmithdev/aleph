@@ -67,7 +67,7 @@ test("POST /api/wait 400s without a blocker or an item", async () => {
 
 const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id === n && (n === 6 ? i.sub === 1 : i.sub === undefined))!.fm.after;
 
-test("POST /api/wait reads the issue from `on`, and the integer part of a goal's dotted `on`", async () => {
+test("POST /api/wait reads the issue from `on`, and the integer part of a part's dotted `on`", async () => {
   for (const [job, n] of [["won", 5], ["wgoal", 6]] as const) {
     const before = recorded().length;
     const res = await post(`/api/wait/${job}`, { "X-Aleph-UI": "1" }, { on: "r-9.1" });

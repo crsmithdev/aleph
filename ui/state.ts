@@ -25,7 +25,7 @@ const hrefOf = (repo: Repo, ref: string) => `#/issues/${encodeURIComponent(repo.
 const priorityOf = (item: any): string => PRIORITIES[rank(item)];
 const deadWait = (q: { waits?: Wait[] }): boolean => !!q.waits?.some((b) => b.dead);
 
-/** A part of a goal as a flat card says it: "n/m" with a link to the parent. */
+/** A part of an issue as a flat card says it: "n/m" with a link to the parent. */
 export interface Part { n: number; m: number; parent: string; href: string }
 
 export interface Job {
@@ -63,7 +63,7 @@ export interface Job {
 
 /** A new issue of a factory repo, in the shape of the Issue card. */
 export interface NewIssue { id: string; title: string; priority?: string; status: string; href: string; labels: string[]; notes: number; created: string; updated: string;
-  /** An issue or goal that awaits you: what Chris is asked. */
+  /** An issue that awaits you: what Chris is asked. */
   question?: string;
   /** Its Ask with options: the fields. */
   decision?: Ask;
@@ -76,7 +76,7 @@ export interface NewIssue { id: string; title: string; priority?: string; status
   /** The stage from stage(). */
   stage?: string }
 
-/** An issue in Running: its goals, each with its stage and the job that works on it. */
+/** An issue in Running: its parts, each with its stage and the job that works on it. */
 export interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
@@ -87,7 +87,7 @@ export interface IncomingItem { id: string; title: string; href: string; created
 export interface State {
   now: string;
   factory: {
-    paused: boolean; judge: "jev" | "haiku"; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; /** Live agent runs on the local backend, and the cap they count against. */ liveLocal: number; localCap: number; runCap: number; /** The most starts any one goal made in the last hour. */ runStarts: number; runsToday: number; costToday: number;
+    paused: boolean; judge: "jev" | "haiku"; liveCap: number; /** Live agent runs, the count the live cap checks. */ liveRuns: number; /** Live agent runs on the local backend, and the cap they count against. */ liveLocal: number; localCap: number; runCap: number; /** The most starts any one issue made in the last hour. */ runStarts: number; runsToday: number; costToday: number;
     nextTick: string | null;
     /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
     tickInProgress: boolean;
@@ -98,18 +98,18 @@ export interface State {
     monitor: ReturnType<typeof monitorPanel>;
   };
   stuck: Job[]; running: Job[]; delivered: Job[];
-  /** Everything that waits for Chris: one entry per awaiting run, issue, goal and proposal, with its kind (input or approval) and reason. */
+  /** Everything that waits for Chris: one entry per awaiting run, issue and proposal, with its kind (input or approval) and reason. */
   asks: AskItem[];
-  /** Queued and blocked goals (and old items): the Queued lane. */
+  /** Queued and blocked issues (and old items): the Queued lane. */
   queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; kind: IssueDecision["kind"];
     /** The hold event the dispatch stores in the record: the action word and the content the card shows. */
     ev?: Hold;
     waits?: { id: string; href: string; state: string | null }[] }[];
-  /** Issues in Running: each with its goals nested and "n of m issues". */
+  /** Issues in Running: each with its parts nested and "n of m issues". */
   runningIssues: RunningIssue[];
   /** Land runs in progress. */
   landing: number;
-  /** Open issues in factory repos that are not goals and not yet taken in: the newest NEW_ISSUES. */
+  /** Open issues in factory repos that are not parts and not yet taken in: the newest NEW_ISSUES. */
   issues: NewIssue[];
   /** How many such issues there are in all. */
   newIssues: number;
@@ -311,7 +311,7 @@ export function state(now = new Date()): State {
       running.push(toJob(runs));
       continue;
     }
-    // An intake, triage, planner or facts run sorts a goal and never lands; it shows only when it awaits you.
+    // An intake, triage, planner or facts run sorts an issue and never lands; it shows only when it awaits you.
     if (last.kind === "intake" || last.kind === "triage" || last.kind === "plan" || last.kind === "facts") {
       if (isOpen(runs) && isWaiting(lastReal(runs).run.condition)) needs.push(toJob(runs));
       continue;
@@ -403,7 +403,7 @@ export function state(now = new Date()): State {
     for (const item of doc?.items ?? []) {
       const ref = refOf(item), id = `${repo.key}-${ref}`, href = hrefOf(repo, ref);
       const st = stageById.get(ref)?.stage ?? status(item);
-      // Incoming and Done list issues; a goal with an issue shows under it.
+      // Incoming and Done list issues; a part shows under its issue.
       const top = parentRef(item) === undefined;
       const card = (): NewIssue => ({ id, title: item.title, priority: priorityOf(item), status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
       const created = String(item.fm.created ?? "");

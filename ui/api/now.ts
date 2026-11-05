@@ -6,7 +6,7 @@ import { loadState } from "../state-load.ts";
 import { cachedSpeed } from "./speed.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
 
-/** The state with only `project`'s jobs and queued goals; the factory and ticks stay whole. */
+/** The state with only `project`'s jobs and queued issues; the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
   if (!project) return s;
   const mine = <T extends { repo: string }>(a: T[]) => a.filter((x) => x.repo === project);

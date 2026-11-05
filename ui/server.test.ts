@@ -23,7 +23,7 @@ beforeAll(async () => {
     mkdirSync(folder, { recursive: true });
     writeRun(folder, JSON.parse(run({ name, job: name, repo })));
   }
-  // A view added the way a view goal adds one: two new files, no edit to server.ts.
+  // A view added the way a view issue adds one: two new files, no edit to server.ts.
   pageDir = join(base, "page"); apiDir = join(base, "api");
   for (const f of ["index.html", "app.css", "lib.js", "system-parts.js", "decision.js", "timeline.js", "views", "vendor"]) cpSync(join(import.meta.dir, f), join(pageDir, f), { recursive: true });
   cpSync(join(import.meta.dir, "..", "lib"), join(base, "lib"), { recursive: true });

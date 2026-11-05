@@ -126,17 +126,17 @@ test("classify: one run of each class, with its cause", () => {
   const r = (job: string, todo: number, h: number, m: number, o: Record<string, unknown> = {}) =>
     ({ kind: "build", job, name: job, repo: "fx", on: `fx-${todo}`, condition: "passed", started: t(h, m), ended: t(h, m + 10), ...o }) as any;
   const runs = [
-    // goal 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
+    // issue 1: a fix round and the landing run in job a, an earlier job z restarted, then a run after the land
     r("z", 1, 1, 0, { condition: "failed", reason: "agent run z: stalled" }),
     r("a", 1, 2, 0, { condition: "failed", failed: "tests" }),
     r("a", 1, 3, 0),
     { kind: "land", job: "a", name: "a", repo: "fx", on: "fx-1", condition: "landed", started: t(3, 20), ended: t(3, 25) },
     r("b", 1, 5, 0),
-    // goal 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
+    // issue 2: four starts in an hour, the 4th is a loop; they have no landing, the first three are not counted
     r("l1", 2, 6, 0), r("l2", 2, 6, 10), r("l3", 2, 6, 20), r("l4", 2, 6, 30),
-    // goal 3 is dropped
+    // issue 3 is dropped
     r("d", 3, 8, 0, { condition: "failed", noCommit: true }),
-    // goal 4 is open and unclassed
+    // issue 4 is open and unclassed
     r("o", 4, 9, 0),
   ];
   const status = (g: string) => (g === "fx-3" ? "dropped" : "open");

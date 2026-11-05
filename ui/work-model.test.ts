@@ -54,13 +54,13 @@ beforeAll(async () => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: repo, sandbox: true, checks: [] } }));
   restoreEnv = withEnv({ ALEPH_JOBS_DIR: runsDir, ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: store, ALEPH_FACTORY_DIR: factory, ...gitEnv });
   writeList({ key: "fac" }, "seed", (doc) => {
-    // fac-1: three goals; .1 is done, .2 builds, .3 runs after .2.
+    // fac-1: three issues; .1 is done, .2 builds, .3 runs after .2.
     const one = add(doc, "Three goals", { request: "Do three things.\n" });
     const g1 = addPart(doc, one, { title: "first", spec: "Do it." });
     addPart(doc, one, { title: "second", spec: "Do it.", after: [`fac-1.1`] });
     addPart(doc, one, { title: "third", spec: "Do it.", after: [`fac-1.2`] });
     setStatus(g1, "done");
-    // fac-2: one goal that waits for approval; fac-3: an issue that awaits input; fac-4: a new issue.
+    // fac-2: one part that waits for approval; fac-3: an issue that awaits input; fac-4: a new issue.
     const two = add(doc, "Needs a go-ahead", { request: "Ask first.\n" });
     const g = addPart(doc, two, { title: "gated", spec: "Do it." });
     setAsk(refIn(doc.repo!, g), { kind: "input", reason: "question", question: "Update left-pad?", options: [], why: [] });
@@ -103,7 +103,7 @@ describe("/api/state on a work-model store", () => {
 
 describe("the Issue page", () => {
 
-  test("a goal's page names its issue and has no goals of its own", async () => {
+  test("a part's page names its issue and has no parts of its own", async () => {
     const d = await getJson("/api/issues/fac/1.2");
     expect(d).toMatchObject({ ref: "1.2", goals: [], issue: { id: "fac-1", href: "#/issues/fac/1" } });
     expect(d.jobs.map((j: any) => j.name)).toEqual(["fac-1.2"]);

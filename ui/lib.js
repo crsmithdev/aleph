@@ -1,7 +1,7 @@
 // Shared helpers for the factory UI's views: escaping, time and money formats,
 // the empty and error states, the copy-command button, and a small Markdown
 // renderer. Plain JS with no DOM, so the page and the tests both import it.
-// View goals may add to this file but not change what is here (the 2026-11-04 format goal did: a unit follows a number with no space).
+// View issues may add to this file but not change what is here (the 2026-11-04 format issue did: a unit follows a number with no space).
 
 export function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);

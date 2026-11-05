@@ -25,7 +25,7 @@ import { filed } from "./speed.ts";
 import { readHolds } from "../../jobs/lib/gates/factory-status.ts";
 import { sameSite } from "../http.ts";
 
-/** An issue or goal id from a route: `7` or `7.1`; null for anything else. */
+/** An issue id from a route: `7` or `7.1`; null for anything else. */
 const refOf = (raw: string): number | string | null => (/^\d+$/.test(raw) ? Number(raw) : /^\d+\.\d+$/.test(raw) ? raw : null);
 
 
@@ -102,7 +102,7 @@ function jobRow(runs: ReturnType<typeof allJobs>[number]) {
   return { name: r.name, condition: r.condition, kind: r.kind, started: runs[0].run.started, ended: r.ended ?? null, cost: cost ?? null, runs: runs.length };
 }
 
-/** Whether an `onOf` value names issue `n`: the number itself, or a goal `<n>.<k>` of it. */
+/** Whether an `onOf` value names issue `n`: the number itself, or a part `<n>.<k>` of it. */
 const isOfIssue = (on: number | string | undefined, n: number): boolean =>
   typeof on === "number" ? on === n : typeof on === "string" && Number(on.split(".")[0]) === n;
 
@@ -130,7 +130,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   const onThis = (on: number | string | undefined) => (!ref.includes(".") ? isOfIssue(on, n) || partRefs.includes(String(on)) : String(on) === ref);
   const jobs = all.filter((runs) => runs.some((e) => onThis(onOf(e.run)))).map(jobRow);
 
-  // The Issue page: the `## Request`, then the goals, each with its Job.
+  // The Issue page: the `## Request`, then the parts, each with its Job.
   const parts = partRefs.map((g) => {
     const gi = todos.find(doc!, g), st = states.get(g);
     return { id: `${repo.key}-${g}`, title: gi?.title ?? "", href: `#/issues/${encodeURIComponent(repo.key)}/${g}`, priority: String(gi?.fm.priority ?? "medium"), stage: st?.stage ?? (gi ? todos.status(gi) : "missing"), why: st?.why ?? "", jobs: jobsOf(g) };

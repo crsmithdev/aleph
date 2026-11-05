@@ -1,6 +1,6 @@
 /**
  * What the Awaiting-you rows say and offer (the `asks` of /api/state). The server decides from the Ask's reason and the item's data;
- * the page only renders. One entry per run, issue or goal that waits for Chris, and per proposal.
+ * the page only renders. One entry per run, issue that waits for Chris, and per proposal.
  */
 import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
 import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Granted } from "../jobs/lib/asks/ask.ts";
@@ -19,11 +19,11 @@ export interface AskItem {
   actions: Action[]; /** What the limits moved out of the card's text, and the director's `details`: shown under Details. */ more?: string[]; always?: { label: string; action: string; hint: string; reason?: string }; details: Details;
   /** The project key, for `?project=`. */
   repo?: string;
-  /** The priority of the issue, goal or run's item it is about; none for a proposal. */
+  /** The priority of the issue or run's item it is about; none for a proposal. */
   priority?: string;
   /** A waiting run: a live run exists for it, the trailers the land will write, its defaults and follow-ups. */
-  /** A waiting run: the goal or issue it is on. */ on?: string;
-  /** The date shown on the card, and when the work was first picked up (ISO, "" for never); a part of a goal as "n/m" of its parent. */
+  /** A waiting run: the issue it is on. */ on?: string;
+  /** The date shown on the card, and when the work was first picked up (ISO, "" for never); a part of an issue as "n/m" of its parent. */
   at?: string; since?: string; part?: { n: number; m: number; parent: string; href: string };
   agent?: boolean; trailers?: { key: string; value: string }[]; defaults?: string[]; followups?: string[];
 }
@@ -244,8 +244,8 @@ function item(reason: string, c: Ctx, key: string, href: string, title: string, 
 }
 
 /**
- * The asks: runs that await, then issues and goals that await, then proposals. `runs` are the awaiting runs, each with its `ask`;
- * `issues` the issues and goals that hold an Ask.
+ * The asks: runs that await, then issues that await, then proposals. `runs` are the awaiting runs, each with its `ask`;
+ * `issues` the issues that hold an Ask.
  */
 export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[] = openProposals()): { items: AskItem[] } {
   const out: AskItem[] = [];
@@ -264,7 +264,7 @@ export function attend(s: { runs: Job[]; issues: NewIssue[] }, lessons: Lesson[]
 /** The asks alone. */
 export const asks = (s: { runs: Job[]; issues: NewIssue[] }, lessons?: Lesson[]): AskItem[] => attend(s, lessons).items;
 
-/** The open issue a stuck job cannot succeed before: the goal's own first `after`, else one its last run's reason names. */
+/** The open issue a stuck job cannot succeed before: the part's own first `after`, else one its last run's reason names. */
 export interface Blocker { id: string; title: string; href: string }
 export function stuckBlocker(j: Pick<Job, "repo" | "item" | "reason">, after: string | null | undefined, open: ReadonlyMap<string, { title: string; href: string }>): Blocker | null {
   const own = j.item ? `${j.repo}-${j.item.id}` : "";

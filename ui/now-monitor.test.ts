@@ -41,7 +41,7 @@ test("Stages and Holds heads are Title Case sortHead buttons, with no cost per i
   expect(labels(view.renderHolds(only(many)))).toEqual([["kind", "Kind"], ["goals", "Affected Issues"], ["hours", "Took"]]);
 });
 
-test("rows sort by runs per item and goals, descending, by default; another key or direction reorders them", () => {
+test("rows sort by runs per item and issues, descending, by default; another key or direction reorders them", () => {
   expect(firsts(view.renderStages(only(many)))).toEqual(["b", "c", "a"]);
   expect(firsts(view.renderHolds(only(many)))).toEqual(["y", "z", "x"]);
   expect(firsts(view.renderStages(only(many), { key: "runs", dir: 1 }))).toEqual(["a", "c", "b"]);
@@ -49,7 +49,7 @@ test("rows sort by runs per item and goals, descending, by default; another key 
   expect(firsts(view.renderHolds(only(many), { key: "hours", dir: -1 }))).toEqual(["x", "z", "y"]);
 });
 
-test("the runs per item and goals cells hold a bar that scales with the value", () => {
+test("the runs per item and issues cells hold a bar that scales with the value", () => {
   expect(widths(view.renderStages(only(many)))).toEqual([100, expect.closeTo(66.7, 1), expect.closeTo(33.3, 1)]);
   expect(widths(view.renderHolds(only(many)))).toEqual([100, 50, 25]);
 });

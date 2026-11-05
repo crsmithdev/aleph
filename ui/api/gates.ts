@@ -137,7 +137,7 @@ function oldLine(at: string, line: string): LogEntry[] {
   let m: RegExpExecArray | null;
   const one = (by: string, subject: string, f: Fields): LogEntry[] => [{ at, by, subject, ...f }];
   if ((m = /^always: revoked (\S+)$/.exec(line))) return one("human", m[1], { action: "changed", sub: askSub(m[1]), to: "human", note: "set to Ask me" });
-  // A rescue rule dropped the run and the goal reran; its second line, `<name>: always: Rerun; …`, is the same act.
+  // A rescue rule dropped the run and the issue reran; its second line, `<name>: always: Rerun; …`, is the same act.
   if ((m = /^(?:always|standing): (\S+): (\S+) on (\S+)$/.exec(line))) return one("rule", m[3], m[1] === "rescue" ? { action: "reran", sub: "rescue", result: "dropped" } : { action: act(m[2]), sub: askSub(m[1]) });
   if ((m = /^director: (\S+): (\S+): decided: ([\s\S]*)$/.exec(line))) { const [, ref, reason, text] = m; return oldDecided(reason, text).map((f) => ({ at, by: "director", subject: ref, ...f })); }
   if ((m = /^director: (\S+): (\S+): escalated: ([\s\S]*)$/.exec(line))) {
@@ -240,7 +240,7 @@ export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, projec
  */
 const baselineGate = () => Object.values(baselines()).map((b) => ({ repo: b.repo, state: b.ok ? "green" : "red", line: b.ok ? `${b.repo} ${b.commit.slice(0, 7)}` : `${b.repo} ${redLine(b)}` }));
 
-/** How many queued goals each per-goal gate holds now, by the Queued lane's decision. */
+/** How many queued parts each per-part gate holds now, by the Queued lane's decision. */
 const issueGates = (queued: State["queued"]) => ({
   baseline: queued.filter((q) => q.kind === "baseline").length,
   "not-ready": queued.filter((q) => q.kind === "not-ready").length,
@@ -284,7 +284,7 @@ export function schedules(): { name: string; last: string | null; result: string
  * The three metrics over the last LOG_DAYS days. `rate`: of the Asks decided (from every log entry in the window, not the capped log), the share that a Rule or the Director decided
  * and not Chris (his answers; his rule changes do not count), null with none. `catches`: `fired`, the build runs started in the
  * window that a check or the reviewer sent back, against `fixed`, those of them that a later build run of the same job fixed:
- * it passed or landed. `held`: the goals held and the hours in a hold, from a hold record to the next `started` record, or to now.
+ * it passed or landed. `held`: the issues held and the hours in a hold, from a hold record to the next `started` record, or to now.
  */
 export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(), records = record.all(), span = LOG_DAYS * DAY) {
   const from = now - span;

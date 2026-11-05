@@ -24,7 +24,7 @@ const NOW = Date.parse("2026-11-04T12:00:00Z");
 beforeAll(() => setSystemTime(NOW));
 afterAll(() => setSystemTime());
 
-/** An item stored as a goal: `kind: goal` on a plain number. */
+/** An item stored as an issue: `kind: goal` on a plain number. */
 const seedPart = (doc: Doc, title: string, body = "") => { return add(doc, title, { spec: body || "Do it." }); };
 
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, jobsDir: string, argvFile: string, stdinFile: string;
@@ -151,7 +151,7 @@ describe("POST /api/issues/:repo/:id/drop", () => {
 });
 
 describe("GET /api/issues/:repo/:n", () => {
-  test("lists runs by on, goals included, and by todo for old runs", async () => {
+  test("lists runs by on, parts included, and by todo for old runs", async () => {
     run("20261027-000010-a", { job: "on-4", name: "on-4", repo: "fac", condition: "running", on: "fac-4" });
     run("20261027-000011-a", { job: "goal-4-1", name: "goal-4-1", repo: "fac", condition: "running", on: "fac-4.1" });
     run("20261027-000012-a", { job: "on-2", name: "on-2", repo: "fac", condition: "running", on: "fac-2" });
@@ -561,7 +561,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     return i.id;
   })!.value;
 
-  test("approving an option writes the note, clears the Ask and its fields, and makes no goal", async () => {
+  test("approving an option writes the note, clears the Ask and its fields, and makes no issue", async () => {
     const n = ask(true);
     await withRealCli(async () => {
       expect((await at(`/api/issues/fac/${n}/decide`, { method: "POST", body: "{}" })).status).toBe(403);
@@ -619,7 +619,7 @@ describe("POST /api/issues/:repo/:id/decide and deny", () => {
     });
   });
 
-  test("the card routes take a goal's dotted id", async () => {
+  test("the card routes take a part's dotted id", async () => {
     const dotted = () => writeList({ key: "fac" }, "seed", (doc) => {
       const i = add(doc, "a capped goal", { request: "x" });
       Object.assign(i, { id: 9000 + i.id, sub: 1 });
@@ -776,7 +776,7 @@ describe("the Issue page shows the ask row", () => {
 });
 
 describe("priority badges", () => {
-  test("the table row, the issue header and a part's timeline row show the badge; the API's goals carry priority", async () => {
+  test("the table row, the issue header and a part's timeline row show the badge; the API's issues carry priority", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => {
       const i = add(doc, "prio parent", { request: "x" });
       addPart(doc, i, { title: "plain part", spec: "x" });

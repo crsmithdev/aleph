@@ -89,7 +89,7 @@ describe("state", () => {
     for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
   });
 
-  test("landing counts land runs in progress; New counts open unlabelled issues, not goals or labelled ones", () => {
+  test("landing counts land runs in progress; New counts open unlabelled issues, not parts or labelled ones", () => {
     writeList({ key: "fac" }, "more", (doc) => {
       add(doc, "labelled", { spec: "Do it." });
       add(doc, "bare");
@@ -98,7 +98,7 @@ describe("state", () => {
     run("20261027-000009-a", { kind: "land", job: "fac-8", name: "fac-8", condition: "running" });
     const s = state(now);
     expect(s.landing).toBe(1);
-    // New is stage "new": the items with a job (fac-1, 3, 4), the goal and the triaged one are not.
+    // New is stage "new": the items with a job (fac-1, 3, 4), the issue and the triaged one are not.
     expect(s.newIssues).toBe(3);
   });
 
@@ -203,7 +203,7 @@ describe("an intake run", () => {
   });
 });
 
-describe("a goal that acceptance failed twice", () => {
+describe("an issue that acceptance failed twice", () => {
   test("a held run from before v6 phase 6 still reads: its old phase, and its second review's call.md as the Ask's review", () => {
     run("20261027-000060-a", { job: "fac-60", name: "fac-60", condition: "waiting", ask: HELD, reason: "held path held/x.ts", stat: " held/x.ts | 1 +", phase: "check oracle" },
       { "review.md": "Fine.\nVERDICT: pass\n", "call.md": "Merged and checked.\nVERDICT: land\n", "call-prompt.md": "old recipe\n" });
@@ -233,7 +233,7 @@ describe("a goal that acceptance failed twice", () => {
     });
     setAsk(`fac-${partId}`, { kind: "input", reason: "run-cap", question: "", options: [], why: [] });
     try {
-      // The trailer commit on main names the goal; origin/main points at it, as a land would leave it.
+      // The trailer commit on main names the issue; origin/main points at it, as a land would leave it.
       sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Reopen the goal\n\nIssue: fac-${partId}`);
       sh(repo, "git", "update-ref", "refs/remotes/origin/main", sh(repo, "git", "rev-parse", "HEAD"));
       const s = state(now);

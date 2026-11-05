@@ -28,7 +28,7 @@ const splitId = (s: string): [string, string] => {
   return p ? [p.repo, `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}`] : ["", ""];
 };
 
-/** The issue number of a run, from `on` or old `todo`; a goal run "860.1" reads as 860. Undefined when the run has none. */
+/** The issue number of a run, from `on` or old `todo`; a part run "860.1" reads as 860. Undefined when the run has none. */
 function issueOf(r: Run): number | undefined {
   const o = onOf(r);
   return o === undefined ? undefined : Math.trunc(Number(o));
@@ -171,7 +171,7 @@ const COUNT: Record<Window, number> = { hour: 60, day: 24, week: 7, month: 30 };
 const HOUR_MS = HOUR;
 const passedState = (st: string) => st === "passed" || st === "landed" || st === "done";
 
-/** Class every agent run of the window by what its work came to; see the parent goal's Classes list. */
+/** Class every agent run of the window by what its work came to; see the parent issue's Classes list. */
 export function classify(runs: Run[], statusOf: (ref: string) => string | undefined, since: number, now: number, fit: Fit | null): { classes: ClassStat[]; notCounted: { runs: number; issues: number; hours: number }; lost: { hours: number; share: number }; total: number } {
   const keyOf = (r: Run) => `${r.repo}-${onOf(r)}`;
   const t0 = (r: Run) => Date.parse(r.started);
@@ -186,7 +186,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
     if (!m.has(g)) m.set(g, []);
     m.get(g)!.push(r);
   }
-  // The landing runs of each goal, and when its last land ended.
+  // The landing runs of each issue, and when its last land ended.
   const landing = new Map<string, Set<Run>>(), lastLand = new Map<string, number>();
   for (const [g, lands] of landsOf) {
     for (const l of lands) {
@@ -263,7 +263,7 @@ export function classify(runs: Run[], statusOf: (ref: string) => string | undefi
   };
 }
 
-// Bulk commits add files whose work is older: they do not say when an issue or a goal was created.
+// Bulk commits add files whose work is older: they do not say when an issue was created.
 const BULK = /^(migrate:|todo: move every )/;
 const FILED = /^([^/]+)\/backlog\/tasks\/\1-(\d+)((?:\.\d+)*)\.md$/;
 export interface Filed { issue: Map<string, number | null> }
@@ -529,7 +529,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     models.get(model)!.push(secs);
     agents.push({ name: r.name, condition: r.condition, model, tests: (r.checks ?? []).find((c) => isTests(c.name))?.seconds ?? null, cost: round(r.cost ?? 0, 2), took: round(secs) });
   }
-  // A fix round is a worker run of the goal that a failed check or the reviewer sent back (`failed` set).
+  // A fix round is a worker run of the issue that a failed check or the reviewer sent back (`failed` set).
   const rounds = new Map<string, number>();
   for (const r of all) {
     if (!isAgentRun(r.kind)) continue;

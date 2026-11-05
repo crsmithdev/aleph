@@ -17,7 +17,7 @@ import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { logEvent } from "../jobs/lib/infra/layout.ts";
 import { contentText, setCodes } from "../lib/naming.ts";
 
-/** Make `rows` the only hold records: each goal's `hold` and `started` events in its job record. */
+/** Make `rows` the only hold records: each issue's `hold` and `started` events in its job record. */
 function setHolds(rows: HoldRecord[]): void {
   const names = new Set([...record.all().map((r) => r.issue), ...rows.map((x) => x.name)]);
   for (const n of names) record.update(n, (r) => {
@@ -222,7 +222,7 @@ test("the body's automation rate counts every decision in the 7 days, past the l
   }
 });
 
-test("the held time sums, over the goals, the hours from a hold to the next start, or to now, in the 7 days", () => {
+test("the held time sums, over the issues, the hours from a hold to the next start, or to now, in the 7 days", () => {
   const h = [rec(300, "a-1", "gate"), rec(120, "a-1", "started"), rec(60, "b-1", "gate"), rec(30, "b-1", "gate"), rec(60 * 24 * 9, "c-1", "gate"), rec(60 * 24 * 8, "c-1", "started")];
   expect(metrics([], h, NOW).held).toEqual({ goals: 2, hours: 4 });
 });

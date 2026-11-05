@@ -47,7 +47,7 @@ const answerAndRerun: Handler = async (req, { name }) => {
   return Response.json(await runCli(["drop", name, `Chris answered the worker's question "${askOf(last.run)?.question ?? last.run.question ?? ""}": ${said}`]));
 };
 
-/** "Wait for <repo>-<n>": set the stuck job's issue (a goal run's dotted `on` names the issue holding the goal) to wait on that open issue, then drop the job. */
+/** "Wait for <repo>-<n>": set the stuck job's issue (a part run's dotted `on` names the issue holding the part) to wait on that open issue, then drop the job. */
 const wait: Handler = async (req, { name }) => {
   if (!sameSite(req)) return text("forbidden", 403);
   const last = find(name);

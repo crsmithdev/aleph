@@ -50,7 +50,7 @@ test("approve and decline handlers", async () => {
     expect(body.code).toBe(0);
     expect(stored()[0].state).toBe("approved");
     const items = readList({ key: "fac" })!.items;
-    // The issue and its goal `.1`.
+    // The issue and its part `.1`.
     expect(items.map((i) => i.fm.id)).toEqual(["1"]);
     expect(items[0].fm).toMatchObject({ source: "memory" });
     const again = await call("POST /api/approve/:id", "approve/l-a", "l-a");

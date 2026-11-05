@@ -98,7 +98,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
     for (const [key, rows] of Object.entries(lists)) {
       writeList({ key }, "fixture", (doc) => {
         for (const r of rows) {
-          // A goal or a sorted item in the fixture is an issue with a spec.
+          // A part or a sorted item in the fixture is an issue with a spec.
           const spec = r.kind === "goal" || r.route;
           const item = add(doc, r.title, { labels: r.labels, priority: r.priority, ...(spec ? { spec: r.body || "Do it." } : { request: r.body }) });
           for (const k of NEW_SHAPE) if (r[k] !== undefined) item.fm[k] = r[k];
