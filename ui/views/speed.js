@@ -170,3 +170,11 @@ export function usageCard(s) {
   const bar = `<div class="usebar"${tip ? ` title="${esc(tip)}" role="img" aria-label="${esc(tip)}"` : ""}><div style="width:${Math.min(100, cur.seven_day)}%"></div>${gone === null ? "" : `<i style="left:${gone}%"></i>`}</div>`;
   return statCard({ k: "Usage", v: pct(cur.seven_day), extra: bar, href: "#/factory/agents" });
 }
+
+/** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/speed for the window. */
+export function bar(d, key) {
+  const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
+  if (!(total > 0)) return `<p>No agent run of an issue ended in the ${lastPeriod(d)}.</p>`;
+  const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${esc(pct((c.hours / total) * 100))}</span></button>`;
+  return `<div class="obar" role="group" aria-label="Agent time by outcome">${cs.map(seg).join("")}</div>`;
+}

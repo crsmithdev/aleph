@@ -149,3 +149,19 @@ test("mountStatus loads the window of the address", async () => {
   resetSpeed();
   delete g.localStorage; delete g.location; delete g.history;
 });
+
+test("the outcome bar sits between the scorecard and the panels and mountStatus fills it", async () => {
+  // @ts-ignore plain JS shared with the page
+  const { resetSpeed } = await import("./views/speed.js");
+  resetSpeed();
+  const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams());
+  const at = ['id="scorecard"', 'id="outcome"', 'class="insights"'].map((x) => page.indexOf(x));
+  expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
+  expect(page).toContain("Loading the outcomes");
+  const outcome = { innerHTML: "" };
+  const urls: string[] = [];
+  await view.mountStatus({ querySelector: (s: string) => (s === "#outcome" ? outcome : null) }, { ...state, usage: USAGE }, async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ ...WEEK, classes: [...WEEK.classes, { key: "idle", name: "Idle", hours: 0, causes: [] }] }) }; }, new URLSearchParams("window=week"));
+  expect(outcome.innerHTML).toContain('class="obar"');
+  expect(outcome.innerHTML.match(/<button /g)?.length).toBe(WEEK.classes.filter((c) => c.hours > 0).length);
+  resetSpeed();
+});

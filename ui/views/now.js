@@ -2,7 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { barList, barRow, card, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, small, tag, tile, tone, when } from "../lib.js";
-import { causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
+import { bar, causeRow, loadSpeed, mergeCauses, pctText, period, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -15,7 +15,7 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><div class="insights"><section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section><section id="slowness" class="card" aria-label="Causes of slowness">${renderSlowness(speedOf(w))}</section>${renderMonitor(s)}</div>${renderLanes(s)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time by outcome">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="causes" class="card" aria-label="Causes of lost time">${renderCauses(speedOf(w), w)}</section><section id="slowness" class="card" aria-label="Causes of slowness">${renderSlowness(speedOf(w))}</section>${renderMonitor(s)}</div>${renderLanes(s)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -30,6 +30,14 @@ const keep = (href, win) => (win === "week" ? href : `${href}?window=${win}`);
 /** The scorecard: lost time, completion, landed, queue wait, usage. `d` is /api/speed for the window `win` with its baseline, or null while it loads. */
 export function renderTiles(s, d, win = d?.window ?? "week") {
   return statusCards(s, d, { efficiency: keep(EFFICIENCY, win), performance: keep(PERFORMANCE, win) });
+}
+
+/** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
+export function renderOutcome(d) {
+  const title = `<h2>Agent time by outcome</h2>`;
+  if (!d) return `${title}${loadingLine("the outcomes")}`;
+  if (d.error) return `${title}<p>${esc(d.error)}</p>`;
+  return `${title}${bar(d)}`;
 }
 
 /** The ranked causes of lost time, largest first. `d` is null while it loads, `{ error }` on a failed load. */
@@ -77,6 +85,8 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   const tiles = root.querySelector("#scorecard"), causes = root.querySelector("#causes");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
   if (causes) causes.innerHTML = renderCauses(speedOf(w), w);
+  const outcome = root.querySelector("#outcome");
+  if (outcome) outcome.innerHTML = renderOutcome(speedOf(w));
   const slowness = root.querySelector("#slowness");
   if (slowness) slowness.innerHTML = renderSlowness(speedOf(w));
 }

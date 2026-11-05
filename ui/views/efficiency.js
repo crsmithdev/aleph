@@ -1,6 +1,6 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
 import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
-import { cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, pctText, period, plural, statCard, weekText, windowTrend } from "./speed.js";
+import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, pctText, period, plural, statCard, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
 const REPO = "aleph";
@@ -35,13 +35,6 @@ function scorecard(d, key) {
     statCard({ k: "Reruns", v: String(d.flaky), note: "passed on rerun", trend: flaky == null ? "" : windowTrend(d, "flaky", d.flaky, { kind: "relative", lowerIsGood: true, format: String }), key: FLAKES, on: key === FLAKES }) +
     statCard({ k: "Fix rounds", v: String(fixed?.runs ?? 0), note: `${hours(fixed?.hours ?? 0)} on ${plural(fixed?.issues ?? 0, "issue")}`, key: "fixed", on: key === "fixed" }) +
     statCard({ k: "Usage per issue", v: usage === null ? "–" : weekText(usage), note: usage === null ? "needs 6 hours of usage snapshots" : "of the weekly limit, median", ...(usage === null ? {} : { key: USAGE, on: key === USAGE }) });
-}
-
-function bar(d, key) {
-  const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return `<p>No agent run of an issue ended in the ${lastPeriod(d)}.</p>`;
-  const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${esc(pct((c.hours / total) * 100))}</span></button>`;
-  return `<div class="obar" role="group" aria-label="Agent time by outcome">${cs.map(seg).join("")}</div>`;
 }
 
 const causeBars = (s) => {
