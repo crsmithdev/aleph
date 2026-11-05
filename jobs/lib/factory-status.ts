@@ -4,7 +4,7 @@
  * queries and the gates. It imports no transition, so aleph-ui can load it, and
  * a change to the actions does not restart aleph-ui. The actions are in factory.ts.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { areasOf, reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
@@ -215,6 +215,24 @@ export async function writeBaseline(key: string, decide: (old: Baseline | undefi
     release();
   }
 }
+
+/** One full suite run: the test counts of its bun test checks, and the tests that failed on the first run and passed on the rerun. */
+export interface SuiteRecord { repo: string; commit: string; at: string; ran: number; passed: number; failed: number; skipped: number; rerunPassed: number }
+
+const historyFile = () => join(factoryDir(), "suite-history.jsonl");
+
+/** The suite records in the order they were appended, of `repo` when given. */
+export const suiteHistory = (repo?: string): SuiteRecord[] => {
+  try {
+    const all: SuiteRecord[] = readFileSync(historyFile(), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    return repo ? all.filter((r) => r.repo === repo) : all;
+  } catch { return []; }
+};
+
+export const appendSuiteHistory = (r: SuiteRecord): void => {
+  mkdirSync(factoryDir(), { recursive: true });
+  appendFileSync(historyFile(), JSON.stringify(r) + "\n");
+};
 
 export const redLine = (b: Baseline) => `main is red at ${b.commit.slice(0, 7)}: ${b.failed}`;
 

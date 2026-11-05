@@ -25,7 +25,7 @@ export type ChecksStop = Stated & { reason: string; timedOut?: boolean };
 export const stopFields = ({ timedOut: _, ...fields }: ChecksStop): Stated & { reason: string } => fields;
 
 /** One run of checks. `folder` gets checks.log. `record` gets each check that ran. `admission` is for tests. */
-export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; record?: (c: CheckResult) => void; admission?: Admission }
+export interface CheckTask { folder: string; repo: Repo; changed: string[]; phase: (p: string) => void; onSpawn?: (p: ReturnType<typeof Bun.spawn>) => void; record?: (c: CheckResult & { rerunPassed?: number }) => void; admission?: Admission }
 
 /**
  * Runs one check with its output appended to `out`. `timedOut` comes from a clock: a command can return 124 by itself.
@@ -95,12 +95,13 @@ async function runAll(t: CheckTask, checks: Check[], exec: CheckExec): Promise<C
     const none = record?.ran === 0;
     const ok = r.code === 0 && !lost && !none;
     const rerun = first !== undefined && ok;
+    const failedFirst = rerun ? failedTests(first!) : [];
     if (rerun) {
-      const tests = failedTests(first!);
+      const tests = failedFirst;
       const row = { repo: t.repo.key, check: check.name, run: basename(t.folder), at: new Date().toISOString(), ...(tests.length ? { tests } : {}) };
       if (!await recordFlake(row)) log(`## ${check.name}: flake not recorded, lock busy\n\n`);
     }
-    t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}), ...(lost ? { noVerdict: true as const } : {}), ...(record ? { tests: record } : {}) });
+    t.record?.({ name: check.name, ok, seconds, ...(rerun ? { rerun: true } : {}), ...(lost ? { noVerdict: true as const } : {}), ...(record ? { tests: record } : {}), ...(failedFirst.length ? { rerunPassed: failedFirst.length } : {}) });
     log(`## ${check.name}: exit ${r.code}${r.timedOut ? " (timed out)" : r.killed ? " (killed)" : ""}${first !== undefined ? " (second run)" : ""}\n${tail(out, 100)}\n\n`);
     if (lost) return { cause: "infra", checkName: check.name, reason: `no verdict: check ${check.name} ${r.timedOut ? "timed out" : "was killed"}`, timedOut: r.timedOut };
     if (r.code !== 0) return { cause: "check", checkName: check.name, reason: `${check.name} failed` };
@@ -419,10 +420,10 @@ async function earnKeep(repo: Repo, tip: string, tests: NewTests[], cases: Plan[
 }
 
 /** The repo's checks, all of them, on `commit` of origin/<main>: null when they pass, else the stop (`infra` when they could not run). For the factory's baseline. */
-export async function baselineChecks(repo: Repo, commit: string, logs: string): Promise<ChecksStop | null> {
+export async function baselineChecks(repo: Repo, commit: string, logs: string, record?: CheckTask["record"]): Promise<ChecksStop | null> {
   rmSync(logs, { recursive: true, force: true });
   mkdirSync(logs, { recursive: true });
   const all = git(repo.path, "ls-tree", "-r", "--name-only", commit).out.split("\n").filter(Boolean);
-  const stop = await checksAt({ folder: logs, repo, changed: all, phase: () => {} }, commit, checkEnv());
+  const stop = await checksAt({ folder: logs, repo, changed: all, phase: () => {}, record }, commit, checkEnv());
   return !stop || stop.cause === "check" ? stop : { ...stop, cause: "infra" };
 }

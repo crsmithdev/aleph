@@ -23,12 +23,12 @@ import { directAll, pendingCases, type Decision, type Ports as DirectorPorts } f
 import { episodesDir, writeEpisodes } from "./episode.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
-import { baselineChecks, type ChecksStop } from "./checks.ts";
+import { baselineChecks, type CheckTask, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { startKept } from "./unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, TIERS, type Tier } from "./route.ts";
-import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
+import { appendSuiteHistory, mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
 export { setPaused };
 
 import { goalDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate } from "./goal-decision.ts";
@@ -67,7 +67,7 @@ export function doneChecker(fetch = true): (ref: string) => boolean {
 
 /** `tier` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
 type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<string | null>;
-export type Checks = (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>;
+export type Checks = (repo: Repo, commit: string, logs: string, record?: CheckTask["record"]) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
  * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
@@ -340,7 +340,7 @@ export const baselineConfig = (repo: Repo): string => JSON.stringify([repo.setup
  * taken leaves it. A pass and a failed check are recorded: an error that kept
  * the checks from running (no verdict) is reported, and the next suite run tries again.
  */
-export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, logs: string) => Promise<ChecksStop | null>): Promise<Baseline> {
+export async function baseline(repo: Repo, checks: Checks): Promise<Baseline> {
   const unchecked = (line: string): Baseline => ({ state: "unchecked", line });
   if (!fetchOrigin(repo.path).ok) return unchecked("main is unchecked: fetch failed");
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
@@ -355,11 +355,17 @@ export async function baseline(repo: Repo, checks: (repo: Repo, commit: string, 
       // Another dispatch may have recorded this commit between the read and the lock.
       b = known();
       if (!b) {
-        const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key));
+        const sum = { ran: 0, passed: 0, failed: 0, skipped: 0, rerunPassed: 0 };
+        const why = await checks(repo, commit, join(factoryDir(), "baseline", repo.key), (c) => {
+          if (!c.tests) return;
+          sum.ran += c.tests.ran; sum.passed += c.tests.passed; sum.failed += c.tests.failed; sum.skipped += c.tests.skipped;
+          sum.rerunPassed += c.rerunPassed ?? 0;
+        });
         if (why && why.cause !== "check") return unchecked(`main is unchecked: ${why.reason}`);
         b = { repo: repo.key, commit, config, ok: !why, ...(why ? { failed: why.checkName ?? "" } : {}) };
         const entry = b;
         await writeBaseline(repo.key, () => entry);
+        appendSuiteHistory({ repo: repo.key, commit, at: new Date().toISOString(), ...sum });
       }
     } finally {
       release();

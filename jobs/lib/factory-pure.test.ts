@@ -5,7 +5,7 @@ import { readList, writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { baseline, dispatchIssues, report, setPaused, stalled } from "./factory.ts";
 import { readTick, sweep } from "./tick.ts";
-import { spentToday, runsToday, health, writeBaseline, factorySnapshot, goalFacts } from "./factory-status.ts";
+import { spentToday, runsToday, health, writeBaseline, suiteHistory, factorySnapshot, goalFacts } from "./factory-status.ts";
 import { allJobs, loadRegistry, lock, readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
@@ -243,4 +243,29 @@ test("a suite record holds for its commit and its checks: a change of the repo's
   repo.checks = [];
   expect(await baseline(repo, passing)).toEqual({ state: "green" });
   expect(ran).toBe(2);
+});
+
+test("each suite run appends a history record with the test counts of its checks; a known commit runs nothing and adds none", async () => {
+  const repo = { key: "fac", path: join(ctx.base, "repo"), main: "main", setup: [], checks: [] } as any;
+  let ran = 0;
+  const counts = (n: number) => async (_r: unknown, _c: string, _l: string, record?: (c: any) => void) => {
+    ran++;
+    record?.({ name: "a", ok: true, seconds: 1, tests: { ran: n, passed: n - 2, failed: 1, skipped: 1, failures: [] }, rerunPassed: 1 });
+    record?.({ name: "b", ok: true, seconds: 1, tests: { ran: 1, passed: 1, failed: 0, skipped: 0, failures: [] } });
+    return null;
+  };
+  await baseline(repo, counts(10));
+  const head = () => Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: repo.path }).stdout.toString().trim();
+  const first = head();
+  expect(await baseline(repo, counts(10))).toEqual({ state: "green" });
+  expect(ran).toBe(1);
+  sh(repo.path, "git", "commit", "-q", "--allow-empty", "-m", "next");
+  sh(repo.path, "git", "push", "-q", "origin", "main");
+  await baseline(repo, counts(20));
+  const h = suiteHistory("fac");
+  expect(h.map((r) => r.commit)).toEqual([first, head()]);
+  expect(h.map(({ ran, passed, failed, skipped, rerunPassed }) => ({ ran, passed, failed, skipped, rerunPassed }))).toEqual([
+    { ran: 11, passed: 9, failed: 1, skipped: 1, rerunPassed: 1 },
+    { ran: 21, passed: 19, failed: 1, skipped: 1, rerunPassed: 1 },
+  ]);
 });
