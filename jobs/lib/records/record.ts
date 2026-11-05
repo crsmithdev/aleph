@@ -10,9 +10,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Ask } from "../asks/ask.ts";
-import type { Run } from "./ledger.ts";
+import { subjectOf, type Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
-import { jobState, word } from "../../../lib/naming.ts";
+import { fixRounds } from "../infra/settings.ts";
+import { jobId, jobState, word } from "../../../lib/naming.ts";
 
 /** A run in a record: the run and its id, the name of its run folder. */
 export type RunRecord = Run & { id: string };
@@ -281,16 +282,26 @@ export const lastEvent = (key: string, kind: string): JobEvent | undefined => re
 // ---------------------------------------------------------------------------
 // The next step.
 
-/** What the job does next: a function of its record only. */
-export type Step =
-  | { step: "ask"; why: string }
-  | { step: "run"; why: string }
-  | { step: "worker"; why: string }
-  | { step: "land"; why: string }
-  | { step: "rescue"; why: string }
-  | { step: "wait"; why: string }
-  | { step: "start"; why: string }
-  | { step: "none"; why: string };
+/** What the job does next: a function of its record only. The fields are the event fields of docs/naming.md. */
+export interface Step {
+  step: "ask" | "run" | "worker" | "land" | "rescue" | "wait" | "start" | "none";
+  /** The job's state word. */
+  action: string;
+  /** Why the run stopped, from its `cause`. */
+  sub?: string;
+  /** The running or waiting job, or the landed commit as its first 7 characters. */
+  on?: string[];
+  /** The fix round of the job: `<rounds> / <fixRounds()>`. */
+  count?: string;
+  /** `human` for a step that waits for Chris. */
+  to?: string;
+}
+
+/** The `sub` of a step: why the run stopped, when the run states it. */
+const subOf = (run: RunRecord): Pick<Step, "sub"> => { const cause = causeOf(run); return cause ? { sub: cause } : {}; };
+
+/** The job ID of a run, `a1375#6`. A run from before job IDs states no number, so it reads as the first. */
+const jobIdOfRun = (run: RunRecord): string => jobId(subjectOf(run), run.n ?? 1);
 
 /**
  * The next step of the job. An Ask waits for Chris; a running run waits for its end; an ended run's `next` says
@@ -301,20 +312,20 @@ export type Step =
  * the Ask and the `director` event it writes, never as the run that counts.
  */
 export function next(r: JobRecord): Step {
-  if (r.ask) return { step: "ask", why: `asks for your ${r.ask.kind}: ${r.ask.reason}` };
+  if (r.ask) return { step: "ask", action: "waiting", to: "human" };
   const last = r.runs.findLast((x) => x.kind !== "facts" && x.kind !== "director" && !(x.kind === "land" && x.condition === "failed" && causeOf(x) === "locked"));
-  if (last?.condition === "running") return { step: "run", why: `${last.kind} run ${last.id} is running` };
-  if (last?.condition === "waiting") return { step: "ask", why: `${last.kind} run ${last.id} waits for Chris` };
-  if (last?.next === "worker") return { step: "worker", why: `${last.failed ?? "a check"} sent it back: fix round ${r.rounds}` };
-  if (last?.next === "land") return { step: "land", why: last.kind === "land" ? "it lands again" : "it passed" };
-  if (last?.condition === "passed") return { step: "wait", why: "it passed and waits for aleph land" };
+  if (last?.condition === "running") return { step: "run", action: "running", on: [jobIdOfRun(last)] };
+  if (last?.condition === "waiting") return { step: "ask", action: "waiting", on: [jobIdOfRun(last)], to: "human" };
+  if (last?.next === "worker") return { step: "worker", action: "returned", ...subOf(last), count: `${r.rounds} / ${fixRounds()}` };
+  if (last?.next === "land") return { step: "land", action: last.condition };
+  if (last?.condition === "passed") return { step: "wait", action: "passed", to: "human" };
   if (last && (last.condition === "returned" || last.condition === "failed")) {
-    if (r.events.some((e) => e.kind === "asked" && e.run === last.id)) return { step: "wait", why: `the factory asked Chris about run ${last.id}` };
-    return { step: "rescue", why: last.reason ?? `its run is ${last.condition}` };
+    if (r.events.some((e) => e.kind === "asked" && e.run === last.id)) return { step: "wait", action: "waiting", to: "human" };
+    return { step: "rescue", action: last.condition, ...subOf(last) };
   }
-  if (last?.condition === "landed") return { step: "none", why: `landed${last.commit ? ` as ${last.commit.slice(0, 7)}` : ""}` };
-  if (last?.condition === "dropped") return { step: "none", why: `dropped: ${last.reason ?? ""}`.trim().replace(/:$/, "") };
-  if (last?.condition === "done") return { step: "none", why: "its run is done" };
-  if (r.wait) return { step: "wait", why: r.wait.reason };
-  return { step: "start", why: "no run has started it" };
+  if (last?.condition === "landed") return { step: "none", action: "landed", ...(last.commit ? { on: [last.commit.slice(0, 7)] } : {}) };
+  if (last?.condition === "dropped") return { step: "none", action: "dropped" };
+  if (last?.condition === "done") return { step: "none", action: "done" };
+  if (r.wait) return { step: "wait", action: "waiting" };
+  return { step: "start", action: "starting" };
 }

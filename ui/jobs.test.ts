@@ -94,7 +94,8 @@ describe("a land that found the job lock busy", () => {
       expect(d.condition).toBe("passed");
       expect(d.reason).toBeUndefined();
       // The job record gives the next step from the run that counts: the passed run, which waits for a land by hand.
-      expect(d.next).toEqual({ step: "wait", why: "it passed and waits for aleph land" });
+      expect(d.next).toEqual({ step: "wait", action: "passed", to: "human", text: "passed → human" });
+      expect(d.next.text).not.toMatch(/[:;]/);
       expect(d.runs.find((r: any) => r.id === ids[1])).toMatchObject({ condition: "failed", reason: "job lock busy" });
       expect((await (await get("/api/jobs?condition=failed")).json()).map((j: any) => j.name)).not.toContain("fac-7");
       expect((await (await get("/api/jobs?condition=passed")).json()).map((j: any) => j.name)).toContain("fac-7");

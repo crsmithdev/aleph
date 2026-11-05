@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Run } from "./ledger.ts";
+import { fixRounds } from "../infra/settings.ts";
 import * as record from "./record.ts";
 
 let dir: string;
@@ -107,7 +108,22 @@ test("next: each run condition gives its step", () => {
     [[{ condition: "passed", next: "land" }, { kind: "director", condition: "passed" }], "land"],
   ];
   for (const [runs, step] of cases) expect([runs, record.next(rec(runs)).step]).toEqual([runs, step]);
-  expect(record.next(rec([{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }])).why).toBe("no commit");
+  expect(record.next(rec([{ condition: "failed", reason: "no commit" }, { kind: "director", condition: "done" }])).sub).toBe("no-commit");
+});
+
+test("next: each case gives its step as event words", () => {
+  const ask = { kind: "input" as const, reason: "question", question: "q", options: [], why: [] };
+  expect(record.next(rec([{ condition: "passed" }], { ask }))).toEqual({ step: "ask", action: "waiting", to: "human" });
+  expect(record.next(rec([{ condition: "running", on: "aleph-1375", n: 6 }]))).toEqual({ step: "run", action: "running", on: ["aleph-1375#6"] });
+  expect(record.next(rec([{ condition: "returned", cause: "check", next: "worker" }], { rounds: 1 }))).toEqual({ step: "worker", action: "returned", sub: "check", count: `1 / ${fixRounds()}` });
+  expect(record.next(rec([{ kind: "land", condition: "landed", commit: "4240d76abc9" }]))).toEqual({ step: "none", action: "landed", on: ["4240d76"] });
+  expect(record.next(rec([{ condition: "failed", cause: "review" }]))).toEqual({ step: "rescue", action: "failed", sub: "review" });
+  expect(record.next(rec([]))).toEqual({ step: "start", action: "starting" });
+});
+
+test("next: no step keeps the why sentence", () => {
+  const cases: Partial<Run>[][] = [[], [{ condition: "running" }], [{ condition: "waiting" }], [{ condition: "returned", cause: "check", next: "worker" }], [{ condition: "passed", next: "land" }], [{ condition: "passed" }], [{ condition: "failed", cause: "review" }], [{ kind: "land", condition: "landed", commit: "4240d76abc9" }], [{ condition: "dropped", reason: "dropped by Chris" }], [{ condition: "done" }]];
+  for (const runs of cases) expect("why" in record.next(rec(runs))).toBe(false);
 });
 
 test("next: a stuck run the factory asked Chris about waits", () => {
@@ -116,7 +132,7 @@ test("next: a stuck run the factory asked Chris about waits", () => {
 });
 
 test("next: a goal with no run waits for its hold, else starts", () => {
-  expect(record.next(rec([], { wait: { kind: "after", reason: "after aleph-6", since: AT } }))).toEqual({ step: "wait", why: "after aleph-6" });
+  expect(record.next(rec([], { wait: { kind: "after", reason: "after aleph-6", since: AT } }))).toEqual({ step: "wait", action: "waiting" });
   expect(record.next(rec([])).step).toBe("start");
 });
 
@@ -150,7 +166,7 @@ test("an Ask set on a record and cleared keeps its set time and clear time, thro
   ]);
 });
 
-test("a land or build run of the job that joins after the run an Ask is on clears that Ask, a director run or another job's land does not, and the stuck run's reason is the next step", () => {
+test("a land or build run of the job that joins after the run an Ask is on clears that Ask, a director run or another job's land does not", () => {
   const ask = { kind: "input" as const, reason: "question", question: "the reviewer sent it back once: free-text column gets td.wide", options: [], why: [] };
   setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
   record.putRun("1", run({ condition: "waiting", ask }));
@@ -167,7 +183,5 @@ test("a land or build run of the job that joins after the run an Ask is on clear
   expect(r.ask).toBeNull();
   expect(r.asks!.at(-1)!.cleared).toBe("2026-11-04T10:05:00.000Z");
   const s = record.next(r);
-  expect(s.step).toBe("rescue");
-  expect(s.why).toContain("doc claims");
-  expect(s.why).not.toContain("the reviewer sent it back");
+  expect(s).toEqual({ step: "rescue", action: "failed" });
 });

@@ -11,7 +11,7 @@ import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
-import { word } from "../../lib/naming.ts";
+import { contentText, word } from "../../lib/naming.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
@@ -68,8 +68,8 @@ export interface JobDetail extends Job {
   spec?: string;
   /** Why the job waited: its hold records, oldest first. */
   holds: HoldRecord[];
-  /** From its job record: the next step, the fix rounds, and what happened to it, oldest first. */
-  next?: NextStep; rounds?: number; events?: JobEvent[];
+  /** From its job record: the next step, its line of event words, the fix rounds, and what happened to it, oldest first. */
+  next?: NextStep & { text: string }; rounds?: number; events?: JobEvent[];
   /** For a part: its issue, its place among the issue's parts, and the part after it. */
   parent?: { id: string; href: string; n: number; of: number; next?: { id: string; href: string } };
 }
@@ -174,7 +174,10 @@ export const routes: Routes = {
     const blockers = detail.item ? projector.blockers(detail.repo, detail.item.id) : [];
     if (blockers.length) detail.blockers = blockers;
     const rec = readRecord(keyOf(runs.at(-1)!.run));
-    if (rec) Object.assign(detail, { next: nextStep(rec), rounds: rec.rounds, events: rec.events });
+    if (rec) {
+      const step = nextStep(rec);
+      Object.assign(detail, { next: { ...step, text: [step.action, step.sub, contentText(step)].filter(Boolean).join(" ") }, rounds: rec.rounds, events: rec.events });
+    }
     annotate([detail], fit);
     const result = latestFile(runs, "result.md", (e) => isBuild(e.run.kind))?.text;
     const review = latestFile(runs, "review.md");
