@@ -43,7 +43,7 @@ export function hashOptions(q = new URLSearchParams()) {
   };
 }
 
-/** A row's own number: `910` for an issue, `910.1` for a part. */
+/** A row's own number: `910` for an issue, `910.1` for a sub-issue. */
 const own = (r) => r.ref ?? r.id;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
@@ -200,7 +200,7 @@ export function ageText(r, now = Date.now()) {
   return `${Math.max(0, Math.floor(((r.status === "open" ? now : dayMs(r.closed) || now) - from) / DAY))}d`;
 }
 
-/** One issue row; a part is indented under its parent. */
+/** One issue row; a sub-issue is indented under its parent. */
 export function renderRow(r) {
   return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(localId(`${r.repo}-${r.n}`, r.repo), r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
@@ -503,7 +503,7 @@ const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" dat
 
 /** Machine note prefixes, matched after the `- ` and the stamp are removed. */
 const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
-/** The notes a person or a run needs to read, which stay visible. */
+/** The notes a person or a job needs to read, which stay visible. */
 const READ = /^(?:intake: for Chris:|triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
 /** True when a note line is a machine line: the prefix at the start of the text after the `- ` and the stamp. */
 export const isMachineNote = (n) => {
@@ -517,7 +517,7 @@ function noteItem(e) {
   return m && isMachineNote(`- ${e.text}`) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(localId(m[2])) } : { at: e.at, tag: "note", tone: "quiet", html: esc(localId(e.text)) };
 }
 
-/** The filing time: the store's, else the created date unless a run that day starts the issue (midnight would draw a false wait). */
+/** The filing time: the store's, else the created date unless a job that day starts the issue (midnight would draw a false wait). */
 function filedAt(d, runs) {
   const created = localMs(d.frontmatter?.created);
   const sameDay = runs.length && new Date(created).toDateString() === new Date(runs[0].start).toDateString();
@@ -528,14 +528,14 @@ const ends = (runs) => (runs.length ? Math.max(...runs.map((x) => x.end)) : NaN)
 const kinds = (runs) => [...new Set(runs.map((x) => (x.r.kind === "build" ? "build" : x.r.kind)))].join(", ");
 
 /**
- * The Timeline's segments for an issue. With parts: Before the split (the issue's own runs before its parts start),
- * Parts (one row per part), After the parts (to the close). Without: one Work row. Notes are events at their time.
+ * The Timeline's segments for an issue. With sub-issues: Before the split (the issue's own jobs before its sub-issues start),
+ * Sub-issues (one row per sub-issue), After the sub-issues (to the close). Without: one Work row. Notes are events at their time.
  */
 export function issueSegments(d, now = Date.now()) {
   const id = `${d.repo}-${d.ref ?? d.id}`, parts = d.goals ?? [], open = !CLOSED.includes(d.status);
   const all = spans(d.timeline?.runs ?? [], now), filed = filedAt(d, all);
   const notes = (d.notes ?? []).map(noteEvent).filter(Boolean).map(noteItem);
-  // A closed issue closes at its last stamped note after its runs, else at its last run.
+  // A closed issue closes at its last stamped note after its jobs, else at its last job.
   const last = ends(all), closing = notes.filter((n) => !(n.at < last)).at(-1)?.at;
   const closed = open ? NaN : closing ?? last;
   const marks = [...(Number.isFinite(filed) ? [{ at: filed, tone: "made", tip: "filed" }] : []), ...(Number.isFinite(closed) ? [{ at: closed, tone: "done", tip: d.status }] : [])];
@@ -568,12 +568,12 @@ export function issueSegments(d, now = Date.now()) {
 
 const title = (s) => String(s).replace(/^./, (c) => c.toUpperCase());
 
-/** The KPI strip of an issue: parts or stage, elapsed, waiting, cost and commits. */
+/** The KPI strip of an issue: sub-issues or stage, elapsed, waiting, cost and commits. */
 function issueKpis(d, segments, now = Date.now()) {
   const parts = d.goals ?? [], open = !CLOSED.includes(d.status), rows = segments.flatMap((s) => s.rows);
   const times = rows.flatMap((r) => [...r.bars.flatMap((b) => [b.start, b.end]), ...r.waits.flatMap((w) => [w.start, w.end]), ...(r.marks ?? []).map((m) => m.at)]).filter(Number.isFinite);
   const lo = Math.min(...times), hi = open ? now : Math.max(...times);
-  // Waiting is the time no run ran, on the whole issue, so a part waiting beside a running part does not count.
+  // Waiting is the time no job ran, on the whole issue, so a sub-issue waiting beside a running sub-issue does not count.
   const all = spans(d.timeline?.runs ?? [], now), waits = times.length ? gaps(all, lo, hi) : [];
   const waited = waits.reduce((n, w) => n + w.end - w.start, 0), chris = waits.filter((w) => w.chris).reduce((n, w) => n + w.end - w.start, 0);
   const runs = all.length, cost = all.reduce((n, x) => n + (x.r.cost ?? 0), 0), done = parts.filter((g) => g.stage === "done").length;
