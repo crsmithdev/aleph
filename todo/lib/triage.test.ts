@@ -10,6 +10,8 @@ let server: ReturnType<typeof Bun.serve>;
 let reply: { status: number; answers: Record<string, number> };
 let asked: any[] = [];
 
+// The preload sets ALEPH_JUDGE_FILE; put it back, not delete it, so later files never reach the live judge file.
+const judgeFile = process.env.ALEPH_JUDGE_FILE!;
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "aleph-triage-"));
   server = Bun.serve({
@@ -23,7 +25,7 @@ beforeAll(() => {
   });
   Object.assign(process.env, { ALEPH_JUDGE_FILE: join(dir, "judge"), ALEPH_JEV_URL: `http://127.0.0.1:${server.port}/`, OPENROUTER_API_KEY: "k-test" });
 });
-afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; delete process.env.ALEPH_JUDGE_FILE; });
+afterAll(() => { server.stop(true); rmSync(dir, { recursive: true, force: true }); delete process.env.ALEPH_JUDGE; process.env.ALEPH_JUDGE_FILE = judgeFile; });
 beforeEach(() => { asked = []; reply = { status: 200, answers: {} }; delete process.env.ALEPH_JUDGE; });
 
 function list(n = 3): issues.Doc {

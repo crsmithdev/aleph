@@ -123,7 +123,8 @@ test("list and lint with no repo cover the repos with a run or an item update in
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
   writeRun(join(jobs, "r1"), { kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: new Date().toISOString() } as any);
-  process.env.ALEPH_JOBS_DIR = saved;
+  // Assigning undefined would set the string "undefined", and a later test's records would land in ./undefined/.
+  if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
   expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    medium   An old item\nfresh\n  1  open    medium   A new item\n");
   expect(JSON.parse(alephWith(e, "issue", "list", "--status", "done", "--json").out)).toEqual([]);
   const lint = alephWith(e, "issue", "lint");

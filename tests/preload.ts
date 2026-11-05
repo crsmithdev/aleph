@@ -3,6 +3,7 @@
  * ~/.claude at a folder of its own for this test process, so no test reads or writes Chris's live data.
  * A test that sets one of them itself still wins; the processes a test starts inherit them.
  */
+import { afterEach } from "bun:test";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +31,9 @@ const vars: Record<string, string> = {
   ALEPH_RULE_CMD: "false",
 };
 for (const [k, v] of Object.entries(vars)) process.env[k] ??= v;
+// A test that deletes one of these and does not put it back would send every later test in the process to the
+// live folder under ~/.aleph (records written to ~/.aleph/jobs on 2026-11-04). After each test, a deleted one is set again.
+afterEach(() => { for (const [k, v] of Object.entries(vars)) process.env[k] ??= v; });
 // A factory worker's shell carries its job's variables. A test reads them as a worker, so they are cleared here;
 // a test that sets one of them itself still gets the value it sets.
 delete process.env.ALEPH_JOB_ID;
