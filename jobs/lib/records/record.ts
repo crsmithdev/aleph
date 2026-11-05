@@ -10,10 +10,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, s
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Ask } from "../asks/ask.ts";
-import { subjectOf, type Run } from "./ledger.ts";
+import type { Run } from "./ledger.ts";
 import { causeOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
-import { jobId, jobState, word } from "../../../lib/naming.ts";
+import { jobId, jobState, subjectOf, word } from "../../../lib/naming.ts";
 
 /** A run in a record: the run and its id, the name of its run folder. */
 export type RunRecord = Run & { id: string };

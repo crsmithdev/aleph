@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { admit, loadRegistry, lock } from "./ledger.ts";
-import { shortId } from "../../../lib/naming.ts";
+import { setCodes, shortId } from "../../../lib/naming.ts";
 
 let base: string;
 let saved: string | undefined;
@@ -113,6 +113,7 @@ describe("admit", () => {
 });
 
 describe("loadRegistry codes", () => {
+  afterEach(() => setCodes({}));
   const load = (repos: object) => {
     const file = join(base, "repos.json");
     writeFileSync(file, JSON.stringify(repos));

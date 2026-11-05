@@ -29,6 +29,11 @@ describe("ids", () => {
     expect(n.parseJob("aleph-1430")).toBeNull();
     expect(n.fileSafe("a1430#2")).toBe("a1430-2");
   });
+  test("a run's subject is its issue, else the routine, else its name", () => {
+    expect(n.subjectOf({ on: "aleph-1430", kind: "build", name: "a1430" })).toBe("aleph-1430");
+    expect(n.subjectOf({ kind: "monitor", name: "monitor" })).toBe("monitor");
+    expect(n.subjectOf({ kind: "build", name: "a1430" })).toBe("a1430");
+  });
   test("free text yields full IDs only, never a sha", () => {
     expect(n.refs("waits for aleph-1372 and btcx-tools-3; sha a143077 and a1372")).toEqual(["aleph-1372", "btcx-tools-3"]);
     expect(n.shortText("after aleph-1372, see 4240d76")).toBe("after a1372, see 4240d76");

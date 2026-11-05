@@ -11,7 +11,7 @@ import * as record from "./record.ts";
 import { isLive } from "../infra/process.ts";
 import { failedCheckOf, causeOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
-import { contentText, fileSafe, jobId, ROUTINES, setCodes } from "../../../lib/naming.ts";
+import { contentText, fileSafe, jobId, setCodes, subjectOf } from "../../../lib/naming.ts";
 
 /** A job's state, docs/naming.md. `returned`: a reviewer or a check sent the run back to its worker. A record keeps old words; record.ts reads them as these. */
 export type State = "running" | "waiting" | "passed" | "returned" | "failed" | "landed" | "dropped" | "done";
@@ -201,9 +201,6 @@ export function allJobs(): Entry[][] {
   }
   return [...jobs.values()];
 }
-
-/** What a run works on: its issue, else its routine (`monitor`), else its name. */
-export const subjectOf = (run: Pick<Run, "on" | "kind" | "name">): string => run.on ?? (ROUTINES.includes(run.kind) ? run.kind : run.name);
 
 /** The runs on `subject`, oldest first, each with its number: the stored `n`, else its place in start order (a run from before job IDs). */
 function numbered(subject: string, runs: Entry[]): { e: Entry; n: number }[] {
