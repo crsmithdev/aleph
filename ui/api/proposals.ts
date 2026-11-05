@@ -16,7 +16,7 @@ const approveHandler: Handler = (req, params) => {
   if (!sameSite(req)) return text("forbidden", 403);
   // The lesson is about aleph itself: the first registry repo that runs in the sandbox.
   const repo = Object.values(loadRegistry()).find((r) => r.sandbox);
-  if (!repo) return answer(false, "", "no sandboxed repo in the registry to file the goal in");
+  if (!repo) return answer(false, "", "no sandboxed repo in the registry to reopen the issue in");
   const ref = approve(params.id, repo);
   return answer(/^[\w.-]+-\d+$/.test(ref) && ref.startsWith(`${repo.key}-`), ref, ref);
 };

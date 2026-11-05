@@ -65,3 +65,18 @@ test("approve and decline handlers", async () => {
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test("the approve refusal names the issue when no registry repo is sandboxed", async () => {
+  const base = mkdtempSync(join(tmpdir(), "aleph-prop-"));
+  const restore = withEnv({ ALEPH_REPOS: join(base, "repos.json") });
+  try {
+    writeFileSync(join(base, "repos.json"), JSON.stringify({ fac: { path: base, sandbox: false } }));
+    const req = new Request("http://x/api/approve/l-a", { method: "POST", headers: { "x-aleph-ui": "1" } });
+    const res = await (proposalRoutes as any)["POST /api/approve/:id"](req, { id: "l-a" }, new URL("http://x/"));
+    expect(res.status).toBe(422);
+    expect((await res.json()).stderr).toBe("no sandboxed repo in the registry to reopen the issue in");
+  } finally {
+    restore();
+    rmSync(base, { recursive: true, force: true });
+  }
+});
