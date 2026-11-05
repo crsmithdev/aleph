@@ -201,7 +201,7 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 - **Bar lists:** `barRow()` and `barList()` (`ui/lib.js:480`): label, bar, value on one grid.
 - **Badges and chips:** `badge()` and `priorityBadge()` (`ui/lib.js:341`, `ui/lib.js:345`) are squared with `--r-tag`; `chips()` (`ui/lib.js:351`) are pills.
 - **Efficiency bar:** `.obar`, in the five `--seg-*` colours under white text.
-- **Loading and empty:** a chart's loading line is `<p role="status">Loading…</p>` (`ui/views/factory-agents.js:54`). Units and legends are not set in one place; each option names its series.
+- **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:53`. Units and legends are not set in one place; each option names its series.
 
 ## Metric cards
 
@@ -249,7 +249,7 @@ Uses: Status, Efficiency, Jobs, Agents, Automation, Issues, Memory, Sessions.
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:282`); a priority is `critical`, `high`, `medium` or `low`.
 - **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:61`): "Nothing waits for you." (`ui/views/gates.js:94`), "No job matches." with "Widen the window or clear a filter." (`ui/views/jobs.js:87`).
-- **Loading:** `Loading <title>…` (`ui/lib.js:80`).
+- **Loading:** `loadingLine()` (`ui/lib.js:83`) draws the inline line, `Loading <what>…`; `loading()` (`ui/lib.js:85`) draws a view's first-load state, `Loading <title>…`.
 - **Error:** `error()` (`ui/lib.js:80`) says what failed, and the default hint is "Check that aleph-ui is running, then reload."
 - **Offline:** "The server is unreachable. Showing the last data." (`ui/index.html:31`).
 - **Missing value:** `–`, except where a helper returns an empty string.
