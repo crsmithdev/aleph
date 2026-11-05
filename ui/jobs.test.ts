@@ -320,6 +320,13 @@ describe("render", () => {
     expect(v.renderJob({ ...job, next: { ...next, text: "a <b> → c" } })).toContain("a &lt;b&gt; → c");
     expect(v.renderJob(job)).not.toContain(">Next<");
   });
+  test("a landed, done or dropped job shows no next line", () => {
+    const next = { step: "none", action: "landed", text: "landed abc1234" };
+    const h = v.renderJob({ ...job, next });
+    expect(h).not.toContain(">Next<");
+    expect(h).not.toContain(next.text);
+    expect(v.renderJob({ ...job, next: { step: "wait", action: "passed", to: "human", text: "passed → human" } })).toContain('<span class="quiet">Next</span> passed → human');
+  });
   test("the Detail head is a sectionHead inside the dp-detail block", () => {
     const h = v.renderJob(job);
     expect(h.slice(h.indexOf('<div class="dp-detail">'))).toStartWith('<div class="dp-detail"><div class="sh"><h2>Detail</h2></div>');
