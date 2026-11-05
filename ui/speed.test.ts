@@ -71,7 +71,7 @@ test("GET /api/speed takes a window (default week) and answers JSON", async () =
   const b = await (await get("?window=week&baseline=1")).json();
   expect(b.window).toBe("week");
   expect(Object.keys(b.baseline).sort()).toEqual(["base", "basis", "prev"]);
-  expect(Object.keys(b.baseline.prev)).toContain("askP50");
+  expect(Object.keys(b.baseline.prev)).toContain("asks");
   // The Efficiency page reads the day and month answers: Status's one request fills them.
   expect(Object.keys(b.others).sort()).toEqual(["day", "month"]);
   expect(b.others.month.window).toBe("month");
@@ -354,16 +354,14 @@ test("cardTrend writes a sub-point change with pct() and keeps the flat marker f
   expect(cardTrend(0.63, 0.5, null, o)).toContain("▲ 13%");
 });
 
-test("asks: the window counts the Asks set and takes the p50 wait of the Asks cleared in it, in the answer and in figures()", () => {
-  const rec = (key: string, asks: { set: string; cleared?: string }[]) => record.write({ ...record.empty(key), asks });
-  rec("fx-1", [{ set: at(1, 9), cleared: at(1, 10) }, { set: at(0, 8), cleared: at(0, 8, 30) }]); // waits 3600, 1800
-  rec("fx-2", [{ set: at(0, 7) }, { set: at(40, 9), cleared: at(40, 10) }]); // open; and one outside the window
-  rec("fx-3", [{ set: at(8, 9), cleared: at(0, 12) }]); // set before the week, cleared in it: a wait, not a count
+test("asks: the window counts the Asks set, and those that came to Chris, in the answer and in figures()", () => {
+  const dir = (a: string, outcome: string) => ({ at: a, kind: "director", what: outcome, data: { outcome } });
+  const rec = (key: string, asks: { set: string; cleared?: string }[], events: unknown[] = []) => record.write({ ...record.empty(key), asks, events: events as never });
+  rec("fx-1", [{ set: at(1, 9), cleared: at(1, 10) }], [dir(at(1, 9, 30), "escalated")]); // escalated between set and cleared
+  rec("fx-2", [{ set: at(0, 7) }, { set: at(40, 9), cleared: at(40, 10) }], [dir(at(0, 6), "escalated"), dir(at(0, 7, 5), "decided")]); // escalated before the set; decided; one outside the window
   const s = speed("week", now);
-  expect(s.asks.count).toBe(3);
-  expect(s.asks.wait).toMatchObject({ count: 3 });
-  expect(s.asks.wait.p50).toBe(3600);
-  expect(figures(s)).toMatchObject({ asks: 3, askP50: 3600 });
-  expect(figures(speed("hour", new Date(2026, 8, 1)))).toMatchObject({ asks: null, askP50: null });
-  expect(averageFigures([figures(s)]).askP50).toBe(3600);
+  expect(s.asks).toEqual({ count: 2, manual: 1 });
+  expect(figures(s)).toMatchObject({ asks: 2 });
+  expect(figures(speed("hour", new Date(2026, 8, 1)))).toMatchObject({ asks: 0 });
+  expect(averageFigures([figures(s)]).asks).toBe(2);
 });

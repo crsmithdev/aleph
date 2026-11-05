@@ -41,8 +41,8 @@ export interface Speed {
   kinds: Record<(typeof KINDS)[number], Pct>;
   /** Intake: issue created to its first intake (or triage) end. Queue: that end, or the filing with none, to the issue's first agent start. Implement: job's first agent start to its last finish. Land: finish to landed. Lead: issue created to its last land. Each counts in the window where it ends. */
   phases: Record<Phase, PhaseStat>;
-  /** Asks to Chris: `count` set in the window; `wait` is from set to cleared, over the Asks cleared in the window. */
-  asks: { count: number; wait: Pct };
+  /** Asks set in the window: `count` all of them, `manual` those that came to Chris (a director event "escalated" from the set time until the Ask cleared). */
+  asks: { count: number; manual: number };
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
   buckets: ({ at: string; runs: number } & Record<Phase, number | null>)[];
@@ -507,9 +507,10 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
 }
 
 function asksOf(since: number, now: number): Speed["asks"] {
-  const asks = allRecords().flatMap((r) => r.asks ?? []), inWindow = (t: number) => t >= since && t <= now;
-  const waits = asks.filter((a) => a.cleared && inWindow(Date.parse(a.cleared))).map((a) => (Date.parse(a.cleared!) - Date.parse(a.set)) / 1000);
-  return { count: asks.filter((a) => inWindow(Date.parse(a.set))).length, wait: stat(waits) };
+  const inWindow = (t: number) => t >= since && t <= now;
+  const asks = allRecords().flatMap((r) => (r.asks ?? []).filter((a) => inWindow(Date.parse(a.set))).map((a) => ({ a, r })));
+  const escalated = ({ a, r }: (typeof asks)[number]) => r.events.some((e) => e.kind === "director" && (e.data as { outcome?: string } | undefined)?.outcome === "escalated" && e.at >= a.set && (!a.cleared || e.at < a.cleared));
+  return { count: asks.length, manual: asks.filter(escalated).length };
 }
 
 const cache = staleSync<Speed>();
@@ -518,7 +519,7 @@ export const clearCache = () => cache.clear();
 export const cachedSpeed = (window: Window, fit: Fit | null = null): Speed => cache.get(window, uiFetchTtl() * 1000, () => speed(window, new Date(), fit));
 
 /** What a Status card shows for one span; a field is null when the span has no data for it. */
-export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; asks: number | null; askP50: number | null; landed: number | null; firstPass: number | null }
+export interface Figures { lost: number | null; hours: number | null; leadP50: number | null; leadP90: number | null; asks: number | null; landed: number | null; firstPass: number | null }
 /** The trend baseline of a window: `prev` is the span just before, `base` the average the trend compares with, `basis` says how it is taken. */
 export interface Baseline { prev: Figures; base: Figures; basis: string }
 
@@ -529,8 +530,7 @@ export function figures(s: Speed): Figures {
     hours: total > 0 ? s.lost.hours : null,
     leadP50: s.phases.lead.count ? s.phases.lead.p50 : null,
     leadP90: s.phases.lead.count ? s.phases.lead.p90 : null,
-    asks: s.asks.count ? s.asks.count : null,
-    askP50: s.asks.wait.count ? s.asks.wait.p50 : null,
+    asks: s.asks.count,
     landed: any ? s.done : null,
     firstPass: s.issues.firstPass,
   };
@@ -545,7 +545,7 @@ export function averageFigures(xs: Figures[]): Figures {
   }
   return out;
 }
-const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, asks: null, askP50: null, landed: null, firstPass: null });
+const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: null });
 
 // Hour: the average of the last 12 hours; day: of the last 7 days; week and month: the span before.
 const BASELINE: Record<Window, { step: number; n: number; avg: boolean; basis: string; prev: string }> = {

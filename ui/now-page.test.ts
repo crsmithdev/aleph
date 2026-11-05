@@ -29,8 +29,8 @@ const WEEK = {
   ],
 };
 
-const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, askP50: 60, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, askP50: 60, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };
-const withBase = (d: any, asks = { count: 4, wait: { count: 3, p50: 90, p90: 400 } }) => ({ ...d, asks, baseline: BASE });
+const BASE = { prev: { lost: 0.3, hours: 5, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, base: { lost: 0.25, hours: 4, leadP50: 1200, leadP90: 9000, asks: 4, landed: 5, firstPass: 0.8 }, basis: "the previous 7 days" };
+const withBase = (d: any, asks = { count: 4, manual: 1 }) => ({ ...d, asks, baseline: BASE });
 
 const USAGE = { now: { seven_day: 7, five_hour: 2, seven_day_resets_at: "2026-11-07T08:00:00Z" }, series: [] };
 
@@ -47,18 +47,20 @@ test("the scorecard before the data arrives: dashes, and usage unknown with no u
   expect(h).not.toContain('class="tr');
 });
 
-test("the Asks to Chris card shows the count and the p50 wait, dashes with no Ask, and no Queue wait card", () => {
+test("the Asks card shows all and manual counts, zeros with no Ask, and no p50 wait or Queue wait", () => {
   const h = view.renderTiles({ ...state, usage: USAGE }, withBase(WEEK), "week");
-  expect(h).toContain("Asks to Chris");
-  expect(h).toContain("<b>4<em> / 1m</em></b>");
+  expect(h).toContain("Asks");
+  expect(h).not.toContain("Asks to Chris");
+  expect(h).not.toContain("p50 wait");
+  expect(h).toContain("<b>4<em> / 1</em></b>");
   expect(h).not.toContain("Queue wait");
-  expect(view.renderTiles({ ...state, usage: USAGE }, withBase(WEEK, { count: 0, wait: { count: 0, p50: 0, p90: 0 } }), "week")).toContain("<b>–<em> / –</em></b>");
+  expect(view.renderTiles({ ...state, usage: USAGE }, withBase(WEEK, { count: 0, manual: 0 }), "week")).toContain("<b>0<em> / 0</em></b>");
 });
 
 test("the Landed card shows the clean share, then the clean count, and trends on the clean share", () => {
   const d = { ...WEEK, done: 49, issues: { ...WEEK.issues, landed: 49, firstPass: Math.round((38 / 49) * 1e4) / 1e4 }, baseline: BASE };
   const h = view.renderTiles({ ...state, usage: undefined }, d);
-  expect(h).toContain("<b>78%<em> / 38 of 49</em></b>");
+  expect(h).toContain("<b>78%<em> / 49</em></b>");
   expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
 });
 

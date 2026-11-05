@@ -145,8 +145,8 @@ export function statusCards(s, d, { efficiency, performance }) {
   const t = (key, o) => (f && base ? cardTrend(f[key], base[key], prev?.[key], { basis, ...o }) : "");
   const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours) }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
   const lead = statCard({ k: "Completion", v: cardDur(f?.leadP50), v2: cardDur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
-  const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: `${Math.round(f.firstPass * f.landed)} of ${f.landed}` }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
-  const asks = statCard({ k: "Asks to Chris", v: f?.asks == null ? "–" : String(f.asks), v2: cardDur(f?.askP50), q: ["set", "p50 wait"], trend: t("askP50", { kind: "relative", lowerIsGood: true, format: cardDur }), href: performance });
+  const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: String(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
+  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : String(f.asks), ...(f ? { v2: String(d.asks?.manual ?? 0) } : {}), q: ["All", "Manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: String }), href: performance });
   return lost + lead + landed + asks + usageCard(s);
 }
 
@@ -156,7 +156,7 @@ export function figuresOf(d) {
   return {
     lost: total > 0 ? d.lost.share : null, hours: total > 0 ? d.lost.hours : null,
     leadP50: lead?.count ? lead.p50 : null, leadP90: lead?.count ? lead.p90 : null,
-    asks: asks?.count ? asks.count : null, askP50: asks?.wait?.count ? asks.wait.p50 : null,
+    asks: asks?.count ?? null,
     landed: total > 0 || d.done > 0 ? d.done : null, firstPass: d.issues?.firstPass ?? null,
   };
 }
