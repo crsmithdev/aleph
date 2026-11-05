@@ -14,11 +14,12 @@ import { isOpen, lastReal, openJob, type Job } from "./job.ts";
 import type { Bound, Gate } from "./goal-decision.ts";
 import { layout, readFactoryLog } from "./layout.ts";
 import * as record from "./record.ts";
-import { allRuns, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo } from "./ledger.ts";
+import { allRuns, held, isAwaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo, type Run } from "./ledger.ts";
 import { isLive, isStarting } from "./process.ts";
 import { causeOf } from "./outcome.ts";
 import { smokeLine } from "./smoke.ts";
-import { LIVE_CAP, RUN_CAP, suiteBudgetSeconds } from "./settings.ts";
+import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "./settings.ts";
+import { LOCAL, readModels, type Backend, type Slot } from "./models.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -96,33 +97,67 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 /** Agent runs live now, and those started whose unit has not written `pid` yet. */
 export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
 
-export const liveRuns = (runs?: Entry[]): number => liveEntries(runs).length;
+/** Whether a build run is on the local backend: unit.ts sets its model to the local one, and before that its slot's backend is local. */
+const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Slot, Backend>): boolean =>
+  run.model === LOCAL.model || models[(run.merge ? "merge" : `worker.${run.model}`) as Slot] === "local";
+
+/** Live agent runs on Claude, the count the live cap checks: a local-backend run counts against LOCAL_CAP only. */
+export const liveRuns = (runs?: Entry[]): number => { const models = readModels(); return liveEntries(runs).filter((e) => !onLocal(e.run, models)).length; };
+
+/** Live agent runs on the local backend, the count LOCAL_CAP checks. */
+const liveLocal = (runs?: Entry[], models = readModels()): number => liveEntries(runs).filter((e) => onLocal(e.run, models)).length;
+
+/**
+ * Takes the GPU slot for one local call: no local agent run is live and the `gpu` lock is free. Waits up to `waitMs`;
+ * null when the slot stays taken. The caller calls the release when its call ends.
+ */
+export async function gpuSlot(waitMs: number): Promise<(() => void) | null> {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    if (liveLocal() < LOCAL_CAP) {
+      const release = await lock("gpu", 0);
+      if (release) return release;
+    }
+    if (Date.now() >= deadline) return null;
+    await Bun.sleep(100);
+  }
+}
 
 /** The gates of the whole factory, in the order of GATES: the others are each goal's own. */
 export const FACTORY_GATES = ["pause", "live-cap"] as const satisfies readonly Gate[];
 
 export type FactoryGate = (typeof FACTORY_GATES)[number];
 
-/** Each factory gate that binds now, or null: the pause, the live cap. `jobs`, when given, hold every run. */
-export function factoryGates(jobs?: Job[]): Record<FactoryGate, Bound | null> {
-  const live = liveRuns(jobs?.flat());
+/**
+ * Each factory gate that binds now, or null: the pause, the live cap. `jobs`, when given, hold every run. `run`, when given,
+ * is the run to start: on the local backend the live cap is LOCAL_CAP over the live local runs and a held `gpu` lock.
+ */
+export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): Record<FactoryGate, Bound | null> {
+  const models = readModels();
+  const local = run !== undefined && onLocal(run, models);
+  // A title or judge call holds the `gpu` lock while it runs on the local backend: it takes the GPU slot as a local run does.
+  const call = local && held("gpu");
+  const live = local ? liveLocal(jobs?.flat(), models) + (call ? 1 : 0) : liveRuns(jobs?.flat());
+  const bound = local
+    ? { why: call ? "a local call holds the GPU" : `${live} local agent runs are live`, text: `Waiting for the GPU slot (${live} of ${LOCAL_CAP} running)` }
+    : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)` };
   return {
     pause: paused() ? { why: "paused", text: "The factory is paused" } : null,
-    "live-cap": live >= LIVE_CAP() ? { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)` } : null,
+    "live-cap": live >= (local ? LOCAL_CAP : LIVE_CAP()) ? bound : null,
   };
 }
 
 /**
  * The first factory gate that binds, in the order of FACTORY_GATES, or null. `only` limits it to some of them (a caller
- * whose other gates do not apply); `jobs` are factoryGates'.
+ * whose other gates do not apply); `jobs` and `run` are factoryGates'.
  */
-export function gates(opts: { only?: readonly FactoryGate[]; jobs?: Job[] } = {}): ({ gate: FactoryGate } & Bound) | null {
+export function gates(opts: { only?: readonly FactoryGate[]; jobs?: Job[]; run?: Pick<Run, "model" | "merge"> } = {}): ({ gate: FactoryGate } & Bound) | null {
   const on = (g: FactoryGate) => !opts.only || opts.only.includes(g);
   // Each gate is read only when asked: the pause is one stat, and the dispatch asks it first.
   if (on("pause") && paused()) return { gate: "pause", why: "paused", text: "The factory is paused" };
   const rest = FACTORY_GATES.filter((g) => g !== "pause" && on(g));
   if (!rest.length) return null;
-  const all = factoryGates(opts.jobs);
+  const all = factoryGates(opts.jobs, opts.run);
   for (const g of rest) if (all[g]) return { gate: g, ...all[g]! };
   return null;
 }

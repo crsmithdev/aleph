@@ -65,7 +65,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, tag: string, c
   let id: string;
   try {
     if (isBuild(run.kind)) {
-      const full = gates({ only: ["live-cap"] });
+      const full = gates({ only: ["live-cap"], run });
       if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
     }
     mkdirSync(runsDir(), { recursive: true });

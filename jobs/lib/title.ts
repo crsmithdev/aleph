@@ -7,8 +7,12 @@ import { NO_SKILLS } from "./role-skill.ts";
 import { titleProblem, TITLE_RULE } from "../../todo/lib/todo.ts";
 import { ruleCmd } from "./settings.ts";
 import { LOCAL, LOCAL_ENV, readModels } from "./models.ts";
+import { gpuSlot } from "./factory-status.ts";
+import { factoryLog } from "./layout.ts";
 
 const TITLE = 60;
+/** The time box of one call, and of its wait for the GPU slot. */
+const BOX = 30_000;
 
 /**
  * One line of text from a nested Haiku `claude -p` given a system prompt and an input.
@@ -21,11 +25,17 @@ export async function writeLine(system: string, input: string, max: number): Pro
   delete env.CLAUDE_CODE_ENTRYPOINT;
   delete env.ANTHROPIC_API_KEY;
   env.MAX_THINKING_TOKENS = "0";
-  const local = readModels().title === "local";
+  // A local call waits for the GPU slot within its time box, then falls back to Claude.
+  let release: (() => void) | null = null;
+  if (readModels().title === "local") {
+    release = await gpuSlot(BOX);
+    if (!release) factoryLog(`title: the GPU slot stayed taken for ${BOX / 1000} s; the call falls back to Claude`);
+  }
+  const local = release !== null;
   if (local) Object.assign(env, LOCAL_ENV);
   try {
     const proc = Bun.spawn([cmd, "-p", "--strict-mcp-config", NO_SKILLS, "--model", local ? LOCAL.model : "haiku", "--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input], { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
-    const timer = setTimeout(() => proc.kill(), 30_000);
+    const timer = setTimeout(() => proc.kill(), BOX);
     const [stdout] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
     const code = await proc.exited;
     clearTimeout(timer);
@@ -35,6 +45,8 @@ export async function writeLine(system: string, input: string, max: number): Pro
     return String(result).trim().split("\n")[0].trim().slice(0, max);
   } catch {
     return "";
+  } finally {
+    release?.();
   }
 }
 

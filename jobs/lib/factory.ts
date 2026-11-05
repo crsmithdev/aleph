@@ -27,7 +27,7 @@ import { baselineChecks, type ChecksStop } from "./checks.ts";
 import { drop, land, recheck, refusal, startGoal } from "./transitions.ts";
 import { startKept } from "./unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
-import type { Tier } from "./route.ts";
+import { route, TIERS, type Tier } from "./route.ts";
 import { mainRed, writeBaseline, clearCap, goalFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "./factory-status.ts";
 export { setPaused };
 
@@ -140,11 +140,15 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : goal(repo, ref);
       if (!item) { skip(name, "not-ready", "not a goal"); continue; }
-      const d = goalDecision({
-        ...goalFacts(repo, item, jobs), done, red,
-        // A pass that began before a pause must not start a run after it.
-        ...factoryGates(jobs),
-      });
+      const facts = { ...goalFacts(repo, item, jobs), done, red };
+      // A pass that began before a pause must not start a run after it.
+      let d = goalDecision({ ...facts, ...factoryGates(jobs) });
+      let tier: Tier | null | undefined;
+      // The live cap held the goal, but a tier on the local backend has room: rate the goal, and check its tier's cap.
+      if (d.kind === "live-cap" && TIERS.some((t) => !factoryGates(jobs, { model: t })["live-cap"])) {
+        tier = await route(goalBrief(item, name, jobs).spec);
+        if (tier) d = goalDecision({ ...facts, ...factoryGates(jobs, { model: tier }) });
+      }
       if (d.kind !== "ready" && d.kind !== "loop-guard") { skip(name, d.kind, d.why); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
@@ -170,7 +174,7 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         continue;
       }
       const { spec, rerun } = goalBrief(item, name, jobs);
-      const why = await start(repo, name, ref, spec);
+      const why = await start(repo, name, ref, spec, tier);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
       if (why) skip(name, LIVE_REFUSAL.test(why) ? "live-cap" : "not-ready", why);
       else { recordHold(name, "started", "started"); started.push(name); clearCap(name); if (rerun) clearRerun(name); }

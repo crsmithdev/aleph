@@ -58,6 +58,8 @@ function cap(envName: string, key: string, dflt: number): number {
 /** The live cap's default as the docs state it; the number depends on the machine. */
 export const LIVE_CAP_DEFAULT = "cores / 6, at least 1";
 export const LIVE_CAP = () => cap("ALEPH_LIVE_CAP", "live", Math.max(1, Math.floor(availableParallelism() / 6)));
+/** The most local-backend agent runs live at once, apart from the live cap: the one GPU serves one gpt-oss call. */
+export const LOCAL_CAP = 1;
 /** The most agent runs one goal starts in any 60 minutes, whatever the trigger: the next start is an Ask. */
 export const RUN_CAP = () => cap("ALEPH_RUN_CAP", "run", 3);
 /** The most director runs one tick starts, one per Ask. */

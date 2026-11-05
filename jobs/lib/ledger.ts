@@ -262,6 +262,14 @@ function reclaim(dir: string): void {
   try { if (isStale(dir)) remove(dir); } finally { rmSync(guard, { recursive: true, force: true }); }
 }
 
+const lockRoot = () => join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
+
+/** True when a live process holds the lock `name`. */
+export function held(name: string): boolean {
+  const dir = join(lockRoot(), name);
+  return existsSync(dir) && !isStale(dir);
+}
+
 /**
  * A lock is a directory on a tmpfs that a reboot clears, with the holder's pid
  * in `owner`. It comes into being whole, by a rename onto a name that must not
@@ -269,7 +277,7 @@ function reclaim(dir: string): void {
  * process is gone. Waits up to `waitMs`, then gives up.
  */
 export async function lock(name: string, waitMs = 20_000): Promise<(() => void) | null> {
-  const root = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid!()}`, "aleph");
+  const root = lockRoot();
   mkdirSync(root, { recursive: true });
   const dir = join(root, name);
   const deadline = Date.now() + waitMs;
