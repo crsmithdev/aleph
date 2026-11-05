@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { buildableIssues, isBuildable, isSorted, partsOf, readList, writeList } from "../../../issues/lib/store.ts";
 
-import { INTAKE_SCHEMA, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
+import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
 import { allRuns, readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
@@ -211,6 +211,21 @@ test("parts are filed in the intake run as new issues from the issue; each waits
   expect(item(1).spec).toBe("");
   expect(item(1).notes.at(-1)).toContain(`intake: split into ${repo.key}-2`);
   expect(calls()).toHaveLength(1);
+});
+
+test("a split gives the parts task when the parent's stored kind is one the store dropped, and a current kind as it is", () => {
+  reset([{ title: "a", kind: "task" }, { title: "b", kind: "bug" }]);
+  const doc = readList(repo)!;
+  const parent = item(1);
+  parent.fm.kind = "goal";
+  const half = { goal: "Half.", surface: [{ path: "x.ts", new: false }], oracle: ["`bun test x.test.ts` passes"] };
+  const refs = addParts(repo, doc, parent, [{ title: "[Big] Do the first half", spec: half, after: [] }, { title: "[Big] Do the second half", spec: half, after: [1] }]);
+  const parts = refs.map((r) => issues.find(doc, r.slice(repo.key.length + 1))!);
+  expect(parts.map((p) => p.fm.from)).toEqual([`${repo.key}-1`, `${repo.key}-1`]);
+  expect(parts.map((p) => p.fm.after ?? [])).toEqual([[], [`${repo.key}-3`]]);
+  expect(parts.map((p) => p.fm.kind)).toEqual(["task", "task"]);
+  const bugs = addParts(repo, doc, item(2), [{ title: "[Bug] Do the fix", spec: half, after: [] }]).map((r) => issues.find(doc, r.slice(repo.key.length + 1))!);
+  expect(bugs.map((p) => p.fm.kind)).toEqual(["bug"]);
 });
 
 test("a build drops an after-link to an item that waits for Chris and keeps one to an ordinary open issue", async () => {

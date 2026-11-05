@@ -316,15 +316,17 @@ ${PART_RULES}
 
 /**
  * File each part as a new issue with `from: <repo>-<id>`, in a write that clears the issue's `plan` and its spec. A part
- * takes the issue's kind and priority, and its source when that is not chris, else agent. Each part's `after` is the
- * earlier parts it names and the issue's own `after`. The parts' refs.
+ * takes the issue's kind when that is a current one, else `task`, its priority, and its source when that is not chris,
+ * else agent. Each part's `after` is the earlier parts it names and the issue's own `after`. The parts' refs.
  */
 export function addParts(repo: Repo, doc: issues.Doc, issue: issues.Issue, parts: Part[], after: string[] = []): string[] {
   const refs: string[] = [];
   const from = `${repo.key}-${issues.refOf(issue)}`;
   const source = issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as issues.Source) : "agent";
+  // A store from before a kind was dropped (such as `goal`) still splits: a kind the store does not know gives the parts `task`.
+  const kind = String(issue.fm.kind ?? "task");
   for (const c of parts) {
-    const part = issues.add(doc, c.title, { kind: String(issue.fm.kind ?? "task"), priority: String(issue.fm.priority ?? "medium"), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
+    const part = issues.add(doc, c.title, { kind: issues.kindProblem(kind) ? "task" : kind, priority: String(issue.fm.priority ?? "medium"), source, spec: specText(c.spec), from, after: [...after, ...c.after.map((w) => refs[w - 1])] });
     refs.push(`${repo.key}-${issues.refOf(part)}`);
   }
   delete issue.fm.plan;
