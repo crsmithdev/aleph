@@ -11,6 +11,7 @@ import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
+import { word } from "../../lib/naming.ts";
 import { partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
@@ -91,6 +92,11 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
 
 const DAY = 24 * 3600_000;
 const KIND = { agent: "worker", build: "worker", recheck: "worker", land: "land", plain: "plain", intake: "intake", triage: "triage", plan: "plan", facts: "facts", firefighter: "firefighter", director: "director", explain: "explain", monitor: "monitor" } as const;
+/** The actor a run belongs to, by its kind. */
+const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
+  worker: "worker", review: "reviewer", intake: "intake", triage: "intake", plan: "intake", facts: "intake",
+  director: "director", explain: "director", monitor: "monitor", firefighter: "firefighter",
+};
 function runInfos(runs: Entry[], fit: Fit | null = null): RunInfo[] {
   const out: RunInfo[] = [];
   runs.forEach((e, i) => {
@@ -140,13 +146,13 @@ export const routes: Routes = {
     const days = dq === null || dq === "" ? 7 : Number(dq);
     if (!(days >= 0)) return Response.json({ error: "days must be a number" }, { status: 400 });
     const since = Date.now() - days * DAY;
-    const kind = role === "planner" ? "plan" : role === "reviewer" ? "review" : role;
+    const actor = role && word("actor", role);
     const hit: { at: number; job: Job }[] = [];
     const { toJob } = jobProjector();
     for (const runs of allJobs()) {
       const last = lastReal(runs).run;
       if ((project && last.repo !== project) || (repo && last.repo !== repo) || (state && last.condition !== state)) continue;
-      if (kind && !runInfos(runs).some((r) => r.kind === kind)) continue;
+      if (actor && !runInfos(runs).some((r) => RUN_ACTOR[r.kind] === actor)) continue;
       const times = runs.flatMap((e) => [e.run.started, e.run.ended]).map((t) => Date.parse(t ?? "")).filter((t) => !Number.isNaN(t));
       const at = Math.max(...times);
       if (!(at >= since)) continue;

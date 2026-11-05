@@ -120,6 +120,29 @@ describe("GET /api/jobs", () => {
       expect(await names("role=intake")).toEqual(["oth-3"]);
     } finally { for (const id of ["20261027-000006-a", "20261027-000007-a", "20261027-000008-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
   });
+  test("?role reads a run's kind as its actor, and an old role as the new one", async () => {
+    const ids = ["20261027-000010-a", "20261027-000011-a", "20261027-000012-a", "20261027-000013-a"];
+    run(ids[0], { kind: "triage", job: "oth-5", name: "oth-5", repo: "oth", condition: "failed", started: ago(1) });
+    run(ids[1], { kind: "firefighter", job: "oth-6", name: "oth-6", repo: "oth", condition: "failed", started: ago(1) });
+    run(ids[2], { kind: "director", job: "oth-7", name: "oth-7", repo: "oth", condition: "failed", started: ago(1) }, { "review.md": "ok\n" });
+    run(ids[3], { job: "oth-8", name: "oth-8", repo: "oth", condition: "passed", started: ago(1), ended: ago(0.5) }, { "review.md": "ok\n" });
+    try {
+      const names = async (q: string) => (await (await get(`/api/jobs?${q}`)).json()).map((j: any) => j.name).sort();
+      expect(await names("role=intake")).toContain("oth-5");
+      expect(await names("role=triage")).toEqual(await names("role=intake"));
+      expect(await names("role=planner")).toEqual(await names("role=intake"));
+      expect(await names("role=firefighter")).toEqual(["oth-6"]);
+      expect(await names("role=director")).toEqual(["oth-7"]);
+      expect(await names("role=reviewer")).toContain("oth-8");
+    } finally { for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
+  });
+  test("the Role filter offers the six actors and no old role", () => {
+    const h = v.renderFilters({});
+    const role = h.slice(h.indexOf('data-name="role"'));
+    expect([...role.matchAll(/data-value="([^"]*)"/g)].map((m) => m[1])).toEqual(["", "worker", "reviewer", "intake", "director", "monitor", "firefighter"]);
+    expect(h).not.toContain('value="triage"');
+    expect(h).not.toContain('value="planner"');
+  });
   test("?project narrows to one project", async () => {
     expect((await (await get("/api/jobs?project=oth&days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
     expect(await (await get("/api/jobs?project=nope")).json()).toEqual([]);

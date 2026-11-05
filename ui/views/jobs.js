@@ -3,7 +3,7 @@
 // strings, with no DOM, so tests can call them.
 import { pageHead, sectionHead, blockersHtml, bytes, chip, codeText, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, WINDOW_DAYS, wireTable, windowOf, when, wkText } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
-
+import { ACTORS } from "../../lib/naming.ts";
 
 /** The days of the list: the window, or an old `?days=` address that has no window; else the stored window. */
 function daysOf(q) {
@@ -50,7 +50,7 @@ export function renderScope(jobs, f = {}) {
   return scopeBar(projectOf({ get: (k) => f[k] }), windowShown(f), repos);
 }
 
-const ROLES = ["worker", "intake", "triage", "planner", "firefighter", "director", "reviewer"];
+const ROLES = ACTORS.filter((a) => !["human", "rule", "gate", "check"].includes(a));
 export const renderFilters = (f = {}) => filterBar([
   { label: "State", name: "condition", value: f.condition || "", options: [{ value: "", label: "All" }, ...STATES] },
   { label: "Role", name: "role", value: f.role || "", options: [{ value: "", label: "All" }, ...ROLES] },
