@@ -193,7 +193,7 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 - **Bars:** `barsOption()` (`ui/lib.js:480`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `ui/views/factory-agents.js:33`, `ui/views/issues.js:312`, `ui/views/issues.js:313`, `ui/views/factory-jobs.js:21`.
 - **Lines:** `lineOption()` (`ui/lib.js:480`) for one series over time, filled at 15% opacity, or as a step area (85%) for live counts. Uses: `ui/views/factory-agents.js:37`, `ui/views/factory-agents.js:49`, `ui/views/skills.js:33`.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:23`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
-- **Metric tiles:** `tile()` (`ui/lib.js:433`): a small caps key, the figure in `--metric` at 32px, and a small line. A tile with `key` selects the detail below it.
+- **Metric tiles:** `tile()` (`ui/lib.js:433`): a small caps key, the figure in `--metric` at 32px, and a small line. A tile with `key` selects the detail below it. `tiles()` lays them out as an auto-fit grid that stretches to fill the row. The Status scorecard, the Efficiency scorecard and the Automation metrics all use this tile.
 - **Bar lists:** `barRow()` and `barList()` (`ui/lib.js:480`): label, bar, value on one grid.
 - **Badges and chips:** `badge()` and `priorityBadge()` (`ui/lib.js:341`, `ui/lib.js:345`) are squared with `--r-tag`; `chips()` (`ui/lib.js:351`) are pills.
 - **Efficiency bar:** `.obar`, in the five `--seg-*` colours under white text.
@@ -270,7 +270,7 @@ Reference view = the view that follows the rules best.
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
 | Chart | `chart()`, `barsOption()`, `lineOption()` | `ui/views/factory-agents.js` |
-| Metric tile | `tile()` | `ui/views/factory-agents.js:19` |
+| Metric tile (the standard data card) | `tile()`, `tiles()` | `ui/views/factory-agents.js:19` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
 | Pager | `pager()` | `ui/views/issues.js:241` |
 | Empty state | `empty()` | `ui/views/jobs.js:87` |

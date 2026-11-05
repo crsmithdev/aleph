@@ -983,19 +983,14 @@ ul.logs .step { margin: var(--sp-6) 0; }
 /* ---------- Gates page (views/gates.js) ---------- */
 .gates .ph .aside { margin-left: 0; font-size: var(--fs-sm); }
 .gates .sh .aside { white-space: normal; }
-.gtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); gap: var(--sp-10); margin-bottom: var(--sp-12); }
-.gtile { display: flex; flex-direction: column; gap: var(--sp-6); min-width: 0; padding: var(--sp-12) 14px; border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); }
-.gtile .gt-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-8); font-size: var(--fs-sm); color: var(--ink-2); }
-.gtile b { font: var(--fw-mid) var(--fs-2xl)/1.2 var(--mono); color: var(--ink); }
-.gtile small { font-size: var(--fs-xs); color: var(--muted); overflow-wrap: anywhere; }
 .gates .hint { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--need); }
 .gates p.quiet { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .rule code { font: var(--fs-xs) var(--mono); color: var(--muted); }
 .gates table.tbl td.rule-main { white-space: normal; }
 .rule .seg button[disabled] { cursor: wait; opacity: .6; }
 .rule .note { margin: 0; }
-.gates-two { display: flex; flex-wrap: wrap; gap: var(--gap-in); margin: 0 0 28px; }
-.gates-two > .card { flex: 1 1 420px; margin: 0; }
+.gates-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: var(--gap-in); margin: 0 0 28px; }
+.gates-two > .card { margin: 0; }
 .held { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
 .held .chip { margin: 0; font-family: var(--mono); border-radius: var(--r-tag); }
 .held-repo { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6) var(--sp-10); margin-top: var(--sp-8); }
@@ -1008,10 +1003,11 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .capform input { width: 5em; font: inherit; font-family: var(--mono); padding: var(--sp-2) var(--sp-6); }
 .capform .cap-env { flex-basis: 100%; }
 .capform .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.caps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr)); gap: var(--sp-10); margin-bottom: var(--sp-12); }
-.cap-row { display: flex; flex-direction: column; gap: var(--sp-6); padding: var(--sp-12) 14px; border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); }
+.caps { display: grid; gap: var(--sp-10); margin-bottom: var(--sp-12); }
+.cap-row { display: grid; grid-template-columns: 7em 5em auto; align-items: center; gap: var(--sp-6) var(--sp-10); }
 .cap-row span { font: var(--fw-mid) var(--fs-2xl)/1.2 var(--mono); }
-.cap-row small { font-size: var(--fs-xs); color: var(--muted); }
+.cap-row small { grid-column: 1 / -1; grid-row: 2; font-size: var(--fs-xs); color: var(--muted); }
+.cap-row .capform { margin-top: 0; }
 
 /* Ask cards: four kinds; compact shows the title and the buttons, open adds the description, what each button does, and Technical details. */
 .issue-row[data-card] { display: flex; flex-direction: column; align-items: stretch; gap: var(--sp-6); padding: 0; border: 0; border-radius: 0; background: none; }

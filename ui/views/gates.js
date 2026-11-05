@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Pause and Resume buttons
 // and the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, sectionHead, when } from "../lib.js";
+import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, sectionHead, small, tile, tiles, when } from "../lib.js";
 import { askRow } from "./now.js";
 
 export const view = {
@@ -46,12 +46,9 @@ const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: "stuck", Gate: "run" };
 
 export function renderGates(d, q = new URLSearchParams()) {
-  const ctl = d.factory.paused
-    ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
-    : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
-  return `<div class="page gates">${pageHead("Automation", { aside: ctl })}` +
-    renderNow(d) + renderCaps(d) + renderSchedules(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
-    `<div class="gates-two">${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
+  return `<div class="page gates">${pageHead("Automation")}` +
+    renderNow(d) + renderSchedules(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
+    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
 
 /** The environment variable that overrides each cap in caps.json. */
@@ -68,23 +65,26 @@ function capForm(f, key, label, value) {
 /** The metric tiles: the automation rate, the gate catches and the held time, each over the log's window. */
 export function renderNow(d) {
   const m = d.metrics, win = `last ${m.days} days`;
-  const tile = (name, value, note) => `<div class="gtile"><div class="gt-head"><span>${esc(name)}</span></div><b>${esc(value)}</b><small>${esc(note)}</small></div>`;
+  const t = (k, v, note) => tile({ k, v, body: small(note) });
   const tilesHtml = [
-    tile("Automation rate", m.rate ? `${m.rate.percent}%` : "–", m.rate ? `${m.rate.auto} of ${m.rate.total} Asks decided without Chris, ${win}` : `no Ask decided, ${win}`),
-    tile("Gate catches", `${m.catches.fired} / ${m.catches.fixed}`, `checks and reviews that sent a build back, against those a later build fixed, ${win}`),
-    tile("Repeat answers", String(d.repeats.length), `kinds of Ask that Chris answered the same way 3 or more times, ${win}`),
-    tile("Held time", `${m.held.goals} goals, ${m.held.hours} h`, `goals held, and hours in a hold, ${win}`),
+    t("Automation rate", m.rate ? `${m.rate.percent}%` : "–", m.rate ? `${m.rate.auto} of ${m.rate.total} Asks decided without Chris, ${win}` : `no Ask decided, ${win}`),
+    t("Gate catches", `${m.catches.fired} / ${m.catches.fixed}`, `checks and reviews that sent a build back, against those a later build fixed, ${win}`),
+    t("Repeat answers", String(d.repeats.length), `kinds of Ask that Chris answered the same way 3 or more times, ${win}`),
+    t("Held time", `${m.held.goals} goals, ${m.held.hours} h`, `goals held, and hours in a hold, ${win}`),
   ].join("");
-  return `<section id="gates-now" aria-label="Metrics"><div class="gtiles">${tilesHtml}</div></section>`;
+  return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }
 
-/** The live cap and the run cap: each shows its use against its limit, with a form to edit it. */
+/** The controls panel: the Pause or Resume button, then the live cap and the run cap, each with its use against its limit and a form to edit it. */
 export function renderCaps(d) {
   const f = d.factory;
+  const ctl = f.paused
+    ? `<button class="act primary" type="button" data-act="resume" data-label="Resume the factory">Resume the factory</button>`
+    : `<button class="act" type="button" data-act="pause" data-label="Pause the factory">Pause the factory</button>`;
   const row = (key, label, use, limit, note) => `<div class="cap-row"><b>${esc(label)}</b><span>${esc(use)} / ${esc(limit)}</span><small>${esc(note)}</small>${capForm(f, key, label, limit)}</div>`;
-  return `<section id="gates-caps" aria-label="Caps">${sectionHead("Caps")}<div class="caps">` +
+  return card("Controls", `<div class="caps">` +
     row("live", "Live cap", f.liveRuns, f.liveCap, "live runs against the cap") +
-    row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div></section>`;
+    row("run", "Run cap", f.runStarts ?? 0, f.runCap, "the most starts any one goal made in the last hour") + `</div>${ctl}`, { id: "gates-caps" });
 }
 
 /** The tick, the suite and the monitor: when each last ran and what came of it. */

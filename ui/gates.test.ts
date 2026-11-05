@@ -131,11 +131,14 @@ const data = () => ({
 
 test("the view draws the sections in order, a closed gate, and the rule switches with only Ask me and the reason's mode", () => {
   const h = gates.renderGates(data());
-  const order = ["Waiting for you", "Rules", "Held paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
+  const order = ["Waiting for you", "Rules", "Controls", "Held paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
-  const tiles = [...h.matchAll(/<div class="gt-head"><span>([^<]*)<\/span>/g)].map((m) => m[1]);
+  const tiles = [...h.matchAll(/<div class="tile"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
   expect(tiles).toEqual(["Automation rate", "Gate catches", "Repeat answers", "Held time"]);
+  expect(h).toContain('<section class="tiles" aria-label="Metrics">');
+  expect(h).not.toContain("gtile");
+  expect(h).not.toContain("gt-head");
   expect(h).toContain("<b>75%</b>");
   expect(h).toContain("<b>6 / 2</b>");
   expect(h).toContain("<b>2 goals, 3 h</b>");
@@ -270,7 +273,7 @@ test("the Caps section holds one form each for the live cap and the run cap, wit
   expect(h).toContain("<span>5 / 5</span>");
   expect(h).toContain("<span>2 / 3</span>");
   expect(h).not.toContain("day");
-  expect(gates.renderGates(data())).toContain("<h2>Caps</h2>");
+  expect(gates.renderGates(data())).toContain("<h2>Controls</h2>");
 });
 
 test("the view is Automation at #/automation in the Factory group; #/gates redirects; the chips link to #/automation", () => {
@@ -287,14 +290,19 @@ test("the view is Automation at #/automation in the Factory group; #/gates redir
   expect(gates.redirect("#/automation")).toBeNull();
 });
 
-test("the Automation page has no explaining aside, and the Pause button sits in the page header before the gates", () => {
+test("the Automation page has no explaining aside; the Pause button sits in the controls panel with the cap forms, before Held paths in one row", () => {
   for (const paused of [false, true]) {
     const h = gates.renderGates({ ...data(), gated: null, factory: { ...data().factory, paused } });
-    const head = h.slice(h.indexOf('<header class="ph">'), h.indexOf("</header>"));
-    expect(head).toContain(`data-act="${paused ? "resume" : "pause"}"`);
-    expect(head).toContain("<h1>Automation</h1>");
-    expect(h.indexOf(`data-act="${paused ? "resume" : "pause"}"`)).toBeLessThan(h.indexOf('id="gates-now"'));
+    const act = `data-act="${paused ? "resume" : "pause"}"`;
+    expect(h.slice(h.indexOf('<header class="ph">'), h.indexOf("</header>"))).not.toContain("data-act");
     expect(h.match(/data-act="(pause|resume)"/g)!.length).toBe(1);
+    const panel = h.slice(h.indexOf('<section class="card" id="gates-caps"'), h.indexOf('aria-label="Held paths"'));
+    expect(panel).toContain(act);
+    expect(panel).toContain('data-cap="live"');
+    expect(panel).toContain('data-cap="run"');
+    const row = h.slice(h.indexOf('<div class="gates-two">'));
+    expect(row.indexOf('id="gates-caps"')).toBeGreaterThan(0);
+    expect(row.indexOf('id="gates-caps"')).toBeLessThan(row.indexOf('aria-label="Held paths"'));
   }
   const h = gates.renderGates(data());
   for (const t of ["What can stop, hold or ask", "Every goal passes these in order", "Who decides each kind of Ask"]) expect(h).not.toContain(t);
@@ -378,7 +386,7 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   const h = gates.renderRepeats(d);
   expect(h).toContain("<h2>Repeat answers");
   expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
-  expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><\/div><b>1<\/b>/);
+  expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><b>1<\/b>/);
   const none = gates.renderRepeats(data());
   expect(none).toContain("No answer repeats.");
   expect(none).not.toContain("<button");
