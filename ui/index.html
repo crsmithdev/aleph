@@ -29,6 +29,7 @@
   </nav>
   <main>
     <p id="offline" role="alert" hidden>The server is unreachable. Showing the last data.</p>
+    <p id="stale" role="alert" hidden>The server runs older code than the checkout. Restart it: <code>systemctl --user restart aleph-ui</code></p>
     <div id="view"></div>
   </main>
 </div>
@@ -88,6 +89,7 @@
     const res = await fetch(url, { cache: "no-store" });
     if (res.status === 401) { location.reload(); return res; }
     if (res.headers.get("x-aleph-login") === "1") $("logout").hidden = false;
+    $("stale").hidden = res.headers.get("x-aleph-stale") !== "1";
     const v = res.headers.get("x-aleph-version");
     if (v && version && v !== version && !document.activeElement?.matches("input, textarea, select")) location.reload();
     if (v && !version) version = v;

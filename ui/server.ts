@@ -3,13 +3,14 @@
  * each `ui/views/*.js`, and the routes of every `ui/api/*.ts`, loaded at start.
  * A route file exports `routes`: `"GET /api/x/:id"` → `(req, params, url) => Response`.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { cacheFetches, uiFetchTtl } from "../todo/lib/store.ts";
 import { loadDotenv } from "../hooks/lib/env.ts";
 import { gateOn, gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";
 import { uiPort } from "../jobs/lib/settings.ts";
+import { serverGraph } from "../jobs/lib/ui-graph.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
 export type Routes = Record<string, Handler>;
@@ -73,9 +74,19 @@ export function version(dir = import.meta.dir): string {
   return `${START}-${Bun.hash(parts.join("\n")).toString(36)}`;
 }
 
+/** A fingerprint of the content of each file that the server loaded (its server graph) under `root`. */
+function codePrint(root: string, files: Iterable<string>): string {
+  return [...files].sort().map((f) => {
+    try { return `${f}:${Bun.hash(readFileSync(join(root, f)))}`; } catch { return `${f}:missing`; }
+  }).join("\n");
+}
+
 /** `warm: false` skips the warm-ups: a test that does not test them keeps Langfuse and the vault out of its process. */
-export async function serve(port: number, { warm = true, pageDir, apiDir }: { warm?: boolean; pageDir?: string; apiDir?: string } = {}) {
+export async function serve(port: number, { warm = true, pageDir, apiDir, root = join(import.meta.dir, "..") }: { warm?: boolean; pageDir?: string; apiDir?: string; root?: string } = {}) {
   const dir = pageDir ?? import.meta.dir;
+  // The files that this process loaded; an answer carries `x-aleph-stale` once one of them differs on disk.
+  const loaded = serverGraph(root);
+  const loadedPrint = codePrint(root, loaded);
   warmers.length = 0;
   const routes = await loadRoutes(join(import.meta.dir, "api"));
   if (apiDir) routes.push(...await loadRoutes(apiDir));
@@ -102,6 +113,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir }: { wa
         r.names.forEach((n, i) => { params[n] = decodeURIComponent(m[i + 1]); });
         const res = await r.handler(req, params, url);
         res.headers.set("x-aleph-version", version(dir));
+        if (codePrint(root, loaded) !== loadedPrint) res.headers.set("x-aleph-stale", "1");
         if (gateOn()) res.headers.set("x-aleph-login", "1");
         return res;
       }

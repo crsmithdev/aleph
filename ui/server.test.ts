@@ -142,3 +142,21 @@ test("x-aleph-version changes when a page file changes, is added or is removed",
     rmSync(pages, { recursive: true, force: true });
   }
 });
+
+test("x-aleph-stale appears once a file of the server graph changes, and not for a page file", async () => {
+  const root = mkdtempSync(join(tmpdir(), "aleph-ui-root-"));
+  mkdirSync(join(root, "ui/views"), { recursive: true });
+  writeFileSync(join(root, "ui/server.ts"), "export const a = 1;\n");
+  writeFileSync(join(root, "ui/views/v.js"), "one");
+  const { at: atRoot, stop: stopRoot } = await withServer({ warm: false, pageDir, apiDir, root });
+  const stale = async () => (await atRoot("/api/_test/x")).headers.get("x-aleph-stale");
+  try {
+    expect(await stale()).toBeNull();
+    writeFileSync(join(root, "ui/views/v.js"), "two");
+    expect(await stale()).toBeNull();
+    writeFileSync(join(root, "ui/server.ts"), "export const a = 2;\n");
+    expect(await stale()).toBe("1");
+  } finally {
+    stopRoot();
+  }
+});
