@@ -440,10 +440,10 @@ export function wireScope(root) {
     goQuery({ [e.target.name]: e.target.value });
   });
   const select = ph.querySelector?.('select[name="project"]');
-  if (select && !projectKeys.length) fetch("/api/projects/keys").then((r) => (r.ok ? r.json() : [])).then((keys) => {
-    projectKeys = keys;
+  if (select) projectKeysOnce().then((keys) => {
+    if (!keys.length) return;
     select.innerHTML = [{ value: "", label: "All" }, ...projectChoices(select.value)].map((o) => `<option value="${esc(o.value)}"${o.value === select.value ? " selected" : ""}>${esc(o.label)}</option>`).join("");
-  }).catch(() => {});
+  });
 }
 
 /** The windows of the Factory pages, and the /api/jobs `days` of each. */
@@ -468,6 +468,13 @@ export function keepWindow(w) {
 
 const PROJECT_KEY = "aleph.project";
 let projectKeys = [];
+let keysLoad = null;
+/** The registry's repo keys, fetched once; a failed fetch gives [] and is tried again by the next call. */
+export const projectKeysOnce = () => keysLoad ??= fetch("/api/projects/keys").then((r) => (r.ok ? r.json() : [])).catch(() => []).then((keys) => {
+  if (keys.length) projectKeys = keys;
+  else keysLoad = null;
+  return keys;
+});
 const projectChoices = (cur, more = []) => [...new Set([...projectKeys, ...more, cur].filter(Boolean))].sort().map((p) => ({ value: p, label: p }));
 /** Remember the project across the pages; "" is All. */
 export function storeProject(p) { try { localStorage.setItem(PROJECT_KEY, p || ""); } catch { /* no storage: the address still holds it */ } }

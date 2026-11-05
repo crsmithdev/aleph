@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -344,5 +344,25 @@ describe("loadDiff", () => {
     stub(async () => { throw new Error("down"); });
     expect(await loadDiff(el, "/x")).toBeNull();
     expect(el.innerHTML).toBe('<p class="msg">The diff failed to load: down</p>');
+  });
+});
+
+describe("projectKeysOnce", () => {
+  const real = globalThis.fetch;
+  afterEach(() => { globalThis.fetch = real; });
+  test("a non-ok response gives an empty list and does not throw, and the next call fetches again", async () => {
+    let calls = 0;
+    globalThis.fetch = (async () => { calls++; return new Response("no", { status: 500 }); }) as any;
+    expect(await projectKeysOnce()).toEqual([]);
+    globalThis.fetch = (async () => { calls++; throw new Error("down"); }) as any;
+    expect(await projectKeysOnce()).toEqual([]);
+    expect(calls).toBe(2);
+  });
+  test("two calls give the same keys from one request", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = (async (u: string) => { urls.push(u); return Response.json(["aleph", "other"]); }) as any;
+    expect(await projectKeysOnce()).toEqual(["aleph", "other"]);
+    expect(await projectKeysOnce()).toEqual(["aleph", "other"]);
+    expect(urls).toEqual(["/api/projects/keys"]);
   });
 });
