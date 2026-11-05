@@ -108,6 +108,16 @@ describe("GET /api/jobs", () => {
     expect((await (await get("/api/jobs?days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1", "fac-9", "fac-2"]);
     expect(await (await get("/api/jobs?days=x")).status).toBe(400);
   });
+  test("?role keeps the jobs with a run of that role, next to ?condition", async () => {
+    run("20261027-000006-a", { kind: "intake", job: "oth-3", name: "oth-3", repo: "oth", condition: "failed", started: ago(1) });
+    run("20261027-000007-a", { job: "fac-3", name: "fac-3", repo: "fac", condition: "failed", started: ago(1) });
+    run("20261027-000008-a", { job: "fac-4", name: "fac-4", repo: "fac", condition: "stuck", started: ago(1) });
+    try {
+      const names = async (q: string) => (await (await get(`/api/jobs?${q}`)).json()).map((j: any) => j.name).sort();
+      expect(await names("role=worker&condition=failed")).toEqual(["fac-3"]);
+      expect(await names("role=intake")).toEqual(["oth-3"]);
+    } finally { for (const id of ["20261027-000006-a", "20261027-000007-a", "20261027-000008-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id)); }
+  });
   test("?project narrows to one project", async () => {
     expect((await (await get("/api/jobs?project=oth&days=30")).json()).map((j: any) => j.name)).toEqual(["oth-1"]);
     expect(await (await get("/api/jobs?project=nope")).json()).toEqual([]);

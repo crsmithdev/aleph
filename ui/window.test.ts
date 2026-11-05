@@ -84,6 +84,7 @@ test("a picked window asks for the jobs of the same window, and an old ?days= ad
   for (const w of WINDOWS) expect(listUrl(null, new URLSearchParams(`window=${w}`))).toBe(DAYS[w] ? `/api/jobs?days=${DAYS[w]}` : "/api/jobs");
   expect(listUrl(null, new URLSearchParams("days=90"))).toBe("/api/jobs?days=90");
   expect(listUrl(null, new URLSearchParams("days=30"))).toBe("/api/jobs?days=30");
+  expect(listUrl(null, new URLSearchParams("role=worker&condition=failed"))).toBe("/api/jobs?condition=failed&role=worker");
   const page = (days: string) => fjobs.renderFactoryJobs(speed("week"), null, "lead", [], { days });
   expect(pressed(page("30")).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
   expect(pressed(page("90")).filter((m) => m[2] === "true")).toEqual([]);

@@ -135,16 +135,18 @@ const find = (name: string, project: string | null): Entry[] | undefined => late
 export const routes: Routes = {
   "GET /api/jobs": async (_req, _p, url) => {
     const q = url.searchParams;
-    const project = q.get("project"), repo = q.get("repo"), state = q.get("condition");
+    const project = q.get("project"), repo = q.get("repo"), state = q.get("condition"), role = q.get("role");
     const dq = q.get("days");
     const days = dq === null || dq === "" ? 7 : Number(dq);
     if (!(days >= 0)) return Response.json({ error: "days must be a number" }, { status: 400 });
     const since = Date.now() - days * DAY;
+    const kind = role === "planner" ? "plan" : role === "reviewer" ? "review" : role;
     const hit: { at: number; job: Job }[] = [];
     const { toJob } = jobProjector();
     for (const runs of allJobs()) {
       const last = lastReal(runs).run;
       if ((project && last.repo !== project) || (repo && last.repo !== repo) || (state && last.condition !== state)) continue;
+      if (kind && !runInfos(runs).some((r) => r.kind === kind)) continue;
       const times = runs.flatMap((e) => [e.run.started, e.run.ended]).map((t) => Date.parse(t ?? "")).filter((t) => !Number.isNaN(t));
       const at = Math.max(...times);
       if (!(at >= since)) continue;

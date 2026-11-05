@@ -19,7 +19,7 @@ export function windowShown(f = {}) {
 /** The list's data URL: the filters in the hash go to the API. */
 export const listUrl = (_params, q = new URLSearchParams()) => {
   const out = new URLSearchParams();
-  for (const k of ["repo", "condition"]) if (q.get(k)) out.set(k, q.get(k));
+  for (const k of ["repo", "condition", "role"]) if (q.get(k)) out.set(k, q.get(k));
   const days = daysOf(q);
   if (Number(days) !== 7) out.set("days", String(days));
   const s = out.toString();
@@ -52,7 +52,11 @@ export function renderScope(jobs, f = {}) {
   ]);
 }
 
-export const renderFilters = (f = {}) => filterBar([{ label: "State", name: "condition", value: f.condition || "", options: [{ value: "", label: "All" }, ...STATES] }]);
+const ROLES = ["worker", "intake", "triage", "planner", "firefighter", "director", "reviewer"];
+export const renderFilters = (f = {}) => filterBar([
+  { label: "State", name: "condition", value: f.condition || "", options: [{ value: "", label: "All" }, ...STATES] },
+  { label: "Role", name: "role", value: f.role || "", options: [{ value: "", label: "All" }, ...ROLES] },
+]);
 
 const titleOf = (j) => j.item?.title || j.name;
 const took = (j) => (j.ended ? Date.parse(j.ended) - Date.parse(j.started) : -1);
