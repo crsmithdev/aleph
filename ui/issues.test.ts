@@ -265,8 +265,8 @@ describe("views", () => {
       { id: 3, repo: "f", title: "c", status: "dropped", labels: [], created: "2026-10-26", closed: "2026-10-25", runs: 0, cost: 0 },
     ] });
     expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 6, oldest: 12, runs: 5, cost: 1.5 });
-    const f = v.flow(rows, 14, now);
-    expect(f.labels).toHaveLength(14);
+    const f = v.flow(rows, "month", now);
+    expect(f.labels).toHaveLength(30);
     expect(f.labels.at(-1)).toBe("Nov 01");
     expect(f.filed.at(-1)).toBe(1);
     expect(f.closed.at(-3)).toBe(1);
@@ -286,6 +286,8 @@ describe("views", () => {
     expect(c.kinds).toEqual(["task", "bug", "check", "proposal", "flake"]);
     expect(c.p50).toEqual([4, 3, null, null, null]);
     expect(c.p90[1]).toBeCloseTo(4.6);
+    expect(v.flow(rows, "week", now).labels).toHaveLength(7);
+    expect(v.flow(rows, "week", now).labels.at(-1)).toBe("Nov 01");
     const fo = v.flowOption(f);
     expect(fo.series.filter((x: any) => x.type === "line").map((x: any) => x.name)).toEqual(["Filed", "Closed"]);
     expect(fo.series.some((x: any) => x.name === "Gap")).toBe(true);
@@ -315,6 +317,16 @@ describe("views", () => {
     expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
     const page = v.view.render(await getJson("/api/contents"), {}, new URLSearchParams("window=day"));
     const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
+    expect(page).toContain("Filed and closed per hour");
+    expect(v.view.render(await getJson("/api/contents"), {}, new URLSearchParams("window=week"))).toContain("Filed and closed per day");
+    const t = new Date(2026, 10, 4, 16, 0), tr = [{ status: "done", created: "2026-11-04", createdTime: "2026-11-04 15:30", closed: "2026-11-04", closedTime: "2026-11-04 15:45" }, { status: "open", created: "2026-11-04", createdTime: "2026-11-04 09:10" }];
+    const fh = v.flow(tr, "hour", t), fd = v.flow(tr, "day", t);
+    expect(fh.labels).toHaveLength(60);
+    expect(fh.filed.reduce((a: number, b: number) => a + b)).toBe(1);
+    expect(fh.filed[fh.labels.indexOf("3:30p")]).toBe(1);
+    expect(fh.closed[fh.labels.indexOf("3:45p")]).toBe(1);
+    expect(fd.labels).toHaveLength(24);
+    expect(fd.filed[fd.labels.indexOf("9a")]).toBe(1);
     expect(head).toContain('data-name="window"');
     for (const w of ["Hour", "Day", "Week", "Month"]) expect(head).toContain(`>${w}</button>`);
     expect(head).toContain('<select name="project"');

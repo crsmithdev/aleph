@@ -1,6 +1,7 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
+import { bucketOf, xLabel } from "./speed.js";
 import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
@@ -290,15 +291,17 @@ export function renderTiles(s, key = "open", win = "week") {
     statCard({ k: "Runs", v: String(s.runs), v2: money(s.cost), q: ["runs", "recorded cost"], ...on("runs") }));
 }
 
-/** The last `days` days: their labels and how many rows were filed and closed on each. */
-export function flow(rows, days = 30, now = new Date()) {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+/** The window's buckets (60 minutes, 24 hours, 7 or 30 days): their labels and how many rows were filed and closed in each. A stored time counts to its minute; a row with only a day counts at the start of that day. */
+export function flow(rows, window = "month", now = new Date()) {
+  const unit = { hour: 60000, day: 3600000 }[window], n = { hour: 60, day: 24, week: 7 }[window] ?? 30;
+  const edge = (i) => unit ? Math.floor(now.getTime() / unit) * unit - i * unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i).getTime();
+  const at = (d, t) => { const m = unit && t ? Date.parse(String(t).replace(" ", "T")) : NaN; return m === m ? m : dayMs(d); };
   const out = { labels: [], filed: [], closed: [] };
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i), from = d.getTime(), to = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i + 1).getTime();
-    out.labels.push(day(d, now));
-    out.filed.push(rows.filter((r) => inDays(r.created, from, to)).length);
-    out.closed.push(rows.filter((r) => CLOSED.includes(r.status) && inDays(r.closed, from, to)).length);
+  for (let i = n - 1; i >= 0; i--) {
+    const from = edge(i), to = unit ? from + unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1).getTime();
+    out.labels.push(xLabel(from, window));
+    out.filed.push(rows.filter((r) => { const t = at(r.created, r.createdTime); return t >= from && t < to; }).length);
+    out.closed.push(rows.filter((r) => { const t = at(r.closed, r.closedTime); return CLOSED.includes(r.status) && t >= from && t < to; }).length);
   }
   return out;
 }
@@ -357,9 +360,9 @@ function renderDetail(rows, o) {
 }
 
 /** The three charts under the tiles, on every tile. */
-const renderCharts = () => `<div class="trio">${card("Open backlog, 30 days", '<p>Open issues per day, by priority.</p><div class="chartbox" data-chart="backlog"></div>')}` +
+const renderCharts = (o) => `<div class="trio">${card("Open backlog, 30 days", '<p>Open issues per day, by priority.</p><div class="chartbox" data-chart="backlog"></div>')}` +
   `${card("Time to close", '<p>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
-  `${card("Filed and closed per day", '<p>Blue is filed; green is closed; the gap is shaded.</p><div class="chartbox" data-chart="flow"></div>')}</div>`;
+  `${card(`Filed and closed per ${bucketOf(o)}`, '<p>Blue is filed; green is closed; the gap is shaded.</p><div class="chartbox" data-chart="flow"></div>')}</div>`;
 
 // ---- The filters ----
 
@@ -391,7 +394,7 @@ function renderLive(projects, rows, o) {
     scope: renderProjects(projects, rows, o),
     filters: renderFilters(rows, o),
     numbers: renderTiles(stats(scoped, new Date(), WINDOW_DAYS[o.window] ?? 7), o.tile, o.window),
-    detail: renderCharts() + renderDetail(scoped, o),
+    detail: renderCharts(o) + renderDetail(scoped, o),
     count: sectionHead("Issues", { count: shown }),
     table: renderTable(rows, o),
   };
@@ -417,7 +420,7 @@ function draw(root) {
   const panel = (name, option) => { const el = root.querySelector(`.chartbox[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
   panel("backlog", backlogOption(backlog(rows)));
   panel("close", closeOption(closeTimes(rows)));
-  panel("flow", flowOption(flow(rows)));
+  panel("flow", flowOption(flow(rows, live.o().window)));
 }
 
 /** Fill what follows the filters. A filter changes no route, so nothing fetches again. */
