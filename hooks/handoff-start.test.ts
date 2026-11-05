@@ -49,3 +49,34 @@ test("a handoff with no summary line still shows", () => {
   write("proj", "## Intent\nx\n");
   expect(JSON.parse(run(join(root, "proj"))).systemMessage).toEndWith(": no summary line");
 });
+
+test("the context holds the handoff text, while the system message keeps the summary", () => {
+  write("proj", "summary: s1\n\n## Intent\nunique-sentence-4417\n");
+  const out = JSON.parse(run(join(root, "proj")));
+  expect(out.hookSpecificOutput.additionalContext).toContain("unique-sentence-4417");
+  expect(out.systemMessage).toEndWith(": s1");
+});
+
+test("the context holds git status and log in a repo, and none outside git", () => {
+  write("proj", "summary: s\n");
+  expect(JSON.parse(run(join(root, "proj"))).hookSpecificOutput.additionalContext).not.toContain("git status:");
+  const dir = join(root, "proj");
+  Bun.spawnSync(["git", "init", "-b", "trunk-x"], { cwd: dir });
+  Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", "marker commit 9921"], { cwd: dir });
+  const ctx = JSON.parse(run(dir)).hookSpecificOutput.additionalContext;
+  expect(ctx).toContain("marker commit 9921");
+  expect(ctx).toContain("On branch trunk-x");
+});
+
+test("a handoff that makes the context too long falls back to the summary and path", () => {
+  write("proj", `summary: s\n\nnear-limit-marker ${"x".repeat(9000)}\n`);
+  const near = JSON.parse(run(join(root, "proj"))).hookSpecificOutput.additionalContext;
+  expect(near).toContain("near-limit-marker");
+  expect(near.length).toBeLessThanOrEqual(10000);
+  write("proj", `summary: s\n\nlong-body-marker ${"x".repeat(10000)}\n`);
+  const ctx = JSON.parse(run(join(root, "proj"))).hookSpecificOutput.additionalContext;
+  expect(ctx.length).toBeLessThanOrEqual(10000);
+  expect(ctx).not.toContain("long-body-marker");
+  expect(ctx).toContain(join(root, "handoffs", "projects", "proj.md"));
+  expect(ctx).toContain("run the aleph:pickup skill with no argument");
+});
