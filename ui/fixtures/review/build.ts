@@ -8,7 +8,7 @@ import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, 
 import { join, resolve } from "node:path";
 import { writeList } from "../../../todo/lib/store.ts";
 import { add, addPart, note, setStatus } from "../../../todo/lib/todo.ts";
-import { putRun } from "../../../jobs/lib/record.ts";
+import { putRun, setIssueAsk } from "../../../jobs/lib/record.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };
@@ -101,6 +101,16 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
           const spec = r.kind === "goal" || r.route;
           const item = add(doc, r.title, { labels: r.labels, priority: r.priority, ...(spec ? { spec: r.body || "Do it." } : { request: r.body }) });
           for (const k of NEW_SHAPE) if (r[k] !== undefined) item.fm[k] = r[k];
+          // Status reads the Ask from the job record store, so the fixture's ask is stored there.
+          if (r.ask) {
+            const [action, why = ""] = (r.recommend ?? "").split(" :: ");
+            setIssueAsk(`${key}-${item.id}`, {
+              kind: r.ask as "input" | "approval", reason: r.reason ?? "", question: r.question ?? "", options: [], why: [],
+              situation: r.situation,
+              effects: (r.effects ?? []).map((e) => { const [a, ...t] = e.split(" :: "); return { action: a, text: t.join(" :: ") }; }),
+              recommend: { action, why },
+            });
+          }
           for (const n of r.notes ?? []) note(item, n);
           if (r.status && r.status !== "open") setStatus(item, r.status as "done" | "dropped");
           for (const p of r.parts ?? []) {

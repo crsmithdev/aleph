@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { layout, factoryLog } from "../../../jobs/lib/layout.ts";
 import { buildReviewFixture } from "./build.ts";
+import { askOf } from "../../../jobs/lib/ask.ts";
+import { state } from "../../state.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_VAULT"];
 let saved: Record<string, string | undefined>;
@@ -34,4 +36,17 @@ test.skip("the fixture environment points the factory folder under its dest, and
   // The factory folder before the fixture: tests/preload.ts points it under its temp folder, never at ~/.aleph.
   const live = join(saved.ALEPH_FACTORY_DIR!, "tick.log");
   if (existsSync(live)) expect(readFileSync(live, "utf8")).not.toContain(line);
+});
+
+test("the fixture's tools-4 is stored as an Ask and shows on Status as an escalated question", () => {
+  Object.assign(process.env, buildReviewFixture(join(dir, "fx")));
+  const ask = askOf("tools-4");
+  expect(ask?.kind).toBe("input");
+  expect(ask?.reason).toBe("question");
+  expect(ask?.situation).toContain("second input file");
+  expect(ask?.effects?.some((e) => e.action === "decide")).toBe(true);
+  expect(ask?.recommend?.action).toBe("decide");
+  const card = state().asks.find((a) => a.id === "tools-4");
+  expect(card?.escalated).toBe(true);
+  expect(card?.actions.length).toBeGreaterThan(0);
 });
