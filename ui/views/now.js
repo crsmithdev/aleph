@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
+import { card, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -66,7 +66,7 @@ export function renderStages(s, sort = SORTS.stages) {
     `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, numText, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
   const head = h("Stage", "stage") + h("Runs per Item", "runs", true) + h("No Usable Result", "unusable", true);
-  return `<h2>Stages</h2>${rows ? dataTable(head, rows) : `<p class="quiet">No stage ran.</p>`}`;
+  return `<h2>Stages</h2>${rows ? dataTable(head, rows) : empty("No stage ran.")}`;
 }
 
 /** The monitor's Holds table: the day's value with a bar for goals; the trailing 7-day mean per day is in each cell's tooltip. At most 10 rows. */
@@ -77,7 +77,7 @@ export function renderHolds(s, sort = SORTS.holds) {
     `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, numText, max, TRAIL.holds)}${pairCell(r.hours, numText, null, TRAIL.holds)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
   const head = h("Kind", "kind") + h("Affected Issues", "goals", true) + h("Hours", "hours", true);
-  return `<h2>Holds</h2>${rows ? dataTable(head, rows) : `<p class="quiet">No hold record.</p>`}`;
+  return `<h2>Holds</h2>${rows ? dataTable(head, rows) : empty("No hold record.")}`;
 }
 
 /** Sort a monitor table when its header is clicked: the same key flips the direction, a new text key goes up, a new number key down. */
@@ -101,9 +101,9 @@ export function findingHtml(text) {
 export function renderMonitor(s) {
   const m = s.factory?.monitor;
   if (!m) return "";
-  const said = m.error ? `<p class="quiet">No reading: ${esc(m.error)}</p>`
+  const said = m.error ? error(`No reading: ${m.error}`, "The monitor reads again at its next run.")
     : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`
-    : `<p class="quiet">Nothing looks off.</p>`;
+    : empty("Nothing looks off.");
   return `<section class="card" id="monitor" aria-label="Monitor ${esc(m.day)}"><div class="sh"><h2>Monitor <span class="asof">${esc(m.day)}</span></h2></div>${said}</section>`;
 }
 

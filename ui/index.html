@@ -55,7 +55,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { actMessages, denyReasons, diffHtml, elapsed, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
+  import { actMessages, denyReasons, diffHtml, elapsed, empty, error, esc, failMessage, loading, loadingLine, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
@@ -279,13 +279,13 @@
       if (!panel.hidden) { panel.hidden = true; openDiffs.delete(name); return; }
       panel.hidden = false;
       openDiffs.set(name, "");
-      panel.innerHTML = `<p class="msg">Loading…</p>`;
+      panel.innerHTML = loadingLine("diff");
       try {
         const res = await fetch(`/api/diff/${encodeURIComponent(name)}`, { cache: "no-store" });
         const t = await res.text();
-        panel.innerHTML = res.ok ? diffHtml(t) : `<p class="msg">${esc(t)}</p>`;
+        panel.innerHTML = res.ok ? diffHtml(t) : error(t, "Reload the page to try again.");
         if (res.ok) openDiffs.set(name, t); else openDiffs.delete(name);
-      } catch (err) { openDiffs.delete(name); panel.innerHTML = `<p class="msg">${esc(err.message)}</p>`; }
+      } catch (err) { openDiffs.delete(name); panel.innerHTML = error(err.message, "Reload the page to try again."); }
       return;
     }
     if ((act === "deny" || act === "answer") && !b.classList.contains("ask")) {

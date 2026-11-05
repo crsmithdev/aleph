@@ -1,5 +1,5 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { cardTrend, meter, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
+import { cardTrend, empty, meter, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
@@ -128,7 +128,7 @@ const LANDED = ["landed", "fixed"];
 /** The outcome bar: one segment per class with hours, `key` the pressed one. `d` is /api/speed for the window. */
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
-  if (!(total > 0)) return `<p>No agent run of an issue ended in the ${lastPeriod(d)}.</p>`;
+  if (!(total > 0)) return empty(`No agent run of an issue ended in the ${lastPeriod(d)}.`);
   const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${esc(pct((c.hours / total) * 100))}</span></button>`;
   const group = (xs, t) => (xs.length ? `<div class="ogrp" style="flex:${xs.reduce((a, c) => a + c.hours, 0)}"><span class="obk">${t}</span><div class="osegs">${xs.map(seg).join("")}</div></div>` : "");
   const good = cs.filter((c) => LANDED.includes(c.key)), lost = cs.filter((c) => !LANDED.includes(c.key));

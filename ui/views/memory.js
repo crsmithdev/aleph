@@ -27,7 +27,7 @@ export function renderHome(m) {
   const secs = m.home.map((s) =>
     `<h3>${esc(s.heading)}</h3>` + (s.entries.length
       ? `<ul>${s.entries.map((e) => `<li>${link(e.title)}${e.hook ? ` <span class="quiet">${esc(e.hook)}</span>` : ""}</li>`).join("")}</ul>`
-      : `<p class="quiet">Nothing indexed.</p>`)).join("");
+      : empty("Nothing indexed."))).join("");
   return head("home", "Home") + (secs || empty("Home has no sections.", "Home.md is the vault's map."));
 }
 
@@ -60,20 +60,19 @@ const fold = (items, row, n = ROWS) => {
   return ul(items.slice(0, n)) + (items.length > n ? `<details><summary>${items.length - n} more</summary>${ul(items.slice(n))}</details>` : "");
 };
 const q = (s) => `<span class="quiet">${s}</span>`;
-const none = (line, hint) => empty(line, hint);
 
 function renderWorking(w) {
-  if (!w.total) return none("No handoff yet.", "<code>/handoff</code> writes one to <code>~/.aleph/handoffs</code>.");
+  if (!w.total) return empty("No handoff yet.", "<code>/handoff</code> writes one to <code>~/.aleph/handoffs</code>.");
   const cur = w.current
     ? `<p><strong>Current</strong> ${q(ago(w.current.at))} ${esc(w.current.intent || "(no intent line)")}</p>`
-    : `<p class="quiet">No current handoff.</p>`;
+    : empty("No current handoff.");
   return cur + (w.projects?.length ? sub("Projects", w.projects.length, `<ul class="tight">${w.projects.map((h) => li(`<code>${esc(h.name)}</code> ${q(ago(h.at))} ${esc(h.text)}`)).join("")}</ul>`) : "") + (w.archived.length ? sub("Archived", w.archived.length, `<ul class="tight">${w.archived.map((h) => li(`<span class="time">${esc(h.date)}</span> ${esc(h.intent || h.name)}`)).join("")}</ul>`) : "");
 }
 
 function renderSemantic(m, s) {
   const mem = s.memory
     ? `<p><code>MEMORY.md</code> ${q(`${s.memory.lines} lines, written ${ago(s.memory.at)}`)}${s.memory.first ? `<br>${q(esc(s.memory.first))}` : ""}</p>`
-    : none("No MEMORY.md.", "The agent writes standing context there.");
+    : empty("No MEMORY.md.", "The agent writes standing context there.");
   const kinds = Object.keys(m.byKind ?? {}).filter((k) => k !== "none");
   const lists = kinds.map((k) => {
     const xs = s.notes.filter((n) => n.kind === k);
@@ -81,41 +80,41 @@ function renderSemantic(m, s) {
   }).join("");
   const start = Object.entries(s.start ?? {}).map(([scope, x]) =>
     `<details><summary>Core lines, ${esc(scope)} <span class="count">${x.bytes} / ${x.budget} bytes</span></summary>${x.cut ? `<p class="quiet">${x.cut} cut.</p>` : ""}${x.core.length ? fold(x.core, (c) => `${link(c.title)} ${q(esc(c.core))}`) : `<p class="quiet">None.</p>`}</details>`).join("");
-  if (!m.exists) return mem + none("No vault yet.", "Run <code>vault init</code> to make one.");
+  if (!m.exists) return mem + empty("No vault yet.", "Run <code>vault init</code> to make one.");
   return mem + start + `<h3>Notes by Kind <span class="count">${s.notes.length}</span></h3><div class="kinds">${lists}</div>` +
     `<details><summary>Counts by kind and scope</summary><div class="pair"><div>${table(["Kind", "Notes"], Object.entries(m.byKind), "No notes by kind.")}</div><div>${table(["Scope", "Notes"], Object.entries(m.byScope), "No notes by scope.")}</div></div></details>` +
     `<details><summary>Home</summary>${renderHome(m)}</details>`;
 }
 
 function renderEpisodic(e) {
-  const eps = e.episodes.length ? fold(e.episodes, (n) => `${esc(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : none("No episode page yet.", "The factory's tick writes one per done goal.");
-  const daily = e.daily.total ? fold(e.daily.latest.map((d) => ({ d })), (x) => link(x.d)) : none("No daily page yet.", "The vault CLI starts one at the first write of a day.");
-  const sess = e.sessions === null ? none("Sessions are not available.", "Langfuse keys fill this.")
+  const eps = e.episodes.length ? fold(e.episodes, (n) => `${esc(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : empty("No episode page yet.", "The factory's tick writes one per done goal.");
+  const daily = e.daily.total ? fold(e.daily.latest.map((d) => ({ d })), (x) => link(x.d)) : empty("No daily page yet.", "The vault CLI starts one at the first write of a day.");
+  const sess = e.sessions === null ? empty("Sessions are not available.", "Langfuse keys fill this.")
     : e.sessions.length ? fold(e.sessions, (x) => `<a href="#/sessions/${encodeURIComponent(x.id)}">${esc(x.firstPrompt || x.id)}</a> ${q(esc(`${x.project} · ${x.turns} turns · ${ago(x.last)}`))}`)
-    : none("No session in 7 days.", "Claude Code sessions traced to Langfuse fill this.");
+    : empty("No session in 7 days.", "Claude Code sessions traced to Langfuse fill this.");
   return `<div class="kinds">${sub("Episode Pages", e.episodes.length, eps)}${sub("Daily Pages", e.daily.total, daily)}${sub("Latest Sessions", e.sessions?.length, sess)}</div><p class="hint"><a href="#/sessions">All sessions</a></p>`;
 }
 
 function renderProcedural(p) {
-  const skills = p.skills.length ? chipRow(p.skills.map((n) => chip(n, { el: "a", attrs: ` href="#/skills/${encodeURIComponent(n)}"` })).join(""), "p") : none("No skills.", "Folders under <code>skills/</code> fill this.");
-  const claude = p.claudeMd ? `<p><code>${esc(p.claudeMd.path)}</code> ${q(`${p.claudeMd.lines} lines, written ${ago(p.claudeMd.at)}`)}</p>` : none("No identity/CLAUDE.md.");
+  const skills = p.skills.length ? chipRow(p.skills.map((n) => chip(n, { el: "a", attrs: ` href="#/skills/${encodeURIComponent(n)}"` })).join(""), "p") : empty("No skills.", "Folders under <code>skills/</code> fill this.");
+  const claude = p.claudeMd ? `<p><code>${esc(p.claudeMd.path)}</code> ${q(`${p.claudeMd.lines} lines, written ${ago(p.claudeMd.at)}`)}</p>` : empty("No identity/CLAUDE.md.");
   const hooks = p.hooks.length
     ? paged(heads(["Event", "Command", "Calls"], ["Calls"]), p.hooks.map((h) => `<tr><td>${esc(h.event)}${h.matcher ? ` ${q(esc(h.matcher))}` : ""}</td><td class="wide" title="${esc(h.command)}"><code>${esc(h.command)}</code></td><td class="num">${h.calls === null ? "–" : h.calls}</td></tr>`))
-    : none("No hooks in ~/.claude/settings.json.", "The hooks entry of that file fills this, with calls from Langfuse.");
+    : empty("No hooks in ~/.claude/settings.json.", "The hooks entry of that file fills this, with calls from Langfuse.");
   return `<div class="kinds">${sub("Skills", p.skills.length, skills + `<p class="hint"><a href="#/skills">Skill use</a></p>`)}${sub("Rules", undefined, claude)}${sub("Hooks, Calls in 7 Days", p.hooks.length, hooks)}</div>`;
 }
 
 function renderRetrieval(r) {
-  if (!r.stats) return none("No recall data.", "<code>vault misses</code> reads Langfuse; set its keys to fill this.");
+  if (!r.stats) return empty("No recall data.", "<code>vault misses</code> reads Langfuse; set its keys to fill this.");
   const s = r.stats;
-  const rows = r.missed.length ? fold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : `<p class="quiet">No query missed.</p>`;
+  const rows = r.missed.length ? fold(r.missed, (x) => `<code>${esc(x.query)}</code> ${q(ago(x.at))}`) : empty("No query missed.");
   return `<div class="kinds">${sub(`Recalls, ${s.days} Days`, s.recalls, table(["Measure", "Count"], [["Empty", `${s.empty} (${pct(s.empty_share * 100)})`], ["Reformulated", s.reformulated], ["Reads not offered", s.unoffered_reads]]))}${sub("Latest Misses", r.missed.length, rows)}</div>`;
 }
 
 function renderProspective(p) {
   const issues = p.issues.length
     ? fold(p.issues, (i) => `<a href="#/issues/${encodeURIComponent(i.repo)}/${i.id}">${i.id}</a> ${priorityBadge(i.priority)} ${esc(i.title)} ${q(esc([i.repo, i.after?.length && `after ${localId(i.after.join(", "), i.repo)}`].filter(Boolean).join(" · ")))}`)
-    : none("No open issue has an after.", "<code>aleph issue edit</code> with <code>--after</code> fills this.");
+    : empty("No open issue has an after.", "<code>aleph issue edit</code> with <code>--after</code> fills this.");
   return `<div class="kinds">${sub("Open Issues With a Wait", p.issues.length, issues)}</div>`;
 }
 
@@ -123,7 +122,7 @@ const renderParametric = () =>
   `<p>The model weights. Aleph does not store them. <a href="#/memory/${encodeURIComponent("Seven Agent Memory Types Mapped Onto Aleph")}">The rule</a>: keep what the model already knows out of the vault.</p>`;
 
 function renderGates(g) {
-  const lessons = (xs, what, fills) => (xs.length ? fold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : none(`No ${what} yet.`, fills));
+  const lessons = (xs, what, fills) => (xs.length ? fold(xs, (l) => `${esc(l.sentence)} ${q(`seen ${l.count}×${l.kind ? ` · ${esc(l.kind)}` : ""}`)}`) : empty(`No ${what} yet.`, fills));
   return `<div class="kinds">${sub("Corrections", g.corrections.length, lessons(g.corrections, "correction", "The correction miner (aleph-353) fills this."))}${sub("Proposals", g.proposals.length, lessons(g.proposals, "proposal", "A correction seen 3 times (aleph-353) becomes one."))}</div>`;
 }
 

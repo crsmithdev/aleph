@@ -122,7 +122,7 @@ export function renderTranscript(steps) {
       ? `<details><summary>${s.error ? "error, " : ""}result (${esc(bytes(s.output.length))})</summary><pre class="trailers">${esc(s.output)}</pre></details>`
       : `<pre class="trailers">${esc(s.output)}</pre>`;
     return `<div class="step"><b>${esc(s.name)}</b><pre class="trailers">${esc(input ?? "")}</pre>${out}</div>`;
-  }).join("") || `<p class="quiet">Nothing to show.</p>`;
+  }).join("") || empty("Nothing to show.");
 }
 
 /** Text with its `code` spans set as code, escaped. */

@@ -72,8 +72,8 @@ test("the Monitor panel shows the findings with numbers and **text** in bold, ot
 });
 
 test("a report with no reading says why; one with no findings says nothing looks off; no report shows no panel", () => {
-  expect(view.renderMonitor({ factory: { monitor: { ...monitor, findings: [], error: "the monitor reader timed out" } } })).toContain("No reading: the monitor reader timed out");
-  expect(view.renderMonitor({ factory: { monitor: { ...monitor, findings: [] } } })).toContain("Nothing looks off.");
+  expect(view.renderMonitor({ factory: { monitor: { ...monitor, findings: [], error: "the monitor reader timed out" } } })).toMatch(/<div class="error" role="alert"><p>No reading: the monitor reader timed out<\/p>/);
+  expect(view.renderMonitor({ factory: { monitor: { ...monitor, findings: [] } } })).toContain('<div class="empty"><p>Nothing looks off.</p>');
   expect(view.renderMonitor({ factory: { monitor: null } })).toBe("");
   expect(render(null)).not.toContain('id="monitor"');
 });

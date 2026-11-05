@@ -89,7 +89,7 @@ export function chatTurn(id, t) {
     (system.length ? `<div class="sys">${system.map(sysChip).join("")}</div>` : "") +
     (text ? `<div class="msg user md">${clip(text, md(text))}</div>` : "") +
     work(t) +
-    (out ? `<div class="msg reply md">${clip(out, md(out))}</div>` : `<p class="msg reply quiet">No reply recorded.</p>`) + `</section>`;
+    (out ? `<div class="msg reply md">${clip(out, md(out))}</div>` : empty("No reply recorded.")) + `</section>`;
 }
 
 /** Under the chat: "20 of 73" and "Show 20 more", which fetches the next turns. */

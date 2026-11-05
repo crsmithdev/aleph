@@ -279,7 +279,7 @@ export const diffHtml = (t) => String(t ?? "").trim()
       const c = l.startsWith("+++") || l.startsWith("---") || l.startsWith("diff ") || l.startsWith("index ") ? "meta" : l[0] === "+" ? "add" : l[0] === "-" ? "del" : l[0] === "@" ? "hunk" : "";
       return `<span class="l d-${c}">${esc(l)}</span>`;
     }).join("")}</pre>`
-  : `<p class="msg">No changes from the merge base.</p>`;
+  : empty("No changes from the merge base.");
 
 /** The job states, as the ledger names them (jobs/lib/records/ledger.ts State), in the order the filters list them. */
 export const STATES = ["running", "passed", "awaiting", "failed", "stuck", "done", "landed", "dropped"];

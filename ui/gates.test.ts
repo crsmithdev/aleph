@@ -164,7 +164,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(card).toContain("<b>r</b>");
   expect(card).toContain('<code class="chip">src/auth/**</code>');
   for (const p of SECURITY_PATHS) expect(card).toContain(`<code class="chip">${p}</code>`);
-  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain("No repo names held paths.");
+  expect(gates.renderHeld({ ...data(), repoHeld: [] })).toContain('<div class="empty"><p>No repo names held paths.</p>');
 });
 
 const entry = (by: string, what = "x", item = "r-1") => ({ at: ago(1), by, item, what }) as any;
