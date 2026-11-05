@@ -296,7 +296,7 @@ export async function loadDiff(el, url) {
 
 /** The job states, as the ledger names them (jobs/lib/records/ledger.ts State), in the order the filters list them. */
 export const STATES = ["running", "passed", "awaiting", "failed", "stuck", "done", "landed", "dropped"];
-const TONES = { running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", awaiting: "need", working: "run", planning: "run", queued: "run", failed: "stuck", stuck: "stuck", dropped: "quiet", parked: "parked" };
+const TONES = { "in use": "done", stale: "need", "never read": "quiet", "lint problem": "stuck", running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", awaiting: "need", working: "run", planning: "run", queued: "run", failed: "stuck", stuck: "stuck", dropped: "quiet", parked: "parked" };
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */
 export const tone = (state) => TONES[state] ?? "quiet";
 
@@ -344,7 +344,7 @@ export function blockersHtml(waits, repo, id) {
   return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> <button class="act" type="button" data-act="unblock" data-repo="${esc(repo)}" data-id="${esc(id)}" data-label="${esc(label)}">${esc(label)}</button></div>`;
 }
 
-export const idLink = (id, href) => `<a class="idl" href="${esc(safeHref(href))}">${esc(id)}</a>`;
+export const idLink = (id, href, { title } = {}) => `<a class="idl"${title === undefined ? "" : ` title="${esc(title)}"`} href="${esc(safeHref(href))}">${esc(id)}</a>`;
 
 /** The page's place at its top: `« aleph / issues / 628`. Each part is [text, href], and the last part is the page itself; the mark links to `back`. */
 export const crumb = (back, parts) => `<nav class="crumb" aria-label="Breadcrumb"><a href="${esc(safeHref(back))}" aria-label="Back">«</a> ${parts.map(([t, h]) => (h ? `<a href="${esc(safeHref(h))}">${esc(t)}</a>` : `<span>${esc(t)}</span>`)).join(" / ")}</nav>`;
@@ -362,8 +362,8 @@ export const tag = (text, tone = "quiet", title) => `<span class="badge ${esc(to
 /** A state as a badge, toned by `tone`. */
 export const badge = (state) => tag(state, tone(state));
 
-/** A priority as a badge: critical is the alert tone, high the warning tone, medium quiet, low dim. Missing or unknown reads medium. */
-const PRIORITY_TONES = { critical: "stuck", high: "need", medium: "quiet", low: "quiet dim" };
+/** A priority as a badge: critical is the alert tone, high the warning tone, medium and low quiet. Missing or unknown reads medium. */
+const PRIORITY_TONES = { critical: "stuck", high: "need", medium: "quiet", low: "quiet" };
 export function priorityBadge(p) {
   const k = Object.hasOwn(PRIORITY_TONES, p) ? p : "medium";
   return tag(k, PRIORITY_TONES[k]);

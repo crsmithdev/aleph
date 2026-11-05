@@ -47,7 +47,6 @@ export function hashOptions(q = new URLSearchParams()) {
 const own = (r) => r.ref ?? r.id;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => `#/issues/${encodeURIComponent(r.repo)}/${own(r)}`;
-const stateBadge = (s) => badge(s);
 
 const DAY = 86_400_000;
 const ms = (s) => Date.parse(s) || 0;
@@ -597,7 +596,7 @@ function issueKpis(d, segments, now = Date.now()) {
   const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
   return renderKpis([
     goals.length ? { k: "Parts done", v: esc(`${done} of ${goals.length}`), sub: esc(goals.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
-      : { k: "Stage", v: esc(title(d.derived?.stage ?? d.status)), sub: "" },
+      : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
     { k: open ? "Open for" : "Elapsed", v: esc(times.length ? lifespan(hi - lo) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: esc(times.length ? lifespan(waited) : "–"), sub: chris ? esc(`${lifespan(chris)} for your answer`) : "" },
     { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 run" : `${runs} runs`) },
@@ -617,7 +616,7 @@ export function renderIssue(d) {
   const place = d.issue ? [project, ["issues", inventory], [localId(d.issue.id, d.repo), d.issue.href], [ref]] : [project, ["issues", inventory], [ref]];
   // Front matter the page shows nowhere else: a chip each.
   const extra = Object.entries(fm).filter(([k]) => !HIDE.includes(k)).map(([k, v]) => chip(`${k}: ${Array.isArray(v) ? v.map(labelName).join(", ") : v}`)).join("");
-  const pills = `<div class="status-row">${d.derived ? stateBadge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(`${d.repo}-${ref}`)}</span></div>`;
+  const pills = `<div class="status-row">${d.derived ? badge(d.derived.stage) : badge(d.status)} ${priorityBadge(priority)}${chip(`kind: ${d.kind ?? "task"}`, { cls: "kind" })}${chip(`source: ${source}`)}${chips([...new Set([...areas, ...(fm.labels ?? [])])])}${extra}<span class="idp">${esc(`${d.repo}-${ref}`)}</span></div>`;
   const fields = `<section class="dp-panel dp-prose edit-only" aria-label="Fields"><div class="dp-fields">` +
     `<label>Priority ${choose("priority", PRIORITIES, priority)}</label><label>Source ${choose("source", SOURCES, source)}</label>` +
     `<label>Areas <input name="areas" ${FORM} aria-label="areas" placeholder="comma separated" value="${esc(areas.join(", "))}"></label></div></section>`;

@@ -11,7 +11,7 @@ const href = (path) => `#${path}`;
 
 /** The session's id link: the job name when it is a factory session, else the id's first 8 characters; the title is the full id. */
 const sessionLink = (s) =>
-  idLink(s.label ?? s.id.slice(0, 8), href(`/sessions/${encodeURIComponent(s.id)}`)).replace('<a class="idl"', `<a class="idl" title="${esc(s.id)}"`);
+  idLink(s.label ?? s.id.slice(0, 8), href(`/sessions/${encodeURIComponent(s.id)}`), { title: s.id });
 
 /** The turn table: the session page's `?view=table`. */
 const TURN_PAGE = 50;

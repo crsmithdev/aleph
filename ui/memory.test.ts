@@ -226,7 +226,7 @@ test("the page is the board, then broad health, then the note browser; the type 
 
 test("the inspector shows the note, its problem, sources, links and path, escaped", () => {
   const h = v.renderInspector({ title: "N", path: "wiki/N.md", frontmatter: { kind: "gotcha", scope: "a", confidence: "measured", updated: "2026-10-01", sources: ["<src>"] }, body: "**Claim.** x", links: [{ title: "L" }], backlinks: [{ title: "B" }] }, row({ status: "lint", problems: [{ rule: "schema", detail: "bad" }] }));
-  for (const s of ["Lint problem", "schema: bad", "&lt;src&gt;", "<strong>Claim.</strong>", "Linked From", "wiki/N.md"]) expect(h).toContain(s);
+  for (const s of ["lint problem", "schema: bad", "&lt;src&gt;", "<strong>Claim.</strong>", "Linked From", "wiki/N.md"]) expect(h).toContain(s);
   expect(v.renderInspector(null)).toContain("Select a note");
 });
 
@@ -330,4 +330,11 @@ test("every seg group in the notes filters has an accessible name", () => {
   const groups = h.slice(h.indexOf('id="mem-filters"')).match(/<div class="seg"[^>]*>/g)!;
   expect(groups.length).toBeGreaterThan(0);
   for (const g of groups) expect(g).toMatch(/aria-label="[^"]+"/);
+});
+
+test("the note states are lower-case badges", () => {
+  const rows = [row({ title: "A", status: "never" }), row({ title: "B", status: "use" }), row({ title: "C", status: "stale" }), row({ title: "D", status: "lint", problems: [{ rule: "schema", detail: "x" }] })];
+  const h = v.renderInspector({ title: "N", path: "p", frontmatter: {}, body: "", links: [], backlinks: [] }, rows[3]);
+  expect(h).toContain('<span class="badge stuck">lint problem</span>');
+  for (const [s, t] of [["never", "quiet"], ["use", "done"], ["stale", "need"]]) expect(v.renderInspector({ title: "N", path: "p", frontmatter: {}, body: "", links: [], backlinks: [] }, row({ status: s }))).toContain(`<span class="badge ${t}">${{ never: "never read", use: "in use", stale: "stale" }[s as string]}</span>`);
 });

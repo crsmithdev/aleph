@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
+import { badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -214,8 +214,6 @@ function details(s, j, extra = "") {
 
 const failed = (j) => (j.checks || []).findLast((c) => !c.ok);
 
-const statusBadge = (st) => tag(st, tone(st));
-
 /** "4m 05s", "1h 05m", "2d4h": the time from `since` to `to`, in the least room; "–" when the work was never picked up. */
 export function span(since, to) {
   const ms = Date.parse(to) - Date.parse(since);
@@ -247,7 +245,7 @@ const lane = (id, title, n, rows, none, cap = 0) =>
 /** Done: the done parts and issues /api/state sends, newest first, each its own card. */
 function doneLane(s, win) {
   const rows = (s.done ?? []).map((i) =>
-    laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
+    laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: badge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
   const from = Date.parse(s.now) - WINDOW_DAYS[win] * 86_400_000;
   const total = (s.doneStamps ?? []).filter((d) => d.at >= from).length;
   return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.", total);
@@ -258,7 +256,7 @@ function queuedLane(s) {
     const dead = (w.waits ?? []).filter((b) => b.dead);
     const id = repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo);
     const blocked = w.waits?.[0]?.id ?? w.on;
-    return laneCard("queued-row", metaRow({ id, chips: (blocked ? "" : statusBadge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, blocked }), w.title, "",
+    return laneCard("queued-row", metaRow({ id, chips: (blocked ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, blocked }), w.title, "",
       dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
   }).join("");
   return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
@@ -266,7 +264,7 @@ function queuedLane(s) {
 
 /** A parent that waits to close: all its parts are done. */
 function runningIssue(i, now) {
-  return laneCard("run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: statusBadge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
+  return laneCard("run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: badge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
 }
 
 const TIERS = { haiku: "low", sonnet: "medium", opus: "high" };

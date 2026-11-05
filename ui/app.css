@@ -359,7 +359,6 @@ section { margin: 0 0 var(--sp-28); }
 .badge.need { background: var(--need-bg); color: var(--need); }
 .badge.parked { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--muted); }
 .badge.quiet { background: var(--sunk); color: var(--muted); }
-.badge.dim { background: transparent; opacity: var(--dim); font-weight: var(--fw-text); }
 
 .facts { display: flex; flex-wrap: wrap; gap: var(--sp-4) 22px; margin: var(--sp-8) 0 var(--sp-16); padding: 0; color: var(--ink-2); font-size: var(--fs-sm); }
 .facts div { display: flex; gap: var(--sp-6); }

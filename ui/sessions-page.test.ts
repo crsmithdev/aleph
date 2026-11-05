@@ -45,7 +45,7 @@ describe("the Sessions page", () => {
   test("the page holds the old pages' content: tools, skills, unused, hooks, denials, sessions", () => {
     const h = v.renderSessions(data(), opts());
     expect(h).toContain('<header class="ph"><h1>Sessions</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
-    for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
+    for (const s of ["Bash", "aleph:handoff", 'href="#/skills/tidy"', "vault-recall", "no &lt;run&gt;", 'title="s1" href="#/sessions/s1"', "dear one"]) expect(h).toContain(s);
     expect(h).not.toContain("no <run>");
     expect(h).toContain("<th>Last Call</th><th>Hook</th>");
     expect(h).toContain("<th>Denied</th><th>Reason</th>");

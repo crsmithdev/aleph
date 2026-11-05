@@ -291,7 +291,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
           const c = [...document.querySelectorAll("#lane-" + id + " .lane-card")];
           out[id] = { n: c.length, h: c.map((e) => e.getBoundingClientRect().height), ih: c.map((e) => e.querySelector(".ih").getBoundingClientRect().height), font: c.map((e) => { const s = getComputedStyle(e.querySelector(":scope > .t")); return s.fontSize + "/" + s.lineHeight; }) };
         }
-        out.dim = { n: document.querySelectorAll(".lane-card .badge.dim").length, h: [], ih: [], font: [] };
+        out.dim = { n: document.querySelectorAll(".lane-card .badge.quiet").length, h: [], ih: [], font: [] };
         out.part = { n: document.querySelectorAll(".lane-card .part").length, h: [], ih: [], font: [] };
         out.heads = { n: 0, h: [], ih: [], font: ["running", "queued", "done"].map((id) => getComputedStyle(document.querySelector("#h-" + id)).fontSize) };
         out.why = { n: document.querySelectorAll(".lane-card .why").length, h: [], ih: [], font: [] };

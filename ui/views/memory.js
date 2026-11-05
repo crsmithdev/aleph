@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
+import { badge, legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -136,7 +136,7 @@ const EMPTY_TYPES = {
 
 const DAY = 86_400_000, STEP = 50;
 const KNOWLEDGE = ["decision", "gotcha", "project", "entity", "concept"];
-const STATUS = { use: "In use", stale: "Stale", never: "Never read", lint: "Lint problem" };
+const STATUS = { use: "in use", stale: "stale", never: "never read", lint: "lint problem" };
 const shortDay = (s) => day(`${String(s).slice(0, 10)}T00:00`);
 
 /** A note's status: a refusal first; else in use when recall returned it in the last 7 days, stale when earlier, never when it never did. */
@@ -248,8 +248,7 @@ export function browseRows(rows, o, hits = []) {
   return sortRows(sortRows(out, SORT, { key: "title", dir: 1 }), { ...SORT, rank: (n) => rank.get(n.title) ?? hits.length }, sort);
 }
 
-const TONE = { use: "done", stale: "need", never: "quiet", lint: "stuck" };
-const pill = (s) => tag(STATUS[s], TONE[s]);
+const pill = (s) => badge(STATUS[s]);
 
 function renderNoteTable(rows, o, hits) {
   const all = browseRows(rows, o, hits);
