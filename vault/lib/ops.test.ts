@@ -96,7 +96,7 @@ describe("init", () => {
     expect(JSON.parse(readFileSync(join(vault, ".obsidian/app.json"), "utf8")).attachmentFolderPath).toBe("attachments");
     expect(readFileSync(join(vault, ".gitignore"), "utf8")).toContain("workspace*.json");
     expect(Bun.spawnSync(["git", "-C", vault, "remote"], { stdout: "pipe" }).stdout.toString().trim()).toBe("");
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: 0 notes, 0 dangling, 0 orphans, 0 stale, lint \d{4}-\d{2}-\d{2}$/);
+    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: 0 notes, 0 dangling, 0 stale, lint \d{4}-\d{2}-\d{2}$/);
   });
   test("refuses a second init", async () => {
     expect((await cli("init")).code).toBe(1);
@@ -116,25 +116,31 @@ describe("write", () => {
     // The test process can run in UTC while the CLI child runs in local time, so ask a child for the date.
     const date = Bun.spawnSync(["date", "+%F"], { stdout: "pipe" }).stdout.toString().trim();
     expect(readFileSync(join(vault, "daily", `${date}.md`), "utf8")).toMatch(/^- \d\d:\d\d write \[\[Stop Hook Block Shape\]\] — measured three shapes$/m);
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 0 orphans, 0 stale, lint ${date}`);
+    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toBe(`Health: 1 notes, 0 dangling, 0 stale, lint ${date}`);
     const log = gitLog();
     expect(log).toContain("write: Stop Hook Block Shape");
     expect(log).toContain("Co-Authored-By: Claude");
     expect(gitStatus()).toBe("");
-    // Home indexes the standing kinds; a gotcha off Home is not an orphan.
-    expect(r.stderr).not.toContain("warn orphan");
   });
-  test("a decision off Home is an orphan", async () => {
-    const r = (await cli("write", note("Orphaned Decision", { kind: "decision" }), "--why", "x"));
-    expect(r.code).toBe(0);
-    expect(r.stderr).toContain("warn orphan Orphaned Decision");
+  test("Home is generated: a decision gets its line, and two writes in either order give the same Home", async () => {
+    const home = join(vault, "Home.md");
+    const a = note("Ordered Decision A", { kind: "decision", scope: "order", updated: "2026-09-03", core: "A comes second" });
+    const b = note("Ordered Decision B", { kind: "decision", scope: "order", updated: "2026-09-04" });
+    expect((await cli("write", a, "--why", "x")).code).toBe(0);
+    expect((await cli("write", b, "--why", "x")).code).toBe(0);
+    const first = readFileSync(home, "utf8");
+    expect(first).toContain("## order\n\n### Decisions\n- [[Ordered Decision B]]\n- [[Ordered Decision A]] — A comes second\n");
+    expect(first).not.toContain("[[Stop Hook Block Shape]]");  // a gotcha has no Home line
+    expect((await cli("write", note("Ordered Decision B", { kind: "decision", scope: "order", updated: "2026-09-04" }), "--why", "x")).code).toBe(0);
+    expect((await cli("write", note("Ordered Decision A", { kind: "decision", scope: "order", updated: "2026-09-03", core: "A comes second" }), "--why", "x")).code).toBe(0);
+    expect(readFileSync(home, "utf8")).toBe(first);
   });
   test("a decision goes to wiki/decisions", async () => {
     const r = (await cli("write", note("No API Judge", { kind: "decision" }), "--why", "subscription only"));
     expect(r.json.path).toBe("wiki/decisions/No API Judge.md");
   });
   test("each write is its own commit", async () => {
-    expect(gitLog().split("\n").filter((l) => l.startsWith("write: ")).length).toBe(3);
+    expect(gitLog().split("\n").filter((l) => l.startsWith("write: ")).length).toBe(6);
   });
   test("refuses a note in the wrong folder", async () => {
     mkdirSync(join(vault, "wiki/concepts"), { recursive: true });
@@ -209,20 +215,10 @@ describe("write", () => {
     expect(r.code).toBe(0);
     expect(readFileSync(join(vault, "wiki/gotchas/Stop Hook Deny Shape.md"), "utf8")).toContain("updated: 2026-09-05");
   });
-  test("Home.md: commits a map edit and refuses over budget", async () => {
-    const home = join(vault, "Home.md");
-    const text = readFileSync(home, "utf8").replace("## Gotchas\n", "## Gotchas\n- [[Stop Hook Deny Shape]] — decision:block only\n");
-    writeFileSync(home, text);
-    const r = (await cli("write", home, "--why", "map the gotcha"));
-    expect(r.code).toBe(0);
-    expect(gitLog()).toContain("write: Home");
-    expect(readFileSync(home, "utf8").trim().split("\n").at(-1)).toMatch(/orphans, \d+ stale, lint/);
-    writeFileSync(home, text + "- filler\n".repeat(150));
-    const over = (await cli("write", home, "--why", "too long"));
-    expect(over.code).toBe(1);
-    expect(over.stderr).toMatch(/Home\.md is \d+ lines; the budget is 150/);
-    writeFileSync(home, text);
-    (await cli("write", home, "--why", "restore"));
+  test("Home.md is generated: a write of it is refused", async () => {
+    const r = (await cli("write", join(vault, "Home.md"), "--why", "hand edit"));
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain("refuse generated Home");
   });
   test("MEMORY.md: commits and refuses a dangling link", async () => {
     const memory = join(vault, "MEMORY.md");
@@ -244,9 +240,7 @@ describe("lint", () => {
     const r = (await spawnCli("lint"));
     expect(r.json.refuse).toEqual([]);
     expect(r.code).toBe(0);
-    const rules = r.json.warn.map((w: any) => w.rule);
-    expect(rules).toContain("orphan");
-    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: \d+ notes, 0 dangling, \d+ orphans, \d+ stale, lint \d{4}-\d{2}-\d{2}$/);
+    expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: \d+ notes, 0 dangling, \d+ stale, lint \d{4}-\d{2}-\d{2}$/);
   });
   test("warns on stale; overlap is opt-in; exit 1 on a hand-made structural break", async () => {
     (await cli("write", note("Langfuse Ingestion Drops Batches", { updated: "2026-01-01" }), "--why", "x"));
@@ -381,31 +375,30 @@ describe("lint --fix", () => {
   });
 });
 
-describe("budget", () => {
-  test("a note write goes through while Home is over budget, and Home stays as it was", async () => {
-    const home = join(vault, "Home.md");
-    (await cli("write", note("Sets The Health Line"), "--why", "x"));
-    const text = readFileSync(home, "utf8");
-    const long = text.replace(/\nHealth:/, "\n" + "- filler\n".repeat(150) + "Health:");
-    writeFileSync(home, long);
-    const r = (await cli("write", note("Written Past A Long Home"), "--why", "x"));
-    expect(r.stderr).not.toContain("refuse");
-    expect(r.code).toBe(0);
-    expect(readFileSync(home, "utf8").split("\n").length).toBe(long.split("\n").length);
-    writeFileSync(home, text);
-    (await cli("write", home, "--why", "restore"));
-  });
-  test("an over-budget Home refusal ranks the lines to remove", async () => {
-    const home = join(vault, "Home.md");
-    const text = readFileSync(home, "utf8");
-    writeFileSync(home, text.replace("## Gotchas\n", "## Gotchas\n- [[Ghost Target]] — points at nothing\n") + "- filler\n".repeat(150));
-    const r = (await cli("write", home, "--why", "too long"));
+describe("core", () => {
+  test("a core line longer than 160 characters is refused", async () => {
+    const r = (await cli("write", note("Too Long A Core", { kind: "decision", core: "x".repeat(161) }), "--why", "x"));
     expect(r.code).toBe(1);
-    expect(r.stderr).toMatch(/Home\.md is \d+ lines; the budget is 150/);
-    expect(r.stderr).toContain("ranked for removal");
-    expect(r.stderr).toContain("[[Ghost Target]] resolves to nothing");
-    writeFileSync(home, text);
-    (await cli("write", home, "--why", "restore"));
+    expect(r.stderr).toContain("core must be one line of 1 to 160 characters");
+  });
+  test("a core write over the start budget is refused with the scope's core lines ranked, and changes nothing", async () => {
+    const line = (i: number) => `Core fact ${i} ${"y".repeat(140)}`;
+    let i = 0;
+    for (; i < 60; i++) {
+      const r = (await cli("write", note(`Budget Core ${i}`, { kind: "decision", scope: "budgetcore", updated: `2026-09-${String(1 + (i % 28)).padStart(2, "0")}`, core: line(i) }), "--why", "x"));
+      if (r.code !== 0) {
+        expect(r.stderr).toContain("refuse core Budget Core");
+        expect(r.stderr).toContain("start context of scope budgetcore is over 6000 bytes");
+        expect(r.stderr).toContain("ranked for demotion, oldest first");
+        expect(r.stderr).toContain("Budget Core 0 (updated 2026-09-01, budgetcore)");
+        break;
+      }
+    }
+    expect(i).toBeGreaterThan(20);
+    expect(i).toBeLessThan(60);
+    expect(existsSync(join(vault, `wiki/decisions/Budget Core ${i}.md`))).toBe(false);
+    expect(gitStatus()).toBe("");
+    for (let j = 0; j < i; j++) (await cli("archive", `Budget Core ${j}`, "--why", "test fixture"));
   });
 });
 
@@ -493,8 +486,6 @@ describe("adopt", () => {
     expect(readFileSync(p, "utf8")).not.toContain("## Evidence");
     // And lint no longer calls it untracked.
     expect((await cli("lint")).json.warn.filter((f: any) => f.rule === "untracked")).toEqual([]);
-    // A decision still wants its Home line.
-    expect(r.stderr).toContain("warn orphan Drafted In Place");
   });
   test("refuses a schema break, a tracked note, and a path outside the vault", async () => {
     const bad = join(vault, "wiki/gotchas/Bad Adopt.md");
@@ -517,37 +508,12 @@ describe("adopt", () => {
   });
 });
 
-describe("consolidate", () => {
-  test("read-only by default; --apply drops gotcha and dead lines, keeps the standing kinds", async () => {
-    // The CLI test of this op: it spawns vault/cli.ts.
-    const home = join(vault, "Home.md");
-    const text = readFileSync(home, "utf8");
-    writeFileSync(home, text
-      .replace("## Gotchas\n", "## Gotchas\n- [[Stop Hook Deny Shape]] — a gotcha, not a router entry\n- [[Ghost Note]] — points at nothing\n")
-      .replace("## Decisions\n", "## Decisions\n- [[No API Judge]] — subscription only\n"));
-    const dry = (await spawnCli("consolidate"));
-    expect(dry.json.applied).toBe(false);
-    const why = dry.json.dropped.map((d: any) => d.why);
-    expect(why).toContain("gotchas are not indexed; recall finds them");
-    expect(why).toContain("[[Ghost Note]] resolves to nothing");
-    expect(dry.stderr).toContain("changed nothing");
-    expect(readFileSync(home, "utf8")).toContain("Stop Hook Deny Shape");
-    expect(dry.json.missing.map((m: any) => m.title)).toContain("Orphaned Decision");
-
-    const r = (await cli("consolidate", "--apply"));
-    expect(r.json.applied).toBe(true);
-    const after = readFileSync(home, "utf8");
-    expect(after).not.toContain("Stop Hook Deny Shape");
-    expect(after).not.toContain("Ghost Note");
-    expect(after).toContain("- [[No API Judge]] — subscription only");
-    expect(gitLog()).toContain("consolidate: Home");
-    expect(gitStatus()).toBe("");
-  });
-  test("reports a relative date without rewriting the note", async () => {
+describe("relative dates", () => {
+  test("lint reports a relative date without rewriting the note", async () => {
     const body = "**Claim.** the run passed yesterday, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Home]]\n";
     (await cli("write", note("Says Yesterday", {}, body), "--why", "x"));
-    const r = (await cli("consolidate"));
-    expect(r.json.relativeDates).toContainEqual({ note: "Says Yesterday", rule: "relative-date", detail: 'says "yesterday"; give the date' });
+    const r = (await cli("lint"));
+    expect(r.json.warn).toContainEqual({ note: "Says Yesterday", rule: "relative-date", detail: 'says "yesterday"; give the date' });
     expect(readFileSync(join(vault, "wiki/gotchas/Says Yesterday.md"), "utf8")).toContain("passed yesterday");
   });
 });
@@ -557,8 +523,7 @@ describe("archive", () => {
     // The CLI test of this op: it spawns vault/cli.ts.
     (await cli("write", note("Retired Subject", { kind: "decision" }), "--why", "x"));
     const home = join(vault, "Home.md");
-    writeFileSync(home, readFileSync(home, "utf8").replace("## Decisions\n", "## Decisions\n- [[Retired Subject]] — about to go\n"));
-    (await cli("write", home, "--why", "map it"));
+    expect(readFileSync(home, "utf8")).toContain("- [[Retired Subject]]");
     const body = "**Claim.** a caller, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Retired Subject]]\n";
     (await cli("write", note("Points At The Retired One", {}, body), "--why", "x"));
 

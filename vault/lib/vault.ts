@@ -179,6 +179,7 @@ export function validateNote(note: Note, others: Note[], index: Map<string, Note
   if (note.fm.updated !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(note.fm.updated))) add("schema", `updated must be YYYY-MM-DD, got ${note.fm.updated}`);
   if (note.fm.scope !== undefined && (Array.isArray(note.fm.scope) || !String(note.fm.scope).trim())) add("schema", "scope must be a repo name or global");
   for (const key of LISTS) if (note.fm[key] !== undefined && !Array.isArray(note.fm[key])) add("schema", `${key} must be a list`);
+  if (note.fm.core !== undefined && (typeof note.fm.core !== "string" || !note.fm.core.trim() || note.fm.core.length > CORE_MAX)) add("schema", `core must be one line of 1 to ${CORE_MAX} characters`);
   const folder = folderFor(kind);
   if (folder && dirname(note.rel) !== folder) add("folder", `kind ${kind} belongs in ${folder}/, note is in ${dirname(note.rel)}/`);
 
@@ -199,7 +200,7 @@ export function validateNote(note: Note, others: Note[], index: Map<string, Note
 
 export function budgetFindings(notes: Note[]): Finding[] {
   const f: Finding[] = [];
-  for (const name of ["Home", "MEMORY"]) {
+  for (const name of ["MEMORY"]) {
     const n = notes.find((x) => x.rel === `${name}.md`);
     if (!n) continue;
     const lines = n.text.replace(/\n+$/, "").split("\n").length;
@@ -306,13 +307,6 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
     }
   }
 
-  const home = notes.find((x) => x.rel === "Home.md");
-  const fromHome = new Set(links(home?.body ?? "").map((t) => targets.get(t.toLowerCase())?.path));
-  for (const n of wiki) {
-    if (!HOME_KINDS.includes(String(n.fm.kind))) continue;
-    if (!fromHome.has(n.path)) warn.push({ note: n.title, rule: "orphan", detail: "not linked from Home.md" });
-  }
-
   for (const n of wiki) {
     const s = staleness(n, read, now);
     if (s) warn.push({ note: n.title, rule: "stale", detail: s });
@@ -341,7 +335,7 @@ export function lintVault(notes: Note[], { read = {}, overlap = false, now = new
   return { refuse, warn };
 }
 
-export interface Health { notes: number; dangling: number; orphans: number; stale: number; date: string }
+export interface Health { notes: number; dangling: number; stale: number; date: string }
 
 /**
  * The counts that go in Home's last line, which SessionStart injects.
@@ -352,19 +346,11 @@ export interface Health { notes: number; dangling: number; orphans: number; stal
 export function health(notes: Note[], read: Record<string, string> = {}): Health {
   const { refuse, warn } = lintVault(notes, { read });
   const count = (rule: string) => warn.filter((f) => f.rule === rule).length;
-  return { notes: wikiNotes(notes).length, dangling: refuse.filter((f) => f.rule === "dangling").length, orphans: count("orphan"), stale: count("stale"), date: today() };
+  return { notes: wikiNotes(notes).length, dangling: refuse.filter((f) => f.rule === "dangling").length, stale: count("stale"), date: today() };
 }
 
 export function healthLine(h: Health): string {
-  return `Health: ${h.notes} notes, ${h.dangling} dangling, ${h.orphans} orphans, ${h.stale} stale, lint ${h.date}`;
-}
-
-/** Home.md with its last line set to the health line. */
-export function withHealth(homeText: string, line: string): string {
-  const lines = homeText.replace(/\n+$/, "").split("\n");
-  if (lines.at(-1)?.startsWith("Health:")) lines[lines.length - 1] = line;
-  else lines.push("", line);
-  return lines.join("\n") + "\n";
+  return `Health: ${h.notes} notes, ${h.dangling} dangling, ${h.stale} stale, lint ${h.date}`;
 }
 
 export function citedTraces(notes: Note[]): string[] {
@@ -406,80 +392,6 @@ export function fixFrontmatter(note: Note, added: string | null): { text: string
 
   if (!repairs.length) return null;
   return { text: `---\n${lines.join("\n")}\n---\n${body}`, repairs };
-}
-
-export interface Candidate { line: number; text: string; why: string }
-
-/**
- * Home.md index lines ranked for removal, worst first, and only as many as the
- * budget needs. Every reason is a fact about the target note, never a guess
- * about what Chris still wants to see. Removing a line drops nothing: the note
- * stays on disk and `recall` still finds it.
- */
-export function homeCandidates(notes: Note[]): Candidate[] {
-  const home = notes.find((n) => n.rel === "Home.md");
-  if (!home) return [];
-  const lines = home.text.replace(/\n+$/, "").split("\n");
-  const over = lines.length - LINE_BUDGET;
-  if (over <= 0) return [];
-  const targets = linkTargets(notes);
-
-  const scored: (Candidate & { rank: number; updated: string })[] = [];
-  for (const [i, text] of lines.entries()) {
-    const m = /^\s*-\s*\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/.exec(text);
-    if (!m) continue;
-    const hit = targets.get(m[1].trim().toLowerCase());
-    const updated = String(hit?.fm.updated ?? "");
-    if (!hit) scored.push({ line: i + 1, text, why: `[[${m[1].trim()}]] resolves to nothing`, rank: 0, updated });
-    else if (hit.archived) scored.push({ line: i + 1, text, why: `${hit.title} is archived`, rank: 1, updated });
-    else scored.push({ line: i + 1, text, why: `${hit.title} last updated ${updated || "never"}`, rank: 2, updated });
-  }
-  scored.sort((a, b) => a.rank - b.rank || a.updated.localeCompare(b.updated) || a.line - b.line);
-  return scored.slice(0, over).map(({ line, text, why }) => ({ line, text, why }));
-}
-
-export interface HomePlan {
-  text: string;
-  dropped: { line: number; text: string; why: string }[];
-  missing: { title: string; kind: string; rel: string }[];
-  lines: number;
-}
-
-/**
- * Home rebuilt as a router: an index line for every live note of a
- * `HOME_KINDS` kind, and nothing else.
- *
- * It drops lines and never writes one. A hook is prose about what a note is
- * for, so a missing line is reported for a human or an agent to write; an
- * invented hook would be a claim nobody made. Headings stay even when they
- * empty out, because their order is Chris's.
- */
-export function planHome(notes: Note[]): HomePlan {
-  const home = notes.find((n) => n.rel === "Home.md");
-  if (!home) return { text: "", dropped: [], missing: [], lines: 0 };
-  const targets = linkTargets(notes);
-  const kept: string[] = [];
-  const dropped: HomePlan["dropped"] = [];
-  const indexed = new Set<string>();
-
-  for (const [i, text] of home.text.replace(/\n+$/, "").split("\n").entries()) {
-    const m = /^\s*-\s*\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]/.exec(text);
-    if (!m) { kept.push(text); continue; }
-    const hit = targets.get(m[1].trim().toLowerCase());
-    if (!hit) dropped.push({ line: i + 1, text, why: `[[${m[1].trim()}]] resolves to nothing` });
-    else if (hit.archived) dropped.push({ line: i + 1, text, why: `${hit.title} is archived` });
-    else if (!HOME_KINDS.includes(String(hit.fm.kind))) dropped.push({ line: i + 1, text, why: hit.fm.kind === undefined ? `${hit.title} has no kind; fix it, then it can be indexed` : `${hit.fm.kind}s are not indexed; recall finds them` });
-    else { kept.push(text); indexed.add(hit.path); }
-  }
-
-  const missing = wikiNotes(notes)
-    .filter((n) => HOME_KINDS.includes(String(n.fm.kind)) && !indexed.has(n.path))
-    .map((n) => ({ title: n.title, kind: String(n.fm.kind), rel: n.rel }))
-    .sort((a, b) => a.kind.localeCompare(b.kind) || a.title.localeCompare(b.title));
-
-  // Two blank lines in a row are what a removed run leaves behind.
-  const text = kept.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\n+$/, "") + "\n";
-  return { text, dropped, missing, lines: text.replace(/\n+$/, "").split("\n").length };
 }
 
 /** Body text that names a date the reader cannot resolve. Reported, never rewritten. */
@@ -525,4 +437,56 @@ export function renameScope(notes: Note[], from: string, to: string): { note: No
 export function repoScope(cwd: string): string {
   const git = Bun.spawnSync(["git", "-C", cwd, "rev-parse", "--path-format=absolute", "--git-common-dir"], { stdout: "pipe", stderr: "ignore" });
   return git.exitCode === 0 ? basename(dirname(git.stdout.toString().trim())) : basename(cwd);
+}
+
+/** The longest `core:` line, in characters. */
+export const CORE_MAX = 160;
+/** The bytes the SessionStart context may take: Claude Code shows a 2 KB preview in place of hook output over about 10,000 characters. */
+export const START_BUDGET = 6000;
+
+const byNewest = (a: Note, b: Note) => String(b.fm.updated ?? "").localeCompare(String(a.fm.updated ?? "")) || a.title.localeCompare(b.title);
+
+/** The live notes whose `core:` line is always on in `scope`: those of `scope` and of `global`, newest first. */
+export function coreNotes(notes: Note[], scope: string): Note[] {
+  return wikiNotes(notes).filter((n) => !n.archived && typeof n.fm.core === "string" && [scope, "global"].includes(String(n.fm.scope))).sort(byNewest);
+}
+
+/**
+ * The SessionStart context for `scope`: MEMORY.md whole, then the core lines,
+ * cut at whole lines to START_BUDGET bytes. `cut` counts the core lines left
+ * out; the last line then points to the rest.
+ */
+export function startContext(root: string, notes: Note[], scope: string): { text: string; cut: number } {
+  const memory = notes.find((n) => n.rel === "MEMORY.md")?.text.trim();
+  const lines = coreNotes(notes, scope).map((n) => `- ${String(n.fm.core).trim()} [[${n.title}]]`);
+  const render = (kept: string[]) => {
+    const cut = lines.length - kept.length;
+    return [`<vault path="${root}">`, ...(memory ? [memory, ""] : []), ...kept, ...(cut ? [`${cut} more core lines: vault recall --scope ${scope}`] : []), "</vault>"].join("\n");
+  };
+  let kept = lines;
+  while (kept.length && Buffer.byteLength(render(kept)) > START_BUDGET) kept = kept.slice(0, -1);
+  return { text: render(kept), cut: lines.length - kept.length };
+}
+
+const KIND_HEADINGS: Record<string, string> = { decision: "Decisions", project: "Projects", concept: "Concepts", entity: "Entities" };
+
+/**
+ * Home.md, generated: every live decision, project, concept and entity note
+ * under its scope (global first), then its kind, newest first, with its core
+ * line when it has one. The health line is last. Nothing here is hand-written,
+ * so two writes in either order give the same Home.
+ */
+export function homeText(notes: Note[], healthLine: string): string {
+  const shown = wikiNotes(notes).filter((n) => !n.archived && HOME_KINDS.includes(String(n.fm.kind)));
+  const scopes = [...new Set(shown.map((n) => String(n.fm.scope ?? "")))].sort((a, b) => Number(b === "global") - Number(a === "global") || a.localeCompare(b));
+  const out = ["# Home", "", "Generated by `vault write` from the notes; do not edit it. Each line is a note, with its core line when it has one.", ""];
+  for (const scope of scopes) {
+    out.push(`## ${scope || "(no scope)"}`, "");
+    for (const kind of HOME_KINDS) {
+      const ns = shown.filter((n) => String(n.fm.scope ?? "") === scope && n.fm.kind === kind).sort(byNewest);
+      if (!ns.length) continue;
+      out.push(`### ${KIND_HEADINGS[kind]}`, ...ns.map((n) => `- [[${n.title}]]${typeof n.fm.core === "string" ? ` — ${n.fm.core.trim()}` : ""}`), "");
+    }
+  }
+  return [...out, healthLine, ""].join("\n");
 }

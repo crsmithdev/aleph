@@ -9,15 +9,9 @@ moves the repo and leaves every note behind, so the vault collected five
 scope names for two projects. It rewrites only the `scope:` line, one commit
 for the batch. An unknown scope refuses and names the ones that exist.
 
-## consolidate
+## Decay
 
-`cli.ts consolidate` is read-only. It reports the Home lines it would drop
-(dead pointers, archived targets, gotchas), the notes that want a Home line,
-the claims past their decay window, and the bodies that say "yesterday"
-instead of a date. `--apply` rebuilds Home and commits. It writes no index
-line: a hook is prose, so you write it.
-
-A claim's window is its kind's budget, times its confidence — `measured`
+`lint` warns `stale` for a claim past its decay window. A claim's window is its kind's budget, times its confidence — `measured`
 1.5, `reported` 1, `inferred` 0.5 — counted from the later of `updated` and
 the last `recall` that returned it. Base days: project 30, gotcha 60,
 decision 180, concept and entity 365.
@@ -26,7 +20,7 @@ decision 180, concept and entity 365.
 
 `cli.ts archive "<title>" --why "<one line>"` retires a note when the
 subject is over and no replacement exists. It moves the file to `archive/`
-with a reason, drops its Home line, and names every note that links to it.
+with a reason, regenerates Home, and names every note that links to it.
 Nothing is deleted and the note stays a link target. Use `supersedes` in a
 write instead when a newer note covers the same ground.
 
@@ -46,16 +40,16 @@ written in place, or a note Chris typed in Obsidian.
 It applies every schema, folder, duplicate and dangling refusal, and demotes
 the template to a warning, because a note on disk cannot be un-written. It
 does not edit the note: an `## Evidence` heading nobody wrote would turn
-"this claim is unbacked" into a passing check. Add the Home line yourself if
-the kind wants one.
+"this claim is unbacked" into a passing check.
 
 Use `write` instead for a new note, or to rewrite a tracked one.
 
 ## lint
 
-`cli.ts lint` prints refusals and warnings for the whole vault and sets the
-health line. Run it after a batch of writes or when Home's health line
-shows dangling links or orphans. Refusals are structural: schema, folder,
+`cli.ts lint` prints refusals and warnings for the whole vault, regenerates
+Home and sets its health line. Run it after a batch of writes or when the
+health line shows dangling links. It also warns `relative-date` for a body
+that says "yesterday" instead of a date. Refusals are structural: schema, folder,
 duplicate title, dangling link, budget. A broken template warns instead,
 because a note on disk cannot be un-written; past one note the warnings
 collapse to a count, and `lint --template` names them.

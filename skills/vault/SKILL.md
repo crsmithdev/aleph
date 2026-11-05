@@ -6,9 +6,10 @@ description: >
   behaves, decide something or get corrected; or to run lint or compile.
 ---
 
-The vault is memory. Home.md and MEMORY.md are already in context from
-SessionStart. Read the note Home points at before searching; search with
-`recall` before deriving anything from scratch.
+The vault is memory. MEMORY.md and the core lines of this repo and `global`
+are already in context from SessionStart. Each core line ends with its note's
+`[[title]]`: read that note before searching, and search with `recall` before
+deriving anything from scratch.
 
 Script: `bun ~/.claude/skills/aleph/vault/cli.ts <op>`. JSON on stdout,
 findings on stderr, exit 1 on refusal. Never edit `VAULT.md`.
@@ -18,7 +19,7 @@ Every op that commits also pushes to `origin`, the private repo
 commit; the next op sends it. The vault held 165 notes on one drive with no
 second copy until 2026-09-26, so do not turn this off.
 
-To run lint, consolidate, adopt, archive or rename-scope, read
+To run lint, adopt, archive or rename-scope, read
 [MAINTAIN.md](MAINTAIN.md) first.
 
 ## write
@@ -54,6 +55,7 @@ re-derive at any price. Prefer them.
    supersedes: []
    sources: [trace:<id>, docs/verify-gate.md, chris]
    tags: []
+   core: <optional: one line, at most 160 characters, always on in this scope>
    ---
    ```
 
@@ -61,21 +63,28 @@ re-derive at any price. Prefer them.
    `## Details`, `## Evidence`, `## Related` with `[[links]]` to notes that
    exist. `[[Home]]` is always a valid link.
 2. `cli.ts write "<path>" --why "<one line>"`. The script files it by kind,
-   appends the daily note, sets the health line and commits. A refusal
-   names the rule; fix the draft and rerun. Warnings are yours to judge.
-3. For a `decision`, `project`, `concept` or `entity`, add one line under
-   the kind's heading in `Home.md`: `- [[Title]] — <hook, under ten words>`,
-   then `cli.ts write ~/.aleph/vault/Home.md --why "<why>"`. An orphan
-   warning means this step was missed. **A gotcha gets no Home line.** Home
-   routes to the standing kinds; `recall` finds the rest.
+   appends the daily note, regenerates Home.md and commits. A refusal names
+   the rule; fix the draft and rerun. Warnings are yours to judge.
+
+Home.md is generated from the notes on each write. Never edit it.
+
+**`core:` is for a fact every session in the scope needs before it starts**,
+such as a decision in force. It is injected at every session start, so the
+budget is small: MEMORY.md plus the core lines of a scope and `global` must
+fit in 6,000 bytes. A write over that is refused with the scope's core lines
+ranked oldest first; remove the `core:` field of one (the note stays and
+`recall` finds it), or leave `core:` off the new note. Most notes have no
+core line.
 
 MEMORY.md holds standing context about Chris and the environment. Rewrite
 the section, keep it under 150 lines, commit the same way.
 
 ## recall
 
-`cli.ts recall "<query>"` ranks title, alias, contains, body. Read the
-note it returns; do not paraphrase Home from memory.
+`cli.ts recall "<query>"` ranks title and alias matches and a full-text
+search of each note, fused. `rank` is 0 for the title, 1 for an alias, 2 for
+a title or alias that holds the query, 3 for the body only. Read the note it
+returns; do not paraphrase from memory.
 
 `--scope <name>` narrows the search to one project, and on its own lists
 that scope's notes — this is how you answer "what do we know about X". An unknown scope prints

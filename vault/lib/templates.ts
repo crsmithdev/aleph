@@ -79,21 +79,6 @@ alias, dangling link, folder/kind mismatch, the line budgets, the body
 template. It warns on orphans, stale measured claims and same-scope overlap.
 `;
 
-export const HOME_MD = `# Home
-
-## Decisions
-
-## Concepts
-
-## Entities
-
-## Projects
-
-## Gotchas
-
-Health: 0 notes, 0 dangling, 0 orphans, lint never
-`;
-
 export const MEMORY_MD = `# Memory
 
 Standing context, ≤150 lines. If this needs to grow, something in it belongs

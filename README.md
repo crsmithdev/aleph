@@ -20,7 +20,7 @@ Edits to a `SKILL.md` apply at once. After you change a hook, run `/reload-plugi
 
 ## Quick start
 
-1. Start a Claude Code session in any repo. The `SessionStart` hooks inject the vault's `Home.md` and `MEMORY.md`, and the factory report.
+1. Start a Claude Code session in any repo. The `SessionStart` hooks inject the vault's `MEMORY.md` and the core lines of the repo and `global`, and the factory report.
 2. Run a skill, for example a grill on a plan:
    ```text
    /aleph:grill-me I want to move the cache from Redis to SQLite
@@ -75,7 +75,7 @@ Invoke a skill as `/aleph:<name>`. Claude can also start one by itself, except t
 | Event | Hook | Does |
 |---|---|---|
 | every event | `obs.ts` | Sends one span per event to Langfuse |
-| `SessionStart` | `vault-context.ts` | Injects the vault's `Home.md` and `MEMORY.md` |
+| `SessionStart` | `vault-context.ts` | Injects the vault's `MEMORY.md` and the `core:` lines of the repo and `global`, at most 6,000 bytes |
 | `SessionStart` | `aleph report --hook` | Injects new factory runs, how far each checkout is behind `origin/main`, and health lines |
 | `UserPromptSubmit` | `vault-recall.ts` | Injects up to 3 vault notes that bear on the prompt |
 | `UserPromptSubmit`, `Stop` | `verify-gate.ts` | Blocks a final message that claims completion without a run after the last edit ([verify gate](docs/verify-gate.md)) |

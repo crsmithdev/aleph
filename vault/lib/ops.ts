@@ -10,10 +10,10 @@ import { fetchObservations, type Observation } from "../../hooks/lib/otlp.ts";
 import { serializeFrontmatter } from "./frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./git.ts";
 import { handoffsFor, traceDigest } from "./compile.ts";
-import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
+import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./vault.ts";
+import { budgetFindings, citedTraces, clock, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, links, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../jobs/lib/settings.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
@@ -51,13 +51,6 @@ function refuse(findings: Finding[], hint?: string): never {
   exit(1);
 }
 
-/** The lines a budget refusal should offer, so the caller is not left guessing. */
-function budgetHint(notes: Note[]): string {
-  const candidates = homeCandidates(notes);
-  if (!candidates.length) return "";
-  return ["", "Home.md lines ranked for removal, worst first. The notes stay on disk and recall still finds them:",
-    ...candidates.map((c) => `  ${c.line}: ${c.text.trim()}\n      — ${c.why}`)].join("\n");
-}
 function warn(findings: Finding[]): void {
   for (const f of findings) console.error(`warn ${f.rule} ${f.note}: ${f.detail}`);
 }
@@ -115,9 +108,30 @@ function noteRead(titles: string[]): void {
   } catch { /* a read must never fail on its own bookkeeping */ }
 }
 
-async function setHealth(): Promise<void> {
-  const home = join(root, "Home.md");
-  writeFileSync(home, withHealth(readFileSync(home, "utf8"), healthLine(health(await loadVault(root), readLog()))));
+/** Write Home.md, generated from the notes, with the health line last. */
+async function writeHome(): Promise<void> {
+  const notes = await loadVault(root);
+  writeFileSync(join(root, "Home.md"), homeText(notes, healthLine(health(notes, readLog()))));
+}
+
+/**
+ * The refusal for a core line the start context cannot hold. A global core
+ * line is on in every scope, so it is checked against each scope that has
+ * core lines.
+ */
+function coreFindings(notes: Note[], draft: Note): { findings: Finding[]; hint: string } {
+  const scope = String(draft.fm.scope);
+  const scopes = scope === "global" ? [...new Set(["global", ...wikiNotes(notes).filter((n) => typeof n.fm.core === "string").map((n) => String(n.fm.scope))])] : [scope];
+  for (const s of scopes) {
+    if (!startContext(root, notes, s).cut) continue;
+    const ranked = coreNotes(notes, s).reverse();
+    return {
+      findings: [{ note: draft.title, rule: "core", detail: `the start context of scope ${s} is over ${START_BUDGET} bytes with this core line` }],
+      hint: ["", `Core lines of ${s} and global ranked for demotion, oldest first. Remove the core: field of one; the note stays and recall still finds it:`,
+        ...ranked.map((n) => `  ${n.title} (updated ${n.fm.updated ?? "never"}, ${n.fm.scope}): ${n.fm.core}`)].join("\n"),
+    };
+  }
+  return { findings: [], hint: "" };
 }
 
 // ---------------------------------------------------------------- init
@@ -129,7 +143,7 @@ async function init(): Promise<void> {
   for (const d of ["daily", "archive", "attachments"]) lay(join(d, ".gitkeep"), "");
   for (const d of ["decisions", "concepts", "entities", "projects", "gotchas"]) lay(join("wiki", d, ".gitkeep"), "");
   lay("VAULT.md", VAULT_MD);
-  lay("Home.md", HOME_MD);
+  lay("Home.md", homeText([], "Health: 0 notes, 0 dangling, 0 stale, lint never"));
   lay("MEMORY.md", MEMORY_MD);
   lay(".gitignore", GITIGNORE);
   for (const [name, value] of Object.entries(OBSIDIAN)) lay(join(".obsidian", name), JSON.stringify(value, null, 2) + "\n");
@@ -137,7 +151,7 @@ async function init(): Promise<void> {
     const r = git(root, "init", "-q", "-b", "main");
     if (!r.ok) { console.error(r.out); exit(1); }
   }
-  await setHealth();
+  await writeHome();
   const commit = commitAndPush("init vault", made);
   out({ op: "init", path: root, commit });
 }
@@ -155,18 +169,18 @@ async function write(): Promise<void> {
   const rel = inside ? relative(root, srcPath) : null;
 
   if (rel === "VAULT.md") refuse([{ note: "VAULT", rule: "owner", detail: "VAULT.md is human-owned; propose a change in wiki/decisions/ and ask" }]);
-  if (rel === "Home.md" || rel === "MEMORY.md") {
-    const name = basename(rel, ".md");
-    if (name === "Home") await setHealth();
+  if (rel === "Home.md") refuse([{ note: "Home", rule: "generated", detail: "Home.md is generated from the notes on each write; write the note instead" }]);
+  if (rel === "MEMORY.md") {
+    const name = "MEMORY";
     const notes = await loadVault(root);
     const budget = budgetFindings(notes).filter((f) => f.note === name);
-    if (budget.length) refuse(budget, budgetHint(notes));
+    if (budget.length) refuse(budget);
     const { refuse: r, warn: w } = lintVault(notes);
     const dangling = r.filter((f) => f.note === name);
     if (dangling.length) refuse(dangling);
     warn(w);
     appendDaily(`write [[${name}]] — ${why}`);
-    if (name === "MEMORY") await setHealth();
+    await writeHome();
     const commit = commitAndPush(`write: ${name}`, [join(root, `${name}.md`), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
     out({ op: "write", title: name, path: `${name}.md`, warnings: w, commit });
     return;
@@ -241,10 +255,14 @@ async function write(): Promise<void> {
     appendDaily(`supersede [[${o.title}]] → [[${draft.title}]]`);
   }
   appendDaily(`write [[${draft.title}]] — ${why}`);
-  await setHealth();
+  await writeHome();
   const after = await loadVault(root);
   const budget = budgetFindings(after).filter((f) => !overBudget.some((b) => b.detail === f.detail));
-  if (budget.length) { rollback(touched); refuse(budget, budgetHint(after)); }
+  if (budget.length) { rollback(touched); refuse(budget); }
+  if (typeof draft.fm.core === "string") {
+    const core = coreFindings(after, placed);
+    if (core.findings.length) { rollback(touched); refuse(core.findings, core.hint); }
+  }
   warn(lintVault(after).warn.filter((f) => f.note === draft.title || f.detail.includes(draft.title)));
   const subject = archived.length ? `supersede: ${archived.join(", ")} → ${draft.title}` : `write: ${draft.title}`;
   const commit = commitAndPush(subject, touched);
@@ -353,8 +371,10 @@ async function lint(): Promise<void> {
       fixed.push({ note: n.title, path: n.rel, repairs: r.repairs });
     }
   }
-  await setHealth();
-  const result = lintVault(await loadVault(root), { read: readLog(), overlap: has("overlap"), templates: has("template"), tracked: trackedFiles(root, "wiki") });
+  await writeHome();
+  const notes = await loadVault(root);
+  const result = lintVault(notes, { read: readLog(), overlap: has("overlap"), templates: has("template"), tracked: trackedFiles(root, "wiki") });
+  result.warn.push(...relativeDates(notes));
   const touched = [join(root, "Home.md"), ...fixed.map((f) => join(root, f.path))];
   const commit = commitAndPush(fixed.length ? `lint --fix: ${fixed.length} notes` : `lint: ${today()}`, touched);
   out({ fixed, ...result, commit });
@@ -398,11 +418,9 @@ async function adopt(): Promise<void> {
   if (hard.length) refuse(hard, "adopt forgives the template, not the schema");
 
   appendDaily(`adopt [[${note.title}]] — ${why}`);
-  await setHealth();
+  await writeHome();
   const commit = commitAndPush(`adopt: ${note.title}`, [path, join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
   warn(template);
-  const home = HOME_KINDS.includes(String(note.fm.kind)) ? "wants a line in Home.md" : null;
-  if (home) warn([{ note: note.title, rule: "orphan", detail: home }]);
   out({ op: "adopt", title: note.title, path: rel, template, commit });
 }
 
@@ -429,53 +447,12 @@ async function renameScopeOp(): Promise<void> {
   if (apply && changes.length) {
     for (const c of changes) writeFileSync(c.note.path, c.text);
     appendDaily(`rename-scope ${from} → ${to} — ${changes.length} notes`);
-    await setHealth();
+    await writeHome();
     commit = commitAndPush(`rename-scope: ${from} → ${to}, ${changes.length} notes`,
       [...changes.map((c) => c.note.path), join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
   }
   out({ op: "rename-scope", from, to, applied: apply, notes: changes.map((c) => c.note.rel), count: changes.length, commit });
   if (!apply && changes.length) console.error(`rename-scope changed nothing; rerun with --apply to move ${changes.length} notes from ${from} to ${to}`);
-}
-
-// ---------------------------------------------------------------- consolidate
-/**
- * The pass that acts on what `compile` gathers: it rebuilds Home as a router,
- * drops index lines that point at nothing, and reports every claim whose
- * window has run out.
- *
- * Read-only unless `--apply`. The consolidation passes that ship elsewhere run
- * unattended with no dry run and no approval; this vault has already lost
- * notes to an op that reached past its own paths, so the default prints and
- * writes nothing.
- *
- * It removes only Home lines. Every note stays on disk and `recall` still
- * finds it, so VAULT.md's rule that a note is never deleted holds unchanged.
- */
-async function consolidate(): Promise<void> {
-  requireVault();
-  const apply = has("apply");
-  const notes = await loadVault(root);
-  const plan = planHome(notes);
-  const read = readLog();
-  const stale = wikiNotes(notes)
-    .map((n) => ({ note: n.title, path: n.rel, detail: staleness(n, read) }))
-    .filter((x): x is { note: string; path: string; detail: string } => x.detail !== null)
-    .sort((a, b) => a.note.localeCompare(b.note));
-  const dates = relativeDates(notes);
-
-  let commit: string | null = null;
-  if (apply && plan.dropped.length) {
-    writeFileSync(join(root, "Home.md"), plan.text);
-    await setHealth();
-    appendDaily(`consolidate — dropped ${plan.dropped.length} Home lines`);
-    commit = commitAndPush(`consolidate: Home ${plan.lines} lines`, [join(root, "Home.md"), join(root, "daily", `${today()}.md`)]);
-  }
-  out({
-    op: "consolidate", applied: apply,
-    home: { lines: plan.lines, was: notes.find((n) => n.rel === "Home.md")?.text.replace(/\n+$/, "").split("\n").length ?? 0, budget: LINE_BUDGET },
-    dropped: plan.dropped, missing: plan.missing, stale, relativeDates: dates, commit,
-  });
-  if (!apply && plan.dropped.length) console.error(`consolidate changed nothing; rerun with --apply to drop ${plan.dropped.length} Home lines`);
 }
 
 // ---------------------------------------------------------------- archive
@@ -504,10 +481,8 @@ async function archive(): Promise<void> {
   writeFileSync(dest, serializeFrontmatter(fm) + hit.body);
   unlinkSync(hit.path);
   const home = join(root, "Home.md");
-  const plan = planHome(await loadVault(root));
-  if (plan.dropped.length) writeFileSync(home, plan.text);
   appendDaily(`archive [[${hit.title}]] — ${why}`);
-  await setHealth();
+  await writeHome();
   const commit = commitAndPush(`archive: ${hit.title}`, [dest, hit.path, home, join(root, "daily", `${today()}.md`)]);
   // An archived note stays a link target, so nothing dangles; the callers are
   // named because each one now points at a retired claim.
@@ -548,12 +523,11 @@ export async function run(argv: string[]): Promise<void> {
     case "lint": await lint(); break;
     case "adopt": await adopt(); break;
     case "rename-scope": await renameScopeOp(); break;
-    case "consolidate": await consolidate(); break;
     case "archive": await archive(); break;
     case "compile": await compile(); break;
     case "misses": await misses(); break;
     default:
-      console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|consolidate [--apply]|archive <title> --why <text>|compile [date]|misses [--days N]>");
+      console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|archive <title> --why <text>|compile [date]|misses [--days N]>");
       exit(2);
   }
 }

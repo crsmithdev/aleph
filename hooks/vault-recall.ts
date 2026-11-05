@@ -11,7 +11,7 @@ import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
 import { peek } from "./lib/handshake.ts";
 import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
-import { loadWiki, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
+import { coreNotes, loadWiki, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
 
 const MIN_PROMPT = 20;
 // Jev took about 1,670 ms for 40 questions and 1,250 ms for 20 (4 Nov), against a 1,500 ms timeout.
@@ -79,7 +79,10 @@ async function main() {
   const root = vaultDir();
   const notes = await loadWiki(root);
   const seen = readSeen(root, input.session_id);
-  const all = rankNotes(openIndex(root, notes), notes, prompt, repoScope(input.cwd ?? process.cwd())).map((r) => r.note).filter((n) => !seen.has(n.rel));
+  const scope = repoScope(input.cwd ?? process.cwd());
+  // A core note's line is already in the start context.
+  const skip = new Set([...seen, ...coreNotes(notes, scope).map((n) => n.rel)]);
+  const all = rankNotes(openIndex(root, notes), notes, prompt, scope).map((r) => r.note).filter((n) => !skip.has(n.rel));
   const candidates = all.slice(0, MAX_ASKED);
   const meta = { candidates: all.length, asked: candidates.length, kept: 0, capped: all.length > MAX_ASKED };
   if (!candidates.length) { await postSpan(input, start, meta, [], ""); return; }

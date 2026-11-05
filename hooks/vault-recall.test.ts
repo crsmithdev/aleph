@@ -100,3 +100,15 @@ test("a note injected once is not injected again in the same session", async () 
   expect(injected((await run(dir, PROMPT, {}, { ...t, prompt_id: "again" })).out)).not.toContain("Jev Screens Bounded Judgments");
   expect(injected((await run(dir, PROMPT, {}, turn())).out)).toContain("Jev Screens Bounded Judgments");
 });
+
+test("a core note of the session's scope is not asked about: its line is already in the start context", async () => {
+  const v = mkdtempSync(join(tmpdir(), "aleph-recall-core-"));
+  note(v, "Jev Screens Bounded Judgments", "Jev answers bounded questions before Haiku.");
+  mkdirSync(join(v, "wiki", "decisions"), { recursive: true });
+  writeFileSync(join(v, "wiki", "decisions", "Jev Screen Is Always On.md"), "---\nkind: decision\nscope: global\ncore: Jev screens bounded calls\n---\nJev screen claim.\n");
+  await run(v, PROMPT, {}, turn());
+  rmSync(v, { recursive: true, force: true });
+  const asked0 = Object.values(asked[0].questions).map((q: any) => q.instructions).join("\n");
+  expect(asked0).toContain("Jev Screens Bounded Judgments");
+  expect(asked0).not.toContain("Jev Screen Is Always On");
+});

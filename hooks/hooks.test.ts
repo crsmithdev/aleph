@@ -411,16 +411,19 @@ describe("obs hook waits for the transcript", () => {
 
 describe("vault-context hook", () => {
   let vault: string, base: string, repo: string, worktree: string;
-  const note = (title: string, scope: string) => {
-    mkdirSync(join(vault, "wiki", "decisions"), { recursive: true });
-    writeFileSync(join(vault, "wiki", "decisions", `${title}.md`), `---\nkind: decision\nscope: ${scope}\n---\n**Claim.** x.\n`);
+  const note = (dir: string, title: string, scope: string, core?: string, updated = "2026-11-01") => {
+    mkdirSync(join(dir, "wiki", "decisions"), { recursive: true });
+    writeFileSync(join(dir, "wiki", "decisions", `${title}.md`), `---\nkind: decision\nscope: ${scope}\nupdated: ${updated}\n${core ? `core: ${core}\n` : ""}---\n**Claim.** x.\n`);
   };
   beforeAll(() => {
     base = mkdtempSync(join(tmpdir(), "aleph-vaultctx-"));
     vault = join(base, "vault");
     mkdirSync(vault);
-    note("Ours", "aleph"); note("Theirs", "cloudchamber"); note("Everyone", "global");
-    writeFileSync(join(vault, "Home.md"), "# Home\n\n## Decisions\n- [[Ours]] — here\n- [[Theirs]] — elsewhere\n- [[Everyone]] — all\n\nHealth: 3 notes, 0 dangling, 0 orphans, lint 2026-09-04\n");
+    note(vault, "Ours", "aleph", "We ship from main", "2026-11-02");
+    note(vault, "Theirs", "cloudchamber", "They ship from trunk");
+    note(vault, "Everyone", "global", "Times are Pacific", "2026-11-01");
+    note(vault, "No Core", "aleph");
+    writeFileSync(join(vault, "Home.md"), "# Home\n\n- [[Home Only]] — not injected\n");
     writeFileSync(join(vault, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
     repo = join(base, "aleph");
     const git = (...args: string[]) => Bun.spawnSync(["git", ...args], { stdout: "ignore", stderr: "ignore" });
@@ -439,38 +442,33 @@ describe("vault-context hook", () => {
     return (await new Response(proc.stdout).text()).trim();
   }
   const context = async (dir: string, cwd?: string): Promise<string> => JSON.parse(await start(dir, cwd)).hookSpecificOutput.additionalContext;
-  test("injects MEMORY whole, then the Home lines of the session's repo and global", async () => {
+  test("injects MEMORY whole, then the core lines of the session's repo and global, newest first; not Home", async () => {
     const out = JSON.parse(await start(vault));
     const ctx: string = out.hookSpecificOutput.additionalContext;
     expect(out.hookSpecificOutput.hookEventName).toBe("SessionStart");
-    expect(ctx.indexOf("# Memory")).toBeLessThan(ctx.indexOf("# Home"));
     expect(ctx).toContain("- Chris, Pacific");
-    expect(ctx).toContain("- [[Ours]] — here");
-    expect(ctx).toContain("- [[Everyone]] — all");
+    expect(ctx.indexOf("# Memory")).toBeLessThan(ctx.indexOf("- We ship from main [[Ours]]"));
+    expect(ctx.indexOf("- We ship from main [[Ours]]")).toBeLessThan(ctx.indexOf("- Times are Pacific [[Everyone]]"));
     expect(ctx).not.toContain("Theirs");
-    expect(ctx).toContain("Health: 3 notes");
+    expect(ctx).not.toContain("No Core");
+    expect(ctx).not.toContain("Home Only");
   });
   test("a worktree takes the scope of its main checkout", async () => {
     const ctx = await context(vault, worktree);
-    expect(ctx).toContain("- [[Ours]] — here");
+    expect(ctx).toContain("[[Ours]]");
     expect(ctx).not.toContain("Theirs");
   });
-  test("an over-budget Home is cut at whole lines to 6,000 bytes, with a pointer to the rest", async () => {
+  test("over-budget core lines are cut at whole lines to 6,000 bytes, with a pointer to the rest", async () => {
     const big = join(base, "big");
-    mkdirSync(join(big, "wiki", "decisions"), { recursive: true });
-    const lines = Array.from({ length: 200 }, (_, i) => {
-      writeFileSync(join(big, "wiki", "decisions", `Note ${i}.md`), "---\nkind: decision\nscope: aleph\n---\n");
-      return `- [[Note ${i}]] — ${"x".repeat(80)}`;
-    });
-    writeFileSync(join(big, "Home.md"), `# Home\n\n${lines.join("\n")}\n`);
+    for (let i = 0; i < 200; i++) note(big, `Note ${String(i).padStart(3, "0")}`, "aleph", "x".repeat(80), `2026-10-${String(1 + (i % 28)).padStart(2, "0")}`);
+    writeFileSync(join(big, "Home.md"), "# Home\n");
     writeFileSync(join(big, "MEMORY.md"), "# Memory\n\n- Chris, Pacific\n");
     const ctx = await context(big);
     expect(Buffer.byteLength(ctx)).toBeLessThanOrEqual(6000);
     expect(ctx).toContain("- Chris, Pacific");
-    const kept = ctx.split("\n").filter((l) => l.startsWith("- [[Note "));
+    const kept = ctx.split("\n").filter((l) => /^- x+ \[\[Note \d+\]\]$/.test(l));
     expect(kept.length).toBeGreaterThan(10);
-    for (const l of kept) expect(lines).toContain(l);
-    expect(ctx).toContain(`${200 - kept.length} more Home lines: vault recall --scope aleph`);
+    expect(ctx).toContain(`${200 - kept.length} more core lines: vault recall --scope aleph`);
   });
   test("no vault, no output", async () => {
     expect(await start(join(vault, "missing"))).toBe("");
