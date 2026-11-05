@@ -15,7 +15,7 @@ export const view = {
   api: "/api/state",
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time by outcome">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="stages" class="card" aria-label="Stages">${renderStages(s)}</section><section id="holds" class="card" aria-label="Holds">${renderHolds(s)}</section>${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}<section id="scorecard" aria-label="Scorecard" class="tiles">${renderTiles(s, usable(w), w)}</section><section id="outcome" class="card" aria-label="Agent time">${renderOutcome(speedOf(w))}</section><div class="insights"><section id="stages" class="card" aria-label="Stages">${renderStages(s)}</section><section id="holds" class="card" aria-label="Holds">${renderHolds(s)}</section>${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -34,7 +34,7 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
 
 /** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
 export function renderOutcome(d) {
-  const title = `<h2>Agent time by outcome</h2>`;
+  const title = `<h2>Agent time</h2>`;
   if (!d) return `${title}${loadingLine("the outcomes")}`;
   if (d.error) return `${title}<p>${esc(d.error)}</p>`;
   return `${title}${bar(d)}`;
@@ -75,7 +75,7 @@ export function renderMonitor(s) {
   const said = m.error ? `<p class="quiet">No reading: ${esc(m.error)}</p>`
     : m.findings.length ? `<ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol>`
     : `<p class="quiet">Nothing looks off.</p>`;
-  return card(`Monitor, ${m.day}`, said, { id: "monitor" });
+  return `<section class="card" id="monitor" aria-label="Monitor ${esc(m.day)}"><div class="sh"><h2>Monitor <span class="asof">${esc(m.day)}</span></h2></div>${said}</section>`;
 }
 
 /** Fetch the window with its baseline in one request, then fill the scorecard. */
@@ -261,8 +261,8 @@ export function renderNeeds(s) {
   const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
   if (!asks.length && !s.stuck.length) return "";
   const group = (id, t, n, html, wrap) => (n ? `<div class="grp" id="${id}"><h3>${esc(t)}<span class="count">${n}</span></h3>${wrap(html)}</div>` : "");
-  return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Awaiting you</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
-    group("awaiting", "Awaiting you", asks.length, asks.join(""), list) + group("jobs-stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
+  return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Asks</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
+    group("awaiting", "Asks", asks.length, asks.join(""), list) + group("jobs-stuck", "Stuck or failed", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
 }
 
 /** How long past due a next tick may be before the tick counts as dead: covers an old state and a late timer. */

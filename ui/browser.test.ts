@@ -275,7 +275,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
         host.id = "obar-probe";
         document.querySelector("#view").prepend(host);
         host.innerHTML = v.bar({ classes }, "");
-        const segs = [...host.querySelectorAll(".obar > *")];
+        const segs = [...host.querySelectorAll(".osegs > *")];
         return {
           clip: segs.flatMap((s) => [...s.querySelectorAll("b, span")].map((e) => e.scrollWidth > e.clientWidth)),
           widths: segs.map((s) => s.getBoundingClientRect().width),

@@ -36,7 +36,8 @@ test("each table shows at most 10 rows", () => {
 
 test("the Monitor panel shows the findings with numbers and **text** in bold, other HTML escaped, and no table", () => {
   const html = render(monitor);
-  expect(html).toContain("Monitor, 2026-10-20");
+  expect(html).toContain('<h2>Monitor <span class="asof">2026-10-20</span></h2>');
+  expect(html).not.toContain("Monitor,");
   expect(html).toContain("<li>Build runs &lt;b&gt;rose&lt;/b&gt; to <b>38%</b> from <b>20%</b>, <b>no usable result</b> is <b>3</b>.</li>");
   expect(html).toContain("<li>Plans rose.</li>");
   expect(html).not.toContain("<summary>Table</summary>");
