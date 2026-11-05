@@ -71,7 +71,7 @@ afterAll(() => {
 
 // The body of GET /api/gates from a stub of the Status page's state. The route itself adds only the state build, which
 // this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
-const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", why: "w", kind }) as any;
+const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", kind }) as any;
 const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runCap: 3, runStarts: 0, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("ready")] };
 const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
 

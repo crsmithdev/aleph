@@ -101,10 +101,10 @@ export interface State {
   /** Everything that waits for Chris: one entry per awaiting run, issue, goal and proposal, with its kind (input or approval) and reason. */
   asks: AskItem[];
   /** Queued and blocked goals (and old items): the Queued lane. */
-  queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; why: string; kind: IssueDecision["kind"];
+  queued: { repo: string; id: number | string; title: string; priority: string; stage: string; at?: string; since?: string; part?: Part; kind: IssueDecision["kind"];
     /** The hold event the dispatch stores in the record: the action word and the content the card shows. */
     ev?: Hold;
-    waits?: { id: string; href: string; state: string | null }[]; /** The id of the issue whose job holds a busy file this one needs. */ on?: string }[];
+    waits?: { id: string; href: string; state: string | null }[] }[];
   /** Issues in Running: each with its goals nested and "n of m issues". */
   runningIssues: RunningIssue[];
   /** Land runs in progress. */
@@ -482,8 +482,8 @@ export function state(now = new Date()): State {
       const red = redOf(repo);
       // The stage already says when an issue is to plan.
       const w = issueDecision({ ...issueFacts(repo, item, jobs, now.getTime()), done: isDone, red, ...gated });
-      return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), why: w.text, kind: w.kind,
-        ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}), ...(w.kind === "busy-file" && w.on ? { on: w.on } : {}),
+      return { item, repo: repo.key, id: idOf(item), title: item.title, priority: priorityOf(item), stage, at, since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}), kind: w.kind,
+        ...(w.ev ? { ev: w.ev } : {}), ...(w.kind === "not-ready" && w.ids ? { waits: w.ids.map(blocker) } : {}),
       };
     }).sort((a, b) => Number(deadWait(b)) - Number(deadWait(a)))).map(({ item: _, ...q }) => q),
   };

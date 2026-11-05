@@ -250,7 +250,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
     const part = { n: 1, m: 3, parent: "r-9", href: "#/issues/r/9" };
     const now = "2026-11-02T12:00:00Z", at = "2026-11-02T11:56:00Z";
     const job = (name, priority, title, p, started) => ({ name, repo: "r", item: { priority, title }, part: p, started, run: { kind: "build", started } });
-    const queued = (id, priority, title, p, why) => ({ repo: "r", id, priority, title, part: p, why, at, since: at });
+    const queued = (id, priority, title, p) => ({ repo: "r", id, priority, title, part: p, at, since: at });
     const s = { now, factory: {}, done: [],
       runningIssues: [{ id: "r-20", href: "#/issues/r/20", stage: "working", priority: "high", title: "Short", at, since: at, of: { n: 3, m: 3 } }],
       running: [
@@ -260,10 +260,10 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
         job("j-4", "high", "Short", part, "2026-11-02T10:00:00Z"),
       ],
       queued: [
-        queued("1", "high", long, part, "waits for r-9"),
-        queued("2", "low", "Short", null, ""),
-        queued("3", "medium", "Short", part, ""),
-        queued("4", "low", long, null, "waits for r-9, which is a long wait"),
+        queued("1", "high", long, part),
+        queued("2", "low", "Short", null),
+        queued("3", "medium", "Short", part),
+        queued("4", "low", long, null),
       ] };
     document.querySelector("#view .lanes").outerHTML = renderLanes(s);
   })()`;
@@ -278,7 +278,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
         const long = ${JSON.stringify(long)}, at = "2026-11-02T11:56:00Z";
         const run = (kind) => ({ name: "j-" + kind, repo: "r", item: { priority: "low", title: long }, started: at, run: { kind, started: at } });
         const s = { now: "2026-11-02T12:00:00Z", factory: {}, runningIssues: [], running: [run("land"), run("build")],
-          queued: [{ repo: "r", id: "1", priority: "low", title: long, stage: "held", kind: "busy-file", why: "waits", on: "r-7", ev: { action: "busy", on: ["r-7"], file: "a.ts" }, at, since: at }],
+          queued: [{ repo: "r", id: "1", priority: "low", title: long, stage: "held", kind: "busy-file", ev: { action: "busy", on: ["r-7"], file: "a.ts" }, at, since: at }],
           done: [{ id: "r-3", title: long, href: "#/x", priority: "low", finished: at, since: at, jobs: [] }] };
         document.querySelector("#view .lanes").outerHTML = renderLanes(s);
       })()`);

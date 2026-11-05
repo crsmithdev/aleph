@@ -198,7 +198,7 @@ describe("an intake run", () => {
     run(ids[0], { kind: "intake", job: "intake-fac-2", name: "intake-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("intake-fac-2");
-    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), why: "Starts at the next dispatch", kind: "ready" }]);
+    expect(s.queued.filter((q) => q.id === 2)).toEqual([{ repo: "fac", id: 2, title: "waiting goal", priority: "medium", stage: "queued", at: expect.any(String), since: expect.any(String), kind: "ready" }]);
     for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
   });
 });

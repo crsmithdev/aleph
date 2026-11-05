@@ -9,7 +9,7 @@ afterEach(() => setCodes({}));
 
 test("a Queued card names a dead blocker and offers to remove only that wait", () => {
   setCodes({ aleph: "a" });
-  const q = view.renderLanes({ ...state, queued: [{ repo: "aleph", id: 964, title: "t", why: "x", kind: "waits_on", waits: [
+  const q = view.renderLanes({ ...state, queued: [{ repo: "aleph", id: 964, title: "t", kind: "waits_on", waits: [
     { id: "aleph-963", href: "#/issues/aleph/963", title: "Old <work>", state: "dropped", dead: "dropped" },
     { id: "aleph-970", href: "#/issues/aleph/970", title: "Live", state: "working", dead: null },
   ] }] });
@@ -104,7 +104,7 @@ test("the lanes: Running shows live agent runs of the cap and lists every open r
 });
 
 test("lane cards show no why text and a worker tag reads its tier and model", () => {
-  const run = (o: object) => view.renderLanes({ ...state, queued: [{ repo: "aleph", id: 1, title: "t", why: "Starts at the next dispatch", kind: "ready" }],
+  const run = (o: object) => view.renderLanes({ ...state, queued: [{ repo: "aleph", id: 1, title: "t", kind: "ready" }],
     running: [job({ name: "a", run: { kind: "build", started: "2026-10-27T15:00:00Z" }, ...o })] });
   const h = run({});
   expect(h).not.toContain('class="why"');
@@ -180,10 +180,10 @@ test("the Status view is at / in the Factory group", () => {
 
 test("a held Queued card ends its meta row with its hold event: the action word and the content, with no wait text and no status chip", () => {
   setCodes({ r: "r" });
-  const w = { repo: "r", title: "t", stage: "held", why: "Waits on r-9", at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z" };
+  const w = { repo: "r", title: "t", stage: "held", at: "2026-11-02T11:00:00Z", since: "2026-11-02T11:00:00Z" };
   const html = view.renderLanes({ ...state, queued: [
     { ...w, id: 1, kind: "not-ready", ev: { action: "after", on: ["r-9"] }, waits: [{ id: "r-9", href: "#/issues/r/9", state: "working", dead: null }] },
-    { ...w, id: 2, kind: "busy-file", why: "waits for r-7: both change the busy file a.ts", on: "r-7", ev: { action: "busy", on: ["r-7"], file: "a.ts" } },
+    { ...w, id: 2, kind: "busy-file", ev: { action: "busy", on: ["r-7"], file: "a.ts" } },
   ] });
   expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">after r9<\/span><\/div>/);
   expect(html).toMatch(/class="num dur">[^<]*<\/span><span class="blocked">busy r7 → a\.ts<\/span><\/div>/);
