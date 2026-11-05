@@ -33,8 +33,8 @@ test("role shares sum to 100% over the timed roles, and the reviewer row says no
 
 test("the tiles come from the state and the agents", () => {
   const h = renderFactoryAgents(S, D);
-  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Weekly usage", "Runs today", "Worker slots", "Agents live"]);
-  for (const t of ["$71.94 recorded cost", "1 <em>of 5</em>", "mean, all roles, peak 4", "1 of 2 steps had no agent live"]) expect(h).toContain(t);
+  expect([...h.matchAll(/<span class="k">([^<]+)</g)].map((m) => m[1])).toEqual(["Usage", "Runs today", "Worker slots", "Agents live"]);
+  for (const t of ["<em> / $71.94</em>", "<b>1<em> / 5</em></b>", "<em> / 4</em>", "<span>mean</span><span class=\"m\"> / peak</span>"]) expect(h).toContain(t);
 });
 
 test("no usage data says usage unknown; while the speed data loads the page says so", () => {

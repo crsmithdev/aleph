@@ -30,8 +30,8 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui` and `--sum
 ## Principles
 
 1. **One token set, two themes.** Colours are CSS custom properties on `:root` (`ui/app.css:3`), re-set for dark in two identical blocks, the `prefers-color-scheme` one at `ui/app.css:87` and the `data-theme="dark"` one at `ui/app.css:119`. Light is a lavender match for Palenight; dark is Palenight (Mild Contrast).
-2. **Shared helpers build the parts.** Views call `ui/lib.js` for a page head, card, table, badge, chip, filter bar, pager, tile and bar list, and the CSS for them is in `ui/app.css`.
-3. **Meaning is a tone.** A state is `run`, `done`, `need`, `stuck` or `quiet`, mapped by `tone()` in `ui/lib.js:282`, and the same tone colours a badge, a chart series and a tile.
+2. **Shared helpers build the parts.** Views call `ui/lib.js` for a page head, card, table, badge, chip, filter bar, pager, metric card and bar list, and the CSS for them is in `ui/app.css`.
+3. **Meaning is a tone.** A state is `run`, `done`, `need`, `stuck` or `quiet`, mapped by `tone()` in `ui/lib.js:282`, and the same tone colours a badge, a chart series and a metric card.
 4. **Numbers are tabular.** `font-variant-numeric: tabular-nums` has 12 literal uses, and number columns are right-aligned.
 5. **Plain text states.** An empty state is one sentence and one hint, a missing value is `–`, and sentences end with a full stop.
 
@@ -55,7 +55,7 @@ All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), 
 | `--add`, `--del` | #437018, #C0304C | #A9C77D, #F07178 | diff lines |
 | `--focus` | #7E57C2 | #C792EA | focus ring |
 | `--good`, `--hot` | #437018, #C2521F | #C3E88D, #F78C6C | a trend that improves; the largest cause |
-| `--raised` | #ECEAF6 | #32374D | a selected tile |
+| `--raised` | #ECEAF6 | #32374D | a selected metric card |
 | `--approve`, `--decide`, `--unstick` | see `ui/app.css:30-32` | see `ui/app.css:112-114` | the three Ask cards, each with `-bg` and `-ring` |
 | `--seg-landed`, `-fixed`, `-nothing`, `-restarted`, `-dropped` | `ui/app.css:35` | same in both themes (not re-set in dark) | Efficiency outcome bar, under white text |
 | `--series-1` to `--series-5` | #2A78D6, #EB6834, #1BAF7A, #EDA100, #E87BA4 | #3987E5, #D95926, #199E70, #C98500, #D55181 | agent roles in charts |
@@ -71,13 +71,13 @@ Type, size and effect tokens (`ui/app.css:47-55`):
 | `--fs-sm` | 13px | table cells, secondary text |
 | `--fs-md` | 14px | body |
 | `--fs-lg` | 15px | section headings |
-| `--fs-2xl` | 20px | brand mark, detail figure, tile figure in `--mono` |
+| `--fs-2xl` | 20px | brand mark, detail figure, the second value on a metric card |
 | `--fs-xl` | 26px | page title, in `--display` |
-| `--fs-metric` | 32px | the figure on a tile |
+| `--fs-metric` | 32px | the value on a metric card |
 | `--fw-text` | 400 | text |
 | `--fw-mid` | 500 | ids and numbers |
 | `--fw-strong` | 600 | headings and table headers |
-| `--r-card` | 10px | cards, tiles |
+| `--r-card` | 10px | cards, metric cards |
 | `--r-ctl` | 6px | controls |
 | `--r-tag` | 4px | badges, code blocks |
 | `--r-hair` | 2px | bars, marks, thin rules |
@@ -92,7 +92,7 @@ Type, size and effect tokens (`ui/app.css:47-55`):
 | `--z-rowlink` | 1 | `tr.rowlink` links above the row link |
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
 | `--z-overlay` | 50 | font picker |
-| `--gap-in` | 16px | between tiles and side-by-side cards |
+| `--gap-in` | 16px | between metric cards and side-by-side cards |
 | `--gap` | 24px | between page blocks |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles |
 
@@ -197,17 +197,38 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 - **Gap lines:** `gapLinesOption()` (`ui/lib.js`) for two counts over time: two lines, with the area between them shaded by a `custom` series. Use: filed and closed per day in `ui/views/issues.js`.
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: a p50 and p90 line per bucket, a log-time strip with one dot per issue linking to the issue, and the 10 slowest issues as stacked bars of intake, queue, build and land. Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:23`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
-- **Metric tiles:** `tile()` (`ui/lib.js:433`): a small caps key, the figure in `--metric` at 32px, and a small line. A tile with `key` selects the detail below it. `tiles()` lays them out as an auto-fit grid that stretches to fill the row. The Status scorecard, the Efficiency scorecard and the Automation metrics all use this tile.
 - **Bar lists:** `barRow()` and `barList()` (`ui/lib.js:480`): label, bar, value on one grid.
 - **Badges and chips:** `badge()` and `priorityBadge()` (`ui/lib.js:341`, `ui/lib.js:345`) are squared with `--r-tag`; `chips()` (`ui/lib.js:351`) are pills.
 - **Efficiency bar:** `.obar`, in the five `--seg-*` colours under white text.
 - **Loading and empty:** a chart's loading line is `<p role="status">Loading…</p>` (`ui/views/factory-agents.js:54`). Units and legends are not set in one place; each option names its series.
 
+## Metric cards
+
+A metric card is the standard data card. The Status scorecard set the design; every page with metric cards uses it. `statCard()` (`ui/lib.js`) draws one card, `tiles()` lays the cards out as an auto-fit grid of 150px minimum that stretches to fill the row, and the CSS is `.tile` in `ui/app.css`. Do not write card markup by hand.
+
+A card has 3 rows and nothing else:
+
+| Row | Content | Style |
+|---|---|---|
+| 1 | The key, left; the trend, right | Key: `--fs-xs`, `--fw-strong`, `--muted`, uppercase, `.08em` letter spacing. Trend: `--fs-sm`, `--fw-strong` |
+| 2 | The value; then the second value as ` / v2` | Value: 700 `--fs-metric` (32px) in `--metric`, tabular numbers, `--ink`. Second value: 400 `--fs-2xl` (20px), `--muted`, not italic |
+| 3 | A qualifier that names the two values (`p50 / p90`), or a note | `--fs-xs`, one line, cut with an ellipsis; the note's full text is its tooltip. Qualifier: the first name `--ink`, ` / second` `--muted`. Note: `--muted` |
+
+- **Values:** text, made with the format helpers (`pct()`, `dur()`, `money()`, `count()`). An unknown value is `–`. The second value and the qualifier go together: a card with `v2` has `q` naming both values, unless the key already names them.
+- **Trend:** `cardTrend()` (`ui/lib.js`) only. `▲` or `▼` and the change from `pct()`, or `▬ 0%` for no change. `kind: "points"` compares shares in percentage points; `"relative"` compares times and counts by relative change. The tone is `good` (`--good`) or `warn` (`--need`) from `lowerIsGood`. A count that is neither good nor bad (`lowerIsGood: null`) stays `--muted`. The tooltip gives the previous value and the baseline, or a `tip` that says what the trend compares. No trend when there is no baseline.
+- **Bar:** an optional bar (`extra`) between rows 2 and 3, as on the Usage card (`.usebar`, 10px).
+- **Link or selector:** with `href` the card is a link to the page that explains the number; with `key` it is a button that selects the detail below the cards (`data-tile`, `aria-pressed`, `onTile()`). Hover sets a `--run` border; a selected card is `--raised` with a `--run` border. The key has no arrow.
+- **Box:** `--surface`, a 1px `--rule` border, `--r-card`, `--sp-12` by 14px padding, a `--sp-4` gap between rows; `--gap-in` between cards.
+- **Window:** the page head states the window (`pageHead(..., { count })`), so a card does not repeat it.
+- **More than 3 rows:** what does not fit goes in the card or chart below the cards, not in the card.
+
+Uses: Status, Efficiency, Jobs, Agents, Automation, Issues, Memory, Sessions.
+
 ## Interaction
 
 - **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:162`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:496`, `ui/app.css:671`, `ui/app.css:996`).
-- **Hover:** a link or button darkens its border to `--ink-2` (`.act`, `.cmd`, cards) or its text to `--ink` (crumbs, `a.idl`, sort buttons); a table row and a nav item take `--sunk`; a tile takes a `--run` border.
-- **Pressed:** a selector (tile, segmented button, bar row) sets `aria-pressed="true"`, drawn with `--raised`, `--rule-2` or `--sunk`.
+- **Hover:** a link or button darkens its border to `--ink-2` (`.act`, `.cmd`, cards) or its text to `--ink` (crumbs, `a.idl`, sort buttons); a table row and a nav item take `--sunk`; a metric card takes a `--run` border.
+- **Pressed:** a selector (metric card, segmented button, bar row) sets `aria-pressed="true"`, drawn with `--raised`, `--rule-2` or `--sunk`.
 - **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:322`).
 - **Active:** `.cmd:active` moves 1px down.
 - **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`); the open state of each is kept across a redraw by `recordState()` and `restoreState()` (`ui/lib.js:229`, `ui/lib.js:242`).
@@ -223,7 +244,7 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 
 ## Voice and copy
 
-- **Headers:** sentence case for page and section titles (`Efficiency`, `Uses per day`); table headers in sentence case (`First prompt`); tile keys are uppercased by CSS (`text-transform: uppercase`, 2 uses).
+- **Headers:** sentence case for page and section titles (`Efficiency`, `Uses per day`); table headers in sentence case (`First prompt`); metric card keys are uppercased by CSS (`text-transform: uppercase`, 2 uses).
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:282`); a priority is `critical`, `high`, `medium` or `low`.
 - **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:61`): "Nothing waits for you." (`ui/views/gates.js:94`), "No job matches." with "Widen the window or clear a filter." (`ui/views/jobs.js:87`).
@@ -237,7 +258,7 @@ Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:
 - **Shell:** a sidebar (`#nav`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:19`); the sidebar collapses to 48px on desktop (`ui/app.css:574`) and its state is kept in `localStorage`.
 - **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:189`, `ui/app.css:532`).
 - **Skeleton:** `pageHead()` (`ui/lib.js:289`) with the serif title and a muted count, then `card()` sections with a `sectionHead()`; Status has its own `.shead`. A detail page starts with `crumb()` (`ui/lib.js:331`).
-- **Grid:** `.tiles` is an auto-fit grid of 150px minimum; `.lanes` is 3 columns, 2 at 1100px and below, 1 at 720px and below.
+- **Grid:** `.tiles` holds the metric cards (see Metric cards); `.lanes` is 3 columns, 2 at 1100px and below, 1 at 720px and below.
 - **Phone:** at 720px and below, 11 rules change the layout; tables scroll inside `.tscroll`. What each table does at a phone width was not seen in a browser.
 
 ## Accessibility
@@ -259,7 +280,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring is visible on all controls. Motion stops under `prefers-reduced-motion`. Sort headers set `aria-sort` (`ui/lib.js:496`) and selector tiles set `aria-pressed` (`ui/lib.js:433`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring is visible on all controls. Motion stops under `prefers-reduced-motion`. Sort headers set `aria-sort` (`ui/lib.js:496`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
 
 ## Components
 
@@ -274,7 +295,7 @@ Reference view = the view that follows the rules best.
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
 | Chart | `chart()`, `barsOption()`, `lineOption()` | `ui/views/factory-agents.js` |
-| Metric tile (the standard data card) | `tile()`, `tiles()` | `ui/views/factory-agents.js:19` |
+| Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
 | Pager | `pager()` | `ui/views/issues.js:241` |
 | Empty state | `empty()` | `ui/views/jobs.js:87` |

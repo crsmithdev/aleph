@@ -289,7 +289,7 @@ describe("views", () => {
     const fo = v.flowOption(f);
     expect(fo.series.filter((x: any) => x.type === "line").map((x: any) => x.name)).toEqual(["Filed", "Closed"]);
     expect(fo.series.some((x: any) => x.name === "Gap")).toBe(true);
-    expect(v.renderTiles(v.stats(rows, now))).toContain("1 done, 0 dropped");
+    expect(v.renderTiles(v.stats(rows, now))).toContain('<b>1<em> / 0</em></b><span class="q"><span>closed</span><span class="m"> / dropped</span></span>');
   });
 
   test("the window sets the Filed and Closed tiles; the Open tile is a Status card; the head holds the window; the form comes first", async () => {
@@ -312,7 +312,7 @@ describe("views", () => {
     expect(html).toContain("Filed, last day");
     expect(html).not.toContain("7 days");
     const open = html.match(/<button[^>]*class="tile sc"[\s\S]*?<\/button>/)![0];
-    expect(open.match(/<(span|b)\b[^>]*class="(r1|q m)"|<b>/g)).toHaveLength(3);
+    expect(open.match(/<(span|b)\b[^>]*class="(r1|q|q m)"|<b>/g)).toHaveLength(3);
     const page = v.view.render(await getJson("/api/contents"), {}, new URLSearchParams("window=day"));
     const head = page.match(/<header class="ph">[\s\S]*?<\/header>/)![0];
     expect(head).toContain('data-name="window"');

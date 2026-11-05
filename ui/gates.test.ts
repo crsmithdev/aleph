@@ -134,14 +134,14 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   const order = ["Waiting for you", "Rules", "Controls", "Held paths", "Log"].map((t) => h.indexOf(`<h2>${t}</h2>`));
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
-  const tiles = [...h.matchAll(/<div class="tile"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
+  const tiles = [...h.matchAll(/<div class="tile sc"><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
   expect(tiles).toEqual(["Automation rate", "Gate catches", "Repeat answers", "Held time"]);
   expect(h).toContain('<section class="tiles" aria-label="Metrics">');
   expect(h).not.toContain("gtile");
   expect(h).not.toContain("gt-head");
-  expect(h).toContain("<b>75%</b>");
-  expect(h).toContain("<b>6 / 2</b>");
-  expect(h).toContain("<b>2 goals, 3 h</b>");
+  expect(h).toContain("<b>75%<em> / 4</em></b>");
+  expect(h).toContain("<b>6<em> / 2</em></b>");
+  expect(h).toContain("<b>3h<em> / 2</em></b>");
   expect(h).not.toContain("Gates now");
   expect(h).not.toContain('data-cap="day"');
   expect(h).not.toContain('data-cap="awaiting"');
@@ -421,7 +421,7 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   const h = gates.renderRepeats(d);
   expect(h).toContain("<h2>Repeat answers");
   expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
-  expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><b>1<\/b>/);
+  expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><\/span><b>1<\/b>/);
   const none = gates.renderRepeats(data());
   expect(none).toContain("No answer repeats.");
   expect(none).not.toContain("<button");

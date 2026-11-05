@@ -1,5 +1,5 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chart, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, keepWindow, searchBox, setQuery, small, tile, tiles, windowOf, wireScope } from "../lib.js";
+import { card, chart, dataTable, dur, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, readTokens, keepWindow, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, durShort, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
 
@@ -12,9 +12,11 @@ export const STAGES = [
 ];
 const PARTS = [["intake", "Intake"], ["queue", "Queue"], ["implement", "Build"], ["land", "Land"]];
 
+/** A stage card: p50 / p90 over the window, with the last 24h p50 against the window's as the trend. */
 const stageTile = ([key, name], d, day, on) => {
   const c = d.phases[key], dc = day?.phases?.[key], none = !c.count;
-  return tile({ k: name, v: none ? "–" : durShort(c.p50), body: small(`p90 ${none ? "–" : dur(c.p90)}`) + (trendOn(d) ? small(dc?.count ? `${dur(dc.p50)} in the last 24h` : "none in the last 24h") : ""), key, on });
+  const tr = trendOn(d) && dc?.count && !none ? cardTrend(dc.p50, c.p50, null, { kind: "relative", lowerIsGood: true, tip: `${dur(dc.p50)} in the last 24h, against ${dur(c.p50)} over the window` }) : "";
+  return statCard({ k: name, v: none ? "–" : durShort(c.p50), v2: none ? "–" : durShort(c.p90), q: ["p50", "p90"], trend: tr, key, on });
 };
 
 const axis = { axisLabel: { formatter: (v) => durShort(v) } };

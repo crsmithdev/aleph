@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, loadingLine, mean, money, onTile, pageHead, pct, setQuery, small, tile, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
-import { hours, lastPeriod, loadSpeed, usable, usageTile, xLabel } from "./speed.js";
+import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, loadingLine, mean, money, onTile, pageHead, pct, setQuery, statCard, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { hours, lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
 export const totals = (a) => a.points.map((p) => a.roles.reduce((n, r) => n + (p[r.key] ?? 0), 0));
@@ -12,11 +12,11 @@ export function roleRows(a) {
 }
 
 function scorecard(s, a, key, w) {
-  const f = s.factory, live = a && totals(a), on = (k) => ({ key: k, on: key === k });
-  return usageTile(s, on("usage"), small("live, not the window")) +
-    tile({ k: "Runs today", v: String(f.runsToday), body: small(`${money(f.costToday)} recorded cost`) + small("live, not the window"), ...on("runs") }) +
-    tile({ k: "Worker slots", vHtml: `${f.liveRuns ?? 0} <em>of ${f.liveCap}</em>`, body: small("live, in use now"), ...on("slots") }) +
-    tile({ k: "Agents live", v: a ? mean(a.mean) : "–", body: a ? small(`mean, all roles, peak ${a.peak}, ${lastPeriod(w)}`) + small(`${live.filter((v) => v === 0).length} of ${live.length} steps had no agent live`) : loadingLine("the agents"), ...on("live") });
+  const f = s.factory, on = (k) => ({ key: k, on: key === k }), p = pace(s);
+  return usageCard(s, on("usage"), usageAge(s) || (p ? `${p.word} pace, live` : "live, not the window")) +
+    statCard({ k: "Runs today", v: String(f.runsToday), v2: money(f.costToday), q: ["runs", "recorded cost"], ...on("runs") }) +
+    statCard({ k: "Worker slots", v: String(f.liveRuns ?? 0), v2: String(f.liveCap), q: ["in use", "cap"], ...on("slots") }) +
+    statCard({ k: "Agents live", v: a ? mean(a.mean) : "–", ...(a ? { v2: String(a.peak), q: ["mean", "peak"] } : { note: "loading the agents" }), ...on("live") });
 }
 
 function roles(a) {

@@ -311,7 +311,7 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
   test("the empty lane text is muted and smaller than the body, and the second tile figure uses --fs-2xl", async () => {
     await page.go("#/");
     const m = await page.ev<{ color: string; want: string; size: number; body: number; em: number; fs: number }>(`import("/views/now.js").then(async (n) => {
-      const { statCard } = await import("/views/speed.js");
+      const { statCard } = await import("/lib.js");
       const host = document.createElement("div");
       host.id = "lane-probe";
       document.querySelector("#view").prepend(host);

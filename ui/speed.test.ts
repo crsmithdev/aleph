@@ -368,7 +368,7 @@ test("serve() warms /api/speed: week, day and month are computed before the firs
 
 test("cardTrend writes a sub-point change with pct() and keeps the flat marker for 0", async () => {
   // @ts-ignore plain JS shared with the page
-  const { cardTrend } = await import("./views/speed.js");
+  const { cardTrend } = await import("./lib.js");
   const o = { kind: "points", lowerIsGood: true, format: String, basis: "b" };
   expect(cardTrend(0.503, 0.5, null, o)).toContain("▲ 0.3%");
   expect(cardTrend(0.5, 0.5, null, o)).toContain("▬ 0%");

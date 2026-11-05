@@ -1,7 +1,7 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
 // notes with an inspector. `renderNote` serves #/memory/<title> too, from
 // memory-note.js, because the page reads one `view` per file.
-import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, loadingLine, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when } from "../lib.js";
+import { barList, barRow, chip, chipRow, count, pct, priorityBadge, tag, card, crumb, dataTable, day, empty, error, esc, filterBar, loadingLine, localId, md, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -156,30 +156,26 @@ export function statusCounts(rows) {
   return c;
 }
 
-/** The newest date of `xs`, or "". */
-const newest = (xs) => xs.filter(Boolean).sort().at(-1) ?? "";
 
-/** The seven tiles. `use` is shown only where it is measured: the recall log covers the notes. */
+/** The seven cards: the count, and a second value with the qualifier that names both, or a note. */
 export function typeTiles(m, rows) {
   const t = { ...EMPTY_TYPES, ...(m.types ?? {}) };
   const known = rows.filter(isKnown);
   const kept = known.length ? (known.filter((n) => n.read).length / known.length) * 100 : 0;
   const stats = t.retrieval.stats;
-  const hooks = t.procedural.hooks.length;
   return [
-    { id: "working", name: "Working", n: t.working.total, unit: "handoffs", status: t.working.current ? "One current" : "None current", tone: "", write: t.working.last },
-    { id: "semantic", name: "Semantic", n: m.exists ? known.length : 0, unit: "notes", status: `${pct(kept)} returned, ${pct(100 - kept)} never`, tone: kept < 50 ? "warn" : "good", write: t.semantic.last, use: newest(known.map((n) => n.read)) },
-    { id: "episodic", name: "Episodic", n: t.episodic.episodes.length, unit: `episodes, ${t.episodic.daily.total} daily pages`, status: `Kept ${t.episodic.keepDays} days`, tone: "", write: t.episodic.last },
-    { id: "procedural", name: "Procedural", n: t.procedural.skills.length, unit: `skills, ${hooks} hooks`, status: t.procedural.claudeMd ? `${t.procedural.claudeMd.lines} lines of rules` : "No rules file", tone: "", write: t.procedural.last },
-    { id: "retrieval", name: "Retrieval", n: stats ? stats.recalls : "–", unit: "recalls, 7 days", status: stats ? `${pct(stats.empty_share * 100)} empty` : "No data", tone: stats && stats.empty_share > 0.2 ? "warn" : "", write: t.retrieval.last },
-    { id: "prospective", name: "Prospective", n: t.prospective.issues.length, unit: "waiting", status: t.prospective.issues.length ? "Waiting" : "Empty", tone: "" },
-    { id: "parametric", name: "Parametric", n: "–", unit: "not stored", status: "By design", tone: "", write: "" },
+    { id: "working", name: "Working", n: t.working.total, note: t.working.current ? "handoffs, one current" : "handoffs, none current" },
+    { id: "semantic", name: "Semantic", n: m.exists ? known.length : 0, v2: pct(kept), q: ["notes", "returned"] },
+    { id: "episodic", name: "Episodic", n: t.episodic.episodes.length, v2: String(t.episodic.daily.total), q: ["episodes", "daily pages"] },
+    { id: "procedural", name: "Procedural", n: t.procedural.skills.length, v2: String(t.procedural.hooks.length), q: ["skills", "hooks"] },
+    { id: "retrieval", name: "Retrieval", n: stats ? stats.recalls : "–", ...(stats ? { v2: pct(stats.empty_share * 100), q: ["recalls, 7 days", "empty"] } : { note: "recalls, 7 days" }) },
+    { id: "prospective", name: "Prospective", n: t.prospective.issues.length, note: "waiting" },
+    { id: "parametric", name: "Parametric", n: "–", note: "not stored, by design" },
   ];
 }
 
-const dateOr = (s) => (s ? esc(shortDay(s) || s) : "–");
-const renderTiles = (m, rows, type) => tiles("Memory types", typeTiles(m, rows).map((t) => tile({ k: t.name, v: typeof t.n === "number" ? count(t.n) : t.n, key: t.id, on: t.id === type,
-  body: `${small(t.unit)}<span class="st ${t.tone}">${esc(t.status)}</span><dl class="dates"><dt>Write</dt><dd>${dateOr(t.write)}</dd><dt>Use</dt><dd>${dateOr(t.use)}</dd></dl>` })).join(""));
+const renderTiles = (m, rows, type) => tiles("Memory types", typeTiles(m, rows).map((t) =>
+  statCard({ k: t.name, v: typeof t.n === "number" ? count(t.n) : t.n, v2: t.v2, q: t.q, note: t.note, key: t.id, on: t.id === type })).join(""));
 
 /** Each knowledge kind's notes by when recall last returned them. */
 function readChart(rows) {

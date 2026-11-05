@@ -1,9 +1,8 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
-import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, small, sortHead, storeWindow, tile, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
-import { statCard } from "./speed.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
@@ -277,18 +276,18 @@ export function stats(rows, now = new Date(), days = 7) {
   };
 }
 
-/** The change from the week before, with no good or bad colour on a count that can go either way. */
-const change = (now, before, w) => (now === before ? small(`same as the ${w} before`) : `<small>${now > before ? "▲" : "▼"} ${Math.abs(now - before)} from the ${w} before</small>`);
+/** The change from the period before, muted: a count that can go either way has no good or bad colour. */
+const change = (now, before, w) => cardTrend(now, before, before, { kind: "relative", lowerIsGood: null, tip: `${before} the ${w} before` });
 
 export function renderTiles(s, key = "open", win = "week") {
   const w = win in WINDOW_DAYS ? win : "week";
   const on = (k) => ({ key: k, on: key === k });
   return tiles("Issue numbers",
-    statCard({ k: "Open", v: String(s.open), note: `of ${s.total} in the store`, ...on("open") }) +
-    tile({ k: `Filed, last ${w}`, v: String(s.filed), body: change(s.filed, s.filedBefore, w), ...on("filed") }) +
-    tile({ k: `Closed, last ${w}`, v: String(s.closed), body: small(`${s.done} done, ${s.dropped} dropped`) + change(s.closed, s.closedBefore, w), ...on("closed") }) +
-    tile({ k: "Median open age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)}d`, body: s.oldest === null ? "" : small(`oldest ${Math.round(s.oldest)}d`), ...on("age") }) +
-    tile({ k: "Runs", v: String(s.runs), body: small(`${money(s.cost)} recorded`), ...on("runs") }));
+    statCard({ k: "Open", v: String(s.open), v2: String(s.total), q: ["open", "in the store"], ...on("open") }) +
+    statCard({ k: `Filed, last ${w}`, v: String(s.filed), trend: change(s.filed, s.filedBefore, w), note: `${s.filedBefore} the ${w} before`, ...on("filed") }) +
+    statCard({ k: `Closed, last ${w}`, v: String(s.closed), v2: String(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w), ...on("closed") }) +
+    statCard({ k: "Median open age", v: s.medianAge === null ? "–" : `${Math.round(s.medianAge)}d`, ...(s.oldest === null ? {} : { v2: `${Math.round(s.oldest)}d`, q: ["median", "oldest"] }), ...on("age") }) +
+    statCard({ k: "Runs", v: String(s.runs), v2: money(s.cost), q: ["runs", "recorded cost"], ...on("runs") }));
 }
 
 /** The last `days` days: their labels and how many rows were filed and closed on each. */

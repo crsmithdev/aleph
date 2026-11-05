@@ -55,7 +55,7 @@
   --fs-sm: 13px;          /* table cells, secondary text */
   --fs-md: 14px;          /* body */
   --fs-lg: 15px;          /* section headings */
-  --fs-2xl: 20px;         /* brand mark, detail figure, mono tile figure */
+  --fs-2xl: 20px;         /* brand mark, detail figure, the second value on a metric card */
   --fs-xl: 26px;          /* page title, in --display */
   --fs-metric: 32px;      /* the figure on a tile, in --metric */
   /* Radii and gaps. */
@@ -733,31 +733,19 @@ pre { font: var(--fs-xs)/1.55 var(--mono); white-space: pre-wrap; overflow-wrap:
 :where(.page) h3 { font: var(--fw-strong) var(--fs-md)/1.3 var(--sans); margin: var(--sp-12) 0 var(--sp-6); }
 :where(.page) h4 { font: var(--fw-strong) var(--fs-xs)/1.3 var(--sans); color: var(--muted); margin: var(--sp-8) 0 var(--sp-4); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--gap-in); }
-.tile { display: flex; flex-direction: column; gap: var(--sp-6); min-width: 0; padding: var(--gap-in); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); color: var(--ink-2); font: inherit; text-align: left; text-decoration: none; }
+.tile { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; padding: var(--sp-12) 14px; border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); color: var(--ink-2); font: inherit; text-align: left; text-decoration: none; }
 a.tile, button.tile { cursor: pointer; }
 a.tile:hover, button.tile:hover { border-color: var(--run); }
 button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(--run); }
+.tile .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-8); }
 .tile .k { color: var(--muted); font: var(--fw-strong) var(--fs-xs) var(--sans); letter-spacing: .08em; text-transform: uppercase; overflow-wrap: anywhere; }
-a.tile .k::after, button.tile .k::after { content: " \203A"; }
 .tile b { font: 700 var(--fs-metric)/1 var(--metric); font-variant-numeric: lining-nums tabular-nums; color: var(--ink); }
-.tile b em { font: var(--fw-text) var(--fs-lg)/1 var(--metric); color: var(--muted); }
-.tile small { font-size: var(--fs-sm); overflow-wrap: anywhere; }
-.tile .st, .tile .good, .tile .warn { font-size: var(--fs-sm); font-weight: var(--fw-strong); }
-.tile .st { color: var(--muted); }
-.tile .good { color: var(--good); }
-.tile .warn { color: var(--need); }
-.tile.sc { gap: var(--sp-4); padding: var(--sp-12) 14px; }
-.tile.sc .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-8); }
-.tile.sc .k::after { content: none; }
-.tile.sc b em { font-size: var(--fs-2xl); font-style: normal; font-weight: var(--fw-text); }
-.tile.sc .q { font-size: var(--fs-xs); color: var(--ink); }
-.tile.sc .q .m { color: var(--muted); }
-.tile.sc .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
-.tile.sc .tr.good { color: var(--good); }
-.tile.sc .tr.warn { color: var(--need); }
-.tile .dates { display: grid; grid-template-columns: auto 1fr; gap: var(--sp-2) var(--sp-8); margin: 0; font-size: var(--fs-xs); }
-.tile .dates dt { color: var(--muted); }
-.tile .dates dd { margin: 0; color: var(--ink); }
+.tile b em { font: var(--fw-text) var(--fs-2xl)/1 var(--metric); font-style: normal; color: var(--muted); }
+.tile .q { font-size: var(--fs-xs); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .q .m, .tile .q.m { color: var(--muted); }
+.tile .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
+.tile .tr.good { color: var(--good); }
+.tile .tr.warn { color: var(--need); }
 .card { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; padding: var(--gap-in); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); }
 .card .sh .aside { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .card p { margin: 0; color: var(--ink-2); }

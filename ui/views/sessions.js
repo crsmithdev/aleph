@@ -1,7 +1,7 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/agents. The session and skill detail routes stay in their own views.
-import { barList, count, barRow, card, chips, costHtml, dataTable, empty, error, esc, filterBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, small, sortHead, tile, tiles, when, wireScope } from "../lib.js";
+import { barList, count, barRow, card, chips, costHtml, dataTable, empty, error, esc, filterBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, statCard, tiles, when, wireScope } from "../lib.js";
 
 export const view = {
   path: "/sessions",
@@ -66,7 +66,7 @@ export function shownSessions(d, o) {
 }
 
 const rate = (r) => pct(r.rate * 100);
-const renderFails = (d, o) => tiles("Failing most", failing(d).map((r) => tile({ k: r.name, v: rate(r), body: small(`${r.kind}: ${count(r.errors)} of ${count(r.n)} ${r.kind === "tool" ? "calls" : "uses"}`), key: r.pick, on: o.pick === r.pick })).join(""));
+const renderFails = (d, o) => tiles("Failing most", failing(d).map((r) => statCard({ k: r.name, v: rate(r), note: `${r.kind}: ${count(r.errors)} of ${count(r.n)} ${r.kind === "tool" ? "calls" : "uses"}`, key: r.pick, on: o.pick === r.pick })).join(""));
 
 function ranked(kind, rows, o) {
   const top = Math.max(1, ...rows.map((r) => r.n));

@@ -442,16 +442,36 @@ export function keepWindow(w) {
 // ---------- the blocks of a page: tile, card, table, bar list ----------
 
 /**
- * A metric tile. With `key` it selects the detail below it: a button with `data-tile` and `aria-pressed`.
- * With `href` it goes to another page. With neither it has no detail, and it is a plain block. `v` is text, `vHtml` is HTML.
+ * The trend of a metric card: an arrow and a percent, green when good, amber when bad, muted when `lowerIsGood` is null.
+ * `kind` "points" compares shares (0 to 1) in percentage points; "relative" compares times and counts by relative change.
+ * The tooltip gives the previous value and the baseline, or `tip`. Empty with no value or no baseline.
  */
-export function tile({ k, v = "", vHtml, body = "", key, on = false, href, cls = "", html }) {
-  const inner = html ?? `<span class="k">${esc(k)}</span><b>${vHtml ?? esc(v)}</b>${body}`, c = cls ? `tile ${cls}` : "tile";
-  if (key) return `<button type="button" class="${c}" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
-  return href ? `<a class="${c}" href="${esc(href)}">${inner}</a>` : `<div class="${c}">${inner}</div>`;
+export function cardTrend(value, base, prev, { kind, lowerIsGood, format, basis, tip }) {
+  if (value === null || value === undefined || base === null || base === undefined) return "";
+  const change = kind === "points" ? (value - base) * 100 : base === 0 ? (value === 0 ? 0 : NaN) : ((value - base) / base) * 100;
+  if (Number.isNaN(change)) return "";
+  const down = change < 0;
+  const title = tip ?? `${prev === null || prev === undefined ? "No previous value" : `Previous ${format(prev)}`}; baseline ${format(base)}, ${basis}${kind === "points" ? " (change in percentage points)" : ""}`;
+  if (change === 0) return `<span class="tr" title="${esc(title)}">▬ 0%</span>`;
+  const tone = lowerIsGood === null ? "" : down === lowerIsGood ? " good" : " warn";
+  return `<span class="tr${tone}" title="${esc(title)}">${down ? "▼" : "▲"} ${pct(Math.abs(change))}</span>`;
+}
+
+/**
+ * A metric card, 3 rows: the key and the trend; the value and the second value; one line of qualifier or note.
+ * `v` and `v2` are text; `q` is `[first, second]`, naming the two values; `note` is text when there is no `q`;
+ * `trend` is HTML from `cardTrend`; `extra` is HTML (a bar) between the value and row 3.
+ * With `key` it selects the detail below it (a button with `data-tile` and `aria-pressed`); with `href` it goes to another page.
+ */
+export function statCard({ k, v, v2, q, note, trend = "", extra = "", href, key, on = false }) {
+  const second = v2 === undefined ? "" : `<em> / ${esc(v2)}</em>`;
+  const row3 = q ? `<span class="q"><span>${esc(q[0])}</span><span class="m"> / ${esc(q[1])}</span></span>`
+    : note ? `<span class="q m" title="${esc(note)}">${esc(note)}</span>` : "";
+  const inner = `<span class="r1"><span class="k">${esc(k)}</span>${trend}</span><b>${esc(v)}${second}</b>${extra}${row3}`;
+  if (key) return `<button type="button" class="tile sc" data-tile="${esc(key)}" aria-pressed="${on}">${inner}</button>`;
+  return href ? `<a class="tile sc" href="${esc(href)}">${inner}</a>` : `<div class="tile sc">${inner}</div>`;
 }
 export const tiles = (label, html) => `<section class="tiles" aria-label="${esc(label)}">${html}</section>`;
-export const small = (t) => `<small>${esc(t)}</small>`;
 /** Call `fn(key)` when a tile or another selector with `data-tile` under `el` is clicked. */
 export function onTile(el, fn) {
   el?.addEventListener("click", (e) => {

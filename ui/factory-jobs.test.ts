@@ -19,7 +19,7 @@ const D: any = {
 test("five stage tiles come from the data, with the last 24h", () => {
   const h = renderFactoryJobs(D, { phases: { ...D.phases, lead: P(1, 1484, 1484) } }, "lead");
   expect([...h.matchAll(/data-tile="(\w+)"/g)].map((m) => m[1])).toEqual(["lead", "intake", "queue", "implement", "land"]);
-  expect(h).toContain("<b>26m</b><small>p90 4h 36m</small><small>24m 44s in the last 24h</small>");
+  expect(h).toContain('<span class="tr good" title="24m 44s in the last 24h, against 26m 10s over the window">▼ 5%</span></span><b>26m<em> / 4h 36m</em></b>');
   expect(h).toContain('data-tile="lead" aria-pressed="true"');
 });
 
@@ -57,7 +57,7 @@ test("empty phases show dashes and no error", () => {
   const none = P(0, 0, 0, [0, 0, 0, 0, 0, 0, 0], 0);
   const d = { ...D, phases: { lead: none, intake: none, queue: none, implement: none, land: none }, buckets: [{ at: D.buckets[0].at, lead: null }], checks: [], models: [] };
   const h = renderFactoryJobs(d, null, "lead");
-  expect(h).toContain("<b>–</b><small>p90 –</small><small>none in the last 24h</small>");
+  expect(h).toContain("<b>–<em> / –</em></b>");
   expect(h).not.toMatch(/NaN|undefined|Infinity/);
 });
 

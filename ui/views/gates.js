@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Pause and Resume buttons
 // and the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, sectionHead, small, tile, tiles, when } from "../lib.js";
+import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, sectionHead, statCard, tiles, when } from "../lib.js";
 import { askRow } from "./now.js";
 
 export const view = {
@@ -46,7 +46,7 @@ const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: "stuck", Gate: "run" };
 
 export function renderGates(d, q = new URLSearchParams()) {
-  return `<div class="page gates">${pageHead("Automation")}` +
+  return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days` })}` +
     renderNow(d) + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
     `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
 }
@@ -64,13 +64,12 @@ function capForm(f, key, label, value) {
 
 /** The metric tiles: the automation rate, the gate catches and the held time, each over the log's window. */
 export function renderNow(d) {
-  const m = d.metrics, win = `last ${m.days} days`;
-  const t = (k, v, note) => tile({ k, v, body: small(note) });
+  const m = d.metrics;
   const tilesHtml = [
-    t("Automation rate", m.rate ? `${m.rate.percent}%` : "–", m.rate ? `${m.rate.auto} of ${m.rate.total} Asks decided without Chris, ${win}` : `no Ask decided, ${win}`),
-    t("Gate catches", `${m.catches.fired} / ${m.catches.fixed}`, `checks and reviews that sent a build back, against those a later build fixed, ${win}`),
-    t("Repeat answers", String(d.repeats.length), `kinds of Ask that Chris answered the same way 3 or more times, ${win}`),
-    t("Held time", `${m.held.goals} goals, ${m.held.hours} h`, `goals held, and hours in a hold, ${win}`),
+    statCard({ k: "Automation rate", v: m.rate ? `${m.rate.percent}%` : "–", ...(m.rate ? { v2: String(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "Asks"] } : { note: "no Ask decided" }) }),
+    statCard({ k: "Gate catches", v: String(m.catches.fired), v2: String(m.catches.fixed), q: ["sent back", "fixed later"] }),
+    statCard({ k: "Repeat answers", v: String(d.repeats.length), note: "Asks answered the same way 3+ times" }),
+    statCard({ k: "Held time", v: `${m.held.hours}h`, v2: String(m.held.goals), q: ["in a hold", "goals"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }
