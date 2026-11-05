@@ -588,6 +588,35 @@ export const rangeBarOption = (labels, p50, p90, suffix, t) => ({
     { type: "scatter", name: "p90", symbol: "rect", symbolSize: [3, 20], data: p90, itemStyle: { color: t.muted } },
   ],
 });
+/** The sort after a click on `key`: the same key flips; a new key starts largest first when `downFirst` has it, else smallest first. */
+export const nextSort = (cur, key, downFirst) => ({ key, dir: cur?.key === key ? -cur.dir : downFirst.has(key) ? -1 : 1 });
+/** The row limit in the query `q` (URLSearchParams or object), never less than `page`. */
+export function limitOf(q, page) {
+  const v = typeof q.get === "function" ? q.get("limit") : q.limit;
+  return Math.max(page, Number.parseInt(v, 10) || page);
+}
+/** A copy of `rows` in the order of `sort` ({key, dir}); `by[key](row)` is the value, `tie(a, b)` orders equal rows. */
+export const sortRows = (rows, by, sort, tie) => [...rows].sort((a, b) => {
+  const x = by[sort.key](a), y = by[sort.key](b);
+  const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, { numeric: true });
+  return c * sort.dir || (tie ? tie(a, b) : 0);
+});
+let searchTimer;
+/** Wire one table: a sort head (`data-sort`), the pager (`data-more`) and the search input (`[data-ui=opts.search]`) write the hash, then call `opts.redraw`. `opts` also has `sortOf(query)`, `downFirst` and `page`. */
+export function wireTable(root, opts) {
+  const go = (changes) => { setQuery(changes); opts.redraw(); };
+  root.onclick = (e) => {
+    const s = e.target.closest?.("button[data-sort]"), m = e.target.closest?.("button[data-more]");
+    if (s) { const n = nextSort(opts.sortOf(Object.fromEntries(hashQuery())), s.dataset.sort, opts.downFirst); go({ sort: n.key, dir: n.dir > 0 ? "asc" : "desc" }); }
+    else if (m) go({ limit: String(limitOf(hashQuery(), opts.page) + Number(m.dataset.more)) });
+  };
+  root.oninput = (e) => {
+    if (!e.target.matches?.(`[data-ui="${opts.search}"]`)) return;
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => go({ q: e.target.value, limit: "" }), 120);
+  };
+}
+
 /** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */
 export function pager(shown, total, step = 50, { cls = "", attr = "data-more", value = more => more } = {}) {
   const n = Math.min(shown, total), more = Math.min(step, total - n);

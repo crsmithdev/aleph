@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -189,6 +189,32 @@ test("bar value labels take the theme ink, not ECharts' #333, in the dark and th
     expect(values.length, name).toBe(2);
     for (const el of values) expect(el.match(/fill="([^"]*)"/)?.[1], name).toBe(t.ink);
   }
+});
+
+test("nextSort flips the current key and starts a new key by downFirst", () => {
+  const down = new Set(["cost"]);
+  expect(nextSort({ key: "a", dir: 1 }, "a", down)).toEqual({ key: "a", dir: -1 });
+  expect(nextSort({ key: "a", dir: -1 }, "a", down)).toEqual({ key: "a", dir: 1 });
+  expect(nextSort({ key: "a", dir: 1 }, "cost", down)).toEqual({ key: "cost", dir: -1 });
+  expect(nextSort({ key: "a", dir: -1 }, "b", down)).toEqual({ key: "b", dir: 1 });
+});
+
+test("limitOf is the page size unless the limit is a larger number", () => {
+  const q = (s: string) => new URLSearchParams(s);
+  expect(limitOf(q(""), 50)).toBe(50);
+  expect(limitOf(q("limit=x"), 50)).toBe(50);
+  expect(limitOf(q("limit=20"), 50)).toBe(50);
+  expect(limitOf(q("limit=120"), 50)).toBe(120);
+});
+
+test("sortRows sorts a copy, numbers by value, text in numeric mode, ties by tie", () => {
+  const rows = [{ n: "10", v: 5, id: 2 }, { n: "2", v: 9, id: 1 }, { n: "2", v: 5, id: 0 }];
+  const by = { n: (r: any) => r.n, v: (r: any) => r.v };
+  const snap = JSON.stringify(rows);
+  expect(sortRows(rows, by, { key: "n", dir: 1 }, (a: any, b: any) => a.id - b.id).map((r: any) => r.id)).toEqual([0, 1, 2]);
+  expect(sortRows(rows, by, { key: "v", dir: 1 }, (a: any, b: any) => a.id - b.id).map((r: any) => r.id)).toEqual([0, 2, 1]);
+  expect(sortRows(rows, by, { key: "v", dir: -1 }, (a: any, b: any) => a.id - b.id).map((r: any) => r.id)).toEqual([1, 0, 2]);
+  expect(JSON.stringify(rows)).toBe(snap);
 });
 
 test("the legend of the Tests and the Live chart ends above the grid at 390 and 1440px", async () => {
