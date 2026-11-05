@@ -803,11 +803,19 @@ describe("the Issue timeline names why a wait waited", () => {
   const run = (kind: string, started: string, ended: string) => ({ kind, name: "fac-1", on: "fac-1", condition: "passed", started, ended });
   const d = (holds?: object[]) => ({ repo: "fac", id: 1, ref: "1", status: "done", frontmatter: { created: "2026-11-01" }, notes: [], commits: [], jobs: [], goals: [], holds,
     timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs: [run("triage", "2026-11-01T10:00:30Z", "2026-11-01T10:02:00Z"), run("build", "2026-11-01T10:30:00Z", "2026-11-01T10:40:00Z")] } });
-  const html = (x: any) => v.issueSegments(x).flatMap((s: any) => s.rows).flatMap((r: any) => r.events).map((e: any) => e.html).join("\n");
-  test("a wait with hold records of the issue's job in its span says the reason and its minutes", () => {
-    const holds = [{ at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "held", text: "main checks are red" }, { at: "2026-11-01T10:06:00Z", name: "fac-2", kind: "held", text: "other job" }];
-    expect(html(d(holds))).toContain("Waited 28m 00s: 25m 00s because main checks are red.");
-    expect(html(d(holds))).not.toContain("other job");
+  const evs = (x: any) => v.issueSegments(x).flatMap((s: any) => s.rows).flatMap((r: any) => r.events);
+  const html = (x: any) => evs(x).map((e: any) => e.html).join("\n");
+  test("a wait with hold records of the issue's job in its span names the hold's action, its content and its minutes", () => {
+    setCodes({ aleph: "a" });
+    try {
+      const holds = [
+        { at: "2026-11-01T10:05:00Z", name: "fac-1", kind: "busy-file", text: "both jobs change the busy file", event: { action: "busy", on: ["aleph-1372"], file: "ui/views/issues.js" } },
+        { at: "2026-11-01T10:06:00Z", name: "fac-2", kind: "baseline", text: "other job" },
+      ];
+      expect(evs(d(holds)).map((e: any) => e.tag)).toContain("busy");
+      expect(html(d(holds))).toContain("a1372 → issues.js · 28m 00s");
+      expect(html(d(holds))).not.toContain("other job");
+    } finally { setCodes({}); }
   });
 });
 

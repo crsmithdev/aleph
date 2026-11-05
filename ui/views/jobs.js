@@ -122,7 +122,7 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 /** The event of one run: its condition as the tag, then its reason, the commit of a land, its job ID and its log buttons. */
 function jobEvent(job, x, nth, j) {
   const r = x.r, name = barLabel(r, nth);
-  const e = runEvent(x, name, r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name[0].toUpperCase() + name.slice(1))} as ${shortSha(j)}.` : null);
+  const e = runEvent(x, name, r.kind === "land" && r.condition === "landed" && j.commit ? `${esc(name)} as ${shortSha(j)}.` : null);
   return { ...e, html: e.html + (r.job ? ` <span class="quiet">${esc(r.job)}</span>` : "") + logButtons(job, r) };
 }
 

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
-import { axisTimes, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
+import { axisTimes, barsOf, compactScale, gaps, fromTo, laneRow, noteEvent, renderTimeline, runEvent, spans, waitEvent } from "./timeline.js";
 // @ts-ignore
-import { dur } from "./lib.js";
+import { dur, setCodes } from "./lib.js";
 // @ts-ignore
 import { issueSegments, renderIssue } from "./views/issues.js";
 
@@ -95,6 +95,14 @@ describe("the event tags", () => {
     expect(tagTone(waitEvent({ ...w, chris: true }))).toEqual(["waiting", "need"]);
   });
 
+  test("a run's event shows its bar label, then the reason as the note with no colon between them", () => {
+    const e = runTag({ condition: "stuck", failed: "review", reason: "checks failed" });
+    expect(e.tag).toBe("returned");
+    expect(e.html.startsWith("build 1")).toBe(true);
+    expect(e.html).toBe("build 1 · checks failed");
+    expect(e.html).not.toContain(": ");
+  });
+
   test("no event tag of a lane row has an upper-case letter", () => {
     const runs = [
       run("worker", iso(0), iso(5), { condition: "stuck", failed: "review" }),
@@ -106,6 +114,14 @@ describe("the event tags", () => {
     const row = laneRow({ head: "h", runs: spans(runs), from: Date.parse(iso(0)) });
     expect(row.events.map((e: any) => e.tag)).toEqual(["waiting", "waiting", "returned", "failed", "waiting", "failed", "dropped"]);
     expect(row.events.filter((e: any) => /[A-Z]/.test(e.tag))).toEqual([]);
+  });
+});
+
+describe("the bar tips", () => {
+  test("a tip keeps the label, the state word and the time, and drops the reason", () => {
+    const iso = (m: number) => new Date(Date.parse("2026-11-01T10:00:00Z") + m * 60_000).toISOString();
+    const [b] = barsOf(spans([run("worker", iso(0), iso(5), { condition: "stuck", failed: "review", reason: "checks failed" })]));
+    expect(b.tip).toBe("build · returned · 5m 00s");
   });
 });
 
@@ -164,15 +180,34 @@ describe("waitEvent", () => {
   const t0 = Date.parse("2026-11-01T08:00:00Z"), min = 60_000;
   const w = { start: t0, end: t0 + 9 * min, chris: false };
   const iso = (m: number) => new Date(t0 + m * min).toISOString();
-  test("ends a hold at a started record", () => {
-    const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "held", text: "x" }, { at: iso(3), name: "a", kind: "started", text: "" }]);
-    expect(e.html).toBe("Waited 9m 00s: 3m 00s because x.");
+  test("a hold's event gives the tag, its content and the wait's length", () => {
+    setCodes({ aleph: "a" });
+    try {
+      const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "busy-file", text: "both change the busy file", event: { action: "busy", on: ["aleph-1372"], file: "ui/views/issues.js" } }]);
+      expect(e.tag).toBe("busy");
+      expect(e.html).toContain("a1372 → issues.js");
+      expect(e.html).toContain("9m 00s");
+    } finally { setCodes({}); }
   });
-  test("reads Waited N min. with no records", () => {
-    expect(waitEvent(w).html).toBe("Waited 9m 00s.");
-    expect(waitEvent(w, []).html).toBe("Waited 9m 00s.");
-    const mapped: any[] = ([w] as any[]).map(waitEvent as any);
-    expect(mapped[0].html).toBe("Waited 9m 00s.");
+  test("an old record with no event gives its gate kind as the tag, and its text as the note", () => {
+    const e = waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "main checks are red" }]);
+    expect(e.tag).toBe("red");
+    expect(e.html).toContain("9m 00s");
+    expect(e.html).toContain("main checks are red");
+  });
+  test("the hold in force the longest gives the tag, and a started record ends one", () => {
+    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "x" }, { at: iso(2), name: "a", kind: "loop-guard", text: "y" }]).tag).toBe("looping");
+    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "x" }, { at: iso(3), name: "a", kind: "started", text: "" }]).tag).toBe("red");
+  });
+  test("a wait with no hold record shows only its length", () => {
+    expect(waitEvent(w).tag).toBe("waiting");
+    expect(waitEvent(w).html).toBe("9m 00s");
+    const mapped: any[] = ([w] as any[]).map(waitEvent as any); // map passes an index as `holds`
+    expect(mapped[0].html).toBe("9m 00s");
+  });
+  test("no wait event reads Waited or because", () => {
+    expect(waitEvent(w).html).not.toMatch(/Waited|because/);
+    expect(waitEvent(w, [{ at: iso(-1), name: "a", kind: "baseline", text: "main checks are red" }]).html).not.toMatch(/Waited|because/);
   });
 });
 

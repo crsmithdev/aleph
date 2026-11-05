@@ -1,8 +1,8 @@
 // The parts the Issue page and the Job page share: the KPI strip, the Detail panels, and the timeline,
 // a waterfall of segments whose rows each hold a lane of bars and waits on one time axis, with the row's events beneath.
 // Plain JS with no DOM, so the pages and the tests both import it.
-import { clamp, codeText, legendHtml, dur, esc, localMs, money, shortModel, tag, when } from "./lib.js";
-import { jobState } from "../lib/naming.ts";
+import { clamp, codeText, contentText, legendHtml, dur, esc, localMs, money, shortModel, tag, when } from "./lib.js";
+import { jobState, word } from "../lib/naming.ts";
 
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
@@ -70,19 +70,15 @@ export function gaps(runs, from, to) {
 }
 
 /**
- * The minutes each hold reason covers inside a wait, in the order the reasons first happened. `holds` are
- * `{ at, name, kind, text }` oldest first; the hold in force at a moment is the last record at or before it,
- * and a `started` record ends it.
+ * The hold in force for the most of a wait. `holds` are `{ at, name, kind, text, event? }` oldest first; the
+ * hold in force at a moment is the last record at or before it, and a `started` record ends it.
  */
-function holdTimes(w, holds) {
+function topHold(w, holds) {
   const recs = holds.map((h) => ({ ...h, t: Date.parse(h.at) })).filter((h) => Number.isFinite(h.t));
   const out = new Map();
   let cur = null, from = w.start;
-  const close = (to) => {
-    if (cur && to > from) out.set(cur, (out.get(cur) ?? 0) + (to - from));
-    else if (cur && !out.has(cur)) out.set(cur, 0);
-  };
-  const apply = (h) => (h.kind === "started" || !h.text ? null : String(h.text));
+  const close = (to) => { if (cur && to > from) out.set(cur, (out.get(cur) ?? 0) + (to - from)); };
+  const apply = (h) => (h.kind === "started" ? null : h);
   for (const h of recs) {
     if (h.t <= w.start) { cur = apply(h); continue; }
     if (h.t >= w.end) break;
@@ -91,14 +87,17 @@ function holdTimes(w, holds) {
     cur = apply(h);
   }
   close(w.end);
-  return [...out].filter(([, ms]) => ms > 0);
+  let best = null;
+  for (const [h, ms] of out) if (!best || ms > best[1]) best = [h, ms];
+  return best?.[0] ?? null;
 }
 
-/** A wait's event: its length, whose it is and, from `holds`, why. */
+/** A wait's event: the hold's action as the tag, its content and the wait's length, and the hold's text as the note. */
 export function waitEvent(w, holds = []) {
-  const reasons = Array.isArray(holds) ? holdTimes(w, holds) : []; // `waits.map(waitEvent)` passes an index
-  const why = reasons.length ? `: ${reasons.map(([text, ms]) => `${dur(ms / 1000)} because ${text}`).join("; ")}` : "";
-  return { at: w.start, tag: "waiting", tone: "need", html: esc(`Waited ${dur((w.end - w.start) / 1000)}${w.chris ? " for your answer" : ""}${why}.`) };
+  const h = topHold(w, Array.isArray(holds) ? holds : []); // `waits.map(waitEvent)` passes an index
+  const e = h?.event ?? {};
+  const text = [e.sub, contentText(e), dur((w.end - w.start) / 1000), h?.text].filter(Boolean).join(" · ");
+  return { at: w.start, tag: e.action ?? (h ? word("gate", h.kind) : "waiting"), tone: "need", html: esc(text) };
 }
 
 /** A label: the kind, a number when the lane has more than one of that kind, the model (not on a bar) and, with `cost`, the cost. */
@@ -107,14 +106,14 @@ export function barLabel(r, nth, { cost = false, model = true } = {}) {
   return [nth ? `${kind} ${nth}` : kind, model ? shortModel(r.model) : "", cost && r.cost ? money(r.cost) : ""].filter(Boolean).join(" · ");
 }
 
-/** The bars of a lane from its spans: the label of each, and a tip with the condition, the time and the reason. */
+/** The bars of a lane from its spans: the label of each, and a tip with the state word and the time. */
 export function barsOf(runs, { cost = false } = {}) {
   const count = {}, seen = {};
   for (const { r } of runs) count[r.kind] = (count[r.kind] ?? 0) + 1;
   return runs.map(({ r, start, end }) => {
     seen[r.kind] = (seen[r.kind] ?? 0) + 1;
     const label = barLabel(r, count[r.kind] > 1 ? seen[r.kind] : 0, { cost, model: false });
-    return { start, end, tone: barTone(r), label, tip: `${label} · ${r.condition} · ${dur((end - start) / 1000)}${r.reason ? ` · ${r.reason}` : ""}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
+    return { start, end, tone: barTone(r), label, tip: `${label} · ${jobState(r.condition, r.failed)} · ${dur((end - start) / 1000)}`, ...(r.name ? { href: `#/jobs/${encodeURIComponent(r.name)}` } : {}) };
   });
 }
 
@@ -176,10 +175,10 @@ export const fromTo = (a, b) => `${when(new Date(a))} to ${when(new Date(b))}`;
 
 /** A run's event tone by its stored condition, so a returned or failed run stays in the stuck tone. */
 const RUN_TONE = { returned: "stuck", failed: "stuck", dropped: "quiet", passed: "done", landed: "done", done: "done", waiting: "need", running: "run" };
-/** The event of one run: its job state as the tag, then `name` and its reason, or `what` in their place. */
+/** The event of one run: its job state as the tag, then `name` as the content and its reason as the note, or `what` in their place. */
 export function runEvent(x, name, what = null) {
-  const state = jobState(x.r.condition, x.r.failed), tone = RUN_TONE[state] ?? "quiet", cap = esc(name[0].toUpperCase() + name.slice(1));
-  return { at: x.end, tag: state, tone, html: what ?? `${cap}${x.r.reason ? `: ${codeText(x.r.reason)}` : "."}` };
+  const state = jobState(x.r.condition, x.r.failed), tone = RUN_TONE[state] ?? "quiet";
+  return { at: x.end, tag: state, tone, html: what ?? [esc(name), x.r.reason && codeText(x.r.reason)].filter(Boolean).join(" · ") };
 }
 /** The events of a lane: each run that stopped or asks, with its reason. */
 const laneEvents = (runs, bars) => runs.flatMap((x, i) => {

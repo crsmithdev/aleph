@@ -353,11 +353,11 @@ describe("render", () => {
     expect(h).not.toContain('href="#/jobs?repo=');
     expect(h).toContain('href="#/factory/jobs"');
   });
-  test("a failed run's event names it, gives its reason with code set as code, and offers its logs", () => {
+  test("a failed run's event names it, gives its reason as the note with code set as code, and offers its logs", () => {
     const h = v.renderJob({ ...job, runs: [{ id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });
     const ev = h.match(/<div class="dp-ev">.*?<\/div><\/div><\/div>/)?.[0] ?? "";
     expect(ev).toContain('<span class="badge stuck">failed</span>');
-    expect(ev).toContain("Build · opus: checks failed in <code>a.ts</code>");
+    expect(ev).toContain("build · opus · checks failed in <code>a.ts</code>");
     expect(ev).toContain('data-log="1" data-job="fac-9" data-file="output.log" data-as="transcript"');
     expect(ev).toContain('data-file="checks.log" title="checks.log, 2.0KiB">checks</button>');
     expect(h).toContain("$1.03");
