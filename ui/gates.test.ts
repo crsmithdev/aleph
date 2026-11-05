@@ -77,7 +77,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "baseline", "codes", "factory", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
+  expect(Object.keys(d).sort()).toEqual(["asks", "backend", "baseline", "codes", "factory", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
   expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
@@ -87,6 +87,21 @@ test("the body of /api/gates has every section, one rule per Ask reason with onl
   expect(by("proposal-claude-md").places).toEqual(["proposal-claude-md:global"]);
   expect(d.held).toEqual(SECURITY_PATHS);
   expect(d.repoHeld).toEqual([{ repo: "held", held: ["src/auth/**"] }]);
+});
+
+test("the body names the held backend and the line it holds with, and the backend gate row binds while the hold is up", async () => {
+  const file = join(process.env.ALEPH_FACTORY_DIR!, "backend-hold.json");
+  const why = "API Error: 402 This request would exceed your available credits";
+  try {
+    writeFileSync(file, JSON.stringify({ via: "openrouter", why, since: ago(10) }));
+    const d: any = await body();
+    expect(d.backend).toEqual({ via: "OpenRouter", why });
+    expect(d.gated).toEqual({ gate: "backend", why: `waits for OpenRouter: ${why}`, text: `Waiting for OpenRouter: ${why}` });
+  } finally { rmSync(file, { force: true }); }
+  // No hold: the body names no backend, and no factory gate binds.
+  const d: any = await body();
+  expect(d.backend).toBeNull();
+  expect(d.gated).toBeNull();
 });
 
 /** An entry as one line: by, subject, action, sub, content and note. */

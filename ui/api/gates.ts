@@ -8,12 +8,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
-import { allHolds, baselines, type HoldRecord, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
+import { allHolds, backendHold, baselines, type HoldRecord, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { eventOf, layout, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
 import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
@@ -315,14 +316,16 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
 export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
   const jobs = allJobs(), entries = log(Date.now(), LOG_MAX, ms, project), all = log(Date.now(), Infinity, ms, project);
   const records = record.all().filter((r) => inProject(r.issue, project)), holds = allHolds().filter((h) => inProject(h.name, project));
-  const f = state.factory;
+  const f = state.factory, hold = backendHold();
   return {
     now: state.now,
     factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP"), run: capEnvSet("ALEPH_RUN_CAP") } },
     metrics: metrics(all, holds, Date.now(), records, ms),
     schedules: schedules(),
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
-    gated: gates({ jobs }),
+    backend: hold ? { via: BACKENDS[hold.via], why: hold.why } : null,
+    // The backend gate of FACTORY_GATES: the dispatch binds it for a run on the held backend, and the page binds it while the hold is up.
+    gated: gates({ jobs }) ?? (hold ? { gate: "backend", why: `waits for ${BACKENDS[hold.via]}: ${hold.why}`, text: `Waiting for ${BACKENDS[hold.via]}: ${hold.why}` } : null),
     baseline: baselineGate(),
     asks: state.asks,
     rules: rules(all, records, Date.now(), ms),
