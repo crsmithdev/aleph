@@ -25,6 +25,10 @@ import type { Routes } from "../server.ts";
 /** The log keeps the entries of the last LOG_DAYS days, newest first, at most LOG_MAX of each actor. */
 export const LOG_DAYS = 7, LOG_MAX = 200;
 const DAY = 86_400_000;
+/** The windows that `?window=` takes. */
+const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DAY, month: 30 * DAY };
+/** Whether `item` (`<repo>-<id>`) belongs to `project`; no project keeps every item. */
+const inProject = (item: string, project?: string) => !project || item.startsWith(`${project}-`);
 
 export type By = "You" | "Rule" | "Director" | "Firefighter" | "Gate";
 export interface LogEntry { at: string; by: By; item: string; what: string; count?: number; first?: string }
@@ -33,9 +37,9 @@ export interface LogEntry { at: string; by: By; item: string; what: string; coun
  * One row per raised Ask reason: its one automatic mode (`ASK_REASONS[reason].always`, "" for none) and what always.json grants.
  * A `proposal-<kind>` reason is granted per place (`proposal-<kind>:<place>`); its row lists those keys.
  */
-export function rules(entries: LogEntry[] = [], records = record.all(), now = Date.now()) {
+export function rules(entries: LogEntry[] = [], records = record.all(), now = Date.now(), ms = LOG_DAYS * DAY) {
   const granted = readAlways();
-  const from = now - LOG_DAYS * DAY, SLACK = 60_000;
+  const from = now - ms, SLACK = 60_000;
   // An entry from before record.asks kept the reason takes the reason of the run's Ask: the record keeps it in rec.ask while rec.askRun awaits.
   const runReason = (rec: record.JobRecord, set: string) => rec.runs.some((x) => x.id === rec.askRun && x.condition === "awaiting" && Date.parse(x.started) <= Date.parse(set)) ? rec.ask?.reason : undefined;
   const asks = records.flatMap((rec) => (rec.asks ?? []).map((a) => ({ ...a, reason: a.reason ?? runReason(rec, a.set), issue: rec.issue, rec }))
@@ -69,8 +73,8 @@ const ANSWERS: [RegExp, string][] = [[/^Chris: run intake again$/, "retry"], [/^
  * The answer is the action its note names (ANSWERS), else the note without `Chris: ` or `Chris decided: `.
  * `mode` is the answer when it is the reason's automatic mode, else "": only then can the answer become the rule.
  */
-export function repeats(entries: LogEntry[], records = record.all(), now = Date.now()) {
-  const from = now - LOG_DAYS * DAY, SLACK = 60_000;
+export function repeats(entries: LogEntry[], records = record.all(), now = Date.now(), ms = LOG_DAYS * DAY) {
+  const from = now - ms, SLACK = 60_000;
   const counts = new Map<string, { reason: string; answer: string; count: number }>();
   for (const rec of records) for (const a of rec.asks ?? []) {
     if (!a.reason || !a.cleared || Date.parse(a.set) < from) continue;
@@ -150,12 +154,12 @@ function collapse(entries: LogEntry[]): LogEntry[] {
 }
 
 /** The log: the gate holds, the Always rules Chris set, the Rule, Director and Firefighter lines and his answers; the last LOG_DAYS days, newest first, `max` of each actor at most, so a busy actor does not push the others out. */
-export function log(now = Date.now(), max = LOG_MAX): LogEntry[] {
+export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, project?: string): LogEntry[] {
   const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h): LogEntry => ({ at: h.at, by: "Gate", item: h.name, what: `${h.kind}: ${h.text}` })));
   const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "You", item: "rule", what: `${reason}: set to ${g.action}` }));
   return [...holds, ...set, ...tickEntries(), ...noteEntries()]
-    .filter((e) => now - Date.parse(e.at) < LOG_DAYS * DAY)
+    .filter((e) => now - Date.parse(e.at) < ms && (!project || (e.item !== "rule" && inProject(e.item, project))))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     .filter((e) => (seen[e.by] = (seen[e.by] ?? 0) + 1) <= max);
 }
@@ -212,8 +216,8 @@ export function schedules(): { name: string; last: string | null; result: string
  * window that a check or the reviewer sent back, against `fixed`, those of them that a later build run of the same job fixed:
  * it passed or landed. `held`: the goals held and the hours in a hold, from a hold record to the next `started` record, or to now.
  */
-export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(), records = record.all()) {
-  const from = now - LOG_DAYS * DAY;
+export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(), records = record.all(), span = LOG_DAYS * DAY) {
+  const from = now - span;
   const auto = entries.filter((e) => (e.by === "Rule" || (e.by === "Director" && /\bdecided:/.test(e.what)))).length;
   const chris = entries.filter((e) => e.by === "You" && e.item !== "rule").length;
   const open: Record<string, number> = {}, goals = new Set<string>();
@@ -234,7 +238,7 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
     ? [r.runs.slice(i + 1).some((y) => y.job === x.job && y.kind === "build" && !y.failed && (y.condition === "passed" || y.condition === "landed"))]
     : []));
   return {
-    days: LOG_DAYS,
+    days: span / DAY,
     rate: auto + chris ? { auto, total: auto + chris, percent: Math.round((100 * auto) / (auto + chris)) } : null,
     catches: {
       fired: sent.length,
@@ -245,31 +249,34 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
 }
 
 /** The page's data from the Status page's state (its factory snapshot, its asks and its Queued lane) and the security facts. */
-export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }) {
-  const jobs = allJobs(), entries = log(), all = log(Date.now(), Infinity);
+export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
+  const jobs = allJobs(), entries = log(Date.now(), LOG_MAX, ms, project), all = log(Date.now(), Infinity, ms, project);
+  const records = record.all().filter((r) => inProject(r.issue, project)), holds = allHolds().filter((h) => inProject(h.name, project));
   const f = state.factory;
   return {
     now: state.now,
     factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP"), run: capEnvSet("ALEPH_RUN_CAP") } },
-    metrics: metrics(all),
+    metrics: metrics(all, holds, Date.now(), records, ms),
     schedules: schedules(),
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
     gated: gates({ jobs }),
     baseline: baselineGate(),
     goalGates: goalGates(state.queued ?? []),
     asks: state.asks,
-    rules: rules(all),
-    repeats: repeats(all),
+    rules: rules(all, records, Date.now(), ms),
+    repeats: repeats(all, records, Date.now(), ms),
     ...security,
     repoHeld: repoHeld(),
-    log: { days: LOG_DAYS, max: LOG_MAX, entries },
+    log: { days: ms / DAY, max: LOG_MAX, entries },
   };
 }
 
 export const routes: Routes = {
-  "GET /api/gates": async () => {
+  "GET /api/gates": async (req) => {
+    const q = new URL(req.url).searchParams, w = q.get("window");
+    if (w !== null && !(w in WINDOWS)) return Response.json({ error: `window must be one of ${Object.keys(WINDOWS).join(", ")}` }, { status: 400 });
     const [{ state }, security] = await Promise.all([loadState(), securityFacts()]);
-    return Response.json(gatesBody(state, security));
+    return Response.json(gatesBody(state, security, w === null ? undefined : WINDOWS[w], q.get("project") || undefined));
   },
   "POST /api/gates/caps": async (req) => {
     if (!sameSite(req)) return text("forbidden", 403);

@@ -446,3 +446,35 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   expect(none).toContain("No answer repeats.");
   expect(none).not.toContain("<button");
 });
+
+test("GET /api/gates takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
+  const logPath = join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), was = readFileSync(logPath, "utf8");
+  const m = (min: number) => min * 60 * 24;
+  writeFileSync(logPath, [
+    `${ago(30)} alpha-1: always: a-hour`,
+    `${ago(60 * 5)} alpha-2: always: a-day`,
+    `${ago(m(3))} beta-1: always: b-week`,
+    `${ago(m(10))} beta-2: always: b-month`,
+    `${ago(m(40))} alpha-3: always: a-old`,
+  ].join("\n") + "\n");
+  const get = async (q: string) => { const r = await at(`/api/gates${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
+  const items = (d: any) => d.log.entries.map((e: any) => e.item).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
+  try {
+    const week = await get("");
+    expect(items(week.d)).toEqual(["alpha-1", "alpha-2", "beta-1"]);
+    expect(week.d.metrics.days).toBe(7);
+    expect(week.d.metrics.rate.total).toBe(3);
+    const day = await get("?window=day");
+    expect(items(day.d)).toEqual(["alpha-1", "alpha-2"]);
+    expect(day.d.metrics.rate.total).toBe(2);
+    expect(items((await get("?window=hour")).d)).toEqual(["alpha-1"]);
+    expect(items((await get("?window=month")).d)).toEqual(["alpha-1", "alpha-2", "beta-1", "beta-2"]);
+    const alpha = await get("?project=alpha");
+    expect(items(alpha.d)).toEqual(["alpha-1", "alpha-2"]);
+    expect(alpha.d.metrics.rate.total).toBe(2);
+    expect(items((await get("?project=beta&window=month")).d)).toEqual(["beta-1", "beta-2"]);
+    expect((await get("?window=year")).status).toBe(400);
+  } finally {
+    writeFileSync(logPath, was);
+  }
+});
