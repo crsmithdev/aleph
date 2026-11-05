@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
+import { card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, tone, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -41,9 +41,7 @@ export function renderOutcome(d) {
 }
 
 const MONITOR_ROWS = 10;
-const numText = (n) => (n === null ? "-" : Number.isInteger(n) ? String(n) : n.toFixed(1));
-const costText = (n) => (n === null ? "-" : `$${n.toFixed(2)}`);
-const pctOf = (n) => (n === null ? "-" : `${Math.round(n * 100)}%`);
+const pctOf = (n) => pct(n === null ? null : n * 100);
 const TRAIL = { stages: "Trailing 7 days", holds: "Mean per day over the trailing 7 days" };
 /** A cell: the day's value, a bar scaled to the table's largest day value (`max`, null for no bar), and the trailing 7 days in the tooltip. */
 const pairCell = (p, f, max, tip) =>
@@ -63,7 +61,7 @@ export function renderStages(s, sort = SORTS.stages) {
   const all = s.factory?.monitor?.stages ?? [];
   const max = Math.max(0, ...all.map((r) => r.runsPerItem.day ?? 0));
   const rows = sorted(all, STAGE_COLS, sort).map((r) =>
-    `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, numText, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
+    `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, mean, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
   const head = h("Stage", "stage") + h("Runs per Item", "runs", true) + h("No Usable Result", "unusable", true);
   return card("Stages", rows ? dataTable(head, rows) : empty("No stage ran."), { id: "stages" });
@@ -74,7 +72,7 @@ export function renderHolds(s, sort = SORTS.holds) {
   const all = s.factory?.monitor?.holds ?? [];
   const max = Math.max(0, ...all.map((r) => r.goals.day ?? 0));
   const rows = sorted(all, HOLD_COLS, sort).map((r) =>
-    `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, numText, max, TRAIL.holds)}${pairCell(r.hours, numText, null, TRAIL.holds)}</tr>`).join("");
+    `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, mean, max, TRAIL.holds)}${pairCell(r.hours, mean, null, TRAIL.holds)}</tr>`).join("");
   const h = (label, key, num) => sortHead(label, key, sort, { num });
   const head = h("Kind", "kind") + h("Affected Issues", "goals", true) + h("Took", "hours", true);
   return card("Holds", rows ? dataTable(head, rows) : empty("No hold record."), { id: "holds" });

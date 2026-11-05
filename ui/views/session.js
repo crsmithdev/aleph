@@ -167,7 +167,7 @@ export function wfDetail(r) {
   return `<h3>${esc(r.name)}${r.args && r.kind !== "turn" ? ` <code>${esc(r.args)}</code>` : ""}</h3><dl class="facts">` +
     f("Kind", esc(r.kind)) + f("Start", `${esc(when(r.start))} (+${esc(axisTick(r.startMs))})`) + f("Duration", esc(dur(r.durationMs))) +
     f("Model", r.model ? esc(shortModel(r.model)) : "") + f("Cost", r.cost ? costHtml(r.cost, r.wk) : "") +
-    f("Tokens", r.inputTokens != null || r.outputTokens != null ? `${esc(r.inputTokens ?? "?")} in, ${esc(r.outputTokens ?? "?")} out` : "") + `</dl>` +
+    f("Tokens", r.inputTokens != null || r.outputTokens != null ? `${esc(r.inputTokens ?? "–")} in, ${esc(r.outputTokens ?? "–")} out` : "") + `</dl>` +
     io("Input", r.input) + (r.error ? io("Error", r.error) : "") + io("Output", r.output);
 }
 
@@ -245,7 +245,7 @@ export function mountSession(root, d, query = new URLSearchParams()) {
 // One row per observation, children after their parent and indented by depth; input and output fold under the name.
 function obsRows(o, depth) {
   const detail = [
-    o.recall ? `candidates ${esc(o.recall.candidates ?? "?")}, asked ${esc(o.recall.asked ?? "?")}, kept ${esc(o.recall.kept ?? "?")}` : "",
+    o.recall ? `candidates ${esc(o.recall.candidates ?? "–")}, asked ${esc(o.recall.asked ?? "–")}, kept ${esc(o.recall.kept ?? "–")}` : "",
     o.verify ? `${esc(o.verify.kind ?? "")} ${esc(o.verify.verdict ?? "")}` : "",
     o.model ? esc(shortModel(o.model)) : "",
     o.error ? `Error: ${esc(o.error)}` : "",

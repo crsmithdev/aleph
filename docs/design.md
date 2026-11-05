@@ -10,7 +10,7 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui --summary` 
 | colour | token-def | 98 |
 | effect | literal | 46 |
 | effect | token-use | 10 |
-| format | helper-bypass | 66 |
+| format | helper-bypass | 64 |
 | size | literal | 138 |
 | size | token-def | 18 |
 | size | token-use | 478 |
@@ -185,7 +185,7 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 | Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:321`), `dateText()` (`ui/views/issues.js:177`) | empty string |
 | Axis hour | 12-hour, `a` or `p` | 4a, 1:36p | `hourLabel()` (`ui/lib.js:322`), for a chart axis only | none |
 | Clock | 24-hour time | 14:05 | `clock()` (`ui/lib.js:12`) | empty string |
-| Duration | seconds, minutes, hours; `durMs()` writes `850ms` under a second; `span()` in `ui/views/now.js:222` writes `2d4h` from 24 hours, a form `dur()` has no day for | 43s, 4m 05s, 1h 02m, 850ms | `dur()` (`ui/lib.js:49`), `durMs()` (`ui/lib.js:58`), `span()`, `elapsed()` (`ui/lib.js:41`); `lifespan()` (`ui/timeline.js:10`) for the timeline | `–` from `dur()`, empty from `durMs()` |
+| Duration | seconds, minutes, hours; `durMs()` writes `850ms` under a second; `span()` in `ui/views/now.js:220` writes `2d4h` from 24 hours, a form `dur()` has no day for | 43s, 4m 05s, 1h 02m, 850ms | `dur()` (`ui/lib.js:49`), `durMs()` (`ui/lib.js:58`), `span()`, `elapsed()` (`ui/lib.js:41`); `lifespan()` (`ui/timeline.js:10`) for the timeline | `–` from `dur()`, empty from `durMs()` |
 | Cost | dollars, 2 decimals, `<$0.01` under half a cent | $1.25 | `money()` (`ui/lib.js:18`), also for the Runs today cost | `$0.00` |
 | Weekly share | `≈1.4% wk` | ≈1.4% wk | `wkText()` (`ui/lib.js:30`), `costHtml()` (`ui/lib.js:33`) | empty string |
 | Percent | whole number from 1%, one decimal below, `<0.1%` under 0.05% | 12%, 0.4% | `pct()` (`ui/lib.js:29`) | `–` |
@@ -199,7 +199,7 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 
 **A unit follows its number with no space**: `850ms`, `3.2h`, `1.5KiB`, `12min`, `10d`. `dur()` puts a space only between two groups (`4m 05s`). Server log lines and health text from the factory keep their own form (`135 s`); they are not UI formats.
 
-Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()`, `ui/views/speed.js:22`). The `format` group has 66 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`, except the rows below. Each stays for one of these reasons:
+Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()`, `ui/views/speed.js:22`). The `format` group has 64 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`, except the rows below. Each stays for one of these reasons:
 
 | Rows | Reason it stays |
 |---|---|
@@ -207,7 +207,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 | `ui/api/activity.ts:20`, `ui/api/speed.ts:495-496` | Local-day date arithmetic for bucket starts, not display. |
 | `getDate()` (`ui/views/issues.js:141`, `230`, `265`, `269`, `285`, `307`) | Local-day date arithmetic for windows and age bins, not display. |
 | `toFixed()` (`ui/views/jobs.js:11`) | Rounds a window length to a stable number, not display. |
-| `style` (`ui/views/session.js:150`), `ui/timeline.js:154` | Inline style widths and offsets in percent, read by CSS only. |
+| `style` (`ui/views/session.js:150`), `ui/timeline.js:136` | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
 | `ui/views/memory.js:188` | A bar width in percent, read by CSS only. |
 
@@ -297,7 +297,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:340`).
 - **Active:** `.cmd:active` (`ui/app.css:327`) moves 1px down.
 - **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`, `ui/app.css:983`); the open state of each is kept across a redraw by `recordState()` (`ui/lib.js:235`) and `restoreState()` (`ui/lib.js:248`).
-- **Page-head controls:** the heads of Status, Jobs, Efficiency and Agents hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()`, `ui/lib.js:476`). The Issues and Sessions heads do not use `scopeBar()` yet (see Deviations). The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as the `act warn` classes (`ui/views/now.js:419`): it is an action with consequences, not a plain button.
+- **Page-head controls:** the heads of Status, Jobs, Efficiency and Agents hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()`, `ui/lib.js:476`). The Issues and Sessions heads do not use `scopeBar()` yet (see Deviations). The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as the `act warn` classes (`ui/views/now.js:417`): it is an action with consequences, not a plain button.
 - **Motion:** `.15s ease-out` on borders and backgrounds; no animation.
 
 ## Content
@@ -393,9 +393,7 @@ Each deviation is a value or pattern in the code that a rule above does not allo
 
 | Deviation | Where | Rule | Fix |
 |---|---|---|---|
-| `–` replaced by `-`; cost by hand (`$` and `toFixed(2)`) | `ui/views/now.js:44-45` | Missing values, Formats | aleph-1358 (pending) |
-| Hours with a fraction (`cardHours()`) | `ui/views/speed.js:85` | Hours | aleph-1358 (pending) |
-| Duration formats outside `dur()`: `durShort()`, `cardDur()`, `lifespan()`, `timeText()`, `span()` | `ui/views/speed.js:5`, `83`; `ui/timeline.js:10`, `188`; `ui/views/now.js:222` | Duration; one `dur()` helper | aleph-1370 (pending) |
+| Duration formats outside `dur()`: `durShort()`, `cardDur()`, `lifespan()`, `timeText()`, `span()` | `ui/views/speed.js:5`, `83`; `ui/timeline.js:10`, `188`; `ui/views/now.js:220` | Duration; one `dur()` helper | aleph-1370 (pending) |
 | Time column names differ: `Started`, `Updated`, `Last`, `When`, `Date`, `Written` | Tables | Column order, time column | aleph-1360 (pending) |
 | Raw `<th>` headers passed to `dataTable()` | `ui/views/jobs.js:201`, `ui/views/issues.js:641` | Tables built with `heads()` | aleph-1359 (pending) |
 | Detail page heads built by hand (`<header class="ph">`) | `ui/views/jobs.js:205`, `ui/views/issues.js:494` | Page head | none; follow-up (aleph-1362 is done and left them) |

@@ -8,7 +8,7 @@ import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from 
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { when } from "./lib.js";
+import { pct, when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
 import * as record from "../jobs/lib/records/record.ts";
@@ -141,7 +141,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(h).not.toContain("gt-head");
   expect(h).toContain("<b>75%<em> / 4</em></b>");
   expect(h).toContain("<b>6<em> / 2</em></b>");
-  expect(h).toContain("<b>3h<em> / 2</em></b>");
+  expect(h).toContain("<b>3.0h<em> / 2</em></b>");
   expect(h).not.toContain("Gates now");
   expect(h).not.toContain('data-cap="day"');
   expect(h).not.toContain('data-cap="awaiting"');
@@ -540,4 +540,11 @@ test("every seg group on the Automation page has an accessible name, rule toggle
   expect(groups.length).toBeGreaterThan(2);
   for (const g of groups) expect(g).toMatch(/aria-label="[^"]+"/);
   expect(h).toContain('aria-label="Who decides ');
+});
+
+test("the Held time card reads hours() and the Automation rate reads pct()", () => {
+  const d = data();
+  const h = gates.renderGates({ ...d, metrics: { ...d.metrics, held: { goals: 2, hours: 3513.1 }, rate: { auto: 1, total: 8, percent: 12.5 } } });
+  expect(h).toContain("<b>3513h<em>");
+  expect(h).toContain(`<b>${pct(12.5)}<em>`);
 });

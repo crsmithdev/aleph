@@ -287,3 +287,13 @@ test("the Turn page pages observations at 50 and gives Detail td.wide", async ()
   expect(h).toContain('<td class="wide">Error: boom</td>');
   expect(h).not.toContain("<strong>T50</strong>");
 });
+
+test("a missing token count or recall figure shows – and not ?", async () => {
+  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
+  const ob = { ...t.observations[0], recall: { candidates: 5, asked: 3 } };
+  const h = v.renderTurn({ ...t, observations: [ob] });
+  expect(h).toContain("kept –");
+  const d = v.wfDetail({ name: "g", kind: "generation", start: t.start, startMs: 0, durationMs: 1, inputTokens: 5 });
+  expect(d).toContain("5 in, – out");
+  expect(h + d).not.toContain("?");
+});

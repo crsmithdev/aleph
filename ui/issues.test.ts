@@ -364,7 +364,7 @@ describe("views", () => {
     expect(c.unit).toBe("hours");
     expect(c.p50[1]).toBe(4);
     const t = { muted: "#123456" };
-    expect(v.closeOption(c, t).xAxis.axisLabel.formatter).toContain("h");
+    expect(v.closeOption({ ...c, unit: "days" }, t).xAxis.axisLabel.formatter(0.05)).toBe("1h 12m");
     expect(v.closeOption(c, t).series.find((s: any) => s.name === "p90").itemStyle.color).toBe(t.muted);
   });
 

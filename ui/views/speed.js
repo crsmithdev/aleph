@@ -1,5 +1,5 @@
 // What the Status pages share: formats, the /api/speed cache, the merged causes, tiles and the usage pace.
-import { cardTrend, empty, meter, day, dur, hourLabel, esc, hours, mean, pct, projectNow, statCard, when } from "../lib.js";
+import { cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, projectNow, statCard, when } from "../lib.js";
 
 /** Seconds for a big number: "59s", "26m" or "4h 36m". */
 export const durShort = (s) => (s >= 60 && s < 3600 ? `${Math.floor(s / 60)}m` : dur(s));
@@ -82,7 +82,7 @@ export function usageAge(s) {
 /** A time on a Status card: "45s", "20m", "1h35m". */
 export const cardDur = (s) => (s != null && Math.round(s) >= 60 && Math.round(s) < 3600 ? `${Math.floor(Math.round(s) / 60)}m` : dur(s));
 export const cardPct = (v) => (v == null ? "–" : pct(v * 100));
-export const cardHours = (h) => (h === null || h === undefined ? "–" : `${mean(h)}h`);
+export const cardHours = (h) => (h === null || h === undefined ? "–" : hours(h));
 
 /** The trend of one figure of `d` against the baseline of its own /api/speed answer; empty with no baseline. */
 export function windowTrend(d, figure, value, o) {

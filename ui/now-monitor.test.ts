@@ -19,7 +19,7 @@ test("the left panel is the Stages table and the middle panel the Holds table, f
   const holds = html.slice(html.indexOf('id="holds"'), html.indexOf('id="monitor"'));
   expect(stages).toContain("<td>build</td>");
   expect(stages).toContain('title="Trailing 7 days: 1.4"');
-  expect(stages).toContain('title="Trailing 7 days: -"');
+  expect(stages).toContain('title="Trailing 7 days: –"');
   expect(holds).toContain("<td>stops</td>");
   expect(holds).toContain('title="Mean per day over the trailing 7 days: 1.5"');
   expect(html).not.toContain("<small>(");
@@ -76,4 +76,13 @@ test("a report with no reading says why; one with no findings says nothing looks
   expect(view.renderMonitor({ factory: { monitor: { ...monitor, findings: [] } } })).toContain('<div class="empty"><p>Nothing looks off.</p>');
   expect(view.renderMonitor({ factory: { monitor: null } })).toBe("");
   expect(render(null)).not.toContain('id="monitor"');
+});
+
+test("a missing day or trailing value shows – and a column shows one number of decimals", () => {
+  const cells = (html: string) => [...html.matchAll(/<td class="num"[^>]*>(.*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]*>/g, "")).sort();
+  const s = view.renderStages(only({ stages: [{ stage: "a", costPerItem: P(1, 1), runsPerItem: P(null, 1), unusable: P(null, null) }, { stage: "b", costPerItem: P(1, 1), runsPerItem: P(1, 1.7), unusable: P(0.25, 0) }] }));
+  expect(cells(s)).toEqual(["–", "–", "1.0", "25%"].sort());
+  expect(s).not.toMatch(/>-</);
+  const h = view.renderHolds(only({ holds: [{ kind: "x", goals: P(1, 1), hours: P(0, 1) }, { kind: "y", goals: P(1.7, 1), hours: P(2.5, 1) }] }));
+  expect(cells(h)).toEqual(["0.0", "1.0", "1.7", "2.5"]);
 });

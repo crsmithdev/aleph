@@ -611,13 +611,13 @@ export const timeSeriesOption = (lines, bars) => ({
     ...bars.map((s) => ({ type: "bar", name: s.name, yAxisIndex: 1, barMaxWidth: 8, data: s.data })),
   ],
 });
-/** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`. */
-export const rangeBarOption = (labels, p50, p90, suffix, t) => ({
+/** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`; `fmt` labels the x axis. */
+export const rangeBarOption = (labels, p50, p90, fmt, t) => ({
   animation: false,
   grid: { left: 64, right: 16, top: 28, bottom: 20 },
   legend,
   tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
-  xAxis: { type: "value", splitLine: { lineStyle: { opacity: 0.5 } }, axisLabel: { formatter: `{value}${suffix}` } },
+  xAxis: { type: "value", splitLine: { lineStyle: { opacity: 0.5 } }, axisLabel: { formatter: fmt } },
   yAxis: { type: "category", data: labels, inverse: true, axisTick: { show: false } },
   series: [
     { type: "bar", name: "p50", barMaxWidth: 24, data: p50 },
