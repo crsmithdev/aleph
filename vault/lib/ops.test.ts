@@ -516,6 +516,13 @@ describe("relative dates", () => {
     expect(r.json.warn).toContainEqual({ note: "Says Yesterday", rule: "relative-date", detail: 'says "yesterday"; give the date' });
     expect(readFileSync(join(vault, "wiki/gotchas/Says Yesterday.md"), "utf8")).toContain("passed yesterday");
   });
+
+  test("lint ignores a relative word inside inline code", async () => {
+    const body = "**Claim.** `today()` returned the wrong day, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[Home]]\n";
+    (await cli("write", note("Names A Function", {}, body), "--why", "x"));
+    const r = (await cli("lint"));
+    expect(r.json.warn.filter((w: { note: string }) => w.note === "Names A Function")).toEqual([]);
+  });
 });
 
 describe("archive", () => {

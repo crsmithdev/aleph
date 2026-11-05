@@ -399,7 +399,8 @@ export function relativeDates(notes: Note[]): Finding[] {
   const words = /\b(yesterday|today|tomorrow|last (?:night|week|month|year)|this (?:morning|week|month)|next week|a few days ago|recently|just now)\b/gi;
   const out: Finding[] = [];
   for (const n of wikiNotes(notes)) {
-    const prose = n.body.replace(/```[\s\S]*?```/g, "");
+    // Code names a word, it does not date anything: `today()` is a function.
+    const prose = n.body.replace(/```[\s\S]*?```/g, "").replace(/`[^`\n]+`/g, "");
     const hits = [...new Set([...prose.matchAll(words)].map((m) => m[0].toLowerCase()))];
     if (hits.length) out.push({ note: n.title, rule: "relative-date", detail: `says ${hits.map((h) => `"${h}"`).join(", ")}; give the date` });
   }
