@@ -308,7 +308,7 @@ Cards with their own markup, because `card()` would add a heading or change the 
 - Memory browse table (`#mem-table`) and inspector (`#mem-inspector`): the table card has no heading, and the inspector is an `aside` with `aria-live`.
 - Sessions (`ui/views/sessions.js`): its head is the redrawn `#ag-sess-head`, not a section head.
 - Issues (`ui/views/issues.js`): the section has no heading; `#inv-count` is its head.
-- Stages and Holds (`ui/views/now.js`): the sections hold the monitor tables from `monitor.stages` and `monitor.holds`, at most 10 rows each, drawn by `renderStages()` and `renderHolds()`.
+- Stages and Holds (`ui/views/now.js`): the sections hold the monitor tables from `monitor.stages` and `monitor.holds`, at most 10 rows each, drawn by `renderStages()` and `renderHolds()`. Each header is a `sortHead` button; a click sorts again. Stages sorts by runs per item and Holds by goals (Affected Issues), descending, and each of those cells has a small bar scaled to the largest row. The trailing 7-day value is in each cell's tooltip.
 
 These references were chosen by reading the code, not by looking at the pages. Gap: no view is a reference for a chart's empty or loading state.
 

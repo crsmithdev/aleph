@@ -1045,3 +1045,5 @@ ul.logs .step { margin: var(--sp-6) 0; }
 @media (max-width: 720px) { .issue-row[data-card]:has(.ask-fold[open]) .choice { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); } }
 .tbl td.bb { width: 40%; }
 .tbl td.bb > i { display: block; height: 10px; min-width: 1px; background: var(--muted); border-radius: 0 var(--r-hair) var(--r-hair) 0; }
+.vbar { display: inline-block; width: 40px; margin-right: var(--sp-6); vertical-align: middle; }
+.vbar > i { display: block; height: 8px; min-width: 1px; background: var(--muted); border-radius: 0 var(--r-hair) var(--r-hair) 0; }

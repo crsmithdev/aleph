@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { card, dataTable, heads, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, tag, tone, when } from "../lib.js";
+import { card, dataTable, blockersHtml, denyReasons, diffHtml, dur, elapsed, costHtml, empty, esc, filterBar, hashQuery, idLink, keepWindow, loadingLine, pageHead, WINDOW_DAYS, WINDOWS, windowOf, wireScope, localId, pct, openDiffs, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, tag, tone, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { oneSentence } from "../decision.js";
 import { act, actMsg, checkFacts, fact, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -44,22 +44,52 @@ const MONITOR_ROWS = 10;
 const numText = (n) => (n === null ? "-" : Number.isInteger(n) ? String(n) : n.toFixed(1));
 const costText = (n) => (n === null ? "-" : `$${n.toFixed(2)}`);
 const pctOf = (n) => (n === null ? "-" : `${Math.round(n * 100)}%`);
-const pairCell = (p, f) => `<td class="num">${f(p.day)} <small>(${f(p.trailing)})</small></td>`;
+const TRAIL = { stages: "Trailing 7 days", holds: "Mean per day over the trailing 7 days" };
+/** A cell: the day's value, a bar scaled to the table's largest day value (`max`, null for no bar), and the trailing 7 days in the tooltip. */
+const pairCell = (p, f, max, tip) =>
+  `<td class="num" title="${esc(`${tip}: ${f(p.trailing)}`)}">${max === null ? "" : `<span class="vbar"><i style="width:${max > 0 ? ((p.day ?? 0) / max * 100).toFixed(1) : 0}%"></i></span>`}${f(p.day)}</td>`;
 
-/** The monitor's Stages table: the day's value, then the trailing 7 days in brackets. At most 10 rows. */
-export function renderStages(s) {
-  const rows = (s.factory?.monitor?.stages ?? []).slice(0, MONITOR_ROWS).map((r) =>
-    `<tr><td>${esc(r.stage)}</td>${pairCell(r.costPerItem, costText)}${pairCell(r.runsPerItem, numText)}${pairCell(r.unusable, pctOf)}</tr>`).join("");
-  const head = heads(["stage", "cost per item", "runs per item", "no usable result"], ["cost per item", "runs per item", "no usable result"]);
+/** The rows by `sort` ({key, dir}), at most 10. `cols` maps a sort key to the row's value. */
+function sorted(rows, cols, sort) {
+  const val = (r) => { const v = cols[sort.key](r); return v?.day === undefined ? v : (v.day ?? -1); };
+  return [...rows].sort((a, b) => (val(a) < val(b) ? -1 : val(a) > val(b) ? 1 : 0) * sort.dir).slice(0, MONITOR_ROWS);
+}
+
+const STAGE_COLS = { stage: (r) => r.stage, runs: (r) => r.runsPerItem, unusable: (r) => r.unusable };
+const HOLD_COLS = { kind: (r) => r.kind, goals: (r) => r.goals, hours: (r) => r.hours };
+const SORTS = { stages: { key: "runs", dir: -1 }, holds: { key: "goals", dir: -1 } };
+
+/** The monitor's Stages table: the day's value with a bar for runs per item; the trailing 7 days is in each cell's tooltip. At most 10 rows. */
+export function renderStages(s, sort = SORTS.stages) {
+  const all = s.factory?.monitor?.stages ?? [];
+  const max = Math.max(0, ...all.map((r) => r.runsPerItem.day ?? 0));
+  const rows = sorted(all, STAGE_COLS, sort).map((r) =>
+    `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, numText, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
+  const h = (label, key, num) => sortHead(label, key, sort, { num });
+  const head = h("Stage", "stage") + h("Runs Per Item", "runs", true) + h("No Usable Result", "unusable", true);
   return `<h2>Stages</h2>${rows ? dataTable(head, rows) : `<p class="quiet">No stage ran.</p>`}`;
 }
 
-/** The monitor's Holds table: the day's value, then the trailing 7 days (the mean per day) in brackets. At most 10 rows. */
-export function renderHolds(s) {
-  const rows = (s.factory?.monitor?.holds ?? []).slice(0, MONITOR_ROWS).map((r) =>
-    `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, numText)}${pairCell(r.hours, numText)}</tr>`).join("");
-  const head = heads(["hold record kind", "goals", "hours in the state"], ["goals", "hours in the state"]);
+/** The monitor's Holds table: the day's value with a bar for goals; the trailing 7-day mean per day is in each cell's tooltip. At most 10 rows. */
+export function renderHolds(s, sort = SORTS.holds) {
+  const all = s.factory?.monitor?.holds ?? [];
+  const max = Math.max(0, ...all.map((r) => r.goals.day ?? 0));
+  const rows = sorted(all, HOLD_COLS, sort).map((r) =>
+    `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, numText, max, TRAIL.holds)}${pairCell(r.hours, numText, null, TRAIL.holds)}</tr>`).join("");
+  const h = (label, key, num) => sortHead(label, key, sort, { num });
+  const head = h("Kind", "kind") + h("Affected Issues", "goals", true) + h("Hours", "hours", true);
   return `<h2>Holds</h2>${rows ? dataTable(head, rows) : `<p class="quiet">No hold record.</p>`}`;
+}
+
+/** Sort a monitor table when its header is clicked: the same key flips the direction, a new text key goes up, a new number key down. */
+function wireSorts(root, s) {
+  root.querySelector(".insights")?.addEventListener?.("click", (e) => {
+    const b = e.target.closest?.("#stages button[data-sort], #holds button[data-sort]");
+    if (!b) return;
+    const id = b.closest("section").id, key = b.dataset.sort, cur = SORTS[id];
+    SORTS[id] = { key, dir: cur.key === key ? -cur.dir : key === "stage" || key === "kind" ? 1 : -1 };
+    root.querySelector(`#${id}`).innerHTML = (id === "stages" ? renderStages : renderHolds)(s, SORTS[id]);
+  });
 }
 
 /** A finding as HTML: **text** and each number or percentage in bold; all other text escaped. */
@@ -83,6 +113,7 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
   keepWindow(w);
   wireScope(root);
+  wireSorts(root, s);
   await loadSpeed(w, fetcher, true);
   const tiles = root.querySelector("#scorecard");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
