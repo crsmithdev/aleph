@@ -498,3 +498,38 @@ test("GET /api/gates takes window and project: the log and the metrics keep that
     writeFileSync(logPath, was);
   }
 });
+
+test("a cap save keeps the Monitor fold open through the Automation redraw", async () => {
+  const dir = join(process.env.ALEPH_FACTORY_DIR!, "monitor"), file = join(dir, "2026-11-03.json");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(file, JSON.stringify({ day: "2026-11-03", table: {}, text: "READER-TEXT", findings: ["FIRST-ONE"] }));
+  const d: any = await body();
+  const was = { fetch: globalThis.fetch, location: (globalThis as any).location };
+  // The view reads the address and the API. The fake root takes the HTML and keeps the details folds.
+  (globalThis as any).location = { hash: "" };
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => ({ ok: true, json: async () => (init?.method === "POST" ? {} : d) })) as any;
+  const root: any = {
+    details: [] as any[],
+    set innerHTML(html: string) {
+      this.details = [...html.matchAll(/<details><summary>(.*?)<\/summary>/g)].map((m) => {
+        const summary = { textContent: m[1] };
+        return { open: false, summary, querySelector: () => summary, querySelectorAll: () => [] };
+      });
+    },
+    querySelectorAll: (sel: string) => (sel === "details" ? root.details : []),
+  };
+  const fold = () => root.details.find((x: any) => x.summary.textContent.startsWith("2026-11-03"));
+  const form: any = { dataset: { cap: "live" }, elements: { live: { value: "5" } }, querySelector: () => ({ disabled: false }) };
+  form.closest = (sel: string) => (sel === "form.capform" ? form : null);
+  try {
+    root.innerHTML = gates.renderGates(d);
+    gates.mount(root);
+    fold().open = true;
+    await root.onsubmit({ target: form, preventDefault() {} });
+    expect(fold().open).toBe(true);
+  } finally {
+    globalThis.fetch = was.fetch;
+    (globalThis as any).location = was.location;
+    rmSync(dir, { recursive: true });
+  }
+});

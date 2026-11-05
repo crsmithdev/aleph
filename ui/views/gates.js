@@ -1,6 +1,6 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, keepProject, keepWindow, pager, pageHead, projectNow, scopeBar, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, keepProject, keepWindow, pager, pageHead, projectNow, recordState, restoreState, scopeBar, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -174,7 +174,9 @@ const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI"
 async function redraw(root) {
   const res = await fetch(view.api(null, hashQuery()), { cache: "no-store" });
   if (!res.ok) return;
+  const saved = recordState(root);
   root.innerHTML = renderGates(await res.json(), hashQuery());
+  restoreState(root, saved);
   wireScope(root);
 }
 
