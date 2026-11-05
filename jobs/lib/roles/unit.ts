@@ -21,11 +21,11 @@ import { markEnded, markStarted } from "../infra/process.ts";
 import type { Cause } from "../records/outcome.ts";
 import { allJobs, isOpen, jobById, lastReal, openJob, stepOf } from "../records/job.ts";
 import { atCommit, changedSources, checkEnv as checksEnv, checksAt, junitFile, keepGate, lastLines, newTests, runOnCommit, type Ran, type Runner, runChecks, runsBunTest, stopFields, testRecord, withJunit, type CheckExec, type CheckTask } from "../gates/checks.ts";
-import { gates } from "../gates/factory-status.ts";
+import { gates, holdBackend } from "../gates/factory-status.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
-import { modelArgv, modelEnv, readModels, viaOf, WORKER_TIER } from "../routing/models.ts";
+import { modelArgv, modelEnv, readModels, viaOf, viaOfRun, WORKER_TIER } from "../routing/models.ts";
 import { costDetails } from "../../../hooks/lib/pricing.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
 import { oracleCommands, outsideSurface } from "./issue-spec.ts";
@@ -212,6 +212,8 @@ export async function unit(folder: string): Promise<void> {
   }
 
   let ended = updateRun(folder, { ...outcome, phase: undefined, ended: new Date().toISOString() });
+  // A run the API refused for credit did no work: the factory holds its backend until a probe succeeds.
+  if (outcome.cause === "credit") await holdBackend(viaOfRun(ended, readModels()), outcome.reason ?? "the API credit ran out");
   const next = nextStep(ended, !!repo?.autoland);
   if (next) ended = updateRun(folder, { next });
   markEnded(folder, code);

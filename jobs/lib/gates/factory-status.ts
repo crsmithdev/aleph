@@ -13,14 +13,14 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate, Hold } from "./issue-decision.ts";
 import { event, type Event } from "../../../lib/naming.ts";
-import { eventOf, layout, readFactoryLog } from "../infra/layout.ts";
+import { eventOf, factoryLog, layout, readFactoryLog } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
-import { allRuns, held, jobIdOf, isWaiting, isBuild, loadRegistry, lock, onOf, type Entry, type Repo, type Run } from "../records/ledger.ts";
+import { allRuns, held, jobIdOf, isWaiting, isBuild, loadRegistry, lock, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { causeOf } from "../records/outcome.ts";
 import { smokeLine } from "./smoke.ts";
 import { LIVE_CAP, LOCAL_CAP, RUN_CAP, suiteBudgetSeconds } from "../infra/settings.ts";
-import { onGpu, readModels, WORKER_TIER, type Setting, type Tier } from "../routing/models.ts";
+import { BACKENDS, probeBackend, readModels, viaOfRun, type Setting, type Tier, type Via } from "../routing/models.ts";
 
 export const factoryDir = () => layout().factory;
 
@@ -82,6 +82,54 @@ export function setPaused(on: boolean): void {
   else rmSync(pauseFile(), { force: true });
 }
 
+/** The backend the factory holds after a run stopped with the credit cause: `via` is the backend, `why` the run's line. */
+export interface BackendHold { via: Via; why: string; since: string }
+
+const holdFile = () => join(factoryDir(), "backend-hold.json");
+
+/** The backend the factory holds now, or null. */
+export function backendHold(): BackendHold | null {
+  try {
+    const h = JSON.parse(readFileSync(holdFile(), "utf8"));
+    return h && typeof h.via === "string" ? h : null;
+  } catch { return null; }
+}
+
+/** The line the hold gives a run on its backend. */
+const holdBound = (h: BackendHold): Bound =>
+  ({ why: `waits for ${BACKENDS[h.via]}: ${h.why}`, text: `Waiting for ${BACKENDS[h.via]}: ${h.why}`, ev: { action: "waiting", count: `for ${BACKENDS[h.via]}` } });
+
+/**
+ * The backend hold of a goal with no run yet, whose backend only routing names: it binds when this hold already held
+ * the goal, so the dispatch does not route the goal again while the hold lasts.
+ */
+export function heldGoal(name: string): Bound | null {
+  const h = backendHold(), w = record.read(name)?.wait;
+  return h && w?.kind === "backend" && w.since >= h.since ? holdBound(h) : null;
+}
+
+/**
+ * Holds the backend of a run that stopped with the credit cause, and tells Chris once. A backend already held keeps
+ * its line, so the jobs that follow it write no second alert.
+ */
+export async function holdBackend(via: Via, why: string): Promise<void> {
+  if (backendHold()?.via === via) return;
+  mkdirSync(factoryDir(), { recursive: true });
+  writeFileSync(holdFile(), JSON.stringify({ via, why, since: new Date().toISOString() }) + "\n");
+  factoryLog(`held ${BACKENDS[via]}: ${why}`);
+  await tell(`the factory holds ${BACKENDS[via]}: ${why}`);
+}
+
+/** Probes the held backend and lifts the hold when it answers, with one line. Returns that line, or null. */
+export async function probeHold(up: (via: Via) => Promise<boolean> = probeBackend): Promise<string | null> {
+  const h = backendHold();
+  if (!h || !(await up(h.via))) return null;
+  rmSync(holdFile(), { force: true });
+  const line = `${BACKENDS[h.via]} answers again: the hold is off`;
+  factoryLog(line);
+  return line;
+}
+
 const sandboxRepos = () => Object.values(loadRegistry()).filter((r) => r.sandbox);
 
 /** The registry's factory repos: those whose runs are sandboxed. */
@@ -104,10 +152,7 @@ export function spentToday(now = Date.now(), runs: Entry[] = allRuns()): number 
 export const liveEntries = (runs: Entry[] = allRuns()): Entry[] => runs.filter((e) => isBuild(e.run.kind) && (isLive(e.folder) || isStarting(e)));
 
 /** Whether a build run is on the local backend: unit.ts sets its model to its tier's, and before that its tier's model is the local one. */
-export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, Setting>): boolean => {
-  const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
-  return onGpu(run.model) || (tier !== undefined && onGpu(models[tier].model));
-};
+export const onLocal = (run: Pick<Run, "model" | "merge">, models: Record<Tier, Setting>): boolean => viaOfRun(run, models) === "local";
 
 /** Live agent runs on Claude, the count the live cap checks: a local-backend run counts against LOCAL_CAP only. */
 export const liveRuns = (runs?: Entry[]): number => { const models = readModels(); return liveEntries(runs).filter((e) => !onLocal(e.run, models)).length; };
@@ -136,16 +181,18 @@ export async function gpuSlot(waitMs: number): Promise<(() => void) | null> {
 const PAUSED: Bound = { why: "paused", text: "The factory is paused", ev: { action: "paused" } };
 
 /** The gates of the whole factory, in the order of GATES: the others are each goal's own. */
-export const FACTORY_GATES = ["pause", "live-cap"] as const satisfies readonly Gate[];
+export const FACTORY_GATES = ["pause", "backend", "live-cap"] as const satisfies readonly Gate[];
 
 export type FactoryGate = (typeof FACTORY_GATES)[number];
 
 /**
- * Each factory gate that binds now, or null: the pause, the live cap. `jobs`, when given, hold every run. `run`, when given,
- * is the run to start: on the local backend the live cap is LOCAL_CAP over the live local runs and a held `gpu` lock.
+ * Each factory gate that binds now, or null: the pause, the backend the factory holds, the live cap. `jobs`, when given,
+ * hold every run. `run`, when given, is the run to start: the backend gate binds on the backend it runs on, and on the
+ * local backend the live cap is LOCAL_CAP over the live local runs and a held `gpu` lock.
  */
 export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): Record<FactoryGate, Bound | null> {
   const models = readModels();
+  const hold = backendHold();
   const local = run !== undefined && onLocal(run, models);
   // A title or judge call holds the `gpu` lock while it runs on the local backend: it takes the GPU slot as a local run does.
   const call = local && held("gpu");
@@ -155,6 +202,7 @@ export function factoryGates(jobs?: Job[], run?: Pick<Run, "model" | "merge">): 
     : { why: `${live} agent runs are live`, text: `Waiting for a slot (${live} of ${LIVE_CAP()} running)`, ev: { action: "full", count: `${live} / ${LIVE_CAP()}` } };
   return {
     pause: paused() ? PAUSED : null,
+    backend: hold && run !== undefined && viaOfRun(run, models) === hold.via ? holdBound(hold) : null,
     "live-cap": live >= (local ? LOCAL_CAP : LIVE_CAP()) ? bound : null,
   };
 }
@@ -394,6 +442,15 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
   const busy = (f: string | undefined) => (f ? { file: f, what: `both change the busy file ${f}` } : undefined);
   const file = mine.length ? openWait(repo, jobs, (theirs) => busy(surfacePaths(theirs.spec).find((p) => mine.includes(p)))) : null;
   return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? { file: "gpt-oss", what: "both use the gpt-oss server" } : undefined) : null);
+}
+
+/**
+ * The run a goal would start next: its newest build run, whose model says which backend the goal runs on. Null when the
+ * goal has no run yet, so a gate that asks the run to start reads nothing.
+ */
+export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null {
+  return jobs.flat().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind))
+    .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started)).at(-1)?.run ?? null;
 }
 
 /** The facts of a goal that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */

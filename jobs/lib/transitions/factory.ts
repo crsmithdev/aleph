@@ -29,7 +29,7 @@ import { drop, land, recheck, refusal, startIssue } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, TIER_MODEL, TIERS, type Tier } from "../routing/route.ts";
-import { appendSuiteHistory, mainRed, writeBaseline, clearCap, issueFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "../gates/factory-status.ts";
+import { appendSuiteHistory, mainRed, writeBaseline, clearCap, backendHold, heldGoal, issueFacts, issueJob, markCap, markStreak, nextRun, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
@@ -78,10 +78,11 @@ type Land = (name: string) => Promise<string | null>;
  * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
  * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
  * steps a pause kept (`startKept`), the rescue of returned, failed, killed and lost runs, the lands and the close of parents whose parts are done.
- * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 6 gates of issueDecision in
+ * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 7 gates of issueDecision in
  * order; the first that binds skips it, and its hold record names that gate. Between Busy file and Loop guard a goal whose last build run ended with the
  * API credit error (`API Error: 402`) less than 10 minutes ago (`CREDIT_WAIT_MS`) waits out its credit wait with a `credit-wait` hold; the credit wait is
- * not one of the 6 gates, because the goal's own last run decides it. A goal no gate holds starts. Each start
+ * not one of the 7 gates, because the goal's own last run decides it. The run a gate reads is the goal's newest build run (`nextRun`),
+ * whose model names the backend the goal runs on. A goal no gate holds starts. Each start
  * holds a lock on its goal and re-reads the jobs under it, so two dispatches at once start a goal once. `start`
  * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts goals
  * only: an issue is closed as done once its goals are all done (`closeIssues`). Intake (intake.ts) took each goal in
@@ -154,10 +155,16 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       if (!item) { skip(name, "not-ready", "not a goal", { action: "parent" }); continue; }
       const facts = { ...issueFacts(repo, item, jobs), done, red };
       // A pass that began before a pause must not start a run after it.
-      let d = issueDecision({ ...facts, ...factoryGates(jobs) });
+      const run = nextRun(repo.key, name, jobs);
+      let d = issueDecision({ ...facts, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { backend: heldGoal(name) }) });
       let tier: Tier | null | undefined;
+      // A goal with no run yet starts on its tier's backend: while a backend is held, rate the goal, and check that backend.
+      if (!run && d.kind === "ready" && backendHold()) {
+        tier = await route(issueBrief(item, name, jobs).spec);
+        d = issueDecision({ ...facts, ...factoryGates(jobs, tier ? { model: TIER_MODEL[tier] } : {}) });
+      }
       // The live cap held the goal, but a tier on the local backend has room: rate the goal, and check its tier's cap.
-      if (d.kind === "live-cap" && TIERS.some((t) => !factoryGates(jobs, { model: TIER_MODEL[t] })["live-cap"])) {
+      if (d.kind === "live-cap" && tier === undefined && TIERS.some((t) => !factoryGates(jobs, { model: TIER_MODEL[t] })["live-cap"])) {
         tier = await route(issueBrief(item, name, jobs).spec);
         if (tier) d = issueDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
       }
@@ -419,7 +426,9 @@ export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()
   if (!liveRuns(runs)) {
     for (const { repo, item } of openIssues(lists)) {
       const facts = issueFacts(repo, item, jobs);
-      if (issueDecision({ ...facts, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
+      const run = nextRun(repo.key, facts.name, jobs);
+      const stop = { ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { backend: heldGoal(facts.name) }) };
+      if (issueDecision({ ...facts, ...stop, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
     }
   }
   if (!live("intake") && !gates({ only: ["live-cap"], jobs })) {

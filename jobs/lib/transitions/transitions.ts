@@ -17,7 +17,7 @@ import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
 import { git } from "../infra/git.ts";
 import { onMain } from "../records/status.ts";
 import { refuse } from "./refusal.ts";
-import { gates, liveEntries, onLocal } from "../gates/factory-status.ts";
+import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
 import { factoryLog } from "../infra/layout.ts";
 import { route, TIER_MODEL, type Tier } from "../routing/route.ts";
@@ -68,8 +68,10 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, c
   let gpu: (() => void) | null = null; // a local run holds the GPU slot from its cap check until its run record is written
   try {
     if (isBuild(run.kind)) {
-      const full = gates({ only: ["live-cap"], run });
-      if (full) refuse(`${full.why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
+      // The run's model, or its tier's, names its backend: a backend the factory holds starts no run, whatever the caller.
+      const f = factoryGates(undefined, run);
+      if (f.backend) refuse(f.backend.why);
+      if (f["live-cap"]) refuse(`${f["live-cap"].why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
       if (onLocal(run, readModels())) {
         gpu = await lock("gpu", 0);
         if (!gpu) refuse("a local call holds the GPU");

@@ -3,11 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GATES, issueDecision, refDone, type IssueFacts } from "./issue-decision.ts";
+import { factoryGates, holdBackend } from "./factory-status.ts";
 
 const item = (fm: Record<string, unknown> = {}) => ({ fm, notes: [] }) as unknown as IssueFacts["item"];
 const facts = (f: Partial<IssueFacts> = {}): IssueFacts => ({ name: "fac-9", item: item(), done: () => false, ...f });
 const kind = (f: Partial<IssueFacts>) => issueDecision(facts(f)).kind;
 const live = { why: "12 agent runs are live", text: "Waiting for a slot (12 of 12 running)" };
+const backend = { why: "waits for OpenRouter: the API credit ran out", text: "Waiting for OpenRouter: the API credit ran out" };
 const MIN = 60_000;
 
 test("a goal with no fact against it is ready, and a fact not read stops nothing", () => {
@@ -19,10 +21,10 @@ test("Not ready names only the open after refs, in both lines", () => {
   expect(d).toEqual({ kind: "not-ready", ids: ["fac-2", "fac-3"], why: "after fac-2,fac-3", text: "Waits on fac-2, fac-3", ev: { action: "after", on: ["fac-2", "fac-3"] } });
 });
 
-test("the 6 gates bind in the order of GATES, Loop guard last", () => {
-  expect([...GATES]).toEqual(["pause", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"]);
-  const all: Partial<IssueFacts> = { pause: { why: "paused", text: "The factory is paused" }, red: "main is red", open: "running", "live-cap": live, busy: { why: "waits for fac-1: both change the busy file a.ts", on: "fac-1", file: "a.ts" }, noCommits: 3 };
-  const clear: Partial<IssueFacts>[] = [{ pause: null }, { red: null }, { open: null }, { "live-cap": null }, { busy: null }, { noCommits: 0 }];
+test("the 7 gates bind in the order of GATES, Loop guard last", () => {
+  expect([...GATES]).toEqual(["pause", "backend", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"]);
+  const all: Partial<IssueFacts> = { pause: { why: "paused", text: "The factory is paused" }, backend: backend, red: "main is red", open: "running", "live-cap": live, busy: { why: "waits for fac-1: both change the busy file a.ts", on: "fac-1", file: "a.ts" }, noCommits: 3 };
+  const clear: Partial<IssueFacts>[] = [{ pause: null }, { backend: null }, { red: null }, { open: null }, { "live-cap": null }, { busy: null }, { noCommits: 0 }];
   let f = all;
   for (const [i, k] of GATES.entries()) {
     expect(kind(f)).toBe(k);
@@ -76,6 +78,26 @@ test("a run that ended with the API credit error holds the goal for its wait and
 
 test("a factory gate gives the dispatch its why and Chris its text", () => {
   expect(issueDecision(facts({ "live-cap": live }))).toEqual({ kind: "live-cap", ...live });
+});
+
+test("a goal whose run is on the held backend gets the hold decision, not a start", async () => {
+  const was = process.env.ALEPH_FACTORY_DIR, url = process.env.SIDETONE_TELL_URL, dir = mkdtempSync(join(tmpdir(), "hold-"));
+  process.env.ALEPH_FACTORY_DIR = dir;
+  process.env.SIDETONE_TELL_URL = "http://127.0.0.1:1/tell";
+  try {
+    await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
+    expect(issueDecision(facts({ ...factoryGates(undefined, { model: "deepseek-v4.1-flash" }) }))).toEqual({
+      kind: "backend",
+      why: "waits for OpenRouter: API Error: 402 This request would exceed your available credits",
+      text: "Waiting for OpenRouter: API Error: 402 This request would exceed your available credits",
+      ev: { action: "waiting", count: "for OpenRouter" },
+    });
+    expect(issueDecision(facts({ ...factoryGates(undefined, { model: "haiku" }) })).kind).toBe("ready");
+  } finally {
+    if (was === undefined) delete process.env.ALEPH_FACTORY_DIR; else process.env.ALEPH_FACTORY_DIR = was;
+    if (url === undefined) delete process.env.SIDETONE_TELL_URL; else process.env.SIDETONE_TELL_URL = url;
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("refDone: an item absent from a read list is done; a list not read blocks", () => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
 import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts";
-import { issueFacts } from "./factory-status.ts";
+import { issueFacts, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -53,4 +53,31 @@ test("a run whose stderr.log holds the credit error but that states no credit ca
   const f = allFacts(id);
   expect(f.startsInHour).toBe(1);
   expect(f.creditWait).toBeNull();
+});
+
+test("a held backend binds the gates for a run on its own model and not for a Claude run", async () => {
+  await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
+  const held = gates({ run: { model: "deepseek-v4.1-flash" } });
+  expect(held?.gate).toBe("backend");
+  expect(held?.why).toBe("waits for OpenRouter: API Error: 402 This request would exceed your available credits");
+  expect(gates({ run: { model: "haiku" } })).toBeNull();
+  expect(gates({ run: { model: "sonnet" } })).toBeNull();
+});
+
+test("the hold lifts when the probe answers, and stays when the probe fails", async () => {
+  await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
+  expect(await probeHold(async () => false)).toBeNull();
+  expect(backendHold()?.via).toBe("openrouter");
+  expect(await probeHold(async () => true)).toBe("OpenRouter answers again: the hold is off");
+  expect(backendHold()).toBeNull();
+});
+
+test("a goal with no run that the hold held stays held with no new routing, until the hold lifts", async () => {
+  await holdBackend("openrouter", "API Error: 402 This request would exceed your available credits");
+  recordHold("fac-1", "backend", "waits for OpenRouter: API Error: 402 This request would exceed your available credits");
+  recordHold("fac-2", "live-cap", "3 agent runs are live");
+  expect(heldGoal("fac-1")?.why).toBe("waits for OpenRouter: API Error: 402 This request would exceed your available credits");
+  expect(heldGoal("fac-2")).toBeNull();
+  await probeHold(async () => true);
+  expect(heldGoal("fac-1")).toBeNull();
 });

@@ -40,6 +40,16 @@ export const viaOf = (model: string | undefined): Via => (model && MODELS[model]
 /** Whether a model's calls take the GPU slot. */
 export const onGpu = (model: string | undefined): boolean => viaOf(model) === "local";
 
+/** The name of a backend in a line Chris reads. */
+export const BACKENDS: Record<Via, string> = { claude: "Claude", local: "the local server", openrouter: "OpenRouter" };
+
+/** Who serves a run's calls: its own model's backend or, when its model is a Claude tier model, its tier's model's backend. */
+export function viaOfRun(run: { model?: string; merge?: true }, models: Record<Tier, Setting>): Via {
+  const own = viaOf(run.model);
+  const tier = run.merge ? "merge" : WORKER_TIER[run.model ?? ""];
+  return own === "claude" && tier !== undefined ? viaOf(models[tier].model) : own;
+}
+
 const MODEL_VARS = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_DEFAULT_HAIKU_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL",
   "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_AUTO_COMPACT_WINDOW", "CLAUDE_CODE_MAX_OUTPUT_TOKENS"];
 
@@ -67,6 +77,30 @@ export async function backendUp(model: string): Promise<boolean> {
   if (via === "openrouter") return openRouterKey() !== null;
   if (via !== "local") return true;
   try { return (await fetch(`${LOCAL_URL}/health`, { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
+}
+
+/**
+ * Whether a backend takes a call now: the local server answers /health, OpenRouter answers a one-token call, and
+ * Claude's subscription needs no probe. The credit error the factory holds a backend for is a 402, and a refused
+ * key a 401; any other answer means the backend takes calls.
+ */
+export async function probeBackend(via: Via): Promise<boolean> {
+  if (via === "claude") return true;
+  const found = Object.entries(MODELS).find(([, m]) => m.via === via);
+  if (!found) return true;
+  const [name, model] = found;
+  if (via === "local") return backendUp(name);
+  const key = openRouterKey();
+  if (!key) return false;
+  try {
+    const r = await fetch(`${OPENROUTER_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+      body: JSON.stringify({ model: model.id, messages: [{ role: "user", content: "ok" }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    return r.status !== 402 && r.status !== 401;
+  } catch { return false; }
 }
 
 /** The models that are not Claude's, which every tier offers after its Claude model. */

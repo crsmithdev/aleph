@@ -18,7 +18,7 @@ export const NO_COMMIT_LIMIT = 3;
 export const CREDIT_WAIT_MS = 10 * 60_000;
 
 /** The dispatch's gates, in the order it asks them. Loop guard is last, so it counts only goals that would start. */
-export const GATES = ["pause", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"] as const;
+export const GATES = ["pause", "backend", "baseline", "not-ready", "live-cap", "busy-file", "loop-guard"] as const;
 
 /** The kind of a hold record: a gate of GATES, or `credit-wait`, which the goal's own last run decides. */
 export type Gate = (typeof GATES)[number] | "credit-wait";
@@ -35,6 +35,8 @@ export interface IssueFacts {
   item: issues.Issue;
   done: (ref: string) => boolean;
   pause?: Bound | null;
+  /** The backend hold, when the run the goal would start is on the backend the factory holds. */
+  backend?: Bound | null;
   /** The line of the repo's baseline when it is red, still running or unchecked. */
   red?: string | null;
   /** The condition of the goal's open job. */
@@ -55,7 +57,7 @@ export interface IssueFacts {
 
 /** `why` is the line in the dispatch's skipped list; `text` is the line Chris reads on the Queued lane. */
 export type IssueDecision = Bound & (
-  | { kind: "ready" | "pause" | "baseline" | "live-cap" | "credit-wait" }
+  | { kind: "ready" | "pause" | "backend" | "baseline" | "live-cap" | "credit-wait" }
   /** `on`: the id of the issue whose open job holds the busy file. */
   | { kind: "busy-file"; on?: string }
   /** `ids`: the refs of `after` that are not done, when that is why. */
@@ -89,6 +91,7 @@ function notReady(f: IssueFacts): Extract<IssueDecision, { kind: "not-ready" }> 
 /** The first gate that binds, in the order of GATES, or `ready`. */
 export function issueDecision(f: IssueFacts): IssueDecision {
   if (f.pause) return { kind: "pause", ...f.pause };
+  if (f.backend) return { kind: "backend", ...f.backend };
   // The fix of a red main is the one goal a red baseline lets through: it is how main gets green again.
   // `add` writes the label into `areas`; an older issue may carry it in `labels`, as the firefighter's isRedMain reads.
   if (f.red && !areasOf(f.item).includes("red-main") && !labels(f.item).includes("red-main")) return { kind: "baseline", why: f.red, text: f.red, ev: { action: "red" } };
