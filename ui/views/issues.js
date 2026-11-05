@@ -333,20 +333,28 @@ const quantile = (xs, p) => {
   const s = [...xs].sort((a, b) => a - b), at = (s.length - 1) * p, lo = Math.floor(at);
   return s[lo] + (s[Math.ceil(at)] - s[lo]) * (at - lo);
 };
-/** For each kind, the p50 and p90 days from created to closed over the rows closed inside the window; null for a kind with none. */
+/** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. A row counts from its times, or from its dates where it has none. `unit` is "hours" when a row has a time and every value is under 2 days; else "days". */
 export function closeTimes(rows, win = "month", now = new Date()) {
-  const out = { kinds: KINDS, p50: [], p90: [] };
+  const out = { kinds: KINDS, unit: "days", p50: [], p90: [] };
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[win])) * DAY, at = inSpan(now.getTime(), WINDOW_DAYS[win]);
-  for (const k of KINDS) {
-    const days = rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && dayMs(r.created) && dayMs(r.closed) && at(r.closed, r.closedTime, 0, from, end)).map((r) => (dayMs(r.closed) - dayMs(r.created)) / DAY);
-    out.p50.push(quantile(days, 0.5));
-    out.p90.push(quantile(days, 0.9));
+  const stamp = (time, d) => { const t = Date.parse(String(time ?? "").replace(" ", "T")); return t === t ? t : dayMs(d); };
+  let timed = false;
+  const spans = KINDS.map((k) => rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && dayMs(r.created) && dayMs(r.closed) && at(r.closed, r.closedTime, 0, from, end)).map((r) => {
+    timed ||= !!(r.createdTime || r.closedTime);
+    return stamp(r.closedTime, r.closed) - stamp(r.createdTime, r.created);
+  }));
+  const hours = timed && spans.flat().every((ms) => ms < 2 * DAY);
+  if (hours) out.unit = "hours";
+  for (const xs of spans) {
+    const per = xs.map((ms) => ms / (hours ? 3600000 : DAY));
+    out.p50.push(quantile(per, 0.5));
+    out.p90.push(quantile(per, 0.9));
   }
   return out;
 }
 
 export const backlogOption = (b) => stackedAreaOption(b.labels, PRIORITY_ORDER.map((p) => ({ name: p, data: b.counts[p] })));
-export const closeOption = (c) => rangeBarOption(c.kinds, c.p50, c.p90);
+export const closeOption = (c) => rangeBarOption(c.kinds, c.p50, c.p90, c.unit === "hours" ? "h" : "d");
 export const flowOption = (f) => gapLinesOption(f.labels, [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
@@ -370,7 +378,7 @@ function renderDetail(rows, o) {
 
 /** The three charts under the tiles, on every tile. */
 const renderCharts = (o) => `<div class="trio">${card(`Open backlog, last ${o.window in WINDOW_DAYS ? o.window : "week"}`, '<p>Open issues over time, by priority.</p><div class="chartbox" data-chart="backlog"></div>')}` +
-  `${card("Time to close", '<p>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
+  `${card("Time to close", '<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
   `${card(`Filed and closed per ${bucketOf(o)}`, '<p>Blue is filed; green is closed; the gap is shaded.</p><div class="chartbox" data-chart="flow"></div>')}</div>`;
 
 // ---- The filters ----
@@ -429,7 +437,9 @@ function draw(root) {
   const panel = (name, option) => { const el = root.querySelector(`.chartbox[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
   const win = live.o().window, now = new Date();
   panel("backlog", backlogOption(backlog(rows, win, now)));
-  panel("close", closeOption(closeTimes(rows, win, now)));
+  const close = closeTimes(rows, win, now), note = root.querySelector("[data-close-note]");
+  if (note) note.textContent = `${close.unit === "hours" ? "Hours" : "Days"} from filed to closed: the bar is p50, the tick p90.`;
+  panel("close", closeOption(close));
   panel("flow", flowOption(flow(rows, win, now)));
 }
 

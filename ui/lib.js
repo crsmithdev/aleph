@@ -532,12 +532,12 @@ export const stackedAreaOption = (labels, series) => ({
   series: series.map((s) => ({ type: "line", name: s.name, stack: "all", symbol: "none", lineStyle: { width: 1 }, areaStyle: { opacity: 0.6 }, data: s.data })),
 });
 /** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`. */
-export const rangeBarOption = (labels, p50, p90) => ({
+export const rangeBarOption = (labels, p50, p90, suffix = "d") => ({
   animation: false,
   grid: { left: 64, right: 16, top: 24, bottom: 20 },
   legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
   tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
-  xAxis: { type: "value", splitLine: { lineStyle: { opacity: 0.5 } }, axisLabel: { formatter: "{value}d" } },
+  xAxis: { type: "value", splitLine: { lineStyle: { opacity: 0.5 } }, axisLabel: { formatter: `{value}${suffix}` } },
   yAxis: { type: "category", data: labels, inverse: true, axisTick: { show: false } },
   series: [
     { type: "bar", name: "p50", barMaxWidth: 24, data: p50 },

@@ -323,6 +323,17 @@ describe("views", () => {
     expect(page).not.toContain("30 days");
   });
 
+  test("Time to close counts from the stored times and shows hours when every value is under 2 days", () => {
+    const now = new Date("2026-11-04T16:00");
+    const c = v.closeTimes([
+      { status: "done", kind: "bug", created: "2026-11-04", createdTime: "2026-11-04 08:00", closed: "2026-11-04", closedTime: "2026-11-04 11:00" },
+      { status: "done", kind: "bug", created: "2026-11-04", createdTime: "2026-11-04 08:00", closed: "2026-11-04", closedTime: "2026-11-04 13:00" },
+    ], "week", now);
+    expect(c.unit).toBe("hours");
+    expect(c.p50[1]).toBe(4);
+    expect(v.closeOption(c).xAxis.axisLabel.formatter).toContain("h");
+  });
+
   test("the window sets the Filed and Closed tiles; the Open tile is a Status card; the head holds the window; the form comes first", async () => {
     const now = new Date("2026-11-01T12:00");
     const rows = v.issueRows({ issues: [
