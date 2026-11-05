@@ -12,7 +12,7 @@ import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "
 import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, HOME_MD, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { recallQuery } from "./recall-query.ts";
-import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, screenCandidates, screenWords, stampProvenance, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./vault.ts";
+import { budgetFindings, citedTraces, clock, fixFrontmatter, folderFor, health, healthLine, HOME_KINDS, homeCandidates, LINE_BUDGET, links, lintVault, loadVault, planHome, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, staleness, today, validateNote, vaultDir, wikiNotes, withHealth, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../jobs/lib/settings.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
@@ -124,9 +124,9 @@ async function init(): Promise<void> {
   if (existsSync(join(root, "Home.md"))) { console.error(`vault already at ${root}`); exit(1); }
   const made: string[] = [];
   const lay = (rel: string, text: string) => { writeFileSync(join(root, rel), text); made.push(join(root, rel)); };
-  for (const d of ["wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "wiki/episodes", "daily", "archive", "attachments", ".obsidian"]) mkdirSync(join(root, d), { recursive: true });
+  for (const d of ["wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "daily", "archive", "attachments", ".obsidian"]) mkdirSync(join(root, d), { recursive: true });
   for (const d of ["daily", "archive", "attachments"]) lay(join(d, ".gitkeep"), "");
-  for (const d of ["decisions", "concepts", "entities", "projects", "gotchas", "episodes"]) lay(join("wiki", d, ".gitkeep"), "");
+  for (const d of ["decisions", "concepts", "entities", "projects", "gotchas"]) lay(join("wiki", d, ".gitkeep"), "");
   lay("VAULT.md", VAULT_MD);
   lay("Home.md", HOME_MD);
   lay("MEMORY.md", MEMORY_MD);
@@ -203,7 +203,7 @@ async function write(): Promise<void> {
   const overBudget = budgetFindings(await loadVault(root));
 
   // The contradiction screen. A Jev failure never blocks a write.
-  if (judgeChoice() !== "haiku" && draft.fm.kind !== "episode") {
+  if (judgeChoice() !== "haiku") {
     const candidates = screenCandidates(placed, notes);
     if (candidates.length) {
       const questions: Record<string, Question> = {};
@@ -254,12 +254,9 @@ async function write(): Promise<void> {
 // ---------------------------------------------------------------- recall
 async function recall(): Promise<void> {
   requireVault();
-  const episodes = has("episodes");
-  // --episodes takes no value, so the word after it is part of the query.
-  const args = rest.filter((a) => a !== "--episodes");
-  const q = args.filter((a, i) => !a.startsWith("--") && args[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
+  const q = rest.filter((a, i) => !a.startsWith("--") && rest[i - 1]?.startsWith("--") !== true).join(" ").trim().toLowerCase();
   const scope = flag("scope");
-  if (!q && !scope) { console.error('usage: vault recall [--episodes] <query> [--scope <name>]  |  vault recall --scope <name>'); exit(1); }
+  if (!q && !scope) { console.error('usage: vault recall <query> [--scope <name>]  |  vault recall --scope <name>'); exit(1); }
   // `--scope` alone lists a project's notes: at 165 notes "what do we know
   // about cloudchamber" is a real question, and ranking every note by one word
   // could not answer it.
@@ -274,18 +271,7 @@ async function recall(): Promise<void> {
     return -1;
   };
   const all = wikiNotes(await loadVault(root));
-  if (episodes) {
-    // Episodes rank by how many distinct query words their title or body holds.
-    const want = new Set(screenWords(q));
-    const top = all.filter((n) => n.fm.kind === "episode" && scoped(n))
-      .map((n) => { const has = new Set(screenWords(`${n.title} ${n.body}`)); return { n, r: [...want].filter((w) => has.has(w)).length }; })
-      .filter((x) => x.r > 0)
-      .sort((a, b) => b.r - a.r || a.n.title.localeCompare(b.n.title)).slice(0, 3);
-    noteRead(top.map(({ n }) => n.title));
-    out(top.map(({ n, r }) => ({ title: n.title, path: n.rel, rank: r, scope: String(n.fm.scope), frontmatter: n.fm })));
-    return;
-  }
-  const notes = all.filter((n) => n.fm.kind !== "episode");
+  const notes = all;
   const hits = notes.filter(scoped).map((n) => ({ n, r: q ? rank(n) : 4 })).filter((x) => x.r >= 0)
     .sort((a, b) => a.r - b.r || a.n.title.localeCompare(b.n.title));
   noteRead(hits.map(({ n }) => n.title));
@@ -576,7 +562,7 @@ export async function run(argv: string[]): Promise<void> {
     case "compile": await compile(); break;
     case "misses": await misses(); break;
     default:
-      console.error("usage: vault <init|write <file> --why <text>|recall [--episodes] <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|consolidate [--apply]|archive <title> --why <text>|compile [date]|misses [--days N]>");
+      console.error("usage: vault <init|write <file> --why <text>|recall <query> [--scope <name>]|lint [--fix] [--overlap] [--template]|adopt <path> --why <text>|rename-scope <old> <new> [--apply]|consolidate [--apply]|archive <title> --why <text>|compile [date]|misses [--days N]>");
       exit(2);
   }
 }

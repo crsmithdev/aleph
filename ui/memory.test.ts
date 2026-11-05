@@ -39,8 +39,8 @@ beforeAll(async () => {
   note("gotchas", "Other trap", "gotcha", "other", "**Claim.** A trap; see [[Use Bun]].");
   note("concepts", "Bunny", "concept", "aleph", "**Claim.** Mentions bun in the body.");
   writeFileSync(join(root, "MEMORY.md"), "# Memory\n\nChris prefers short answers.\n");
-  mkdirSync(join(root, "wiki", "episodes"), { recursive: true });
-  note("episodes", "Goal aleph-1", "episode", "aleph", "**Claim.** It went fine.");
+  mkdirSync(join(base, "factory", "episodes"), { recursive: true });
+  writeFileSync(join(base, "factory", "episodes", "aleph-1 Goal.md"), `---\nkind: episode\nscope: aleph\nupdated: ${today}\n---\n## Goal\nShip it.\n`);
   const hand = join(base, "handoffs");
   mkdirSync(hand);
   writeFileSync(join(hand, "current.md"), "# Handoff\n\n## Intent\n\nFinish the memory tab.\n");
@@ -57,7 +57,7 @@ beforeAll(async () => {
   git(join(base, "items"), "push", "-q", "origin", "main");
   writeFileSync(join(base, "repos.json"), "{}");
   mkdirSync(join(base, "jobs"));
-  const restoreStore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs") });
+  const restoreStore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
   restoreEnv = () => { restoreStore(); restoreVault(); restoreHandoffs(); };
   clearCache();
   ({ server, stop } = await withServer());
@@ -66,6 +66,12 @@ afterAll(() => {
   stop();
   restoreEnv();
   rmSync(base, { recursive: true, force: true });
+});
+
+test("the episodic block lists the pages in the factory's episodes folder", async () => {
+  const m: any = await (await at("/api/memory")).json();
+  expect(m.types.episodic.episodes).toEqual([{ title: "aleph-1 Goal", scope: "aleph", updated: today }]);
+  expect(m.types.episodic.keepDays).toBe(14);
 });
 
 test("?project= keeps only that project's data", async () => {

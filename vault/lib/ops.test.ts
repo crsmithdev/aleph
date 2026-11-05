@@ -90,7 +90,7 @@ describe("init", () => {
     const r = (await spawnCli("init"));
     expect(r.code).toBe(0);
     expect(r.json.commit).toMatch(/^[0-9a-f]{7,}$/);
-    for (const p of ["VAULT.md", "Home.md", "MEMORY.md", "wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "wiki/episodes/.gitkeep", "daily", "archive", "attachments", ".obsidian/daily-notes.json", ".gitignore"]) expect(existsSync(join(vault, p))).toBe(true);
+    for (const p of ["VAULT.md", "Home.md", "MEMORY.md", "wiki/decisions", "wiki/concepts", "wiki/entities", "wiki/projects", "wiki/gotchas", "daily", "archive", "attachments", ".obsidian/daily-notes.json", ".gitignore"]) expect(existsSync(join(vault, p))).toBe(true);
     const daily = JSON.parse(readFileSync(join(vault, ".obsidian/daily-notes.json"), "utf8"));
     expect(daily).toEqual({ folder: "daily", format: "YYYY-MM-DD" });
     expect(JSON.parse(readFileSync(join(vault, ".obsidian/app.json"), "utf8")).attachmentFolderPath).toBe("attachments");
@@ -841,17 +841,5 @@ describe("provenance and the contradiction screen", () => {
     const r = await write(note("Sprocket Ledger Rules", { scope: "screen" }), { ALEPH_JEV_URL: "http://127.0.0.1:1/" });
     expect(r.code).toBe(0);
     expect(r.stderr).toContain("warn contradiction");
-  });
-});
-
-describe("episode", () => {
-  const episodeBody = (word: string, skip?: string) => ["Goal", "What landed", "How it went", "Cost", "What went wrong"]
-    .filter((h) => h !== skip).map((h) => `## ${h}\n${word} ${h.toLowerCase()}\n`).join("\n");
-  const episode = (title: string, word: string, skip?: string) => note(title, { kind: "episode" }, episodeBody(word, skip));
-  test("recall --episodes returns the top 3", async () => {
-    for (const t of ["Quartz One", "Quartz Two", "Quartz Three", "Quartz Four"]) expect((await cli("write", episode(t, "quartz"), "--why", "x")).code).toBe(0);
-    const hits = (await cli("recall", "--episodes", "quartz")).json;
-    expect(hits.length).toBe(3);
-    expect(hits[0].rank).toBeGreaterThan(0);
   });
 });

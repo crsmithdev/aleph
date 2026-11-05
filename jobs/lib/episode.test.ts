@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
-import { episodeTitle, writeEpisodes } from "./episode.ts";
+import { episodeTitle, KEEP_DAYS, writeEpisodes } from "./episode.ts";
 import { loadRegistry, writeRun, type Run } from "./ledger.ts";
 import { factoryRepos, vault } from "../../tests/git-fixture.ts";
 
@@ -72,10 +72,12 @@ const land = (id: number | string): string => {
 const run = (id: string, o: Partial<Run>): void => {
   const folder = join(base, "jobs", id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: "2026-10-28T10:00:00Z", ended: "2026-10-28T10:20:00Z", ...o });
+  writeRun(folder, { kind: "build", job: id, name: "fac-1", repo: "fac", condition: "landed", told: true, started: hoursAgo(1), ended: hoursAgo(0.5), ...o });
 };
 
-const pages = () => readdirSync(join(base, "vault", "wiki", "episodes")).filter((f) => f.endsWith(".md"));
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+const episodes = () => join(base, "factory", "episodes");
+const pages = () => readdirSync(episodes()).filter((f) => f.endsWith(".md"));
 const section = (text: string, name: string) => text.split(`## ${name}\n`)[1].split("\n## ")[0];
 
 test("a 400-character multi-byte title is cut to fit a file name", () => {
@@ -96,8 +98,35 @@ test("an unreachable Langfuse does not block the page", async () => {
   process.env.LANGFUSE_BASE_URL = "http://127.0.0.1:1";
   const r = await writeEpisodes([loadRegistry().fac]);
   expect(r.failed).toEqual([]);
-  expect(existsSync(join(base, "vault", "wiki", "episodes"))).toBe(true);
-  expect(readFileSync(join(base, "vault", "wiki", "episodes", pages()[0]), "utf8")).toContain("Langfuse unreachable");
+  expect(readFileSync(join(episodes(), pages()[0]), "utf8")).toContain("Langfuse unreachable");
+});
+
+test("a done goal gets a page in the factory's episodes folder and no vault commit", async () => {
+  const id = add("ship it");
+  land(id);
+  run("20261028-100000-fac-1-agent", { on: `fac-${id}` });
+  const head = sh(join(base, "vault"), "git", "rev-parse", "HEAD");
+  const r = await writeEpisodes([loadRegistry().fac]);
+  expect(r).toEqual({ written: [`fac-${id} ship it`], failed: [] });
+  expect(pages()).toEqual([`fac-${id} ship it.md`]);
+  expect(sh(join(base, "vault"), "git", "rev-parse", "HEAD")).toBe(head);
+  expect(existsSync(join(base, "vault", "wiki", "episodes"))).toBe(false);
+});
+
+test(`a page older than ${KEEP_DAYS} days is deleted, and a goal whose last run ended before then gets no page`, async () => {
+  const old = add("old one"), fresh = add("fresh one");
+  land(old);
+  land(fresh);
+  run("20261001-100000-fac-1-agent", { on: `fac-${old}`, started: hoursAgo(24 * (KEEP_DAYS + 1)), ended: hoursAgo(24 * (KEEP_DAYS + 1) - 1) });
+  run("20261028-100000-fac-1-agent", { on: `fac-${fresh}` });
+  mkdirSync(episodes(), { recursive: true });
+  const stale = join(episodes(), "fac-99 gone.md");
+  writeFileSync(stale, "x\n");
+  const then = (Date.now() - (KEEP_DAYS + 1) * 86400_000) / 1000;
+  utimesSync(stale, then, then);
+  const r = await writeEpisodes([loadRegistry().fac]);
+  expect(r).toEqual({ written: [`fac-${fresh} fresh one`], failed: [] });
+  expect(pages()).toEqual([`fac-${fresh} fresh one.md`]);
 });
 
 /** Adds a top-level issue and `titles.length` parts under it, all done with a landed commit and a run. */
@@ -122,7 +151,7 @@ test("two done parts of one issue get a page each, named by their refs", async (
   expect(pages().filter((f) => f.startsWith(`fac-${parent}.1 `)).length).toBe(1);
   expect(pages().filter((f) => f.startsWith(`fac-${parent}.2 `)).length).toBe(1);
   expect(pages().filter((f) => f.startsWith(`fac-${parent} `)).length).toBe(0);
-  const text = readFileSync(join(base, "vault", "wiki", "episodes", pages().find((f) => f.startsWith(`fac-${parent}.2 `))!), "utf8");
+  const text = readFileSync(join(episodes(), pages().find((f) => f.startsWith(`fac-${parent}.2 `))!), "utf8");
   expect(section(text, "Cost")).toContain("1234");
   const again = await writeEpisodes([repo]);
   expect(again.written).toEqual([]);

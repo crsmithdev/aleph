@@ -20,8 +20,7 @@ import { causeOf, type Fate } from "./outcome.ts";
 import { allJobs, checkedBy, lookMinutes, openJob } from "./job.ts";
 import { mine, proposals, readStore } from "./corrections.ts";
 import { directAll, pendingCases, type Decision, type Ports as DirectorPorts } from "./director.ts";
-import { writeEpisodes } from "./episode.ts";
-import { vaultDir } from "../../vault/lib/vault.ts";
+import { episodesDir, writeEpisodes } from "./episode.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "./landing.ts";
 import { baselineChecks, type ChecksStop } from "./checks.ts";
@@ -468,10 +467,10 @@ export function report(now = Date.now()): string {
 
 const episodesSeenFile = () => join(factoryDir(), "episodes-seen");
 
-/** The episode page titles under the vault's wiki/episodes/ that no report has listed; each is then appended to the seen file. */
+/** The episode page titles under `<factoryDir()>/episodes/` that no report has listed; each is then appended to the seen file. */
 function newEpisodes(): string[] {
   let titles: string[] = [];
-  try { titles = readdirSync(join(vaultDir(), "wiki", "episodes")).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).sort(); } catch { return []; }
+  try { titles = readdirSync(episodesDir()).filter((f) => f.endsWith(".md")).map((f) => f.slice(0, -3)).sort(); } catch { return []; }
   const seen = new Set(existsSync(episodesSeenFile()) ? readFileSync(episodesSeenFile(), "utf8").split("\n").filter(Boolean) : []);
   const fresh = titles.filter((t) => !seen.has(t));
   if (fresh.length) {

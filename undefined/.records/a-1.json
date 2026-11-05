@@ -1,0 +1,20 @@
+{
+ "issue": "a-1",
+ "ask": null,
+ "wait": null,
+ "rounds": 0,
+ "cost": 0,
+ "runs": [
+  {
+   "kind": "build",
+   "condition": "running",
+   "started": "2026-11-04T23:58:59.659Z",
+   "name": "a-1",
+   "job": "a-1",
+   "repo": "a",
+   "on": "a-1",
+   "id": "20261027-100000-a-a-1-agent"
+  }
+ ],
+ "events": []
+}

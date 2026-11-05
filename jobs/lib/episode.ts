@@ -1,22 +1,24 @@
 /**
  * The report writer: one episode page per done goal, built from git, the job
- * ledger and Langfuse, and written to the vault through `vault write`. It
- * never reads a run's result.md or any other worker claim.
+ * ledger and Langfuse, and written to `<factoryDir()>/episodes/`. It never
+ * reads a run's result.md or any other worker claim. A page older than
+ * KEEP_DAYS is deleted, and a goal whose last run ended before then gets no
+ * page, so a deleted page is not written again.
  */
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { fetchTrace, traceIdFor } from "../../hooks/lib/otlp.ts";
 import { partsOf, readList } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { section } from "../../todo/lib/todo.ts";
-import { vaultDir } from "../../vault/lib/vault.ts";
+import { factoryDir } from "./factory-status.ts";
 import { fetchOrigin, git } from "./git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "./ledger.ts";
 import { landedCommits, repoStages } from "./status.ts";
 
-const VAULT_CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
+export const KEEP_DAYS = 14;
+export const episodesDir = () => join(factoryDir(), "episodes");
 const today = () => new Date().toISOString().slice(0, 10);
 const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
@@ -30,16 +32,17 @@ function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {
   return item.sub !== undefined && pages.includes(`${titleUnder(`${repo.key}-${item.id}`, item)}${MD}`);
 }
 
-/** The repo's done goals with a ledger run and no episode page yet. */
-export function doneGoals(repo: Repo): issues.Issue[] {
+/** The repo's done goals with a ledger run in the last KEEP_DAYS and no episode page yet. */
+export function doneGoals(repo: Repo, now = Date.now()): issues.Issue[] {
   const doc = readList(repo);
   if (!doc) return [];
   const goals = doc.items.filter((i) => !!i.spec.trim());
   if (!goals.length) return [];
   const done = new Set(repoStages(repo, { fetch: true, doc, items: goals.map(issues.refOf) }).filter((s) => s.stage === "done").map((s) => s.id));
-  const dir = join(vaultDir(), "wiki", "episodes");
+  const dir = episodesDir();
   const pages = existsSync(dir) ? readdirSync(dir) : [];
-  const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined).map((e) => onOf(e.run)));
+  const since = now - KEEP_DAYS * 86400_000;
+  const ran = new Set(allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) !== undefined && (epoch(e.run.ended) || epoch(e.run.started)) >= since).map((e) => onOf(e.run)));
   return goals.filter((i) => done.has(`${repo.key}-${issues.refOf(i)}`) && ran.has(issues.idOf(i)) && !written(repo, i, pages));
 }
 
@@ -150,28 +153,32 @@ export function episodePage(repo: Repo, item: issues.Issue, runs: Entry[], commi
   ].join("\n");
 }
 
-/** Build the page and write it through the vault CLI. */
+/** Build the page and write it to the episodes folder. */
 export async function writeEpisode(repo: Repo, item: issues.Issue): Promise<{ title: string } | { error: string }> {
-  const dir = mkdtempSync(join(tmpdir(), "aleph-episode-"));
   try {
     const title = episodeTitle(repo, item);
     const runs = runsOf(repo, item);
-    const draft = join(dir, `${title}.md`);
-    writeFileSync(draft, episodePage(repo, item, runs, commitsOf(repo, item), await langfuseFor(runs)));
-    const env: Record<string, string | undefined> = { ...process.env };
-    delete env.CLAUDE_CODE_SESSION_ID;
-    const p = Bun.spawnSync(["bun", VAULT_CLI, "write", draft, "--why", `episode of ${repo.key}-${issues.refOf(item)}`], { env, stdout: "pipe", stderr: "pipe" });
-    if (p.exitCode !== 0) return { error: p.stderr.toString().trim() || `vault write exited ${p.exitCode}` };
+    mkdirSync(episodesDir(), { recursive: true });
+    writeFileSync(join(episodesDir(), `${title}${MD}`), episodePage(repo, item, runs, commitsOf(repo, item), await langfuseFor(runs)));
     return { title };
   } catch (e: any) {
     return { error: String(e?.message ?? e) };
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** Delete the pages last written more than KEEP_DAYS ago. */
+export function pruneEpisodes(now = Date.now()): void {
+  const dir = episodesDir();
+  if (!existsSync(dir)) return;
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (statSync(p).mtimeMs < now - KEEP_DAYS * 86400_000) rmSync(p);
   }
 }
 
 /** The done goals of `repos`, the one whose last run ended longest ago first, at most `cap` pages. */
 export async function writeEpisodes(repos: Repo[], cap = 10): Promise<{ written: string[]; failed: string[] }> {
+  pruneEpisodes();
   const todo: { repo: Repo; item: issues.Issue; at: number }[] = [];
   for (const repo of repos) {
     for (const item of doneGoals(repo)) {

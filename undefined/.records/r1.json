@@ -1,0 +1,25 @@
+{
+ "issue": "r1",
+ "ask": null,
+ "wait": null,
+ "rounds": 0,
+ "cost": 0,
+ "runs": [],
+ "events": [
+  {
+   "at": "2026-11-04T23:59:04.123Z",
+   "kind": "asked",
+   "run": "r1",
+   "what": "Which module?"
+  },
+  {
+   "at": "2026-11-04T23:59:04.124Z",
+   "kind": "asked",
+   "run": "r1",
+   "what": "Which spec?",
+   "data": {
+    "spec": "3a3973fb79db"
+   }
+  }
+ ]
+}

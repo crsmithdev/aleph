@@ -9,7 +9,6 @@ import { spentToday, runsToday, health, writeBaseline } from "./factory-status.t
 import { lock, readRun, writeRun } from "./ledger.ts";
 import { type Run } from "./ledger.ts";
 import { ctx, sh, goal, change, mk, setup, teardown } from "./factory.helpers.ts";
-import { vault as newVault } from "../../tests/git-fixture.ts";
 
 beforeEach(setup);
 afterEach(() => { setSystemTime(); teardown(); });
@@ -17,29 +16,18 @@ afterEach(() => { setSystemTime(); teardown(); });
 const NOW = Date.parse("2026-11-04T12:00:00Z");
 
 
-/** A temp vault under ALEPH_VAULT for one test; the old value is restored by `done`. */
-function withVault(): { vault: string; done: () => void } {
-  const old = process.env.ALEPH_VAULT;
-  const vault = join(ctx.base, "vault");
-  process.env.ALEPH_VAULT = vault;
-  newVault(vault);
-  return { vault, done: () => { if (old === undefined) delete process.env.ALEPH_VAULT; else process.env.ALEPH_VAULT = old; } };
-}
-
-test("report lists each new episode page once, and nothing without a wiki/episodes folder", () => {
-  const v = withVault();
-  try {
-    rmSync(join(v.vault, "wiki", "episodes"), { recursive: true, force: true });
-    expect(report()).not.toContain("episodes:");
-    mkdirSync(join(v.vault, "wiki", "episodes"), { recursive: true });
-    writeFileSync(join(v.vault, "wiki", "episodes", "fac-1 Ship it.md"), "x\n");
-    writeFileSync(join(v.vault, "wiki", "episodes", "fac-2 Other.md"), "x\n");
-    const first = report();
-    expect(first).toContain("episodes:\n  fac-1 Ship it\n  fac-2 Other");
-    const second = report();
-    expect(second).not.toContain("fac-1 Ship it");
-    expect(second).not.toContain("fac-2 Other");
-  } finally { v.done(); }
+test("report lists each new episode page once, and nothing without an episodes folder", () => {
+  const dir = join(ctx.base, "factory", "episodes");
+  rmSync(dir, { recursive: true, force: true });
+  expect(report()).not.toContain("episodes:");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "fac-1 Ship it.md"), "x\n");
+  writeFileSync(join(dir, "fac-2 Other.md"), "x\n");
+  const first = report();
+  expect(first).toContain("episodes:\n  fac-1 Ship it\n  fac-2 Other");
+  const second = report();
+  expect(second).not.toContain("fac-1 Ship it");
+  expect(second).not.toContain("fac-2 Other");
 });
 
 test("a dispatch with checks, three factory repos and no open goals fetches the work store at most twice", async () => {

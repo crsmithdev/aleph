@@ -71,7 +71,7 @@ function renderSemantic(m, s) {
   const mem = s.memory
     ? `<p><code>MEMORY.md</code> ${q(`${s.memory.lines} lines, written ${ago(s.memory.at)}`)}${s.memory.first ? `<br>${q(esc(s.memory.first))}` : ""}</p>`
     : none("No MEMORY.md.", "The agent writes standing context there.");
-  const kinds = Object.keys(m.byKind ?? {}).filter((k) => k !== "episode" && k !== "none");
+  const kinds = Object.keys(m.byKind ?? {}).filter((k) => k !== "none");
   const lists = kinds.map((k) => {
     const xs = s.notes.filter((n) => n.kind === k);
     return `<details><summary>${esc(k)} <span class="count">${xs.length}</span></summary>${xs.length ? fold(xs, (n) => `${link(n.title)} ${q(esc(n.scope))}`) : `<p class="quiet">None.</p>`}</details>`;
@@ -83,7 +83,7 @@ function renderSemantic(m, s) {
 }
 
 function renderEpisodic(e) {
-  const eps = e.episodes.length ? fold(e.episodes, (n) => `${link(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : none("No episode page yet.", "The factory's tick writes one per done goal.");
+  const eps = e.episodes.length ? fold(e.episodes, (n) => `${esc(n.title)} ${q(esc(`${n.scope} · ${n.updated}`))}`) : none("No episode page yet.", "The factory's tick writes one per done goal.");
   const daily = e.daily.total ? fold(e.daily.latest.map((d) => ({ d })), (x) => link(x.d)) : none("No daily page yet.", "The vault CLI starts one at the first write of a day.");
   const sess = e.sessions === null ? none("Sessions are not available.", "Langfuse keys fill this.")
     : e.sessions.length ? fold(e.sessions, (x) => `<a href="#/sessions/${encodeURIComponent(x.id)}">${esc(x.firstPrompt || x.id)}</a> ${q(esc(`${x.project} · ${x.turns} turns · ${ago(x.last)}`))}`)
@@ -125,7 +125,7 @@ function renderGates(g) {
 const EMPTY_TYPES = {
   working: { total: 0, archived: [], current: null, last: "" },
   semantic: { memory: null, notes: [], last: "" },
-  episodic: { episodes: [], daily: { total: 0, latest: [] }, sessions: null, last: "" },
+  episodic: { episodes: [], keepDays: 0, daily: { total: 0, latest: [] }, sessions: null, last: "" },
   procedural: { skills: [], claudeMd: null, hooks: [], last: "" },
   retrieval: { stats: null, missed: [], last: "" },
   prospective: { issues: [] },
@@ -159,17 +159,17 @@ export function statusCounts(rows) {
 /** The newest date of `xs`, or "". */
 const newest = (xs) => xs.filter(Boolean).sort().at(-1) ?? "";
 
-/** The seven tiles. `use` is shown only where it is measured: the recall log covers the notes and the episodes. */
+/** The seven tiles. `use` is shown only where it is measured: the recall log covers the notes. */
 export function typeTiles(m, rows) {
   const t = { ...EMPTY_TYPES, ...(m.types ?? {}) };
-  const known = rows.filter(isKnown), eps = rows.filter((n) => n.kind === "episode");
+  const known = rows.filter(isKnown);
   const kept = known.length ? (known.filter((n) => n.read).length / known.length) * 100 : 0;
   const stats = t.retrieval.stats;
   const hooks = t.procedural.hooks.length;
   return [
     { id: "working", name: "Working", n: t.working.total, unit: "handoffs", status: t.working.current ? "One current" : "None current", tone: "", write: t.working.last },
     { id: "semantic", name: "Semantic", n: m.exists ? known.length : 0, unit: "notes", status: `${pct(kept)} returned, ${pct(100 - kept)} never`, tone: kept < 50 ? "warn" : "good", write: t.semantic.last, use: newest(known.map((n) => n.read)) },
-    { id: "episodic", name: "Episodic", n: m.byKind?.episode ?? eps.length, unit: `episodes, ${t.episodic.daily.total} daily pages`, status: `${eps.filter((n) => n.read).length} returned by recall`, tone: "", write: t.episodic.last, use: newest(eps.map((n) => n.read)) },
+    { id: "episodic", name: "Episodic", n: t.episodic.episodes.length, unit: `episodes, ${t.episodic.daily.total} daily pages`, status: `Kept ${t.episodic.keepDays} days`, tone: "", write: t.episodic.last },
     { id: "procedural", name: "Procedural", n: t.procedural.skills.length, unit: `skills, ${hooks} hooks`, status: t.procedural.claudeMd ? `${t.procedural.claudeMd.lines} lines of rules` : "No rules file", tone: "", write: t.procedural.last },
     { id: "retrieval", name: "Retrieval", n: stats ? stats.recalls : "–", unit: "recalls, 7 days", status: stats ? `${pct(stats.empty_share * 100)} empty` : "No data", tone: stats && stats.empty_share > 0.2 ? "warn" : "", write: t.retrieval.last },
     { id: "prospective", name: "Prospective", n: t.prospective.issues.length, unit: "waiting", status: t.prospective.issues.length ? "Waiting" : "Empty", tone: "" },
@@ -238,11 +238,11 @@ export function options(q = new URLSearchParams()) {
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null, limit: Math.max(STEP, Number.parseInt(q.get("limit"), 10) || STEP) };
 }
 
-/** The kind filter: empty is the knowledge notes; episodes are there on request. */
+/** The kind filter: empty is the knowledge notes. */
 const ofKind = (rows, kind) => (kind ? rows.filter((n) => n.kind === kind) : rows.filter(isKnown));
 
 const SORT = { title: (n) => n.title, kind: (n) => n.kind, scope: (n) => n.scope, read: (n) => n.read ?? "", updated: (n) => n.updated, status: (n) => n.status };
-/** The rows the filters keep. `hits` is the ranked titles of a search; a title that holds the text also passes, for the episodes recall does not search. */
+/** The rows the filters keep. `hits` is the ranked titles of a search; a title that holds the text also passes. */
 export function browseRows(rows, o, hits = []) {
   const q = o.q.trim().toLowerCase(), rank = new Map(hits.map((t, i) => [t, i]));
   const out = ofKind(rows, o.kind).filter((n) => (!o.status || n.status === o.status) && (!o.scope || n.scope === o.scope) && (!q || rank.has(n.title) || n.title.toLowerCase().includes(q)));

@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { claudeSettings } from "../../hooks/lib/context.ts";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { readStore } from "../../jobs/lib/corrections.ts";
+import { episodesDir, KEEP_DAYS } from "../../jobs/lib/episode.ts";
 import { loadRegistry } from "../../jobs/lib/ledger.ts";
 import { afterOf, readLists } from "../../todo/lib/store.ts";
 import * as todos from "../../todo/lib/todo.ts";
@@ -74,12 +75,17 @@ async function loadSessions(): Promise<Sessions | null> {
   } catch { return null; }
 }
 
-function episodic(root: string, wiki: Note[], live: Awaited<ReturnType<typeof sessions>>) {
-  const episodes = wiki.filter((n) => n.fm.kind === "episode")
-    .map((n) => ({ title: n.title, scope: String(n.fm.scope ?? ""), updated: String(n.fm.updated ?? "") }))
-    .sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title));
+/** `<field>: <value>` from a page's frontmatter, else "". */
+const field = (text: string, name: string) => new RegExp(`^${name}:\\s*(.*)$`, "m").exec(text)?.[1]?.trim() ?? "";
+
+function episodic(root: string, live: Awaited<ReturnType<typeof sessions>>) {
+  const episodes = files(episodesDir(), /\.md$/).map((f) => {
+    let text = "";
+    try { text = readFileSync(join(episodesDir(), f), "utf8"); } catch {}
+    return { title: f.slice(0, -3), scope: field(text, "scope"), updated: field(text, "updated") };
+  }).sort((a, b) => b.updated.localeCompare(a.updated) || a.title.localeCompare(b.title));
   const daily = files(join(root, "daily"), /^\d{4}-\d{2}-\d{2}\.md$/).sort().reverse().map((f) => f.slice(0, 10));
-  return { episodes, daily: { total: daily.length, latest: daily.slice(0, 10) }, sessions: live, last: newest([episodes[0]?.updated, daily[0], live?.[0]?.last]) };
+  return { episodes, keepDays: KEEP_DAYS, daily: { total: daily.length, latest: daily.slice(0, 10) }, sessions: live, last: newest([episodes[0]?.updated, daily[0], live?.[0]?.last]) };
 }
 
 const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vault-context": "vault-context", "vault-recall": "vault-recall" };
@@ -154,7 +160,7 @@ function gates() {
 export async function memoryTypes(root: string, wiki: Note[], misses: unknown) {
   const [live, proc] = await Promise.all([sessions(), procedural()]);
   return {
-    working: working(), semantic: semantic(root, wiki), episodic: episodic(root, wiki, live), procedural: proc,
+    working: working(), semantic: semantic(root, wiki), episodic: episodic(root, live), procedural: proc,
     retrieval: retrieval(misses), prospective: prospective(), gates: gates(),
   };
 }

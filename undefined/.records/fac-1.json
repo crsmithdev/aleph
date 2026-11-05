@@ -1,0 +1,29 @@
+{
+ "issue": "fac-1",
+ "ask": {
+  "kind": "input",
+  "reason": "part-dropped",
+  "question": "Part fac-1.2 was dropped: too big. What now?",
+  "options": [
+   {
+    "label": "Close with what landed",
+    "line": "Close the issue: the parts that landed are enough."
+   },
+   {
+    "label": "Plan the missing part",
+    "line": "Plan a new part for what the dropped part was to do."
+   }
+  ],
+  "why": []
+ },
+ "wait": null,
+ "rounds": 0,
+ "cost": 0,
+ "runs": [],
+ "events": [],
+ "asks": [
+  {
+   "set": "2026-11-04T23:59:04.122Z"
+  }
+ ]
+}
