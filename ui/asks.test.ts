@@ -72,17 +72,24 @@ describe("asks", () => {
     try { expect(ofIssues(issue({ reason: "question", question: "what now?" }))[0].tag).toBe("question"); } finally { STORE = undefined; }
   });
 
-  test("the approve of a proposal, with and without a lesson, and the rerun of no-commit and run-cap do not say goal", () => {
+  test("the approve of a proposal, with and without a lesson, reopens the issue and says neither File nor goal", () => {
     STORE = { situation: "Stored situation." };
     try {
-      const acts = [
+      const approves = [
         ...CASES["proposal-check"]()[0].actions.filter((a) => a.act === "approve"),
         ...ofIssues(issue({ reason: "proposal-check", question: "q" }))[0].actions.filter((a) => a.act === "approve"),
+      ];
+      expect(approves.length).toBe(2);
+      for (const a of approves) {
+        expect(`${a.label} ${a.hint}`).toMatch(/[Rr]eopen/);
+        expect(`${a.label} ${a.hint}`).not.toMatch(/File|files|goal/);
+      }
+      const reruns = [
         ...CASES["no-commit"]()[0].actions.filter((a) => a.act === "rerun"),
         ...CASES["run-cap"]()[0].actions.filter((a) => a.act === "rerun"),
       ];
-      expect(acts.length).toBe(4);
-      for (const a of acts) expect(`${a.label} ${a.hint}`).not.toContain("goal");
+      expect(reruns.length).toBe(2);
+      for (const a of reruns) expect(`${a.label} ${a.hint}`).not.toContain("goal");
     } finally { STORE = undefined; }
   });
 

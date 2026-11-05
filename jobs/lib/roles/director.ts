@@ -235,7 +235,7 @@ Kind: ${l.kind}
 Target: ${l.target || "(none)"}
 Title: ${l.title || "(none)"}
 Sentence: ${l.sentence}
-Approve only files a goal for the factory; it writes no CLAUDE.md line, skill or check itself. Decline marks the lesson declined for good.
+Approve only reopens the proposal's parked issue with a spec for the factory; it writes no CLAUDE.md line, skill or check itself. Decline marks the lesson declined for good.
 Signals:
 ${l.signals.map((s) => `- source: ${s.source}; at: ${s.at}; quote: ${s.quote}; link: ${s.link}`).join("\n") || "(none)"}
 `;

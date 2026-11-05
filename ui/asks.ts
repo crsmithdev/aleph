@@ -136,8 +136,8 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
       case "deny":
         return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
       case "approve":
-        if (c.lesson) { const w = words(c.lesson); return [a("approve", w.approve, `Files the issue that ${w.hint}.`, { id: c.id })]; }
-        return [a("approve", "File the issue", "Files the proposal as an issue for the factory.", { id: c.id })];
+        if (c.lesson) { const w = words(c.lesson); return [a("approve", `Reopen the issue: ${w.approve}`, `Reopens the issue that ${w.hint}.`, { id: c.id })]; }
+        return [a("approve", "Reopen the issue", "Reopens the proposal's issue with a spec for the factory.", { id: c.id })];
       case "decline":
         if (c.lesson) return [a("decline", words(c.lesson).decline, "Drops the proposal; the memory does not propose this lesson again.", { id: c.id })];
         return [a("decline", "Never propose this", "Drops the proposal and stops the memory proposing it again.", { id: c.id })];

@@ -143,6 +143,9 @@ test("a memory proposal is on the escalation list: the director's case text goes
   expect(l.situation).toBe("The lesson says to check x.ts.");
   expect(l.recommend).toEqual({ action: "decline", why: "Too vague." });
   expect(l.state).toBe("proposed");
+  // The case text says approve reopens the parked issue; it does not say approve files a goal.
+  expect(prompt()).toContain("reopens");
+  expect(prompt()).not.toContain("files a goal");
 });
 
 test("a proposed lesson with no issue is no case", async () => {
