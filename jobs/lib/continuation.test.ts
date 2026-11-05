@@ -207,6 +207,14 @@ describe("the worker brief", () => {
     expect(brief("rb1", f, r, repo)).not.toContain("code-change");
   });
 
+  test("a merge run's brief lets the worker update the branch's change where main moved what it cites", () => {
+    const r = run({ job: "jm", merge: true, conflicts: ["a.ts"] });
+    const b = brief("rm1", folder("rm1"), r, { ...repo, path: dir });
+    expect(b).toContain("Where a commit from origin/main that you merge moves or renames what this job's change cites or depends on, update this job's change to match.");
+    expect(b).toContain("Your final message names each such update.");
+    expect(b).toContain("Do not start other work.");
+  });
+
   test("a factory brief names the job's worktree and branch, and says Chrome runs there", () => {
     const r = run({ job: "jw", worktree: "/w", branch: "factory/fac-1" });
     folder("jw", { "spec.md": "# Spec\n\n## Edit surface\n\n- ui/views/issues.js\n" });

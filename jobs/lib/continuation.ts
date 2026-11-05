@@ -192,7 +192,7 @@ function mergeBrief(land: Run, repo: Repo, title?: string): string {
   return [
     `# Merge ${main} into this branch`,
     ...(title ? [`Goal: ${title}`] : []),
-    `A land of this branch conflicted with ${main}. This run does one task and nothing else: merge ${main} into the branch, resolve the conflicts so that the change on main and this job's change both survive, and commit. Do not start other work.`,
+    `A land of this branch conflicted with ${main}. Merge ${main} into the branch, resolve the conflicts so that the change on main and this job's change both survive, and commit. Where a commit from ${main} that you merge moves or renames what this job's change cites or depends on, update this job's change to match. Your final message names each such update. Do not start other work.`,
     `Conflicted paths:\n${paths.join("\n")}`,
   ].join("\n\n") + "\n";
 }
