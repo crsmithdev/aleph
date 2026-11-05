@@ -223,7 +223,7 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
       const item = now ? issues.find(now, listed.id) : undefined;
       if (!now || !item || !finished(now, item, repo, done)) continue;
       const commits = partsOf(now, item).filter((p) => issues.status(p) !== "dropped").map((p) => `${repo.key}-${issues.refOf(p)} (${itemOnMain(repo, issues.idOf(p)) ?? "no commit"})`);
-      const bad = note(repo, item.id, `its parts are done: ${commits.join(", ")}`, { done: true });
+      const bad = note(repo, item.id, `its sub-issues are done: ${commits.join(", ")}`, { done: true });
       lines.push(bad ? `${name}: not closed: ${bad}` : `${name}: closed as done`);
     } finally {
       release();

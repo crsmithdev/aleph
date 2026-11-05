@@ -426,7 +426,7 @@ try {
       const day = flag("day") ?? addDays(issues.today(), -1);
       if (!/^\d{4}-\d\d-\d\d$/.test(day)) refuse("usage: aleph monitor [--dry] [--day YYYY-MM-DD]");
       if (rest.includes("--dry")) { process.stdout.write(renderTable(tableOf(day))); break; }
-      const r = await runMonitor(day) ?? refuse("another monitor run holds the lock");
+      const r = await runMonitor(day) ?? refuse("another monitor job holds the lock");
       out({ day: r.day, findings: r.findings, ...(r.error ? { error: r.error } : {}), run: r.run, note: r.note ?? r.noteError });
       break;
     }

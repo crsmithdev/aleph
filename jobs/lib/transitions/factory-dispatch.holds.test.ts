@@ -53,6 +53,15 @@ test("an open goal whose work is on main closes as done, and no later dispatch l
   expect(second.skipped.filter((l) => l.startsWith(`fac-${id}:`))).toEqual([]);
 });
 
+test("a parent whose sub-issues are all done closes with a note that names them", async () => {
+  const parent = newIssue();
+  const child = writeList({ key: "fac" }, "split", (doc) => issues.add(doc, "the first sub-issue", { from: `fac-${parent}`, spec: "Do it." }).id, true)!.value;
+  sh(join(ctx.base, "repo"), "git", "commit", "-q", "--allow-empty", "-m", `the work\n\nIssue: fac-${child}`);
+  sh(join(ctx.base, "repo"), "git", "push", "-q", "origin", "main");
+  await dispatchIssues(async () => null, undefined, undefined, undefined);
+  expect(notes(parent)).toMatch(new RegExp(`its sub-issues are done: fac-${child} \\([0-9a-f]{7}\\)$`, "m"));
+});
+
 test("a main that no suite run has checked, or whose checks gave no verdict, does not hold a goal", async () => {
   const id = newIssue();
   expect(await suiteStep(async () => ({ cause: "infra" as const, reason: "no runner" }))).toEqual({ fac: "main is unchecked: no runner" });
@@ -119,6 +128,6 @@ describe("the done checker's copy of the store was read before a goal existed", 
     } finally {
       spy.mockRestore();
     }
-    expect(notes(parent)).not.toMatch(/its parts are done/);
+    expect(notes(parent)).not.toMatch(/its sub-issues are done/);
   });
 });

@@ -106,7 +106,7 @@ export function stage(item: Subject, ctx: Ctx, seen: ReadonlySet<string> = new S
   if (item.parts.length) {
     if (item.plan) return out("working", "intake plans the rest");
     const n = parts.filter((p) => p.stage === "done").length;
-    return out("working", `${n} of ${item.parts.length} parts done`, { n, m: item.parts.length });
+    return out("working", `${n} of ${item.parts.length} sub-issues done`, { n, m: item.parts.length });
   }
   const last = work.at(-1);
   if (last?.kind === "land") return out("landing", `its job is ${last.condition}`);

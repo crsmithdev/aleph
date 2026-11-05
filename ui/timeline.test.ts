@@ -60,7 +60,7 @@ describe.skip("the issue timeline", () => {
       run("build", "2026-11-01T10:11:00Z", "2026-11-01T10:15:00Z", { name: "fac-1.1", on: "fac-1.1" }),
       run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" }),
     ];
-    const notes = ["- 2026-11-01 10:06: planner: split into fac-1.1, fac-1.2", "- 2026-11-01 10:25: its parts are done"];
+    const notes = ["- 2026-11-01 10:06: planner: split into fac-1.1, fac-1.2", "- 2026-11-01 10:25: its sub-issues are done"];
     const segs = issueSegments(issue({ goals: parts, notes, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } }));
     expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Parts", 2], ["After the Parts", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;

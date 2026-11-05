@@ -28,7 +28,7 @@ const newIssue = (fm: Record<string, unknown> = {}) => seedItem("fac", `goal ${+
 const issue = (fm: Record<string, unknown> = {}) => seedItem("fac", `issue ${++jobs}`, { kind: "issue", source: "chris", ...fm });
 
 const ISSUES_NEW: Row[] = [
-  { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
+  { name: "new issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, why: /^1 of 2 sub-issues done$/, build: async () => {
     const n = issue();
     seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
@@ -68,7 +68,7 @@ const PARTS_DOTTED: Row[] = [
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     const a = seedPart("fac", n, 1); setAsk(`fac-${n}.1`, plainAsk("run-cap", "it looped")); landPart(n, `${n}.1`); return a;
   } },
-  { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, build: async () => {
+  { name: "dotted issue: working 1 of 2", stage: "working", of: { n: 1, m: 2 }, why: /^1 of 2 sub-issues done$/, build: async () => {
     const n = seedItem("fac", `parent ${++jobs}`, { kind: "issue", source: "chris" });
     seedPart("fac", n, 1, { status: "done" }); seedPart("fac", n, 2);
     return n;
