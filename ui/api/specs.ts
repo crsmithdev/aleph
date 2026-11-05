@@ -3,7 +3,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
 
 export interface Spec { project: string; file: string; date: string; title: string }

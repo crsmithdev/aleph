@@ -9,10 +9,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFile
 import { dirname, join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
-import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/settings.ts";
+import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;
 const TTL = 120_000;

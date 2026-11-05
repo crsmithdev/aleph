@@ -11,12 +11,12 @@
  * (`note`, `close`, `closeAndFile`, `file`). Callers do not read
  * `fm.labels` or name a task's path.
  */
-import * as record from "../../jobs/lib/record.ts";
-import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/git.ts";
-import { layout } from "../../jobs/lib/layout.ts";
+import * as record from "../../jobs/lib/records/record.ts";
+import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../jobs/lib/infra/git.ts";
+import { layout } from "../../jobs/lib/infra/layout.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
-import { uiFetchTtl as fetchTtlSetting } from "../../jobs/lib/settings.ts";
+import { uiFetchTtl as fetchTtlSetting } from "../../jobs/lib/infra/settings.ts";
 
 export { labels };
 

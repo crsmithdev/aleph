@@ -5,7 +5,7 @@
  */
 import { cacheFetches } from "../issues/lib/store.ts";
 import { state } from "./state.ts";
-import { stateSlowMs } from "../jobs/lib/settings.ts";
+import { stateSlowMs } from "../jobs/lib/infra/settings.ts";
 
 declare const self: Worker;
 

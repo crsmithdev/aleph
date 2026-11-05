@@ -1,13 +1,13 @@
 /** `GET /api/jobs`, `/api/jobs/:name`, `/api/jobs/:name/diff`: the Jobs and Job views' data. */
-import { keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/record.ts";
+import { keyOf, next as nextStep, read as readRecord, type JobEvent, type Step as NextStep } from "../../jobs/lib/records/record.ts";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { git } from "../../jobs/lib/git.ts";
-import { OPUS_MODEL } from "../../jobs/lib/agent-call.ts";
-import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
-import { isAgentRun, isBuild, loadRegistry, type Entry } from "../../jobs/lib/ledger.ts";
-import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, readFile, view } from "../../jobs/lib/job.ts";
-import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/factory-status.ts";
+import { git } from "../../jobs/lib/infra/git.ts";
+import { OPUS_MODEL } from "../../jobs/lib/roles/agent-call.ts";
+import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
+import { isAgentRun, isBuild, loadRegistry, type Entry } from "../../jobs/lib/records/ledger.ts";
+import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, readFile, view } from "../../jobs/lib/records/job.ts";
+import { changedLinesOf, readHolds, type HoldRecord } from "../../jobs/lib/gates/factory-status.ts";
 import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";

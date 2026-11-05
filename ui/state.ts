@@ -4,17 +4,17 @@
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
 import { judgeChoice } from "../hooks/lib/jev.ts";
-import { factorySnapshot, goalFacts, mainRed } from "../jobs/lib/factory-status.ts";
-import { monitorPanel } from "../jobs/lib/monitor-table.ts";
-import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/goal-decision.ts";
-import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/ledger.ts";
-import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/job.ts";
-import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/ask.ts";
+import { factorySnapshot, goalFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
+import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
+import { goalDecision, pendingWaits, refDone, type GoalDecision } from "../jobs/lib/gates/goal-decision.ts";
+import { askOf as runAsk, isAwaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
+import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
+import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
 import { idOf, parseGoalRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
-import { facts, landedIndex, stages } from "../jobs/lib/status.ts";
-import type { Stage } from "../jobs/lib/stage.ts";
+import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
+import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
@@ -136,7 +136,7 @@ function systemctlUser(...args: string[]): { ok: boolean; out: string } {
   } catch { return { ok: false, out: "" }; }
 }
 
-/** The next firing of aleph-tick.timer and whether a tick is running, as jobs/lib/doctor.ts reads them: `systemctl show` for the next elapse, `is-active` for the oneshot service. */
+/** The next firing of aleph-tick.timer and whether a tick is running, as jobs/lib/land/doctor.ts reads them: `systemctl show` for the next elapse, `is-active` for the oneshot service. */
 export function tickTimer(): { nextTick: string | null; tickInProgress: boolean } {
   const t = systemctlUser("show", "aleph-tick.timer", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic");
   if (!t.ok) return { nextTick: null, tickInProgress: false };

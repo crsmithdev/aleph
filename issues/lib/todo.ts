@@ -7,7 +7,7 @@
  * a `.k`; its parent comes from its id.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../vault/lib/frontmatter.ts";
-import { nowOverride } from "../../jobs/lib/settings.ts";
+import { nowOverride } from "../../jobs/lib/infra/settings.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
 export type Status = (typeof STATUSES)[number];
@@ -266,7 +266,7 @@ export interface Finding {
   fixable: boolean;
 }
 
-/** Fields of the old store shape: a file with one was not rewritten. `ask` moved to the job record (jobs/lib/record.ts). */
+/** Fields of the old store shape: a file with one was not rewritten. `ask` moved to the job record (jobs/lib/records/record.ts). */
 const RETIRED = ["status", "goals", "issue", "labels", "waiting_on", "due", "route", "created_date", "updated_date", "ask"];
 
 export function lint(doc: Doc): Finding[] {

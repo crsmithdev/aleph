@@ -6,7 +6,7 @@ import { aleph, base, branchExists, fakeLog, file, job, jobsDir, seedRun, setupL
 import { actionJob, drop, jobView } from "./inproc";
 
 // The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,
-// the news, the --fate check, and six `aleph job` processes at once. The other cases run in-process in jobs/lib/unit.flow.test.ts.
+// the news, the --fate check, and six `aleph job` processes at once. The other cases run in-process in jobs/lib/roles/unit.flow.test.ts.
 beforeAll(setup);
 afterAll(teardown);
 

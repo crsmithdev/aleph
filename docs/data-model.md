@@ -1,6 +1,6 @@
 # Data model
 
-Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdown with frontmatter, and two git repos. The only database is the vault's search index. `jobs/lib/layout.ts` and `jobs/lib/settings.ts` resolve each path; an environment variable moves each store for tests.
+Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdown with frontmatter, and two git repos. The only database is the vault's search index. `jobs/lib/infra/layout.ts` and `jobs/lib/infra/settings.ts` resolve each path; an environment variable moves each store for tests.
 
 ```text
 ~/.aleph/
@@ -44,7 +44,7 @@ erDiagram
 
 ## Registry: `repos.json`
 
-An object keyed by repo key. `loadRegistry` in `jobs/lib/ledger.ts` reads it; no code writes it.
+An object keyed by repo key. `loadRegistry` in `jobs/lib/records/ledger.ts` reads it; no code writes it.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -110,7 +110,7 @@ The status comes from the fields: `closed_as`, else `parked`, else `open`. `alep
 
 ## Job records: `jobs/`
 
-The run state. `jobs/lib/record.ts` is the only module that opens a record. `update()` takes the lock `record-<key>`, writes a temp file and renames it. The key is the run's issue (`<repo>-<n>[.<k>]`), or its job id for a run with no issue.
+The run state. `jobs/lib/records/record.ts` is the only module that opens a record. `update()` takes the lock `record-<key>`, writes a temp file and renames it. The key is the run's issue (`<repo>-<n>[.<k>]`), or its job id for a run with no issue.
 
 | Field | Holds |
 |---|---|
@@ -127,7 +127,7 @@ Event kinds: `hold` (with `data.gate`), `started`, `asked` (with the spec versio
 
 ### Run
 
-`Run` in `jobs/lib/ledger.ts`.
+`Run` in `jobs/lib/records/ledger.ts`.
 
 | Group | Fields |
 |---|---|
@@ -153,7 +153,7 @@ A job is open while its latest run is `running`, `passed`, `awaiting`, `failed` 
 
 ## Run folders: `runs/`
 
-One folder per run: `<YYYYMMDD-HHMMSS>-<name>-<kind>`. A stamp is never earlier than the job's previous stamp. `jobs/lib/run-files.ts` names the files:
+One folder per run: `<YYYYMMDD-HHMMSS>-<name>-<kind>`. A stamp is never earlier than the job's previous stamp. `jobs/lib/records/run-files.ts` names the files:
 
 | File | Holds |
 |---|---|
@@ -171,7 +171,7 @@ No code prunes run folders or records.
 
 ## Asks
 
-`jobs/lib/ask.ts`. An Ask sits on the job record.
+`jobs/lib/asks/ask.ts`. An Ask sits on the job record.
 
 | Field | Holds |
 |---|---|
@@ -204,7 +204,7 @@ No code prunes run folders or records.
 
 ### Corrections
 
-`corrections.json` holds `{minedAt, lessons[]}` (`jobs/lib/corrections.ts`). A **signal** is a quote from the last 14 days: Chris in a trace, a verify-gate deny, or a drop reason. A **lesson** groups signals under one sentence, with state `open`, `proposed`, `approved` or `declined`. At 3 signals (`ALEPH_PROPOSE_AT`) a lesson becomes a `proposal-*` Ask; an approved one files an issue.
+`corrections.json` holds `{minedAt, lessons[]}` (`jobs/lib/learning/corrections.ts`). A **signal** is a quote from the last 14 days: Chris in a trace, a verify-gate deny, or a drop reason. A **lesson** groups signals under one sentence, with state `open`, `proposed`, `approved` or `declined`. At 3 signals (`ALEPH_PROPOSE_AT`) a lesson becomes a `proposal-*` Ask; an approved one files an issue.
 
 ## Vault: `vault/`
 
@@ -234,6 +234,6 @@ Langfuse is outside `~/.aleph`, at `http://127.0.0.1:3010`.
 | Trace | Id | Session | Writer |
 |---|---|---|---|
 | A Claude Code turn | `sha256("turn:" + prompt_id)` | The Claude session | `hooks/obs.ts` |
-| A factory run | `traceIdFor(runId)`, named `factory <name>` | The run's job | `jobs/lib/trace.ts` |
+| A factory run | `traceIdFor(runId)`, named `factory <name>` | The run's job | `jobs/lib/learning/trace.ts` |
 
 A turn trace holds a root `turn` span, one generation per model call with usage and cost, and one span per tool, subagent and event. Scores: `rating`, `verified`. [Langfuse](langfuse.md) has the setup.

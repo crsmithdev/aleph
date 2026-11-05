@@ -3,8 +3,8 @@
  * proposal. Under the same header and Origin rule as ui/api/controls.ts. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages. The answer is the
  * `{ code, stdout, stderr }` the page's click handler shows.
  */
-import { approve, decline } from "../../jobs/lib/corrections.ts";
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { approve, decline } from "../../jobs/lib/learning/corrections.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { sameSite, text } from "../http.ts";
 import type { Handler, Routes } from "../server.ts";
 

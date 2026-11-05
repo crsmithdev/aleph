@@ -20,7 +20,7 @@ describe("claimsDocMatch", () => {
   });
   test("a sentence that does not name the code side is not a claim", () => {
     expect(claimsDocMatch("The label says that an edited spec is checked first.")).toBe(false);
-    expect(claimsDocMatch("The doc says the limit in jobs/lib/ask.ts is correct.")).toBe(true);
+    expect(claimsDocMatch("The doc says the limit in jobs/lib/asks/ask.ts is correct.")).toBe(true);
   });
   test("a state verb is a claim alone, and a spec is a doc but a spec check is not", () => {
     expect(claimsDocMatch("I checked the docs; they are accurate.")).toBe(true);
@@ -30,7 +30,7 @@ describe("claimsDocMatch", () => {
   test("a names-only diff sentence is not a claim, even when a docs/ path is in it", () => {
     expect(claimsDocMatch("The branch now changes only docs/design.md, ui/app.css, ui/gates.test.ts and ui/views/gates.js (checked with `git diff --name-only main...HEAD`).")).toBe(false);
     expect(claimsDocMatch("I checked docs/design.md against ui/lib.js after the edit.")).toBe(true);
-    expect(claimsDocMatch("docs/factory.md matches the code in jobs/lib/unit.ts.")).toBe(true);
+    expect(claimsDocMatch("docs/factory.md matches the code in jobs/lib/roles/unit.ts.")).toBe(true);
   });
 });
 
@@ -47,9 +47,9 @@ describe("docClaimProblems", () => {
     expect(docClaimProblems(e, claim).join()).toContain("no run after the last edit");
   });
   test("a cited file:line no output shows is named, one shown is not", () => {
-    const e = [...edit(), ...bash("grep -n isBuildable jobs/lib/store.ts docs/factory.md", "242:export function isBuildable")];
-    expect(docClaimProblems(e, "Docs match the code (jobs/lib/store.ts:242).")).toEqual([]);
-    expect(docClaimProblems(e, "Docs match the code (jobs/lib/store.ts:300).").join()).toContain("store.ts:300");
+    const e = [...edit(), ...bash("grep -n isBuildable jobs/lib/infra/git.ts docs/factory.md", "242:export function isBuildable")];
+    expect(docClaimProblems(e, "Docs match the code (jobs/lib/infra/git.ts:242).")).toEqual([]);
+    expect(docClaimProblems(e, "Docs match the code (jobs/lib/infra/git.ts:300).").join()).toContain("git.ts:300");
   });
   test("a cited file:line in the middle of a long Bash output counts as shown", () => {
     const filler = (n: number) => Array.from({ length: n }, (_, i) => `docs/design.md:${i + 1}: unrelated line of the grep output`).join("\n");
@@ -58,9 +58,9 @@ describe("docClaimProblems", () => {
     expect(docClaimProblems(e, "docs/design.md matches the code: ui/views/gates.js:112 is the empty line.")).toEqual([]);
   });
   test("a code file named with no tool call on it is named", () => {
-    const e = [...edit(), ...bash("grep -n X jobs/lib/a.ts", "1:X")];
-    const p = docClaimProblems(e, "Docs match; `dispatchIssues` in `jobs/lib/factory.ts` is as the code on main has them.");
-    expect(p.join()).toContain("jobs/lib/factory.ts");
-    expect(p.join()).not.toContain("a.ts");
+    const e = [...edit(), ...bash("grep -n X jobs/lib/infra/clock.ts", "1:X")];
+    const p = docClaimProblems(e, "Docs match; `dispatchIssues` in `jobs/lib/transitions/factory.ts` is as the code on main has them.");
+    expect(p.join()).toContain("jobs/lib/transitions/factory.ts");
+    expect(p.join()).not.toContain("clock.ts");
   });
 });

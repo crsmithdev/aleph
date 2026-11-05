@@ -7,12 +7,12 @@
  */
 import { specs } from "./specs.ts";
 import { runCli } from "../cli.ts";
-import { allJobs, lastReal } from "../../jobs/lib/job.ts";
-import { loadRegistry, onOf, type Repo } from "../../jobs/lib/ledger.ts";
-import { git } from "../../jobs/lib/git.ts";
-import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/status.ts";
-import { askOf, awaitsChris, refIn } from "../../jobs/lib/ask.ts";
-import { Refusal } from "../../jobs/lib/refusal.ts";
+import { allJobs, lastReal } from "../../jobs/lib/records/job.ts";
+import { loadRegistry, onOf, type Repo } from "../../jobs/lib/records/ledger.ts";
+import { git } from "../../jobs/lib/infra/git.ts";
+import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/records/status.ts";
+import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
+import { Refusal } from "../../jobs/lib/transitions/refusal.ts";
 import * as issues from "../../issues/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
@@ -22,7 +22,7 @@ import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
 import { githubBase, jobProjector, type NewIssue } from "../state.ts";
 import { filed } from "./speed.ts";
-import { readHolds } from "../../jobs/lib/factory-status.ts";
+import { readHolds } from "../../jobs/lib/gates/factory-status.ts";
 import { sameSite } from "../http.ts";
 
 /** An issue or goal id from a route: `7` or `7.1`; null for anything else. */

@@ -46,12 +46,12 @@ Chris works in Claude Code sessions and on the UI. Both write through the `aleph
 |---|---|---|---|
 | Hooks | Claude Code, per event | One event | `hooks/*.ts` |
 | `aleph` CLI | Chris, a session, the UI | One command | `jobs/cli.ts` |
-| `aleph tick` | `aleph-tick.timer`, each minute | Seconds | `jobs/lib/tick.ts` |
-| `aleph suite` | `aleph-suite.timer`, hourly | Minutes | `jobs/lib/factory.ts` `suiteStep` |
-| Dispatch, intake, director | A transition, as a transient systemd unit | Until done | `jobs/lib/launch.ts` |
-| Unit: worker, verify, review, land | A dispatch | Up to the time boxes | `jobs/lib/unit.ts` |
+| `aleph tick` | `aleph-tick.timer`, each minute | Seconds | `jobs/lib/transitions/tick.ts` |
+| `aleph suite` | `aleph-suite.timer`, hourly | Minutes | `jobs/lib/transitions/factory.ts` `suiteStep` |
+| Dispatch, intake, director | A transition, as a transient systemd unit | Until done | `jobs/lib/transitions/launch.ts` |
+| Unit: worker, verify, review, land | A dispatch | Up to the time boxes | `jobs/lib/roles/unit.ts` |
 | `aleph-ui` | `aleph-ui.service` | Always | `ui/server.ts` |
-| `llama-server` | `aleph-gpt-oss.service` | Always, optional | `jobs/lib/gpt-oss-start.ts` |
+| `llama-server` | `aleph-gpt-oss.service` | Always, optional | `jobs/lib/routing/gpt-oss-start.ts` |
 
 The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts WSL and the units after a Windows restart.
 
@@ -70,19 +70,21 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 | `tests/` | Repo-wide tests, `tests/live/` against real services |
 | `vendor/` | The upstream text of the adapted skills, for diffs |
 
-The main modules of `jobs/lib/`:
+The modules of `jobs/lib/`, one folder per concern:
 
-| Concern | Modules |
-|---|---|
-| Records and runs | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts` |
-| Transitions | `transitions.ts`, `continuation.ts`, `factory.ts`, `tick.ts`, `launch.ts` |
-| Agent roles | `agent-run.ts`, `agent-call.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts` |
-| Gates and checks | `goal-decision.ts`, `factory-status.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts` |
-| Land and recovery | `landing.ts`, `rescue.ts`, `firefighter.ts`, `doctor.ts` |
-| Routing | `route.ts`, `models.ts`, `gpt-oss-start.ts` |
-| Asks | `ask.ts`, `director.ts` |
-| Learning | `corrections.ts`, `episode.ts`, `monitor-table.ts` |
-| Infrastructure | `git.ts`, `process.ts`, `clock.ts`, `settings.ts`, `layout.ts`, `main-clone.ts` |
+| Concern | Folder | Modules |
+|---|---|---|
+| Records and runs | `records/` | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts`, `status.ts`, `jobdiff.ts` |
+| Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `tick.ts`, `launch.ts`, `refusal.ts` |
+| Agent roles | `roles/` | `agent-run.ts`, `agent-call.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `structured.ts`, `goal-spec.ts`, `role-skill.ts` |
+| Gates and checks | `gates/` | `goal-decision.ts`, `factory-status.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
+| Land and recovery | `land/` | `landing.ts`, `rescue.ts`, `firefighter.ts`, `doctor.ts` |
+| Routing | `routing/` | `route.ts`, `models.ts`, `gpt-oss-start.ts` |
+| Asks | `asks/` | `ask.ts`; the director (`jobs/lib/roles/director.ts`) answers the asks |
+| Learning | `learning/` | `corrections.ts`, `episode.ts`, `monitor-table.ts`, `trace.ts` |
+| Infrastructure | `infra/` | `git.ts`, `process.ts`, `clock.ts`, `settings.ts`, `layout.ts`, `main-clone.ts`, `ui-graph.ts` |
+
+The tests, fixtures and testkits of a module are in its folder.
 
 ## Key flows
 
@@ -119,7 +121,7 @@ The main modules of `jobs/lib/`:
 |---|---|
 | Locks | Directories under `$XDG_RUNTIME_DIR/aleph/` with an owner pid; a reboot clears them |
 | Load | A check, a worker and a land start only under `ALEPH_LOAD_LIMIT` |
-| Clocks | `jobs/lib/clock.ts`; `tests/clock-lint.test.ts` denies a raw `Date.now()` outside the listed files |
+| Clocks | `jobs/lib/infra/clock.ts`; `tests/clock-lint.test.ts` denies a raw `Date.now()` outside the listed files |
 | Cost | Each run records its cost; the Efficiency page and the monitor read it |
 | Secrets | `~/.aleph/.env`, read by `hooks/lib/env.ts`; `secret-scan` denies a commit that adds one |
 | Tests | `bun run test` in parallel; each test makes its own temp stores through the `ALEPH_*` path variables |

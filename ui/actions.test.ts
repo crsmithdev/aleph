@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { add, addPart } from "../issues/lib/todo.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { writeRun } from "../jobs/lib/ledger.ts";
+import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // The test's clock: the server reads it, and the runs start at it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

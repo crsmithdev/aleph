@@ -6,7 +6,7 @@ import { mkdirSync } from "node:fs";
 import { clearFit, currentFit, fit, gainSince, pollOnce, readSnapshots, share, sinceReset, summary, type Snapshot } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { costHtml, wkText } from "./lib.js";
-import { writeRun } from "../jobs/lib/ledger.ts";
+import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

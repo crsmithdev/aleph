@@ -4,14 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeList } from "../issues/lib/store.ts";
 import { add, addPart, setStatus } from "../issues/lib/todo.ts";
-import { setAsk, refIn } from "../jobs/lib/ask.ts";
+import { setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import { renderLanes, renderNeeds } from "./views/now.js";
 // @ts-ignore plain JS, shared with the page
 import { renderIssue } from "./views/issues.js";
-import { writeRun } from "../jobs/lib/ledger.ts";
+import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // /api/state on a store and a ledger in the new shape (kind, issue, goals, after, ask; runs with `on`, `build`, `awaiting`, `ask`):
 // the asks list (acceptance criterion 5) and the stage of every incoming entry (criterion 8).

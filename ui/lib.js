@@ -281,7 +281,7 @@ export const diffHtml = (t) => String(t ?? "").trim()
     }).join("")}</pre>`
   : `<p class="msg">No changes from the merge base.</p>`;
 
-/** The job states, as the ledger names them (jobs/lib/ledger.ts State), in the order the filters list them. */
+/** The job states, as the ledger names them (jobs/lib/records/ledger.ts State), in the order the filters list them. */
 export const STATES = ["running", "passed", "awaiting", "failed", "stuck", "done", "landed", "dropped"];
 const TONES = { running: "run", landing: "run", open: "run", landed: "done", passed: "done", done: "done", closed: "done", awaiting: "need", working: "run", planning: "run", queued: "run", failed: "stuck", stuck: "stuck", dropped: "quiet", parked: "parked" };
 /** The badge tone of a state (a job's, land's or issue's): run, done, need, stuck, or quiet for any other. */

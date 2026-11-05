@@ -8,7 +8,7 @@ import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, 
 import { join, resolve } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
 import { add, addPart, note, setStatus } from "../../../issues/lib/todo.ts";
-import { putRun, setIssueAsk } from "../../../jobs/lib/record.ts";
+import { putRun, setIssueAsk } from "../../../jobs/lib/records/record.ts";
 
 const ANCHOR = Date.parse("2026-10-28T12:00:00Z");
 const IDENT = { GIT_AUTHOR_NAME: "fixture", GIT_AUTHOR_EMAIL: "fixture@example.com", GIT_COMMITTER_NAME: "fixture", GIT_COMMITTER_EMAIL: "fixture@example.com" };

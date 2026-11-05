@@ -11,9 +11,9 @@
  * docs/verify-gate.md "Jev screen".
  */
 import { decide, judgeChoice } from "./jev.ts";
-import { LOCAL, LOCAL_ENV, readModels } from "../../jobs/lib/models.ts";
-import { gpuSlot } from "../../jobs/lib/factory-status.ts";
-import { factoryLog } from "../../jobs/lib/layout.ts";
+import { LOCAL, LOCAL_ENV, readModels } from "../../jobs/lib/routing/models.ts";
+import { gpuSlot } from "../../jobs/lib/gates/factory-status.ts";
+import { factoryLog } from "../../jobs/lib/infra/layout.ts";
 
 export interface Verdict { verdict: "pass" | "deny"; reason: string }
 

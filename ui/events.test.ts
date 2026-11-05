@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { countsInFactory, countsInRecords } from "./api/events.ts";
-import { putRun } from "../jobs/lib/record.ts";
-import type { Run } from "../jobs/lib/ledger.ts";
+import { putRun } from "../jobs/lib/records/record.ts";
+import type { Run } from "../jobs/lib/records/ledger.ts";
 
 let base: string, runs: string, factory: string, ref: string;
 let server: TestServer, stop: () => void, restoreEnv: () => void;

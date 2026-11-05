@@ -1,5 +1,5 @@
 /** The model routes: each tier's enable and model, and the local server's state. */
-import { LOCAL, readModels, setModel } from "../../jobs/lib/models.ts";
+import { LOCAL, readModels, setModel } from "../../jobs/lib/routing/models.ts";
 import { sameSite, text } from "../http.ts";
 import type { Routes } from "../server.ts";
 

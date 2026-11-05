@@ -3,9 +3,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { layout, factoryLog } from "../../../jobs/lib/layout.ts";
+import { layout, factoryLog } from "../../../jobs/lib/infra/layout.ts";
 import { buildReviewFixture } from "./build.ts";
-import { askOf } from "../../../jobs/lib/ask.ts";
+import { askOf } from "../../../jobs/lib/asks/ask.ts";
 import { state } from "../../state.ts";
 
 const KEYS = ["ALEPH_FACTORY_DIR", "ALEPH_JOBS_DIR", "ALEPH_REPOS", "ALEPH_ISSUES", "ALEPH_VAULT"];

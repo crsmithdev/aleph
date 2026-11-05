@@ -5,7 +5,7 @@
  * reason. Any other path prints nothing.
  */
 import { dirname, join, resolve } from "node:path";
-import { handoffsDir } from "../jobs/lib/settings.ts";
+import { handoffsDir } from "../jobs/lib/infra/settings.ts";
 
 const input = JSON.parse((await Bun.stdin.text()) || "{}");
 const path = String(input.tool_input?.file_path ?? "");

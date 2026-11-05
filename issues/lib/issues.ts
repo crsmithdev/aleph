@@ -6,13 +6,13 @@
  * detached dispatch and intake that follow a write. A store `follow` warning
  * comes back in the result for the caller to print.
  */
-import { Refusal, refuse } from "../../jobs/lib/refusal.ts";
-import { git } from "../../jobs/lib/git.ts";
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
-import { recentRepos } from "../../jobs/lib/status.ts";
+import { Refusal, refuse } from "../../jobs/lib/transitions/refusal.ts";
+import { git } from "../../jobs/lib/infra/git.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { recentRepos } from "../../jobs/lib/records/status.ts";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
-import { askIfPartDropped, askOf, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/ask.ts";
+import { askIfPartDropped, askOf, awaitsChris, clearAsk, decideAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { triage } from "./triage.ts";
 
 /** The fields `add` and `edit` take. `labels` are the issue's areas. `spec` makes an issue buildable, and `after` is what it waits for. */

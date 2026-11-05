@@ -6,13 +6,13 @@ import { writeList } from "../issues/lib/store.ts";
 import { add, addPart, setStatus } from "../issues/lib/todo.ts";
 import { state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
-import { loadRegistry, writeRun } from "../jobs/lib/ledger.ts";
-import { removeRun } from "../jobs/lib/record.ts";
+import { loadRegistry, writeRun } from "../jobs/lib/records/ledger.ts";
+import { removeRun } from "../jobs/lib/records/record.ts";
 import { spawn } from "node:child_process";
-import { facts } from "../jobs/lib/status.ts";
+import { facts } from "../jobs/lib/records/status.ts";
 import { state as fixture } from "./fixtures/status-state.ts";
 import { rows, withAttn } from "./test-now.ts";
-import { setAsk } from "../jobs/lib/ask.ts";
+import { setAsk } from "../jobs/lib/asks/ask.ts";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

@@ -8,7 +8,7 @@ import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
 import { waitFor } from "../tests/wait.ts";
-import { writeRun } from "../jobs/lib/ledger.ts";
+import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
 let restoreEnv: () => void;

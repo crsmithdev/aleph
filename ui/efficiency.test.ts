@@ -8,7 +8,7 @@ import { withEnv } from "./test-server.ts";
 import { onTile } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import { renderEfficiency, selection } from "./views/efficiency.js";
-import { writeRun } from "../jobs/lib/ledger.ts";
+import { writeRun } from "../jobs/lib/records/ledger.ts";
 // @ts-ignore plain JS shared with the page
 
 let base: string;

@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readRun, writeRun, type Run } from "./lib/ledger.ts";
-import { unitAlive } from "./lib/process.ts";
+import { readRun, writeRun, type Run } from "./lib/records/ledger.ts";
+import { unitAlive } from "./lib/infra/process.ts";
 export { unitAlive };
 import { config as storeConfig } from "../issues/lib/store.ts";
 import { renderItem } from "../issues/lib/todo.ts";

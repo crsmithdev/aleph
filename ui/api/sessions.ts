@@ -1,7 +1,7 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { basename } from "node:path";
 import { LangfuseError, config, observations, traces } from "../langfuse.ts";
-import { allRuns, loadRegistry } from "../../jobs/lib/ledger.ts";
+import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
 import { currentFit, share } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page

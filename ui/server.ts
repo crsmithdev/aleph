@@ -9,8 +9,8 @@ import { cacheFetches, uiFetchTtl } from "../issues/lib/store.ts";
 import { loadDotenv } from "../hooks/lib/env.ts";
 import { gateOn, gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";
-import { uiPort } from "../jobs/lib/settings.ts";
-import { serverGraph } from "../jobs/lib/ui-graph.ts";
+import { uiPort } from "../jobs/lib/infra/settings.ts";
+import { serverGraph } from "../jobs/lib/infra/ui-graph.ts";
 
 export type Handler = (req: Request, params: Record<string, string>, url: URL) => Response | Promise<Response>;
 export type Routes = Record<string, Handler>;

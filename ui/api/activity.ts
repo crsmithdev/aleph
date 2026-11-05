@@ -7,10 +7,10 @@
 import { basename } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
 import type { Observation } from "../../hooks/lib/otlp.ts";
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { today } from "../../issues/lib/todo.ts";
 import { staleAsync } from "../stale.ts";
-import { uiCacheMs } from "../../jobs/lib/settings.ts";
+import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];

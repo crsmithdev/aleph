@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { asks, clean, stuckBlocker } from "./asks.ts";
-import { ASK_REASONS, type Ask } from "../jobs/lib/ask.ts";
-import type { Lesson } from "../jobs/lib/corrections.ts";
+import { ASK_REASONS, type Ask } from "../jobs/lib/asks/ask.ts";
+import type { Lesson } from "../jobs/lib/learning/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
 
 /** Stored case text the fixtures put on their Ask while a test sets it. */

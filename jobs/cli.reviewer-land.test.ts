@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { aleph, other, repo, sh, setup, teardown } from "./cli.helpers";
 import { actionJob, drop } from "./inproc";
 
-// The wiring of `aleph report`; the reviewer and the land run in-process in jobs/lib/review.land.test.ts.
+// The wiring of `aleph report`; the reviewer and the land run in-process in jobs/lib/land/review.land.test.ts.
 beforeAll(setup);
 afterAll(teardown);
 

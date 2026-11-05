@@ -7,7 +7,7 @@ import { uiFetchTtl } from "../../issues/lib/store.ts";
 import { clearTypesCache, memoryTypes } from "./memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
-import { uiCacheMs } from "../../jobs/lib/settings.ts";
+import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const scopeOf = (n: Note) => String(n.fm.scope ?? "");

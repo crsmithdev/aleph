@@ -2,8 +2,8 @@ import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ASK_REASONS } from "../jobs/lib/ask.ts";
-import { SECURITY_PATHS } from "../jobs/lib/gate.ts";
+import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
+import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
 import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
@@ -11,8 +11,8 @@ import { withEnv, withServer } from "./test-server.ts";
 import { when } from "./lib.js";
 // @ts-ignore gates.js is plain JS, shared with the page
 import * as gates from "./views/gates.js";
-import * as record from "../jobs/lib/record.ts";
-import { allHolds, type HoldRecord } from "../jobs/lib/factory-status.ts";
+import * as record from "../jobs/lib/records/record.ts";
+import { allHolds, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
 
 /** Make `rows` the only hold records: each goal's `hold` and `started` events in its job record. */
 function setHolds(rows: HoldRecord[]): void {

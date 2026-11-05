@@ -10,8 +10,8 @@ import { withEnv } from "./test-server.ts";
 import * as v from "./views/jobs.js";
 // @ts-ignore plain JS, shared with the page
 import * as jobView from "./views/job.js";
-import { writeRun } from "../jobs/lib/ledger.ts";
-import { removeRun } from "../jobs/lib/record.ts";
+import { writeRun } from "../jobs/lib/records/ledger.ts";
+import { removeRun } from "../jobs/lib/records/record.ts";
 
 let base: string, jobsDir: string;
 let restore: () => void;

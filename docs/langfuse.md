@@ -47,4 +47,4 @@ At `Stop`, the hook reads the generations from the transcript, one per `requestI
 
 ## Factory traces
 
-After each factory run, the factory sends the worker's stream-json, and the reviewer's, as one trace named `factory <job>` with the job id as its session id. It makes one span per tool call (`jobs/lib/trace.ts`). A failed post writes one line to `trace.log` in the run folder and changes nothing else.
+After each factory run, the factory sends the worker's stream-json, and the reviewer's, as one trace named `factory <job>` with the job id as its session id. It makes one span per tool call (`jobs/lib/learning/trace.ts`). A failed post writes one line to `trace.log` in the run folder and changes nothing else.

@@ -2,8 +2,8 @@
  * What the Awaiting-you rows say and offer (the `asks` of /api/state). The server decides from the Ask's reason and the item's data;
  * the page only renders. One entry per run, issue or goal that waits for Chris, and per proposal.
  */
-import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/corrections.ts";
-import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Granted } from "../jobs/lib/ask.ts";
+import { place, proposals as openProposals, standingKey, type Lesson } from "../jobs/lib/learning/corrections.ts";
+import { actionsOn, ASK_REASONS, kindOf, LIMITS, limitText, reasonOf, type Ask, type Granted } from "../jobs/lib/asks/ask.ts";
 // @ts-ignore plain JS, shared with the page
 // @ts-ignore plain JS, shared with the page
 import { oneSentence, proseDecision } from "./decision.js";
@@ -219,7 +219,7 @@ function proposalAlways(l: Lesson): NonNullable<AskItem["always"]> {
 }
 
 /**
- * One row. An Ask with no case text is still with the director (jobs/lib/director.ts): the row shows the fixed problem
+ * One row. An Ask with no case text is still with the director (jobs/lib/roles/director.ts): the row shows the fixed problem
  * text and offers no action and no auto-yes until the director escalates it with its case text.
  */
 function item(reason: string, c: Ctx, key: string, href: string, title: string, repo?: string, kind?: string, priority?: string): AskItem {

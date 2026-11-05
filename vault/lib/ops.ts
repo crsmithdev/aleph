@@ -14,7 +14,7 @@ import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
 import { budgetFindings, citedTraces, clock, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, links, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
-import { handoffsDir } from "../../jobs/lib/settings.ts";
+import { handoffsDir } from "../../jobs/lib/infra/settings.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
 export class Exit extends Error { constructor(readonly code: number) { super(`exit ${code}`); } }

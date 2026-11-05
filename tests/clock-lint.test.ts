@@ -2,7 +2,7 @@
  * No test reads the wall clock or sleeps. This test reads every test file and test helper
  * and fails when one of them uses a rule below and is not in tests/clock-exceptions.txt, or when a file in
  * that list no longer uses one. So the list only shrinks. A test reads time from an injected clock
- * (jobs/lib/clock.ts) or setSystemTime, and waits for an event, not for a timer.
+ * (jobs/lib/infra/clock.ts) or setSystemTime, and waits for an event, not for a timer.
  */
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";

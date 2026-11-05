@@ -2,8 +2,8 @@
  * `GET /api/contents`: the Inventory view's data: `{ issues, projects, tests }`, the rows of `/api/issues`, each with
  * the count and recorded cost of the runs on it and its parts, the registry's keys and each project's suite history records. `?project=<key>` shows only that project.
  */
-import { suiteHistory } from "../../jobs/lib/factory-status.ts";
-import { allRuns, loadRegistry, onOf } from "../../jobs/lib/ledger.ts";
+import { suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
+import { allRuns, loadRegistry, onOf } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
 import { routes as issueRoutes, type Row } from "./issues.ts";
 

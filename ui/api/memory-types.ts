@@ -3,9 +3,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { claudeSettings } from "../../hooks/lib/context.ts";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
-import { readStore } from "../../jobs/lib/corrections.ts";
-import { episodesDir, KEEP_DAYS } from "../../jobs/lib/episode.ts";
-import { loadRegistry } from "../../jobs/lib/ledger.ts";
+import { readStore } from "../../jobs/lib/learning/corrections.ts";
+import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
+import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { afterOf, readLists } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 import { coreNotes, START_BUDGET, startContext, type Note } from "../../vault/lib/vault.ts";
@@ -13,7 +13,7 @@ import { activity } from "./activity.ts";
 import { skillsDir } from "./skills.ts";
 import { config, traces } from "../langfuse.ts";
 import { staleAsync } from "../stale.ts";
-import { handoffsDir as handoffsSetting, uiCacheMs } from "../../jobs/lib/settings.ts";
+import { handoffsDir as handoffsSetting, uiCacheMs } from "../../jobs/lib/infra/settings.ts";
 
 /** Langfuse-backed loads, kept `ALEPH_UI_CACHE_TTL` seconds like `vault misses`; a failure is kept as an answer with no data (null). */
 const sessionsCache = staleAsync<Sessions | null>();

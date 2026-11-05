@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import * as verbs from "./issues.ts";
-import { askChris, askOf, setAsk, refIn } from "../../jobs/lib/ask.ts";
+import { askChris, askOf, setAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

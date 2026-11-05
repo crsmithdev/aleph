@@ -5,12 +5,12 @@
  * name, run as a subprocess by the launcher; the page offers nothing the CLI does not. A POST must carry `X-Aleph-UI: 1` and, when it has
  * an Origin, the server's own, so a web page in the browser cannot post here. The password gate in `ui/auth.ts` is what stops a LAN client, so this check is only against other web pages.
  */
-import { askOf, isAwaiting, loadRegistry, onOf } from "../../jobs/lib/ledger.ts";
-import { jobDiff, NO_DIFF } from "../../jobs/lib/jobdiff.ts";
-import { latestJob } from "../../jobs/lib/job.ts";
-import { may } from "../../jobs/lib/ask.ts";
+import { askOf, isAwaiting, loadRegistry, onOf } from "../../jobs/lib/records/ledger.ts";
+import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
+import { latestJob } from "../../jobs/lib/records/job.ts";
+import { may } from "../../jobs/lib/asks/ask.ts";
 import { runCli } from "../cli.ts";
-import { Refusal } from "../../jobs/lib/refusal.ts";
+import { Refusal } from "../../jobs/lib/transitions/refusal.ts";
 import * as issues from "../../issues/lib/issues.ts";
 import { sameSite, text } from "../http.ts";
 import type { Handler, Routes } from "../server.ts";

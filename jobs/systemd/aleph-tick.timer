@@ -1,4 +1,4 @@
-# Every minute. The tick starts only periodic work, each step on its own due rule (jobs/lib/tick.ts); no transition waits for it. `aleph pause` stops the runs, not the timer.
+# Every minute. The tick starts only periodic work, each step on its own due rule (jobs/lib/transitions/tick.ts); no transition waits for it. `aleph pause` stops the runs, not the timer.
 [Unit]
 Description=aleph factory tick, every minute
 

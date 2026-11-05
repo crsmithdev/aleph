@@ -44,7 +44,7 @@ scope: aleph            # a repo name, or global
 confidence: measured    # measured | reported | inferred
 updated: 2026-11-02
 supersedes: []
-sources: [jobs/lib/unit.ts]
+sources: [jobs/lib/roles/unit.ts]
 tags: []
 ---
 ```

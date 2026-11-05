@@ -1,6 +1,6 @@
 /** `GET /api/state`: the Now view's data, narrowed to one project by `?project=<key>`. */
 import type { Routes } from "../server.ts";
-import { proposals } from "../../jobs/lib/corrections.ts";
+import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import type { State } from "../state.ts";
 import { loadState } from "../state-load.ts";
 import { cachedSpeed } from "./speed.ts";

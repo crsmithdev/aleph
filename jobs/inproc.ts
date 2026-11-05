@@ -4,12 +4,12 @@
  * cli.helpers, and gives the result in the shape of `aleph()`: the printed JSON, the exit code and the refusal.
  */
 import { base, env } from "./cli.helpers";
-import { loadRegistry } from "./lib/ledger.ts";
-import { Refusal } from "./lib/refusal.ts";
-import { checked as checkedJob, drop as dropJob, jobCommand, land as landJob, recheck as recheckJob, startJob, type Start } from "./lib/transitions.ts";
-import { runDispatch } from "./lib/factory.ts";
-import { repoStages } from "./lib/status.ts";
-import { findJob, view } from "./lib/job.ts";
+import { loadRegistry } from "./lib/records/ledger.ts";
+import { Refusal } from "./lib/transitions/refusal.ts";
+import { checked as checkedJob, drop as dropJob, jobCommand, land as landJob, recheck as recheckJob, startJob, type Start } from "./lib/transitions/transitions.ts";
+import { runDispatch } from "./lib/transitions/factory.ts";
+import { repoStages } from "./lib/records/status.ts";
+import { findJob, view } from "./lib/records/job.ts";
 import * as verbs from "../issues/lib/issues.ts";
 
 export interface Result { code: number; json: any; stderr: string }

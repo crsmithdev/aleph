@@ -7,8 +7,8 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Routes } from "./server.ts";
-import { layout } from "../jobs/lib/layout.ts";
-import { uiPassword } from "../jobs/lib/settings.ts";
+import { layout } from "../jobs/lib/infra/layout.ts";
+import { uiPassword } from "../jobs/lib/infra/settings.ts";
 
 const COOKIE = "aleph_session";
 const password = () => uiPassword();

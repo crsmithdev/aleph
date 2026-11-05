@@ -3,7 +3,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, jobsDir, state, setup, teardown } from "./cli.helpers";
 import { actionJob as job } from "./inproc";
-import { updateRun } from "./lib/ledger.ts";
+import { updateRun } from "./lib/records/ledger.ts";
 
 beforeAll(setup);
 afterAll(teardown);

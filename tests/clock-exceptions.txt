@@ -1,5 +1,5 @@
 # Test files that read the wall clock or sleep. tests/clock-lint.test.ts fails when a file here no longer does, so
-# this list only shrinks. Do not add to it: inject a clock (jobs/lib/clock.ts) or wait for an event.
+# this list only shrinks. Do not add to it: inject a clock (jobs/lib/infra/clock.ts) or wait for an event.
 hooks/hooks.test.ts
 jobs/cli.basic.test.ts
 jobs/cli.dispatch-once.test.ts
@@ -7,14 +7,14 @@ jobs/cli.helpers.ts
 jobs/cli.issue-goal.test.ts
 jobs/cli.land-crash.test.ts
 jobs/cli.transitions.test.ts
-jobs/lib/agent-run.test.ts
-jobs/lib/director.fixture.ts
-jobs/lib/factory.helpers.ts
-jobs/lib/landing.fixture.ts
-jobs/lib/ledger.test.ts
-jobs/lib/review.flow.test.ts
-jobs/lib/unit.flow.test.ts
-jobs/lib/unit.tz.test.ts
+jobs/lib/roles/agent-run.test.ts
+jobs/lib/roles/director.fixture.ts
+jobs/lib/transitions/factory.helpers.ts
+jobs/lib/land/landing.fixture.ts
+jobs/lib/records/ledger.test.ts
+jobs/lib/roles/review.flow.test.ts
+jobs/lib/roles/unit.flow.test.ts
+jobs/lib/roles/unit.tz.test.ts
 tests/live/jobs.test.ts
 tests/live/langfuse.test.ts
 tests/wait.ts

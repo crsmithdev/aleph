@@ -15,13 +15,13 @@ This page states which model or command does each piece of work, with which tool
 | Title and rule writer | `haiku`, or the local `title` tier | None, 1 turn | | 30 s | One line |
 | Judge | Jev, then `haiku` or the local `judge` tier | None, 1 turn | | 30 s | `{verdict, reason}` |
 
-The code: intake `jobs/lib/intake.ts`, worker and reviewer `jobs/lib/unit.ts`, director `jobs/lib/director.ts`, monitor `jobs/lib/monitor.ts`, titles `jobs/lib/title.ts`, judge `hooks/lib/judge.ts`.
+The code: intake `jobs/lib/roles/intake.ts`, worker and reviewer `jobs/lib/roles/unit.ts`, director `jobs/lib/roles/director.ts`, monitor `jobs/lib/roles/monitor.ts`, titles `jobs/lib/roles/title.ts`, judge `hooks/lib/judge.ts`.
 
 Corrections, episodes and the firefighter start no agent. Corrections asks Jev typed questions; episodes read git, the ledger and Langfuse; the firefighter is code.
 
 ## How a run starts
 
-`openRun` and `callAgent` in `jobs/lib/agent-run.ts` start each one-reply role:
+`openRun` and `callAgent` in `jobs/lib/roles/agent-run.ts` start each one-reply role:
 
 ```bash
 claude -p --strict-mcp-config --disable-slash-commands \
@@ -31,20 +31,20 @@ claude -p --strict-mcp-config --disable-slash-commands \
 - The environment drops `ANTHROPIC_API_KEY` and `CLAUDECODE`, so each run uses the subscription.
 - The time box sends SIGTERM, then SIGKILL after 30 seconds, to the process group.
 - `askAgain` resumes the same session with `--resume` for a send-back, such as intake's second try.
-- `jobs/lib/structured.ts` reads `structured_output` from the stream's `result` event.
+- `jobs/lib/roles/structured.ts` reads `structured_output` from the stream's `result` event.
 - The worker and reviewer go through `agentCall`, which adds the stall watch (`ALEPH_STALL_SECONDS`, 600).
 
 The worker's environment (`agentEnv`) rewrites a push to `git@github.com:` to a dead remote, gives `gh` a private config with no token, and sets `ALEPH_JOB_ID` and `ALEPH_JOB_RUN`.
 
-`jobs/lib/launch.ts` starts `aleph intake`, `dispatch`, `director` and `suite` as transient systemd units (`systemd-run --user`). `ALEPH_JOB_FOREGROUND=1` runs them as child processes. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops all of them.
+`jobs/lib/transitions/launch.ts` starts `aleph intake`, `dispatch`, `director` and `suite` as transient systemd units (`systemd-run --user`). `ALEPH_JOB_FOREGROUND=1` runs them as child processes. `ALEPH_DISPATCH`, else `on`; `ALEPH_DISPATCH=off` stops all of them.
 
 ## Skills in roles
 
-Every role runs with `--disable-slash-commands`, so it loads no skill. The worker gets `skills/code-change/SKILL.md` and the reviewer gets `skills/code-review/SKILL.md` as a section of the prompt (`jobs/lib/role-skill.ts` `skillSection`). The other roles get no skill.
+Every role runs with `--disable-slash-commands`, so it loads no skill. The worker gets `skills/code-change/SKILL.md` and the reviewer gets `skills/code-review/SKILL.md` as a section of the prompt (`jobs/lib/roles/role-skill.ts` `skillSection`). The other roles get no skill.
 
 ## Worker tiers
 
-`route(spec)` in `jobs/lib/route.ts` asks Jev one `choice` question about the goal's spec:
+`route(spec)` in `jobs/lib/routing/route.ts` asks Jev one `choice` question about the goal's spec:
 
 | Tier | Model | Fits |
 |---|---|---|
@@ -58,7 +58,7 @@ The dispatch also routes when the live cap holds a goal: if a tier on the local 
 
 ## Local model
 
-`~/.aleph/factory/models.json` maps each tier to `{enabled, model}` (`jobs/lib/models.ts`). Each tier offers its Claude model or `gpt-oss-20b`:
+`~/.aleph/factory/models.json` maps each tier to `{enabled, model}` (`jobs/lib/routing/models.ts`). Each tier offers its Claude model or `gpt-oss-20b`:
 
 | Tier | Offers |
 |---|---|
@@ -74,7 +74,7 @@ aleph models set worker-low gpt-oss-20b
 aleph models disable worker-medium    # only the worker tiers can be off
 ```
 
-The local model is `llama-server` on `127.0.0.1:8012`, run by `jobs/systemd/aleph-gpt-oss.service` through `jobs/lib/gpt-oss-start.ts`, which sets the CPU offload from the free VRAM. A run on it gets `ANTHROPIC_BASE_URL` pointed at the server, a 40,960-token window and 4,096 output tokens. One GPU means one local run at a time: `LOCAL_CAP` is 1 and the `gpu` lock holds the rest. Local runs do not count against the live cap. A title or judge call that cannot get the GPU in time falls back to Claude Haiku. The measurements are in [the gpt-oss finding](findings/2026-11-04-gpt-oss-20b-llama-server.md).
+The local model is `llama-server` on `127.0.0.1:8012`, run by `jobs/systemd/aleph-gpt-oss.service` through `jobs/lib/routing/gpt-oss-start.ts`, which sets the CPU offload from the free VRAM. A run on it gets `ANTHROPIC_BASE_URL` pointed at the server, a 40,960-token window and 4,096 output tokens. One GPU means one local run at a time: `LOCAL_CAP` is 1 and the `gpu` lock holds the rest. Local runs do not count against the live cap. A title or judge call that cannot get the GPU in time falls back to Claude Haiku. The measurements are in [the gpt-oss finding](findings/2026-11-04-gpt-oss-20b-llama-server.md).
 
 ## Judge
 

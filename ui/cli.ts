@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { cliOverride } from "../jobs/lib/settings.ts";
+import { cliOverride } from "../jobs/lib/infra/settings.ts";
 
 /** The argv that runs the CLI: `$ALEPH_CLI` when set (the UI tests' fake), else bun on jobs/cli.ts. */
 export const cliArgv = (): string[] => (cliOverride() ? [cliOverride()!] : [process.execPath, join(import.meta.dir, "..", "jobs", "cli.ts")]);

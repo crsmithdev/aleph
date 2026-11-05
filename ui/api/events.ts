@@ -4,9 +4,9 @@
  */
 import { existsSync, mkdirSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
 import { join } from "node:path";
-import { factoryDir } from "../../jobs/lib/factory-status.ts";
-import { layout } from "../../jobs/lib/layout.ts";
-import { recordsDir } from "../../jobs/lib/record.ts";
+import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
+import { layout } from "../../jobs/lib/infra/layout.ts";
+import { recordsDir } from "../../jobs/lib/records/record.ts";
 import type { Routes } from "../server.ts";
 
 /** Changes this close together send one event. */

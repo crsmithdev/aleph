@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv } from "./test-server.ts";
 import { agentStats, CLASSES, classify, clearCache, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
-import { activeEnd } from "../jobs/lib/process.ts";
+import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
 import { durShort, weekText, xLabel } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
 import { dur } from "./lib.js";
-import { writeRun } from "../jobs/lib/ledger.ts";
-import * as record from "../jobs/lib/record.ts";
+import { writeRun } from "../jobs/lib/records/ledger.ts";
+import * as record from "../jobs/lib/records/record.ts";
 import { averageFigures, figures } from "./api/speed.ts";
 
 let base: string;

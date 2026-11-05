@@ -8,32 +8,32 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/ledger.ts";
-import { isLive } from "./lib/process.ts";
-import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/job.ts";
-import { unit } from "./lib/unit.ts";
-import { onMain } from "./lib/status.ts";
-import { removeBranch } from "./lib/landing.ts";
-import { fetchOrigin, git } from "./lib/git.ts";
+import { allRuns, loadRegistry, newsLine, updateRun, type Entry, type Repo } from "./lib/records/ledger.ts";
+import { isLive } from "./lib/infra/process.ts";
+import { allJobs, findJob, goal, isOpen, issue as issueOf, lastReal, readFile, view, type Job } from "./lib/records/job.ts";
+import { unit } from "./lib/roles/unit.ts";
+import { onMain } from "./lib/records/status.ts";
+import { removeBranch } from "./lib/land/landing.ts";
+import { fetchOrigin, git } from "./lib/infra/git.ts";
 import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
 import * as issues from "../issues/lib/todo.ts";
 import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
-import { askOf, refIn, grant, readAlways, revoke } from "./lib/ask.ts";
-import { behind, directorStep, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/factory.ts";
-import { runTick } from "./lib/tick.ts";
-import { dispatchDetached, intakeDetached } from "./lib/launch.ts";
-import { health } from "./lib/factory-status.ts";
-import { addDays, flakeLines, renderTable, reportLine } from "./lib/monitor-table.ts";
-import { runMonitor, tableOf } from "./lib/monitor.ts";
-import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions.ts";
-import type { Fate } from "./lib/outcome.ts";
-import { refuse, Refusal } from "./lib/refusal.ts";
-import * as doctor from "./lib/doctor.ts";
-import { facts, repoStages, stages } from "./lib/status.ts";
-import type { Stage } from "./lib/stage.ts";
-import { jobId } from "./lib/settings.ts";
-import { readModels, setModel } from "./lib/models.ts";
+import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
+import { behind, directorStep, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
+import { runTick } from "./lib/transitions/tick.ts";
+import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
+import { health } from "./lib/gates/factory-status.ts";
+import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
+import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
+import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
+import type { Fate } from "./lib/records/outcome.ts";
+import { refuse, Refusal } from "./lib/transitions/refusal.ts";
+import * as doctor from "./lib/land/doctor.ts";
+import { facts, repoStages, stages } from "./lib/records/status.ts";
+import type { Stage } from "./lib/records/stage.ts";
+import { jobId } from "./lib/infra/settings.ts";
+import { readModels, setModel } from "./lib/routing/models.ts";
 
 const DAY_MS = 24 * 3600_000;
 
@@ -389,7 +389,7 @@ try {
     case "doctor": await doctorCmd(); break;
     case "doc-claims": {
       // Each doc claim of this repo the code does not back, read now: run it after the last edit of a doc.
-      const r = (await import("./lib/doc-claims-repo.ts")).docClaimsReport();
+      const r = (await import("./lib/gates/doc-claims-repo.ts")).docClaimsReport();
       console.log(r.text);
       if (!r.ok) process.exit(1);
       break;

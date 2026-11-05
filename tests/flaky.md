@@ -50,28 +50,28 @@ jobs/cli.landcheck.test.ts > two lands of one job at once start one land run. Fa
 jobs/cli.milestone.test.ts > three ready branches land one at a time, in the order their lands were made. Fails: once in 8 baseline suites; main's last 3 commits are not in `made` order. Seen: 2026-11-04. Cause: clock (`made` is Date.now(); the WSL2 wall clock steps back 0.5 to 0.7 s about every 30 s).
 
 ## tick-one-run-per-goal
-jobs/lib/factory.tick.test.ts > a factory run > a tick starts one run per open goal, lands it, and then has nothing to start. Fails: in the full suite, passed on the rerun (2 runs). Seen: 2026-11-01, 2026-11-04. Cause: load.
+jobs/lib/transitions/factory.tick.test.ts > a factory run > a tick starts one run per open goal, lands it, and then has nothing to start. Fails: in the full suite, passed on the rerun (2 runs). Seen: 2026-11-01, 2026-11-04. Cause: load.
 
 ## batch-member-failed
-jobs/lib/landing.batch.test.ts > a member that failed in attempt 1 does not take the leader out when main moves twice. Fails: the 60 s test limit. Seen: 2026-10-28. Cause: load.
+jobs/lib/land/landing.batch.test.ts > a member that failed in attempt 1 does not take the leader out when main moves twice. Fails: the 60 s test limit. Seen: 2026-10-28. Cause: load.
 
 ## checks-commit-added
-jobs/lib/landing.checks.test.ts > a commit added to the branch after its checks gets the checks on land. Fails: the 60 s test limit (2 runs). Seen: 2026-10-28. Cause: load.
+jobs/lib/land/landing.checks.test.ts > a commit added to the branch after its checks gets the checks on land. Fails: the 60 s test limit (2 runs). Seen: 2026-10-28. Cause: load.
 
 ## conflict-records-paths
-jobs/lib/landing.conflict.test.ts > a conflict records its paths, sends the job back to the worker, and the passed follow-up lands. Fails: in 2 full runs, passes alone. Seen: 2026-11-03. Cause: load.
+jobs/lib/land/landing.conflict.test.ts > a conflict records its paths, sends the job back to the worker, and the passed follow-up lands. Fails: in 2 full runs, passes alone. Seen: 2026-11-03. Cause: load.
 
 ## merge-lost-race
-jobs/lib/landing.merge.test.ts > a push that loses a race merges again in the same land, and lands. Fails: run kinds come back as land, build instead of build, land. Seen: 2026-11-01. Cause: clock (runs sorted by a wall-clock stamp).
+jobs/lib/land/landing.merge.test.ts > a push that loses a race merges again in the same land, and lands. Fails: run kinds come back as land, build instead of build, land. Seen: 2026-11-01. Cause: clock (runs sorted by a wall-clock stamp).
 
 ## launch-detached-unit
-jobs/lib/launch.test.ts > detached starts its verb in a unit of its own, a different one per call. Fails: both calls get the same unit name (CI). Seen: 2026-11-01. Cause: clock (the unit name used only Date.now() and the pid). Fixed after: jobs/lib/launch.ts now adds a per-process count to the name.
+jobs/lib/transitions/launch.test.ts > detached starts its verb in a unit of its own, a different one per call. Fails: both calls get the same unit name (CI). Seen: 2026-11-01. Cause: clock (the unit name used only Date.now() and the pid). Fixed after: jobs/lib/transitions/launch.ts now adds a per-process count to the name.
 
 ## review-held-path
-jobs/lib/review.flow.test.ts > a factory run > the reviewer > a held path the reviewer holds is a fix round, not an Ask. Fails: in the full suite, passed on the rerun. Seen: 2026-11-04. Cause: load.
+jobs/lib/roles/review.flow.test.ts > a factory run > the reviewer > a held path the reviewer holds is a fix round, not an Ask. Fails: in the full suite, passed on the rerun. Seen: 2026-11-04. Cause: load.
 
 ## review-stuck-follow-up
-jobs/lib/review.land.test.ts > a follow-up on a stuck job starts from the job's previous branch. Fails: at 5007 ms, the 5 s hook or test limit. Seen: 2026-10-28. Cause: load.
+jobs/lib/land/review.land.test.ts > a follow-up on a stuck job starts from the job's previous branch. Fails: at 5007 ms, the 5 s hook or test limit. Seen: 2026-10-28. Cause: load.
 
 ## auth-password-gate
 ui/auth.test.ts > password gate: login, session across servers, logout. Fails: under load, passes on the quiet rerun. Seen: 2026-10-31. Cause: load.

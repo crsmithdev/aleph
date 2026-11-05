@@ -7,13 +7,13 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ASK_REASONS, readAlways } from "../../jobs/lib/ask.ts";
-import { allHolds, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/factory-status.ts";
-import { latestReport } from "../../jobs/lib/monitor-table.ts";
-import { allJobs } from "../../jobs/lib/job.ts";
-import * as record from "../../jobs/lib/record.ts";
-import { layout, readFactoryLog } from "../../jobs/lib/layout.ts";
-import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/settings.ts";
+import { ASK_REASONS, readAlways } from "../../jobs/lib/asks/ask.ts";
+import { allHolds, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
+import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
+import { allJobs } from "../../jobs/lib/records/job.ts";
+import * as record from "../../jobs/lib/records/record.ts";
+import { layout, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
+import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 
 import { runCli } from "../cli.ts";

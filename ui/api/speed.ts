@@ -6,18 +6,18 @@
  * The phases also read when each issue file first came into the work store's git history.
  */
 import { existsSync } from "node:fs";
-import { flakeNames, flakes } from "../../jobs/lib/factory-status.ts";
-import { git } from "../../jobs/lib/git.ts";
-import { all as allRecords } from "../../jobs/lib/record.ts";
-import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/ledger.ts";
-import { activeEnd, isLive, isStarting } from "../../jobs/lib/process.ts";
-import { causeOf, type Cause } from "../../jobs/lib/outcome.ts";
+import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
+import { git } from "../../jobs/lib/infra/git.ts";
+import { all as allRecords } from "../../jobs/lib/records/record.ts";
+import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
+import { activeEnd, isLive, isStarting } from "../../jobs/lib/infra/process.ts";
+import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
-import { LIVE_CAP } from "../../jobs/lib/settings.ts";
+import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 /** The issue number of a run, from `on` or old `todo`; a goal run "860.1" reads as 860. Undefined when the run has none. */

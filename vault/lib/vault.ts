@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
-import { vaultDir } from "../../jobs/lib/settings.ts";
+import { vaultDir } from "../../jobs/lib/infra/settings.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
 
 export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
