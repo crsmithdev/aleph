@@ -77,7 +77,7 @@ type Land = (name: string) => Promise<string | null>;
  * Start every ready goal, in order, until the live cap. It runs when a run ends, when a goal is added or edited,
  * and from the tick's sweep when the sweep finds work it missed. While the factory is paused it does nothing. Else its steps run first: the next
  * steps a pause kept (`startKept`), the rescue of stuck, failed, killed and lost runs, the lands and the close of parents whose parts are done.
- * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 7 gates of goalDecision in
+ * It runs no checks: main's state is what the last `aleph suite` recorded (`mainState`). Then each goal meets the 6 gates of goalDecision in
  * order; the first that binds skips it, and its hold record names that gate. A goal no gate holds starts. Each start
  * holds a lock on its goal and re-reads the jobs under it, so two dispatches at once start a goal once. `start`
  * dispatches the run; it is `aleph job`, in-process (transitions.ts). It starts goals

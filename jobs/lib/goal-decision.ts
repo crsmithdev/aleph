@@ -3,7 +3,7 @@
  * stall check and the Queued lane all read it. It reads no store and takes no lock:
  * the caller reads the facts, and holds the locks and does the writes.
  *
- * The dispatch asks the 7 gates in the order of GATES; the first that binds skips the goal,
+ * The dispatch asks the 6 gates in the order of GATES; the first that binds skips the goal,
  * and its name is the kind of the hold record.
  */
 import { afterOf, areasOf, labels } from "../../issues/lib/store.ts";
