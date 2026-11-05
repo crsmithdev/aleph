@@ -52,8 +52,6 @@ export interface Subject {
 export interface RunView { id: string; kind: Run["kind"]; condition: State; open: boolean; ask?: AskFact }
 
 export interface Ctx {
-  /** The ref's name on the page. */
-  main: string;
   /** The repo is a factory repo (`sandbox: true`): intake reads it, so an issue with no spec gets sorted. */
   sandbox: boolean;
   /** The not-reverted `Issue:` trailer commits on origin/<main>, by item number: `landedIndex`. */

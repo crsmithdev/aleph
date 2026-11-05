@@ -135,7 +135,7 @@ export function onMain(repo: { path: string; key: string; main: string } | undef
 export function stages(cwd: string, main: string, f: Facts, refs: (number | string)[], landed: Map<string, string[]> = landedIndex(cwd, main, f.repo, (n) => f.items[n]?.since)): Stage[] {
   const num = (ref: string) => (ref.startsWith(`${f.repo}-`) && /^\d+(\.\d+)?$/.test(ref.slice(f.repo.length + 1)) ? ref.slice(f.repo.length + 1) : undefined);
   const ctx: Ctx = {
-    main, landed, reverted: revertedIn(landed), sandbox: f.sandbox,
+    landed, reverted: revertedIn(landed), sandbox: f.sandbox,
     item: (ref) => f.items[num(ref) ?? ""],
     runs: (ref) => f.runs[num(ref) ?? ""] ?? [],
   };
