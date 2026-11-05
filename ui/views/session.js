@@ -1,7 +1,7 @@
 // Session and Turn: the conversations Langfuse recorded. One module holds the two
 // views; sessions-session.js and sessions-turn.js re-export them, because the page
 // reads one `view` per file. The list of sessions is in sessions.js.
-import { chip, chips, costHtml, crumb, dataTable, durMs as dur, error, esc, filterBar, idLink, md, pager, pageHead, shortModel, tag, when } from "../lib.js";
+import { chip, chips, costHtml, crumb, dataTable, durMs as dur, empty, error, esc, filterBar, idLink, md, pager, pageHead, shortModel, tag, when } from "../lib.js";
 import { systemParts } from "../system-parts.js";
 
 const down = (d) => `<div class="page">${error(`Langfuse is unreachable: ${d.error}`, "Check that Langfuse is running and LANGFUSE_* is set in ~/.aleph/.env, then reload.")}</div>`;

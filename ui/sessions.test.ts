@@ -164,6 +164,12 @@ test("the Turn page uses pageHead, idLink and when", async () => {
   expect(h.match(/<h1/g)?.length).toBe(1);
 });
 
+test("the Turn page says so when a turn has no observations", async () => {
+  const t: any = await (await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/2", { id: "s1", n: "2" })).json();
+  const h = v.renderTurn({ ...t, observations: [] });
+  expect(h).toContain("No observation in this turn.");
+  expect(h).not.toContain("<table");
+});
 
 
 const chat = async (id: string, q = "") => (await call("GET /api/sessions/:id/chat", `/api/sessions/${id}/chat${q}`, { id })).json() as Promise<any>;
