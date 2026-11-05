@@ -5,7 +5,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { LANES, lane, word } from "../../../lib/naming.ts";
+import { LANES, lane, shortId, word } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
@@ -444,7 +444,7 @@ function entry(e: Entry): string {
   const needs = isAwaiting(r.condition) ? needsOf(runAskOf(r)) : undefined;
   const lane = laneOf(e);
   const prio = (lane === "landed" || lane === "waiting") && r.repo && r.on ? reader().item(r.repo, issues.parseIssueRef(r.on)?.id ?? r.on)?.fm.priority : undefined;
-  const head = `${r.repo}/${r.name} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
+  const head = `${shortId(r.name)} ${r.condition}${prio === "high" || prio === "critical" ? ` [${prio}]` : ""}${needs ? ` (${needs})` : ""}${r.round && r.condition !== "stuck" ? ` after ${r.round} fix rounds` : ""}`;
   const lines = [r.reason ? `${head}: ${r.reason}` : head];
   if (r.condition === "landed" && r.commit) {
     lines.push(`  commit ${r.commit.slice(0, 7)}`);
@@ -469,6 +469,7 @@ function entry(e: Entry): string {
  * shown. `told` is Sidetone's flag and the report leaves it alone.
  */
 export function report(now = Date.now()): string {
+  loadRegistry();
   const lines = runLines(now);
   const due = cameDue();
   if (due.length) lines.unshift(["came due:", ...due.map((d) => `  ${d}`)].join("\n"));

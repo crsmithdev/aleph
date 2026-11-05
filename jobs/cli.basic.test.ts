@@ -26,7 +26,7 @@ describe("job", () => {
     expect(s.checks.map((c: any) => c.name)).not.toContain("android build");
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
     expect(readFileSync(setupLog, "utf8")).toBe("ran\n");
-    expect(told).toContain("demo/alpha passed");
+    expect(told).toContain("alpha passed");
     const args = readFileSync(join(fakeLog, "args"), "utf8");
     expect(args).toContain(`--session-id ${s.session}`);
     expect(args).toContain("--output-format stream-json --verbose");

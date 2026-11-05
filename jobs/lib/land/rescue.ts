@@ -12,6 +12,7 @@
  * A land live past 30 minutes gets the Ask too, once per land run (`askSlowLands`, from the tick's firefighter).
  */
 import { readFileSync } from "node:fs";
+import { shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { isVersion } from "../roles/issue-spec.ts";
 import { note, partsOf, reader, writeList } from "../../../issues/lib/store.ts";
@@ -267,7 +268,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   const stuck: Stuck = { last, r, repo, name, issue, reason: isKilled ? "host restart" : isLostRun ? "lost: its process ended with no end written" : r.reason ?? r.condition };
   const { reason } = stuck;
 
-  const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${repo.key}/${name}: ${line}`); };
+  const say = (line: string) => { factoryLog(`${name}: ${line}`); return tell(`${shortId(name)}: ${line}`); };
   const record = (text: string, opts: { done?: boolean } = {}) => {
     const why = issue === undefined ? "no issue" : note(repo, issue, text, opts);
     if (why) factoryLog(`${name}: no issue note: ${why}`);

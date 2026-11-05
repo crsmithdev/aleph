@@ -38,9 +38,9 @@ test("the report groups each unshown run under its report lane, in the order of 
   const at = (s: string) => out.indexOf(s);
   expect(at("landed:")).toBeLessThan(at("waiting:"));
   expect(at("waiting:")).toBeLessThan(at("failed:"));
-  expect(out).toContain("landed:\nfac/fac-11 landed");
-  expect(out).toContain("waiting:\nfac/fac-12 awaiting");
-  expect(out).toContain("failed:\nfac/fac-13 stuck");
+  expect(out).toContain("landed:\nfac-11 landed");
+  expect(out).toContain("waiting:\nfac-12 awaiting");
+  expect(out).toContain("failed:\nfac-13 stuck");
   expect(out).not.toContain("delivered:");
   expect(out).not.toContain("needs you:");
   expect(out).not.toContain("stuck:");
@@ -284,4 +284,12 @@ test("each suite run appends a history record with the test counts of its checks
     { ran: 11, passed: 9, failed: 1, skipped: 1, rerunPassed: 1 },
     { ran: 21, passed: 19, failed: 1, skipped: 1, rerunPassed: 1 },
   ]);
+});
+
+test("the report heads a run with its short id once repos.json gives the code", () => {
+  writeFileSync(join(process.env.ALEPH_REPOS!, "..", "repos.json"), JSON.stringify({ fac: { code: "f", path: join(process.env.ALEPH_REPOS!, "..", "repo"), sandbox: true, autoland: false } }));
+  mk("fac-1421", "build", "landed", { shown: false });
+  const out = report();
+  expect(out).toContain("f1421 landed");
+  expect(out).not.toContain("fac/fac-1421");
 });

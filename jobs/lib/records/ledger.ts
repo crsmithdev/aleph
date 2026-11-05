@@ -11,7 +11,7 @@ import * as record from "./record.ts";
 import { isLive } from "../infra/process.ts";
 import { failedCheckOf, type Cause, type Fate } from "./outcome.ts";
 import { loadLimit, reposFile } from "../infra/settings.ts";
-import { setCodes } from "../../../lib/naming.ts";
+import { setCodes, shortId } from "../../../lib/naming.ts";
 
 export type State = "running" | "passed" | "awaiting" | "failed" | "stuck" | "done" | "landed" | "dropped";
 
@@ -326,7 +326,7 @@ export function nextStamp(s: string): string {
 /** The one line of news for an ended run. */
 export function newsLine(run: Run, note?: string): string {
   if (run.kind === "plain") return `${run.name} ${run.condition === "done" ? "finished" : "failed"}`;
-  let line = `${run.repo}/${run.name} ${run.condition}`;
+  let line = `${shortId(run.name)} ${run.condition}`;
   const needs = needsOf(askOf(run));
   if (isAwaiting(run.condition) && needs) line += ` ${needs}`;
   const check = run.condition === "failed" && failedCheckOf(run);

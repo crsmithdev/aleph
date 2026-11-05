@@ -97,14 +97,14 @@ for (const [title, rows] of [["issues, new shape", ISSUES_NEW], ["goals, new sha
   });
 }
 
-test("aleph status prints the same stage as JSON and as one line, with the repo key cut from local refs", async () => {
+test("aleph status prints the same stage as JSON and as one line, with the short id of each ref", async () => {
   const id = await idOf(PARTS_NEW[1]);
   const r = await aleph(["status", ref(id), "--json"]);
   expect(r.code, r.stderr).toBe(0);
   expect(r.json).toEqual(JSON.parse(JSON.stringify(await statusOf(PARTS_NEW[1]))));
   expect(r.json.why).toMatch(/after fac-\d/);
   const text = await aleph(["status", ref(id)]);
-  expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage}: ${r.json.why}`.replace(/\bfac-(?=\d)/g, ""));
+  expect(text.stdout.trim()).toBe(`${r.json.id} ${r.json.stage}: ${r.json.why}`);
   expect((await aleph(["status", "fac-999"])).stderr).toContain("fac has no issue 999");
 }, 90_000);
 

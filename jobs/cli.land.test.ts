@@ -31,7 +31,7 @@ describe("land", () => {
     expect(sh(repo, "git", "rev-parse", "HEAD")).toBe(s.commit);
     expect(existsSync(worktree("shipit"))).toBe(false);
     expect(branchExists("shipit")).toBe(false);
-    expect(told).toContain("demo/shipit landed");
+    expect(told).toContain("shipit landed");
     expect(file(r.json.run, "land.log")).toContain("## push: ok");
     expect((await aleph(["jobs"])).json.find((j: any) => j.name === "shipit")).toMatchObject({ condition: "landed" });
   });

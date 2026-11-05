@@ -8,7 +8,7 @@
  * parent comes from its id.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../vault/lib/frontmatter.ts";
-import { parseId } from "../../lib/naming.ts";
+import { parseId, shortText } from "../../lib/naming.ts";
 import { nowOverride } from "../../jobs/lib/infra/settings.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
@@ -136,8 +136,8 @@ export const blank = (repo?: string): Doc => ({ items: [], ...(repo ? { repo } :
 
 /** `"5"` for a top-level issue, `"5.1"` for a part. */
 export const refOf = (item: Issue): string => (item.sub === undefined ? String(item.id) : `${item.id}.${item.sub}`);
-/** The text with each `<repo>-<n>` of this repo as `<n>`, for output where the repo is known. An id of another repo stays whole. */
-export const localRefs = (key: string, text: string): string => text.replace(new RegExp(`(^|[^\\w-])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-(?=\\d)`, "g"), "$1");
+/** The text with each id as its short id (docs/naming.md); an id of a project with no code stays whole. `key` is the repo the text is about. */
+export const localRefs = (_key: string, text: string): string => shortText(text);
 /** The ref of the parent: `"5"` for an old part `5.1` and for a child with `from: <repo>-5`. Undefined for a top-level issue. */
 export const parentRef = (item: Issue): string | undefined =>
   item.sub !== undefined ? String(item.id) : item.fm.from ? parseRef(String(item.fm.from))?.id.toString() : undefined;

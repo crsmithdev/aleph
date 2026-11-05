@@ -42,7 +42,7 @@ describe("a factory run", () => {
     expect(state((await fjob("fidle", "none")).json.run)).toMatchObject({ condition: "stuck", reason: "no commit" });
     expect(state((await fjob("fnoout", "nostructured")).json.run)).toMatchObject({ condition: "stuck", reason: "worker: no structured output" });
     expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--json-schema");
-    expect(told).toContain("fac/ferr stuck");
+    expect(told).toContain("ferr stuck");
     for (const n of ["ferr", "fnone", "ftrail", "fidle", "fnoout"]) await drop(n);
   });
 });

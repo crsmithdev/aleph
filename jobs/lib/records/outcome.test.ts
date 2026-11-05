@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { newsLine, type Run } from "./ledger.ts";
+import { setCodes } from "../../../lib/naming.ts";
 import { causeOf, failedCheckOf } from "./outcome.ts";
 
 const run = (o: Partial<Run>) => ({ kind: "build", job: "j", name: "n", repo: "fac", condition: "stuck", told: false, started: "", ...o }) as Run;
@@ -34,6 +35,12 @@ test("an old dropped run keeps its no-commit mark, and free prose states no caus
 });
 
 test("the news names the stated check, and no other cause", () => {
-  expect(newsLine(run({ condition: "failed", cause: "check", checkName: "tests", reason: "tests failed" }))).toBe("fac/n failed tests");
-  expect(newsLine(run({ condition: "failed", cause: "other", reason: "commit-tree failed" }))).toBe("fac/n failed");
+  expect(newsLine(run({ condition: "failed", cause: "check", checkName: "tests", reason: "tests failed" }))).toBe("n failed tests");
+  expect(newsLine(run({ condition: "failed", cause: "other", reason: "commit-tree failed" }))).toBe("n failed");
+});
+
+test("the news starts with the short id of the run's name", () => {
+  setCodes({ aleph: "a" });
+  expect(newsLine(run({ repo: "aleph", name: "aleph-1421", condition: "landed" }))).toStartWith("a1421 landed");
+  setCodes({});
 });

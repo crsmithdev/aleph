@@ -69,13 +69,13 @@ describe("the state rule", () => {
     const r = await actionJob("exits", "exit3");
     expect(r.code).not.toBe(0);
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "worker exited 3" });
-    expect(told).toContain("demo/exits failed");
+    expect(told).toContain("exits failed");
   });
 
   test("a question needs Chris", async () => {
     const r = await actionJob("asks", "question");
     expect(state(r.json.run)).toMatchObject({ condition: "awaiting", ask: expect.objectContaining({ kind: "input", reason: "question" }), question: "which colour?" });
-    expect(told).toContain("demo/asks awaiting question");
+    expect(told).toContain("asks awaiting question");
   });
 
   test("an untracked file fails", async () => {
@@ -93,7 +93,7 @@ describe("the state rule", () => {
   test("a failing check fails, with its name in the news", async () => {
     const r = await actionJob("broken", "commit FAIL");
     expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "tests failed" });
-    expect(told).toContain("demo/broken failed tests");
+    expect(told).toContain("broken failed tests");
     expect(file(r.json.run, "checks.log")).toContain("## tests: exit 1");
   });
 

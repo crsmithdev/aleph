@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import * as issues from "./todo.ts";
+import { setCodes } from "../../lib/naming.ts";
 
 test("titleProblem passes a part title with its group and refuses length, a final period and a prefix", () => {
   expect(issues.titleProblem("[Status layout] Put the metrics on the left", { part: true })).toBeNull();
@@ -79,4 +80,10 @@ test("edit leaves labels unset and lint reports no retired labels finding", () =
   issues.edit(item, { title: "Fix the lane height", priority: "high", areas: ["ui"], labels: ["ui"] } as any);
   expect(item.fm.labels).toBeUndefined();
   expect(issues.lint(doc).filter((f) => f.problem.includes("labels is retired"))).toEqual([]);
+});
+
+test("localRefs shows each id as its short id and keeps the id of a project with no code", () => {
+  setCodes({ aleph: "a" });
+  expect(issues.localRefs("aleph", "after aleph-12, koans-3")).toBe("after a12, koans-3");
+  setCodes({});
 });

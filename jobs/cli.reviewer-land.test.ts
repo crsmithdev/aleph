@@ -22,7 +22,7 @@ test("the report hook prints JSON for SessionStart, and nothing when nothing is 
   expect(quiet.stdout.trim()).toBe("");
   await actionJob("fhook", "error", {}, "fac");
   const h = await aleph(["report", "--hook"]);
-  expect(h.json.hookSpecificOutput.additionalContext).toContain("fac/fhook stuck: API Error: 500");
-  expect(h.json.systemMessage).toContain("fac/fhook stuck");
+  expect(h.json.hookSpecificOutput.additionalContext).toContain("fhook stuck: API Error: 500");
+  expect(h.json.systemMessage).toContain("fhook stuck");
   await drop("fhook");
 }, 60_000);
