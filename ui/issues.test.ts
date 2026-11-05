@@ -358,7 +358,9 @@ describe("views", () => {
     ], "week", now);
     expect(c.unit).toBe("hours");
     expect(c.p50[1]).toBe(4);
-    expect(v.closeOption(c).xAxis.axisLabel.formatter).toContain("h");
+    const t = { muted: "#123456" };
+    expect(v.closeOption(c, t).xAxis.axisLabel.formatter).toContain("h");
+    expect(v.closeOption(c, t).series.find((s: any) => s.name === "p90").itemStyle.color).toBe(t.muted);
   });
 
   test("the window sets the Filed and Closed tiles; the Open tile is a Status card; the head holds the window; the form comes first", async () => {

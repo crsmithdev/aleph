@@ -583,7 +583,7 @@ export const timeSeriesOption = (lines, bars) => ({
   ],
 });
 /** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`. */
-export const rangeBarOption = (labels, p50, p90, suffix = "d") => ({
+export const rangeBarOption = (labels, p50, p90, suffix, t) => ({
   animation: false,
   grid: { left: 64, right: 16, top: 24, bottom: 20 },
   legend: { top: 0, right: 0, itemWidth: 10, itemHeight: 10 },
@@ -592,7 +592,7 @@ export const rangeBarOption = (labels, p50, p90, suffix = "d") => ({
   yAxis: { type: "category", data: labels, inverse: true, axisTick: { show: false } },
   series: [
     { type: "bar", name: "p50", barMaxWidth: 24, data: p50 },
-    { type: "scatter", name: "p90", symbol: "rect", symbolSize: [3, 20], data: p90, itemStyle: { color: "#888" } },
+    { type: "scatter", name: "p90", symbol: "rect", symbolSize: [3, 20], data: p90, itemStyle: { color: t.muted } },
   ],
 });
 /** Under a long table: "50 of 345" and a "Show 50 more" button (`data-more` holds the step) while rows are left. */

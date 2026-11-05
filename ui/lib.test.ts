@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, rangeBarOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -164,6 +164,12 @@ test("bar value labels have no outline in the dark or the light theme", async ()
     expect(values.length, name).toBe(2);
     for (const el of values) expect(el.includes(' stroke="') && !el.includes('stroke-width="0"'), name).toBe(false);
   }
+});
+
+test("rangeBarOption colours the p90 tick from the muted token", () => {
+  const color = rangeBarOption(["bug"], [1], [2], "d", { muted: "#123456" }).series.find((s: any) => s.name === "p90").itemStyle.color;
+  expect(color).toBe("#123456");
+  expect(color).not.toBe("#888");
 });
 
 test("bar value labels take the theme ink, not ECharts' #333, in the dark and the light theme", async () => {

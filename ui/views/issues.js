@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, readTokens, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -365,7 +365,7 @@ export function testsOption(tests, project = "", win = "month", now = new Date()
   }
   return timeSeriesOption(lines, bars);
 }
-export const closeOption = (c) => rangeBarOption(c.kinds, c.p50, c.p90, c.unit === "hours" ? "h" : "d");
+export const closeOption = (c, t) => rangeBarOption(c.kinds, c.p50, c.p90, c.unit === "hours" ? "h" : "d", t);
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
 export const TILE_FILTER = {
@@ -449,7 +449,7 @@ function draw(root) {
   panel("backlog", backlogOption(backlog(rows, win, now), flow(rows, win, now)));
   const close = closeTimes(rows, win, now), note = root.querySelector("[data-close-note]");
   if (note) note.textContent = `${close.unit === "hours" ? "Hours" : "Days"} from filed to closed: the bar is p50, the tick p90.`;
-  panel("close", closeOption(close));
+  panel("close", closeOption(close, readTokens()));
   panel("tests", testsOption(live.tests, live.o().project, win, now));
 }
 
