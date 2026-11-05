@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { redirect, renderFactoryJobs, slowestOption, stripOption, trendOption } from "./views/factory-jobs.js";
+// @ts-ignore plain JS shared with the page
 import { xLabel } from "./views/speed.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
