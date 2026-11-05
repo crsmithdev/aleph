@@ -71,7 +71,7 @@ else \`already_met\` is null. If you cannot do the goal, make no commit and give
 in \`summary\`.
 
 ${checksSentence(checks)} Chrome is at \`/usr/bin/google-chrome\`, so the repo's browser tests run. For a screenshot of a page that
-your own server serves on \`http://127.0.0.1:<port>\`, run \`google-chrome --headless=new --window-size=1440,900 --screenshot=<out.png> <url>\`
+your own server serves on \`http://127.0.0.1:<port>\`, run \`google-chrome --headless=new --password-store=basic --window-size=1440,900 --screenshot=<out.png> <url>\`
 with a path inside the repo, and commit the PNG.
 For each code change, follow the code-change method at the end of this brief. ${FOREGROUND}
 End with a summary of what you did and what you ran in \`summary\`, each thing said once:

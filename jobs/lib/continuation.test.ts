@@ -213,6 +213,8 @@ describe("the worker brief", () => {
     const b = brief("rb2", folder("rb2"), r, { ...repo, sandbox: true } as Repo);
     expect(b).toContain("in `/w`, branch `factory/fac-1`.\nWork only there.");
     expect(b).toContain("Chrome is at `/usr/bin/google-chrome`, so the repo's browser tests run.");
+    expect(b).toContain("`google-chrome --headless=new --password-store=basic --window-size=1440,900 --screenshot=<out.png> <url>`");
+    expect(b).not.toContain("`google-chrome --headless=new --window-size=1440,900 --screenshot=<out.png> <url>`");
     expect(b).not.toContain("sandbox");
   });
 
