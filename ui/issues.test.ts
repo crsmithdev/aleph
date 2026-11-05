@@ -270,7 +270,7 @@ describe("views", () => {
     expect(f.labels.at(-1)).toBe("Nov 01");
     expect(f.filed.at(-1)).toBe(1);
     expect(f.closed.at(-3)).toBe(1);
-    const b = v.backlog(rows, 30, now);
+    const b = v.backlog(rows, "month", now);
     expect(b.labels).toHaveLength(30);
     // Row 1 is open from Nov 01; the part from Oct 20; row 2 from Oct 21 to Oct 30; row 3 closed before it was created.
     expect(b.counts.medium.at(-1)).toBe(2);
@@ -282,7 +282,7 @@ describe("views", () => {
       ...[1, 2, 3, 4, 5].map((n) => ({ status: "done", kind: "bug", created: "2026-10-01", closed: `2026-10-0${n + 1}` })),
       { status: "done", kind: "task", created: "2026-10-01", closed: "2026-10-05" },
       { status: "open", kind: "flake", created: "2026-10-01", closed: null },
-    ]);
+    ], "month", new Date("2026-10-10T12:00"));
     expect(c.kinds).toEqual(["task", "bug", "check", "proposal", "flake"]);
     expect(c.p50).toEqual([4, 3, null, null, null]);
     expect(c.p90[1]).toBeCloseTo(4.6);
@@ -292,6 +292,35 @@ describe("views", () => {
     expect(fo.series.filter((x: any) => x.type === "line").map((x: any) => x.name)).toEqual(["Filed", "Closed"]);
     expect(fo.series.some((x: any) => x.name === "Gap")).toBe(true);
     expect(v.renderTiles(v.stats(rows, now))).toContain('<b>1<em> / 0</em></b><span class="q"><span>closed</span><span class="m"> / dropped</span></span>');
+  });
+
+  test("the window sets the Open backlog buckets, the Time to close rows and the backlog card title", async () => {
+    const now = new Date("2026-11-04T16:00");
+    const rows = v.issueRows({ issues: [
+      { id: 1, repo: "f", title: "a", status: "open", labels: [], created: "2026-11-04", createdTime: "2026-11-04 15:30" },
+      { id: 2, repo: "f", title: "b", status: "done", kind: "bug", labels: [], created: "2026-10-20", closed: "2026-10-25" },
+      { id: 3, repo: "f", title: "c", status: "done", kind: "bug", labels: [], created: "2026-11-01", closed: "2026-11-02" },
+    ] });
+    const one = rows.filter((r: any) => r.id === "f-1");
+    const hour = v.backlog(one, "hour", now), dayB = v.backlog(one, "day", now);
+    expect(hour.labels).toHaveLength(60);
+    expect(dayB.labels).toHaveLength(24);
+    for (const b of [hour, dayB]) {
+      const i = b.counts.medium.findIndex((n: number) => n > 0);
+      expect(b.counts.medium.slice(i).every((n: number) => n === 1)).toBe(true);
+    }
+    expect(hour.counts.medium.indexOf(1)).toBe(29);
+    expect(dayB.counts.medium.indexOf(1)).toBe(23);
+    const w = v.backlog(rows, "week", now), m = v.backlog(rows, "month", now);
+    expect(w.labels).toHaveLength(7);
+    expect(w.labels.at(-1)).toBe("Nov 04");
+    expect(m.labels).toHaveLength(30);
+    expect(v.closeTimes(rows, "week", now).p50[1]).toBe(1);
+    expect(v.closeTimes(rows, "month", now).p50[1]).toBe(3);
+    const d = await getJson("/api/contents");
+    const page = v.view.render(d, {}, new URLSearchParams("window=week"));
+    expect(page).toContain("Open backlog, last week");
+    expect(page).not.toContain("30 days");
   });
 
   test("the window sets the Filed and Closed tiles; the Open tile is a Status card; the head holds the window; the form comes first", async () => {

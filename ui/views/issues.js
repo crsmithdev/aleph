@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is shared with views/issue.js.
 import { bucketOf, xLabel } from "./speed.js";
-import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
+import { barList, barRow, blockersHtml, gapLinesOption, rangeBarOption, stackedAreaOption, badge, tag, priorityBadge, card, sectionHead, chart, chip, chips, crumb, dataTable, day, empty, hourLabel, esc, filterBar, idLink, labelName, localId, md, money, onTile, pageHead, pager, searchBox, setQuery as setHash, cardTrend, sortHead, statCard, storeWindow, tiles, when, WINDOW_DAYS, WINDOWS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
@@ -307,13 +307,21 @@ export function flow(rows, window = "month", now = new Date()) {
 }
 
 const PRIORITY_ORDER = ["low", "medium", "high", "critical"];
-/** The last `days` days: how many rows were open on each, per priority. A row is open from its created day to its closed day. */
-export function backlog(rows, days = 30, now = new Date()) {
+/** The window's buckets: how many rows were open in each, per priority. Hour is 60 minutes and day is 24 hours, sampled at each bucket's end; week and month are days. A row is open from its created time to its closed time, or by day when it has no time. */
+export function backlog(rows, win = "month", now = new Date()) {
   const labels = [], counts = Object.fromEntries(PRIORITY_ORDER.map((p) => [p, []]));
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), t = d.getTime();
-    labels.push(day(d, now));
-    for (const p of PRIORITY_ORDER) counts[p].push(rows.filter((r) => r.priority === p && dayMs(r.created) && dayMs(r.created) <= t && (!dayMs(r.closed) || t <= dayMs(r.closed))).length);
+  const fine = { hour: [60, 60_000], day: [24, 3_600_000] }[win];
+  const stamp = (time, d, late) => { const t = Date.parse(String(time ?? "").replace(" ", "T")); return t === t ? t : dayMs(d) ? dayMs(d) + (late ? DAY : 0) : 0; };
+  const [n, step] = fine ?? [WINDOW_DAYS[win], DAY];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = fine ? new Date(now.getTime() - i * step) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), t = d.getTime();
+    labels.push(fine ? hourLabel(d) : day(d, now));
+    for (const p of PRIORITY_ORDER) counts[p].push(rows.filter((r) => {
+      if (r.priority !== p) return false;
+      if (!fine) return dayMs(r.created) && dayMs(r.created) <= t && (!dayMs(r.closed) || t <= dayMs(r.closed));
+      const from = stamp(r.createdTime, r.created, false), to = stamp(r.closedTime, r.closed, true);
+      return from && from <= t && (!to || t < to);
+    }).length);
   }
   return { labels, counts };
 }
@@ -325,11 +333,12 @@ const quantile = (xs, p) => {
   const s = [...xs].sort((a, b) => a - b), at = (s.length - 1) * p, lo = Math.floor(at);
   return s[lo] + (s[Math.ceil(at)] - s[lo]) * (at - lo);
 };
-/** For each kind, the p50 and p90 days from created to closed over the closed rows; null for a kind with none. */
-export function closeTimes(rows) {
+/** For each kind, the p50 and p90 days from created to closed over the rows closed inside the window; null for a kind with none. */
+export function closeTimes(rows, win = "month", now = new Date()) {
   const out = { kinds: KINDS, p50: [], p90: [] };
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[win])) * DAY, at = inSpan(now.getTime(), WINDOW_DAYS[win]);
   for (const k of KINDS) {
-    const days = rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && dayMs(r.created) && dayMs(r.closed)).map((r) => (dayMs(r.closed) - dayMs(r.created)) / DAY);
+    const days = rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && dayMs(r.created) && dayMs(r.closed) && at(r.closed, r.closedTime, 0, from, end)).map((r) => (dayMs(r.closed) - dayMs(r.created)) / DAY);
     out.p50.push(quantile(days, 0.5));
     out.p90.push(quantile(days, 0.9));
   }
@@ -360,7 +369,7 @@ function renderDetail(rows, o) {
 }
 
 /** The three charts under the tiles, on every tile. */
-const renderCharts = (o) => `<div class="trio">${card("Open backlog, 30 days", '<p>Open issues per day, by priority.</p><div class="chartbox" data-chart="backlog"></div>')}` +
+const renderCharts = (o) => `<div class="trio">${card(`Open backlog, last ${o.window in WINDOW_DAYS ? o.window : "week"}`, '<p>Open issues over time, by priority.</p><div class="chartbox" data-chart="backlog"></div>')}` +
   `${card("Time to close", '<p>Days from filed to closed: the bar is p50, the tick p90.</p><div class="chartbox" data-chart="close"></div>')}` +
   `${card(`Filed and closed per ${bucketOf(o)}`, '<p>Blue is filed; green is closed; the gap is shaded.</p><div class="chartbox" data-chart="flow"></div>')}</div>`;
 
@@ -418,9 +427,10 @@ function draw(root) {
   drawn = [];
   const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
   const panel = (name, option) => { const el = root.querySelector(`.chartbox[data-chart="${name}"]`); if (!el) return; try { drawn.push(chart(el, option)); } catch (e) { console.error("inventory chart failed", e); } };
-  panel("backlog", backlogOption(backlog(rows)));
-  panel("close", closeOption(closeTimes(rows)));
-  panel("flow", flowOption(flow(rows, live.o().window)));
+  const win = live.o().window, now = new Date();
+  panel("backlog", backlogOption(backlog(rows, win, now)));
+  panel("close", closeOption(closeTimes(rows, win, now)));
+  panel("flow", flowOption(flow(rows, win, now)));
 }
 
 /** Fill what follows the filters. A filter changes no route, so nothing fetches again. */
