@@ -1,15 +1,9 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { barsOption, card, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, loadingLine, mean, money, onTile, pageHead, pct, setQuery, statCard, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { barsOption, card, cardTrend, chart, dataTable, dur, esc, filterBar, hashQuery, heads, keepWindow, lineOption, loadingLine, mean, money, onTile, pageHead, pct, setQuery, statCard, tiles, when, WINDOWS, windowOf, wireScope } from "../lib.js";
 import { hours, lastPeriod, loadSpeed, pace, usable, usageAge, usageCard, xLabel } from "./speed.js";
 
 /** Each point's total live agents over the timed roles. */
 export const totals = (a) => a.points.map((p) => a.roles.reduce((n, r) => n + (p[r.key] ?? 0), 0));
-
-/** The roles with each timed role's share of the timed hours. */
-export function roleRows(a) {
-  const all = a.roles.reduce((n, r) => n + (r.hours ?? 0), 0);
-  return a.roles.map((r) => ({ ...r, share: r.hours === null || !all ? null : (r.hours / all) * 100 }));
-}
 
 function scorecard(s, a, key, w) {
   const f = s.factory, on = (k) => ({ key: k, on: key === k }), p = pace(s);
@@ -19,10 +13,20 @@ function scorecard(s, a, key, w) {
     statCard({ k: "Agents live", v: a ? mean(a.mean) : "–", ...(a ? { v2: String(a.peak), q: ["mean", "peak"] } : { note: "loading the agents" }), ...on("live") });
 }
 
+/** A success rate under this line (0 to 1) shows in the warn tone. */
+export const WARN_RATE = 0.7;
+
 function roles(a) {
-  const num = ["Runs", "Hours", "Share of hours", "p50"];
-  const rows = roleRows(a).map((r) => `<tr><td>${esc(r.name)}</td><td class="num">${r.runs}</td><td class="num">${r.hours === null ? "not timed" : esc(hours(r.hours))}</td><td class="num">${esc(pct(r.share))}</td><td class="num">${esc(dur(r.p50))}</td><td class="wide">${esc(r.models.join(", ")) || "–"}</td></tr>`).join("");
-  return dataTable(heads(["Role", ...num, "Models"], num), rows);
+  const num = ["Runs", "Succeeded", "Failed", "Timed out or stuck", "Success", "p50", "Cost", "First pass", "Reviewer pass", "Pass", "Fail"];
+  const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
+  const share = (v) => (v == null ? "–" : pct(v * 100));
+  const cell = (v) => `<td class="num">${v ?? "–"}</td>`;
+  const rows = (a.outcomes ?? []).map((o) => {
+    const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
+    const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
+    return `<tr><td>${esc(names[o.role] ?? o.role)} · ${esc(o.model)}</td>${cell(o.runs)}${cell(o.succeeded)}${cell(o.failed)}${cell(o.stuck)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed runs</a></td></tr>`;
+  }).join("");
+  return dataTable(heads(["Role", ...num, "Jobs"], num), rows);
 }
 
 /** What each tile shows in the card below it: the title, and the chart's option from the two answers. Tokens come from the theme. */

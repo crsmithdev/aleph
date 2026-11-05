@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { liveOption, renderFactoryAgents, roleRows, totals } from "./views/factory-agents.js";
+import { liveOption, renderFactoryAgents, totals } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import { pace, weekGone } from "./views/speed.js";
 
@@ -24,11 +24,16 @@ test("the share of the week gone comes from seven_day_resets_at", () => {
   expect(pace({ ...S, usage: { now: { ...S.usage.now, seven_day: 50 } } }).word).toBe("over");
 });
 
-test("role shares sum to 100% over the timed roles, and the reviewer row says not timed", () => {
-  const rows = roleRows(agents);
-  expect(rows.filter((r: any) => r.share !== null).reduce((a: number, r: any) => a + r.share, 0)).toBeCloseTo(100);
-  expect(rows.at(-1).share).toBeNull();
-  expect(renderFactoryAgents(S, D)).toMatch(/<td>Reviewer<\/td><td class="num">3<\/td><td class="num">not timed<\/td><td class="num">–<\/td><td class="num">–<\/td><td class="wide">–<\/td>/);
+test("the Roles table has a row per role and model, with the warn tone under 70% and a link to the failed runs", () => {
+  const o = (role: string, model: string, rate: number, extra = {}) => ({ role, model, runs: 10, succeeded: rate * 10, failed: 10 - rate * 10, stuck: 0, rate, p50: 60, cost: 1.5, baseline: 0.7, ...extra });
+  const html = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "haiku", 0.6, { firstPass: 4, reviewPass: 0.5 }), o("worker", "gpt-oss-20b", 0.8, { firstPass: 6, reviewPass: 1 }), o("reviewer", "unset", 0.9, { pass: 9, fail: 1 })] } });
+  const row = (name: string) => html.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
+  expect(row("Worker · haiku")).toMatch(/<td class="num warn">60%.*?class="tr[^"]*"/);
+  expect(row("Worker · haiku")).toContain('href="#/factory/jobs?role=worker&condition=failed"');
+  expect(row("Worker · gpt-oss-20b")).toMatch(/<td class="num">80%.*?class="tr[^"]*"/);
+  expect(row("Worker · gpt-oss-20b")).not.toContain("warn");
+  expect(row("Worker · gpt-oss-20b")).toContain('<td class="num">10</td><td class="num">8</td><td class="num">2</td>');
+  expect(row("Reviewer · unset")).toContain('<td class="num">9</td><td class="num">1</td>');
 });
 
 test("the tiles come from the state and the agents", () => {

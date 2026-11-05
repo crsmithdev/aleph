@@ -746,6 +746,9 @@ button.tile[aria-pressed="true"] { background: var(--raised); border-color: var(
 .tile .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
 .tile .tr.good { color: var(--good); }
 .tile .tr.warn { color: var(--need); }
+table.tbl .tr { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
+table.tbl .tr.good { color: var(--good); }
+table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .card { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; padding: var(--gap-in); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); }
 .card .sh .aside { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-8); }
 .card p { margin: 0; color: var(--ink-2); }

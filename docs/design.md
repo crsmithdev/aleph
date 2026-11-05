@@ -225,6 +225,8 @@ A card has 3 rows and nothing else:
 
 Uses: Status, Efficiency, Jobs, Agents, Automation, Issues, Memory, Sessions.
 
+The Roles table on Agents has one row per role and model ("Worker · haiku"). Its Success cell is the success rate with a `cardTrend()` marker (`kind: "points"`, against the baseline). A rate under 70% (`WARN_RATE` in `ui/views/factory-agents.js`) shows in the `--need` tone. The Jobs cell links to `#/factory/jobs?role=<role>&condition=failed`.
+
 ## Interaction
 
 - **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:162`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:496`, `ui/app.css:671`, `ui/app.css:996`).
