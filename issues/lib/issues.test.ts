@@ -92,6 +92,16 @@ describe("issue verbs without argv", () => {
     expect(refusal(() => issueOps.edit(r, 1, {}))).toContain("give --title, --request, --spec, --priority, --labels, --after");
   });
 
+  test("edit reads the issue for the group prefix: a child with a from link takes it, a top-level issue refuses it", () => {
+    const r = repo([{ title: "parent" }]);
+    const child = store.writeList(r, "split", (doc) => issues.add(doc, "[Group] Old name", { spec: "x", from: `${r.key}-1` }).id)!.value;
+    const title = "[Group] Do the thing: now";
+    issueOps.edit(r, child, { title });
+    expect(item(r, child).title).toBe(title);
+    expect(refusal(() => issueOps.edit(r, 1, { title }))).toContain("': ' prefix");
+    expect(item(r, 1).title).toBe("parent");
+  });
+
   test("decide needs an issue with an Ask, clears it and makes no goal", () => {
     const r = repo([{ title: "a" }, { title: "b" }]);
     for (const n of [1, 2]) store.writeList(r, "ask", (doc) => { setAsk(refIn(doc.repo!, issues.find(doc, n)!), { kind: "input", reason: "question", question: "Q?", options: [], why: [] }); return true; });

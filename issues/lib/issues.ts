@@ -162,13 +162,16 @@ export function edit(repo: store.Place, id: number | string, fields: Fields, rea
   if (source !== undefined && !["chris", "worker", "deps", "memory", "agent"].includes(source)) refuse("--source takes chris, worker, deps, memory, agent");
   if (title === undefined && kind === undefined && request === undefined && spec === undefined && priority === undefined && labels === undefined && source === undefined && status === undefined && after === undefined) refuse("give --title, --request, --spec, --priority, --labels, --after (or --status, --kind)");
   if (title === "") refuse("the title cannot be empty");
-  const problem = title === undefined ? null : issues.titleProblem(title, { part: typeof id === "string" });
-  if (problem) refuse(problem);
   const kept = after?.filter((r) => r !== "none");
   const w = write(repo, `todo: edit item ${id}`, (doc) => {
     const i = pick(repo, doc, id);
     for (const r of kept ?? []) if (r === `${repo.key}-${issues.refOf(i)}`) refuse("an issue cannot wait for itself");
-    issues.edit(i, { kind, title, request, spec, priority, areas: labels });
+    // On a child, a leading `[Group] ` takes the place of a `<words>: ` prefix, so only the length and the final period are checked.
+    const grouped = title !== undefined && issues.parentRef(i) !== undefined && /^\[[^\]]*\] /.test(title);
+    const bad = grouped ? issues.titleProblem(title.replaceAll(": ", "  ")) : null;
+    if (bad) refuse(bad);
+    issues.edit(i, { kind, title: grouped ? undefined : title, request, spec, priority, areas: labels });
+    if (grouped) i.title = title;
     if (priority !== undefined) for (const p of store.partsOf(doc, i)) if (issues.status(p) === "open") issues.edit(p, { priority });
     if (source !== undefined) i.fm.source = source;
     if (status === "open" && issues.status(i) === "parked") issues.setStatus(i, "open");
