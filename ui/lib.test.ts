@@ -165,3 +165,22 @@ test("bar value labels have no outline in the dark or the light theme", async ()
     for (const el of values) expect(el.includes(' stroke="') && !el.includes('stroke-width="0"'), name).toBe(false);
   }
 });
+
+test("bar value labels take the theme ink, not ECharts' #333, in the dark and the light theme", async () => {
+  // @ts-ignore the vendored ECharts bundle has no types
+  const echarts = (await import("./vendor/echarts.min.js")).default;
+  const tokens = { surface: "#1b1b1f", rule: "#3a3a40", run: "#5b9bd5", done: "#60b060", need: "#e0a040", stuck: "#e05050", "chart-6": "#9070c0", "chart-7": "#40a0a0", sans: "sans" };
+  const themes = {
+    dark: { ...tokens, bg: "#111114", ink: "#e6e6e6" },
+    light: { ...tokens, bg: "#ffffff", ink: "#111114" },
+  };
+  for (const [name, t] of Object.entries(themes)) {
+    const ec = echarts.init(null, chartTheme(t), { renderer: "svg", ssr: true, width: 400, height: 300 });
+    ec.setOption(barsOption(["a", "b"], [{ name: "n", data: [1, 2] }], { labels: true }));
+    const svg: string = ec.renderToSVGString();
+    ec.dispose();
+    const values = svg.match(/<text[^>]*text-anchor="middle"[^>]*>[12]<\/text>/g) ?? [];
+    expect(values.length, name).toBe(2);
+    for (const el of values) expect(el.match(/fill="([^"]*)"/)?.[1], name).toBe(t.ink);
+  }
+});

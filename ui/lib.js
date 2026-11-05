@@ -169,7 +169,7 @@ export function chartTheme(t) {
     backgroundColor: "transparent",
     textStyle: { color: t.ink, fontFamily: t.chart || t.sans },
     title: { textStyle: { color: t.ink }, subtextStyle: { color: t.ink } },
-    legend: { textStyle: { color: t.ink } },
+    legend: { textStyle: { color: t.ink } }, bar: { label: { color: t.ink } },
     categoryAxis: axis, valueAxis: axis, timeAxis: axis, logAxis: axis,
     tooltip: { backgroundColor: t.surface, borderColor: t.rule, textStyle: { color: t.ink }, axisPointer: { lineStyle: { color: t.rule }, crossStyle: { color: t.rule } } },
   };
