@@ -1,37 +1,37 @@
 # UI design reference
 
-The design language of the aleph UI (`ui/`), read from the code by the design-language skill (`skills/design-language/SKILL.md`, Extract mode). It records what the code already mostly does; a value that bypasses it is a deviation, listed at the end. The fixes are in `docs/findings/2026-11-03-ui-design-fixes.md`.
+The design language of the aleph UI (`ui/`), read from the code by the design-language skill (`skills/design-language/SKILL.md`, Extract mode). It records what the code already mostly does. A value that bypasses it is a deviation, listed at the end with its fix. A deviation whose fix is an open issue names that issue as pending. The fixes of 2026-11-03 are in `docs/findings/2026-11-03-ui-design-fixes.md`; the audit of 2026-11-04 is in `docs/findings/2026-11-04-ui-design-audit.md`.
 
-Counts come from `bun skills/design-language/scripts/inventory.ts ui` and `--summary`, run on the finished tree. A count read from the code instead gives its `file:line`. Totals:
+Counts come from `bun skills/design-language/scripts/inventory.ts ui --summary` on the tree this page describes. A count that the inventory does not print is a grep count, and the text says so. Totals:
 
 | group | kind | count |
 |---|---|---|
-| colour | literal | 19 |
-| colour | token-def | 85 |
-| effect | literal | 48 |
-| effect | token-use | 1 |
-| format | helper-bypass | 77 |
-| size | literal | 476 |
-| size | token-def | 12 |
-| size | token-use | 184 |
-| type | literal | 60 |
+| colour | literal | 5 |
+| colour | token-def | 98 |
+| effect | literal | 49 |
+| effect | token-use | 7 |
+| format | helper-bypass | 66 |
+| size | literal | 211 |
+| size | token-def | 18 |
+| size | token-use | 410 |
+| type | literal | 26 |
 | type | token-def | 31 |
-| type | token-use | 14 |
+| type | token-use | 44 |
 
 ## What could not be determined
 
 - **Earlier decisions.** Absolute time is `10/28 14:05` (mm/dd hh:mm, 24-hour), the same format as the aleph-199 decision. A chart axis can keep a short form. No other UI decision outranks the code here.
-- **Browser checks.** Chrome could not start in the sandbox of the run that wrote this page, so no page was rendered, in light or dark, at desktop or phone width. Responsive behaviour below is read from the media queries; chart empty and loading states, and whether a table scrolls or wraps at a phone width, are read from the code and not seen.
+- **Browser checks.** No page was rendered for this refresh, in light or dark, at desktop or phone width. Responsive behaviour below is read from the media queries. Chart empty and loading states, and whether a table scrolls or wraps at a phone width, are read from the code and not seen.
 - **Colour token uses.** The inventory has no `token-use` kind for colours: `var(--ink)` and the like are not counted, so a colour token has a definition count (three blocks) and no use count.
 - **Contrast.** Computed from the hex values in `ui/app.css` for the pairs below, not for every text and background pair that the CSS puts together. The pair `--muted` on `--rule-2` (4.41 light, 4.35 dark) was not traced to a use.
-- **Inventory false positives.** `querySelector()` (`ui/views/efficiency.js:86`) is read as the colour literal `#eff`, but the line is `root.querySelector("#eff")`, an element id selector, not a colour. The inventory reads text, so it counts it in the colour literals.
+- **Inventory false positives.** None on this tree. `querySelector("#eff")` (`ui/views/efficiency.js:86`) is no longer read as a colour literal.
 - **Chart data.** No chart was drawn with real data.
 
 ## Principles
 
 1. **One token set, two themes.** Colours are CSS custom properties on `:root` (`ui/app.css:3`), re-set for dark in two identical blocks, the `prefers-color-scheme` one at `ui/app.css:101` and the `data-theme="dark"` one at `ui/app.css:136`. Light is a lavender match for Palenight; dark is Palenight (Mild Contrast).
-2. **Shared helpers build the parts.** Views call `ui/lib.js` for a page head, card, table, badge, chip, filter bar, pager, metric card, meter and bar list, and the CSS for them is in `ui/app.css`.
-3. **Meaning is a tone.** A state is `run`, `done`, `need`, `stuck` or `quiet`, mapped by `tone()` in `ui/lib.js:288`, and the same tone colours a badge, a chart series and a metric card.
+2. **Shared helpers build the parts.** Views call `ui/lib.js` for a page head, card, table, badge, chip, filter bar, pager, metric card, meter and bar list. The CSS for them is in `ui/app.css`.
+3. **Meaning is a tone.** A state is `run`, `done`, `need`, `stuck` or `quiet`, mapped by `tone()` (`ui/lib.js:288`). The same tone colours a badge, a chart series and a metric card.
 4. **Numbers are tabular.** `font-variant-numeric: tabular-nums` has 12 literal uses, and number columns are right-aligned.
 5. **Plain text states.** An empty state is one sentence and one hint, a missing value is `–`, and sentences end with a full stop.
 
@@ -63,7 +63,7 @@ All colour tokens are defined in three blocks of `ui/app.css`: light (`:root`), 
 | `--chart-6`, `--chart-7` | #7E57C2, #0E7C9E | #C792EA, #89DDFF | extra chart series |
 | `--lift` | `0 1px 3px` and `0 2px 8px` shadows | heavier black shadows | the top Status card |
 
-The allowed colour literals outside the token blocks are the `#000` mask gradients of `.chat .clip.cut` (`ui/app.css:634`) and `.wf-detail .clip.cut` (`ui/app.css:691`), and the `color-mix(in srgb, currentColor 30%, transparent)` of `.cmd .cp` (`ui/app.css:331`).
+The allowed colour literals outside the token blocks are the `#000` mask gradients of `.chat .clip.cut` (`ui/app.css:633`) and `.wf-detail .clip.cut` (`ui/app.css:690`), and the `color-mix(in srgb, currentColor 30%, transparent)` of `.cmd .cp` (`ui/app.css:331`).
 
 Type, size and effect tokens (`ui/app.css:47-71`):
 
@@ -99,23 +99,89 @@ Type, size and effect tokens (`ui/app.css:47-71`):
 | `--gap` | 24px | between page blocks |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles |
 
-Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers, `--fw-strong` 600 for headings and table headers. 700 stays a literal on `.mark` (`ui/app.css:185`) and `.tile b` (`ui/app.css:729`).
+Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers, `--fw-strong` 600 for headings and table headers. 700 stays a literal on `.mark` (`ui/app.css:185`) and `.tile b` (`ui/app.css:728`).
 
-Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 10 times, `(max-width: 1100px)` 3 and `(min-width: 721px)` 1.
+Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 11 times, `(max-width: 1100px)` 4 and `(min-width: 721px)` 1.
 
-Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. Widths and heights stay literal.
+Spacing is tokens: `--sp-2`, `--sp-4`, `--sp-6`, `--sp-8`, `--sp-10`, `--sp-12` and `--sp-16` are 2, 4, 6, 8, 10, 12 and 16px, used for every `gap`, `padding` and `margin` on that scale. A negative margin is written `calc(-1 * var(--sp-2))`. The steps 14px and 18px are not tokens; see Patterns. Widths and heights stay literal.
 
-Radii: the five `--r-*` tokens. Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` is tokens, `--z-rowlink` < `--z-sticky` < `--z-overlay`. Motion: 2 `transition` literals (`.15s ease-out`) and no animation.
+Radii: the five `--r-*` tokens. Shadows: `--lift`, plus `box-shadow: inset` rings for selected and parked states. Layers: `z-index` is tokens, `--z-rowlink` < `--z-sticky` < `--z-overlay`. Motion: 2 `transition` literals (`.15s ease-out`) and no CSS animation. The ECharts options set `animation: false` (8 rows).
 
-Rules taken from the audit of 2026-11-04 (`docs/findings/2026-11-04-ui-design-audit.md`). Each pattern has 3 or more uses and no token yet. Until its token lands, use the value given here.
+### Missing tokens
+
+These values repeat in the code with no token. Until a token lands, write the value given here.
+
+| Proposed token | Value | Uses | Where |
+|---|---|---|---|
+| `--dim` | `opacity: .6` | 3 rows | `ui/app.css:340`, `362`, `953` |
+| `--ctl-h` | 28px control height | 9 rows (`min-height` 6, `height` 3) | see Patterns |
+| `--bar-h` | 10px bar and meter height | 4 rows | `ui/app.css:678`, `760`, `768`, `987` |
+| `--sp-14`, `--sp-18` | 14px and 18px spacing steps | 33 and 23 rows | see Patterns |
+| `--ls-display` | `letter-spacing: -0.01em` | 4 rows | `ui/app.css:185`, `211`, `212`, `484` |
+| `--ls-caps` | one tracking for uppercase keys | 2 rows (`.06em`, `.08em`) | `ui/app.css:567`, `727` |
+| `--indent-list` | 18px list indent | 2 rows | `ui/app.css:413`, `509` |
+
+## Patterns
+
+Each pattern below has 3 or more uses in the code, or is a fixed part of a component. Where the code uses another value, the row is a deviation, listed at the end.
 
 | Rule | Value | Uses | Token to come |
 |---|---|---|---|
-| Dimmed control | `opacity: .6` | 3 (`ui/app.css:340`, `362`, `954`) | `--dim` |
-| Display type tracking | `letter-spacing: -0.01em` on the brand mark, page title and display text | 4 (`ui/app.css:185`, `211`, `212`, `484`) | none; a rule |
-| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:567`) and `.08em` (`ui/app.css:727`) | 2 | none; pick one when a third key comes |
-| Control height | 28px | 9 (`min-height` 6, `height` 3) | `--ctl-h` |
-| Bar and meter height | 10px | 8 | `--bar-h` |
+| Dimmed control | `opacity: .6` | 3 rows (`ui/app.css:340`, `362`, `953`) | `--dim` |
+| Display type tracking | `letter-spacing: -0.01em` on the brand mark, the shead text, the page title and display text | 4 rows (`ui/app.css:185`, `211`, `212`, `484`) | `--ls-display` |
+| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:567`) and `.08em` (`ui/app.css:727`) | 2 rows | none; pick one when a third key comes |
+| Control height | 28px | 9 rows (`min-height` 6, `height` 3) | `--ctl-h` |
+| Bar and meter height | 10px | 4 rows (`ui/app.css:678`, `760`, `768`, `987`) | `--bar-h` |
+| Spacing step | 14px | 33 rows in `gap`, `padding` and `margin` | `--sp-14` |
+| Spacing step | 18px | 23 rows in `gap`, `padding` and `margin` | `--sp-18` |
+| Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
+| Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`ui/lib.js:572`, `585`, `597`, `ui/views/factory-jobs.js:31`) | none; a rule |
+| List indent | `padding-left: 18px` on a list | 2 rows (`ui/app.css:413`, `509`) | `--indent-list` |
+| Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
+
+### Spacing steps 14px and 18px
+
+- 14px and 18px are padding and gap steps for a card, a tile, a panel and a fact list. They do not change a page block, which uses `--gap`.
+- A new padding or gap uses `--sp-*` first. Use 14px or 18px only where the same value already sits on that component.
+- Counts are the inventory rows whose property is `gap`, `padding` or `margin` (or a side of one) and whose value contains the step.
+
+### Focus offset
+
+- A control takes `outline: 2px solid var(--focus)` with `outline-offset: 2px` (`ui/app.css:182`).
+- A control inside a container takes `outline-offset: -2px`, so the ring sits inside the box (`ui/app.css:500`, `674`, `986`).
+
+### Chart gridlines and fills
+
+- Gridlines are `splitLine` at `opacity: 0.5`.
+- A stacked area series is filled at `areaStyle: { opacity: 0.6 }` (`ui/lib.js:574`), with a legend.
+- A p90 band is filled at `opacity: 0.2` (`ui/views/factory-jobs.js:33`). It is one use and has no rule.
+
+### Row actions
+
+- No table has a row action column. The inventory of tables (see Tables) has no action column.
+- A row's actions sit in a `.actions` box under the row's text, in the same card: `ui/views/jobs.js:207`, `ui/views/now.js:336`, `368`, `404`.
+- A table cell holds data only.
+
+### Key-value pairs and fact lists
+
+- There are no key-value tables. A key and a value in a card or panel is a fact list: `<dl class="facts">` with one `<div>` per fact, `<dt>` for the key and `<dd>` for the value (`ui/views/memory.js:280`, `383`, `ui/views/session.js:167`, `265`, `ui/views/now.js:208`; 5 uses).
+- The fact list is a flex row that wraps (`ui/app.css:364`). Its key is `--muted`; its value has `dd { margin: 0 }`.
+
+### Form messages
+
+- A result line after an action is `<span class="act-msg" role="alert">` (4 sites: `ui/index.html:276`, `ui/views/gates.js:186`, `ui/views/session.js:240`, `ui/views/cards.js:7`).
+- A line inside a form is `<span class="form-msg" role="status">` (3 uses: `ui/views/issues.js:467`, `497`, `502`).
+- Both classes exist. Merging them is pending (see Deviations).
+
+### Two-click confirm
+
+- Land (on an action without a choice box), Drop and Pause ask for a second click. The first click turns the label into `<label> <name>? Click again` for 5 seconds, then the label returns (`ui/index.html:305`, `307`). The second click runs the action.
+- A deny or answer that needs a reason opens the reason box on the first click, and its button reads `Confirm` (`ui/index.html:296`).
+
+### Chart empty state
+
+- A card with a chart shows `empty()` in place of the chart when the chart has no data: `ui/views/skills.js:59` (`This skill was not used in the window.`).
+- Gap: the Agents, Jobs and Issues charts draw an empty plot when the window has no data. No view is a reference for a chart's empty state.
 
 ## Formats
 
@@ -126,14 +192,14 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 | Absolute time | mm/dd hh:mm, 24-hour; `YYYY-MM-DD` in another year | 10/28 14:05 | `when()` (`ui/lib.js:300`) | empty string |
 | Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:315`), `dateText()` (`ui/views/issues.js:177`) | empty string |
 | Axis hour | 12-hour, `a` or `p` | 4a, 1:36p | `hourLabel()` (`ui/lib.js:309`), for a chart axis only | none |
-| Clock | 24-hour time | 14:05 | `clock()` | empty string |
-| Duration | seconds, minutes, hours; `durMs()` writes `850ms` under a second; `span()` in `ui/views/now.js` writes `2d4h` from 24 hours, a form `dur()` has no day for | 43s, 4m 05s, 1h 02m, 850ms | `dur()`, `durMs()`, `span()`, `elapsed()`; `lifespan()` (`ui/timeline.js:10`) for the timeline | `–` from `dur()`, empty from `durMs()` |
+| Clock | 24-hour time | 14:05 | `clock()` (`ui/lib.js:12`) | empty string |
+| Duration | seconds, minutes, hours; `durMs()` writes `850ms` under a second; `span()` in `ui/views/now.js:222` writes `2d4h` from 24 hours, a form `dur()` has no day for | 43s, 4m 05s, 1h 02m, 850ms | `dur()` (`ui/lib.js:49`), `durMs()` (`ui/lib.js:58`), `span()`, `elapsed()` (`ui/lib.js:41`); `lifespan()` (`ui/timeline.js:10`) for the timeline | `–` from `dur()`, empty from `durMs()` |
 | Cost | dollars, 2 decimals, `<$0.01` under half a cent | $1.25 | `money()` (`ui/lib.js:18`), also for the Runs today cost | `$0.00` |
-| Weekly share | `≈1.4% wk` | ≈1.4% wk | `wkText()` (`ui/lib.js:30`), `costHtml()` | empty string |
+| Weekly share | `≈1.4% wk` | ≈1.4% wk | `wkText()` (`ui/lib.js:30`), `costHtml()` (`ui/lib.js:33`) | empty string |
 | Percent | whole number from 1%, one decimal below, `<0.1%` under 0.05% | 12%, 0.4% | `pct()` (`ui/lib.js:29`) | `–` |
 | Count | thousands separators | 12,345 | `count()` (`ui/lib.js:19`) | none |
-| Ids | mono, muted, `500 var(--fs-xs)` | aleph-52 | `idLink()`, `repoIdLink()` | none |
-| Model | name without `claude-` and the version | opus | `shortModel()` | empty string |
+| Ids | mono, muted, `500 var(--fs-xs)` | aleph-52 | `idLink()` (`ui/lib.js:334`), `repoIdLink()` (`ui/lib.js:344`) | none |
+| Model | name without `claude-` and the version | opus | `shortModel()` (`ui/lib.js:322`) | empty string |
 | Bytes | `B`, `KiB`, `MiB`, one decimal | 1.5KiB | `bytes()` (`ui/lib.js:25`) | none |
 | Mean | one decimal | 2.4 | `mean()` (`ui/lib.js:21`) | `–` |
 | Hours | one decimal under 10, whole from 10, then `h` | 3.2h, 12h | `hours()` (`ui/lib.js:23`) | none |
@@ -141,16 +207,17 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 
 **A unit follows its number with no space**: `850ms`, `3.2h`, `1.5KiB`, `12min`, `10d`. `dur()` puts a space only between two groups (`4m 05s`). Server log lines and health text from the factory keep their own form (`135 s`); they are not UI formats.
 
-Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()` (`ui/views/speed.js:22`)). The `format` group has 71 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`. Each stays for one of these reasons:
+Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()`, `ui/views/speed.js:22`). The `format` group has 66 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`, except the rows below. Each stays for one of these reasons:
 
 | Rows | Reason it stays |
 |---|---|
-| `ui/lib.js` (`pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `dur`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
-| `ui/api/activity.ts:20`, `ui/api/speed.ts:477-478` | Local-day date arithmetic for bucket starts, not display. |
-| `getDate()` (`ui/views/issues.js:141`), `getDate()` (`ui/views/issues.js:230`), `getDate()` (`ui/views/issues.js:265`), `getDate()` (`ui/views/issues.js:269`), `getDate()` (`ui/views/issues.js:307`) | Local-day date arithmetic for windows and age bins, not display. |
+| `ui/lib.js` (31 rows: `pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
+| `ui/api/activity.ts:20`, `ui/api/speed.ts:495-496` | Local-day date arithmetic for bucket starts, not display. |
+| `getDate()` (`ui/views/issues.js:141`, `230`, `265`, `269`, `285`, `307`) | Local-day date arithmetic for windows and age bins, not display. |
 | `toFixed()` (`ui/views/jobs.js:11`) | Rounds a window length to a stable number, not display. |
-| `style` (`ui/views/session.js:150`), `ui/timeline.js:154`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
+| `style` (`ui/views/session.js:150`), `ui/timeline.js:154` | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
+| `ui/views/memory.js:188` | A bar width in percent, read by CSS only. |
 
 ## Tables
 
@@ -161,13 +228,12 @@ Rules, as the code states them (`ui/lib.js:527`, `ui/app.css:442`):
 - **Column order:** time first, then id or name, title, state badge, project, labels, numbers. A duration is a number and stays among the numbers.
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:448`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:454`) on `th` and `td`, in `--num` with tabular figures and weight 500.
-- **Cells:** `white-space: nowrap`, padding `6px 12px 6px 0`, a `--rule-2` line under each row, and `--sunk` on row hover. Headers are `600 var(--fs-xs)` in `--muted`.
-- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼`.
-- **Pager:** `pager()` shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
+- **Cells:** `white-space: nowrap`, padding `--sp-6 --sp-12 --sp-6 0`, a `--rule-2` line under each row, and `--sunk` on row hover (`ui/app.css:443`). Headers are `600 var(--fs-xs)` in `--muted`.
+- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼` (`ui/lib.js:642`).
+- **Pager:** `pager()` (`ui/lib.js:634`) shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
 - **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:851`) and shows the rest on click.
-- **Page length:** a table paginates at 50 rows with `pager()`.
 - **Wide tables:** `.tscroll` (`ui/app.css:466`) scrolls sideways.
-- **Empty table:** `empty()` in place of the table.
+- **Empty table:** `empty()` (`ui/lib.js:67`) in place of the table.
 
 Columns of the main tables:
 
@@ -187,7 +253,7 @@ Columns of the main tables:
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:201`) |
 | Commits | Date, Commit, Subject, Part | `dataTable()` (`ui/views/issues.js:641`) |
 
-Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. No table has a row action column. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
+Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:489`) over the table.
 
 ## Charts and data displays
 
@@ -195,35 +261,35 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `cha
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
 - **Bars:** `barsOption()` (`ui/lib.js:554`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `barsOption()` (`ui/views/factory-agents.js:87`).
-- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `stackedAreaOption()` (`ui/views/factory-agents.js:64`).
-- **Range bars:** `rangeBarOption()` (`ui/lib.js`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
+- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js:566`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `stackedAreaOption()` (`ui/views/factory-agents.js:64`).
+- **Range bars:** `rangeBarOption()` (`ui/lib.js:592`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: p50 and p90 areas per bucket, with 0 for a bucket with no time; a strip with one dot per issue linking to the issue, with the time on a base-60 log axis that starts at 1m unless a time is under a minute and the filing time on the vertical axis (an issue with no filing time has no dot); and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue, each linking to the issue (for Lead Time an issue has a row per slow stage). Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Agents page:** three charts of the same height in one row (`liveOption`, `outcomesOption`, `costOption` in `ui/views/factory-agents.js`), drawn by `chart()` with the theme tokens: live agents by role as a stacked area, one series per timed role in `--series-1` to `--series-5`; outcomes by role as stacked horizontal bars of succeeded, failed and stuck; and cost by model as stacked columns per bucket, from `buckets[].cost` in `/api/speed`. Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Alerts section (Status page):** one section, "Alerts", holds the Asks and the stuck, failed and error cards. The cards are one full-width column, as the Asks are. Each card has the Ask card structure (`ask-box` with the meta row, then the fold, then the buttons); a stuck, failed or error card uses the red `unstick` tone. The id, priority, date and runtime sit inside the box and show while the fold is closed. The status line links `#awaiting` (Asks) and `#jobs-stuck` (stuck jobs) point at the two lists of the section.
-- **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:22`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
-- **Meters:** `meter()` (`ui/lib.js`) draws every share bar, one share or segments, as `.meter` (`ui/app.css`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
-- **Bar lists:** `barRow()` and `barList()` (`ui/lib.js`): label, meter, value on one grid.
+- **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:22`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month. The cost chart on Agents is the one exception (see Deviations).
+- **Meters:** `meter()` (`ui/lib.js:537`) draws every share bar, one share or segments, as `.meter` (`ui/app.css:760`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
+- **Bar lists:** `barRow()` (`ui/lib.js:545`) and `barList()` (`ui/lib.js:551`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:350`) and `priorityBadge()` (`ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
 - **Efficiency bar:** `.obar` (`ui/app.css:878`), in the five `--seg-*` colours under white text.
-- **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it: `loadingLine()` (`ui/views/factory-agents.js:108`). Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:564`), and each option names its series.
+- **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:108`. Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:564`), and each option names its series.
 
 ## Metric cards
 
-A metric card is the standard data card. The Status scorecard set the design; every page with metric cards uses it. `statCard()` (`ui/lib.js`) draws one card, `tiles()` lays the cards out as an auto-fit grid of 150px minimum that stretches to fill the row, and the CSS is `.tile` (`ui/app.css:722`). Do not write card markup by hand.
+A metric card is the standard data card. The Status scorecard set the design; every page with metric cards uses it. `statCard()` (`ui/lib.js:505`) draws one card, `tiles()` (`ui/lib.js:513`) lays the cards out as an auto-fit grid of 150px minimum that stretches to fill the row, and the CSS is `.tile` (`ui/app.css:722`). Do not write card markup by hand.
 
 A card has 3 rows and nothing else:
 
 | Row | Content | Style |
 |---|---|---|
-| 1 | The key, left; the trend, right | Key: `--fs-xs`, `--fw-strong`, `--muted`, uppercase, `.08em` letter spacing. Trend: `--fs-sm`, `--fw-strong` |
-| 2 | The value; then the second value as ` / v2` | Value: 700 `--fs-metric` (32px) in `--metric`, tabular numbers, `--ink`. Second value: 400 `--fs-2xl` (20px), `--muted`, not italic |
+| 1 | The key, left; the trend, right | Key: `--fs-xs`, `--fw-strong`, `--muted`, uppercase, `.08em` letter spacing (`ui/app.css:727`). Trend: `--fs-sm`, `--fw-strong` |
+| 2 | The value; then the second value as ` / v2` | Value: 700 `--fs-metric` (32px) in `--metric`, tabular numbers, `--ink` (`ui/app.css:728`). Second value: 400 `--fs-2xl` (20px), `--muted`, not italic |
 | 3 | A qualifier that names the two values (`p50 / p90`), or a note | `--fs-xs`, one line, cut with an ellipsis; the note's full text is its tooltip. Qualifier: the first name `--ink`, ` / second` `--muted`. Note: `--muted` |
 
 - **Values:** text, made with the format helpers (`pct()`, `dur()`, `money()`, `count()`). An unknown value is `–`. The second value and the qualifier go together: a card with `v2` has `q` naming both values, unless the key already names them.
-- **Trend:** `cardTrend()` (`ui/lib.js`) only. `▲` or `▼` and the change from `pct()`, or `▬ 0%` for no change. `kind: "points"` compares shares in percentage points; `"relative"` compares times and counts by relative change. The tone is `good` (`--good`) or `warn` (`--need`) from `lowerIsGood`. Each card states which direction is good. A neutral (`--muted`) trend (`lowerIsGood: null`) is only for a card where neither direction is good. The tooltip gives the previous value and the baseline, or a `tip` that says what the trend compares. No trend when there is no baseline.
+- **Trend:** `cardTrend()` (`ui/lib.js:488`) only. `▲` or `▼` and the change from `pct()`, or `▬ 0%` for no change. `kind: "points"` compares shares in percentage points; `"relative"` compares times and counts by relative change. The tone is `good` (`--good`) or `warn` (`--need`) from `lowerIsGood`. Each card states which direction is good. A neutral (`--muted`) trend (`lowerIsGood: null`) is only for a card where neither direction is good. The tooltip gives the previous value and the baseline, or a `tip` that says what the trend compares. No trend when there is no baseline.
 - **Bar:** an optional bar (`extra`) between rows 2 and 3, as on the Usage card (`meter()` with a mark, 10px).
 - **Link or selector:** with `href` the card is a link to the page that explains the number; with `key` it is a button that selects the detail below the cards (`data-tile`, `aria-pressed`, `onTile()`). Hover sets a `--run` border; a selected card is `--raised` with a `--run` border. The key has no arrow.
-- **Box:** `--surface`, a 1px `--rule` border, `--r-card`, `--sp-12` by 14px padding, a `--sp-4` gap between rows; `--gap-in` between cards.
+- **Box:** `--surface`, a 1px `--rule` border, `--r-card`, `--sp-12` by 14px padding, a `--sp-4` gap between rows; `--gap-in` between cards. The 14px padding is the spacing step (see Patterns).
 - **Window:** the page head states the window (`pageHead(..., { count })`), so a card does not repeat it.
 - **More than 3 rows:** what does not fit goes in the card or chart below the cards, not in the card.
 
@@ -233,28 +299,27 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Interaction
 
-- **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:182`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:500`, `ui/app.css:675`, `ui/app.css:987`).
-- **Hover:** a link or button darkens its border to `--ink-2` (`.act:hover` at `ui/app.css:337`, `.cmd:hover` at `ui/app.css:326`, cards) or its text to `--ink` (crumbs, `a.idl` at `ui/app.css:477`, sort buttons); a table row and a nav item take `--sunk`; a metric card takes a `--run` border.
+- **Focus:** one ring for all, `2px solid var(--focus)` with a 2px offset (`ui/app.css:182`). Segmented buttons, rows and the Ask head use a negative offset (`ui/app.css:500`, `ui/app.css:674`, `ui/app.css:986`). See Patterns.
+- **Hover:** a link or button darkens its border to `--ink-2` (`.act:hover` at `ui/app.css:337`, `.cmd:hover` at `ui/app.css:326`, cards) or its text to `--ink` (crumbs, `a.idl` at `ui/app.css:477`, sort buttons); a table row and a nav item take `--sunk` (`ui/app.css:568`); a metric card takes a `--run` border.
 - **Pressed:** a selector (metric card, segmented button, bar row) sets `aria-pressed="true"`, drawn with `--raised`, `--rule-2` or `--sunk`.
 - **Disabled:** `.act:disabled` is 60% opacity with a wait cursor (`ui/app.css:340`).
 - **Active:** `.cmd:active` (`ui/app.css:327`) moves 1px down.
-- **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`, `ui/app.css:984`); the open state of each is kept across a redraw by `recordState()` (`ui/lib.js:235`) and `restoreState()` (`ui/lib.js:248`).
-- **Page-head controls:** the heads of Status, Issues, Jobs, Efficiency and Agents hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()` in `ui/lib.js`). The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as `.act.warn` in the `--need` tokens: it is an action with consequences, not a plain button.
+- **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold`, `ui/app.css:983`); the open state of each is kept across a redraw by `recordState()` (`ui/lib.js:235`) and `restoreState()` (`ui/lib.js:248`).
+- **Page-head controls:** the heads of Status, Jobs, Efficiency and Agents hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()`, `ui/lib.js:476`). The Issues and Sessions heads do not use `scopeBar()` yet (see Deviations). The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as the `act warn` classes (`ui/views/now.js:419`): it is an action with consequences, not a plain button.
 - **Motion:** `.15s ease-out` on borders and backgrounds; no animation.
 
 ## Content
 
-- **Markdown:** `md()` (`ui/lib.js:118`) renders into `.md` (`ui/app.css:591`); headings are `600 var(--fs-lg)` in the sans face.
-- **Code:** `pre` (`ui/app.css:717`) and `code` (`ui/app.css:180`) use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:717`) or scroll (`.md pre`, `ui/app.css:593`).
-- **Diffs:** `.diff-panel` (`ui/app.css:342`) on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`.diff-panel .d-hunk`, `ui/app.css:347`).
+- **Markdown:** `md()` (`ui/lib.js:118`) renders into `.md` (`ui/app.css:590`); headings are `600 var(--fs-lg)` in the sans face.
+- **Code:** `pre` (`ui/app.css:717`) and `code` (`ui/app.css:180`) use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:717`) or scroll (`.md pre`, `ui/app.css:592`).
+- **Diffs:** `.diff-panel` (`ui/app.css:342`) on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`.diff-panel .d-hunk`, `ui/app.css:347`). `diffHtml()` (`ui/lib.js:277`) renders a diff.
 - **Command box:** `cmd()` (`ui/lib.js:92`) renders `.cmd` (`ui/app.css:320`), a mono button that copies on click with a `.cp` control (`ui/app.css:331`); `primary` (`.cmd.primary`, `ui/app.css:328`) inverts it.
 - **Not determined:** the wrap rule of every long-text view was not traced.
 
 ## Voice and copy
 
-- **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Runs per Item`); metric card keys are uppercased by CSS (`text-transform: uppercase`, 2 uses).
+- **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Runs per Item`); CSS uppercases two keys (`text-transform: uppercase`, 2 rows: the nav group heads at `ui/app.css:567` and the metric card key at `ui/app.css:727`).
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
-- **Section head ids and levels:** `sectionHead()` and `card()` take `id` (the heading gets `id="h-<id>"`) and `level` (2 by default, 3 for a sub-head). These headings do not come from the helpers: Status lane card titles (`ui/views/cards.js`), session waterfall row heads (`ui/views/session.js`), the Memory note inspector title (`ui/views/memory.js`) and detail-page `.dp-ph` panel heads (`ui/views/issues.js`, `ui/timeline.js`).
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:285`); a priority is `critical`, `high`, `medium` or `low`.
 - **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:67`). Gates shows `empty()` (`ui/views/gates.js:108`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:74`) as "No job matches." with "Widen the window or clear a filter."
@@ -265,11 +330,11 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Layout and responsive
 
-- **Shell:** a sidebar (`#nav`, `ui/app.css:557`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:30`); the sidebar collapses to 48px on desktop (`ui/app.css:579`) and its state is kept in `localStorage`.
-- **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:209`, `ui/app.css:537`).
-- **Skeleton:** `pageHead()` (`ui/lib.js:295`) with the serif title and a muted count, then `card()` sections with a `sectionHead()`; Status has its own `.shead` (`ui/app.css:210`). A detail page starts with `crumb()` (`ui/lib.js:337`).
-- **Grid:** `.tiles` (`ui/app.css:721`) holds the metric cards (see Metric cards); `.lanes` (`ui/app.css:189`) is 3 columns, 2 at 1100px and below, 1 at 720px and below.
-- **Phone:** at 720px and below, 11 rules change the layout; tables scroll inside `.tscroll` (`ui/app.css:466`). What each table does at a phone width was not seen in a browser.
+- **Shell:** a sidebar (`#nav`, `ui/app.css:562`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:30`); the sidebar collapses to 48px on desktop (`ui/app.css:578`) and its state is kept in `localStorage` (`ui/index.html:47`, `51`).
+- **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:209`, `ui/app.css:536`).
+- **Skeleton:** `pageHead()` (`ui/lib.js:295`) with the serif title and a muted count, then `card()` sections (`ui/lib.js:523`) with a `sectionHead()` (`ui/lib.js:645`); Status has its own `.shead` (`ui/app.css:210`). A detail page starts with `crumb()` (`ui/lib.js:337`).
+- **Grid:** `.tiles` (`ui/app.css:721`) holds the metric cards (see Metric cards); `.lanes` (`ui/app.css:189`) is 3 columns, 2 at 1100px and below (`ui/app.css:530`), 1 at 720px and below (`ui/app.css:532`).
+- **Phone:** at 720px and below, 11 `@media` queries change the layout; tables scroll inside `.tscroll` (`ui/app.css:466`). What each table does at a phone width was not seen in a browser.
 
 ## Accessibility
 
@@ -290,7 +355,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-restarted` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:642`) and selector cards set `aria-pressed` (`statCard()` in `ui/lib.js`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:642`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:505`).
 
 ## Components
 
@@ -312,9 +377,7 @@ Reference view = the view that follows the rules best.
 
 Cards with their own markup, because `card()` would add a heading or change the element:
 
-- Memory browse table (`#mem-table`) and inspector (`#mem-inspector`): the table card has no heading, and the inspector is an `aside` with `aria-live`.
-- Sessions (`ui/views/sessions.js`): its head is the redrawn `#ag-sess-head`, not a section head.
-- Issues (`ui/views/issues.js`): the section has no heading; `#inv-count` is its head.
+- Memory browse table (`#mem-table`, `ui/views/memory.js:291`) and inspector (`#mem-inspector`): the table card has no heading, and the inspector is an `aside` with `aria-live`.
 - Stages and Holds (`ui/views/now.js`): the sections hold the monitor tables from `monitor.stages` and `monitor.holds`, at most 10 rows each, drawn by `renderStages()` and `renderHolds()`. Each header is a `sortHead` button; a click sorts again. Stages sorts by runs per item and Holds by goals (Affected Issues), descending, and each of those cells has a small bar scaled to the largest row. The trailing 7-day value is in each cell's tooltip.
 
 These references were chosen by reading the code, not by looking at the pages. Gap: no view is a reference for a chart's empty or loading state.
@@ -328,12 +391,34 @@ Use:
 - `when()`, `day()`, `hourLabel()`, `clock()`, `dur()`, `durMs()`, `money()`, `count()`, `pct()` for times, durations, costs, counts and percents;
 - `dataTable()` with `heads()` or `sortHead()` for a table, `empty()` for an empty state, and `badge()` for a state;
 - the column order time (first in Issues and Jobs), id or name, title, state, project, labels, numbers;
-- `--sp-*` for `gap`, `padding` and `margin`, and, until their tokens land, `opacity: .6` for a dimmed control, 28px for a control and 10px for a bar, as listed under Tokens.
+- `--sp-*` for `gap`, `padding` and `margin`; the steps in Patterns for 14px and 18px; and, until their tokens land, `opacity: .6` for a dimmed control, 28px for a control and 10px for a bar, as listed under Missing tokens.
 
 Never hard-code: a hex colour or shadow in CSS or in a view (except the allowed literals under Tokens), a font size, radius or `z-index` in a literal, a breakpoint other than 720px and one wide width, or a date, number or duration format written inline.
 
 ## Deviations
 
-The audit of 2026-11-04 marks every inventory row and lists each deviation with its `file:line`: `docs/findings/2026-11-04-ui-design-audit.md`. The fixes of 2026-11-03 are in `docs/findings/2026-11-03-ui-design-fixes.md`; items 1 to 6 are on main.
+Each deviation is a value or pattern in the code that a rule above does not allow. Where an open issue fixes it, the issue is named as pending. A deviation with no open issue is a follow-up. The audit of 2026-11-04 listed raw colours, off-rule breakpoints and literal z-index values. The inventory finds none of them on this tree.
+
+| Deviation | Where | Rule | Fix |
+|---|---|---|---|
+| `–` replaced by `-`; cost by hand (`$` and `toFixed(2)`) | `ui/views/now.js:44-45` | Missing values, Formats | aleph-1358 (pending) |
+| Hours with a fraction (`cardHours()`) | `ui/views/speed.js:85` | Hours | aleph-1358 (pending) |
+| Duration formats outside `dur()`: `durShort()`, `cardDur()`, `lifespan()`, `timeText()`, `span()` | `ui/views/speed.js:5`, `83`; `ui/timeline.js:10`, `188`; `ui/views/now.js:222` | Duration; one `dur()` helper | aleph-1370 (pending) |
+| Time column names differ: `Started`, `Updated`, `Last`, `When`, `Date`, `Written` | Tables | Column order, time column | aleph-1360 (pending) |
+| Duration column names differ: `Duration`, `Took`, `Time` | `ui/views/session.js:25`, `273`; `ui/views/jobs.js:201` | Duration column name | aleph-1377 (pending) |
+| Raw `<th>` headers passed to `dataTable()` | `ui/views/jobs.js:201`, `ui/views/issues.js:641` | Tables built with `heads()` | aleph-1359 (pending) |
+| Detail page heads built by hand (`<header class="ph">`) | `ui/views/jobs.js:205`, `ui/views/issues.js:494` | Page head | none; follow-up (aleph-1362 is done and left them) |
+| Issues and Sessions heads without `scopeBar()` | `ui/views/issues.js`, `ui/views/sessions.js` | Page-head controls | aleph-1363 (pending) |
+| Chart boxes without `role="img"` or `aria-label` | `ui/views/issues.js` (`backlog`, `close`, `tests`) | Charts: each chart box | aleph-1364 (pending) |
+| Two classes for one result line (`.act-msg`, `.form-msg`) | `ui/app.css:341`; `ui/views/issues.js:467` | Form messages | aleph-1372 (pending) |
+| Two diff renderers (`renderDiff()`, `diffHtml()`) and two diff loaders | `ui/views/jobs.js:219`, `233`; `ui/lib.js:277`; `ui/index.html:284` | Diffs | aleph-1374 (pending) |
+| Long text clicks through a `.dp-txt` element, not a button | `ui/views/gates.js:216` | Long text clamp | aleph-1373 (pending) |
+| Code-span writer copied across views (`inline`) | `ui/views/jobs.js:120`, `ui/views/issues.js:537`, `ui/lib.js:99` | One helper per copy | aleph-1375 (pending) |
+| Capitalised state badges (`In use`, `Stale`); `stateBadge()` and `statusBadge()` beside `badge()`; `idLink()` title patched by string replace | `ui/views/memory.js:139`; `ui/views/issues.js:50`; `ui/views/now.js:219`; `ui/views/session.js:14`, `ui/views/sessions.js:115` | States are lower case; `badge()` for a state | aleph-1365 (pending) |
+| Metric card without the qualifier rule (Lost time) | Status and Efficiency cards | Metric cards, row 3 | aleph-1368 (pending) |
+| Chart empty state drawn as an empty plot | Agents, Jobs and Issues charts | Chart empty state | none; follow-up |
+| List indent of 20px and 22px | `ui/app.css:235`, `624` | List indent (18px) | none; follow-up |
+| Login and font picker sizes as literals | `ui/auth.ts:53-57`; `ui/index.html:501-511` | Spacing and size tokens | none; follow-up |
+| Dates with no time: `Oct 28` in tables, `10/28` proposed | `ui/views/issues.js:177`; `ui/views/memory.js:140` | Absolute time and day | Chris's decision (see Formats) |
 
 The cost chart on Agents (`costOption()` in `ui/views/factory-agents.js`) keeps `minInterval: 0` on its value axis, not whole-number steps: a cost in dollars has cents, and the axis labels go through `money()`.
