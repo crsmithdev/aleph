@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, chip, tag, costHtml, count, STATES, badge, card, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, keepWindow, loadingLine, localId, md, money, pageHead, pager, priorityBadge, searchBox, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wireScope, wkText } from "../lib.js";
+import { blockersHtml, bytes, chip, tag, costHtml, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, loadingLine, localId, md, money, pager, priorityBadge, setQuery, shortModel, sortHead, span, WINDOW_DAYS, WINDOWS, windowOf, when, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -17,25 +17,13 @@ export function windowShown(f = {}) {
 }
 
 /** The list's data URL: the filters in the hash go to the API. */
-const listUrl = (_params, q = new URLSearchParams()) => {
+export const listUrl = (_params, q = new URLSearchParams()) => {
   const out = new URLSearchParams();
   for (const k of ["repo", "condition"]) if (q.get(k)) out.set(k, q.get(k));
   const days = daysOf(q);
   if (Number(days) !== 7) out.set("days", String(days));
   const s = out.toString();
   return s ? `/api/jobs?${s}` : "/api/jobs";
-};
-
-export const view = {
-  path: "/jobs",
-  title: "All jobs",
-  nav: false,
-  group: "factory",
-  order: 1,
-  api: listUrl,
-  refresh: 30,
-  render: (jobs, _params, query) => renderJobs(jobs, Object.fromEntries(query ?? [])),
-  mount: (root, jobs) => mountJobs(root, jobs),
 };
 
 /** The Job view, routed at `#/jobs/<name>` through ui/views/job.js. */
@@ -96,19 +84,9 @@ export function renderJobsTable(jobs, f = {}) {
   return dataTable(h("Job", "name") + h("Title", "title") + h("State", "condition") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started"), rows) + pager(shown.length, all.length, PAGE);
 }
 
-const WORDS = { hour: "hour", day: "24 hours", week: "7 days", month: "30 days" };
-
-export function renderJobs(jobs, f = {}) {
-  return `<div class="page sp">${pageHead("All jobs", { count: `${jobs.length} in the last ${WORDS[windowShown(f)] ?? `${f.days} days`}`, aside: renderScope(jobs, f) })}` +
-    card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${renderJobsTable(jobs, f)}</div>`) + `</div>`;
-}
-
-/** Wire the scope (it fetches again), the state filter, the search, the sort and the pager; the last three redraw the table. */
-export function mountJobs(root, jobs) {
-  const shown = windowShown(Object.fromEntries(hashQuery()));
-  if (shown) keepWindow(shown);
-  const redraw = () => { root.querySelector("#jobs-table").innerHTML = renderJobsTable(jobs, Object.fromEntries(hashQuery())); };
-  wireScope(root);
+/** Wire the state filter (it fetches again), the search, the sort and the pager; the last three redraw the table once `jobsNow()` gives the jobs. */
+export function wireJobs(root, jobsNow) {
+  const redraw = () => { const jobs = jobsNow(); if (jobs) root.querySelector("#jobs-table").innerHTML = renderJobsTable(jobs, Object.fromEntries(hashQuery())); };
   root.onclick = (e) => {
     const seg = e.target.closest?.(".card .seg button");
     if (seg) return goQuery({ [seg.parentElement.dataset.name]: seg.dataset.value });
@@ -213,7 +191,7 @@ export function renderJob(j) {
   const id = localId(j.name, j.repo), p = j.parent;
   // The issue the job works on: a part's parent, else the job's own item.
   const iss = p ?? (j.item && { id: `${j.repo}-${j.item.id}`, href: `#/issues/${encodeURIComponent(j.repo)}/${j.item.id}` });
-  const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(iss.id, j.repo)}`, iss.href], [`job ${id}`]] : [[j.repo, `#/jobs?repo=${encodeURIComponent(j.repo)}`], ["jobs", "#/jobs"], [id]];
+  const back = iss ? [[j.repo, `#/issues?project=${encodeURIComponent(j.repo)}`], [`issue ${localId(iss.id, j.repo)}`, iss.href], [`job ${id}`]] : [[j.repo], ["jobs", "#/factory/jobs"], [id]];
   const nav = [iss ? `<a class="act" href="${esc(iss.href)}">Issue</a>` : "", p?.next ? `<a class="act" href="${esc(p.next.href)}">Next part: ${esc(localId(p.next.id, j.repo))}</a>` : "", j.trace ? `<a class="act" href="${esc(j.trace)}">Trace</a>` : ""].join("");
   const pills = `<div class="status-row">${badge(j.condition)}${j.item ? priorityBadge(j.item.priority) : ""}${p ? chip("", { html: `part ${esc(p.n)} of ${esc(p.of)} of ${idLink(localId(p.id, j.repo), p.href)}` }) : ""}<span class="idp">${esc(j.name)}</span></div>`;
   const blocked = j.blockers?.length ? `<div class="dp-blocked"><span class="quiet">Waits on</span>${blockersHtml(j.blockers, j.repo, j.item.id)}</div>` : "";
@@ -230,7 +208,7 @@ export function renderJob(j) {
     ? `<div class="dp-logs" data-logs>${dataTable('<th>Check</th><th>Result</th><th class="num">Ran</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Skipped</th><th class="num">Time</th><th>Log</th>', j.checks.map((c) => `<tr><td>${esc(c.name)}</td><td>${tag(c.ok ? "pass" : "fail", c.ok ? "done" : "stuck")}</td>${counts(c.tests)}<td class="num">${esc(dur(c.seconds))}</td><td>${checkLog}</td></tr>`).join(""))}${failures}<div class="logbody" hidden></div></div>`
     : "";
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
-  return `<div class="page dp-page">${crumb(iss ? iss.href : "#/jobs", back)}` +
+  return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
     `<header class="ph"><h1>${esc(j.item?.title || j.name)}</h1>${nav ? `<div class="aside">${nav}</div>` : ""}</header>${pills}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +

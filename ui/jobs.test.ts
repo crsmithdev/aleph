@@ -275,27 +275,11 @@ describe("render", () => {
     expect(h({ verdict: "hold" })).toContain('class="badge stuck">hold<');
     expect(h({})).not.toContain(">hold<");
   });
-  test("the list shows jobs with filters, and an empty state", () => {
-    const h = v.renderJobs([job], { repo: "fac", condition: "landed" });
-    expect(h).toContain('href="#/jobs/fac-9"');
-    expect(h).toContain('<table class="tbl">');
-    expect(h.match(/<th[ >]/g)).toHaveLength(8);
-    expect(h).toContain('data-name="condition"');
-    expect(h).toContain('data-value="landed" aria-pressed="true"');
-    expect(h).toContain('aria-pressed="true"');
-    expect(h).not.toContain("<style>");
-    expect(h).not.toContain("data-more");
-    const many = v.renderJobs(Array.from({ length: 51 }, (_, i) => ({ ...job, name: `fac-${i}` })), {});
-    expect(many.match(/<tr class="rowlink"/g)).toHaveLength(50);
-    expect(many).toContain('data-more="1"');
-    expect(many).toContain("50 of 51");
-    expect(v.renderJobs([], {})).toContain("No job matches.");
-  });
-  test("the list reads the route query from its argument", () => {
-    expect(v.view.api({}, new URLSearchParams("condition=stuck&repo=fac"))).toBe("/api/jobs?repo=fac&condition=stuck");
-    expect(v.view.api({}, new URLSearchParams())).toBe("/api/jobs");
-    const h = v.view.render([job], {}, new URLSearchParams("condition=stuck"));
-    expect(h).toContain('data-value="stuck" aria-pressed="true"');
+  test("the Job page of a job with no parent issue links back to the merged Jobs page only", () => {
+    const h = v.renderJob({ ...job, item: undefined });
+    expect(h).not.toContain('href="#/jobs"');
+    expect(h).not.toContain('href="#/jobs?repo=');
+    expect(h).toContain('href="#/factory/jobs"');
   });
   test("a failed run's event names it, gives its reason with code set as code, and offers its logs", () => {
     const h = v.renderJob({ ...job, runs: [{ id: "1", kind: "worker", condition: "failed", started: ago(5), ended: ago(4), cost: 1.0276, model: "opus", reason: "checks failed in `a.ts`", logs: [{ name: "output.log", size: 10 }, { name: "checks.log", size: 2048 }] }] });

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { histOption, renderFactoryJobs } from "./views/factory-jobs.js";
+import { histOption, redirect, renderFactoryJobs } from "./views/factory-jobs.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const D: any = {
@@ -42,6 +42,36 @@ test("empty phases show dashes and no error", () => {
 });
 
 test("the title is the sidebar name; models with no name say not recorded", () => {
-  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><span class="count">last 7 days</span><div class="aside"><a href="#/jobs?window=week">All jobs</a> <div class="fbar">');
+  expect(renderFactoryJobs(D, null, "lead")).toContain('<header class="ph"><h1>Jobs</h1><span class="count">last 7 days</span><div class="aside"><div class="fbar">');
   expect(renderFactoryJobs(D, null, "lead")).toContain("not recorded");
+});
+
+const J: any = { name: "fac-9", repo: "fac", item: { id: 9, title: "Fix it" }, condition: "landed", started: "2026-11-01T08:00:00Z", cost: 0.75 };
+
+test("the page lists the jobs with the search, the State filter and the Project filter, and links no list", () => {
+  const h = renderFactoryJobs(D, null, "lead", [J], { repo: "fac", condition: "landed" });
+  expect(h).toContain('href="#/jobs/fac-9"');
+  expect(h).toContain('data-ui="jobs-search"');
+  expect(h).toContain('data-name="condition"');
+  expect(h).toContain('data-value="landed" aria-pressed="true"');
+  expect(h).toContain('<select name="repo"');
+  expect(h).not.toContain('href="#/jobs?');
+  expect(h.match(/<tr class="rowlink"/g)).toHaveLength(1);
+  expect(h).toContain('<table class="tbl">');
+  expect(h.slice(h.indexOf('id="jobs-table"')).match(/<th[ >]/g)).toHaveLength(8);
+  expect(h).not.toContain("<style>");
+  expect(h).not.toContain("data-more");
+  const many = renderFactoryJobs(D, null, "lead", Array.from({ length: 51 }, (_, i) => ({ ...J, name: `fac-${i}` })), {});
+  expect(many.match(/<tr class="rowlink"/g)).toHaveLength(50);
+  expect(many).toContain('data-more="1"');
+  expect(many).toContain("50 of 51");
+  expect(renderFactoryJobs(D, null, "lead", [], {})).toContain("No job matches.");
+  expect(renderFactoryJobs(D, null, "lead", null, {})).toContain("Loading jobs");
+});
+
+test("#/jobs redirects to the merged page with its query; a Job page does not", () => {
+  expect(redirect("#/jobs?window=day")).toBe("#/factory/jobs?window=day");
+  expect(redirect("#/jobs?repo=fac")).toBe("#/factory/jobs?repo=fac");
+  expect(redirect("#/jobs")).toBe("#/factory/jobs");
+  expect(redirect("#/jobs/aleph-1")).toBeNull();
 });

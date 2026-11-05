@@ -40,7 +40,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a view's handlers do not outlive it", async () => {
-    await page.go("#/jobs");
+    await page.go("#/factory/jobs");
     expect(await page.ev('typeof document.querySelector("#view").onclick')).toBe("function");
     await page.go("#/issues");
     expect(await page.ev('[document.querySelector("#view").onclick, document.querySelector("#view").onchange]')).toEqual([null, null]);

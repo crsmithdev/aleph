@@ -10,7 +10,8 @@ import * as agents from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import * as fjobs from "./views/factory-jobs.js";
 // @ts-ignore plain JS shared with the page
-import * as jobs from "./views/jobs.js";
+import { listUrl } from "./views/jobs.js";
+// @ts-ignore plain JS shared with the page
 // @ts-ignore plain JS shared with the page
 import * as now from "./views/now.js";
 import { full } from "./test-now.ts";
@@ -33,7 +34,6 @@ const PAGES: Record<string, { path: string; view: any; render: (w: string) => st
   efficiency: { path: "#/factory/efficiency", view: eff.view, render: (w) => eff.renderEfficiency(speed(w)) },
   agents: { path: "#/factory/agents", view: agents.view, render: (w) => agents.renderFactoryAgents(S, speed(w), "live", w) },
   status: { path: "#/", view: now.view, render: (w) => now.view.render(full, {}, new URLSearchParams(`window=${w}`)) },
-  all: { path: "#/jobs", view: jobs.view, render: (w) => jobs.renderJobs([], { window: w }) },
 };
 // Agents loads /api/state, then the speed of the window the mount asks for.
 const request = (p: { view: any }, q: URLSearchParams): string => {
@@ -66,26 +66,27 @@ test("picking an option on each page asks for that window and the page says its 
     click({ target: { closest: () => btn } });
     expect(query().get("window"), name).toBe(w);
     const url = request(p, query());
-    if (name === "all") expect(url).toBe(DAYS[w] ? `/api/jobs?days=${DAYS[w]}` : "/api/jobs");
-    else expect(url).toBe(`/api/speed?window=${w}${name === "efficiency" ? "&baseline=1" : ""}`);
+    expect(url).toBe(`/api/speed?window=${w}${name === "efficiency" ? "&baseline=1" : ""}`);
     const shown = p.render(w);
-    expect(shown, `${name} ${w}`).toContain(name === "all" ? WORDS[w].replace("last ", "") : name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
+    expect(shown, `${name} ${w}`).toContain(name === "status" ? `data-value="${w}" aria-pressed="true"` : WORDS[w]);
     expect(html).toBeTruthy();
   }
 });
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
   storeWindow("month");
-  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.all ? "/api/jobs?days=30" : p === PAGES.efficiency ? "/api/speed?window=month&baseline=1" : "/api/speed?window=month");
+  for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency ? "/api/speed?window=month&baseline=1" : "/api/speed?window=month");
   expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/speed?window=hour");
   expect(windowOf(new URLSearchParams("window=nope"))).toBe("month");
 });
 
-test("All jobs keeps an old ?days= address open", () => {
-  expect(jobs.view.api(null, new URLSearchParams("days=90"))).toBe("/api/jobs?days=90");
-  expect(jobs.view.api(null, new URLSearchParams("days=30"))).toBe("/api/jobs?days=30");
-  expect(pressed(jobs.renderJobs([], { days: "30" })).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
-  expect(pressed(jobs.renderJobs([], { days: "90" })).filter((m) => m[2] === "true")).toEqual([]);
+test("a picked window asks for the jobs of the same window, and an old ?days= address stays open", () => {
+  for (const w of WINDOWS) expect(listUrl(null, new URLSearchParams(`window=${w}`))).toBe(DAYS[w] ? `/api/jobs?days=${DAYS[w]}` : "/api/jobs");
+  expect(listUrl(null, new URLSearchParams("days=90"))).toBe("/api/jobs?days=90");
+  expect(listUrl(null, new URLSearchParams("days=30"))).toBe("/api/jobs?days=30");
+  const page = (days: string) => fjobs.renderFactoryJobs(speed("week"), null, "lead", [], { days });
+  expect(pressed(page("30")).filter((m) => m[2] === "true").map((m) => m[1])).toEqual(["month"]);
+  expect(pressed(page("90")).filter((m) => m[2] === "true")).toEqual([]);
 });
 
 test("the route of #?window=day is Status, on the day window", () => {
