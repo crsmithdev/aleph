@@ -110,12 +110,12 @@ for (const k of ["check", "claude-md", "skill"]) PROBLEM[`proposal-${k}`] = (c) 
 
 /** `rerun` by what it does for each reason. */
 const RERUN: Record<string, { label: string; hint: string }> = {
-  "no-commit": { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the goal." },
+  "no-commit": { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the issue." },
   "part-dropped": { label: "Close as done", hint: "Sets the issue to done; nothing more runs for it." },
-  "run-cap": { label: "Start it again", hint: "Clears the Ask and lets the factory start the goal again." },
+  "run-cap": { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." },
 };
 const rerun = (reason: string, args: Record<string, string>): Action => {
-  const r = RERUN[reason] ?? { label: "Start it again", hint: "Clears the label and lets the factory start the goal again." };
+  const r = RERUN[reason] ?? { label: "Start it again", hint: "Clears the label and lets the factory start the issue again." };
   return { act: "rerun", label: r.label, hint: r.hint, primary: false, args, recommended: false };
 };
 
@@ -136,8 +136,8 @@ function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
       case "deny":
         return [a("deny", "Deny", "Records your refusal on the issue and closes the question.", issue)];
       case "approve":
-        if (c.lesson) { const w = words(c.lesson); return [a("approve", w.approve, `Files the goal that ${w.hint}.`, { id: c.id })]; }
-        return [a("approve", "File the goal", "Files the proposal as a goal for the factory.", { id: c.id })];
+        if (c.lesson) { const w = words(c.lesson); return [a("approve", w.approve, `Files the issue that ${w.hint}.`, { id: c.id })]; }
+        return [a("approve", "File the issue", "Files the proposal as an issue for the factory.", { id: c.id })];
       case "decline":
         if (c.lesson) return [a("decline", words(c.lesson).decline, "Drops the proposal; the memory does not propose this lesson again.", { id: c.id })];
         return [a("decline", "Never propose this", "Drops the proposal and stops the memory proposing it again.", { id: c.id })];

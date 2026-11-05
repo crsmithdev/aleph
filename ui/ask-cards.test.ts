@@ -82,7 +82,8 @@ test("an old Ask with none of the new fields still renders: the item's title, th
   const row = view.askRow(i, "2026-10-27T17:00:00Z");
   expect(row).toContain('<b class="ask-kind">Unstick:</b> <span class="ask-title">Loops a lot</span>');
   expect(row).toContain('<span class="ask-tag">capped</span>');
-  expect(row).toContain("Clears the Ask and lets the factory start the goal again.");
+  expect(row).toContain("Clears the Ask and lets the factory start the issue again.");
+  expect(row).not.toContain("the goal");
   expect(row).not.toContain("rec-note");
   // An item from before the cards, with no card, headline or tag: the kind comes from its input or approval.
   const bare = view.askRow({ key: "run:x-1", reason: "held-path", kind: "approval", id: "x-1", href: "", title: "Old run", problem: "p", situation: "s", escalated: true, actions: [], details: {} }, "2026-10-27T17:00:00Z");

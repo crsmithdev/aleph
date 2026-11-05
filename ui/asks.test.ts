@@ -72,6 +72,20 @@ describe("asks", () => {
     try { expect(ofIssues(issue({ reason: "question", question: "what now?" }))[0].tag).toBe("question"); } finally { STORE = undefined; }
   });
 
+  test("the approve of a proposal, with and without a lesson, and the rerun of no-commit and run-cap do not say goal", () => {
+    STORE = { situation: "Stored situation." };
+    try {
+      const acts = [
+        ...CASES["proposal-check"]()[0].actions.filter((a) => a.act === "approve"),
+        ...ofIssues(issue({ reason: "proposal-check", question: "q" }))[0].actions.filter((a) => a.act === "approve"),
+        ...CASES["no-commit"]()[0].actions.filter((a) => a.act === "rerun"),
+        ...CASES["run-cap"]()[0].actions.filter((a) => a.act === "rerun"),
+      ];
+      expect(acts.length).toBe(4);
+      for (const a of acts) expect(`${a.label} ${a.hint}`).not.toContain("goal");
+    } finally { STORE = undefined; }
+  });
+
   test("an issue with a reason the table does not name is a question", () => {
     expect(ofIssues(issue({ reason: "nope", question: "what now?" }))[0].reason).toBe("question");
   });
