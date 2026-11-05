@@ -34,6 +34,8 @@ export interface Pct { count: number; p50: number; p90: number }
 export interface PhaseStat extends Pct { hist: number[]; worst: number }
 export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
 const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
+/** One issue's seconds per phase (null when the phase did not end in the window). `outcome` is "landed" once a land run landed it, else "unlanded". */
+export type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded" } & Record<Phase, number | null>;
 export interface Speed {
   window: Window;
   /** Issues that landed in the window: one per issue, however many land runs it had. Land runs with no issue count as one. */
@@ -45,7 +47,9 @@ export interface Speed {
   asks: { count: number; manual: number };
   checks: { name: string; count: number; p50: number; p90: number }[];
   /** hour: 60 buckets of 1 minute; day: 24 hourly; week: 7 and month: 30 local days; `at` is its local start as an ISO string. */
-  buckets: ({ at: string; runs: number } & Record<Phase, number | null>)[];
+  buckets: ({ at: string; runs: number; p90: Record<Phase, number | null> } & Record<Phase, number | null>)[];
+  /** Every issue with a phase that ended in the window. */
+  times: IssueTimes[];
   slowest: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[];
   models: { model: string; count: number; p50: number }[];
   flaky: number;
@@ -271,7 +275,14 @@ export function filed(dir = storeDir()): Filed {
 }
 
 /** The phases of the work over `runs` and the store's history, for what ended in `since`..`now`: each one's end time and seconds. */
-export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: number): Record<Phase, { at: number; secs: number }[]> {
+export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: number): Record<Phase, { at: number; secs: number }[]> & { issues: IssueTimes[] } {
+  const per = new Map<string, IssueTimes>();
+  const note = (key: string | undefined, k: Phase, secs: number) => {
+    if (!key) return;
+    const m = key.lastIndexOf("-");
+    if (!per.has(key)) per.set(key, { id: key, href: `#/issues/${encodeURIComponent(key.slice(0, m))}/${key.slice(m + 1)}`, outcome: "unlanded", intake: null, queue: null, implement: null, land: null, lead: null });
+    per.get(key)![k] = secs;
+  };
   const inWindow = (t: number) => t >= since && t <= now;
   const intake: { at: number; secs: number }[] = [], queue: { at: number; secs: number }[] = [], implement: { at: number; secs: number }[] = [], land: { at: number; secs: number }[] = [], lead: { at: number; secs: number }[] = [];
   const jobs = new Map<string, Run[]>();
@@ -282,9 +293,10 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
     // A job can run again after it lands; what finished the work is the last finish before the land.
     const ends = agents.filter((r) => passedState(r.condition) || r.condition === "awaiting").map((r) => Date.parse(r.ended!)).filter((t) => t <= landed);
     if (!ends.length) continue;
+    const owner = rs.find((r) => issueOf(r) !== undefined), key = owner && `${owner.repo}-${issueOf(owner)}`;
     const finished = Math.max(...ends), started = Math.min(...agents.map((r) => Date.parse(r.started)));
-    if (inWindow(finished)) implement.push({ at: finished, secs: (finished - started) / 1000 });
-    if (inWindow(landed)) land.push({ at: landed, secs: (landed - finished) / 1000 });
+    if (inWindow(finished)) { implement.push({ at: finished, secs: (finished - started) / 1000 }); note(key, "implement", (finished - started) / 1000); }
+    if (inWindow(landed)) { land.push({ at: landed, secs: (landed - finished) / 1000 }); note(key, "land", (landed - finished) / 1000); }
   }
   // Queue and Lead are per issue. A run older than its filing (a file added again) has no such span.
   const firstStart = new Map<string, number>(), lastLand = new Map<string, number>(), triaged = new Map<string, number>();
@@ -305,16 +317,17 @@ export function phaseTimes(runs: Run[], { issue }: Filed, since: number, now: nu
   }
   for (const [key, started] of firstStart) {
     const created = issue.get(key), sorted = triaged.get(key);
-    if (created != null && sorted != null && sorted >= created && sorted <= started && inWindow(sorted)) intake.push({ at: sorted, secs: (sorted - created) / 1000 });
+    if (created != null && sorted != null && sorted >= created && sorted <= started && inWindow(sorted)) { intake.push({ at: sorted, secs: (sorted - created) / 1000 }); note(key, "intake", (sorted - created) / 1000); }
     // An issue filed with a spec in a repo without author skips intake: it queues from its filing.
     const queued = sorted != null && sorted <= started ? sorted : created;
-    if (queued != null && started >= queued && inWindow(started)) queue.push({ at: started, secs: (started - queued) / 1000 });
+    if (queued != null && started >= queued && inWindow(started)) { queue.push({ at: started, secs: (started - queued) / 1000 }); note(key, "queue", (started - queued) / 1000); }
   }
   for (const [key, landed] of lastLand) {
     const created = issue.get(key);
-    if (created != null && landed >= created && inWindow(landed)) lead.push({ at: landed, secs: (landed - created) / 1000 });
+    if (created != null && landed >= created && inWindow(landed)) { lead.push({ at: landed, secs: (landed - created) / 1000 }); note(key, "lead", (landed - created) / 1000); }
   }
-  return { intake, queue, implement, land, lead };
+  for (const [key, t] of per) if (lastLand.has(key)) t.outcome = "landed";
+  return { intake, queue, implement, land, lead, issues: [...per.values()] };
 }
 
 /** Each phase's count, p50 and p90 over `phaseTimes`. */
@@ -472,9 +485,9 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     else if (lists.list(u.goal.slice(0, m))) delete u.href;
   }
   const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
-  const med = (xs: { at: number; secs: number }[], i: number) => {
+  const med = (xs: { at: number; secs: number }[], i: number, q = 0.5) => {
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
-    return inBucket.length ? round(pct(inBucket, 0.5)) : null;
+    return inBucket.length ? round(pct(inBucket, q)) : null;
   };
   const recent = flakes().filter((f) => Date.parse(f.at) >= since.getTime());
   const started = Array.from({ length: n }, () => 0);
@@ -491,8 +504,9 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null):
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
-      return { at: d.toISOString(), runs: started[i], ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
+      return { at: d.toISOString(), runs: started[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
     }),
+    times: ended.issues,
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
     issues,

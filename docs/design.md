@@ -190,11 +190,12 @@ Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Writte
 Charts are ECharts, themed by `chartTheme()` and drawn by `chart()` (`ui/lib.js:159`, `ui/lib.js:184`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:174`) and redraws on a colour-scheme change.
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
-- **Bars:** `barsOption()` (`ui/lib.js:480`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `ui/views/factory-agents.js:33`, `ui/views/factory-jobs.js:21`.
+- **Bars:** `barsOption()` (`ui/lib.js:480`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `ui/views/factory-agents.js:33`.
 - **Lines:** `lineOption()` (`ui/lib.js:480`) for one series over time, filled at 15% opacity, or as a step area (85%) for live counts. Uses: `ui/views/factory-agents.js:37`, `ui/views/factory-agents.js:49`, `ui/views/skills.js:33`.
 - **Stacked areas:** `stackedAreaOption()` (`ui/lib.js`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend. Use: the open backlog by priority in `ui/views/issues.js`.
 - **Range bars:** `rangeBarOption()` (`ui/lib.js`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
 - **Gap lines:** `gapLinesOption()` (`ui/lib.js`) for two counts over time: two lines, with the area between them shaded by a `custom` series. Use: filed and closed per day in `ui/views/issues.js`.
+- **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: a p50 and p90 line per bucket, a log-time strip with one dot per issue linking to the issue, and the 10 slowest issues as stacked bars of intake, queue, build and land. Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:23`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
 - **Metric tiles:** `tile()` (`ui/lib.js:433`): a small caps key, the figure in `--metric` at 32px, and a small line. A tile with `key` selects the detail below it. `tiles()` lays them out as an auto-fit grid that stretches to fill the row. The Status scorecard, the Efficiency scorecard and the Automation metrics all use this tile.
 - **Bar lists:** `barRow()` and `barList()` (`ui/lib.js:480`): label, bar, value on one grid.

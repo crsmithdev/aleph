@@ -1,12 +1,17 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { histOption, redirect, renderFactoryJobs } from "./views/factory-jobs.js";
+import { redirect, renderFactoryJobs, slowestOption, stripOption, trendOption } from "./views/factory-jobs.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const D: any = {
   window: "week",
   phases: { lead: P(3, 1570, 16560), intake: P(3, 59, 1467), queue: P(3, 304, 6120, [1, 1, 1, 0, 0, 0, 0], 800), implement: P(3, 475, 1698), land: P(3, 74, 650) },
-  buckets: [{ at: new Date(2026, 9, 27).toISOString(), lead: 1000, queue: 200 }, { at: new Date(2026, 9, 28).toISOString(), lead: null, queue: 100 }],
+  buckets: [{ at: new Date(2026, 9, 27).toISOString(), lead: 1000, queue: 200, p90: { lead: 3000, queue: 900 } }, { at: new Date(2026, 9, 28).toISOString(), lead: null, queue: 100, p90: { lead: null, queue: 400 } }],
+  times: [
+    { id: "fx-1", href: "#/issues/fx/1", outcome: "landed", intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 },
+    { id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", intake: 100, queue: 300, implement: 100, land: null, lead: null },
+    { id: "fx-3", href: "#/issues/fx/3", outcome: "landed", intake: 10, queue: 20, implement: 4000, land: 30, lead: 5000 },
+  ],
   checks: [{ name: "tests", count: 5, p50: 51, p90: 171 }],
   models: [{ model: "unset", count: 2, p50: 480 }, { model: "opus", count: 1, p50: 700 }],
 };
@@ -18,19 +23,34 @@ test("five stage tiles come from the data, with the last 24h", () => {
   expect(h).toContain('data-tile="lead" aria-pressed="true"');
 });
 
-test("picking a stage changes the histogram and the day rows", () => {
+test("three chart boxes in one row replace the old cards, each says its data for the stage, and the strip holds one point per issue on a log axis with its issue link", () => {
   const lead = renderFactoryJobs(D, null, "lead"), queue = renderFactoryJobs(D, null, "queue");
-  expect(lead).toContain("Lead time times: 0, 1, 0, 0, 0, 0, 2 issues");
-  expect(queue).toContain("Queue times: 1, 1, 1, 0, 0, 0, 0 issues");
-  expect(lead).toContain('<span class="bv">16m 40s</span>');
-  expect(queue).toContain('<span class="bv">3m 20s</span>');
-  expect(queue).toContain("Longest: 13m 20s.");
-  expect(lead).toContain("2 of 3 took over 4h in the last 7 days.");
+  expect(lead).not.toContain("how long it took");
+  expect(lead).not.toContain("Median by");
+  const row = lead.match(/<div class="trio">(.*?)<div class="pair">/s)![1];
+  expect([...row.matchAll(/class="chartbox"[^>]*role="img" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual([
+    "Lead time p50 and p90 trend: 2 issues in the last 7 days, from 18m 20s to 1h 23m",
+    "Lead time time per issue: 2 issues in the last 7 days, from 18m 20s to 1h 23m",
+    "Lead time slowest 10: 2 issues in the last 7 days, from 18m 20s to 1h 23m",
+  ]);
+  expect(queue).toContain("Queue slowest 10: 3 issues");
+  const o = stripOption(D, "queue", { done: "D", need: "N" });
+  expect(o.xAxis.type).toBe("log");
+  const pts = o.series.flatMap((s: any) => s.data);
+  expect(pts.map((p: any) => [p.id, p.href, p.value[0]]).sort()).toEqual([["fx-1", "#/issues/fx/1", 600], ["fx-2", "#/issues/fx/2", 300], ["fx-3", "#/issues/fx/3", 20]]);
+  expect(o.series.map((s: any) => s.color)).toEqual(["D", "N"]);
+  expect(trendOption(D, "queue", { run: "R", hot: "H" }).series.map((s: any) => s.data)).toEqual([[200, 100], [900, 400]]);
 });
 
-test("the 1–4h and over-4h bins take the slow colour, the others do not", () => {
-  const color = histOption(D.phases.lead, "Lead time", { hot: "H", run: "R" }).series[0].itemStyle.color;
-  expect([0, 1, 2, 3, 4, 5, 6].map((dataIndex) => color({ dataIndex }))).toEqual(["R", "R", "R", "R", "R", "H", "H"]);
+test("Slowest 10 holds at most 10 issues, slowest first, with Intake, Queue, Build and Land stacked to the issue's total", () => {
+  const many = { ...D, times: Array.from({ length: 12 }, (_, i) => ({ id: `fx-${i}`, href: "", outcome: "landed", intake: 1, queue: 2, implement: 100 + i, land: 3, lead: 106 + i })) };
+  const o = slowestOption(many, "lead");
+  expect(o.yAxis.data).toEqual(["fx-11", "fx-10", "fx-9", "fx-8", "fx-7", "fx-6", "fx-5", "fx-4", "fx-3", "fx-2"]);
+  expect(o.series.map((s: any) => [s.name, s.stack])).toEqual([["Intake", "total"], ["Queue", "total"], ["Build", "total"], ["Land", "total"]]);
+  expect(o.yAxis.data.map((_: string, n: number) => o.series.reduce((a: number, s: any) => a + s.data[n], 0))).toEqual(many.times.slice(2).reverse().map((i: any) => i.lead));
+  const q = slowestOption(D, "queue");
+  expect(q.yAxis.data).toEqual(["fx-1", "fx-2", "fx-3"]);
+  expect(q.series[3].data).toEqual([200, 0, 30]);
 });
 
 test("empty phases show dashes and no error", () => {

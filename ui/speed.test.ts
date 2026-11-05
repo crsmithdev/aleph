@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv } from "./test-server.ts";
-import { agentStats, CLASSES, classify, clearCache, filed, phases, routes, speed } from "./api/speed.ts";
+import { agentStats, CLASSES, classify, clearCache, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/process.ts";
 // @ts-ignore plain JS shared with the page
 import { durShort, weekText, xLabel } from "./views/speed.js";
@@ -259,6 +259,27 @@ test("phases: intake runs from the filing to the first triage end, queue from th
   expect(p.lead).toMatchObject({ count: 2, p50: 400, p90: 3600 }); // fx-1 3600, fx-3 400
   const later = phases([r(1, "build", "passed", 1660_000, 1700_000)], f, 2000_000, 9_999_000);
   expect(later.queue.count).toBe(0);
+});
+
+test("per-issue times carry each issue's phases and outcome, and a bucket has a p90 next to its p50", () => {
+  const r = (n: number, kind: string, state: string, a: number, b: number) => ({ kind, job: `fx-${n}`, name: "x", repo: "fx", on: `fx-${n}`, condition: state, started: new Date(a).toISOString(), ended: new Date(b).toISOString() }) as any;
+  const f = { issue: new Map<string, number | null>([["fx-1", 1000_000], ["fx-2", 1000_000]]) };
+  const t = phaseTimes([
+    r(1, "triage", "done", 1000_000, 1060_000), r(1, "build", "passed", 1660_000, 1900_000), r(1, "land", "landed", 2000_000, 2100_000),
+    r(2, "triage", "done", 1000_000, 1100_000), r(2, "build", "passed", 1400_000, 1500_000),
+  ], f, 0, 9_999_000);
+  const by = Object.fromEntries(t.issues.map((i) => [i.id, i]));
+  expect(by["fx-1"]).toEqual({ id: "fx-1", href: "#/issues/fx/1", outcome: "landed", intake: 60, queue: 600, implement: 240, land: 200, lead: 1100 });
+  expect(by["fx-2"]).toEqual({ id: "fx-2", href: "#/issues/fx/2", outcome: "unlanded", intake: 100, queue: 300, implement: 100, land: null, lead: null });
+  // Two jobs finish in one hour: builds of 600 and 1200 s.
+  const now2 = new Date(2026, 2, 10, 15), h = (m: number) => new Date(2026, 2, 10, 9, m).toISOString();
+  run({ kind: "build", job: "pa", repo: "px", on: "px-1", condition: "passed", started: h(0), ended: h(10) });
+  run({ kind: "build", job: "pb", repo: "px", on: "px-2", condition: "passed", started: h(5), ended: h(25) });
+  const d = speed("day", now2);
+  const b = d.buckets.find((x) => x.implement !== null)!;
+  expect(b.implement).toBe(600);
+  expect(b.p90.implement).toBe(1200);
+  expect(d.times.map((i) => i.id).sort()).toEqual(["px-1", "px-2"]);
 });
 
 test("agents: each role's live, runs, hours and models, with a peak over all roles", () => {
