@@ -1,6 +1,7 @@
 /** The per-type blocks of `GET /api/memory`: where aleph keeps each of the seven memory types, read as it is. A source that is absent gives an empty list, never an error. */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
+import { clip } from "../../lib/naming.ts";
 import { claudeSettings } from "../../hooks/lib/context.ts";
 import { langfuseConfig } from "../../hooks/lib/env.ts";
 import { readStore } from "../../jobs/lib/learning/corrections.ts";
@@ -22,7 +23,6 @@ export const clearTypesCache = () => { sessionsCache.clear(); callsCache.clear()
 
 const mtime = (p: string): string => { try { return statSync(p).mtime.toISOString(); } catch { return ""; } };
 const newest = (xs: (string | undefined | null)[]): string => xs.filter(Boolean).sort().at(-1) ?? "";
-const oneLine = (s: string, max = 160) => { const t = s.replace(/\s+/g, " ").trim(); return t.length > max ? t.slice(0, max) + "…" : t; };
 const files = (dir: string, re: RegExp): string[] => { try { return readdirSync(dir).filter((f) => re.test(f)); } catch { return []; } };
 
 export const handoffsDir = handoffsSetting;
@@ -32,7 +32,7 @@ export function intent(text: string): string {
   const lines = text.split("\n");
   const at = lines.findIndex((l) => /^##\s+intent\s*$/i.test(l));
   const from = at < 0 ? lines : lines.slice(at + 1);
-  return oneLine(from.find((l) => l.trim() && !/^#/.test(l)) ?? "");
+  return clip(from.find((l) => l.trim() && !/^#/.test(l)) ?? "", 160);
 }
 
 function working() {
@@ -61,7 +61,7 @@ function semantic(root: string, wiki: Note[], all: Note[]) {
   }));
   return {
     start,
-    memory: text === null ? null : { lines: text.split("\n").length, first: oneLine(text.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? ""), at: mtime(file) },
+    memory: text === null ? null : { lines: text.split("\n").length, first: clip(text.split("\n").find((l) => l.trim() && !l.startsWith("#")) ?? "", 160), at: mtime(file) },
     notes, last: newest([text === null ? "" : mtime(file), ...notes.map((n) => n.updated)]),
   };
 }
@@ -79,7 +79,7 @@ async function loadSessions(): Promise<Sessions | null> {
     return [...groups].map(([id, ts]) => {
       ts.sort((a, b) => ms(a) - ms(b));
       const input = ts[0].input;
-      return { id, project: ts[0].name || (ts[0].metadata?.cwd ? basename(String(ts[0].metadata.cwd)) : ""), firstPrompt: oneLine(typeof input === "string" ? input : JSON.stringify(input ?? ""), 120), turns: ts.length, last: ts.at(-1).timestamp as string };
+      return { id, project: ts[0].name || (ts[0].metadata?.cwd ? basename(String(ts[0].metadata.cwd)) : ""), firstPrompt: clip(typeof input === "string" ? input : JSON.stringify(input ?? ""), 120), turns: ts.length, last: ts.at(-1).timestamp as string };
     }).sort((a, b) => b.last.localeCompare(a.last)).slice(0, 10);
   } catch { return null; }
 }

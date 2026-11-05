@@ -18,6 +18,7 @@ import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
+import { clip } from "../../lib/naming.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 /** The issue number of a run, from `on` or old `todo`; a goal run "860.1" reads as 860. Undefined when the run has none. */
@@ -704,10 +705,3 @@ export const routes: Routes = {
     return Response.json({ ...d, baseline: cachedBaseline(w as Window, fit, project), others });
   },
 };
-
-/** `s` cut to at most `max` characters at a word end, with "…" when anything was cut. */
-function clip(s: string, max: number): string {
-  if (s.length <= max) return s;
-  const cut = s.slice(0, max - 1), sp = cut.lastIndexOf(" ");
-  return (sp > max / 2 ? cut.slice(0, sp) : cut).replace(/[\s.,;:]+$/, "") + "…";
-}

@@ -1,5 +1,6 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
 import { basename } from "node:path";
+import { clip } from "../../lib/naming.ts";
 import { LangfuseError, config, observations, traces } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
@@ -7,11 +8,6 @@ import { currentFit, share } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page
 import { systemParts } from "../system-parts.js";
 
-const line = (s: unknown, max: number) => {
-  const t = typeof s === "string" ? s : s == null ? "" : JSON.stringify(s);
-  const one = t.replace(/\s+/g, " ").trim();
-  return one.length > max ? one.slice(0, max) + "…" : one;
-};
 const cut = (s: unknown, max: number) => {
   const t = typeof s === "string" ? s : s == null ? "" : JSON.stringify(s);
   return t.length > max ? t.slice(0, max) + "…" : t;
@@ -95,14 +91,14 @@ export function argSummary(input: unknown, max = 100): string {
   const o = inputObject(input);
   if (o) {
     const key = ARG_KEYS.find((k) => typeof o[k] === "string" && o[k]) ?? Object.keys(o).find((k) => typeof o[k] === "string" && o[k]);
-    return key ? line(o[key], max) : line(o, max);
+    return key ? clip(text(o[key]), max) : clip(text(o), max);
   }
   const s = text(input);
   for (const k of ARG_KEYS) {
     const m = s.match(new RegExp(`"${k}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`));
-    if (m) { try { return line(JSON.parse(`"${m[1]}"`), max); } catch { return line(m[1], max); } }
+    if (m) { try { return clip(text(JSON.parse(`"${m[1]}"`)), max); } catch { return clip(text(m[1]), max); } }
   }
-  return line(s, max);
+  return clip(text(s), max);
 }
 const pretty = (input: unknown) => { const o = inputObject(input); return o ? JSON.stringify(o, null, 2) : text(input); };
 
@@ -198,7 +194,7 @@ export async function listSessions(req: Request): Promise<Response> {
         id,
         ...(job ? { label: job.name } : {}),
         project: projectOf(ts[0]),
-        firstPrompt: line(firstTyped(ts), 160),
+        firstPrompt: clip(text(firstTyped(ts)), 160),
         turns: ts.length,
         start: ts[0].timestamp,
         last: ts[ts.length - 1].timestamp,
@@ -222,7 +218,7 @@ export const routes: Routes = {
         ...wkOf(fit, t.totalCost, modelOf(all[i])),
         traceId: t.id,
         start: t.timestamp,
-        prompt: line(t.input, 300),
+        prompt: clip(text(t.input), 300),
         output: cut(t.output, 400),
         tools: all[i].filter((o) => isType(o, "tool")).length,
         durationMs: durationMs(t),
