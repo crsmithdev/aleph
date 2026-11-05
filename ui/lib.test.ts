@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
+import { localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, idLink, pageHead, pager, sortHead, sectionHead, shortModel, when, chartTheme, barsOption, clock, cmd, diffHtml, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, tone, searchBox } from "./lib.js";
 
 test("md renders a heading, a list, code and a link", () => {
   const h = md("# Title\n\nSome `code` here.\n\n- one\n- [two](https://example.com/a?b=1&c=2)\n\n1. first\n2. second\n\n```\nx < y\n```");
@@ -144,4 +144,24 @@ test("when gives mm/dd hh:mm this year, YYYY-MM-DD another year, and '' for a ba
 test("pct shows whole percents, one decimal under 1%, <0.1% under 0.05 and – for none", () => {
   expect([null, undefined, NaN].map(pct)).toEqual(["–", "–", "–"]);
   expect([0.02, 0.5, 30, 2.5].map(pct)).toEqual(["<0.1%", "0.5%", "30%", "3%"]);
+});
+
+test("bar value labels have no outline in the dark or the light theme", async () => {
+  // @ts-ignore the vendored ECharts bundle has no types
+  const echarts = (await import("./vendor/echarts.min.js")).default;
+  const tokens = { surface: "#1b1b1f", rule: "#3a3a40", run: "#5b9bd5", done: "#60b060", need: "#e0a040", stuck: "#e05050", "chart-6": "#9070c0", "chart-7": "#40a0a0", sans: "sans" };
+  const themes = {
+    dark: { ...tokens, bg: "#111114", ink: "#e6e6e6" },
+    light: { ...tokens, bg: "#ffffff", ink: "#111114" },
+  };
+  for (const [name, t] of Object.entries(themes)) {
+    const ec = echarts.init(null, chartTheme(t), { renderer: "svg", ssr: true, width: 400, height: 300 });
+    ec.setOption(barsOption(["a", "b"], [{ name: "n", data: [1, 2] }], { labels: true }));
+    const svg: string = ec.renderToSVGString();
+    ec.dispose();
+    // Value labels sit centred over the bars; the axis labels are right-aligned, so they do not match.
+    const values = svg.match(/<text[^>]*text-anchor="middle"[^>]*>[12]<\/text>/g) ?? [];
+    expect(values.length, name).toBe(2);
+    for (const el of values) expect(el.includes(' stroke="') && !el.includes('stroke-width="0"'), name).toBe(false);
+  }
 });

@@ -544,7 +544,7 @@ export const barsOption = (labels, series, { labels: showValues = false } = {}) 
   xAxis: { type: "category", data: labels, axisTick: { show: false } },
   yAxis: { type: "value", minInterval: 1, splitLine: { show: true } },
   tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
-  series: series.map((s) => ({ type: "bar", barMaxWidth: 64, name: s.name, data: s.data, ...(s.color ? { itemStyle: { color: s.color } } : {}), ...(showValues ? { label: { show: true, position: "top", textBorderWidth: 0 } } : {}) })),
+  series: series.map((s) => ({ type: "bar", barMaxWidth: 64, name: s.name, data: s.data, ...(s.color ? { itemStyle: { color: s.color } } : {}), ...(showValues ? { label: { show: true, position: "top", textBorderWidth: 0, textBorderColor: "transparent" } } : {}) })),
 });
 /** The ECharts option for one line over categories, `area` filled. */
 export const lineOption = (labels, name, data, { interval = "auto", step = false, formatter, max } = {}) => ({
