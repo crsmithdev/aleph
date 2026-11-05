@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/gates object and returns an HTML
 // string, so tests can call them. The shell's click handler (index.html) runs the Pause and Resume buttons
 // and the Waiting-for-you buttons; `mount` runs the rule switches.
-import { badge, card, tag, dataTable, empty, esc, hashQuery, heads, chip, idLink, pageHead, sectionHead, statCard, tiles, when } from "../lib.js";
+import { badge, card, tag, dataTable, empty, esc, filterBar, goQuery, hashQuery, heads, chip, idLink, pager, pageHead, sectionHead, setQuery, statCard, tiles, when } from "../lib.js";
 import { askRow } from "./now.js";
 
 export const view = {
@@ -45,10 +45,12 @@ const modeLabel = (m) => MODES[m] ?? m.replace(/^./, (c) => c.toUpperCase());
 /** The log's actors, in filter order, with the badge tone of each. */
 export const BY = { You: "need", Rule: "done", Director: "parked", Firefighter: "stuck", Gate: "run" };
 
+const PAGE = 50;
+
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days` })}` +
     renderNow(d) + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
-    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by")) + `</div>`;
+    `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), Number(q.get("limit")) || PAGE) + `</div>`;
 }
 
 /** The environment variable that overrides each cap in caps.json. */
@@ -135,9 +137,9 @@ export function renderRules(d) {
     }
     const num = (n) => `<td class="num">${n}</td>`;
     const dec = r.decided, out = r.outcome;
-    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} rule, ${dec.director} director, ${dec.chris} Chris</td><td>${out.fixed} fixed, ${out.none} no change</td></tr>`;
+    return `<tr class="rule" data-reason="${esc(r.reason)}"><td class="rule-main"><b>${esc(name)}</b> <code>${esc(r.reason)}</code>${desc ? `<p class="quiet">${esc(desc)}</p>` : ""}</td><td>${control}${hint ? `<p class="hint">${esc(hint)}</p>` : ""}</td>${num(r.fired)}<td>${dec.rule} / ${dec.director} / ${dec.chris}</td><td>${out.fixed} / ${out.none}</td></tr>`;
   }).join("");
-  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who decides", "Fired", "Decided by", "Outcome"]), rows, { id: "rules-table" })}</section>`;
+  return `<section id="rules" aria-label="Rules">${sectionHead("Rules")}${dataTable(heads(["Rule", "Who decides", "Fired", "Decided by (rule / director / manual)", "Outcome (fixed / no change)"]), rows, { id: "rules-table" })}</section>`;
 }
 
 /** The held paths: the security paths of gate.ts (every repo) and the globs each repo names in the registry. Read-only. */
@@ -157,15 +159,17 @@ function itemLink(item) {
   return m ? idLink(item, `#/issues/${encodeURIComponent(m[1])}/${encodeURIComponent(m[2])}`) : esc(item || "–");
 }
 
-/** The log, newest first, filtered by `by` (you, rule, firefighter, gate) from the address. */
-export function renderLog(d, by) {
+/** The log, newest first, filtered by `by` (you, rule, firefighter, gate) from the address; `limit` rows show. */
+export function renderLog(d, by, limit = PAGE) {
   const pick = Object.keys(BY).find((k) => k.toLowerCase() === by) ?? "All";
-  const chips = ["All", ...Object.keys(BY)].map((k) => `<a class="fchip" href="#/automation${k === "All" ? "" : `?by=${k.toLowerCase()}`}"${k === pick ? ' aria-current="true"' : ""}>${esc(k)}</a>`).join("");
+  const filter = filterBar([{ name: "by", label: "By", value: pick === "All" ? "" : pick.toLowerCase(), options: [{ value: "", label: "All" }, ...Object.keys(BY).map((k) => ({ value: k.toLowerCase(), label: k }))] }]);
   const entries = d.log.entries.filter((e) => pick === "All" || e.by === pick);
-  const rows = entries.map((e) => `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td class="what">${esc(e.what)}${e.count ? ` <span class="quiet">×${e.count}</span>` : ""}</td></tr>`).join("");
-  return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}` +
-    `<nav class="fchips" aria-label="Filter the log">${chips}</nav>` +
-    (rows ? dataTable(heads(["When", "By", "Item", "What"]), rows) : empty("No entry in this window.")) + `</section>`;
+  const rows = entries.slice(0, limit).map((e) => {
+    const m = /^([^:]+): ([\s\S]*)$/.exec(e.what);
+    return `<tr><td class="time">${esc(e.count ? `${when(e.first)} – ${when(e.at)}` : when(e.at))}</td><td>${tag(e.by, BY[e.by])}</td><td>${itemLink(e.item)}</td><td>${m ? esc(m[1]) : "–"}</td><td class="what"><div class="dp-txt clamp">${esc(m ? m[2] : e.what)}</div></td><td class="num">${e.count || 1}</td></tr>`;
+  }).join("");
+  return `<section id="gates-log" aria-label="Log">${sectionHead("Log")}${filter}` +
+    (rows ? dataTable(heads(["When", "By", "Item", "Action", "What", "Times"], ["Times"]), rows) + pager(limit, entries.length, PAGE) : empty("No entry in this window.")) + `</section>`;
 }
 
 const post = (url, body) => fetch(url, { method: "POST", headers: { "X-Aleph-UI": "1", "content-type": "application/json" }, body: JSON.stringify(body ?? {}) });
@@ -200,6 +204,15 @@ export function mount(root) {
     await redraw(root);
   };
   root.onclick = async (e) => {
+    const seg = e.target.closest?.("#gates-log .seg button");
+    if (seg) return goQuery({ by: seg.dataset.value, limit: "" });
+    const more = e.target.closest?.("#gates-log button[data-more]");
+    if (more) {
+      setQuery({ limit: String((Number(hashQuery().get("limit")) || PAGE) + Number(more.dataset.more)) });
+      return redraw(root);
+    }
+    const txt = e.target.closest?.("#gates-log .dp-txt");
+    if (txt) return void txt.classList.toggle("clamp");
     const r = e.target.closest?.("button[data-rule]");
     if (r) {
       if (r.getAttribute("aria-pressed") === "true") return;

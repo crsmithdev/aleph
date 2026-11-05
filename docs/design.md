@@ -161,6 +161,8 @@ Rules, as the code states them (`ui/lib.js:289`, `ui/app.css:438`):
 - **Cells:** `white-space: nowrap`, padding `6px 12px 6px 0`, a `--rule-2` line under each row, and `--sunk` on row hover. Headers are `600 var(--fs-xs)` in `--muted`.
 - **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼`.
 - **Pager:** `pager()` shows "50 of 345" and "Show 50 more"; `PAGE` is 50 in `ui/views/issues.js:55` and `ui/views/jobs.js:56`.
+- **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` and shows the rest on click.
+- **Page length:** a table paginates at 50 rows with `pager()`.
 - **Wide tables:** `.tscroll` scrolls sideways.
 - **Empty table:** `empty()` in place of the table.
 

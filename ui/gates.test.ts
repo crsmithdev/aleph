@@ -204,9 +204,25 @@ test("gate catches are the builds a check or the reviewer sent back in the 7 day
 
 test("the log filter keeps one actor's entries", () => {
   const h = gates.renderLog(data(), "you");
-  expect(h).toContain('aria-current="true">You<');
-  expect(h).toContain("rescue: set to recommended");
+  expect(h).toMatch(/class="seg"[^>]*>.*aria-pressed="true">You</);
+  expect(h).not.toContain("fchip");
+  expect(h).toContain("<td>rescue</td>");
+  expect(h).toContain("set to recommended");
   expect(h).not.toContain("rescue: recommended<");
+  for (const t of ["When", "By", "Item", "Action", "What", "Times"]) expect(h).toContain(t);
+  expect(h).toContain('<div class="dp-txt clamp">');
+});
+
+test("renderLog shows 50 rows with a pager; a Gate run shows its count in Times", () => {
+  const e = (n: number): any => ({ at: new Date(NOW - n * 1000).toISOString(), by: "Rule", item: "x-1", what: `t${n}` });
+  const entries = Array.from({ length: 120 }, (_, i) => e(i));
+  entries[0] = { ...entries[0], by: "Gate", count: 3, first: entries[1].at };
+  const h = gates.renderLog({ log: { entries } } as any);
+  expect(h.match(/<tr>/g)!.length - 1).toBe(50);
+  expect(h).toContain("50 of 120");
+  expect(h).toContain("Show 50 more");
+  expect(h).toContain('<td class="num">3</td>');
+  expect(h).not.toContain("×3");
 });
 
 const withHolds = (rows: HoldRecord[], f: () => void) => {
@@ -276,14 +292,14 @@ test("the Caps section holds one form each for the live cap and the run cap, wit
   expect(gates.renderGates(data())).toContain("<h2>Controls</h2>");
 });
 
-test("the view is Automation at #/automation in the Factory group; #/gates redirects; the chips link to #/automation", () => {
+test("the view is Automation at #/automation in the Factory group; #/gates redirects; the By filter is buttons, not links", () => {
   expect(gates.view.path).toBe("/automation");
   expect(gates.view.title).toBe("Automation");
   expect(gates.view.group).toBe("factory");
   const h = gates.renderGates(data());
   expect(h).toContain("<h1>Automation</h1>");
   expect(h).not.toContain("<h1>Gates</h1>");
-  expect(h).toContain('href="#/automation?by=');
+  expect(h).not.toContain('href="#/automation?by=');
   expect(h).not.toContain("#/gates");
   expect(gates.redirect("#/gates")).toBe("#/automation");
   expect(gates.redirect("#/gates?by=director")).toBe("#/automation?by=director");
@@ -347,7 +363,8 @@ test("rules() counts each reason's Asks in the window by who decided them and wh
   expect(row.decided).toEqual({ rule: 2, director: 1, chris: 1 });
   expect(row.outcome).toEqual({ fixed: 1, none: 3 });
   const h = gates.renderRules({ rules: [row] });
-  for (const t of ["Fired", "Decided by", "Outcome", "<td class=\"num\">5</td>", "2 rule, 1 director, 1 Chris", "1 fixed, 3 no change"]) expect(h).toContain(t);
+  for (const t of ["Fired", "Decided by (rule / director / manual)", "Outcome (fixed / no change)", "<td class=\"num\">5</td>", "2 / 1 / 1", "1 / 3"]) expect(h).toContain(t);
+  expect(h).not.toContain("2 rule, 1 director, 1 Chris");
 });
 
 test("rules() takes an entry's missing reason from the run that awaited when it was set; with no such run the entry is not counted", () => {
