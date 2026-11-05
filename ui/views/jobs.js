@@ -1,7 +1,7 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { blockersHtml, bytes, chip, tag, costHtml, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, setQuery, shortModel, sortHead, span, WINDOW_DAYS, windowOf, when, wkText } from "../lib.js";
+import { blockersHtml, bytes, chip, tag, count, STATES, badge, cmd, crumb, dataTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, setQuery, shortModel, sortHead, span, WINDOW_DAYS, windowOf, when, wkText } from "../lib.js";
 import { barLabel, barsOf, costText, fold, fromTo, gaps, lifespan, panel, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
 
@@ -77,13 +77,13 @@ export function renderJobsTable(jobs, f = {}) {
   if (!all.length) return empty("No job matches.", "Widen the window or clear a filter.");
   const shown = all.slice(0, Math.max(PAGE, Number.parseInt(f.limit, 10) || PAGE)), sort = sortOf(f);
   const h = (label, key, c) => sortHead(label, key, sort, c);
-  // Columns: id, title, state, project, model, then took, cost, started.
+  // Columns: started, id, title, state, project, model, then took and cost: the Issues table's order.
   const rows = shown.map((j) => {
     const url = href(`/jobs/${encodeURIComponent(j.name)}`);
-    return `<tr class="rowlink"><td>${idLink(localId(j.name, j.repo), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.condition)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
-      `<td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td><td class="num">${j.cost !== undefined ? costHtml(j.cost, j.wk) : ""}</td><td class="time">${esc(when(j.started))}</td></tr>`;
+    return `<tr class="rowlink"><td class="time">${esc(when(j.started))}</td><td>${idLink(localId(j.name, j.repo), url)}</td><td class="wide" title="${esc(titleOf(j))}"><a href="${esc(url)}">${esc(titleOf(j))}</a></td><td>${badge(j.condition)}</td><td>${esc(j.repo)}</td><td>${esc(shortModel(j.model))}</td>` +
+      `<td class="num">${j.ended ? esc(span(j.started, j.ended)) : ""}</td><td class="num">${j.cost !== undefined ? esc(money(j.cost)) : ""}</td></tr>`;
   }).join("");
-  return dataTable(h("Job", "name") + h("Title", "title") + h("State", "condition") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }) + h("Started", "started"), rows) + pager(shown.length, all.length, PAGE);
+  return dataTable(h("Started", "started") + h("Job", "name") + h("Title", "title") + h("State", "condition") + h("Project", "repo") + h("Model", "model") + h("Took", "took", { num: true }) + h("Cost", "cost", { num: true }), rows) + pager(shown.length, all.length, PAGE);
 }
 
 /** Wire the state filter (it fetches again), the search, the sort and the pager; the last three redraw the table once `jobsNow()` gives the jobs. */

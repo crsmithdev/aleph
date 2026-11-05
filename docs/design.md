@@ -121,7 +121,7 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 | Kind | Format | Example | Helper | Missing |
 |---|---|---|---|---|
 | Absolute time | mm/dd hh:mm, 24-hour; `YYYY-MM-DD` in another year | 10/28 14:05 | `when()` (`ui/lib.js:300`) | empty string |
-| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:315`), `dateText()` (`ui/views/issues.js:208`) | empty string |
+| Day | month name and day; `YYYY-MM-DD` in another year | Oct 28 | `day()` (`ui/lib.js:315`), `dateText()` (`ui/views/issues.js:181`) | empty string |
 | Axis hour | 12-hour, `a` or `p` | 4a, 1:36p | `hourLabel()` (`ui/lib.js:309`), for a chart axis only | none |
 | Clock | 24-hour time | 14:05 | `clock()` | empty string |
 | Duration | seconds, minutes, hours; `durMs()` writes `850ms` under a second; `span()` in `ui/views/now.js` writes `2d4h` from 24 hours, a form `dur()` has no day for | 43s, 4m 05s, 1h 02m, 850ms | `dur()`, `durMs()`, `span()`, `elapsed()`; `lifespan()` (`ui/timeline.js:10`) for the timeline | `–` from `dur()`, empty from `durMs()` |
@@ -144,7 +144,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 |---|---|
 | `ui/lib.js` (`pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `dur`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
 | `ui/api/activity.ts:20`, `ui/api/speed.ts:477-478` | Local-day date arithmetic for bucket starts, not display. |
-| `getDate()` (`ui/views/issues.js:168`), `getDate()` (`ui/views/issues.js:262`), `getDate()` (`ui/views/issues.js:297`), `getDate()` (`ui/views/issues.js:301`), `getDate()` (`ui/views/issues.js:339`) | Local-day date arithmetic for windows and age bins, not display. |
+| `getDate()` (`ui/views/issues.js:141`), `getDate()` (`ui/views/issues.js:234`), `getDate()` (`ui/views/issues.js:269`), `getDate()` (`ui/views/issues.js:273`), `getDate()` (`ui/views/issues.js:311`) | Local-day date arithmetic for windows and age bins, not display. |
 | `toFixed()` (`ui/views/jobs.js:11`) | Rounds a window length to a stable number, not display. |
 | `style` (`ui/views/memory.js:189`), `style` (`ui/views/sessions.js:74`), `style` (`ui/views/session.js:148`), `ui/timeline.js:154`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
@@ -155,13 +155,13 @@ The one table is `dataTable()` (`ui/lib.js:523`) with `heads()` (`ui/lib.js:526`
 
 Rules, as the code states them (`ui/lib.js:523`, `ui/app.css:451`):
 
-- **Column order:** id or name, title, state badge, project, labels, numbers, time last.
+- **Column order:** time first in Issues and Jobs, then id or name, title, state badge, project, labels, numbers; the other tables still put the time last.
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:457`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:463`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `6px 12px 6px 0`, a `--rule-2` line under each row, and `--sunk` on row hover. Headers are `600 var(--fs-xs)` in `--muted`.
 - **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼`.
-- **Pager:** `pager()` shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:56`) and `PAGE` (`ui/views/jobs.js:45`).
-- **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:879`) and shows the rest on click.
+- **Pager:** `pager()` shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
+- **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:871`) and shows the rest on click.
 - **Page length:** a table paginates at 50 rows with `pager()`.
 - **Wide tables:** `.tscroll` (`ui/app.css:475`) scrolls sideways.
 - **Empty table:** `empty()` in place of the table.
@@ -170,8 +170,8 @@ Columns of the main tables:
 
 | Table | Columns, in order | Source |
 |---|---|---|
-| Issues | Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num), Updated, (actions) | `dataTable()` (`ui/views/issues.js:243`) |
-| Jobs | Job, Title, State, Project, Model, Took (num), Cost (num), Started | `dataTable()` (`ui/views/jobs.js:86`) |
+| Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` (`ui/views/issues.js:215`) |
+| Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` (`ui/views/jobs.js:86`) |
 | Sessions | Session, First Prompt, Project, Kinds, Turns (num), Cost (num), Started, Last | `dataTable()` (`ui/views/sessions.js:120`) |
 | Memory notes | Title, Kind, Scope, Read, Written, Status | `dataTable()` (`ui/views/memory.js:263`) |
 | Turns of a session | Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num), Started | `dataTable()` (`ui/views/session.js:23`) |
@@ -182,9 +182,9 @@ Columns of the main tables:
 | Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:210`) |
-| Commits | Commit, Subject, Part, Date | `dataTable()` (`ui/views/issues.js:680`) |
+| Commits | Commit, Subject, Part, Date | `dataTable()` (`ui/views/issues.js:640`) |
 
-Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Row actions sit in the last column in the Issues table (`act`) and are absent elsewhere. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:498`) over the table.
+Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. No table has a row action column. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:498`) over the table.
 
 ## Charts and data displays
 
@@ -194,9 +194,9 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `cha
 - **Bars:** `barsOption()` (`ui/lib.js:541`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `barsOption()` (`ui/views/factory-agents.js:88`).
 - **Stacked areas:** `stackedAreaOption()` (`ui/lib.js`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `stackedAreaOption()` (`ui/views/factory-agents.js:65`).
 - **Range bars:** `rangeBarOption()` (`ui/lib.js`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
-- **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: a p50 and p90 line per bucket, a log-time strip with one dot per issue linking to the issue, and the 10 slowest issues as stacked bars of intake, queue, build and land. Each chart box has `role="img"` and an `aria-label` that states its data.
+- **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: p50 and p90 areas per bucket, with 0 for a bucket with no time; a strip with one dot per issue linking to the issue, on a base-60 log time axis that starts at 1m unless a time is under a minute; and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue, each linking to the issue (for Lead Time an issue has a row per slow stage). Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Agents page:** three charts of the same height in one row (`liveOption`, `outcomesOption`, `costOption` in `ui/views/factory-agents.js`), drawn by `chart()` with the theme tokens: live agents by role as a stacked area, one series per timed role in `--series-1` to `--series-5`; outcomes by role as stacked horizontal bars of succeeded, failed and stuck; and cost by model as stacked columns per bucket, from `buckets[].cost` in `/api/speed`. Each chart box has `role="img"` and an `aria-label` that states its data.
-- **Alerts section (Status page):** one section, "Alerts", holds the Asks and the stuck, failed and error cards. Each card has the Ask card structure (`ask-box` with the meta row, then the fold, then the buttons); a stuck, failed or error card uses the red `unstick` tone. The id, priority, date and runtime sit inside the box and show while the fold is closed. The status line links `#awaiting` (Asks) and `#jobs-stuck` (stuck jobs) point at the two lists of the section.
+- **Alerts section (Status page):** one section, "Alerts", holds the Asks and the stuck, failed and error cards. The cards are one full-width column, as the Asks are. Each card has the Ask card structure (`ask-box` with the meta row, then the fold, then the buttons); a stuck, failed or error card uses the red `unstick` tone. The id, priority, date and runtime sit inside the box and show while the fold is closed. The status line links `#awaiting` (Asks) and `#jobs-stuck` (stuck jobs) point at the two lists of the section.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:23`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month.
 - **Bar lists:** `barRow()` (`ui/lib.js:532`) and `barList()` (`ui/lib.js:538`): label, bar, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:350`) and `priorityBadge()` (`ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
@@ -302,7 +302,7 @@ Reference view = the view that follows the rules best.
 | Chart | `chart()`, `barsOption()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
-| Pager | `pager()` | `pager()` (`ui/views/issues.js:243`) |
+| Pager | `pager()` | `pager()` (`ui/views/issues.js:215`) |
 | Empty state | `empty()` | `empty()` (`ui/views/jobs.js:77`) |
 
 Cards with their own markup, because `card()` would add a heading or change the element:
@@ -322,7 +322,7 @@ Use:
 - `--fs-xs`, `--fs-sm`, `--fs-md`, `--fs-lg` for font sizes, and `--r-card`, `--r-ctl`, `--r-tag` for radii;
 - `when()`, `day()`, `hourLabel()`, `clock()`, `dur()`, `durMs()`, `money()`, `count()`, `pct()` for times, durations, costs, counts and percents;
 - `dataTable()` with `heads()` or `sortHead()` for a table, `empty()` for an empty state, and `badge()` for a state;
-- the column order id or name, title, state, project, labels, numbers, time;
+- the column order time (first in Issues and Jobs), id or name, title, state, project, labels, numbers;
 - `--sp-*` for `gap`, `padding` and `margin`, and, until their tokens land, `opacity: .6` for a dimmed control, 28px for a control and 10px for a bar, as listed under Tokens.
 
 Never hard-code: a hex colour or shadow in CSS or in a view, a font size, radius or `z-index` in a literal, a breakpoint other than 720px and one wide width, or a date, number or duration format written inline.

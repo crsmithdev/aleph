@@ -46,6 +46,11 @@ export const today = (now = new Date()): string =>
   `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 export const minute = (now = new Date()): string =>
   `${today(now)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+/** Mark an item changed at `now`: `updated` is the day, `updated_time` the minute. */
+export function touch(item: { fm: Record<string, unknown> }, now = new Date()): void {
+  item.fm.updated = today(now);
+  item.fm.updated_time = minute(now);
+}
 
 /** The current time. `ALEPH_NOW` (anything `Date` parses) fixes it, for tests that cross days. */
 export const clock = (): Date => (nowOverride() ? new Date(nowOverride()!) : new Date());
@@ -182,7 +187,7 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   const item: Issue = {
     id: nextId(doc),
     title,
-    fm: { id: String(nextId(doc)), created: day, created_time: minute(o.now), updated: day, kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}) },
+    fm: { id: String(nextId(doc)), created: day, created_time: minute(o.now), updated: day, updated_time: minute(o.now), kind, priority: o.priority ?? "medium", source, areas, ...(o.tracker ? { tracker: "true" } : {}) },
     request: o.request ?? "",
     spec: o.spec ?? "",
     notes: [],
@@ -201,12 +206,12 @@ export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string
     id: issue.id,
     sub,
     title: o.title,
-    fm: { id: `${issue.id}.${sub}`, created: day, created_time: minute(o.now), updated: day, kind: (issue.fm.kind as string) ?? "task", priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
+    fm: { id: `${issue.id}.${sub}`, created: day, created_time: minute(o.now), updated: day, updated_time: minute(o.now), kind: (issue.fm.kind as string) ?? "task", priority: (issue.fm.priority as string) ?? "medium", source: issue.fm.source && issue.fm.source !== "chris" ? (issue.fm.source as Source) : "agent", after: o.after ?? [] },
     request: "",
     spec: o.spec,
     notes: [],
   };
-  issue.fm.updated = day;
+  touch(issue, o.now);
   doc.items.push(part);
   return part;
 }
@@ -215,7 +220,7 @@ export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string
 export function note(item: Issue, text: string, now = new Date()): string {
   const line = `- ${minute(now)}: ${text}`;
   item.notes.push(line);
-  item.fm.updated = today(now);
+  touch(item, now);
   return line;
 }
 
@@ -230,7 +235,7 @@ export function edit(item: Issue, change: { kind?: string; title?: string; reque
   if (change.priority !== undefined) item.fm.priority = change.priority;
   if (change.labels !== undefined) item.fm.labels = change.labels;
   if (change.areas !== undefined) item.fm.areas = change.areas;
-  item.fm.updated = today(now);
+  touch(item, now);
 }
 
 /** Close the issue as `next`, with why; `open` takes the closure off. A reopen also sets `since`: see `store.reopen`. */
@@ -250,7 +255,7 @@ export function setStatus(item: Issue, next: Status, now = new Date(), why?: str
     item.fm.closed_time = minute(now);
     if (why) item.fm.closed_why = why;
   }
-  item.fm.updated = today(now);
+  touch(item, now);
 }
 
 const refParts = (r: string): [number, number] => { const [n, k] = r.split("."); return [Number(n), k === undefined ? -1 : Number(k)]; };

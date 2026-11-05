@@ -91,6 +91,7 @@ describe("GET /api/issues", () => {
     const [r] = await getJson("/api/issues?repo=fac");
     expect(r).toMatchObject({ repo: "fac", title: "first goal", status: "open", priority: "medium", labels: [], after: [], notes: 0 });
     expect(r.updated).toBeTruthy();
+    expect(r.updatedTime === null || /^\d{4}-\d\d-\d\d \d\d:\d\d$/.test(r.updatedTime)).toBe(true);
     expect((await at("/api/issues?status=bogus")).status).toBe(400);
   });
 
@@ -213,11 +214,11 @@ describe("views", () => {
     expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="backlog"'));
     expect(h.indexOf('data-chart="backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
-    expect(ths(section(h, "issues-table"))).toEqual(["id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age", "updated", ""]);
+    expect(ths(section(h, "issues-table"))).toEqual(["updated", "id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age"]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
   });
 
-  test("issue rows: Id, Title, Stage, Project, Labels, Updated and an X on an open issue only", async () => {
+  test("issue rows: Updated first, then Id, Title, Stage, Project and Labels, and no X", async () => {
     const d = await getJson("/api/contents");
     const h = section(v.view.render(d, {}, new URLSearchParams("status=any")), "issues-table");
     expect(h).toContain('href="#/issues/fac/1"');
@@ -225,8 +226,8 @@ describe("views", () => {
     const rows = h.split("<tr class=\"rowlink").slice(1);
     const closed = rows.filter((r: string) => r.includes("plain task"));
     expect(closed).toHaveLength(1);
-    expect(closed[0]).not.toContain("data-cancel");
-    expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(true);
+    expect(rows.some((r: string) => r.includes("data-cancel"))).toBe(false);
+    expect(rows.every((r: string) => /^[^>]*><td class="time">/.test(r))).toBe(true);
     expect(closed[0]).toContain(">done</span>");
     expect(v.view.render(d, {}, new URLSearchParams())).toContain("File an issue");
   });
@@ -456,7 +457,6 @@ describe("views", () => {
     ] });
     const [, goal] = rows;
     expect(goal).toMatchObject({ id: "fac-910.1", href: "#/issues/fac/910.1", part: true });
-    expect(v.dropTarget(goal).url).toBe("/api/issues/fac/910.1/drop");
     expect(v.renderRow(goal)).toContain("part-row");
     expect(v.sortRows(rows, { key: "id", dir: -1 })[0]).toBe(goal);
   });
@@ -766,5 +766,32 @@ describe("exact times in the Hour window", () => {
     ] });
     expect(v.stats(rows, now, 1 / 24)).toMatchObject({ filed: 2, closed: 2 });
     expect(v.stats(rows, now, 1)).toMatchObject({ filed: 3, closed: 3 });
+  });
+});
+
+describe("the Updated time", () => {
+  const item = (fm: Record<string, unknown>, notes: string[] = []) => ({ id: 1, title: "t", fm, request: "", spec: "", notes }) as any;
+
+  test("updatedTime is updated_time, else the latest stamp on the updated day", async () => {
+    const { updatedTime } = await import("./api/issues.ts");
+    expect(updatedTime(item({ updated: "2026-11-03", updated_time: "2026-11-03 14:05" }))).toBe("2026-11-03 14:05");
+    expect(updatedTime(item({ updated: "2026-11-03", created_time: "2026-11-01 09:00" }, ["- 2026-11-03 08:10: a", "- 2026-11-03 16:40: b", "- 2026-11-02 23:00: c"]))).toBe("2026-11-03 16:40");
+    expect(updatedTime(item({ updated: "2026-11-03", created_time: "2026-11-01 09:00" }))).toBeNull();
+  });
+
+  test("updatedText gives when()'s form for a minute and the day without one; the sort uses the minute", () => {
+    const now = new Date();
+    const y = now.getFullYear();
+    expect(v.updatedText({ at: `${y}-11-03`, atTime: `${y}-11-03 14:05` })).toBe("11/03 14:05");
+    expect(v.updatedText({ at: `${y}-11-03`, atTime: null })).toBe("11/03");
+    expect(v.updatedText({ at: null, atTime: null })).toBe("");
+    const rows = [{ at: `${y}-11-03`, atTime: `${y}-11-03 08:00` }, { at: `${y}-11-03`, atTime: `${y}-11-03 17:00` }];
+    expect(v.sortRows(rows, { key: "updated", dir: -1 })[0]).toBe(rows[1]);
+  });
+
+  test("a write sets updated and updated_time", () => {
+    const i = item({ updated: "2026-01-01" });
+    todos.note(i, "hi", new Date(2026, 10, 5, 9, 7));
+    expect([i.fm.updated, i.fm.updated_time]).toEqual(["2026-11-05", "2026-11-05 09:07"]);
   });
 });

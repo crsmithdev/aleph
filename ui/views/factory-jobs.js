@@ -21,46 +21,61 @@ const stageTile = ([key, name], d, day, on) => {
 
 const axis = { axisLabel: { formatter: (v) => durShort(v) } };
 
-/** The p50 and p90 of a stage by bucket, two lines. */
+/** The p50 and p90 of a stage by bucket, two areas; a bucket with no time is 0. The p90 is drawn first, so the p50 sits on top. */
 export const trendOption = (d, key, t) => ({
   animation: false,
   grid: { left: 48, right: 16, top: 28, bottom: 20 },
   legend: { top: 0, right: 0 },
-  tooltip: { trigger: "axis", confine: true, valueFormatter: (v) => (v == null ? "–" : dur(v)) },
-  xAxis: { type: "category", data: d.buckets.map((b) => xLabel(b.at, d.window)), axisTick: { show: false }, axisLabel: { hideOverlap: true } },
+  tooltip: { trigger: "axis", confine: true, valueFormatter: (v) => (v ? dur(v) : "–") },
+  xAxis: { type: "category", boundaryGap: false, data: d.buckets.map((b) => xLabel(b.at, d.window)), axisTick: { show: false }, axisLabel: { hideOverlap: true } },
   yAxis: { type: "value", min: 0, splitLine: { lineStyle: { opacity: 0.5 } }, ...axis },
   series: [
-    { type: "line", name: "p50", color: t.run, data: d.buckets.map((b) => b[key]), lineStyle: { width: 2 } },
-    { type: "line", name: "p90", color: t.hot, data: d.buckets.map((b) => b.p90?.[key] ?? null), lineStyle: { width: 2 } },
+    { type: "line", name: "p90", color: t.hot, symbol: "none", data: d.buckets.map((b) => b.p90?.[key] ?? 0), lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.2 } },
+    { type: "line", name: "p50", color: t.run, symbol: "none", data: d.buckets.map((b) => b[key] ?? 0), lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.35 } },
   ],
 });
 
-/** One dot per issue with a time for the stage, on a log time axis and coloured by outcome. A dot's `href` is its issue. */
+/**
+ * One dot per issue with a time for the stage, coloured by outcome. The time is on the horizontal log axis in base 60, so
+ * the ticks fall on 1s, 1m and 1h; it starts at 1m unless a time is under a minute. The height of a dot only spreads the
+ * dots apart. The axis ends at half again the longest time. A dot's `href` is its issue.
+ */
 export const stripOption = (d, key, t) => ({
   animation: false,
   grid: { left: 8, right: 16, top: 28, bottom: 24 },
   legend: { top: 0, right: 0 },
   tooltip: { confine: true, formatter: (p) => `${esc(p.data.id)}: ${esc(dur(p.value[0]))}` },
-  xAxis: { type: "log", min: 1, ...axis },
+  xAxis: { type: "log", logBase: 60, min: (v) => (v.min >= 60 ? 60 : 1), max: (v) => v.max * 1.5, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
   yAxis: { type: "value", min: 0, max: 1, show: false },
   series: [["landed", t.done], ["unlanded", t.need]].map(([outcome, color]) => ({
     type: "scatter", name: outcome, color, symbolSize: 9,
-    // The height of a dot only spreads the dots apart.
     data: (d.times ?? []).filter((i) => i.outcome === outcome && i[key] > 0).map((i, n) => ({ value: [i[key], ((n * 0.618) % 1) * 0.8 + 0.1], id: i.id, href: i.href })),
   })),
 });
 
-/** The 10 slowest issues of a stage, slowest first: one stacked bar each of its intake, queue, build and land seconds. */
+/**
+ * The 10 slowest stages of an issue: for Lead Time, any of intake, queue, build and land, so an issue with two slow
+ * stages has two rows; for another stage, that stage. Ordered by stage, then by issue. Each row is `{ id, href, k, name, secs, label }`.
+ */
+export function slowest(d, key) {
+  const parts = key === "lead" ? PARTS : PARTS.filter(([k]) => k === key);
+  const order = (k) => PARTS.findIndex(([p]) => p === k);
+  return (d.times ?? []).flatMap((i) => parts.filter(([k]) => i[k] > 0).map(([k, name]) => ({ id: i.id, href: i.href, k, name, secs: i[k], label: key === "lead" ? `${i.id} ${name}` : i.id })))
+    .sort((a, b) => b.secs - a.secs).slice(0, 10)
+    .sort((a, b) => order(a.k) - order(b.k) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+}
+
+/** The slowest rows as bars, one series per stage so each stage has its colour. A bar or label click opens the issue. */
 export const slowestOption = (d, key) => {
-  const top = (d.times ?? []).filter((i) => i[key] > 0).sort((a, b) => b[key] - a[key]).slice(0, 10);
+  const top = slowest(d, key), parts = PARTS.filter(([k]) => top.some((r) => r.k === k));
   return {
     animation: false,
-    grid: { left: 8, right: 16, top: 28, bottom: 24, containLabel: true },
+    grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
     legend: { top: 0, right: 0 },
-    tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" }, valueFormatter: (v) => dur(v) },
-    xAxis: { type: "value", ...axis },
-    yAxis: { type: "category", inverse: true, data: top.map((i) => i.id), axisTick: { show: false } },
-    series: PARTS.map(([k, name]) => ({ type: "bar", stack: "total", name, barMaxWidth: 20, data: top.map((i) => i[k] ?? 0) })),
+    tooltip: { trigger: "item", confine: true, formatter: (p) => `${esc(p.name)}: ${esc(dur(p.value))}` },
+    xAxis: { type: "value", splitNumber: 3, axisLabel: { formatter: (v) => durShort(v), hideOverlap: true } },
+    yAxis: { type: "category", inverse: true, data: top.map((r) => r.label), axisTick: { show: false }, axisLabel: { interval: 0 }, triggerEvent: true },
+    series: parts.map(([k, name]) => ({ type: "bar", stack: "one", name, barMaxWidth: 20, cursor: "pointer", data: top.map((r) => (r.k === k ? { value: r.secs, href: r.href } : null)) })),
   };
 };
 
@@ -79,7 +94,7 @@ export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
     `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p><div class="chartbox" data-chart="trend" role="img" aria-label="${esc(label(d, key, sentence(name), "p50 and p90 trend"))}"></div>`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
     card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome.</p><div class="chartbox" data-chart="strip" role="img" aria-label="${esc(label(d, key, sentence(name), "time per issue"))}"></div>`, { label: `${sentence(name)}: time per issue` }) +
-    card("Slowest 10", `<p>Intake, queue, build and land of the slowest issues.</p><div class="chartbox" data-chart="slowest" role="img" aria-label="${esc(label(d, key, sentence(name), "slowest 10"))}"></div>`) + `</div>` +
+    card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p><div class="chartbox" data-chart="slowest" role="img" aria-label="${esc(label(d, key, sentence(name), "slowest 10"))}"></div>`) + `</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Runs", "p50", "p90"], ["Runs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
     card("Build Time by Model", table(["Model", "Runs", "p50"], ["Runs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
@@ -124,6 +139,10 @@ export const view = {
       for (const el of root.querySelectorAll(".chartbox")) {
         const c = chart(el, opts[el.dataset.chart]);
         if (el.dataset.chart === "strip") c.on("click", (p) => { if (p.data?.href) location.hash = p.data.href; });
+        if (el.dataset.chart === "slowest") {
+          const top = slowest(d, key);
+          c.on("click", (p) => { const h = p.data?.href ?? (p.componentType === "yAxis" ? top.find((r) => r.label === p.value)?.href : null); if (h) location.hash = h; });
+        }
         drawn.push(c);
       }
     };

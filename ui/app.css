@@ -783,15 +783,7 @@ tr.rowlink { position: relative; }
 tr.rowlink td.wide a { color: inherit; text-decoration: none; }
 tr.rowlink td.wide a::after { content: ""; position: absolute; inset: 0; }
 tr.rowlink:hover td.wide a, tr.rowlink td.wide a:focus-visible { text-decoration: underline; }
-tr.rowlink a.idl, tr.rowlink td.drop { position: relative; z-index: var(--z-rowlink); }
-table.tbl td.drop { width: 28px; padding: 0; text-align: right; }
-.cancel { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--r-tag); color: var(--muted); cursor: pointer; }
-.cancel svg { width: 14px; height: 14px; pointer-events: none; }
-.cancel:hover, .cancel.arm { color: var(--stuck); background: var(--rule-2); }
-.cancel:focus-visible { color: var(--stuck); outline: 2px solid currentColor; outline-offset: 1px; }
-.cancel[disabled] { opacity: .5; cursor: default; }
-.cmsg { position: absolute; right: 30px; top: 50%; transform: translateY(-50%); font: var(--fs-xs) var(--sans); color: var(--muted); background: var(--bg); white-space: nowrap; }
-.cmsg.err { color: var(--stuck); }
+tr.rowlink a.idl { position: relative; z-index: var(--z-rowlink); }
 mark { color: inherit; background: var(--need-bg); border-radius: var(--r-hair); }
 .unused { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
 .unused a { font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); border: 1px solid var(--rule); border-radius: var(--r-tag); padding: 1px var(--sp-6); text-decoration: none; }
@@ -954,7 +946,8 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .lane-card > .ih > * { line-height: 1; align-self: center; }
 .cards > .job-card.small.lane-card { border-left: 4px solid var(--rule); }
 .cards > .job-card.small.lane-card.kind-land { border-left-color: var(--done); }
-.job-card.small .ih > .blocked { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--fs-xs); color: var(--ink); }
+.cards > .job-card.small.lane-card.kind-worker { border-left-color: var(--run); }
+.job-card.small .ih > .blocked { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 .lane-card .blockers { margin-top: var(--sp-6); font-size: var(--fs-sm); }
 @container (max-width: 420px) {
   .job-card.small .ih { gap: var(--sp-4); }
@@ -1043,5 +1036,7 @@ ul.logs .step { margin: var(--sp-6) 0; }
 @media (max-width: 720px) { .issue-row[data-card]:has(.ask-fold[open]) .choice { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); } }
 .tbl td.bb { width: 40%; }
 .tbl td.bb > i { display: block; height: 10px; min-width: 1px; background: var(--muted); border-radius: 0 var(--r-hair) var(--r-hair) 0; }
-.vbar { display: inline-block; width: 40px; margin-right: var(--sp-6); vertical-align: middle; }
+/* A number cell with a bar: the bar starts at the cell's left edge, the number stays right-aligned. */
+.vpair { display: flex; align-items: center; gap: var(--sp-6); }
+.vpair > .vbar { flex: none; width: 40px; margin-right: auto; }
 .vbar > i { display: block; height: 8px; min-width: 1px; background: var(--muted); border-radius: 0 var(--r-hair) var(--r-hair) 0; }

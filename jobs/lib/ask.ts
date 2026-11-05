@@ -302,7 +302,7 @@ export function askPartDropped(key: string, issue: issues.Issue, question: strin
     ],
     why: [],
   });
-  issue.fm.updated = issues.today();
+  issues.touch(issue);
 }
 
 // Actions.

@@ -37,22 +37,27 @@ test("three chart boxes in one row replace the old cards, each says its data for
   expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time: p50 and p90 by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
   expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead time: p50 and p90 by day", "Lead time: time per issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
   const o = stripOption(D, "queue", { done: "D", need: "N" });
-  expect(o.xAxis.type).toBe("log");
+  expect([o.xAxis.type, o.xAxis.logBase, o.xAxis.min({ min: 20 }), o.xAxis.min({ min: 60 })]).toEqual(["log", 60, 1, 60]);
   const pts = o.series.flatMap((s: any) => s.data);
   expect(pts.map((p: any) => [p.id, p.href, p.value[0]]).sort()).toEqual([["fx-1", "#/issues/fx/1", 600], ["fx-2", "#/issues/fx/2", 300], ["fx-3", "#/issues/fx/3", 20]]);
   expect(o.series.map((s: any) => s.color)).toEqual(["D", "N"]);
-  expect(trendOption(D, "queue", { run: "R", hot: "H" }).series.map((s: any) => s.data)).toEqual([[200, 100], [900, 400]]);
+  expect(trendOption(D, "queue", { run: "R", hot: "H" }).series.map((s: any) => [s.name, s.data, !!s.areaStyle])).toEqual([["p90", [900, 400], true], ["p50", [200, 100], true]]);
+  expect(trendOption(D, "lead", { run: "R", hot: "H" }).series.map((s: any) => s.data)).toEqual([[3000, 0], [1000, 0]]);
 });
 
-test("Slowest 10 holds at most 10 issues, slowest first, with Intake, Queue, Build and Land stacked to the issue's total", () => {
-  const many = { ...D, times: Array.from({ length: 12 }, (_, i) => ({ id: `fx-${i}`, href: "", outcome: "landed", intake: 1, queue: 2, implement: 100 + i, land: 3, lead: 106 + i })) };
+test("Slowest 10 holds the 10 slowest stages, by stage then by issue; for Lead Time an issue has a row per slow stage", () => {
+  const many = { ...D, times: Array.from({ length: 12 }, (_, i) => ({ id: `fx-${i}`, href: `#/issues/fx/${i}`, outcome: "landed", intake: 1, queue: i === 3 ? 500 : 2, implement: 100 + i, land: 3, lead: 106 + i })) };
   const o = slowestOption(many, "lead");
-  expect(o.yAxis.data).toEqual(["fx-11", "fx-10", "fx-9", "fx-8", "fx-7", "fx-6", "fx-5", "fx-4", "fx-3", "fx-2"]);
-  expect(o.series.map((s: any) => [s.name, s.stack])).toEqual([["Intake", "total"], ["Queue", "total"], ["Build", "total"], ["Land", "total"]]);
-  expect(o.yAxis.data.map((_: string, n: number) => o.series.reduce((a: number, s: any) => a + s.data[n], 0))).toEqual(many.times.slice(2).reverse().map((i: any) => i.lead));
+  expect(o.yAxis.data).toEqual(["fx-3 Queue", "fx-3 Build", "fx-4 Build", "fx-5 Build", "fx-6 Build", "fx-7 Build", "fx-8 Build", "fx-9 Build", "fx-10 Build", "fx-11 Build"]);
+  expect(o.yAxis.axisLabel.interval).toBe(0);
+  expect(o.series.map((s: any) => [s.name, s.stack])).toEqual([["Queue", "one"], ["Build", "one"]]);
+  expect(o.series[0].data[0]).toEqual({ value: 500, href: "#/issues/fx/3" });
+  expect(o.series[1].data[0]).toBeNull();
+  expect(o.series[1].data[1]).toEqual({ value: 103, href: "#/issues/fx/3" });
   const q = slowestOption(D, "queue");
   expect(q.yAxis.data).toEqual(["fx-1", "fx-2", "fx-3"]);
-  expect(q.series[3].data).toEqual([200, 0, 30]);
+  expect(q.series.map((s: any) => s.name)).toEqual(["Queue"]);
+  expect(q.series[0].data.map((x: any) => x.value)).toEqual([600, 300, 20]);
 });
 
 test("empty phases show dashes and no error", () => {

@@ -42,7 +42,7 @@ function setAfter(repo: store.Place, doc: issues.Doc, i: issues.Issue, after: st
   checkAfter(after);
   for (const r of after) if (r.startsWith(`${repo.key}-`) && !issues.find(doc, r.slice(repo.key.length + 1))) refuse(`--after ${r} names no issue`);
   i.fm.after = after;
-  i.fm.updated = issues.today();
+  issues.touch(i);
 }
 
 /** The repo's list in the work store; a refusal when the store has none or the fetch fails. */

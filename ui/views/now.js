@@ -47,7 +47,7 @@ const pctOf = (n) => (n === null ? "-" : `${Math.round(n * 100)}%`);
 const TRAIL = { stages: "Trailing 7 days", holds: "Mean per day over the trailing 7 days" };
 /** A cell: the day's value, a bar scaled to the table's largest day value (`max`, null for no bar), and the trailing 7 days in the tooltip. */
 const pairCell = (p, f, max, tip) =>
-  `<td class="num" title="${esc(`${tip}: ${f(p.trailing)}`)}">${max === null ? "" : `<span class="vbar"><i style="width:${max > 0 ? ((p.day ?? 0) / max * 100).toFixed(1) : 0}%"></i></span>`}${f(p.day)}</td>`;
+  `<td class="num" title="${esc(`${tip}: ${f(p.trailing)}`)}">${max === null ? f(p.day) : `<span class="vpair"><span class="vbar"><i style="width:${max > 0 ? ((p.day ?? 0) / max * 100).toFixed(1) : 0}%"></i></span>${f(p.day)}</span>`}</td>`;
 
 /** The rows by `sort` ({key, dir}), at most 10. `cols` maps a sort key to the row's value. */
 function sorted(rows, cols, sort) {
@@ -296,7 +296,7 @@ export function renderNeeds(s) {
   if (!asks.length && !s.stuck.length) return "";
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
   return `<section id="needs" class="needs" aria-labelledby="h-needs"><div class="sh"><h2 id="h-needs">Alerts</h2><span class="count">${asks.length + s.stuck.length}</span></div>` +
-    group("awaiting", asks.length, asks.join(""), list) + group("jobs-stuck", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), cards) + `</section>`;
+    group("awaiting", asks.length, asks.join(""), list) + group("jobs-stuck", s.stuck.length, s.stuck.map(stuckRow(s)).join(""), list) + `</section>`;
 }
 
 /** How long past due a next tick may be before the tick counts as dead: covers an old state and a late timer. */

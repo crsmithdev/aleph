@@ -6,33 +6,6 @@ import { barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeS
 import { askRow } from "./now.js";
 import { barsOf, costText, fold, fromTo, gaps, lifespan, localMs, noteEvent, renderKpis, renderTimeline, spans, timeText, waitEvent } from "../timeline.js";
 
-export const X_ICON = `<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
-
-const CONFIRM_MS = 5000;
-/**
- * The X's two clicks: the first arms the button, the second within 5 s sends `target`
- * ({ url, body }); `done(json)` runs on success, the error shows in the row's `msg` cell.
- */
-export async function confirmCancel(btn, msg, target, done) {
-  if (!btn.dataset.armed) {
-    btn.dataset.armed = "1"; btn.title = "Click again to confirm"; btn.classList.add("arm"); msg.textContent = "";
-    setTimeout(() => { if (!btn.isConnected || btn.dataset.sent) return; delete btn.dataset.armed; btn.title = "Stop or drop"; btn.classList.remove("arm"); }, CONFIRM_MS);
-    return;
-  }
-  if (btn.dataset.sent) return;
-  btn.dataset.sent = "1"; btn.disabled = true; msg.className = "cmsg"; msg.textContent = "Cancelling…";
-  try {
-    const res = await fetch(target.url, { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify(target.body) });
-    const j = await res.json().catch(() => ({}));
-    const err = !res.ok ? (j.error ?? `HTTP ${res.status}`) : j.code ? (j.stderr || j.stdout || `aleph exited ${j.code}`).trim() : "";
-    if (err) throw new Error(err);
-    done(j);
-  } catch (x) {
-    delete btn.dataset.sent; delete btn.dataset.armed; btn.disabled = false; btn.title = "Stop or drop"; btn.classList.remove("arm");
-    msg.className = "cmsg err"; msg.textContent = x?.message ?? String(x);
-  }
-}
-
 export const view = {
   path: "/issues",
   title: "Issues",
@@ -83,7 +56,7 @@ const dayMs = (s) => (/^\d{4}-\d\d-\d\d/.test(String(s ?? "")) ? Date.parse(`${S
 
 /** The issue rows from the API data. */
 export function issueRows(d) {
-  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, createdTime: r.createdTime ?? null, closed: r.closed ?? null, closedTime: r.closedTime ?? null, at: r.updated, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
+  return (d?.issues ?? []).map((r) => ({ status: r.status, id: ref(r), project: r.repo, title: r.title, kind: r.kind ?? "task", labels: r.labels ?? [], priority: r.priority ?? "medium", notes: r.notes ?? 0, runs: r.runs ?? 0, cost: r.cost ?? 0, created: r.created ?? null, createdTime: r.createdTime ?? null, closed: r.closed ?? null, closedTime: r.closedTime ?? null, at: r.updated, atTime: r.updatedTime ?? null, href: href(r), repo: r.repo, n: own(r), stage: r.stage ?? r.status, why: r.why ?? "", part: String(own(r)).includes(".") }));
 }
 
 // ---- Fuzzy search ----
@@ -180,11 +153,11 @@ export function filterRows(rows, o = {}, skip = []) {
 
 // ---- The table ----
 
-// Column order: id, title, state badge, project, labels, numbers, time last. [key, label, { num }]
-export const COLUMNS = [["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Runs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }], ["updated", "Updated"], ["act", ""]];
+// Column order: time, id, title, state badge, project, labels, numbers. [key, label, { num }]
+export const COLUMNS = [["updated", "Updated"], ["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Runs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }]];
 const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 const SORT = {
-  project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => dayMs(r.at),
+  project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => updatedMs(r),
   priority: (r) => RANK[r.priority] ?? 0, notes: (r) => r.notes, runs: (r) => r.runs, cost: (r) => r.cost, age: (r) => -dayMs(r.created),
 };
 /** The keys that start with the largest first. */
@@ -211,6 +184,13 @@ export function dateText(s, now = new Date()) {
   return day(new Date(t), now);
 }
 
+/** "YYYY-MM-DD HH:MM" from the store as ms, local time; NaN for none. */
+const minuteMs = (s) => Date.parse(String(s ?? "").replace(" ", "T"));
+/** When a row last changed, in ms: its minute, else its day. */
+const updatedMs = (r) => minuteMs(r.atTime) || dayMs(r.at);
+/** The Updated cell: the minute as `when()` gives it; with no minute in the store, only `when()`'s date ("10/27"). */
+export const updatedText = (r) => (Number.isNaN(minuteMs(r.atTime)) ? (dayMs(r.at) ? when(new Date(dayMs(r.at))).split(" ")[0] : "") : when(new Date(minuteMs(r.atTime))));
+
 /** The days since a store date, as "12d"; a closed issue counts to its closing. "" for none. */
 export function ageText(r, now = Date.now()) {
   const from = dayMs(r.created);
@@ -218,20 +198,12 @@ export function ageText(r, now = Date.now()) {
   return `${Math.max(0, Math.floor(((r.status === "open" ? now : dayMs(r.closed) || now) - from) / DAY))}d`;
 }
 
-/** The request an issue row's X sends, or null for a row that is not an open issue. */
-export function dropTarget(r) {
-  return r.status === "open" ? { url: `/api/issues/${encodeURIComponent(r.repo)}/${r.n}/drop`, body: { reason: "from the Inventory page" } } : null;
-}
-
-/** One issue row, a part indented under its parent, and the X. */
+/** One issue row; a part is indented under its parent. */
 export function renderRow(r) {
-  const x = dropTarget(r)
-    ? `<button type="button" class="cancel" data-cancel aria-label="Drop ${esc(r.id)}" title="Stop or drop">${X_ICON}</button>` : "";
-  return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td>${idLink(r.n, r.href)}</td>` +
+  return `<tr class="rowlink${r.part ? " part-row" : ""}" data-repo="${esc(r.repo)}" data-n="${r.n}"><td class="time">${esc(updatedText(r))}</td><td>${idLink(r.n, r.href)}</td>` +
     `<td class="wide"><a href="${esc(r.href)}">${markHits(r.title, r.hits)}</a></td>` +
     `<td title="${esc(r.why ?? "")}">${badge(r.stage ?? r.status)}</td><td>${esc(r.project)}</td><td>${priorityBadge(r.priority)}</td><td>${chip(r.kind ?? "task", { cls: "kind" })}${chips(r.labels)}</td>` +
-    `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td>` +
-    `<td class="time">${esc(dateText(r.at))}</td><td class="drop">${x}<span class="cmsg" role="status"></span></td></tr>`;
+    `<td class="num">${r.notes}</td><td class="num">${r.runs}</td><td class="num">${r.cost ? esc(money(r.cost)) : ""}</td><td class="num">${esc(ageText(r))}</td></tr>`;
 }
 
 export function renderTable(rows, o = {}) {
@@ -469,18 +441,6 @@ export async function mount(root, d) {
   onTile(root.querySelector?.("#inv-numbers"), (k) => {
     setQuery(TILE_FILTER[k]);
     root.querySelector(`button[data-tile="${k}"]`)?.focus();
-  });
-  const table = root.querySelector?.("#issues-table");
-  if (table) table.addEventListener("click", (ev) => {
-    const btn = ev.target.closest?.("button[data-cancel]");
-    const tr = btn?.closest("tr");
-    const r = tr && live.rows.find((x) => x.repo === tr.dataset.repo && String(x.n) === tr.dataset.n);
-    const target = r && dropTarget(r);
-    if (!target) return;
-    confirmCancel(btn, tr.querySelector(".cmsg"), target, (j) => {
-      r.status = j.status ?? "dropped";
-      refill();
-    });
   });
   const select = root.querySelector?.('select[name="repo"]');
   if (!select) return;
