@@ -75,6 +75,15 @@ test("stop ends a live run's process", async () => {
   expect(processState(e)).toBe("lost");
 });
 
+test("stop waits for a unit that wrote exit but still runs", async () => {
+  const e = entry("a");
+  await liveIn(e.folder);
+  markEnded(e.folder, 0);
+  expect(processState(e)).toBe("ended");
+  expect(await stop(e, 300)).toBe(true);
+  expect(unitAlive(e.folder)).toBe(false);
+});
+
 test("stop kills a process that ignores SIGTERM once the grace time is over, and returns only when it is gone", async () => {
   const e = entry("a");
   await liveIn(e.folder, "trap '' TERM;");

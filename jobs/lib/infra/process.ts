@@ -77,11 +77,11 @@ export async function waitForPid(folder: string, ms: number, gone: () => boolean
   return existsSync(join(folder, "pid"));
 }
 
-/** Wait up to `ms` for the run's process to go. True when it is gone. */
+/** Wait up to `ms` for the unit process to go. True when it is gone. */
 async function gone(folder: string, ms: number): Promise<boolean> {
   const deadline = Date.now() + ms;
-  while (isLive(folder) && Date.now() < deadline) await Bun.sleep(50);
-  return !isLive(folder);
+  while (unitAlive(folder) && Date.now() < deadline) await Bun.sleep(50);
+  return !unitAlive(folder);
 }
 
 /**
@@ -93,7 +93,7 @@ export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
   // The unit is `aleph-<subject>-<n>`, the folder name after its stamp; a run from before job IDs has no `n` and its unit has the whole folder name.
   Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.run.n === undefined ? e.id : e.id.slice(16)}`], { stdout: "ignore", stderr: "ignore" });
   const pid = pidOf(e.folder);
-  if (pid === null || !isLive(e.folder)) return true;
+  if (pid === null || !unitAlive(e.folder)) return true;
   const signal = (s: NodeJS.Signals) => { for (const p of [-pid, pid]) try { process.kill(p, s); } catch {} };
   signal("SIGTERM");
   if (await gone(e.folder, ms)) return true;
