@@ -134,7 +134,7 @@ describe("the Issue page", () => {
     expect(html).not.toContain('">docs/specs/gone.md</a>');
     expect(html).toContain('<div class="status-row"><span class="badge');
     expect(html).toContain('<h2 id="h-timeline">Timeline</h2>');
-    expect(html).toContain("<h3>Parts</h3>");
+    expect(html).toContain("<h3>Sub-issues</h3>");
     expect(html).not.toContain(base.derived.why);
     expect(html).not.toContain("<h2>Request</h2>");
     // Edit mode: each value and its editor sit in one place, and the controls belong to the one form.
@@ -146,9 +146,9 @@ describe("the Issue page", () => {
   test("the page shows the parts in the timeline, each linked to its job and its page, then the Request", async () => {
     const html = renderIssue(await getJson("/api/issues/fac/1"));
     const at = (t: string) => html.indexOf(t);
-    expect(at('id="h-request">Description<')).toBeGreaterThan(at("<h3>Parts</h3>"));
+    expect(at('id="h-request">Description<')).toBeGreaterThan(at("<h3>Sub-issues</h3>"));
     expect(at("Do three things.")).toBeGreaterThan(at('id="h-request"'));
-    const parts = html.slice(at("<h3>Parts</h3>"), at('id="h-request"'));
+    const parts = html.slice(at("<h3>Sub-issues</h3>"), at('id="h-request"'));
     for (const id of ["fac-1.1", "fac-1.2", "fac-1.3"]) expect(parts).toContain(`href="#/issues/fac/${id.slice(4)}"`);
     expect(parts).toContain('href="#/jobs/fac-1.2"');
     // A part with no job yet links its id to its own page.

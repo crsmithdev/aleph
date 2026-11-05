@@ -791,7 +791,7 @@ describe("priority badges", () => {
     const head = h.slice(h.indexOf('<div class="status-row">'), h.indexOf("</div>", h.indexOf('<div class="status-row">')));
     expect(head).toContain(">critical<");
     // A part's row in the timeline shows its priority when it is not medium.
-    const rows = h.slice(h.indexOf("<h3>Parts</h3>")).split('<div class="dp-row">');
+    const rows = h.slice(h.indexOf("<h3>Sub-issues</h3>")).split('<div class="dp-row">');
     expect(rows.find((r: string) => r.includes("hot part"))).toContain(">critical<");
     expect(rows.find((r: string) => r.includes("plain part"))).not.toContain(">medium<");
     const row = v.renderRow({ repo: "fac", n: 1, id: "fac-1", href: "#/issues/fac/1", title: "t", stage: "new", project: "fac", priority: "critical", labels: [], notes: 0, runs: 0, cost: 0, at: null });
@@ -892,4 +892,36 @@ test("the Issue page's notes show an issue id in its short form", () => {
   } finally {
     setCodes({});
   }
+});
+
+describe("the labels say sub-issue and job", () => {
+  /** The page's own labels: the table heads, the headings, and the tile and KPI keys. */
+  const labels = (h: string) => [
+    ...h.matchAll(/<th[^>]*>(?:<button[^>]*>)?([^<]*)/g),
+    ...h.matchAll(/<h[23][^>]*>([^<]*)</g),
+    ...h.matchAll(/<span class="(?:dp-)?k">([^<]*)</g),
+  ].map((m) => m[1]);
+  const OLD = /runs|goal|part/i;
+
+  test("the Issues page heads its job count Jobs, and no label keeps the old words", async () => {
+    const rows = await getJson("/api/issues?repo=fac");
+    const h = v.renderIssues({ issues: rows, projects: ["fac"] }, { tile: "runs" });
+    expect(h).toContain('<button type="button" data-sort="runs">Jobs');
+    expect(h).toContain("<h2>Issues by Jobs</h2>");
+    expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
+  });
+
+  test("the Issue page says Sub-issues and Sub-issues done, and no label keeps the old words", async () => {
+    const n = writeList({ key: "fac" }, "seed", (doc) => {
+      const i = add(doc, "label parent", { request: "Do it." });
+      addPart(doc, i, { title: "one", spec: "x" });
+      return i.id;
+    }, true)!.value;
+    run("20261104-120001-a", { job: `fac-${n}`, name: `fac-${n}`, repo: "fac", condition: "landed", on: `fac-${n}` });
+    const h = v.renderIssue(await getJson(`/api/issues/fac/${n}`));
+    expect(h).toContain("<h3>Sub-issues</h3>");
+    expect(h).toContain('<span class="dp-k">Sub-issues done</span>');
+    expect(h).toContain('<span class="dp-sub">1 job</span>');
+    expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
+  });
 });

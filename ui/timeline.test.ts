@@ -61,7 +61,7 @@ describe("the issue timeline", () => {
     ];
     const notes = ["- 2026-11-01 10:06: planner: split into fac-1.1, fac-1.2", "- 2026-11-01 10:25: its sub-issues are done"];
     const segs = issueSegments(issue({ goals: parts, notes, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } }));
-    expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Parts", 2], ["After the Parts", 1]]);
+    expect(segs.map((s: any) => [s.title, s.rows.length])).toEqual([["Before the Split", 1], ["Sub-issues", 2], ["After the Sub-issues", 1]]);
     const [before] = segs[0].rows, [one, two] = segs[1].rows, [after] = segs[2].rows;
     expect(before.bars.map((b: any) => b.label)).toEqual(["plan"]);
     expect(before.events.map((e: any) => e.tag)).toEqual(["waiting", "planner"]);
@@ -74,6 +74,14 @@ describe("the issue timeline", () => {
     expect(after.marks.map((m: any) => m.tone)).toEqual(["done"]);
     expect(after.events.map((e: any) => e.tag)).toEqual(["waiting", "note"]);
   });
+});
+
+test("the issue timeline heads the segment for its children Sub-issues", () => {
+  const parts = [{ id: "fac-1.1", title: "one", href: "#/issues/fac/1.1", stage: "done", jobs: [] }, { id: "fac-1.2", title: "two", href: "#/issues/fac/1.2", stage: "done", jobs: [] }];
+  const runs = [run("build", "2026-11-01T10:07:00Z", "2026-11-01T10:10:00Z", { name: "fac-1.1", on: "fac-1.1" }), run("build", "2026-11-01T10:16:00Z", "2026-11-01T10:20:00Z", { name: "fac-1.2", on: "fac-1.2" })];
+  const h = renderTimeline(issueSegments(issue({ goals: parts, timeline: { filed: Date.parse("2026-11-01T10:00:00Z"), runs } })));
+  expect(h).toContain("<h3>Sub-issues</h3>");
+  expect(h).toContain("<h3>After the Sub-issues</h3>");
 });
 
 describe("the event tags", () => {

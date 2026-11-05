@@ -153,7 +153,7 @@ export function filterRows(rows, o = {}, skip = []) {
 // ---- The table ----
 
 // Column order: time, id, title, state badge, project, labels, numbers. [key, label, { num }]
-export const COLUMNS = [["updated", "Updated"], ["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Runs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }]];
+export const COLUMNS = [["updated", "Updated"], ["id", "Id"], ["title", "Title"], ["stage", "Stage"], ["project", "Project"], ["priority", "Priority"], ["labels", "Labels"], ["notes", "Notes", { num: true }], ["runs", "Jobs", { num: true }], ["cost", "Cost", { num: true }], ["age", "Age", { num: true }]];
 const RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 const SORT = {
   project: (r) => r.project, stage: (r) => r.stage, id: (r) => String(r.n), title: (r) => r.title, labels: (r) => r.labels.join(","), updated: (r) => updatedMs(r),
@@ -262,7 +262,7 @@ export function renderTiles(s, key = "open", win = "week") {
     statCard({ k: "Filed", v: count(s.filed), trend: change(s.filed, s.filedBefore, w, true), note: `${s.filedBefore} the ${w} before`, ...on("filed") }) +
     statCard({ k: "Closed", v: count(s.closed), v2: count(s.dropped), q: ["closed", "dropped"], trend: change(s.closed, s.closedBefore, w, false), ...on("closed") }) +
     statCard({ k: "Open Age", v: days(s.medianAge), ...(s.oldest == null ? {} : { v2: days(s.oldest), q: ["open age", "oldest"] }), ...on("age") }) +
-    statCard({ k: "Runs", v: count(s.runs), v2: money(s.cost), q: ["runs", "recorded cost"], ...on("runs") }));
+    statCard({ k: "Jobs", v: count(s.runs), v2: money(s.cost), q: ["jobs", "recorded cost"], ...on("runs") }));
 }
 
 /** The window's buckets (60 minutes, 24 hours, 7 or 30 days): their labels and how many rows were filed and closed in each. A stored time counts to its minute; a row with only a day counts at the start of that day. */
@@ -355,7 +355,7 @@ const TOP_RUNS = 10;
 function renderDetail(rows, o) {
   if (o.tile === "runs") {
     const top = [...rows].filter((r) => !r.part && r.runs > 0).sort((a, b) => b.runs - a.runs).slice(0, TOP_RUNS), max = top[0]?.runs ?? 1;
-    return card("Issues by Runs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a run."), { label: "Issues by runs" });
+    return card("Issues by Jobs", top.length ? barList(top.map((r) => barRow(`<a href="${esc(r.href)}">${esc(r.title)}</a>`, (r.runs / max) * 100, `${r.runs} · ${esc(money(r.cost))}`)).join("")) : empty("No issue has a job."), { label: "Issues by jobs" });
   }
   return "";
 }
@@ -546,7 +546,7 @@ export function issueSegments(d, now = Date.now()) {
   // The hold records of a job name: why its waits waited.
   const holdsOf = (name) => (d.holds ?? []).filter((h) => h.name === name);
   if (!parts.length) {
-    return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no run yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes, holds: holdsOf(id) })] }];
+    return [{ title: "Work", rows: [laneRow({ head: headOf(kinds(all) || (open ? "no job yet" : d.status)), runs: all, from: filed, to: open ? (all.some((x) => x.r.condition === "running") ? NaN : now) : closed, marks, result: badge(state), events: notes, holds: holdsOf(id) })] }];
   }
   const ofPart = (g) => all.filter((x) => x.r.on === g.id), partRuns = parts.flatMap(ofPart);
   const first = partRuns.length ? Math.min(...partRuns.map((x) => x.start)) : Infinity;
@@ -555,14 +555,14 @@ export function issueSegments(d, now = Date.now()) {
   const done = parts.filter((g) => g.stage === "done").length;
   const segments = [
     { title: "Before the Split", rows: [laneRow({ head: headOf(kinds(before) || "filed"), runs: before, from: filed, marks: marks.filter((m) => m.tone === "made"), result: tag(`split in ${parts.length}`), events: notes.filter((n) => n.at < first), holds: holdsOf(id) })] },
-    { title: "Parts", aside: `${done} of ${parts.length} done`, rows: parts.map((g) => {
+    { title: "Sub-issues", aside: `${done} of ${parts.length} done`, rows: parts.map((g) => {
       const runs = ofPart(g);
       const job = g.jobs?.at(-1), p = g.priority && g.priority !== "medium" ? ` ${priorityBadge(g.priority)}` : "";
       return laneRow({ head: `<span>${idLink(localId(g.id, d.repo), job ? `#/jobs/${encodeURIComponent(job.name)}` : g.href)}${p}</span><a class="t" href="${esc(g.href)}" title="${esc(g.title)}">${esc(g.title)}</a>`, runs, from: split, to: runs.length || !open ? NaN : now, result: badge(g.stage), holds: holdsOf(job?.name) });
     }) },
   ];
   const later = notes.filter((n) => n.at >= first);
-  if (after.length || later.length || !open) segments.push({ title: "After the Parts", rows: [laneRow({ head: headOf(open ? kinds(after) : d.status), runs: after, from: lastPart, to: open ? NaN : closed, marks: marks.filter((m) => m.tone === "done"), result: badge(state), events: later, holds: holdsOf(id) })] });
+  if (after.length || later.length || !open) segments.push({ title: "After the Sub-issues", rows: [laneRow({ head: headOf(open ? kinds(after) : d.status), runs: after, from: lastPart, to: open ? NaN : closed, marks: marks.filter((m) => m.tone === "done"), result: badge(state), events: later, holds: holdsOf(id) })] });
   return segments;
 }
 
@@ -580,11 +580,11 @@ function issueKpis(d, segments, now = Date.now()) {
   const commits = d.commits ?? [];
   const sha = (c) => (c.commitUrl ? idLink(c.hash.slice(0, 7), c.commitUrl) : `<code>${esc(c.hash.slice(0, 7))}</code>`);
   return renderKpis([
-    parts.length ? { k: "Parts done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
+    parts.length ? { k: "Sub-issues done", v: esc(`${done} of ${parts.length}`), sub: esc(parts.filter((g) => g.stage !== "done").map((g) => `${localId(g.id, d.repo)} ${title(g.stage)}`).join(", ")) }
       : { k: "Stage", v: esc(d.derived?.stage ?? d.status), sub: "" },
     { k: open ? "Open for" : "Elapsed", v: esc(times.length ? dur((hi - lo) / 1000) : "–"), sub: times.length ? esc(fromTo(lo, hi)) : "" },
     { k: "Waiting", v: esc(times.length ? dur(waited / 1000) : "–"), sub: chris ? esc(`${dur(chris / 1000)} for your answer`) : "" },
-    { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 run" : `${runs} runs`) },
+    { k: "Cost", v: esc(costText(cost)), sub: esc(runs === 1 ? "1 job" : `${runs} jobs`) },
     { k: "Commits", v: commits.length ? commits.slice(0, 3).map(sha).join(" ") : "–", text: commits.length > 0, sub: commits.length > 3 ? esc(`${commits.length} on main`) : commits.length ? "on main" : "" },
   ]);
 }
@@ -619,7 +619,7 @@ export function renderIssue(d) {
   const notes = (d.notes.length ? (shown.length ? `<ul class="notes">${shown.map(noteRow).join("")}</ul>` : "") + machineNotes : empty("No notes.")) + renderNoteForm(d, ref);
   const parts = d.commits.some((c) => c.part);
   const commits = d.commits.length
-    ? pagedTable(heads(["Committed", "Commit", "Subject", ...(parts ? ["Part"] : [])]), d.commits.map((c) => {
+    ? pagedTable(heads(["Committed", "Commit", "Subject", ...(parts ? ["Sub-issue"] : [])]), d.commits.map((c) => {
       const sha = c.hash.slice(0, 7);
       return `<tr><td class="time">${esc(when(c.date))}</td><td>${c.commitUrl ? idLink(sha, c.commitUrl) : `<code>${esc(sha)}</code>`}</td><td class="wide" title="${esc(c.subject)}">${esc(c.subject)}</td>${parts ? `<td>${c.part ? idLink(localId(c.part, d.repo), `#/jobs/${encodeURIComponent(c.part)}`) : ""}</td>` : ""}</tr>`;
     }))
