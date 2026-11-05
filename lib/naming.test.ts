@@ -65,6 +65,7 @@ describe("events", () => {
     expect(n.contentText({ on: ["aleph-1372"], file: "ui/views/issues.js" })).toBe("a1372 → issues.js");
     expect(n.contentText({ on: ["a1421#6"], result: "dropped" })).toBe("a1421#6 → dropped");
     expect(n.contentText({ file: "hooks/lib/docclaims.ts", to: "human" })).toBe("docclaims.ts → human");
+    expect(n.contentText({ file: "tests" })).toBe("→ tests");
     expect(n.contentText({ count: "3 / 1h" })).toBe("3 / 1h");
   });
   test("a word outside its set throws", () => {

@@ -378,9 +378,9 @@ export function newsLine(e: Entry, note?: string): string {
   const needs = needsOf(askOf(run));
   const sub = isWaiting(run.condition) ? needs
     : run.condition === "failed" ? causeOf(run) : undefined;
-  // A failed check's name is the content. The arrow marks it: `contentText` puts one before a file only after another field.
+  // A failed check's name is the content. The arrow marks it: `contentText` puts one before a lone file.
   const check = failedCheckOf(run);
-  const line = [`${jobIdOf(e)} ${run.condition}`, sub, check && `→ ${contentText({ file: check })}`].filter(Boolean).join(" ");
+  const line = [`${jobIdOf(e)} ${run.condition}`, sub, check && contentText({ file: check })].filter(Boolean).join(" ");
   const said = run.condition === "landed" ? [run.reason, note].filter(Boolean).join(" ") : "";
   return said ? `${line}\n  ${said}` : line;
 }

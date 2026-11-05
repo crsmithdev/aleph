@@ -131,10 +131,14 @@ export const shownId = (s: unknown): string => {
   const j = String(s ?? "").includes("#") ? parseJob(s) : null;
   return j ? jobId(j.subject, j.n) : shortId(s);
 };
-/** The content of an event as text: `a1372 → issues.js`, `a1421#6 → dropped`, `3 / 1h`, `docclaims.ts → human`. */
+/**
+ * The content of an event as text: `a1372 → issues.js`, `a1421#6 → dropped`, `→ tests`, `3 / 1h`,
+ * `docclaims.ts → human`. The arrow comes before a file also when no other field comes first; a file that a `to`
+ * follows takes the `to`'s arrow, and none of its own.
+ */
 export function contentText(e: Partial<Event>): string {
   const on = [e.on ?? []].flat().map(shownId).join(" ");
-  return [on, e.count, e.result && `→ ${e.result}`, e.file && `${on ? "→ " : ""}${base(e.file)}`, e.to && `→ ${e.to}`]
+  return [on, e.count, e.result && `→ ${e.result}`, e.file && `${on || !e.to ? "→ " : ""}${base(e.file)}`, e.to && `→ ${e.to}`]
     .filter(Boolean).join(" ");
 }
 
