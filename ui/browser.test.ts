@@ -10,6 +10,14 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   const title = () => page.ev<string>('document.querySelector("#view h1")?.textContent ?? ""');
   const click = (selector: string) => page.ev(`document.querySelector(${JSON.stringify(selector)}).click()`);
 
+  test("the sidebar opens with the Factory header, with no link above it", async () => {
+    expect(await page.ev('(() => { const li = document.querySelector("#nav li"); return [li.className, li.textContent, !!li.querySelector("a")]; })()')).toEqual(["head", "Factory", false]);
+    // Every view the page loads sits in a group the sidebar shows under a header: no view keeps a hidden group.
+    const heads = await page.ev<string[]>('[...document.querySelectorAll("#nav li.head")].map((li) => li.textContent.toLowerCase())');
+    const groups = await page.ev<string[]>('fetch("/api/views").then((r) => r.json()).then((ns) => Promise.all(ns.map((n) => import("/views/" + n).then((m) => m.view?.group))))');
+    expect([...new Set(groups.filter(Boolean))].filter((g) => !heads.includes(g))).toEqual([]);
+  });
+
   test("every sidebar link opens its page and marks itself, with no page error", async () => {
     const links = await page.ev<[string, string][]>('[...document.querySelectorAll("#nav li a")].map((a) => [a.getAttribute("href"), a.textContent])');
     expect(links.length).toBeGreaterThan(3);

@@ -20,6 +20,7 @@ test("the sidebar: every group has a page, paths are unique, and each page has a
   for (const n of readdirSync(dir).filter((f) => f.endsWith(".js"))) for (const m of Object.values(await import(new URL(n, dir).href))) if (m && typeof (m as any).path === "string") all.push(m);
   const shown = all.filter((v) => !v.path.includes(":") && v.nav !== false);
   for (const g of ["factory", "claude"]) expect(shown.some((v) => v.group === g)).toBe(true);
+  expect(all.filter((v) => v.group === "work")).toEqual([]);
   expect(new Set(shown.map((v) => v.path)).size).toBe(shown.length);
   for (const v of shown) expect([v.title, v.icon]).toEqual([v.title, expect.stringMatching(/^[a-z-]+$/)]);
   // The job list keeps its route and stay out of the sidebar.

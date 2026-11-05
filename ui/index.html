@@ -64,7 +64,7 @@
   // `refresh` the seconds between reloads, `live` that /api/events also reloads it,
   // `icon` its sidebar glyph, a Font Awesome name. The page builds the sidebar from
   // them, in GROUPS order under the HEADERS, and routes by hash (#/jobs/aleph-52).
-  const GROUPS = ["work", "factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
+  const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
   const $ = (id) => document.getElementById(id);
   let views = [], redirects = [], timer = 0, shown = null;
 

@@ -5,7 +5,7 @@ import { renderIssue } from "./issues.js";
 export const view = {
   path: "/issues/:repo/:n",
   title: "Issue",
-  group: "work",
+  group: "factory",
   api: "/api/issues/:repo/:n",
   render: renderIssue,
 };
