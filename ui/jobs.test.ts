@@ -300,6 +300,16 @@ describe("render", () => {
       mock.module("./lib.js", () => real);
     }
   });
+  test("the head of a job with no item title is its short id, not its full name", () => {
+    setCodes({ fac: "f" });
+    try {
+      const h = v.renderJob({ ...job, item: undefined });
+      expect(h).toContain('<header class="ph"><h1>f9</h1>');
+      expect(h).not.toContain("<h1>fac-9</h1>");
+    } finally {
+      setCodes({});
+    }
+  });
   test("the Detail head is a sectionHead inside the dp-detail block", () => {
     const h = v.renderJob(job);
     expect(h.slice(h.indexOf('<div class="dp-detail">'))).toStartWith('<div class="dp-detail"><div class="sh"><h2>Detail</h2></div>');

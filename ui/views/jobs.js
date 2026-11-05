@@ -193,7 +193,7 @@ export function renderJob(j) {
     : empty("No check ran.");
   const passed = (j.checks ?? []).filter((c) => c.ok).length, verdict = j.verdict, c = change(j.stat);
   return `<div class="page dp-page">${crumb(iss ? iss.href : "#/factory/jobs", back)}` +
-    pageHead(j.item?.title || j.name, { aside: nav }) + `${pills}${blocked}` +
+    pageHead(j.item?.title || id, { aside: nav }) + `${pills}${blocked}` +
     (j.reason && !(j.runs ?? []).length ? `<p class="quiet q">${esc(j.reason)}</p>` : "") +
     (j.condition === "awaiting" ? `<div class="actions">${cmd(`aleph land ${j.name}`, { primary: true })}${cmd(`aleph drop ${j.name}`)}</div>` : "") +
     jobKpis(j) + renderTimeline(jobSegments(j)) +
