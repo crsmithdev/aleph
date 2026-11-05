@@ -488,10 +488,10 @@ const editable = (shown, editor) => `<span class="view-only">${shown}</span><spa
 const FORM = 'form="issue-edit"';
 
 /** The head of the Issue page: the title and the Edit button, or the title's input and Save and Cancel. */
-const issueHead = (d, ref) => `<header class="ph"><h1 class="view-only">${esc(d.title)}</h1>` +
-  `<input class="edit-only title-edit" name="title" ${FORM} required aria-label="Title" value="${esc(d.title)}">` +
-  `<div class="aside"><button type="button" class="act view-only" data-edit="start">Edit</button>` +
-  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="form-msg" role="status"></span> <button type="button" class="act" data-edit="cancel">Cancel</button> <button type="submit" class="act primary">Save</button></form></div></header>`;
+const issueHead = (d, ref) => pageHead(d.title, { cls: "view-only",
+  after: `<input class="edit-only title-edit" name="title" ${FORM} required aria-label="Title" value="${esc(d.title)}">`,
+  aside: `<button type="button" class="act view-only" data-edit="start">Edit</button>` +
+  `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="form-msg" role="status"></span> <button type="button" class="act" data-edit="cancel">Cancel</button> <button type="submit" class="act primary">Save</button></form>` });
 
 /** The form that appends a note. */
 const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,8 @@ import { askOf, setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/issues.js";
+// @ts-ignore plain JS, shared with the page
+import * as lib from "./lib.js";
 // @ts-ignore plain JS, shared with the page
 import { when } from "./lib.js";
 // @ts-ignore
@@ -105,6 +107,19 @@ describe("GET /api/issues", () => {
     expect(d.kind).toBe("bug");
     expect(v.renderIssue(d)).toContain('<span class="chip kind">kind: bug</span>');
     expect(v.renderRow(v.issueRows({ issues: [row] })[0])).toContain('<span class="chip kind">bug</span>');
+  });
+
+  test("the issue page's head is pageHead: the view-only title, the title input and the Edit button", async () => {
+    const d = await getJson("/api/issues/fac/2");
+    const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
+    mock.module("./lib.js", () => ({ ...real, pageHead: tagged }));
+    try {
+      const h = v.renderIssue(d);
+      expect(h.match(/<header class="ph">/g)).toHaveLength(1);
+      expect(h).toContain(`<!--pageHead--><header class="ph"><h1 class="view-only">${d.title}</h1><input class="edit-only title-edit" name="title" form="issue-edit" required aria-label="Title" value="${d.title}"><div class="aside"><button type="button" class="act view-only" data-edit="start">Edit</button>`);
+    } finally {
+      mock.module("./lib.js", () => real);
+    }
   });
 
   test("a row carries its stage", async () => {

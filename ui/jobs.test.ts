@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, mock, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +6,8 @@ import { readList, writeList } from "../issues/lib/store.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { routes } from "./api/jobs.ts";
 import { withEnv } from "./test-server.ts";
+// @ts-ignore lib.js is plain JS, shared with the page
+import * as lib from "./lib.js";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
 // @ts-ignore plain JS, shared with the page
@@ -263,6 +265,16 @@ describe("render", () => {
     expect(h).toContain("1 stuck, then fixed");
     expect(h).not.toContain("<it>");
     expect(h).toContain('<div class="diff-panel" id="diff" data-job="fac-9"><p class="quiet" role="status">Loading the diff…</p></div>');
+  });
+  test("the head is pageHead with the title and the nav links as aside", () => {
+    const aside = '<a class="act" href="#/issues/fac/9">Issue</a><a class="act" href="http://lf/sessions/s">Trace</a>';
+    const real = { ...lib }, tagged = (t: string, o: object) => `<!--pageHead-->${real.pageHead(t, o)}`;
+    mock.module("./lib.js", () => ({ ...real, pageHead: tagged }));
+    try {
+      expect(v.renderJob(job)).toContain(tagged("Fix <it>", { aside }));
+    } finally {
+      mock.module("./lib.js", () => real);
+    }
   });
   test("the Detail head is a sectionHead inside the dp-detail block", () => {
     const h = v.renderJob(job);

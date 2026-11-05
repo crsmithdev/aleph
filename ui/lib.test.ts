@@ -161,6 +161,7 @@ test("idLink and pageHead", () => {
   expect(idLink("x", "javascript:alert(1)")).toContain('href="#"');
   expect(pageHead("Jobs", { count: 12, aside: "<b>x</b>" })).toBe('<header class="ph"><h1>Jobs</h1><span class="count">12</span><div class="aside"><b>x</b></div></header>');
   expect(pageHead("Jobs")).toBe('<header class="ph"><h1>Jobs</h1></header>');
+  expect(pageHead("T", { cls: "view-only", after: "<i></i>", aside: "a" })).toBe('<header class="ph"><h1 class="view-only">T</h1><i></i><div class="aside">a</div></header>');
   expect(pageHead("Jobs", { count: 0 })).toContain('<span class="count">0</span>');
 });
 
