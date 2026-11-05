@@ -24,7 +24,7 @@ Counts come from `bun skills/design-language/scripts/inventory.ts ui` and `--sum
 - **Browser checks.** Chrome could not start in the sandbox of the run that wrote this page, so no page was rendered, in light or dark, at desktop or phone width. Responsive behaviour below is read from the media queries; chart empty and loading states, and whether a table scrolls or wraps at a phone width, are read from the code and not seen.
 - **Colour token uses.** The inventory has no `token-use` kind for colours: `var(--ink)` and the like are not counted, so a colour token has a definition count (three blocks) and no use count.
 - **Contrast.** Computed from the hex values in `ui/app.css` for the pairs below, not for every text and background pair that the CSS puts together. The pair `--muted` on `--rule-2` (4.41 light, 4.35 dark) was not traced to a use.
-- **Inventory false positives.** `ui/views/efficiency.js:85` is read as the colour literal `#eff`, but the line is `root.querySelector("#eff")`, an element id selector, not a colour. The inventory reads text, so it counts it in the colour literals.
+- **Inventory false positives.** `querySelector()` (`ui/views/efficiency.js:86`) is read as the colour literal `#eff`, but the line is `root.querySelector("#eff")`, an element id selector, not a colour. The inventory reads text, so it counts it in the colour literals.
 - **Chart data.** No chart was drawn with real data.
 
 ## Principles
@@ -138,15 +138,15 @@ One format per kind of value. The helpers are in `ui/lib.js` unless named.
 
 **A unit follows its number with no space**: `850ms`, `3.2h`, `1.5KiB`, `12min`, `10d`. `dur()` puts a space only between two groups (`4m 05s`). Server log lines and health text from the factory keep their own form (`135 s`); they are not UI formats.
 
-Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()`, `ui/views/speed.js:23`). The `format` group has 71 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`. Each stays for one of these reasons:
+Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLabel()` (`xLabel()` (`ui/views/speed.js:23`)). The `format` group has 71 `helper-bypass` rows (`bun skills/design-language/scripts/inventory.ts ui | grep helper-bypass`). None builds a displayed date, number or duration by hand outside `ui/lib.js`. Each stays for one of these reasons:
 
 | Rows | Reason it stays |
 |---|---|
 | `ui/lib.js` (`pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `dur`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
 | `ui/api/activity.ts:20`, `ui/api/speed.ts:477-478` | Local-day date arithmetic for bucket starts, not display. |
-| `ui/views/issues.js:168`, `262`, `297`, `301`, `339` | Local-day date arithmetic for windows and age bins, not display. |
-| `ui/views/jobs.js:11` | Rounds a window length to a stable number, not display. |
-| `ui/views/memory.js:189`, `ui/views/sessions.js:74`, `ui/views/session.js:148`, `ui/timeline.js:154`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
+| `getDate()` (`ui/views/issues.js:168`), `getDate()` (`ui/views/issues.js:262`), `getDate()` (`ui/views/issues.js:297`), `getDate()` (`ui/views/issues.js:301`), `getDate()` (`ui/views/issues.js:339`) | Local-day date arithmetic for windows and age bins, not display. |
+| `toFixed()` (`ui/views/jobs.js:11`) | Rounds a window length to a stable number, not display. |
+| `style` (`ui/views/memory.js:189`), `style` (`ui/views/sessions.js:74`), `style` (`ui/views/session.js:148`), `ui/timeline.js:154`, `ui/lib.js` bar row | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts:92` | A server log line. |
 
 ## Tables
@@ -160,7 +160,7 @@ Rules, as the code states them (`ui/lib.js:523`, `ui/app.css:451`):
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:463`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `6px 12px 6px 0`, a `--rule-2` line under each row, and `--sunk` on row hover. Headers are `600 var(--fs-xs)` in `--muted`.
 - **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼`.
-- **Pager:** `pager()` shows "50 of 345" and "Show 50 more"; `PAGE` is 50 in `ui/views/issues.js:56` and `ui/views/jobs.js:44`.
+- **Pager:** `pager()` shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:56`) and `PAGE` (`ui/views/jobs.js:45`).
 - **Long text:** a long text cell clamps to 3 lines with `.dp-txt.clamp` (`ui/app.css:879`) and shows the rest on click.
 - **Page length:** a table paginates at 50 rows with `pager()`.
 - **Wide tables:** `.tscroll` (`ui/app.css:475`) scrolls sideways.
@@ -170,19 +170,19 @@ Columns of the main tables:
 
 | Table | Columns, in order | Source |
 |---|---|---|
-| Issues | Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num), Updated, (actions) | `ui/views/issues.js:242` |
-| Jobs | Job, Title, State, Project, Model, Took (num), Cost (num), Started | `ui/views/jobs.js:88` |
-| Sessions | Session, First prompt, Project, Kinds, Turns (num), Cost (num), Started, Last | `ui/views/sessions.js:120` |
-| Memory notes | Title, Kind, Scope, Read, Written, Status | `ui/views/memory.js:263` |
-| Turns of a session | Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num), Started | `ui/views/session.js:23` |
-| Observations | Kind, Name, Detail, Duration (num) | `ui/views/session.js:259` |
-| Gates log | When, By, Item, What | `ui/views/gates.js:172` |
-| Hooks | Hook, Calls (num), Errors (num), Last | `ui/views/sessions.js:104` |
-| Denials | Reason, When | `ui/views/sessions.js:107` |
-| Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `ui/views/efficiency.js:42`, `ui/views/efficiency.js:45` |
-| Agents by role | Role, Model, one number column per measure, Jobs | `ui/views/factory-agents.js:56` |
-| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `ui/views/jobs.js:212` |
-| Commits | Commit, Subject, Part, Date | `ui/views/issues.js:680` |
+| Issues | Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num), Updated, (actions) | `dataTable()` (`ui/views/issues.js:243`) |
+| Jobs | Job, Title, State, Project, Model, Took (num), Cost (num), Started | `dataTable()` (`ui/views/jobs.js:86`) |
+| Sessions | Session, First Prompt, Project, Kinds, Turns (num), Cost (num), Started, Last | `dataTable()` (`ui/views/sessions.js:120`) |
+| Memory notes | Title, Kind, Scope, Read, Written, Status | `dataTable()` (`ui/views/memory.js:263`) |
+| Turns of a session | Turn (num), Prompt, Output, Model, Tools (num), Duration (num), Cost (num), Started | `dataTable()` (`ui/views/session.js:23`) |
+| Observations | Kind, Name, Detail, Duration (num) | `dataTable()` (`ui/views/session.js:259`) |
+| Gates log | When, By, Item, Action, What, Times (num) | `dataTable()` (`ui/views/gates.js:168`) |
+| Hooks | Hook, Calls (num), Errors (num), Last | `dataTable()` (`ui/views/sessions.js:104`) |
+| Denials | Reason, When | `dataTable()` (`ui/views/sessions.js:107`) |
+| Efficiency | Issue, Why, Hours (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `dataTable()` (`ui/views/efficiency.js:45`) |
+| Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:56`) |
+| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Time (num), Log; then each failed test with its failure | `dataTable()` (`ui/views/jobs.js:210`) |
+| Commits | Commit, Subject, Part, Date | `dataTable()` (`ui/views/issues.js:680`) |
 
 Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Written` depending on the table, and a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Row actions sit in the last column in the Issues table (`act`) and are absent elsewhere. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:498`) over the table.
 
@@ -191,9 +191,9 @@ Gaps: the time column is `Started`, `Updated`, `Last`, `When`, `Date` or `Writte
 Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `chart()` (`ui/lib.js:190`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:180`) and redraws on a colour-scheme change.
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
-- **Bars:** `barsOption()` (`ui/lib.js:541`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `ui/views/factory-agents.js:88`.
+- **Bars:** `barsOption()` (`ui/lib.js:541`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: `barsOption()` (`ui/views/factory-agents.js:88`).
 - **Lines:** `lineOption()` (`ui/lib.js:550`) for one series over time, filled at 15% opacity, or as a step area (85%) for live counts.
-- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `ui/views/factory-agents.js:65`.
+- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`; live agents by role in `stackedAreaOption()` (`ui/views/factory-agents.js:65`).
 - **Range bars:** `rangeBarOption()` (`ui/lib.js`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: a p50 and p90 line per bucket, a log-time strip with one dot per issue linking to the issue, and the 10 slowest issues as stacked bars of intake, queue, build and land. Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Agents page:** three charts of the same height in one row (`liveOption`, `outcomesOption`, `costOption` in `ui/views/factory-agents.js`), drawn by `chart()` with the theme tokens: live agents by role as a stacked area, one series per timed role in `--series-1` to `--series-5`; outcomes by role as stacked horizontal bars of succeeded, failed and stuck; and cost by model as stacked columns per bucket, from `buckets[].cost` in `/api/speed`. Each chart box has `role="img"` and an `aria-label` that states its data.
@@ -202,7 +202,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:165`) and drawn by `cha
 - **Bar lists:** `barRow()` (`ui/lib.js:532`) and `barList()` (`ui/lib.js:538`): label, bar, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:350`) and `priorityBadge()` (`ui/lib.js:354`) are squared with `--r-tag`; `chips()` (`ui/lib.js:366`) are pills.
 - **Efficiency bar:** `.obar` (`ui/app.css:909`), in the five `--seg-*` colours under white text.
-- **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:109`. Units and legends are not set in one place; each option names its series.
+- **Loading and empty:** a chart's loading line is `loadingLine("the agents")` (`ui/lib.js:83`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it: `loadingLine()` (`ui/views/factory-agents.js:109`). Units and legends are not set in one place; each option names its series.
 
 ## Metric cards
 
@@ -253,7 +253,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case (`running`, `landed`, `awaiting`), listed in `STATES` (`ui/lib.js:285`); a priority is `critical`, `high`, `medium` or `low`.
-- **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:67`): "Nothing waits for you." (`ui/views/gates.js:112`), "No job matches." with "Widen the window or clear a filter." (`ui/views/jobs.js:79`).
+- **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:67`). Gates shows `empty()` (`ui/views/gates.js:108`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:77`) as "No job matches." with "Widen the window or clear a filter."
 - **Loading:** `loadingLine()` (`ui/lib.js:83`) draws the inline line, `Loading <what>…`; `loading()` (`ui/lib.js:85`) draws a view's first-load state, `Loading <title>…`.
 - **Error:** `error()` (`ui/lib.js:88`) says what failed, and the default hint is "Check that aleph-ui is running, then reload."
 - **Offline:** "The server is unreachable. Showing the last data." (`ui/index.html:31`).
@@ -296,15 +296,15 @@ Reference view = the view that follows the rules best.
 |---|---|---|
 | Page header | `pageHead()` | `ui/views/jobs.js` |
 | Card | `card()` | `ui/views/factory-agents.js` |
-| Table | `dataTable()`, `sortHead()` | `ui/views/jobs.js:88` |
+| Table | `dataTable()`, `sortHead()` | `dataTable()` (`ui/views/jobs.js:86`) |
 | Badge | `badge()` | `ui/views/jobs.js` |
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
 | Chart | `chart()`, `barsOption()`, `lineOption()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
-| Pager | `pager()` | `ui/views/issues.js:243` |
-| Empty state | `empty()` | `ui/views/jobs.js:79` |
+| Pager | `pager()` | `pager()` (`ui/views/issues.js:243`) |
+| Empty state | `empty()` | `empty()` (`ui/views/jobs.js:77`) |
 
 Cards with their own markup, because `card()` would add a heading or change the element:
 
