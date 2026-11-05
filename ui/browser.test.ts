@@ -288,4 +288,42 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
       await page.ev('document.querySelector("#obar-probe").remove()');
     }, 30_000);
   }
+
+  test("the outcome bar mark is as tall as the segments", async () => {
+    await page.width(1100);
+    await page.go("#/");
+    const m = await page.ev<{ sep: number[]; segs: number[][] }>(`import("/views/speed.js").then((v) => {
+      const host = document.createElement("div");
+      host.id = "obar-probe";
+      document.querySelector("#view").prepend(host);
+      host.innerHTML = v.bar({ classes: [{ key: "landed", name: "Landed", hours: 5, text: "" }, { key: "dropped", name: "Dropped", hours: 3, text: "" }] }, "");
+      const r = (e) => e.getBoundingClientRect();
+      const sep = r(host.querySelector(".osep"));
+      return { sep: [sep.top, sep.bottom], segs: [...host.querySelectorAll(".osegs")].map((e) => [r(e).top, r(e).bottom]) };
+    })`);
+    for (const [top, bottom] of m.segs) {
+      expect(Math.abs(m.sep[0]! - top!)).toBeLessThanOrEqual(1);
+      expect(Math.abs(m.sep[1]! - bottom!)).toBeLessThanOrEqual(1);
+    }
+    await page.ev('document.querySelector("#obar-probe").remove()');
+  }, 30_000);
+
+  test("the empty lane text is muted and smaller than the body, and the second tile figure uses --fs-2xl", async () => {
+    await page.go("#/");
+    const m = await page.ev<{ color: string; want: string; size: number; body: number; em: number; fs: number }>(`import("/views/now.js").then(async (n) => {
+      const { statCard } = await import("/views/speed.js");
+      const host = document.createElement("div");
+      host.id = "lane-probe";
+      document.querySelector("#view").prepend(host);
+      host.innerHTML = n.renderLanes({ queued: [], running: [], done: [], factory: {} }) + '<section class="tiles">' + statCard({ k: "Landed", v: "5", v2: "9" }) + "</section>";
+      const css = (e) => getComputedStyle(e);
+      const probe = (v) => { const p = document.createElement("i"); p.style.color = v; host.append(p); return css(p).color; };
+      const sz = (v) => { const p = document.createElement("i"); p.style.fontSize = v; host.append(p); return parseFloat(css(p).fontSize); };
+      return { color: css(host.querySelector(".lane .empty p")).color, want: probe("var(--muted)"), size: parseFloat(css(host.querySelector(".lane .empty p")).fontSize), body: parseFloat(css(document.body).fontSize), em: parseFloat(css(host.querySelector(".tile.sc b em")).fontSize), fs: sz("var(--fs-2xl)") };
+    })`);
+    expect(m.color).toBe(m.want);
+    expect(m.size).toBeLessThan(m.body);
+    expect(m.em).toBe(m.fs);
+    await page.ev('document.querySelector("#lane-probe").remove()');
+  }, 30_000);
 });

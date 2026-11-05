@@ -302,6 +302,7 @@ section { margin: 0 0 28px; }
 /* empty state, after old aleph's EmptyState: one sentence, one hint */
 .empty { padding: var(--sp-4) 0 0; }
 .empty p { margin: 0; }
+.lane .empty p { color: var(--muted); font-size: var(--fs-sm); }
 .empty .hint { color: var(--muted); font-size: var(--fs-sm); margin-top: var(--sp-2); }
 
 /* ---------- needs you ---------- */
@@ -748,7 +749,7 @@ a.tile .k::after, button.tile .k::after { content: " \203A"; }
 .tile.sc { gap: var(--sp-4); padding: var(--sp-12) 14px; }
 .tile.sc .r1 { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-8); }
 .tile.sc .k::after { content: none; }
-.tile.sc b em { font-size: var(--fs-lg); font-style: normal; font-weight: var(--fw-text); }
+.tile.sc b em { font-size: var(--fs-2xl); font-style: normal; font-weight: var(--fw-text); }
 .tile.sc .q { font-size: var(--fs-xs); color: var(--ink); }
 .tile.sc .q .m { color: var(--muted); }
 .tile.sc .tr { font-size: var(--fs-sm); font-weight: var(--fw-strong); color: var(--muted); white-space: nowrap; }
@@ -915,12 +916,12 @@ pre.diff span.del { background: var(--stuck-bg); color: var(--del); }
 .usebar i { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--ink); }
 .obar { display: flex; }
 .ogrp { display: flex; flex-direction: column; gap: var(--sp-2); min-width: max-content; }
-.obk { border-top: 1px solid var(--rule); color: var(--muted); text-align: center; padding-top: var(--sp-2); }
+.obk { border-top: 1px solid var(--rule); color: var(--muted); text-align: center; padding-top: var(--sp-2); line-height: 16px; }
 .osegs { display: flex; gap: var(--sp-2); }
 .osegs > * { display: flex; flex-direction: column; justify-content: center; min-width: max-content; min-height: 56px; padding: var(--sp-8) var(--sp-10); overflow: hidden; border: 0; color: var(--on-fill); font: inherit; font-size: var(--fs-sm); text-align: left; }
 .osegs > :first-child { border-radius: var(--r-ctl) 0 0 var(--r-ctl); }
 .osegs > :last-child { border-radius: 0 var(--r-ctl) var(--r-ctl) 0; }
-.osep { flex: none; width: 2px; margin: 0 var(--sp-8); background: var(--ink-2); }
+.osep { flex: none; width: 2px; margin: calc(1px + 2 * var(--sp-2) + 16px) var(--sp-8) 0; background: var(--ink-2); }
 .obar span { font-size: var(--fs-xs); white-space: nowrap; }
 .obar button { cursor: pointer; }
 .obar button[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: -2px; }
