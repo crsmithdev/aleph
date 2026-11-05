@@ -110,6 +110,22 @@ test("a goal that names a busy file an open job also names waits; a job waiting 
   expect(calls).toEqual([`fac-${second}`]);
 });
 
+test("a goal that uses the gpt-oss server waits for an open job that uses it; a goal that does not is not held", async () => {
+  const add = (spec: string) => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec }); return item.id; }, true)!.value;
+  const first = add("Call the model on 127.0.0.1:8012.\n");
+  const second = add("Start aleph-gpt-oss first.\n");
+  const third = add("Change a label.\n");
+  const { folder } = mk(`fac-${first}`, "build", "passed");
+  const calls: string[] = [];
+  const start = async (_repo: unknown, name: string) => { calls.push(name); return null; };
+  const out = await dispatchIssues(start);
+  expect(calls).toEqual([`fac-${third}`]);
+  expect(out.skipped).toContain(`fac-${second}: waits for fac-${first}: both use the gpt-oss server`);
+  writeRun(folder, { ...readRun(folder)!, condition: "awaiting", ask: { kind: "approval", reason: "held-path", question: "q", options: [], why: [] } });
+  await dispatchIssues(start);
+  expect(calls).toContain(`fac-${second}`);
+});
+
 test("a goal that shares only a quiet file with an open job starts", async () => {
   const body = "## Edit surface\n- jobs/quiet.ts\n";
   const add = () => writeList({ key: "fac" }, "add a goal", (doc) => { const item = issues.add(doc, "ship it", { spec: body }); return item.id; }, true)!.value;

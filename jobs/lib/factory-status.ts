@@ -6,7 +6,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { reader } from "../../todo/lib/store.ts";
+import { areasOf, reader } from "../../todo/lib/store.ts";
 import * as issues from "../../todo/lib/todo.ts";
 import { surfacePaths } from "./goal-spec.ts";
 import { ciLine, redCi } from "./ci.ts";
@@ -331,9 +331,28 @@ const BUSY_CONFLICTS = 3;
 
 const BUSY_MS = 7 * 86_400_000;
 
+/** The first open job of the repo, not waiting for Chris, whose issue `shares` something with the goal; the line says what. */
+function openWait(repo: Repo, jobs: Job[], shares: (theirs: issues.Issue) => string | undefined): string | null {
+  const lists = reader({ fetch: false });
+  for (const j of jobs) {
+    const last = lastReal(j).run;
+    const on = onOf(last);
+    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isAwaiting(last.condition)) continue;
+    const theirs = lists.item(repo.key, on);
+    const what = theirs && shares(theirs);
+    if (what) return `waits for ${last.name}: ${what}`;
+  }
+  return null;
+}
+
+/** Whether an issue uses the gpt-oss server: its spec names the server, or it carries the area local-model. */
+const usesGptOss = (item: issues.Issue): boolean =>
+  /aleph-gpt-oss|127\.0\.0\.1:8012/.test(item.spec) || areasOf(item).includes("local-model");
+
 /**
  * Why a goal waits for an open job: both name the same busy file in their Edit surface, so one
- * of the two lands would conflict. A job waiting for Chris does not count, as it can wait for hours.
+ * of the two lands would conflict; or both use the gpt-oss server, which runs one build at a time.
+ * A job waiting for Chris does not count, as it can wait for hours.
  */
 function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now()): string | null {
   const counts = new Map<string, number>();
@@ -342,17 +361,8 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
     for (const f of run.conflicts ?? []) counts.set(f, (counts.get(f) ?? 0) + 1);
   }
   const mine = surfacePaths(item.spec).filter((f) => (counts.get(f) ?? 0) >= BUSY_CONFLICTS);
-  if (!mine.length) return null;
-  const lists = reader({ fetch: false });
-  for (const j of jobs) {
-    const last = lastReal(j).run;
-    const on = onOf(last);
-    if (last.repo !== repo.key || on === undefined || !isOpen(j) || isAwaiting(last.condition)) continue;
-    const theirs = lists.item(repo.key, on);
-    const shared = theirs && surfacePaths(theirs.spec).find((f) => mine.includes(f));
-    if (shared) return `waits for ${last.name}: both change the busy file ${shared}`;
-  }
-  return null;
+  const file = mine.length ? openWait(repo, jobs, (theirs) => { const f = surfacePaths(theirs.spec).find((p) => mine.includes(p)); return f && `both change the busy file ${f}`; }) : null;
+  return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? "both use the gpt-oss server" : undefined) : null);
 }
 
 /** The facts of a goal that the jobs and the factory's marks give; `goalDecision` takes them with the caller's own. */
