@@ -7,7 +7,7 @@ import { withEnv } from "./test-server.ts";
 // @ts-ignore plain JS shared with the page
 import { onTile } from "./lib.js";
 // @ts-ignore plain JS shared with the page
-import { fileIssue, issueFor, renderEfficiency, selection } from "./views/efficiency.js";
+import { renderEfficiency, selection } from "./views/efficiency.js";
 import { writeRun } from "../jobs/lib/ledger.ts";
 // @ts-ignore plain JS shared with the page
 
@@ -80,14 +80,25 @@ test("All lost time: the causes sum to lost.hours", () => {
   const s = selection(D, "all");
   expect(s.causes.map((x: any) => [x.name, x.hours, x.runs])).toEqual([["Issue had landed", 3, 7], ["No commit", 3, 2]]);
   expect(s.causes.reduce((a: number, x: any) => a + x.hours, 0)).toBe(D.lost.hours);
-  expect(renderEfficiency(D, "all")).toContain("<h2>Lost time, largest first</h2>");
+  expect(renderEfficiency(D, "all")).toContain("<h2>Lost time causes</h2>");
+  expect(renderEfficiency(D, "all")).toContain("<h2>Lost time issues</h2>");
   expect(s.text).toContain("Late and Restarted together.");
+});
+
+test("the causes card is a table beside the issues card, with no intro and no File an issue button", () => {
+  const h = renderEfficiency(D, "all");
+  const causes = h.slice(h.indexOf('aria-label="Lost time causes"'), h.indexOf('aria-label="Lost time issues"'));
+  expect([...causes.matchAll(/<th[^>]*>([^<]+)</g)].map((m) => m[1])).toEqual(["Cause", "Time", "Runs", "Bar"]);
+  expect([...causes.matchAll(/<tr><td[^>]*>([^<]+)<\/td><td class="num">([^<]+)<\/td><td class="num">(\d+)</g)].map((m) => m.slice(1))).toEqual([["Issue had landed", "3.0h", "7"], ["No commit", "3.0h", "2"]]);
+  expect(causes).toContain('<td class="bb">');
+  expect(h).toMatch(/<div class="pair"><section class="card"[^>]*aria-label="Lost time causes"/);
+  for (const gone of ["together.", "File an issue", "data-file", 'id="filed"']) expect(h).not.toContain(gone);
 });
 
 test("selecting a class shows its causes; selecting Lost time again restores the merged list", () => {
   const all = renderEfficiency(D, "all");
   const one = renderEfficiency(D, "fixed");
-  expect(one).toContain("<h2>Fixed, largest first</h2>");
+  expect(one).toContain("<h2>Fixed causes</h2>");
   expect(one).toContain('data-tile="fixed" style="flex:4" aria-pressed="true"');
   expect(one).not.toContain("No commit");
   expect(renderEfficiency(D, "all")).toBe(all);
@@ -105,21 +116,6 @@ test("an issue with no link shows its id as text, and a run with no reason says 
   expect(h).toContain("fx-2");
   expect(h).toContain("No reason recorded.");
   expect(h).not.toContain("undefined");
-});
-
-test("File an issue posts the first cause as the title, with the runs and reasons as the body", async () => {
-  let sent: any;
-  await fileIssue(D, "nothing", async (u: string, o: any) => { sent = { u, o }; return { ok: true, json: async () => ({ id: 5 }) }; });
-  expect(sent.u).toBe("/api/issues");
-  expect(sent.o.headers["X-Aleph-UI"]).toBe("1");
-  const b = JSON.parse(sent.o.body);
-  expect(b.title).toBe("Cut lost time in Issue had landed");
-  expect(b.title).not.toContain(": ");
-  expect(b.kind).toBe("task");
-  expect(b.repo).toBe("aleph");
-  expect(b.body).toContain("fx-1: 2.0h, 6 runs. already met");
-  expect(issueFor({ ...D, classes: [] }, "all")).toBeNull();
-  await expect(fileIssue(D, "nothing", async () => ({ ok: false, status: 422, json: async () => ({ error: "no" }) }) as any)).rejects.toThrow("no");
 });
 
 test("a click on a card selects its class", () => {

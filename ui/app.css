@@ -1052,3 +1052,5 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .issue-row[data-card] .choice-text .effect { font-size: var(--fs-md); line-height: 1.5; color: var(--ink-2); }
 .issue-row[data-card] .rec-note { font: var(--fs-xs) var(--sans); font-weight: var(--fw-strong); color: var(--k); }
 @media (max-width: 720px) { .issue-row[data-card]:has(.ask-fold[open]) .choice { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); } }
+.tbl td.bb { width: 40%; }
+.tbl td.bb > i { display: block; height: 10px; min-width: 1px; background: var(--muted); border-radius: 0 var(--r-hair) var(--r-hair) 0; }

@@ -1,9 +1,8 @@
 // The Efficiency page: where agent time went, in hours. `d` is /api/speed for the window.
-import { barList, barRow, card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
-import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, pctText, period, plural, statCard, weekText, windowTrend } from "./speed.js";
+import { card, dataTable, esc, filterBar, hashQuery, heads, onTile, pageHead, pct, repoIdLink, keepWindow, setQuery, tiles, WINDOWS, windowOf, wireScope } from "../lib.js";
+import { bar, cardHours, cardPct, figuresOf, hours, lostClasses, lastPeriod, mergeCauses, pctText, plural, statCard, weekText, windowTrend } from "./speed.js";
 
 const TOP_ISSUES = 5;
-const REPO = "aleph";
 const ALL = "all", FLAKES = "flakes", USAGE = "usage";
 
 /** What the cards show for a selection: a class, the reruns, or all the lost classes together. */
@@ -39,27 +38,12 @@ function scorecard(d, key) {
 
 const causeBars = (s) => {
   const size = (x) => x.hours ?? x.runs, max = size(s.causes[0] ?? {}) ?? 0;
-  return barList(s.causes.map((x, i) => barRow(`<b title="${esc(x.name)}">${esc(x.name)}</b>`, max > 0 ? (size(x) / max) * 100 : 0, x.hours === undefined ? esc(plural(x.runs, "rerun")) : `${esc(hours(x.hours))} · ${esc(plural(x.runs, "run"))}`, { top: i === 0 })).join(""));
+  return dataTable(heads(["Cause", "Time", "Runs", "Bar"], ["Time", "Runs"]), s.causes.map((x) =>
+    `<tr><td title="${esc(x.name)}">${esc(x.name)}</td><td class="num">${x.hours === undefined ? "" : esc(hours(x.hours))}</td><td class="num">${x.runs}</td><td class="bb"><i style="width:${(max > 0 ? (size(x) / max) * 100 : 0).toFixed(1)}%"></i></td></tr>`).join(""));
 };
 
 const topTable = (rows) => dataTable(heads(["Issue", "Why", "Hours", "Runs"], ["Hours", "Runs"]), rows.map((x) =>
   `<tr><td>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="wide" title="${esc(`${x.title ? `${x.title}. ` : ""}${x.reason || "No reason recorded."}`)}">${x.title ? `${esc(x.title)}. ` : ""}${esc(x.reason || "No reason recorded.")}</td><td class="num">${esc(hours(x.hours))}</td><td class="num">${x.runs}</td></tr>`).join(""));
-
-/** The issue that "File an issue" files for a selection: its first cause as the title, its runs and reasons as the body. The reruns have no hours to file. */
-export function issueFor(d, key) {
-  const s = selection(d, key), first = s.causes[0];
-  if (!first || key === FLAKES) return null;
-  const rows = s.top.map((x) => `- ${x.goal}: ${hours(x.hours)}, ${plural(x.runs, "run")}. ${x.reason || "No reason recorded."}`);
-  return { repo: REPO, title: `Cut lost time in ${first.name}`, kind: "task", body: `${first.name}: ${hours(first.hours)}, ${plural(first.runs, "run")} in the last ${period(d)}.\n\n${s.title}, the issues that cost the most:\n${rows.join("\n")}` };
-}
-
-/** Post the issue for a selection. It returns the answer of the server. */
-export async function fileIssue(d, key, fetcher = fetch) {
-  const res = await fetcher("/api/issues", { method: "POST", headers: { "Content-Type": "application/json", "X-Aleph-UI": "1" }, body: JSON.stringify(issueFor(d, key)) });
-  const out = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(out.error ?? `Could not file the issue (${res.status}).`);
-  return out;
-}
 
 const usageTable = (rows) => dataTable(heads(["Issue", "Usage", "Runs"], ["Usage", "Runs"]), rows.map((x) =>
   `<tr><td${x.title ? ` title="${esc(x.title)}"` : ""}>${x.href ? repoIdLink(x.goal, x.href) : esc(x.goal)}</td><td class="num">${esc(weekText(x.week))}</td><td class="num">${x.runs}</td></tr>`).join(""));
@@ -76,13 +60,11 @@ function usagePage(d, key) {
 export function renderEfficiency(d, key = ALL) {
   if (key === USAGE) return usagePage(d, key);
   const s = selection(d, key), total = (d.classes ?? []).reduce((a, c) => a + c.hours, 0), nc = d.notCounted;
-  const file = issueFor(d, key);
   const scope = filterBar([{ name: "window", value: d.window ?? "week", options: WINDOWS }]);
   return `<div class="page sp" id="eff">${pageHead("Efficiency", { count: lastPeriod(d), aside: scope })}${tiles("Quality", scorecard(d, key))}` +
     card("Agent time by outcome", bar(d, key), { aside: `${esc(hours(total))} counted${nc?.runs ? ` · ${esc(plural(nc.runs, "run"))}, ${esc(hours(nc.hours))}, have no outcome yet` : ""}` }) +
-    card(`${s.title}, largest first`, `<p>${esc(s.text)} ${esc(s.size)}</p>${s.causes.length ? causeBars(s) : "<p>No cause to show.</p>"}`) +
-    (key === FLAKES ? "" : card(`${s.title}: the issues that cost the most`, (s.top.length ? topTable(s.top) : "<p>No issue to show.</p>") +
-      (file ? `<div class="actions"><button type="button" class="act primary" data-file>File an issue: ${esc(s.causes[0].name)}</button><span id="filed" class="quiet" role="status">The issue carries the runs and the reasons.</span></div>` : ""))) + `</div>`;
+    `<div class="pair">${card(`${s.title} causes`, s.causes.length ? causeBars(s) : "<p>No cause to show.</p>")}` +
+    (key === FLAKES ? "" : card(`${s.title} issues`, s.top.length ? topTable(s.top) : "<p>No issue to show.</p>")) + `</div></div>`;
 }
 
 /** The old address. */
@@ -109,14 +91,6 @@ export const view = {
         setQuery({ tile: k === ALL ? "" : k });
         draw();
         root.querySelector(`.tiles button[data-tile="${k}"], .obar button[data-tile="${k}"]`)?.focus();
-      });
-      page?.addEventListener("click", async (e) => {
-        const f = e.target.closest("button[data-file]");
-        if (!f) return;
-        const say = root.querySelector("#filed");
-        f.disabled = true;
-        try { const out = await fileIssue(d, picked()); say.textContent = `Filed${out.id ?? out.n ? ` ${REPO}-${out.id ?? out.n}` : ""}.`; }
-        catch (err) { say.textContent = err.message; f.disabled = false; }
       });
     };
     wire();
