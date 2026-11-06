@@ -14,6 +14,10 @@ test("a missing file gives both worker tiers enabled on haiku and sonnet, and me
     "worker-low": { enabled: true, model: "haiku" },
     "worker-medium": { enabled: true, model: "sonnet" },
     merge: { enabled: true, model: "haiku" },
+    reviewer: { enabled: true, model: "claude-opus-5-5" },
+    intake: { enabled: true, model: "claude-opus-5-5" },
+    director: { enabled: true, model: "claude-opus-5-5" },
+    monitor: { enabled: true, model: "deepseek-v4.1-flash" },
     title: { enabled: true, model: "haiku" },
     judge: { enabled: true, model: "haiku" },
   });
@@ -35,7 +39,8 @@ test("a tier set to a model it offers reads back; a model it does not offer, an 
   expect(m["worker-low"]).toEqual({ enabled: true, model: "gpt-oss-20b" });
   expect(m["worker-medium"]).toEqual({ enabled: false, model: "sonnet" });
   expect(setModel("worker-low", { model: "sonnet" })).toContain("offers");
-  expect(setModel("intake", { model: "haiku" })).toContain("unknown tier");
+  expect(setModel("nonexistent", { model: "haiku" })).toContain("unknown tier");
+  expect(setModel("intake", { model: "nonexistent" })).toContain("offers");
   expect(setModel("merge", { enabled: false })).toContain("can be disabled");
   expect(readModels()).toEqual(m);
 });

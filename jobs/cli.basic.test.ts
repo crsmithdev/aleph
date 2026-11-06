@@ -179,7 +179,7 @@ describe("models", () => {
     expect((await aleph(["models", "set", "title", "gpt-oss-20b"])).code).toBe(0);
     const r = await aleph(["models"]);
     expect(r.json).toMatchObject({ title: { enabled: true, model: "gpt-oss-20b" }, merge: { enabled: true, model: "haiku" } });
-    const bad = await aleph(["models", "set", "intake", "gpt-oss-20b"]);
+    const bad = await aleph(["models", "set", "nonexistent", "gpt-oss-20b"]);
     expect(bad.code).not.toBe(0);
     expect(bad.stderr).toContain("unknown tier");
   });

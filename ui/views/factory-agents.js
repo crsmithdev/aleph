@@ -18,9 +18,17 @@ function scorecard(s, a, w) {
 const WARN_RATE = 0.7;
 
 /** Each tier's name; the models it offers come from /api/models. */
-const TIERS = { "worker-low": "Worker low", "worker-medium": "Worker medium", merge: "Merge", title: "Title", judge: "Judge" };
-/** The roles whose model is fixed, and that model. */
-const FIXED = [["Intake", "opus"], ["Review", "opus"], ["Monitor", "deepseek-v4.1-flash"], ["Director", "opus"]];
+const TIERS = {
+  "worker-low": "Worker low",
+  "worker-medium": "Worker medium",
+  merge: "Merge",
+  reviewer: "Reviewer",
+  intake: "Intake",
+  director: "Director",
+  monitor: "Monitor",
+  title: "Title",
+  judge: "Judge",
+};
 
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "Cost", "First Pass", "Reviewer Pass", "Pass", "Fail"];
@@ -30,7 +38,7 @@ function roles(a, m) {
   // The outcome row for a config row: the one of its role and current model, when no other config row claims it.
   const claims = [];
   const find = (role, model) => {
-    const o = outs.find((x) => x.role === role && shortModel(x.model) === model);
+    const o = outs.find((x) => x.role === role && shortModel(x.model) === shortModel(model));
     if (o) claims.push(o);
     return o;
   };
@@ -47,10 +55,11 @@ function roles(a, m) {
   const merged = (role, model) => (shared(role, model) ? undefined : find(role, model));
   const pick = ([tier, name]) => {
     const t = m.tiers[tier], box = tier.startsWith("worker") ? `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${esc(name)} enabled"${t?.enabled ? " checked" : ""}> ` : "";
+    const offers = m.offers[tier] ?? [];
     return `<tr><td>${esc(name)}</td><td>${box}<select data-tier="${esc(tier)}" aria-label="${esc(name)} model">` +
-      m.offers[tier].map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(v)}</option>`).join("") + `</select></td>${stats(merged(roleOf(tier), t?.model))}</tr>`;
+      offers.map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(v)}</option>`).join("") + `</select></td>${stats(merged(roleOf(tier), t?.model))}</tr>`;
   };
-  const config = m ? tierRows.map(pick).join("") + FIXED.map(([n, model]) => `<tr><td>${n}</td><td>${model}</td>${stats(find(n.toLowerCase(), model))}</tr>`).join("") : "";
+  const config = m ? tierRows.map(pick).join("") : "";
   const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, ""], num), rows) : empty("No agent ran in this window.");
 }

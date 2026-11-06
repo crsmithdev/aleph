@@ -35,12 +35,12 @@ import { factoryLog, logEvent } from "../infra/layout.ts";
 import { refs as idsIn, word } from "../../../lib/naming.ts";
 import type { Hold } from "../gates/issue-decision.ts";
 import { DIRECTOR_CAP, needsYouLog, vaultDir } from "../infra/settings.ts";
-import { OPUS_MODEL } from "../routing/models.ts";
+import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "../transitions/transitions.ts";
 import { writeTitle } from "./title.ts";
 
-const DIRECTOR_MODEL = OPUS_MODEL;
+const DIRECTOR_MODEL = () => readModels().director?.model ?? OPUS_MODEL;
 /** One run per Ask: its time box in seconds. */
 export const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */
@@ -655,7 +655,7 @@ export async function direct(c: Case, ports: Ports = defaultPorts): Promise<Deci
     const cwd = c.repo && existsSync(c.repo.path) ? c.repo.path : undefined;
     const dirs = ["--add-dir", join(vaultDir(), "wiki", "decisions")];
     const run = openRun({
-      role: "director", who: "the director", model: DIRECTOR_MODEL, seconds: SECONDS,
+      role: "director", who: "the director", model: DIRECTOR_MODEL(), seconds: SECONDS,
       flags: ["--tools", "Read,Grep,Glob,Bash", "--allowedTools", ALLOWED.join(","), ...dirs], schema: DIRECTOR_SCHEMA,
       cwd, name: `director-${c.on}`, command: `director ${c.on}: ${reasonName(c)}: ${questionOf(c)}`, shown: true, on: subjectOfCase(c),
     });

@@ -358,7 +358,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
+const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"], ["monitor", "Monitor", "monitor"]] as const;
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
@@ -407,7 +407,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
     if (build) {
       const back = r.failed === "review" || r.review?.call === "returned", land = ok || r.review?.call === "passed";
       if (back || land) {
-        const v = row("reviewer", "unset");
+        const v = row("reviewer", r.review?.model || "unset");
         v.runs++;
         if (back) { v.fail = (v.fail ?? 0) + 1; v.failed++; } else { v.pass = (v.pass ?? 0) + 1; v.succeeded++; }
         const w = row("worker", r.model || "unset");

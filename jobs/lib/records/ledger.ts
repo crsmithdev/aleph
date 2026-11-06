@@ -32,7 +32,7 @@ export interface TestRecord { ran: number; passed: number; failed: number; skipp
  * The second review's call: what it decided, or `running` while it ran and `failed` when it ended without one. A `chris`
  * VERDICT line reads as `waiting`. The second review went in v6 phase 6 (3 Nov 2026); only runs from before it have one.
  */
-export type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string };
+export type Review = { call: "passed" | "returned" | "waiting" | "running" | "failed"; reason?: string; model?: string };
 
 export interface Run {
   /**

@@ -24,7 +24,7 @@ test("GET /api/models answers each tier with enabled and model plus the local st
   rmSync(file(), { force: true });
   const b: any = await at("/api/models").then((r) => r.json());
   expect(b.local).toBe("up");
-  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "merge", "title", "judge"]);
+  expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
   expect(b.tiers["worker-medium"]).toEqual({ enabled: true, model: "sonnet" });
 });
 
@@ -42,7 +42,8 @@ test("a missing header gives 403; a bad tier, a model the tier does not offer, a
   const kept = '{"title":{"enabled":true,"model":"haiku"}}';
   writeFileSync(file(), kept);
   expect((await post({ tier: "title", model: "gpt-oss-20b" }, {})).status).toBe(403);
-  expect((await post({ tier: "intake", model: "haiku" })).status).toBe(422);
+  expect((await post({ tier: "nonexistent", model: "haiku" })).status).toBe(422);
+  expect((await post({ tier: "intake", model: "nonexistent" })).status).toBe(422);
   expect((await post({ tier: "worker-low", model: "sonnet" })).status).toBe(422);
   expect((await post({ tier: "title", enabled: false })).status).toBe(422);
   healthy = false;

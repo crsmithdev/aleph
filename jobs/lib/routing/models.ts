@@ -28,6 +28,8 @@ const routed = (id: string, input: number, output: number, cacheRead = input, ca
 export const MODELS: Record<string, Model> = {
   haiku: { via: "claude", id: "haiku" },
   sonnet: { via: "claude", id: "sonnet" },
+  opus: { via: "claude", id: OPUS_MODEL },
+  "claude-opus-5-5": { via: "claude", id: OPUS_MODEL },
   "gpt-oss-20b": { via: "local", id: "gpt-oss-20b", price: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
   "deepseek-v4.1-flash": routed("deepseek/deepseek-v4.1-flash", 0.045, 0.5, 0.018),
   "gpt-6-luna": routed("openai/gpt-6-luna", 0.1, 0.5, 0.01, 0.125),
@@ -111,6 +113,10 @@ export const OFFERS = {
   "worker-low": ["haiku", ...OTHERS],
   "worker-medium": ["sonnet", ...OTHERS],
   merge: ["haiku", ...OTHERS],
+  reviewer: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
+  intake: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
+  director: ["claude-opus-5-5", "sonnet", "haiku", ...OTHERS],
+  monitor: ["deepseek-v4.1-flash", "haiku", "sonnet", "claude-opus-5-5", ...OTHERS.filter((m) => m !== "deepseek-v4.1-flash")],
   title: ["haiku", ...OTHERS],
   judge: ["haiku", ...OTHERS],
 };

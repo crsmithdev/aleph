@@ -5,7 +5,8 @@
  * `ALEPH_<ROLE>_TIMEOUT` replaces the role's time box, in seconds.
  * `agentCall` is the other kind: a `claude` call that works in a git worktree (the worker and the reviewer).
  */
-import { modelArgv, modelEnv } from "../routing/models.ts";
+import { modelArgv, modelEnv, onGpu } from "../routing/models.ts";
+import { gpuSlot } from "../gates/factory-status.ts";
 import { appendFileSync, closeSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { outcome, replyOf, type Outcome } from "../gates/gate.ts";
@@ -38,6 +39,8 @@ function killGroup(pid: number, signal: NodeJS.Signals): void {
 async function spawn(c: Call, input: string): Promise<{ output: string; text: string; data?: unknown; cost?: number; session?: string; failure?: string }> {
   const role = c.role.toUpperCase();
   const argv = modelArgv(roleCmd(role), c.model, ["--output-format", "stream-json", "--verbose", ...c.flags, ...(c.schema ? schemaFlags(c.schema) : [])]);
+  let release: (() => void) | null = null;
+  if (onGpu(c.model)) release = await gpuSlot(roleSeconds(role, c.seconds) * 1000);
   // A process group of its own, so the time box ends the call's children too: one that kept the pipes open would hold the reads.
   const p = Bun.spawn(argv, { cwd: c.cwd, env: { ...process.env, ANTHROPIC_API_KEY: undefined, CLAUDECODE: undefined, ...modelEnv(c.model) }, stdin: new Blob([input]), stdout: "pipe", stderr: "pipe", detached: true });
   let timedOut = false;
@@ -54,6 +57,7 @@ async function spawn(c: Call, input: string): Promise<{ output: string; text: st
   } finally {
     clearTimeout(timer);
     clearTimeout(kill);
+    release?.();
   }
 }
 

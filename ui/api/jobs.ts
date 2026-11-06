@@ -3,7 +3,7 @@ import { keyOf, next as nextStep, read as readRecord, type JobEvent, type Step a
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
-import { OPUS_MODEL } from "../../jobs/lib/routing/models.ts";
+import { OPUS_MODEL, readModels } from "../../jobs/lib/routing/models.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
 import { allRuns, isAgentRun, isBuild, jobIdOf, loadRegistry, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, readFile, view } from "../../jobs/lib/records/job.ts";
@@ -117,7 +117,7 @@ function runInfos(runs: Entry[], fit: Fit | null = null, all?: Entry[]): RunInfo
     out.push(info);
     // The reviewer runs inside the worker's run folder and leaves review.md there.
     if (isAgentRun(r.kind) && hasFile(e, "review.md")) {
-      out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: OPUS_MODEL });
+      out.push({ id: `${e.id}-review`, kind: "review", condition, started: r.ended ?? r.started, ...(r.ended ? { ended: r.ended } : {}), model: r.review?.model ?? readModels().reviewer?.model ?? OPUS_MODEL });
     }
   });
   return out;

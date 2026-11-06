@@ -11,11 +11,12 @@ import { factoryLog } from "../infra/layout.ts";
 import { addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
 import { monitorOn } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { readModels } from "../routing/models.ts";
 
 /** The reader's time box, in seconds. */
 const SECONDS = 600;
 /** The model of the monitor reader: a run on OpenRouter, priced from its tokens. */
-const MONITOR_MODEL = "deepseek-v4.1-flash";
+const MONITOR_MODEL = () => readModels().monitor?.model ?? "deepseek-v4.1-flash";
 
 /** The day a report is due for: yesterday, when it has no report yet; else null. */
 export function monitorDue(now = new Date()): string | null {
@@ -53,7 +54,7 @@ export function tableOf(day: string, now = Date.now()): Table {
 /** Read the table with the agent, and keep the report and its note. The caller holds the monitor lock. */
 async function read(day: string, table: Table): Promise<Report> {
   const r: Report = { day, table, findings: [] };
-  const run = openRun({ role: "monitor", who: "the monitor reader", model: MONITOR_MODEL, seconds: SECONDS, flags: ["--tools", ""], name: `monitor-${day}`, command: `monitor ${day}`, shown: false });
+  const run = openRun({ role: "monitor", who: "the monitor reader", model: MONITOR_MODEL(), seconds: SECONDS, flags: ["--tools", ""], name: `monitor-${day}`, command: `monitor ${day}`, shown: false });
   r.run = run.folder;
   try {
     r.text = (await run.ask(readerPrompt(day, renderTable(table)))).trim();

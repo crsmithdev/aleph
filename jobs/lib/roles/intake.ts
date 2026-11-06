@@ -20,11 +20,11 @@ import { fetchOrigin, git } from "../infra/git.ts";
 import { withMainClone } from "../infra/main-clone.ts";
 import { itemOnMain } from "../records/status.ts";
 import { INTAKE_TRIES } from "../infra/settings.ts";
-import { OPUS_MODEL } from "../routing/models.ts";
+import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "./structured.ts";
 
 /** The model an intake run asks for. */
-const INTAKE_MODEL = OPUS_MODEL;
+const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;
 
 /** A spec as intake gives it: each section a field. `new` marks a file of the Edit surface that the run creates. */
 export interface Spec { goal: string; surface: { path: string; new: boolean }[]; oracle: string[] }
@@ -471,7 +471,7 @@ async function intakeItem(repo: Repo, id: number, counts: Counts, skipped: strin
       return;
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
-    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL, seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
+    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
     const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.

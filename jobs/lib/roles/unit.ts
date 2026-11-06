@@ -24,7 +24,8 @@ import { gates, holdBackend } from "../gates/factory-status.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
-import { modelArgv, modelEnv, OPUS_MODEL, readModels, viaOf, viaOfRun, WORKER_TIER } from "../routing/models.ts";
+import { modelArgv, modelEnv, onGpu, OPUS_MODEL, readModels, viaOf, viaOfRun, WORKER_TIER } from "../routing/models.ts";
+import { gpuSlot } from "../gates/factory-status.ts";
 import { costDetails } from "../../../lib/pricing.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
 import { oracleCommands, outsideSurface } from "./issue-spec.ts";
@@ -651,15 +652,18 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
   const diff = reviewDiff(repo.path, range, reviewDiffMax());
   const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
   writeFileSync(runFile(folder, "review-prompt.md"), text);
-  const argv = modelArgv(reviewerCmd(), OPUS_MODEL, ["--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
+  const model = readModels().reviewer?.model ?? OPUS_MODEL;
+  const argv = modelArgv(reviewerCmd(), model, ["--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
     "--tools", "Read", "Grep", "Glob", "Bash", ...schemaFlags(REVIEW_SCHEMA)]);
   const log = runFile(folder, "review.log");
   const err = runFile(folder, "review.err");
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
+  let release: (() => void) | null = null;
+  if (onGpu(model)) release = await gpuSlot(reviewSeconds() * 1000);
   try {
     return await atCommit(repo, tip, async (wt) => {
       const w = await agentCall("reviewer", argv, {
-        cwd: wt, env: { ...agentEnv(env, folder), ...modelEnv(OPUS_MODEL) }, stdin: text, stdout: log, stderr: err, limit: reviewSeconds(), stall: stallSeconds(),
+        cwd: wt, env: { ...agentEnv(env, folder), ...modelEnv(model) }, stdin: text, stdout: log, stderr: err, limit: reviewSeconds(), stall: stallSeconds(),
         onSpawn: (p) => { child = p; },
       });
       child = null;
@@ -671,11 +675,13 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
       if (w.cause?.kind === "credit") return { ...none(w.cause.reason), credit: w.cause.reason };
       if (w.cause) return none(w.cause.reason);
       if (typeof v === "string") return none(v);
-      writeFileSync(runFile(folder, "review.json"), JSON.stringify(v.json));
+      writeFileSync(runFile(folder, "review.json"), JSON.stringify({ ...v.json, model }));
       return { reason: v.pass ? null : `reviewer: ${v.reason}`, cost };
     });
   } catch (e) {
     return { reason: `reviewer: no verdict (${e instanceof Error ? e.message : e})`, none: true };
+  } finally {
+    release?.();
   }
 }
 
