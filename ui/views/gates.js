@@ -102,7 +102,7 @@ export function renderSchedules(d) {
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
-export function renderWaiting(d) {
+function renderWaiting(d) {
   const rows = d.asks.map((i) => askRow(i, d.now)).join("");
   return `<section id="gates-waiting" aria-label="Waiting for you">${sectionHead("Waiting for You", { count: d.asks.length })}` +
     (rows ? `<div class="list">${rows}</div>` : empty("Nothing waits for you.")) + `</section>`;

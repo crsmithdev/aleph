@@ -1,6 +1,6 @@
 # UI design reference
 
-The design language of the aleph UI (`ui/`), read from the code by the design-language skill (`skills/design-language/SKILL.md`, Extract mode). It records what the code already mostly does. A value that bypasses it is a deviation, listed at the end with its fix. A deviation whose fix is an open issue names that issue as pending. The fixes of 2026-11-03 are in `docs/findings/2026-11-03-ui-design-fixes.md`; the audit of 2026-11-04 is in `docs/findings/2026-11-04-ui-design-audit.md`.
+The design language of the aleph UI (`ui/`), read from the code by the design-language skill (`skills/design-language/SKILL.md`, Extract mode). It records what the code already mostly does. A value that bypasses it is a deviation, listed at the end with its fix. A deviation whose fix is an open issue names that issue as pending.
 
 Counts come from `bun skills/design-language/scripts/inventory.ts ui --summary` on the tree this page describes. A count that the inventory does not print is a grep count, and the text says so. Totals:
 
@@ -201,7 +201,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 | Rows | Reason it stays |
 |---|---|
 | `ui/lib.js` (31 rows: `pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
-| `ui/api/activity.ts:20`, `ui/api/speed.ts:495-496` | Local-day date arithmetic for bucket starts, not display. |
+| `ui/activity.ts:20`, `ui/api/speed.ts:495-496` | Local-day date arithmetic for bucket starts, not display. |
 | `getDate()` (`ui/views/issues.js:140`, `229`, `264`, `268`, `284`, `306`) | Local-day date arithmetic for windows and age bins, not display. |
 | `toFixed()` (`ui/views/jobs.js:11`) | Rounds a window length to a stable number, not display. |
 | `style` (`ui/views/session.js:146`), `ui/timeline.js:149` | Inline style widths and offsets in percent, read by CSS only. |
@@ -397,7 +397,7 @@ Each deviation is a value or pattern in the code that a rule above does not allo
 | Chart boxes without `role="img"` or `aria-label` | `ui/views/issues.js` (`backlog`, `close`, `tests`) | Charts: each chart box | aleph-1364 (pending) |
 | Code-span writer copied across views (`inline`, `code`) | `ui/views/jobs.js:120`, `ui/views/issues.js:529`, `ui/views/now.js:335`, `ui/lib.js:93` | One helper per copy | aleph-1375 (pending) |
 | Chart empty state drawn as an empty plot | Agents, Jobs and Issues charts | Chart empty state | none; follow-up |
-| Login and font picker sizes as literals | `ui/auth.ts:53-57`; `ui/index.html:482-497` | Spacing and size tokens | none; follow-up |
+| Login sizes as literals | `ui/auth.ts:53-57` | Spacing and size tokens | none; follow-up |
 | Dates with no time: `Oct 28` in tables, `10/28` proposed | `ui/views/issues.js:176`; `ui/views/memory.js:140` | Absolute time and day | Chris's decision (see Formats) |
 
 The cost chart on Agents (`costOption()` in `ui/views/factory-agents.js`) keeps `minInterval: 0` on its value axis, not whole-number steps: a cost in dollars has cents, and the axis labels go through `money()`.

@@ -1,20 +1,20 @@
 /** The per-type blocks of `GET /api/memory`: where aleph keeps each of the seven memory types, read as it is. A source that is absent gives an empty list, never an error. */
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
-import { clip } from "../../lib/naming.ts";
-import { claudeSettings } from "../../hooks/lib/context.ts";
-import { langfuseConfig } from "../../hooks/lib/env.ts";
-import { readStore } from "../../jobs/lib/learning/corrections.ts";
-import { episodesDir, KEEP_DAYS } from "../../jobs/lib/learning/episode.ts";
-import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { afterOf, readLists } from "../../issues/lib/store.ts";
-import * as todos from "../../issues/lib/todo.ts";
-import { coreNotes, START_BUDGET, startContext, type Note } from "../../vault/lib/vault.ts";
+import { clip } from "../lib/naming.ts";
+import { claudeSettings } from "../hooks/lib/context.ts";
+import { langfuseConfig } from "../lib/env.ts";
+import { readStore } from "../jobs/lib/learning/corrections.ts";
+import { episodesDir, KEEP_DAYS } from "../jobs/lib/learning/episode.ts";
+import { loadRegistry } from "../jobs/lib/records/ledger.ts";
+import { afterOf, readLists } from "../issues/lib/store.ts";
+import * as todos from "../issues/lib/todo.ts";
+import { coreNotes, START_BUDGET, startContext, type Note } from "../vault/lib/vault.ts";
 import { activity } from "./activity.ts";
-import { skillsDir } from "./skills.ts";
-import { config, traces } from "../langfuse.ts";
-import { staleAsync } from "../stale.ts";
-import { handoffsDir as handoffsSetting, uiCacheMs } from "../../jobs/lib/infra/settings.ts";
+import { skillsDir } from "./api/skills.ts";
+import { config, traces } from "./langfuse.ts";
+import { staleAsync } from "./stale.ts";
+import { handoffsDir as handoffsSetting, uiCacheMs } from "../jobs/lib/infra/settings.ts";
 
 /** Langfuse-backed loads, kept `ALEPH_UI_CACHE_TTL` seconds like `vault misses`; a failure is kept as an answer with no data (null). */
 const sessionsCache = staleAsync<Sessions | null>();
@@ -125,7 +125,7 @@ async function hooks() {
 async function procedural() {
   const dir = skillsDir();
   const skills = files(dir, /^[^.]/).filter((f) => existsSync(join(dir, f, "SKILL.md"))).sort();
-  const claude = join(import.meta.dir, "..", "..", "identity", "CLAUDE.md");
+  const claude = join(import.meta.dir, "..", "identity", "CLAUDE.md");
   const hs = await hooks();
   return {
     skills, claudeMd: existsSync(claude) ? { path: "identity/CLAUDE.md", lines: readFileSync(claude, "utf8").split("\n").length, at: mtime(claude) } : null,

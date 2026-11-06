@@ -9,7 +9,7 @@
  * prices, and cache reads are most of a Claude Code request, so the hook
  * prices each generation itself and sends cost_details.
  */
-import { MODELS, type Rate } from "../../jobs/lib/routing/models.ts";
+import { MODELS, type Rate } from "../jobs/lib/routing/models.ts";
 
 /** `long` replaces the base rate for a request whose prompt (input + cache read + cache write) exceeds `above` tokens. */
 type Price = Rate & { long?: { above: number; rate: Rate } };

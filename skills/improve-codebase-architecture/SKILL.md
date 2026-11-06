@@ -4,7 +4,7 @@ description: Scan a codebase for deepening opportunities, present them as a visu
 disable-model-invocation: true
 ---
 
-Adapted from Matt Pocock's `improve-codebase-architecture` skill (github.com/mattpocock/skills @4ae2317, copy in `vendor/mattpocock-skills/`).
+Adapted from Matt Pocock's `improve-codebase-architecture` skill (github.com/mattpocock/skills @4ae2317).
 
 # Improve Codebase Architecture
 

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { activity, clearCache } from "./api/activity.ts";
+import { activity, clearCache } from "./activity.ts";
 import { withEnv } from "./test-server.ts";
 
 let obsHits = 0;

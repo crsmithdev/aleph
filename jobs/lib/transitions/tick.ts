@@ -13,7 +13,7 @@ import { ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
 import { correctionsStep, directIfNew, doneChecker, episodeStep, runDispatch, stalled } from "./factory.ts";
 import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
-import { firefight } from "../land/firefighter.ts";
+import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { factoryLog } from "../infra/layout.ts";
 import { allJobs, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";

@@ -1,13 +1,13 @@
 /**
  * One work store file: an issue. Flat frontmatter, then three parts, each
  * opened by a marker line: the request, the spec and the notes. See
- * docs/specs/2026-10-31-work-model.md.
+ * docs/data-model.md.
  *
  * An issue is closed by its `closed_as` field. A child is an issue with a `from`
  * field that names its parent. An old part is an issue whose id has a `.k`; its
  * parent comes from its id.
  */
-import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../vault/lib/frontmatter.ts";
+import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 import { parseId, shortText } from "../../lib/naming.ts";
 import { nowOverride } from "../../jobs/lib/infra/settings.ts";
 

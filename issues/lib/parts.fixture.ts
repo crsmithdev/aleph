@@ -1,7 +1,7 @@
 import { minute, titleProblem, today, touch, type Doc, type Issue, type Source } from "./todo.ts";
 
 /** The next free `k` for a part `<n>.<k>` under issue `n`, above any part of closed work. */
-export const nextSub = (doc: Doc, n: number): number => Math.max(doc.items.reduce((m, i) => (i.id === n && i.sub !== undefined ? Math.max(m, i.sub) : m), 0), doc.floor?.parts[String(n)] ?? 0) + 1;
+const nextSub = (doc: Doc, n: number): number => Math.max(doc.items.reduce((m, i) => (i.id === n && i.sub !== undefined ? Math.max(m, i.sub) : m), 0), doc.floor?.parts[String(n)] ?? 0) + 1;
 
 /** Add an old part `<n>.<k>` under issue `issue` (`k` the next free number), with `after`, the issue's priority and a `source`: the issue's when it is not chris, else agent. Only tests call it: they make the parts that old stores hold. */
 export function addPart(doc: Doc, issue: Issue, o: { title: string; spec: string; after?: string[]; now?: Date }): Issue {

@@ -20,11 +20,11 @@ import { fetchOrigin, git } from "../infra/git.ts";
 import { withMainClone } from "../infra/main-clone.ts";
 import { itemOnMain } from "../records/status.ts";
 import { INTAKE_TRIES } from "../infra/settings.ts";
-import { OPUS_MODEL } from "./agent-call.ts";
+import { OPUS_MODEL } from "../routing/models.ts";
 import { NO_OUTPUT } from "./structured.ts";
 
-/** The model an intake run asks for; `ui/usage.ts` books its cost under this name. */
-export const INTAKE_MODEL = OPUS_MODEL;
+/** The model an intake run asks for. */
+const INTAKE_MODEL = OPUS_MODEL;
 
 /** A spec as intake gives it: each section a field. `new` marks a file of the Edit surface that the run creates. */
 export interface Spec { goal: string; surface: { path: string; new: boolean }[]; oracle: string[] }

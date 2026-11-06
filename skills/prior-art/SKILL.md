@@ -151,11 +151,11 @@ deletion probably did not read hard enough. Say it if it is there.
 
 ### 6. Deliver
 
-Report in the terminal, then publish the survey as an artifact: the matrix,
-the three sections, the sources, and a closing note stating what was read at
-the code level and what came from a README.
+Report the survey in the terminal: the matrix, the three sections, the
+sources, and a closing note stating what was read at the code level and what
+came from a README.
 
-Give the artifact a title naming the comparison, not the topic.
+Give the survey a title naming the comparison, not the topic.
 
 ## Calibration
 

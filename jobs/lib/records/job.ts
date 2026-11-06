@@ -2,7 +2,7 @@
  * A job over the ledger: its runs, oldest first, as `allJobs` groups them.
  * Lookups by name, its issue, the run that counts, its state, the files in
  * its run folders, and `view`, the one projection that `/api/state`,
- * `/api/jobs` and `aleph jobs` show. See docs/specs/2026-09-24-agent-jobs.md.
+ * `/api/jobs` and `aleph jobs` show. See docs/data-model.md.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -73,13 +73,6 @@ export function latestFile(j: Job, file: RunFile, only: (e: Entry) => boolean = 
 
 /** The last `n` lines of a file in a run's folder; empty when it is not there. */
 export const tailOf = (e: Entry, file: RunFile, n: number): string => (readFile(e, file) ?? "").trimEnd().split("\n").slice(-n).join("\n");
-
-/** The verdict an earlier land wrote for a land run it took into its batch. */
-export interface Batch { verdict: string; code: number; checks?: CheckResult[] }
-export function batch(e: Entry): Batch | undefined {
-  const text = readFile(e, "batch.json");
-  return text === undefined ? undefined : JSON.parse(text);
-}
 
 /** The notes of a job, in order: each follow-up's spec, kept in its first run's `notes/`. */
 export function notes(j: Job): { name: string; text: string }[] {

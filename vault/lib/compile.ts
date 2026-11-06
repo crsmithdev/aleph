@@ -4,7 +4,7 @@
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { LangfuseConfig } from "../../hooks/lib/env.ts";
+import type { LangfuseConfig } from "../../lib/env.ts";
 
 const TRACE_CAP = 12 * 1024;
 

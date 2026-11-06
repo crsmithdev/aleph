@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
 import { vaultDir } from "../../jobs/lib/infra/settings.ts";
-import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "./frontmatter.ts";
+import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 
 export const KINDS = ["decision", "concept", "entity", "project", "gotcha"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -90,8 +90,6 @@ export function walk(dir: string, out: string[] = []): string[] {
 
 /** Parsed notes by root and path, valid while a file's mtime and size are unchanged. */
 const cache = new Map<string, { mtimeMs: number; size: number; note: Note }>();
-/** Files `loadVault` has read from disk; a test reads it to see that a second call read none. */
-export const loadStats = { reads: 0 };
 
 /** Every markdown file outside .obsidian/, archive included: archived notes are link targets. */
 export async function loadVault(root: string): Promise<Note[]> {
@@ -103,7 +101,6 @@ export async function loadVault(root: string): Promise<Note[]> {
       const st = await stat(p);
       const hit = cache.get(key);
       if (hit && hit.mtimeMs === st.mtimeMs && hit.size === st.size) return { ...hit.note };
-      loadStats.reads++;
       const note = parseNote(p, root, await readFile(p, "utf8"));
       cache.set(key, { mtimeMs: st.mtimeMs, size: st.size, note });
       return { ...note };

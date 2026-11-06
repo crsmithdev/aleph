@@ -11,7 +11,7 @@ export { trailerLine } from "./views/cards.js";
 export const asksOf = (runs: any[] = [], issues: any[] = [], lessons: any[] = []) => attend({ runs, issues }, lessons).items;
 export const withAttn = (s: any) => view.renderNeeds(s) + view.renderLanes(s);
 export const issue = (n: number) => ({ id: `aleph-${n}`, title: `Issue ${n}`, status: "open", href: `#/issues/aleph/${n}`, labels: [], notes: 0, created: "2026-10-27", updated: "2026-10-27" });
-export const full: any = { ...state, issues: [issue(1), issue(2)], queued: [{ repo: "aleph", id: 9, title: "w" }] };
+export const full: any = { ...state, queued: [{ repo: "aleph", id: 9, title: "w" }] };
 export const section = (h: string, id: string) => h.match(new RegExp(`<section id="${id}"[^]*?</section>`))![0];
 export const withFactory = (o: object) => ({ ...state, factory: { ...state.factory, health: [], ...o } });
 export const rows = (h: string) => h.split('<article class="job-card small issue-row ').slice(1);

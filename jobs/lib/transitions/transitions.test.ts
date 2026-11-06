@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { allRuns, writeRun, type Run } from "../records/ledger.ts";
 import { STARTING_MS } from "../infra/process.ts";
 import { recheck, startJob, type Start } from "./transitions.ts";
-import { Refusal } from "./refusal.ts";
+import { Refusal } from "../../../lib/refusal.ts";
 
 let base: string;
 const saved: Record<string, string | undefined> = {};

@@ -12,7 +12,7 @@
  * its verdict exits 2 (deny) with its name and the error on stderr.
  */
 import { resolve } from "node:path";
-import { GH_USER_CMD } from "./lib/env.ts";
+import { GH_USER_CMD } from "../lib/env.ts";
 
 try {
   const input = JSON.parse(await Bun.stdin.text());

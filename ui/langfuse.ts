@@ -1,8 +1,8 @@
 /** Langfuse reads for the Sessions views: one authenticated GET, reloaded at most every 30 s; an older answer is served while it reloads. */
-import { langfuseConfig, type LangfuseConfig } from "../hooks/lib/env.ts";
+import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
 import { staleAsync } from "./stale.ts";
 
-export const CACHE_MS = 30_000;
+const CACHE_MS = 30_000;
 const cache = staleAsync<unknown>();
 
 export function clearCache(): void { cache.clear(); }
@@ -31,7 +31,7 @@ export async function get(cfg: LangfuseConfig, path: string, query: Record<strin
 }
 
 /** Every row of a paged list endpoint. */
-export async function getAll(cfg: LangfuseConfig, path: string, query: Record<string, string>): Promise<any[]> {
+async function getAll(cfg: LangfuseConfig, path: string, query: Record<string, string>): Promise<any[]> {
   const rows: any[] = [];
   for (let page = 1; page < 200; page++) {
     const body = await get(cfg, path, { ...query, limit: "100", page: String(page) });

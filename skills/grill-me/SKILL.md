@@ -4,7 +4,7 @@ description: >
   Grill the user about a plan, decision or idea until you reach shared
   understanding. Use when the user says "grill me" or "interview me", or wants
   a plan stress-tested in conversation. NOT for: general Q&A, ideas with no
-  plan yet, implemented code (use /code-review), or review without the user in
+  plan yet, implemented code (use /aleph:code-review), or review without the user in
   the loop (use /aleph:red-team).
 ---
 

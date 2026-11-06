@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { judge } from "./judge.ts";
 import { setModel } from "../../jobs/lib/routing/models.ts";
-import { judgeChoice, setJudgeChoice } from "./jev.ts";
+import { judgeChoice, setJudgeChoice } from "../../lib/jev.ts";
 
 let dir: string;
 let server: ReturnType<typeof Bun.serve>;

@@ -50,5 +50,3 @@ tags: []
 ```
 
 `write` refuses a note with a bad schema, a duplicate, a dangling link, a folder that does not match its kind, a broken template, or one over the budget. It warns on an orphan, a stale measured claim, and an overlap with a note of the same scope. `compile` is the safety net for what the agent did not write on the day.
-
-The design is in [the memory vault spec](specs/2026-09-04-memory-vault.md).

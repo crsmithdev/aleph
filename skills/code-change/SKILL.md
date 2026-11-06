@@ -48,7 +48,7 @@ Make a **surgical** change: the fewest lines that meet the goal, and every chang
 
 These rules apply only when the goal adds a module or changes a module's interface: its signature, invariants, error modes or configuration. Otherwise the Scope rules win, and you restructure nothing.
 
-- Read [`codebase-design`](../codebase-design/SKILL.md) and use its words: module, interface, depth, seam, adapter.
+- Load `/aleph:codebase-design` and use its words: module, interface, depth, seam, adapter.
 - **Deletion test**: picture the module deleted. If its complexity reappears across its callers, it earns its keep; if the complexity vanishes, it is a pass-through, so inline it.
 - **One adapter is a hypothetical seam; two adapters are a real one.** Add a seam only where something varies across it.
 - **The interface is the test surface.** Test through it. A test that must reach past it says the module has the wrong shape.

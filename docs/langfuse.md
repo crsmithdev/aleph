@@ -36,7 +36,7 @@ turn                    root: input = the prompt, output = the last assistant
 └─ verify-gate          guardrail: verdict and reason
 ```
 
-At `Stop`, the hook reads the generations from the transcript, one per `requestId`, with cache reads and cache writes as usage. It prices them from `hooks/lib/pricing.ts`, because the Langfuse models API keeps only input and output prices, and cache reads are most of a Claude Code request.
+At `Stop`, the hook reads the generations from the transcript, one per `requestId`, with cache reads and cache writes as usage. It prices them from `lib/pricing.ts`, because the Langfuse models API keeps only input and output prices, and cache reads are most of a Claude Code request.
 
 ## Scores
 

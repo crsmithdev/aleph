@@ -11,13 +11,13 @@
  *   turn (root)  →  tool | agent → tool | generation | event
  */
 import { basename } from "node:path";
-import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
+import { langfuseConfig, sessionEnvironment } from "../lib/env.ts";
 import { peek, prune, put, take } from "./lib/handshake.ts";
-import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "./lib/otlp.ts";
+import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "../lib/otlp.ts";
 import { parseRating } from "./lib/rating.ts";
 import { readEntries } from "./lib/digest.ts";
-import { decide, judgeChoice, type Question } from "./lib/jev.ts";
-import { costDetails, type Usage } from "./lib/pricing.ts";
+import { decide, judgeChoice, type Question } from "../lib/jev.ts";
+import { costDetails, type Usage } from "../lib/pricing.ts";
 
 type Payload = Record<string, any>;
 

@@ -26,7 +26,7 @@ import type { State } from "../state.ts";
 import type { Routes } from "../server.ts";
 
 /** The log keeps the entries of the last LOG_DAYS days, newest first, at most LOG_MAX of each actor. */
-export const LOG_DAYS = 7, LOG_MAX = 200;
+const LOG_DAYS = 7; export const LOG_MAX = 200;
 const DAY = 86_400_000;
 /** The windows that `?window=` takes. */
 const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DAY, month: 30 * DAY };
@@ -34,7 +34,7 @@ const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DA
 const inProject = (item: string, project?: string) => !project || item.startsWith(`${project}-`);
 
 /** One log row: an event. A run of equal gate events is one row: `times` is how many, `first` the first one's time. */
-export type LogEntry = Event & { times?: number; first?: string };
+type LogEntry = Event & { times?: number; first?: string };
 /** Whether an entry is a decision on an Ask that a rule or the director made, not Chris. */
 const automatic = (e: LogEntry) => e.by === "rule" || (e.by === "director" && e.action !== "escalated");
 /** Whether an entry is Chris's answer to an Ask: his rule changes are not. */

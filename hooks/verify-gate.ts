@@ -9,13 +9,13 @@
  *                     otherwise ask the judge; deny with its reason
  *                     always record a guardrail span and a score
  */
-import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
+import { langfuseConfig, sessionEnvironment } from "../lib/env.ts";
 import { digest, readEntries, userGrantedSkip } from "./lib/digest.ts";
 import { docClaimProblems } from "./lib/docclaims.ts";
 import { backing, unbackedHashes } from "./lib/hashes.ts";
 import { peek, put, take } from "./lib/handshake.ts";
 import { judge } from "./lib/judge.ts";
-import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type Span } from "./lib/otlp.ts";
+import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type Span } from "../lib/otlp.ts";
 import { changedFiles, isCode, snapshot, type Snapshot } from "./lib/snapshot.ts";
 
 const input = JSON.parse(await Bun.stdin.text());

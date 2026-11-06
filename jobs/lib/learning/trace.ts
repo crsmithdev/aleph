@@ -3,8 +3,8 @@
  * and the reviewer's stream-json. episode.ts reads it back by that id.
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { langfuseConfig } from "../../../hooks/lib/env.ts";
-import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../../hooks/lib/otlp.ts";
+import { langfuseConfig } from "../../../lib/env.ts";
+import { attrs, nano, postSpans, spanId, traceIdFor, truncate, type Span } from "../../../lib/otlp.ts";
 import { onOf, type Run } from "../records/ledger.ts";
 import { runFile } from "../records/run-files.ts";
 

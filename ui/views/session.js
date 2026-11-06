@@ -25,7 +25,7 @@ function turnTable(d, limit = TURN_PAGE) {
   return dataTable(heads(["Started", "Turn", "Prompt", "Output", "Model", "Tools", "Took", "Cost"], ["Turn", "Tools", "Took", "Cost"]), rows) + pager(limit, d.turns.length, TURN_PAGE);
 }
 
-export const CHAT_PAGE = 20;
+const CHAT_PAGE = 20;
 const CLIP_LINES = 20, CLIP_CHARS = 1600, TOOLS_SHOWN = 5, TOOLS_FOLD = 12;
 const INDENT_STEP = 14;
 
@@ -126,7 +126,7 @@ export function wfRows(turns) {
 const axisTick = (ms) => (ms <= 0 ? "0s" : dur(Math.round(ms)));
 
 /** Wall time, summed tool time, the 3 longest calls (links that select their row) and the error count. */
-export function wfSummary(rows) {
+function wfSummary(rows) {
   const calls = rows.filter((r) => r.kind !== "turn");
   const wall = rows.reduce((m, r) => Math.max(m, r.endMs), 0);
   const toolMs = calls.filter((r) => r.kind === "tool").reduce((n, r) => n + (r.durationMs ?? 0), 0);
@@ -180,7 +180,7 @@ export function renderSession(d, _params, query = new URLSearchParams()) {
 }
 
 // The toggle writes the hash; "Show all" uncuts a long message; "Show 20 more" appends the next turns in place.
-export function mountSession(root, d, query = new URLSearchParams()) {
+function mountSession(root, d, query = new URLSearchParams()) {
   if (!d || d.error) return;
   const wf = isWaterfall(query);
   let loaded = [...d.turns], sel = null, turns = TURN_PAGE;
@@ -275,7 +275,8 @@ function mountTurn(root, d) {
   };
 }
 
-export const sessionView = { path: "/sessions/:id", title: "Session", group: "claude", order: 0,
+export const sessionView = { path: "/sessions/:id", title: "Session", group: "claude",
   api: (params, q = new URLSearchParams()) => `/api/sessions/${encodeURIComponent(params.id)}${isTable(q) ? "" : `/chat?limit=${CHAT_PAGE}`}`,
   render: renderSession, mount: mountSession };
-export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", order: 0, api: "/api/sessions/:id/turns/:n", render: renderTurn, mount: mountTurn };
+export const turnView = { path: "/sessions/:id/turns/:n", title: "Turn", group: "claude", api: "/api/sessions/:id/turns/:n", render: renderTurn, mount: mountTurn };
+export const views = [sessionView, turnView];

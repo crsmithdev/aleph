@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { addOld, sh, worktree, setup, teardown } from "../../cli.helpers";
 import { actionJob, drop, issueClose } from "../../inproc.ts";
-import { reportText } from "../infra/flow.testkit.ts";
+import { reportText } from "../../flow.testkit.ts";
 import { trailerOf } from "../records/ledger.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.

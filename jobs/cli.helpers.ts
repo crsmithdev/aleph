@@ -251,7 +251,7 @@ echo '{"type":"result","is_error":false,"total_cost_usd":0.01,"usage":{"input_to
 `;
 
 /** Pids (not this process) whose cmdline, environ or cwd holds `dir`. */
-export function referring(dir: string): number[] {
+function referring(dir: string): number[] {
   const out: number[] = [];
   for (const p of readdirSync("/proc").filter((p) => /^\d+$/.test(p))) {
     if (Number(p) === process.pid) continue;
@@ -276,7 +276,7 @@ export function referring(dir: string): number[] {
 }
 
 /** SIGKILLs every process that refers to `dir` and waits, up to 10 s, until none is left. */
-export function killReferring(dir: string): void {
+function killReferring(dir: string): void {
   const end = Date.now() + 10_000;
   for (;;) {
     const pids = referring(dir);
@@ -391,9 +391,6 @@ export function teardown(): void {
   try { if (base) killReferring(base); } catch {}
   if (base) rmSync(base, { recursive: true, force: true });
   delete process.env.ALEPH_RECORDS_DIR;
-}
-export async function fjobFor(name: string, action: string, id: number) {
-  return aleph(["job", "fac", name, "--spec", specFile(`Goal: ${name}\nACTION: ${action}\n`), "--on", String(id)]);
 }
 
 /** Brings the test store's checkout up to origin/main. A detached dispatch or intake writing the store at the same moment can make one fetch find no ref, so it retries. */

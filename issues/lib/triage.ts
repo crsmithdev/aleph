@@ -3,7 +3,7 @@
  * which open items it may duplicate. One request; any failure, or
  * `aleph judge haiku`, gives an empty triage.
  */
-import { decide, judgeChoice, type Question } from "../../hooks/lib/jev.ts";
+import { decide, judgeChoice, type Question } from "../../lib/jev.ts";
 import { areasOf } from "./store.ts";
 import { status, type Doc } from "./todo.ts";
 

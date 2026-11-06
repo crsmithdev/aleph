@@ -7,8 +7,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
-import type { Observation } from "../../hooks/lib/otlp.ts";
+import { langfuseConfig, type LangfuseConfig } from "../../lib/env.ts";
+import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
@@ -39,7 +39,7 @@ const folders = (): string[] => {
 const short = (name: string) => name.split(":").pop()!;
 
 /** The slash command a prompt starts with, or null. */
-export function slashCommand(prompt: string): string | null {
+function slashCommand(prompt: string): string | null {
   const m = prompt.match(/^\s*(?:<command-message>[\s\S]*?<\/command-message>\s*)?<command-name>\s*\/?([^<\s]+)\s*<\/command-name>/) ?? prompt.match(/^\s*\/([\w][\w:.-]*)/);
   return m ? m[1] : null;
 }
@@ -131,7 +131,7 @@ async function fetchRows(cfg: LangfuseConfig, from: Date, to: Date): Promise<{ o
  * whole, to pick up rows that came later than that.
  */
 interface Store { base: string; from: number; through: number; built: number; synced: number; obs: Map<string, Observation>; traces: Map<string, TraceInfo> }
-export const storeFile = skillsStore;
+const storeFile = skillsStore;
 let store: Store | null = null;
 let queue: Promise<unknown> = Promise.resolve();
 

@@ -19,7 +19,7 @@ export const sh = (cwd: string, ...args: string[]): string => {
   return p.stdout.toString().trim();
 };
 export const remote = (...a: string[]) => sh(dir, "git", "--git-dir", join(dir, "repo.git"), ...a);
-export const filesAt = (commit: string) => sh(repo.path, "git", "ls-tree", "-r", "--name-only", commit).split("\n");
+const filesAt = (commit: string) => sh(repo.path, "git", "ls-tree", "-r", "--name-only", commit).split("\n");
 export const mainFiles = () => remote("ls-tree", "-r", "--name-only", "main").split("\n");
 export const pushes = () => existsSync(join(dir, "pushes")) ? readFileSync(join(dir, "pushes"), "utf8").trim().split("\n").length : 0;
 

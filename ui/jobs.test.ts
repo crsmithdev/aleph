@@ -11,8 +11,6 @@ import { withEnv } from "./test-server.ts";
 import * as lib from "./lib.js";
 // @ts-ignore jobs.js is plain JS, shared with the page
 import * as v from "./views/jobs.js";
-// @ts-ignore plain JS, shared with the page
-import * as jobView from "./views/job.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 import { removeRun } from "../jobs/lib/records/record.ts";
 

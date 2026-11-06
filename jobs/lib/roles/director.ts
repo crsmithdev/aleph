@@ -35,12 +35,12 @@ import { factoryLog, logEvent } from "../infra/layout.ts";
 import { refs as idsIn, word } from "../../../lib/naming.ts";
 import type { Hold } from "../gates/issue-decision.ts";
 import { DIRECTOR_CAP, needsYouLog, vaultDir } from "../infra/settings.ts";
-import { OPUS_MODEL } from "./agent-call.ts";
+import { OPUS_MODEL } from "../routing/models.ts";
 import type { Fate } from "../records/outcome.ts";
 import { drop as dropJob, land as landJob, refusal } from "../transitions/transitions.ts";
 import { writeTitle } from "./title.ts";
 
-export const DIRECTOR_MODEL = OPUS_MODEL;
+const DIRECTOR_MODEL = OPUS_MODEL;
 /** One run per Ask: its time box in seconds. */
 export const SECONDS = 900;
 /** The most actions one run may take; the rest are refused. */

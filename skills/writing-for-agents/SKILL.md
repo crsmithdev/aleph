@@ -5,7 +5,7 @@ description: >
   reaches by a pointer. Use when creating, editing or auditing one.
 ---
 
-Adapted from Matt Pocock's `writing-for-agents` skill (github.com/mattpocock/skills @4ae2317, copy in `vendor/mattpocock-skills/`).
+Adapted from Matt Pocock's `writing-for-agents` skill (github.com/mattpocock/skills @4ae2317).
 
 Reference for writing any document an agent consumes: a skill, an `AGENTS.md` / `CLAUDE.md`, a doc reached by a pointer. The packaging differs; the writing does not: the same levers make each one predictable, since the agent takes the same _process_ every run rather than producing the same output.
 

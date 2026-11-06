@@ -10,7 +10,7 @@ import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
 import { latestJob } from "../../jobs/lib/records/job.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
 import { runCli } from "../cli.ts";
-import { Refusal } from "../../jobs/lib/transitions/refusal.ts";
+import { Refusal } from "../../lib/refusal.ts";
 import * as issues from "../../issues/lib/issues.ts";
 import { sameSite, text } from "../http.ts";
 import type { Handler, Routes } from "../server.ts";

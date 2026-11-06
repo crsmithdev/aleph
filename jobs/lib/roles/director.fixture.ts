@@ -61,7 +61,7 @@ export const reply = (actions: object[], text?: object) => writeFileSync(join(ba
 /** The fake's whole reply: an object, such as `{ case: {...} }`, as structured output; a string as plain text. */
 export const replyWith = (o: object | string) => writeFileSync(join(base, "reply.json"), typeof o === "string" ? o : result(o));
 export const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
-export const log = () => readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8");
+const log = () => readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8");
 /** The events of tick.log, oldest first: its JSON lines. */
 export const events = () => log().split("\n").filter((l) => l.includes(" {")).map((l) => JSON.parse(l.slice(l.indexOf(" ") + 1)));
 
@@ -127,10 +127,3 @@ export function useDirectorFixture(): void {
   afterAll(() => { server.stop(true); rmSync(base, { recursive: true, force: true }); });
   beforeEach(() => { rmSync(join(base, "calls"), { force: true }); landed = []; dropped = []; told = []; reply([]); });
 }
-
-
-/** Chris's standing permissions for this test's factory directory. */
-export const alwaysFile = (s: object) => {
-  mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
-  writeFileSync(join(process.env.ALEPH_FACTORY_DIR!, "always.json"), JSON.stringify(s));
-};

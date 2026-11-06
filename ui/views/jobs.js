@@ -27,8 +27,8 @@ export const listUrl = (_params, q = new URLSearchParams()) => {
   return s ? `/api/jobs?${s}` : "/api/jobs";
 };
 
-/** The Job view, routed at `#/jobs/<name>` through ui/views/job.js. */
-export const detail = {
+/** The Job view, routed at `#/jobs/<name>`. */
+export const view = {
   path: "/jobs/:name",
   title: "Job",
   group: "factory",
@@ -64,7 +64,7 @@ const DOWN_FIRST = new Set(["took", "cost", "started"]);
 const sortOf = (f) => (f.sort && SORT[f.sort] ? { key: f.sort, dir: f.dir === "asc" ? 1 : -1 } : { key: "started", dir: -1 });
 
 /** The jobs the search keeps, in the sort's order. */
-export function shownJobs(jobs, f = {}) {
+function shownJobs(jobs, f = {}) {
   const q = (f.q ?? "").trim().toLowerCase(), sort = sortOf(f);
   return sortRows(jobs.filter((j) => !q || `${j.name} ${titleOf(j)}`.toLowerCase().includes(q)), SORT, sort);
 }
@@ -97,7 +97,7 @@ export function wireJobs(root, jobsNow) {
 
 const TRANSCRIPT = new Set(["output.log", "review.log"]);
 /** A run's log files as buttons, with a place beneath for the one that loads. "" for a run with no logs. */
-export function logButtons(job, r) {
+function logButtons(job, r) {
   if (!r.logs?.length) return "";
   const buttons = r.logs.map((l) => `<button class="link" type="button" data-log="${esc(r.id)}" data-job="${esc(job)}" data-file="${esc(l.name)}"${TRANSCRIPT.has(l.name) ? ' data-as="transcript"' : ""} title="${esc(`${l.name}, ${bytes(l.size)}`)}">${esc(l.name.replace(/\.log$/, ""))}</button>`).join(" · ");
   return `<div class="dp-logs" data-logs><span class="quiet">logs:</span> ${buttons}<div class="logbody" hidden></div></div>`;
@@ -136,7 +136,7 @@ export function change(stat) {
 const workRuns = (j) => (j.runs ?? []).filter((r) => r.kind !== "review" && r.kind !== "facts");
 
 /** The Timeline's segments for a job: Work (builds, reviews in them, the land). */
-export function jobSegments(j, now = Date.now()) {
+function jobSegments(j, now = Date.now()) {
   const work = spans(workRuns(j), now);
   const count = {};
   for (const x of work) count[x.r.kind] = (count[x.r.kind] ?? 0) + 1;
@@ -208,7 +208,7 @@ export function renderJob(j) {
 }
 
 /** The Job page's mount: load the diff into the Diff panel, once. */
-export async function mountJob(root) {
+async function mountJob(root) {
   const out = root.querySelector?.("#diff[data-job]");
   if (!out || out.dataset.loaded) return;
   out.dataset.loaded = "1";

@@ -5,7 +5,7 @@ description: >
   check it against the code and return a ranked list of flaws. Use when a plan
   needs stress-testing before commit, including your own. NOT for:
   interviewing the user (use /aleph:grill-me), implemented code (use
-  /code-review), bugs (use /aleph:diagnosing-bugs).
+  /aleph:code-review), bugs (use /aleph:diagnosing-bugs).
 ---
 
 # Red Team

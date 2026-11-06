@@ -1,7 +1,7 @@
 /**
  * The factory around the runs: the timer's tick, the dispatch and the report.
  * What it reads of its state is in factory-status.ts. Its state lives in
- * ~/.aleph/factory. See docs/specs/2026-10-26-seed-factory.md.
+ * ~/.aleph/factory. See docs/factory.md.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";

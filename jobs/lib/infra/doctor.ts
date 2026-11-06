@@ -4,11 +4,11 @@
  */
 import { existsSync, lstatSync, readdirSync, readlinkSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { git } from "../infra/git.ts";
+import { git } from "./git.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
-import { isLost } from "../infra/process.ts";
-import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "../infra/clock.ts";
-import { doctorClockMs, homeUrl, systemctlBin, unitDir } from "../infra/settings.ts";
+import { isLost } from "./process.ts";
+import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
+import { doctorClockMs, homeUrl, systemctlBin, unitDir } from "./settings.ts";
 
 export interface Check { name: string; ok: boolean; detail: string }
 

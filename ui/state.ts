@@ -1,16 +1,16 @@
 /**
- * The `/api/state` object of docs/specs/2026-10-27-ui.md, built read-only from
+ * The `/api/state` object (docs/ui.md), built read-only from
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
-import { judgeChoice } from "../hooks/lib/jev.ts";
+import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
 import { issueDecision, pendingWaits, refDone, type Hold, type IssueDecision } from "../jobs/lib/gates/issue-decision.ts";
 import { askOf as runAsk, isWaiting, loadRegistry, onOf, type CheckResult, type Repo } from "../jobs/lib/records/ledger.ts";
 import { allJobs, isOpen, lastReal, view, type Job as Runs, type JobView } from "../jobs/lib/records/job.ts";
 import { causeOf, failedCheckOf, type Cause } from "../jobs/lib/records/outcome.ts";
-import { askOf, needsOf, plainAsk, readAlways, type Ask } from "../jobs/lib/asks/ask.ts";
+import { askOf, needsOf, plainAsk, type Ask } from "../jobs/lib/asks/ask.ts";
 import { attend, stuckBlocker, type AskItem, type Blocker } from "./asks.ts";
 import { afterOf, areasOf, byPriority, partsOf, rank, reader, isTracker } from "../issues/lib/store.ts";
 import { idOf, parentRef, parseIssueRef, PRIORITIES, refOf, status } from "../issues/lib/todo.ts";
@@ -82,9 +82,7 @@ export interface NewIssue { id: string; title: string; priority?: string; status
 export interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
-export interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
-/** An issue as the Incoming list shows it: `stage` is from stage(). */
-export interface IncomingItem { id: string; title: string; href: string; created: string; stage: string }
+interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
 
 export interface State {
   now: string;
@@ -99,7 +97,7 @@ export interface State {
     /** The monitor's newest daily report: the first metric, the reader's findings in rank order, and the table. Null before the first report. */
     monitor: ReturnType<typeof monitorPanel>;
   };
-  stuck: Job[]; running: Job[]; delivered: Job[];
+  stuck: Job[]; running: Job[];
   /** Everything that waits for Chris: one entry per awaiting run, issue and proposal, with its kind (input or approval) and reason. */
   asks: AskItem[];
   /** Queued and blocked issues (and old items): the Queued lane. */
@@ -109,32 +107,13 @@ export interface State {
     waits?: { id: string; href: string; state: string | null }[] }[];
   /** Issues in Running: each with its parts nested and "n of m issues". */
   runningIssues: RunningIssue[];
-  /** Land runs in progress. */
-  landing: number;
-  /** Open issues in factory repos that are not parts and not yet taken in: the newest NEW_ISSUES. */
-  issues: NewIssue[];
-  /** How many such issues there are in all. */
-  newIssues: number;
-  /** Every open issue in factory repos, whatever its labels: the count of the Issues metric card. */
-  openIssues: number;
   /** Done: the last 10 done issues, newest first, each with the intake and land jobs that belong to it. */
   done: DoneItem[];
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
-  /** Incoming: the last 10 issues added, newest first, each with its current status. */
-  incoming: IncomingItem[];
-  /** The intake runs (and planner runs from before intake), the running ones first, then the latest finished. */
-  planner: Job[];
-  /** The Always rules, with how many asks each reason hands to the firefighter. */
-  always: { reason: string; action: string; at: string }[];
-  /** Jobs landed and issues taken in (or triaged) in the last 24 hours, with the 7-day daily average. */
-  velocity: { landed: { day: number; avg: number }; triaged: { day: number; avg: number } };
 }
 
-/** The Now page shows this many of the latest lands. */
-const DELIVERED = 10;
-/** So do the Issues and Triage sections. */
-const NEW_ISSUES = 10, TRIAGED = 10, DONE = 10;
+const DONE = 10;
 
 function systemctlUser(...args: string[]): { ok: boolean; out: string } {
   try {
@@ -143,8 +122,8 @@ function systemctlUser(...args: string[]): { ok: boolean; out: string } {
   } catch { return { ok: false, out: "" }; }
 }
 
-/** The next firing of aleph-tick.timer and whether a tick is running, as jobs/lib/land/doctor.ts reads them: `systemctl show` for the next elapse, `is-active` for the oneshot service. */
-export function tickTimer(): { nextTick: string | null; tickInProgress: boolean } {
+/** The next firing of aleph-tick.timer and whether a tick is running, as jobs/lib/infra/doctor.ts reads them: `systemctl show` for the next elapse, `is-active` for the oneshot service. */
+function tickTimer(): { nextTick: string | null; tickInProgress: boolean } {
   const t = systemctlUser("show", "aleph-tick.timer", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic");
   if (!t.ok) return { nextTick: null, tickInProgress: false };
   const lines = t.out.split("\n");
@@ -302,14 +281,11 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
 export function state(now = new Date()): State {
   const registry = loadRegistry();
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
-  const jobs = allJobs(), runs = jobs.flat();
+  const jobs = allJobs();
   const { lists, toJob, stagesOf, isDone, blocker } = jobProjector(registry, jobs);
 
-  let landing = 0;
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];
-  const delivered: { at: number; runs: Runs }[] = [];
   const liveJobs = new Set<string>(), liveItems = new Set<string>();
-  const landRuns: Job[] = [];
   for (const runs of jobs) {
     const last = runs.at(-1)!.run;
     // A running intake (or planner) counts as running; it is not a live agent.
@@ -329,13 +305,8 @@ export function state(now = new Date()): State {
       else {
         liveJobs.add(real.job);
         if (onOf(real) !== undefined) liveItems.add(`${real.repo}/${onOf(real)}`);
-        const job = toJob(runs);
-        running.push(job);
-        if (real.kind === "land") { landing++; landRuns.push(job); }
+        running.push(toJob(runs));
       }
-    } else if (last.condition === "landed" && last.ended) {
-      const at = Date.parse(last.ended);
-      delivered.push({ at, runs });
     }
   }
 
@@ -363,14 +334,6 @@ export function state(now = new Date()): State {
     if (b) j.blocker = b;
   }
 
-  const DAY_MS = 86_400_000, t0 = now.getTime();
-  const rate = (times: number[]) => ({
-    day: times.filter((t) => t0 - t < DAY_MS).length,
-    avg: times.filter((t) => t0 - t < 7 * DAY_MS).length / 7,
-  });
-  const landedAt = delivered.map((d) => d.at).filter((t) => t <= t0);
-  const triagedAt = runs.filter((e) => (e.run.kind === "intake" || e.run.kind === "triage") && e.run.condition === "done").map((e) => Date.parse(e.run.ended ?? e.run.started)).filter((t) => t <= t0);
-
   // The jobs of each issue, by `repo-id`: the open ones give its status, all of them its Done package.
   const ofItem = new Map<string, Runs[]>();
   for (const runs of jobs) {
@@ -394,14 +357,11 @@ export function state(now = new Date()): State {
       ps.forEach((g, i) => partOf.set(`${repo.key}-${refOf(g)}`, { n: i + 1, m: ps.length, parent: `${repo.key}-${refOf(item)}`, href: hrefOf(repo, refOf(item)) }));
     }
   }
-  const everyone: { at: string; n: number; card: IncomingItem }[] = [];
   const doneItems: { at: number; repo: Repo; item: any; runs: Runs[]; since: string }[] = [];
 
-  const fresh: NewIssue[] = [];
   const awaitingItems: NewIssue[] = [];
   const queued: { repo: Repo; item: any; stage: string; since: string; at: string }[] = [];
   const runningIssues: RunningIssue[] = [];
-  let openIssues = 0;
   for (const repo of Object.values(registry)) {
     if (!repo.sandbox) continue;
     const stageById = stagesOf(repo);
@@ -409,11 +369,9 @@ export function state(now = new Date()): State {
     for (const item of doc?.items ?? []) {
       const ref = refOf(item), id = `${repo.key}-${ref}`, href = hrefOf(repo, ref);
       const st = stageById.get(ref)?.stage ?? status(item);
-      // Incoming and Done list issues; a part shows under its issue.
+      // Done lists issues; a part shows under its issue.
       const top = parentRef(item) === undefined;
       const card = (): NewIssue => ({ id, title: item.title, priority: priorityOf(item), status: "open", href, labels: areasOf(item), notes: item.notes.length, created: String(item.fm.created ?? ""), updated: String(item.fm.updated ?? ""), stage: st });
-      const created = String(item.fm.created ?? "");
-      if (top) everyone.push({ at: created, n: item.id, card: { id, title: item.title, href, created, stage: st } });
       const mineParts = partsOf(doc!, item);
       // Latest done holds the done parts and the done issues without parts; a done parent shows no card.
       if (st === "done" && (!top || mineParts.length === 0)) {
@@ -422,7 +380,6 @@ export function state(now = new Date()): State {
         doneItems.push({ at: ends.length ? Math.max(...ends) : Date.parse(String(item.fm.updated ?? "")) || 0, repo, item, runs: mine, since: pickedUp(id) });
       }
       if (status(item) !== "open" || st === "done" || st === "dropped") continue;
-      if (top) openIssues++;
       const ask = askOf(id);
       if (st === "waiting" && ask) {
         const c = card();
@@ -435,7 +392,6 @@ export function state(now = new Date()): State {
         awaitingItems.push(c);
       }
       else if (st === "queued" || st === "held") queued.push({ repo, item, stage: st, since: pickedUp(id), at: String(item.fm.updated ?? item.fm.created ?? "") });
-      else if (st === "new" && !isTracker(item)) fresh.push({ ...card(), status: st });
       // A parent shows a card in Running only while it waits to close: every part is done.
       if (st === "working" && mineParts.length) {
         const of = stageById.get(ref)?.of ?? { n: 0, m: mineParts.length };
@@ -449,18 +405,13 @@ export function state(now = new Date()): State {
   }
   for (const j of stuck) if (j.item) j.part = partOf.get(`${j.repo}-${j.item.id}`);
 
-  everyone.sort((a, b) => b.at.localeCompare(a.at) || b.n - a.n);
   doneItems.sort((a, b) => b.at - a.at);
   const done: DoneItem[] = doneItems.slice(0, DONE).map(({ at, repo, item, runs, since }) => ({
     id: `${repo.key}-${refOf(item)}`, title: item.title, href: hrefOf(repo, refOf(item)), priority: priorityOf(item),
     finished: at ? new Date(at).toISOString() : "", since, ...(partOf.get(`${repo.key}-${refOf(item)}`) ? { part: partOf.get(`${repo.key}-${refOf(item)}`) } : {}),
     jobs: runs.map((r: Runs) => toJob(r)),
   }));
-  const planAt = (r: Runs) => Date.parse(r.at(-1)!.run.condition === "running" ? "9999-01-01" : r.at(-1)!.run.ended ?? r.at(-1)!.run.started);
-  const planner = jobs.filter((r) => r.at(-1)!.run.kind === "intake" || r.at(-1)!.run.kind === "plan").sort((a, b) => planAt(b) - planAt(a)).slice(0, TRIAGED).map((r) => toJob(r));
 
-  fresh.sort((a, b) => b.created.localeCompare(a.created));
-  const granted = readAlways();
   const { gated, baselines: base, ...factory } = factorySnapshot(now.getTime(), jobs);
   const att = attend({ runs: needs, issues: awaitingItems });
   // The run behind an ask: its live-run mark, its trailers and its notes.
@@ -478,12 +429,8 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...tickTimer(), monitor: monitorPanel() },
-    asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })), incoming: everyone.slice(0, NEW_ISSUES).map((e) => e.card), planner,
-    always: Object.entries(granted).map(([reason, g]) => ({ reason, action: g.action, at: g.at })),
-    stuck, running, runningIssues, landing, newIssues: fresh.length, openIssues, issues: fresh.slice(0, NEW_ISSUES),
-    velocity: { landed: rate(landedAt), triaged: rate(triagedAt) },
-    // Lands: land runs in progress first, then the latest landed, DELIVERED in all.
-    delivered: [...landRuns, ...delivered.sort((a, b) => b.at - a.at).slice(0, Math.max(0, DELIVERED - landRuns.length)).map((d) => toJob(d.runs))].slice(0, DELIVERED),
+    asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
+    stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {
       const red = redOf(repo);
       // The stage already says when an issue is to plan.

@@ -2,7 +2,7 @@
 
 The factory builds issues without you. It takes in each open issue as goals, starts a worker for each ready goal, checks and reviews the branch, and lands it on `main`. It asks you only when a rule says so.
 
-A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps. The design is in [the seed factory spec](specs/2026-10-26-seed-factory.md).
+A repo with `"sandbox": true` in `~/.aleph/repos.json` is a factory repo. [Workflow](workflow.md) states each step and gate, [Routing](routing.md) the model for each role, and [Data model](data-model.md) each file the factory keeps.
 
 ## Set it up
 

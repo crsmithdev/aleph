@@ -1,5 +1,5 @@
 // One skill: how often it ran, from Langfuse. `renderSkill` takes /api/skills/:name and does not touch the DOM.
-// The shell takes one view per module, so the route is declared in skill.js. The list of skills is in sessions.js.
+// The list of skills is in sessions.js.
 import { card, chartBox, mountCharts, crumb, dataTable, empty, esc, heads, idLink, day, pageHead, pager, span, when } from "../lib.js";
 
 const sessionHref = (id) => `#/sessions/${encodeURIComponent(id)}`;
@@ -32,7 +32,7 @@ export function mountPerDay(root, d) {
 }
 
 /** When the last reload failed, the page shows the last good rows and says how old they are. */
-export const staleNote = (d, now = new Date()) => d.failed
+const staleNote = (d, now = new Date()) => d.failed
   ? `<p class="quiet stale" role="status">Langfuse failed: ${esc(d.failed)}. Showing the data from ${esc(when(d.asOf, now))} (${esc(span(d.asOf, now.toISOString()) || "0s")} ago).</p>`
   : "";
 
@@ -60,3 +60,23 @@ export function renderSkill(d, limits = {}) {
     card("Turns With Errors", table("errors", heads(["Started", "Session", "Error", "Project"]), errors, lim("errors"), "No turn with this skill had an error."), { count: d.errors.length, label: "Turns with errors" }) +
     `</div>`;
 }
+
+export const view = {
+  path: "/skills/:name",
+  title: "Skill",
+  group: "claude",
+  api: "/api/skills/:name",
+  render: (d) => renderSkill(d),
+  mount: (root, d) => {
+    const limits = {};
+    mountPerDay(root, d);
+    root.onclick = (e) => {
+      const more = e.target.closest?.("[data-t] button[data-more]");
+      if (!more) return;
+      const name = more.closest("[data-t]").dataset.t;
+      limits[name] = (limits[name] ?? 50) + Number(more.dataset.more);
+      root.innerHTML = renderSkill(d, limits);
+      mountPerDay(root, d);
+    };
+  },
+};

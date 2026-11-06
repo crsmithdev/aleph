@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addNote, allJobs, batch, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, readFile, tailOf } from "./job.ts";
+import { addNote, allJobs, checkedBy, lookMinutes, issueTitle, hasFile, latestFile, latestJob, notes, readFile, tailOf } from "./job.ts";
 import { isOpen, writeRun, type Run } from "./ledger.ts";
 import { asked, markAsked, waitsForSpecEdit } from "../asks/ask.ts";
 import { markRescued, rescued } from "../transitions/continuation.ts";
@@ -52,8 +52,6 @@ describe("run-folder files", () => {
     expect(latestFile(j, "review.md")).toBeUndefined();
     expect(tailOf(first, "checks.log", 2)).toBe("b\nc");
     expect(tailOf(first, "review.md", 2)).toBe("");
-    expect(batch(last)).toEqual({ verdict: "landed", code: 0 });
-    expect(batch(first)).toBeUndefined();
     expect(hasFile(last, "batch.json")).toBe(true);
     expect(issueTitle(j)).toBe("Do it");
 

@@ -112,4 +112,4 @@ For the full rule list per category, read `rules/_sections.md`. The `*-defaults.
 - Cite the specific failing check in a `*-defaults.md` bundle ("`voice-defaults`: passive voice"), not just the filename, or the author can't locate the issue.
 - Rule files carry their own false-positive guidance (the "should" check, sample credentials, hand-typed dates, series openers). Read the rule before you flag a finding against it.
 
-Adapted from Matthew Blode's `docs-writing` skill (github.com/mblode/agent-skills, MIT, `skills/LICENSE-mblode`), with its references to sibling skills and its eval suite removed.
+Adapted from Matthew Blode's `docs-writing` skill (github.com/mblode/agent-skills, MIT, `skills/docs-writing/LICENSE`), with its references to sibling skills and its eval suite removed.

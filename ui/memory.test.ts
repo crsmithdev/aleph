@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { clearCache, warm } from "./api/memory.ts";
-import { memoryTypes } from "./api/memory-types.ts";
+import { memoryTypes } from "./memory-types.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
@@ -13,7 +13,7 @@ import { md, priorityBadge } from "./lib.js";
 // @ts-ignore
 import * as v from "./views/memory.js";
 // @ts-ignore
-import { view as noteView } from "./views/memory-note.js";
+import { noteView } from "./views/memory.js";
 
 // The test's clock: the code under test reads it, and the fixtures sit at known distances from it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

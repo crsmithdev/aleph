@@ -4,10 +4,10 @@
  */
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { decide, judgeChoice, type Question } from "../../hooks/lib/jev.ts";
-import { langfuseConfig } from "../../hooks/lib/env.ts";
-import { fetchObservations, type Observation } from "../../hooks/lib/otlp.ts";
-import { serializeFrontmatter } from "./frontmatter.ts";
+import { decide, judgeChoice, type Question } from "../../lib/jev.ts";
+import { langfuseConfig } from "../../lib/env.ts";
+import { fetchObservations, type Observation } from "../../lib/otlp.ts";
+import { serializeFrontmatter } from "../../lib/frontmatter.ts";
 import { addedDate, commitPaths, git, pushOrigin, tracked, trackedFiles } from "./git.ts";
 import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";

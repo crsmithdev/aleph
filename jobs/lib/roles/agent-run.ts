@@ -57,13 +57,6 @@ async function spawn(c: Call, input: string): Promise<{ output: string; text: st
   }
 }
 
-/** One call with no run of its own. It throws on a time-out or a non-zero exit. */
-export async function callAgent(c: Call, input: string): Promise<{ text: string; data?: unknown; cost?: number }> {
-  const r = await spawn(c, input);
-  if (r.failure) throw new Error(r.failure);
-  return { text: r.text, data: r.data, cost: r.cost };
-}
-
 /** The ledger's line for a role's run. `job` defaults to the folder's own name. The run's subject is `on`, else `monitor` for the monitor, else `name`. */
 export interface Opening extends Call {
   role: "intake" | "facts" | "director" | "monitor";

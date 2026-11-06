@@ -6,7 +6,7 @@ description: >
   integration tests.
 ---
 
-Adapted from Matt Pocock's `tdd` skill (github.com/mattpocock/skills @4ae2317, copy in `vendor/mattpocock-skills/`).
+Adapted from Matt Pocock's `tdd` skill (github.com/mattpocock/skills @4ae2317).
 
 # Test-Driven Development
 

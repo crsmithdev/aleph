@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { wallStepSince } from "../infra/clock.ts";
+import { wallStepSince } from "./clock.ts";
 import { emptyObjects, fix, gitChecks, homeCheck, linkCheck, lostCheck, unitChecks, doctor } from "./doctor.ts";
 import { writeRun } from "../records/ledger.ts";
 import { mkdirSync, symlinkSync } from "node:fs";

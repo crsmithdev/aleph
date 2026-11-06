@@ -1,6 +1,6 @@
 /** Jev picks the model tier for a factory run, from the item's spec. */
 import { factoryLog } from "../infra/layout.ts";
-import { decide, judgeChoice } from "../../../hooks/lib/jev.ts";
+import { decide, judgeChoice } from "../../../lib/jev.ts";
 import { readModels } from "./models.ts";
 
 export const TIERS = ["worker-low", "worker-medium", "opus"] as const;

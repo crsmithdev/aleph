@@ -6,10 +6,10 @@
  */
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { decide, judgeChoice, type Question } from "./lib/jev.ts";
-import { langfuseConfig, sessionEnvironment } from "./lib/env.ts";
+import { decide, judgeChoice, type Question } from "../lib/jev.ts";
+import { langfuseConfig, sessionEnvironment } from "../lib/env.ts";
 import { peek } from "./lib/handshake.ts";
-import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
+import { attrs, nano, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor } from "../lib/otlp.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
 import { coreNotes, loadWiki, repoScope, vaultDir, type Note } from "../vault/lib/vault.ts";
 

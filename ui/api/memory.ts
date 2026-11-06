@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
 import { uiFetchTtl } from "../../issues/lib/store.ts";
-import { clearTypesCache, memoryTypes } from "./memory-types.ts";
+import { clearTypesCache, memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
@@ -72,7 +72,7 @@ export async function warm(): Promise<void> {
 const missesCache = staleAsync<{ value: unknown; cachedAt: string } | null>();
 /** The vault's notes, reloaded at most every ALEPH_UI_FETCH_TTL seconds: a load stats every file, which is slow on /mnt/c. */
 const notes = staleAsync<Note[]>();
-export const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));
+const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));
 export const clearCache = () => { missesCache.clear(); notes.clear(); clearTypesCache(); };
 async function runMisses(): Promise<unknown | null> {
   try {

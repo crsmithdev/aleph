@@ -10,9 +10,9 @@ import { docProblems, type Doc, type Truth } from "./doc-claims.ts";
 import * as s from "../infra/settings.ts";
 import { stallSeconds } from "../roles/agent-run.ts";
 import { JEV_PASS_BELOW } from "../../../hooks/lib/judge.ts";
-import { judgeChoice } from "../../../hooks/lib/jev.ts";
+import { judgeChoice } from "../../../lib/jev.ts";
 import { spoolDir } from "../../../hooks/lib/handshake.ts";
-import { classifyEnvironment, GH_USER_CMD } from "../../../hooks/lib/env.ts";
+import { classifyEnvironment, GH_USER_CMD } from "../../../lib/env.ts";
 import { DEFAULT_WARN } from "../../../hooks/lib/context.ts";
 import { homedir, tmpdir } from "node:os";
 
@@ -78,7 +78,7 @@ export const DEFAULTS: Truth["defaults"] = {
 export function repoTruth(root = ROOT): Truth {
   const files = repoFiles(root);
   const read = (fs: string[]) => fs.map((f) => { try { return readFileSync(join(root, f), "utf8"); } catch { return ""; } }).join("\n");
-  const code = (f: string) => /^(hooks|jobs|issues|ui|vault|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
+  const code = (f: string) => /^(hooks|jobs|issues|ui|vault|lib|tests)\/.*\.ts$/.test(f) || /^bin\/[^/]+$/.test(f);
   return {
     defaults: DEFAULTS,
     root,

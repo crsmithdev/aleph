@@ -29,5 +29,4 @@ The `aleph` CLI (jobs/cli.ts) is the entry point for issues and the factory. `al
 
 - [Start at boot](https://github.com/crsmithdev/aleph/blob/main/docs/start-at-boot.md): Start WSL, the UI and the tick after a Windows restart
 - [Langfuse compose](https://github.com/crsmithdev/aleph/blob/main/compose/README.md): Docker inside WSL2 and Langfuse API checks
-- [Specs](https://github.com/crsmithdev/aleph/tree/main/docs/specs): Design specs that the code cites
 - [Findings](https://github.com/crsmithdev/aleph/tree/main/docs/findings): Measurements that the code and docs cite

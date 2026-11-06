@@ -3,7 +3,7 @@ name: diagnosing-bugs
 description: Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow.
 ---
 
-Adapted from Matt Pocock's `diagnosing-bugs` skill (github.com/mattpocock/skills @4ae2317, copy in `vendor/mattpocock-skills/`).
+Adapted from Matt Pocock's `diagnosing-bugs` skill (github.com/mattpocock/skills @4ae2317).
 
 # Diagnosing Bugs
 

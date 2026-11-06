@@ -59,30 +59,30 @@ The unit files are in `jobs/systemd/`. [Start at boot](start-at-boot.md) starts 
 
 | Folder | Holds |
 |---|---|
-| `hooks/` | One script per hook; `hooks/lib/` has the judge, Jev, OTLP, the secret rules and the snapshots |
+| `hooks/` | One script per hook; `hooks/lib/` has the judge, the secret rules and the snapshots |
 | `skills/` | One folder per skill with its `SKILL.md`; the licences of adapted skills |
-| `vault/` | `vault/cli.ts` and `vault/lib/`: notes, frontmatter, the FTS index, git |
+| `vault/` | `vault/cli.ts` and `vault/lib/`: notes, the FTS index, git |
 | `issues/` | The work store client: `issues/lib/store.ts` (git I/O), `todo.ts` (file format), `issues.ts` (the `aleph issue` verbs) |
 | `jobs/` | `jobs/cli.ts` and `jobs/lib/`: the factory; `jobs/systemd/` and `jobs/windows/` start it |
 | `ui/` | `ui/server.ts`; `ui/api/*.ts` routes, loaded by file name; `ui/views/*.js` pages; `ui/state.ts` builds the Status state in a worker thread |
+| `lib/` | Shared modules across subsystems: `naming.ts`, `env.ts`, `jev.ts`, `otlp.ts`, `pricing.ts`, `refusal.ts`, `frontmatter.ts` |
 | `identity/` | The global `CLAUDE.md` and `STYLE.md` |
 | `compose/` | Langfuse in Docker |
 | `tests/` | Repo-wide tests, `tests/live/` against real services |
-| `vendor/` | The upstream text of the adapted skills, for diffs |
 
 The modules of `jobs/lib/`, one folder per concern:
 
 | Concern | Folder | Modules |
 |---|---|---|
 | Records and runs | `records/` | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts`, `status.ts`, `jobdiff.ts` |
-| Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `tick.ts`, `launch.ts`, `refusal.ts` |
-| Agent roles | `roles/` | `agent-run.ts`, `agent-call.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `structured.ts`, `issue-spec.ts`, `role-skill.ts` |
-| Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
-| Land and recovery | `land/` | `landing.ts`, `rescue.ts`, `firefighter.ts`, `doctor.ts` |
+| Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `tick.ts`, `launch.ts` |
+| Agent roles | `roles/` | `agent-run.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `structured.ts`, `issue-spec.ts`, `role-skill.ts` |
+| Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `firefighter.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
+| Land and recovery | `land/` | `landing.ts`, `rescue.ts` |
 | Routing | `routing/` | `route.ts`, `models.ts`, `gpt-oss-start.ts` |
 | Asks | `asks/` | `ask.ts`; the director (`jobs/lib/roles/director.ts`) answers the asks |
 | Learning | `learning/` | `corrections.ts`, `episode.ts`, `monitor-table.ts`, `trace.ts` |
-| Infrastructure | `infra/` | `git.ts`, `process.ts`, `clock.ts`, `settings.ts`, `layout.ts`, `main-clone.ts`, `ui-graph.ts` |
+| Infrastructure | `infra/` | `git.ts`, `process.ts`, `clock.ts`, `settings.ts`, `layout.ts`, `main-clone.ts`, `ui-graph.ts`, `doctor.ts` |
 
 The tests, fixtures and testkits of a module are in its folder.
 
@@ -123,6 +123,6 @@ The tests, fixtures and testkits of a module are in its folder.
 | Load | A check, a worker and a land start only under `ALEPH_LOAD_LIMIT` |
 | Clocks | `jobs/lib/infra/clock.ts`; `tests/clock-lint.test.ts` denies a raw `Date.now()` outside the listed files |
 | Cost | Each run records its cost; the Efficiency page and the monitor read it |
-| Secrets | `~/.aleph/.env`, read by `hooks/lib/env.ts`; `secret-scan` denies a commit that adds one |
+| Secrets | `~/.aleph/.env`, read by `lib/env.ts`; `secret-scan` denies a commit that adds one |
 | Tests | `bun run test` in parallel; each test makes its own temp stores through the `ALEPH_*` path variables |
 | Flakes | A failing check reruns once; a pass on the rerun goes to `flaky.json` and the flake tracker |

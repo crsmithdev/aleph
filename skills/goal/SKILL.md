@@ -1,14 +1,14 @@
 ---
 name: goal
 description: >
-  Turn a goal of one or two sentences into a goal issue for the factory: a
+  Turn a goal of one or two sentences into an issue for the factory: a
   short grill, then one issue with its spec in the work store. Use when Chris
   runs /aleph:goal. It is optional: items also come from the browser, intake
   and the chat, without a grill.
   NOT for: a design tree (use /aleph:grill-me), a spec (use /aleph:to-spec).
 ---
 
-The factory (`docs/specs/2026-10-26-seed-factory.md`) runs one
+The factory (`docs/workflow.md`) runs one
 worker per open issue with a spec, with nobody to ask; intake checks the spec and splits a large
 goal first. The issue is all the worker gets, so it must say what done is and
 how to check it.
@@ -71,7 +71,7 @@ The body has these sections, each non-empty:
 
 The title is an imperative of at most 60 characters that says what changes, not how, with no final period and no `<words>: ` prefix (`TITLE_RULE` in `issues/lib/todo.ts`). When the work is part of a larger group, it opens with the group in brackets: `[<group>] <title>`. A bug keeps its symptom inside the imperative: "Fix Status Week per issue showing 0.0%". `--kind` says what the issue is: `task` (the default), `bug`, `check`, `flake` or `proposal`.
 
-A new goal:
+A new issue:
 
 ```
 aleph issue add <repo> "<title>" --spec - --priority high <<'BODY'

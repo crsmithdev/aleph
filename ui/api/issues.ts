@@ -12,7 +12,7 @@ import { loadRegistry, onOf, type Repo } from "../../jobs/lib/records/ledger.ts"
 import { git } from "../../jobs/lib/infra/git.ts";
 import { landedIndex, recentRepos, repoStages } from "../../jobs/lib/records/status.ts";
 import { askOf, awaitsChris, refIn } from "../../jobs/lib/asks/ask.ts";
-import { Refusal } from "../../jobs/lib/transitions/refusal.ts";
+import { Refusal } from "../../lib/refusal.ts";
 import * as issues from "../../issues/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";

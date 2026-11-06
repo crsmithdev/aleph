@@ -3,7 +3,7 @@
  * close a manual check. Each takes explicit arguments, refuses with a
  * `Refusal`, and returns what `aleph` prints as JSON; jobs/cli.ts only parses
  * argv. The factory and the unit call them in-process. Starting the run's unit
- * is the launcher's (launch.ts). See docs/specs/2026-09-24-agent-jobs.md.
+ * is the launcher's (launch.ts). See docs/workflow.md.
  */
 import { existsSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -16,7 +16,7 @@ import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
 import { git } from "../infra/git.ts";
 import { onMain } from "../records/status.ts";
-import { refuse } from "./refusal.ts";
+import { refuse } from "../../../lib/refusal.ts";
 import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
 import { factoryLog } from "../infra/layout.ts";
@@ -43,7 +43,7 @@ export function checkName(name: string | undefined): string {
   return name!;
 }
 
-export const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
+const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
 
 /** How long a start waits for the unit to write `pid`; `ALEPH_PID_WAIT_MS` changes it. */
 

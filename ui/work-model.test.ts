@@ -9,8 +9,6 @@ import { setAsk, refIn } from "../jobs/lib/asks/ask.ts";
 import { state } from "./state.ts";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
-import { renderLanes, renderNeeds } from "./views/now.js";
-// @ts-ignore plain JS, shared with the page
 import { renderIssue } from "./views/issues.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
@@ -87,17 +85,9 @@ describe("/api/state on a work-model store", () => {
     const s: any = state(now);
     // Parts are flat: the parent waits for its parts and has no card in Running; .3 runs after .2, so it is held.
     expect(s.runningIssues).toEqual([]);
-    expect(s.incoming.find((i: any) => i.id === "fac-1").stage).toBe("working");
     expect(s.running.find((j: any) => j.name === "fac-1.2").part).toMatchObject({ n: 2, m: 3, parent: "fac-1" });
     expect(s.queued.map((q: any) => [q.id, q.stage])).toEqual([["1.3", "held"]]);
     expect(s.queued[0].part).toMatchObject({ n: 3, m: 3, parent: "fac-1" });
-  });
-
-  test("the Always list is always.json under the new reasons", () => {
-    writeFileSync(join(factory, "always.json"), JSON.stringify({ "intake-failed": { action: "retry", at: "2026-10-30T00:00:00.000Z" } }));
-    try {
-      expect((state(now) as any).always).toEqual([{ reason: "intake-failed", action: "retry", at: "2026-10-30T00:00:00.000Z" }]);
-    } finally { rmSync(join(factory, "always.json")); }
   });
 });
 

@@ -40,9 +40,6 @@ export function claimSentences(message: string): string[] {
   return sentences(message).filter((s) => pair(STATE).test(s) || (pair(ACTION).test(s) && CODE_SIDE.test(s) && !NAMES_ONLY.test(s)) || AS_CODE.test(s));
 }
 
-/** Whether `message` says a doc, a spec or a README matches, agrees with or is backed by the code. */
-export const claimsDocMatch = (message: string): boolean => claimSentences(message).length > 0;
-
 interface Call { index: number; name: string; input: Entry; out: string; visible: string }
 
 function calls(entries: Entry[]): Call[] {

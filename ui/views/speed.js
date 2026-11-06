@@ -71,7 +71,7 @@ export function pace(s) {
   return { used: cur.seven_day, gone, word: cur.seven_day > gone ? "over" : "under" };
 }
 /** "as of 40m ago" for a stale snapshot, else "". */
-export function usageAge(s) {
+function usageAge(s) {
   const cur = s.usage?.now;
   if (!cur || !s.usage.stale) return "";
   const sec = Math.max(0, (Date.parse(s.now) - Date.parse(cur.at)) / 1000);

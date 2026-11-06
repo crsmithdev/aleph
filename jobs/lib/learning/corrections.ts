@@ -1,5 +1,5 @@
 /**
- * Correction signals, the procedural memory (docs/specs/2026-10-27-memory.md):
+ * Correction signals, the procedural memory (docs/vault.md):
  * Chris's messages that push back on the assistant, the verify-gate's denials
  * and the reviewer's drop reasons of the last 14 days, grouped into lessons by
  * Jev. The store is corrections.json in the factory directory.
@@ -7,9 +7,9 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { langfuseConfig, type LangfuseConfig } from "../../../hooks/lib/env.ts";
-import { decide } from "../../../hooks/lib/jev.ts";
-import { fetchObservations } from "../../../hooks/lib/otlp.ts";
+import { langfuseConfig, type LangfuseConfig } from "../../../lib/env.ts";
+import { decide } from "../../../lib/jev.ts";
+import { fetchObservations } from "../../../lib/otlp.ts";
 import { factoryDir } from "../gates/factory-status.ts";
 import { factoryLog } from "../infra/layout.ts";
 import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";
@@ -71,7 +71,8 @@ function repoSkills(repo: Repo): Record<string, string> {
     if (!existsSync(f)) continue;
     const fm = readFileSync(f, "utf8").match(/^---\n([\s\S]*?)\n---/)?.[1] ?? "";
     const name = fm.match(/^name:\s*(.+)$/m)?.[1].trim().replace(/^["']|["']$/g, "") || n;
-    out[name] = fm.match(/^description:\s*(.+)$/m)?.[1].trim() ?? "";
+    const block = fm.match(/^description:\s*[>|]-?\s*\n((?:[ \t]+.+\n?)+)/m)?.[1];
+    out[name] = block ? block.trim().replace(/\s*\n\s*/g, " ") : fm.match(/^description:\s*(.+)$/m)?.[1].trim().replace(/^["']|["']$/g, "") ?? "";
   }
   return out;
 }

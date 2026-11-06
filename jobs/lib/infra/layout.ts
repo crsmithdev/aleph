@@ -1,6 +1,6 @@
 /**
  * Where the store, the ledger, and the factory folder live. One answer for every
- * reader (docs/specs/2026-10-30-work-model.md, "Migration rules"): the new layout
+ * reader (docs/data-model.md): the layout
  * (issues, runs, factory) under ~/.aleph. The environment wins, variable by variable.
  */
 import { appendFileSync, mkdirSync, readFileSync } from "node:fs";

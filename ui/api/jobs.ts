@@ -3,7 +3,7 @@ import { keyOf, next as nextStep, read as readRecord, type JobEvent, type Step a
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { git } from "../../jobs/lib/infra/git.ts";
-import { OPUS_MODEL } from "../../jobs/lib/roles/agent-call.ts";
+import { OPUS_MODEL } from "../../jobs/lib/routing/models.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
 import { allRuns, isAgentRun, isBuild, jobIdOf, loadRegistry, type Entry } from "../../jobs/lib/records/ledger.ts";
 import { allJobs, checkedBy, lookMinutes, hasFile, latestFile, latestJob, lastReal, readFile, view } from "../../jobs/lib/records/job.ts";
@@ -16,7 +16,7 @@ import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
 /** `id` is the run folder's name, the key of its logs; `job` is the job ID that the page shows, `a1375#6`. */
-export interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "triage" | "plan" | "facts" | "firefighter" | "director" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "triage" | "plan" | "facts" | "firefighter" | "director" | "explain" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 export interface LogFile { name: string; size: number }
 /** The log files the Job page serves, and no others. */
@@ -56,7 +56,7 @@ export function transcript(stream: string): Step[] {
   }
   return steps;
 }
-export interface JobDetail extends Job {
+interface JobDetail extends Job {
   blockers?: Wait[];
   runs: RunInfo[]; result?: string; review?: string; stat?: string;
   /** The reviewer's verdict, from the review.json beside review.md. */

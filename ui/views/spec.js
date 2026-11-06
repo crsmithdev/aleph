@@ -6,12 +6,11 @@ export const view = {
   path: "/specs/:project/:file",
   title: "Spec",
   group: "factory",
-  order: 3,
   api: (params) => `/api/specs/${encodeURIComponent(params.project)}/${encodeURIComponent(params.file)}`,
   render: (s) => renderSpec(s),
 };
 
-export function renderSpec(s) {
+function renderSpec(s) {
   return `<div class="page">${crumb("#/issues", [["issues", "#/issues"], [s.project, `#/issues?project=${encodeURIComponent(s.project)}`], [s.file]])}${pageHead(s.title)}` +
     `<p class="hint"><code>${esc(s.project)}/docs/specs/${esc(s.file)}</code></p>` +
     `<article class="note">${md(s.body)}</article></div>`;

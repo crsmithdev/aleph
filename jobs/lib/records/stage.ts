@@ -1,6 +1,5 @@
 /**
- * stage(): the one place that says where an issue or a part stands, from the
- * work-model spec (docs/specs/2026-10-31-work-model.md). The CLI,
+ * stage(): the one place that says where an issue or a part stands (docs/workflow.md). The CLI,
  * Incoming, the lanes and `aleph status` read it.
  *
  * It takes plain data from the store and the ledger: `subjectOf` and

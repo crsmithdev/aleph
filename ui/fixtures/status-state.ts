@@ -10,6 +10,5 @@ export const state: any = {
   asks: attend({ runs: [held], issues: [] }, []).items,
   stuck: [job({ name: "aleph-30", condition: "failed", reason: "types failed" })],
   running: [job({ name: "aleph-36", phase: "worker", item: { id: 36, title: "Route tiers" } })],
-  delivered: [job({ name: "aleph-28", condition: "landed", ended: "2026-10-27T16:30:00Z", commit: "50f301fabc", commitUrl: "https://github.com/o/r/commit/50f301fabc" })],
   queued: [],
 };

@@ -6,7 +6,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { cacheFetches, uiFetchTtl } from "../issues/lib/store.ts";
-import { loadDotenv } from "../hooks/lib/env.ts";
+import { loadDotenv } from "../lib/env.ts";
 import { gateOn, gate, routes as authRoutes } from "./auth.ts";
 import { startPoller } from "./usage.ts";
 import { uiPort } from "../jobs/lib/infra/settings.ts";
@@ -98,7 +98,7 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port,
-    // Bun closes a request after 10 s by default; /api/memory and /api/activity take longer.
+    // Bun closes a request after 10 s by default; /api/memory and /api/agents take longer.
     idleTimeout: 120,
     async fetch(req) {
       const refused = gate(req);

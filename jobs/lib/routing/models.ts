@@ -6,7 +6,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { layout } from "../infra/layout.ts";
-import { openRouterKey } from "../../../hooks/lib/env.ts";
+import { openRouterKey } from "../../../lib/env.ts";
 import { NO_SKILLS } from "../roles/role-skill.ts";
 
 /** USD per million tokens. */
@@ -17,6 +17,7 @@ export interface Model { via: Via; id: string; price?: Rate }
 
 /** The llama-server of aleph-1282. */
 export const LOCAL_URL = "http://127.0.0.1:8012";
+export const OPUS_MODEL = "claude-opus-5-5";
 const OPENROUTER_URL = "https://openrouter.ai/api";
 
 /** OpenRouter list prices, read 2026-11-05 from /api/v1/models. Where a price is 0 or not listed, the input price stands in. */

@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, setSystemTime, test } from "bun
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentCause, callAgent, endLost, openRun, type Opening } from "./agent-run.ts";
+import { agentCause, endLost, openRun, type Opening } from "./agent-run.ts";
 import { allRuns, jobIdOf, lock, readRun, runsDir, stamp, writeRun } from "../records/ledger.ts";
 
 let base: string;
@@ -113,14 +113,6 @@ test("the time box ends the call's children too, so a child that holds the outpu
   expect(alive()).toBe(false);
 });
 
-test("a call with no run gives the text and the cost, and throws on a failure", async () => {
-  fake(`echo '${JSON.stringify({ type: "result", is_error: false, total_cost_usd: 1, result: "t" })}'`);
-  const call = { role: "facts", who: "the author", model: "m", seconds: 60, flags: [] };
-  expect(await callAgent(call, "x")).toEqual({ text: "t", cost: 1 });
-  fake("exit 2");
-  await expect(callAgent(call, "x")).rejects.toThrow("the author exited 2");
-});
-
 test("endLost ends a run when its lock is free, and leaves one whose lock is held or that it does not pick", async () => {
   const free = openRun({ ...opening, name: "free" });
   const held = openRun({ ...opening, name: "held" });
@@ -143,7 +135,7 @@ test("an agent gets no API key and no CLAUDECODE, so it bills the subscription",
   process.env.ANTHROPIC_API_KEY = "secret";
   process.env.CLAUDECODE = "1";
   fake('echo "key=[$ANTHROPIC_API_KEY] code=[$CLAUDECODE] path=[${PATH:+set}]"');
-  expect((await callAgent(opening, "x")).text).toBe("key=[] code=[] path=[set]\n");
+  expect(await openRun(opening).ask("x")).toBe("key=[] code=[] path=[set]\n");
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.CLAUDECODE;
 });

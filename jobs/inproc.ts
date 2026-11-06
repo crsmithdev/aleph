@@ -5,7 +5,7 @@
  */
 import { base, env } from "./cli.helpers";
 import { loadRegistry } from "./lib/records/ledger.ts";
-import { Refusal } from "./lib/transitions/refusal.ts";
+import { Refusal } from "../lib/refusal.ts";
 import { checked as checkedJob, drop as dropJob, jobCommand, land as landJob, recheck as recheckJob, startJob, type Start } from "./lib/transitions/transitions.ts";
 import { runDispatch } from "./lib/transitions/factory.ts";
 import { repoStages } from "./lib/records/status.ts";

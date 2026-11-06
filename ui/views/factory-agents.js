@@ -15,7 +15,7 @@ function scorecard(s, a, w) {
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */
-export const WARN_RATE = 0.7;
+const WARN_RATE = 0.7;
 
 /** Each tier's name; the models it offers come from /api/models. */
 const TIERS = { "worker-low": "Worker low", "worker-medium": "Worker medium", merge: "Merge", title: "Title", judge: "Judge" };

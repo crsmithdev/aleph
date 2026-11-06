@@ -21,7 +21,7 @@ Corrections, episodes and the firefighter start no agent. Corrections asks Jev t
 
 ## How a run starts
 
-`openRun` and `callAgent` in `jobs/lib/roles/agent-run.ts` start each one-reply role:
+`openRun` in `jobs/lib/roles/agent-run.ts` starts each one-reply role:
 
 ```bash
 claude -p --strict-mcp-config --disable-slash-commands \
@@ -86,7 +86,7 @@ aleph models set worker-low deepseek-v4.1-flash
 aleph models disable worker-medium    # only the worker tiers can be off
 ```
 
-A run on a worker tier set to another model records that model as `model` and its Claude model as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `hooks/lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
+A run on a worker tier set to another model records that model as `model` and its Claude model as `tier`. Claude Code knows Claude's prices only, so such a run's cost is its tokens times the row's price (`costDetails()` in `lib/pricing.ts`), not `total_cost_usd`. The Agents page offers the same models and disables one whose backend is down.
 
 **OpenRouter.** A call gets `ANTHROPIC_BASE_URL=https://openrouter.ai/api`, `OPENROUTER_API_KEY` as `ANTHROPIC_AUTH_TOKEN` (from the environment or `~/.aleph/.env`), an empty `ANTHROPIC_API_KEY`, and the model's id in the default-model variables. OpenRouter runs count against the live cap and take no GPU slot. Without a key, the Agents page disables the OpenRouter models.
 
@@ -96,7 +96,7 @@ A run on a worker tier set to another model records that model as `model` and it
 
 `judgeChoice()` reads `ALEPH_JUDGE` first. If it is not set, `judgeChoice()` reads the file `~/.aleph/judge`. If neither is set, the default is `ALEPH_JUDGE`, else `jev`. `aleph judge [jev|haiku]` sets it.
 
-- **Jev** is `typesafe/jev-1.13` through OpenRouter's decisions endpoint (`hooks/lib/jev.ts`), with `OPENROUTER_API_KEY`. It answers typed questions only: `choice` or `noul` (a probability). It never denies a turn.
+- **Jev** is `typesafe/jev-1.13` through OpenRouter's decisions endpoint (`lib/jev.ts`), with `OPENROUTER_API_KEY`. It answers typed questions only: `choice` or `noul` (a probability). It never denies a turn.
 - **Haiku** is `claude -p --model haiku --setting-sources "" --max-turns 1 --tools ""` with a rubric as the system prompt, up to 2 tries.
 
 | User | With `jev` | With `haiku` |

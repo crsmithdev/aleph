@@ -7,8 +7,8 @@
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { langfuseConfig } from "../../../hooks/lib/env.ts";
-import { fetchTrace, traceIdFor } from "../../../hooks/lib/otlp.ts";
+import { langfuseConfig } from "../../../lib/env.ts";
+import { fetchTrace, traceIdFor } from "../../../lib/otlp.ts";
 import { partsOf, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { section } from "../../../issues/lib/todo.ts";

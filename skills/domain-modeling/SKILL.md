@@ -5,7 +5,7 @@ description: >
   a term, writing or editing GLOSSARY.md, or recording or editing an ADR.
 ---
 
-Adapted from Matt Pocock's `domain-modeling` skill (github.com/mattpocock/skills @4ae2317, copy in `vendor/mattpocock-skills/`).
+Adapted from Matt Pocock's `domain-modeling` skill (github.com/mattpocock/skills @4ae2317).
 
 # Domain Modeling
 

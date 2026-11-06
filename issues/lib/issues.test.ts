@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as issues from "./todo.ts";
 import * as store from "./store.ts";
 import * as issueOps from "./issues.ts";
-import { Refusal } from "../../jobs/lib/transitions/refusal.ts";
+import { Refusal } from "../../lib/refusal.ts";
 import { askOf, setAsk, refIn } from "../../jobs/lib/asks/ask.ts";
 import { storeRepos } from "../../tests/git-fixture.ts";
 

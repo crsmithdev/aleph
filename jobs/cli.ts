@@ -4,7 +4,7 @@
  * — detached agent jobs, plain runs, each repo's issues, and the factory.
  * Ledger: $ALEPH_JOBS_DIR or ~/.aleph/runs. Registry: $ALEPH_REPOS or
  * ~/.aleph/repos.json. JSON on stdout, findings on stderr, exit 1 on refusal, and the foreground unit's exit code when it fails.
- * See docs/specs/2026-09-24-agent-jobs.md.
+ * See docs/workflow.md and docs/factory.md.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -15,7 +15,7 @@ import { unit } from "./lib/roles/unit.ts";
 import { onMain } from "./lib/records/status.ts";
 import { removeBranch } from "./lib/land/landing.ts";
 import { fetchOrigin, git } from "./lib/infra/git.ts";
-import { judgeChoice, setJudgeChoice } from "../hooks/lib/jev.ts";
+import { judgeChoice, setJudgeChoice } from "../lib/jev.ts";
 import * as issues from "../issues/lib/todo.ts";
 import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
@@ -28,8 +28,8 @@ import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/mon
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
 import type { Fate } from "./lib/records/outcome.ts";
-import { refuse, Refusal } from "./lib/transitions/refusal.ts";
-import * as doctor from "./lib/land/doctor.ts";
+import { refuse, Refusal } from "../lib/refusal.ts";
+import * as doctor from "./lib/infra/doctor.ts";
 import { facts, repoStages, stages } from "./lib/records/status.ts";
 import type { Stage } from "./lib/records/stage.ts";
 import { jobId } from "./lib/infra/settings.ts";

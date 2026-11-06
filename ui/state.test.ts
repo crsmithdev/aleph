@@ -5,9 +5,10 @@ import { join } from "node:path";
 import { writeList } from "../issues/lib/store.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
-import { state } from "./state.ts";
+import { jobProjector, state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { loadRegistry, writeRun } from "../jobs/lib/records/ledger.ts";
+import { allJobs } from "../jobs/lib/records/job.ts";
 import { removeRun } from "../jobs/lib/records/record.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/records/status.ts";
@@ -77,29 +78,14 @@ const runAsks = (s: ReturnType<typeof state>) => s.asks.filter((a) => a.key.star
 
 describe("state", () => {
 
-  test("triage lists running runs first, then finished ones with their outcome, and keeps them out of the jobs lists; issues lists the new ones", () => {
+  test("triage runs stay out of the jobs lists", () => {
     run("20261027-000030-a", { kind: "triage", job: "fac-t1", name: "triage-fac-1", condition: "done", reason: "close", on: "fac-1", started: ago(5), ended: ago(4) });
     run("20261027-000031-a", { kind: "triage", job: "fac-t2", name: "triage-fac-2", condition: "running", on: "fac-2", started: ago(0.1) });
     run("20261027-000032-a", { kind: "triage", job: "fac-t3", name: "triage-fac-3", condition: "done", reason: "malformed verdict: x", on: "fac-3", started: ago(7), ended: ago(6) });
     const s = state(now);
     expect("triage" in s).toBe(false);
     expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
-    expect(s.issues.length).toBe(s.newIssues);
-    expect(s.issues.every((i) => i.id.startsWith("fac-") && i.href.startsWith("#/issues/fac/") && i.status === "new")).toBe(true);
     for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
-  });
-
-  test("landing counts land runs in progress; New counts open unlabelled issues, not parts or labelled ones", () => {
-    writeList({ key: "fac" }, "more", (doc) => {
-      add(doc, "labelled", { spec: "Do it." });
-      add(doc, "bare");
-      return true;
-    }, true);
-    run("20261027-000009-a", { kind: "land", job: "fac-8", name: "fac-8", condition: "running" });
-    const s = state(now);
-    expect(s.landing).toBe(1);
-    // New is stage "new": the items with a job (fac-1, 3, 4), the issue and the triaged one are not.
-    expect(s.newIssues).toBe(3);
   });
 
   test("factory.liveRuns counts live agent runs only; land and plan runs stay in running", () => {
@@ -130,7 +116,8 @@ describe("state", () => {
     const commit = sh(repo, "git", "rev-parse", "HEAD").trim();
     run("20261027-000007-a", { job: "fac-7", name: "fac-7", condition: "landed", on: "fac-1", commit, ended: ago(1), started: ago(2) });
     const s = state(now);
-    expect(s.delivered.find((j) => j.name === "fac-7")!.trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Job", value: "fac-7" }]);
+    const landed = jobProjector().toJob(allJobs().find((rs) => rs[0].run.name === "fac-7")!);
+    expect(landed.trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Job", value: "fac-7" }]);
     expect(runAsks(s)[0].trailers).toEqual([{ key: "Issue", value: "fac-1" }, { key: "Job", value: "fac-1" }, { key: "Held-by", value: "Chris" }]);
   });
 
@@ -142,16 +129,6 @@ describe("state", () => {
     run("20261027-000040-a", { job: "fac-g1", name: "fac-g1", condition: "waiting", ask: { kind: "input", reason: "question", question: "q", options: [], why: [] }, on: "fac-1.1", ended: ago(1), started: ago(2) });
     const j = state(now).asks.find((x) => x.id === "fac-g1")!;
     expect(j.trailers).toEqual([{ key: "Issue", value: "fac-1.1" }, { key: "Job", value: "fac-g1" }]);
-  });
-
-  test("delivered holds the 10 latest lands, newest first", () => {
-    for (let i = 0; i < 11; i++) run(`20261027-0001${String(i).padStart(2, "0")}-a`, { job: `fac-l${i}`, name: `fac-l${i}`, condition: "landed", commit: "abcdef1234567", ended: ago(40 + i), started: ago(41 + i) });
-    const s = state(now);
-    expect(s.delivered).toHaveLength(10);
-    // The land in progress (fac-8) comes first, then the landed ones, newest first.
-    expect(s.delivered[0].condition).not.toBe("landed");
-    expect(s.delivered.slice(0, 4).map((j) => j.name)).toEqual(["fac-8", "fac-7", "fac-5", "fac-6"]);
-    expect(s.delivered.map((j) => j.name)).not.toContain("fac-l10");
   });
 });
 
@@ -185,7 +162,6 @@ describe("a dropped issue", () => {
 
 describe("an intake run", () => {
   test("counts as running; triage does not; a done one does not", () => {
-    const landing = state(now).landing;
     const ids = ["20261027-000050-a", "20261027-000051-a"];
     run(ids[0], { kind: "intake", job: "intake-fac-2", name: "intake-fac-2", condition: "running", on: "fac-2", started: ago(1) });
     run(ids[1], { kind: "triage", job: "triage-fac-2", name: "triage-fac-2", condition: "running", on: "fac-2", started: ago(1) });
@@ -194,7 +170,6 @@ describe("an intake run", () => {
     expect(s.running.map((j) => j.name)).not.toContain("triage-fac-2");
     expect(runAsks(s).map((a) => a.id)).toEqual(["fac-1"]);
     expect(s.stuck.map((j) => j.name)).toEqual(["fac-3"]);
-    expect(s.landing).toBe(landing);
     run(ids[0], { kind: "intake", job: "intake-fac-2", name: "intake-fac-2", condition: "done", on: "fac-2", started: ago(1), ended: ago(0.5) });
     s = state(now);
     expect(s.running.map((j) => j.name)).not.toContain("intake-fac-2");

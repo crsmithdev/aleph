@@ -5,7 +5,7 @@ description: >
 disable-model-invocation: true
 ---
 
-Adapted from Matt Pocock's `grill-with-docs` skill (github.com/mattpocock/skills @4ae2317, copy in `vendor/mattpocock-skills/`).
+Adapted from Matt Pocock's `grill-with-docs` skill (github.com/mattpocock/skills @4ae2317).
 
 Call the Skill tool twice, for `aleph:grill-me` and `aleph:domain-modeling`.
 

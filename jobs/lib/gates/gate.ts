@@ -1,10 +1,10 @@
 /**
  * The factory's gate: what a worker's transcript says, and whether a diff
- * needs Chris. See "Held paths" in docs/specs/2026-10-26-seed-factory.md.
+ * needs Chris. See docs/workflow.md.
  */
 import { git } from "../infra/git.ts";
 import { NO_OUTPUT } from "../roles/structured.ts";
-import type { Usage } from "../../../hooks/lib/pricing.ts";
+import type { Usage } from "../../../lib/pricing.ts";
 
 /** `usage` is the result event's tokens, in the shape `costDetails` takes. */
 export interface Outcome { ok: boolean; line: string; result: string; cost?: number; usage?: Usage }

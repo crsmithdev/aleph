@@ -63,7 +63,7 @@ names the claim and the concrete run that would back it, in two sentences.
 
 ## Jev screen (on by default since 27 Oct 2026)
 
-Jev (`typesafe/jev-1.13`, TypeSafe's decision model) screens each turn first, through OpenRouter's `/api/alpha/decisions` endpoint (`hooks/lib/jev.ts`). `aleph judge haiku` turns it off and `aleph judge jev` turns it back on; `aleph judge` shows the choice. The choice lives in `~/.aleph/judge`, so a change takes effect at the next Stop. `ALEPH_JUDGE` overrides the file.
+Jev (`typesafe/jev-1.13`, TypeSafe's decision model) screens each turn first, through OpenRouter's `/api/alpha/decisions` endpoint (`lib/jev.ts`). `aleph judge haiku` turns it off and `aleph judge jev` turns it back on; `aleph judge` shows the choice. The choice lives in `~/.aleph/judge`, so a change takes effect at the next Stop. `ALEPH_JUDGE` overrides the file.
 
 Jev answers one `noul` question on `{ final_message }` alone: does it claim that work is complete, fixed, working, passing, landed or verified? The question has `true` and `false` criteria. A turn whose probability of a claim is below `ALEPH_JEV_PASS_BELOW` (default 0.05) passes on Jev's word: the rule passes a message with no claim. Every other turn, every empty final message and every Jev error goes on to Haiku, so only Haiku can deny and every denial still names its claim. The span records `judge_by` and `jev_p_claim`. The key is `OPENROUTER_API_KEY`, read from the environment or from that one line of `~/.aleph/.env`.
 

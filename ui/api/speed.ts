@@ -34,17 +34,17 @@ function issueOf(r: Run): number | undefined {
   return o === undefined ? undefined : Math.trunc(Number(o));
 }
 
-export const MAX_RUN = 4 * HOUR;
+const MAX_RUN = 4 * HOUR;
 export const KINDS = ["agent", "land", "intake", "triage", "plan"] as const;
 
 export interface Pct { count: number; p50: number; p90: number }
 /** A phase's `hist` counts times in 7 bins: under 1m, 1-5m, 5-15m, 15-30m, 30m-1h, 1-4h, over 4h (an edge falls in the upper bin). `worst` is the longest time in seconds. */
-export interface PhaseStat extends Pct { hist: number[]; worst: number }
+interface PhaseStat extends Pct { hist: number[]; worst: number }
 export type Phase = "intake" | "queue" | "implement" | "land" | "lead";
 const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
 /** One issue's seconds per phase (null when the phase did not end in the window). `outcome` is "landed" once a land run landed it, else "unlanded". */
 /** `filed` is the issue's filing time in ms, or null when the store has none. */
-export type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded"; filed: number | null } & Record<Phase, number | null>;
+type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded"; filed: number | null } & Record<Phase, number | null>;
 export interface Speed {
   window: Window;
   /** Issues that landed in the window: one per issue, however many land runs it had. Land runs with no issue count as one. */
@@ -89,7 +89,7 @@ export interface AgentRole { key: AgentKey | "reviewer"; name: string; live: num
  * One role and model of the window with how its runs ended. `rate` is succeeded over the runs that ended (null with none); `baseline` is the same rate over the baseline's spans (null with no data). `cost` is the recorded cost of the runs (a reviewer records none, so 0).
  * Worker rows add `built` (succeeded runs of a landed job), `firstPass` (those with no fix round) and `reviewPass` (the reviewer's pass share of the verdicts on their builds, null with none); Reviewer rows add `pass` and `fail`.
  */
-export interface OutcomeRow {
+interface OutcomeRow {
   role: AgentKey | "reviewer"; model: string; runs: number; succeeded: number; failed: number; stuck: number;
   rate: number | null; p50: number | null; cost: number; baseline: number | null;
   firstPass?: number; built?: number; reviewPass?: number | null; pass?: number; fail?: number;
@@ -108,8 +108,8 @@ export interface Agents {
 export const GONE = "gone";
 export const CLASSES = ["landed", "returned", "failed", "reran", "dropped"] as const;
 export type Class = (typeof CLASSES)[number];
-export const CLASS_NAME: Record<Class, string> = { landed: "landed", returned: "returned", failed: "failed", reran: "reran", dropped: "dropped" };
-export const CLASS_TEXT: Record<Class, string> = {
+const CLASS_NAME: Record<Class, string> = { landed: "landed", returned: "returned", failed: "failed", reran: "reran", dropped: "dropped" };
+const CLASS_TEXT: Record<Class, string> = {
   landed: "The run whose work landed on main.",
   returned: "A run of the landing job before the run that landed: a fix round the issue needed.",
   failed: "A run that started after its issue had landed, or found the work already on main.",
@@ -140,7 +140,7 @@ const CAUSE_TEXT: Record<string, string> = {
 };
 
 export interface Measure { hours: number; week: number; runs: number }
-export interface ClassStat extends Measure {
+interface ClassStat extends Measure {
   key: Class; name: string; text: string; issues: number;
   causes: (Omit<Measure, "week"> & { name: string; text: string })[];
   top: (Omit<Measure, "week"> & { goal: string; title?: string; href?: string; reason: string })[];
@@ -155,7 +155,7 @@ export function pct(xs: number[], p: number): number {
 const round = (n: number, d = 0) => { const k = 10 ** d; return Math.round(n * k) / k; };
 const stat = (xs: number[]): Pct => ({ count: xs.length, p50: round(pct(xs, 0.5)), p90: round(pct(xs, 0.9)) });
 const HIST_EDGES = [60, 300, 900, 1800, 3600, 14400];
-export const histOf = (xs: number[]): number[] => {
+const histOf = (xs: number[]): number[] => {
   const h = new Array(HIST_EDGES.length + 1).fill(0);
   for (const x of xs) h[HIST_EDGES.filter((e) => x >= e).length]++;
   return h;
@@ -358,8 +358,8 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-export const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
-export type AgentKey = (typeof AGENT_ROLES)[number][0];
+const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"]] as const;
+type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
 const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
@@ -681,7 +681,7 @@ export function baseline(window: Window, now = new Date(), fit: Fit | null = nul
 }
 
 const baselines = staleSync<Baseline>();
-export const cachedBaseline = (window: Window, fit: Fit | null = null, project?: string): Baseline => baselines.get(project ? `${window}:${project}` : window, uiFetchTtl() * 1000, () => baseline(window, new Date(), fit, project));
+const cachedBaseline = (window: Window, fit: Fit | null = null, project?: string): Baseline => baselines.get(project ? `${window}:${project}` : window, uiFetchTtl() * 1000, () => baseline(window, new Date(), fit, project));
 
 /**
  * Fills the cache for the windows the Status page reads (week, day, month) once the server is up, so the

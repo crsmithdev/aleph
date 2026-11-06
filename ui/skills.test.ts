@@ -6,8 +6,6 @@ import { clearCache, listSkills } from "./api/skills.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/skills.js";
-// @ts-ignore
-import { view as skillView } from "./views/skill.js";
 
 const today = new Date().toISOString().slice(0, 10);
 const daysAgo = (n: number, time = "10:00:00") => new Date(Date.parse(today) - n * 86400_000).toISOString().slice(0, 10) + `T${time}.000Z`;

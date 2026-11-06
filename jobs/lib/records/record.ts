@@ -1,6 +1,6 @@
 /**
  * The job record: one JSON file per job, `<records>/<key>.json`, that holds the job's execution state. See
- * docs/specs/2026-11-04-job-record.md. This module is the only one that opens a record. `update` writes through a
+ * docs/data-model.md. This module is the only one that opens a record. `update` writes through a
  * temporary file and a rename under the record's lock, so a reader never sees half a file.
  *
  * The key is the issue the job is on (`<repo>-<n>`, the run's `on`). A run on no issue (a plain run, an old run)

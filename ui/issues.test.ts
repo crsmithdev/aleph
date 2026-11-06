@@ -15,8 +15,6 @@ import * as v from "./views/issues.js";
 import * as lib from "./lib.js";
 // @ts-ignore plain JS, shared with the page
 import { when } from "./lib.js";
-// @ts-ignore
-import { view as issueView } from "./views/issue.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // The test's clock: the server reads it, and the runs start at it.

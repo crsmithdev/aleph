@@ -6,7 +6,7 @@ description: >
   seam goes, or make code more testable or AI-navigable.
 ---
 
-Adapted from Matt Pocock's `codebase-design` skill (github.com/mattpocock/skills @4ae2317, copy in `vendor/mattpocock-skills/`).
+Adapted from Matt Pocock's `codebase-design` skill (github.com/mattpocock/skills @4ae2317).
 
 # Codebase Design
 

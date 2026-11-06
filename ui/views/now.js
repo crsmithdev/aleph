@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actButton, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, parseId, priorityBadge, repoIdLink, repoOf, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -32,7 +32,7 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
 }
 
 /** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
-export function renderOutcome(d) {
+function renderOutcome(d) {
   const outcome = (body) => card("Agent Time", body, { id: "outcome", label: "Agent time" });
   if (!d) return outcome(loadingLine("the outcomes"));
   if (d.error) return outcome(`<p>${esc(d.error)}</p>`);
@@ -139,7 +139,7 @@ function statLines(stat) {
 const runningCount = (s) => (s.runningIssues ?? []).length + (s.running ?? []).length;
 
 /** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
-export function renderStatusLine(s, stale = false, w = "day") {
+function renderStatusLine(s, stale = false, w = "day") {
   const bar = scopeBar(projectNow(), w, [], { after: renderControls(s) });
   return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
 }
@@ -372,7 +372,7 @@ function askDetails(i) {
 
 
 /** The three kinds of Ask card and their labels. An item without a `card` reads as Approve for an approval, else Decide. */
-export const CARD_LABEL = { approve: "Approve", decide: "Decide", unstick: "Unstick" };
+const CARD_LABEL = { approve: "Approve", decide: "Decide", unstick: "Unstick" };
 const cardOf = (i) => (CARD_LABEL[i.card] ? i.card : i.kind === "approval" ? "approve" : "decide");
 
 /** One choice of an Ask card: the button, then what it does and the recommended mark, shown when the card is open. */
@@ -408,7 +408,7 @@ export function askRow(i, now = new Date().toISOString()) {
 const errorRow = (l) => alertCard("error", l, "", `${/main is red/.test(l) ? "fix" : "check"} ${l}`, "");
 
 /** "10/28 14:05": the time of the state. */
-export const renderAsOf = (s) => when(s.now);
+const renderAsOf = (s) => when(s.now);
 
 /** The Pause or Resume button of the page head. */
 export function renderControls(s) {

@@ -48,7 +48,7 @@ test("/api/state?project= keeps only that project's jobs", async () => {
   expect(all.running.map((j: any) => j.name).sort()).toEqual(["aleph-1", "other-2"]);
   const other: any = await (await at("/api/state?project=other")).json();
   expect(other.running.map((j: any) => j.name)).toEqual(["other-2"]);
-  for (const k of ["stuck", "running", "delivered", "queued"]) expect(other[k].every((j: any) => j.repo === "other")).toBe(true);
+  for (const k of ["stuck", "running", "queued"]) expect(other[k].every((j: any) => j.repo === "other")).toBe(true);
 });
 
 test("/api/projects/keys lists the registry's repos", async () => {

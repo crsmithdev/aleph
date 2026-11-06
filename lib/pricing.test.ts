@@ -1,6 +1,6 @@
 // Source: https://claude.com/pricing (read 2026-10-27)
 import { expect, test } from "bun:test";
-import { costDetails } from "./pricing";
+import { costDetails } from "./pricing.ts";
 
 test("haiku 5.5 tier is per request by prompt size", () => {
   const at = (read: number) => costDetails("claude-haiku-5-5", { input: 40_000, output: 1_000, cache_read_input_tokens: read });

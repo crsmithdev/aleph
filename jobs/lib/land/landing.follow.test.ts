@@ -19,9 +19,9 @@ describe("land follows main", () => {
     const files: Record<string, string> = {
       "ui/server.ts": 'import "../jobs/lib/infra/git.ts";\nimport "./banner.ts";\n',
       "ui/banner.ts": 'import "./views/now.js";\n',
-      "ui/api/now.ts": 'import "../../hooks/lib/env.ts";\n',
+      "ui/api/now.ts": 'import "../../lib/env.ts";\n',
       "jobs/lib/infra/git.ts": "1\n",
-      "hooks/lib/env.ts": "1\n",
+      "lib/env.ts": "1\n",
       "ui/views/now.js": "1\n",
       "ui/views/other.js": "1\n",
       "ui/index.html": "1\n",

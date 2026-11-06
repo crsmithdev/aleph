@@ -6,14 +6,14 @@ import { afterAll, afterEach, beforeEach } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseFrontmatter, splitFrontmatter } from "../vault/lib/frontmatter.ts";
+import { parseFrontmatter, splitFrontmatter } from "../lib/frontmatter.ts";
 import { renderItem, type Issue } from "./lib/todo.ts";
 import { config } from "./lib/store.ts";
 
 /** `repo` is a product repo; `items` is the work store's checkout and `remote` its origin. Set again before each test. */
 export const fx = { base: "", remote: "", repo: "", repoRemote: "", items: "" };
 
-export const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
+const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): string {
   const p = Bun.spawnSync(args, { cwd, env: { ...process.env, ...gitEnv }, stdout: "pipe", stderr: "pipe" });
   if (p.exitCode !== 0) throw new Error(`${args.join(" ")}: ${p.stderr}`);

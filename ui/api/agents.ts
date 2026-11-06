@@ -1,10 +1,10 @@
 /**
- * `GET /api/agents?days=7&project=<key>`: the Agents view's data over one window: the tools, hooks and denials of `/api/activity`,
+ * `GET /api/agents?days=7&project=<key>`: the Agents view's data over one window: the tools, hooks and denials of `ui/activity.ts`,
  * the skills of `/api/skills`, the sessions of `/api/sessions`, and `toolSessions`, the sessions each tool ran in.
  * A part that fails gives its own error, so the other parts still show.
  */
 import type { Routes } from "../server.ts";
-import { activity } from "./activity.ts";
+import { activity } from "../activity.ts";
 import { listSessions, windowTraces } from "./sessions.ts";
 import { listSkills } from "./skills.ts";
 

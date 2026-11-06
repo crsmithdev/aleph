@@ -120,16 +120,16 @@ Flag what needs judgment, and leave it: whether the README leads with what the p
 
 # 11. Report
 
-Publish the run as an artifact. Load the `artifact-design` skill, write the page, publish it with the Artifact tool, and give the user the link. A run produces a judgment about every candidate it touched, and that judgment is worth more than the diff; in terminal scrollback it is gone by the next session.
+Write the report in the terminal. A run produces a judgment about every candidate it touched, and that judgment is worth more than the diff.
 
-The page carries six things:
+The report carries six things:
 
 - **The delta.** Files and lines removed against the baseline, split by pass and by tier.
 - **The sweep**, one row per finding, grouped by outcome rather than by category. The reader wants to know what changed; the category is how you found the file, not what you did to it. Include the ignore rules added, so a reader can tell why the next run will be quieter.
 - **Every finding** from pass 2: tier, `file:line`, what it was, which detector raised it.
-- **The survivors.** Each candidate you did not delete and the escape hatch that saved it. This is the most useful part of the page: it maps the entry points, dynamic dispatch and string lookups the codebase relies on, which is exactly what the next reader cannot see.
+- **The survivors.** Each candidate you did not delete and the escape hatch that saved it. This is the most useful part of the report: it maps the entry points, dynamic dispatch and string lookups the codebase relies on, which is exactly what the next reader cannot see.
 - **The gate**, when pass 3 ran: each row pass or fail, the cold clone's actual outcome, and every judgment call left open.
-- **Follow-ups.** T4 items, anything re-tiered upward, a secret in history, and untracked files the user declined — those survive into the next run, and the page is what keeps that from being a surprise.
+- **Follow-ups.** T4 items, anything re-tiered upward, a secret in history, and untracked files the user declined — those survive into the next run, and the report is what keeps that from being a surprise.
 
 Then write the vault page (`/aleph:vault`) for what the run taught you about how this codebase actually behaves.
 

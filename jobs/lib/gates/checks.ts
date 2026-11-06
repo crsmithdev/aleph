@@ -10,10 +10,11 @@ import { recordFlake } from "./factory-status.ts";
 import { admit, type Admission, type Check, type CheckResult, type FailedTest, type Repo, type TestRecord } from "../records/ledger.ts";
 import type { Stated } from "../records/outcome.ts";
 import { checkSeconds } from "../infra/settings.ts";
-import { q } from "../roles/agent-call.ts";
 import { git } from "../infra/git.ts";
 import { runFile } from "../records/run-files.ts";
 import type { Plan } from "./keep-earn.ts";
+
+const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`;
 
 /**
  * Why the checks stopped: the cause and check name that the run states, the sentence for `reason`, and whether a clock

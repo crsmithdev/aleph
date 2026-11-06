@@ -107,7 +107,7 @@ The design is in [the context gate decision](context-gate.md).
 
 ## Tracing
 
-`hooks/obs.ts` sends OTLP spans to Langfuse (`hooks/lib/otlp.ts`). Each user turn is one trace, keyed by the prompt id. Spans cover tools, skills (`skill:<name>`), subagents, model generations with their cost (`hooks/lib/pricing.ts`) and text events.
+`hooks/obs.ts` sends OTLP spans to Langfuse (`lib/otlp.ts`). Each user turn is one trace, keyed by the prompt id. Spans cover tools, skills (`skill:<name>`), subagents, model generations with their cost (`lib/pricing.ts`) and text events.
 
 - At `SessionStart` it posts nothing. It saves the session name, tags and directory in the spool.
 - At `UserPromptSubmit`, an `N/10` in the prompt becomes a `rating` score on the previous trace.

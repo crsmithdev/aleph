@@ -1,6 +1,6 @@
 // The Memory view: a status board of the seven memory types, broad health below it, then a browser of the
-// notes with an inspector. `renderNote` serves #/memory/<title> too, from
-// memory-note.js, because the page reads one `view` per file.
+// notes with an inspector. `renderNote` serves #/memory/<title> too, from the
+// `noteView` route exported in `views` at the bottom of this file.
 import { facts, localMs, moreFold, badge, legendHtml, barList, barRow, chip, chipRow, count, pct, priorityBadge, card, crumb, dataTable, day, empty, error, esc, filterBar, heads, limitOf, loadingLine, localId, md, meter, onTile, pageHead, pager, searchBox, sectionHead, setQuery, sortHead, sortRows, statCard, tiles, when, wireTable } from "../lib.js";
 
 export const view = {
@@ -22,7 +22,7 @@ const table = ([key, val], rows, none = "") => rows.length
 const paged = (head, rows) =>
   `<div class="mem-page">${dataTable(head, rows.map((r, i) => (i < STEP ? r : r.replace("<tr", "<tr hidden"))).join(""))}${pager(STEP, rows.length, STEP)}</div>`;
 
-export function renderHome(m) {
+function renderHome(m) {
   const secs = m.home.map((s) =>
     sectionHead(s.heading, { level: 3 }) + (s.entries.length
       ? `<ul>${s.entries.map((e) => `<li>${link(e.title)}${e.hook ? ` <span class="quiet">${esc(e.hook)}</span>` : ""}</li>`).join("")}</ul>`
@@ -30,7 +30,7 @@ export function renderHome(m) {
   return sectionHead("Home", { id: "home" }) + (secs || empty("Home has no sections.", "Home.md is the vault's map."));
 }
 
-export function renderHealth(m) {
+function renderHealth(m) {
   const f = (x) => `<li><code>${esc(x.rule)}</code> ${x.note ? link(x.note) : ""} <span class="quiet">${esc(x.detail)}</span></li>`;
   const { refuse, warn } = m.lint;
   const med = m.misses;
@@ -146,7 +146,7 @@ export const noteRows = (m, now = Date.now()) => (m.notes ?? []).map((n) => ({ .
 const isKnown = (n) => KNOWLEDGE.includes(n.kind);
 
 /** How many of `rows` have each status. A lint problem counts as itself, so the four add up to the rows. */
-export function statusCounts(rows) {
+function statusCounts(rows) {
   const c = { use: 0, stale: 0, never: 0, lint: 0 };
   for (const n of rows) c[n.status]++;
   return c;
@@ -376,3 +376,12 @@ export function renderNote(n) {
     `<section id="links">${sectionHead("Links to", { id: "links", count: n.links.length })}${crumbs(n.links)}</section>` +
     `<section id="backlinks">${sectionHead("Linked From", { id: "backlinks", count: n.backlinks.length })}${crumbs(n.backlinks)}</section></div>`;
 }
+
+export const noteView = {
+  path: "/memory/:title",
+  title: "Note",
+  group: "claude",
+  api: (params) => `/api/memory/note?title=${encodeURIComponent(params.title)}`,
+  render: (n) => renderNote(n),
+};
+export const views = [view, noteView];

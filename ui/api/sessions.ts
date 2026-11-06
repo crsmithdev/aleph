@@ -106,7 +106,7 @@ const pretty = (input: unknown) => { const o = inputObject(input); return o ? JS
  * Each subagent's `agent` span paired with the `Agent` tool span that launched it (hooks/obs.ts writes it as the tool span's sibling): agent span id → tool span id.
  * The agent span lies inside the tool span in time; of several overlapping calls, the one whose `subagent_type` (default `general-purpose`) is the agent_type wins.
  */
-export function pairAgents(obs: any[]): Map<string, string> {
+function pairAgents(obs: any[]): Map<string, string> {
   const tools = obs.filter((o) => isType(o, "tool") && o.name === "Agent");
   const taken = new Set<string>();
   const out = new Map<string, string>();

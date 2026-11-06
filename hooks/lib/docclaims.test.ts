@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { claimsDocMatch, docClaimProblems } from "./docclaims.ts";
+import { claimSentences, docClaimProblems } from "./docclaims.ts";
+
+const claimsDocMatch = (message: string): boolean => claimSentences(message).length > 0;
 
 let n = 0;
 const use = (name: string, input: Record<string, unknown>, out = "") => {

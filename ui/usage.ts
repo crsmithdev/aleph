@@ -18,13 +18,13 @@ export interface Spend { at: number; model: string; cost: number }
 export interface Wk { pct: number; pooled: boolean }
 export interface Fit { pooled: number; byModel: Record<string, number>; hours: number }
 
-export const POLL_MS = 10 * 60_000;
-export const MIN_HOURS = 6;
-export const MIN_DOLLARS = 5;
+const POLL_MS = 10 * 60_000;
+const MIN_HOURS = 6;
+const MIN_DOLLARS = 5;
 const HOUR = 3600_000;
 const STALE_MS = 25 * 60_000;
 
-export const usageFile = () => expand(usageFileSetting());
+const usageFile = () => expand(usageFileSetting());
 const credentialsFile = () => expand(credentialsFileSetting());
 const usageUrl = usageUrlSetting;
 
@@ -43,7 +43,7 @@ const errName = (e: unknown) => (e instanceof Error ? e.name : "error");
  * One call to the endpoint: a snapshot, or null on any error, with the reason on stderr. The token stays inside this function.
  * A failed read or parse of the credentials file logs fixed text, because a JSON parse error can quote the file.
  */
-export async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
+async function fetchUsage(now = new Date()): Promise<Snapshot | null> {
   let token: unknown;
   try {
     token = JSON.parse(readFileSync(credentialsFile(), "utf8"))?.claudeAiOauth?.accessToken;
@@ -226,7 +226,7 @@ export function currentFit(): Promise<Fit | null> {
 }
 export const clearFit = () => fitCache.clear();
 
-export interface UsageSummary {
+interface UsageSummary {
   /** The last snapshot of the reset window, or null with none or when its week has ended. */
   now: Snapshot | null;
   /** True when the last poll failed or the snapshot is older than STALE_MS. */

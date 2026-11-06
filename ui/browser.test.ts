@@ -16,7 +16,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('(() => { const li = document.querySelector("#nav li"); return [li.className, li.textContent, !!li.querySelector("a")]; })()')).toEqual(["head", "Factory", false]);
     // Every view the page loads sits in a group the sidebar shows under a header: no view keeps a hidden group.
     const heads = await page.ev<string[]>('[...document.querySelectorAll("#nav li.head")].map((li) => li.textContent.toLowerCase())');
-    const groups = await page.ev<string[]>('fetch("/api/views").then((r) => r.json()).then((ns) => Promise.all(ns.map((n) => import("/views/" + n).then((m) => m.view?.group))))');
+    const groups = await page.ev<string[]>('fetch("/api/views").then((r) => r.json()).then((ns) => Promise.all(ns.map((n) => import("/views/" + n).then((m) => (m.views ?? (m.view ? [m.view] : [])).map((v) => v.group))))).then((gs) => gs.flat())');
     expect([...new Set(groups.filter(Boolean))].filter((g) => !heads.includes(g))).toEqual([]);
   });
 
@@ -396,16 +396,6 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
     expect(m.size).toBeLessThan(m.body);
     expect(m.em).toBe(m.fs);
     await page.ev('document.querySelector("#lane-probe").remove()');
-  }, 30_000);
-
-  test("the font picker button weight comes from --fw-strong", async () => {
-    await page.width(1200);
-    await page.go("#/");
-    const weight = () => page.ev<string>('getComputedStyle(document.querySelector(".fontpick > summary")).fontWeight');
-    expect(await weight()).toBe("600");
-    await page.ev('document.documentElement.style.setProperty("--fw-strong", "700")');
-    expect(await weight()).toBe("700");
-    await page.ev('document.documentElement.style.removeProperty("--fw-strong")');
   }, 30_000);
 
   test("every indented list takes its left padding from --indent-list", async () => {

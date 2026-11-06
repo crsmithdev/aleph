@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { attrs, fetchObservations, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "./lib/otlp.ts";
-import { classifyEnvironment, loadDotenv } from "./lib/env.ts";
+import { attrs, fetchObservations, traceIdFor, truncate, turnSpanIdFor, turnTraceIdFor } from "../lib/otlp.ts";
+import { classifyEnvironment, loadDotenv } from "../lib/env.ts";
 import { parseRating } from "./lib/rating.ts";
 import { scanDiff, scanLine } from "./lib/scan.ts";
 
@@ -372,7 +372,7 @@ describe("obs hook generations", () => {
 
 describe("pricing", () => {
   test("dated haiku id prices as haiku 4.5; unknown model has no cost", async () => {
-    const { costDetails, priceFor } = await import("./lib/pricing.ts");
+    const { costDetails, priceFor } = await import("../lib/pricing.ts");
     expect(priceFor("claude-haiku-4-5-20251001")?.input).toBe(1);
     expect(costDetails("claude-haiku-4-5-20251001", { input: 1_000_000, output: 0 })?.total).toBeCloseTo(1, 10);
     expect(costDetails("gpt-x", { input: 1, output: 1 })).toBeNull();

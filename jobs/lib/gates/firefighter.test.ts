@@ -7,7 +7,7 @@ import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { askOf } from "../asks/ask.ts";
-import { ciStep, type GhRun } from "../gates/ci.ts";
+import { ciStep, type GhRun } from "./ci.ts";
 import { ciFailure, firefight, LOG_CHARS, type Ports } from "./firefighter.ts";
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";

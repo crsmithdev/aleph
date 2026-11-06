@@ -1,6 +1,6 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
-// The issue detail (renderIssue) is shared with views/issue.js.
+// The issue detail (renderIssue) is routed at #/issues/:repo/:n.
 import { xLabel } from "./speed.js";
 import { actButton, postJson, say, count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
 import { askRow } from "./now.js";
@@ -31,7 +31,7 @@ export const PAGE = 50;
 /** The Status filter's default is Open; "any" (the All option) shows every status. */
 /** The statuses that close an issue; a parked one is neither open nor closed. */
 const CLOSED = ["done", "dropped"];
-export const DEFAULT_STATUS = "open";
+const DEFAULT_STATUS = "open";
 const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STATUS : s === "any" ? "" : s);
 
 /** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&limit=100. With a search and no sort, the best match comes first. */
@@ -92,7 +92,7 @@ function subsequence(t, s) {
  * How well one lower-case word of a query fits `s`: `{ score, hits }`, or null. An exact run of letters scores best, more so
  * at the start of a word; then letters in order; then a word of `s` within one typo (two from eight letters).
  */
-export function fuzzyToken(t, s) {
+function fuzzyToken(t, s) {
   const i = s.indexOf(t);
   if (i >= 0) return { score: 100 + (i === 0 || /\W/.test(s[i - 1]) ? 30 : 0), hits: Array.from(t, (_, k) => i + k) };
   if (t.length < 2) return null;
@@ -121,7 +121,7 @@ export function fuzzyMatch(q, r) {
 }
 
 /** The title as HTML with the hit letters marked. */
-export function markHits(title, hits = []) {
+function markHits(title, hits = []) {
   if (!hits.length) return esc(title);
   const on = new Set(hits);
   let out = "", run = "";
@@ -342,7 +342,7 @@ export function testsOption(tests, project = "", win = "month", now = new Date()
 export const closeOption = (c, t) => rangeBarOption(c.kinds, c.p50, c.p90, (v) => dur(v * (c.unit === "hours" ? 3600 : 86400)), t);
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
-export const TILE_FILTER = {
+const TILE_FILTER = {
   open: { tile: "", status: "", sort: "", dir: "", limit: "" },
   filed: { tile: "filed", status: "any", sort: "", dir: "", limit: "" },
   closed: { tile: "closed", status: "any", sort: "", dir: "", limit: "" },
@@ -406,10 +406,10 @@ function renderLive(projects, rows, o, tests) {
 
 const projectsOf = (d) => [...new Set([...(d?.projects ?? []), ...(d?.issues ?? []).map((r) => r.repo)])].sort();
 
-export const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
+const BODY_TEMPLATE = "## Outcome\n\n\n\n## Oracle\n\n\n\n## Time box\n\n";
 
 /** The Project select's options, one per registry key, `project` selected. */
-export function projectOptions(keys, project) {
+function projectOptions(keys, project) {
   return keys.map((k) => `<option value="${esc(k)}"${k === project ? " selected" : ""}>${esc(k)}</option>`).join("");
 }
 
@@ -454,7 +454,7 @@ export async function mount(root, d) {
   if (keys.length) select.innerHTML = projectOptions(keys, select.value);
 }
 
-export function renderForm(rows, o = {}) {
+function renderForm(rows, o = {}) {
   const repos = [...new Set(rows.map((r) => r.repo))];
   return `<details class="new"><summary>File an issue</summary>` +
     `<form data-ui="issue-form" class="stack">` +
@@ -481,7 +481,7 @@ export function renderIssues(d, o = {}) {
 export const description = (body) => String(body ?? "").replace(/^\s*## Request[ \t]*\r?\n+/, "");
 
 /** Each `docs/specs/<file>.md` that this project has becomes a link to its Spec page. */
-export const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
+const linkSpecs = (html, repo, files = []) => html.replace(/docs\/specs\/([\w.-]+\.md)/g, (m, f) => (files.includes(f) ? `<a href="#/specs/${encodeURIComponent(repo)}/${encodeURIComponent(f)}">${m}</a>` : m));
 
 const PRIORITIES = ["critical", "high", "medium", "low"], SOURCES = ["chris", "worker", "deps", "memory", "agent"];
 const choose = (name, all, cur) => `<select name="${name}" ${FORM} aria-label="${name}">${(all.includes(cur) || !cur ? all : [cur, ...all]).map((o) => `<option${o === cur ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
@@ -506,7 +506,7 @@ const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighte
 /** The notes a person or a job needs to read, which stay visible. */
 const READ = /^(?:intake: for Chris:|triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
 /** True when a note line is a machine line: the prefix at the start of the text after the `- ` and the stamp. */
-export const isMachineNote = (n) => {
+const isMachineNote = (n) => {
   const t = String(n).replace(/^- /, "").replace(/^\d{4}-\d\d-\d\d \d\d:\d\d(?::\d\d)?: /, "");
   return MACHINE.test(t) && !READ.test(t);
 };
@@ -634,7 +634,6 @@ export function renderIssue(d) {
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
 // listens on the document. Filters live in the route's query, the form posts.
 if (typeof document !== "undefined") {
-  const here = () => hashOptions(hashQuery());
   document.addEventListener("click", (e) => {
     const t = e.target.closest ? e.target : null;
     const seg = t?.closest("#inv-filters .seg button");
@@ -681,3 +680,12 @@ if (typeof document !== "undefined") {
     } catch (err) { say(form.querySelector("button"), `Could not file it: ${err.message}`); }
   });
 }
+
+export const issueView = {
+  path: "/issues/:repo/:n",
+  title: "Issue",
+  group: "factory",
+  api: "/api/issues/:repo/:n",
+  render: renderIssue,
+};
+export const views = [view, issueView];

@@ -42,7 +42,7 @@ export function axisTimes(times, x, max = 5) {
 const BAD = ["failed", "returned", "dropped"];
 const AUX = ["intake", "triage", "plan", "facts", "explain", "firefighter", "director", "monitor"];
 /** A run's bar colour: bad for a run that failed, land, aux for a run that does not build, else build. */
-export const barTone = (r) => (BAD.includes(jobState(r.condition, r.failed)) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
+const barTone = (r) => (BAD.includes(jobState(r.condition, r.failed)) ? "bad" : r.kind === "land" ? "land" : AUX.includes(r.kind) ? "aux" : "build");
 
 /** A run's start and end in ms; a live run ends now, a run with no end ends where it started. */
 export function spanOf(r, now = Date.now()) {

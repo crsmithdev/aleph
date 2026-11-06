@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path";
 import { base, branchExists, fakeLog, file, jobRuns, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.helpers";
 import { actionJob, drop, job, jobView } from "../../inproc.ts";
-import { dropAs, run } from "../infra/flow.testkit.ts";
+import { dropAs, run } from "../../flow.testkit.ts";
 import { writeRun } from "../records/ledger.ts";
 
 // The runs start in-process, as `aleph job` and `aleph run` start them; each run's unit is a process of its own.

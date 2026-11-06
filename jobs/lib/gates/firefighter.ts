@@ -17,12 +17,12 @@ import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
-import { ciOf, gh, redCi, ciLine, type Gh } from "../gates/ci.ts";
-import { baselines, factoryDir, factoryRepos, gates, redLine } from "../gates/factory-status.ts";
+import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
+import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";
 import { git } from "../infra/git.ts";
 import { factoryLog, logEvent } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
-import { askSlowLands } from "./rescue.ts";
+import { askSlowLands } from "../land/rescue.ts";
 import { runFile } from "../records/run-files.ts";
 
 /** The most of a log that goes into an issue's request: its last LOG_LINES lines, cut to LOG_CHARS. */

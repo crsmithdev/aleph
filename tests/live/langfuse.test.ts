@@ -3,8 +3,8 @@
  * (env or ~/.aleph/.env). Run with ALEPH_LIVE=1 bun test tests/live
  */
 import { describe, expect, test } from "bun:test";
-import { langfuseConfig } from "../../hooks/lib/env.ts";
-import { attrs, fetchTrace, nano, postSpans, spanId, traceIdFor } from "../../hooks/lib/otlp.ts";
+import { langfuseConfig } from "../../lib/env.ts";
+import { attrs, fetchTrace, nano, postSpans, spanId, traceIdFor } from "../../lib/otlp.ts";
 
 const cfg = process.env.ALEPH_LIVE === "1" ? langfuseConfig() : null;
 const describeLive = cfg ? describe : describe.skip;

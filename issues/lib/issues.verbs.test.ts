@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Refusal } from "../../jobs/lib/transitions/refusal.ts";
+import { Refusal } from "../../lib/refusal.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { breakItem, doc, env, fx, parse, remoteItem, sec, seed, sh, tasks, useFixture } from "../fixture.ts";
 import { config } from "./store.ts";

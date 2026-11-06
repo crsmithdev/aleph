@@ -1,16 +1,16 @@
 /**
- * `GET /api/activity?days=7`: the tools and hooks Claude Code used over the
- * last days, and the verify-gate's denials. It reads Langfuse observations (as
- * `fetchObservations` does). `?project=<key>` keeps one project: a Langfuse
- * trace by its name or cwd.
+ * The tools and hooks Claude Code used over the last days, and the
+ * verify-gate's denials, for `/api/agents` and `/api/memory`. It reads Langfuse
+ * observations (as `fetchObservations` does). `?project=<key>` keeps one
+ * project: a Langfuse trace by its name or cwd.
  */
 import { basename } from "node:path";
-import { langfuseConfig, type LangfuseConfig } from "../../hooks/lib/env.ts";
-import type { Observation } from "../../hooks/lib/otlp.ts";
-import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { today } from "../../issues/lib/todo.ts";
-import { staleAsync } from "../stale.ts";
-import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
+import { langfuseConfig, type LangfuseConfig } from "../lib/env.ts";
+import type { Observation } from "../lib/otlp.ts";
+import { loadRegistry } from "../jobs/lib/records/ledger.ts";
+import { today } from "../issues/lib/todo.ts";
+import { staleAsync } from "./stale.ts";
+import { uiCacheMs } from "../jobs/lib/infra/settings.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
@@ -137,5 +137,3 @@ export async function activity(days: number, project: string | null, now = new D
   out.toolTraces = Object.fromEntries([...traceSets].map(([k, v]) => [k, [...v]]));
   return out;
 }
-
-
