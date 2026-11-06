@@ -414,7 +414,8 @@ test("localMs reads a bare date as local midnight, not UTC midnight", () => {
   try {
     expect(lib.localMs("2026-11-05")).toBe(new Date(2026, 10, 5).getTime());
   } finally {
+    // Bun reads a new TZ when it is set, not when it is deleted: set UTC back first.
+    process.env.TZ = tz ?? "UTC";
     if (tz === undefined) delete process.env.TZ;
-    else process.env.TZ = tz;
   }
 });

@@ -40,6 +40,8 @@ delete process.env.ALEPH_JOB_ID;
 delete process.env.ALEPH_JOB_RUN;
 // The job records follow the test ledger (`<ALEPH_JOBS_DIR>/.records`), never a folder the shell names.
 delete process.env.ALEPH_RECORDS_DIR;
+// Pin the test runner to UTC so timezone-independent dates and timestamps agree across environments.
+process.env.TZ = "UTC";
 // No check, worker or land in a test waits for the host's load: the admission's own tests give a fake load.
 process.env.ALEPH_LOAD_LIMIT = "Infinity";
 
