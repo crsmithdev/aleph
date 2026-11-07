@@ -68,10 +68,10 @@ test("the Landed card shows the clean share, then the clean count, and trends on
   expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
 });
 
-test("the Status page puts the Stages, Holds and Monitor panels in one row above the lanes", () => {
+test("the Status page puts the Stages, Holds and Herald panels in one row above the lanes", () => {
   const monitor = { day: "2026-11-04", findings: ["one"], stages: [], holds: [] };
   const page = view.view.render({ ...state, usage: USAGE, factory: { ...state.factory, monitor } }, {}, new URLSearchParams());
-  const at = ['class="insights"', 'id="stages"', 'id="holds"', 'id="monitor"', 'class="lanes"'].map((x) => page.indexOf(x));
+  const at = ['class="insights"', 'id="stages"', 'id="holds"', 'id="herald"', 'class="lanes"'].map((x) => page.indexOf(x));
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
 });
 

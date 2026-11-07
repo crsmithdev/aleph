@@ -82,7 +82,29 @@ export interface NewIssue { id: string; title: string; priority?: string; status
 export interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
-interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
+/** One status transition or factory event in the Herald feed. */
+export interface HeraldHistoryItem {
+  at: string;
+  tone: "alert" | "warning" | "fine" | "run" | "ask";
+  label?: string;
+  text: string;
+  reason?: string;
+}
+
+const statusHistory: HeraldHistoryItem[] = [];
+const MAX_STATUS_HISTORY = 50;
+
+export function recordStatusTransition(item: HeraldHistoryItem): void {
+  const last = statusHistory[0];
+  if (!last || last.text !== item.text || last.tone !== item.tone) {
+    statusHistory.unshift(item);
+    if (statusHistory.length > MAX_STATUS_HISTORY) statusHistory.pop();
+  }
+}
+
+export function currentStatusHistory(): HeraldHistoryItem[] {
+  return statusHistory.slice();
+}
 
 export interface State {
   now: string;
@@ -111,6 +133,8 @@ export interface State {
   done: DoneItem[];
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
+  /** Recent status transitions and events for the Herald panel. */
+  herald?: { history: HeraldHistoryItem[] };
 }
 
 const DONE = 10;
@@ -425,10 +449,18 @@ export function state(now = new Date()): State {
     a.agent = j.agent ?? false; a.defaults = j.defaults; a.followups = j.followups;
     if (j.trailers) a.trailers = j.trailers;
   }
+  const timers = tickTimer();
+  const alertLines = (factory.health || []).filter((l) => !/passed on rerun|holds \d+ flake notes?|full suite took|^(?!aleph )\S+ (main is red|CI on main has failed)/.test(l.replace(/^health:\s*/, "")));
+  if (timers.nextTick === null && !timers.tickInProgress) alertLines.push("the factory tick has stopped");
+  if (stuck.length) alertLines.push("jobs are unhealthy");
+  const tone = alertLines.length ? "alert" : (att.items.length || factory.paused) ? "warning" : "fine";
+  const text = alertLines.length ? `Alert: ${alertLines.join("; ")}` : att.items.length ? "Your attention is needed" : factory.paused ? "The factory is paused" : "Everything is running smoothly";
+  recordStatusTransition({ at: now.toISOString(), tone, label: tone === "alert" ? "Alert" : tone === "warning" ? "Ask" : "Fine", text, reason: alertLines[0] });
   const redOf = mainRed();
   return {
     now: now.toISOString(),
-    factory: { ...factory, judge: judgeChoice(), ...tickTimer(), monitor: monitorPanel() },
+    factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
+    herald: { history: currentStatusHistory() },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

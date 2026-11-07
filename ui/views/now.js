@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actButton, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, pct, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
 
@@ -14,7 +14,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${renderNeeds(s)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}${renderOutcome(speedOf(w))}<div class="insights">${renderStages(s)}${renderHolds(s)}${renderMonitor(s)}</div>${renderLanes(s, w)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}${renderOutcome(speedOf(w))}<div class="insights"><div class="stack-left">${renderStages(s)}${renderHolds(s)}</div>${renderHerald(s)}</div>${renderLanes(s, w)}</div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -104,6 +104,97 @@ export function renderMonitor(s) {
   return card("Monitor", said, { id: "monitor", aside: `<span class="asof">${esc(m.day)}</span>`, label: `Monitor ${m.day}` });
 }
 
+let clientEvents = [];
+
+/** Extract the plain-text status line verdict and reasons from state. */
+export function statusVerdict(s, stale = false) {
+  const f = s.factory || {};
+  const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
+  if (s.stuck?.length) alerts.add(JOBS_UNHEALTHY);
+  const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
+  const alert = alerts.size > 0;
+  const reasons = [...alerts];
+  if (stale) return { tone: "error", label: "Alert", text: "Alert: this status is out of date", reasons: ["status stale"] };
+  if (alert) return { tone: "error", label: "Alert", text: `Alert: ${[...alerts].join("; ")}`, reasons };
+  if (asks.length && !f.paused) return { tone: "warning", label: "Ask", text: "Your attention is needed", reasons: [`${asks.length} ask${asks.length > 1 ? "s" : ""}`] };
+  if (f.paused) return { tone: "warning", label: "Wait", text: "The factory is paused", reasons: ["factory paused"] };
+  return { tone: "fine", label: "Fine", text: FINE, reasons: [] };
+}
+
+/** Record a client-side transition if state changed. */
+function trackStatusEvent(s) {
+  const v = statusVerdict(s);
+  const tone = v.tone === "error" ? "alert" : v.tone === "warning" ? "ask" : "fine";
+  const last = clientEvents[0];
+  if (!last || last.text !== v.text || last.tone !== tone) {
+    clientEvents.unshift({
+      at: s.now || new Date().toISOString(),
+      tone,
+      label: v.label,
+      text: v.text,
+      reason: v.reasons[0] || "",
+    });
+    if (clientEvents.length > 50) clientEvents.pop();
+  }
+}
+
+/** The Herald panel: sticky alerts on top, rolling event history stream below. */
+export function renderHerald(s) {
+  trackStatusEvent(s);
+  const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
+  const stuck = (s.stuck ?? []).map(stuckRow(s));
+  const pinnedCount = asks.length + stuck.length;
+  const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
+
+  const sticky = pinnedCount > 0
+    ? `<section id="needs" class="needs herald-sticky" aria-labelledby="h-needs">` +
+        `<div class="herald-sticky-head"><span id="h-needs">Sticky Alerts (${pinnedCount})</span><span class="aside-quiet">Fixed until unstuck</span></div>` +
+        group("awaiting", asks.length, asks.join(""), list) +
+        group("jobs-stuck", stuck.length, stuck.join(""), list) +
+      `</section>`
+    : `<div class="herald-sticky calm"><span class="event-dot fine"></span> No active alerts</div>`;
+
+  const events = s.herald?.history?.length ? s.herald.history : clientEvents;
+  const feed = events.length
+    ? events.map((ev) =>
+        `<div class="event-row">` +
+          `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
+          `<span class="event-tone"><span class="event-dot ${esc(ev.tone)}"></span>${esc(ev.label || ev.tone)}</span>` +
+          `<span class="event-body">${esc(ev.text)}${ev.reason ? `<span class="reason">${esc(ev.reason)}</span>` : ""}</span>` +
+        `</div>`
+      ).join("")
+    : `<div class="empty quiet"><p>No recent events.</p></div>`;
+
+  const m = s.factory?.monitor;
+  const monitorFindings = m?.findings?.length
+    ? `<details class="more herald-findings" data-keep="herald:findings"><summary>Daily Monitor (${esc(m.day)})</summary><ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol></details>`
+    : "";
+
+  const badgeHtml = pinnedCount > 0
+    ? `<span class="badge alert">${pinnedCount} Pinned</span>`
+    : `<span class="badge done">Calm</span>`;
+
+  return `<section id="herald" class="card herald-card" aria-label="Herald">` +
+    `<div class="sh"><h2 id="h-herald">Herald</h2><div class="aside">${badgeHtml}</div></div>` +
+    sticky +
+    `<div class="herald-history-head">Event history</div>` +
+    `<div class="herald-feed">${feed}</div>` +
+    monitorFindings +
+  `</section>`;
+}
+
+function wireHeraldJump(root) {
+  root.querySelector?.(".shead .say")?.addEventListener?.("click", (e) => {
+    if (e.target.closest?.("a")) return;
+    const herald = root.querySelector?.("#herald");
+    if (herald) {
+      herald.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      herald.classList?.add("pulsing");
+      setTimeout(() => herald.classList?.remove("pulsing"), 1200);
+    }
+  });
+}
+
 /** Fetch the window with its baseline in one request, then fill the scorecard. */
 export async function mountStatus(root, s, fetcher = fetch, q) {
   const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
@@ -111,6 +202,7 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   keepProject(projectNow());
   wireScope(root);
   wireSorts(root, s);
+  wireHeraldJump(root);
   await loadSpeed(w, fetcher, true);
   const tiles = root.querySelector("#scorecard");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);

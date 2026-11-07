@@ -16,7 +16,7 @@ const render = (m: any) => view.view.render({ ...calm, factory: { ...calm.factor
 test("the left panel is the Stages table and the middle panel the Holds table, from monitor.stages and monitor.holds", () => {
   const html = render(monitor);
   const stages = html.slice(html.indexOf('id="stages"'), html.indexOf('id="holds"'));
-  const holds = html.slice(html.indexOf('id="holds"'), html.indexOf('id="monitor"'));
+  const holds = html.slice(html.indexOf('id="holds"'), html.indexOf('id="herald"'));
   expect(stages).toContain("<td>build</td>");
   expect(stages).toContain('title="Trailing 7 days: 1.4"');
   expect(stages).toContain('title="Trailing 7 days: –"');
@@ -64,7 +64,7 @@ test("each table shows at most 10 rows", () => {
 });
 
 test("the Monitor panel shows the findings with numbers and **text** in bold, other HTML escaped, and no table", () => {
-  const html = render(monitor);
+  const html = view.renderMonitor({ factory: { monitor } });
   expect(html).toContain('<h2 id="h-monitor">Monitor</h2><span class="aside"><span class="asof">2026-10-20</span></span>');
   expect(html).not.toContain("Monitor,");
   expect(html).toContain("<li>Build runs &lt;b&gt;rose&lt;/b&gt; to <b>38%</b> from <b>20%</b>, <b>no usable result</b> is <b>3</b>.</li>");
@@ -87,4 +87,18 @@ test("a missing day or trailing value shows – and a column shows one number of
   expect(s).not.toMatch(/>-</);
   const h = view.renderHolds(only({ holds: [{ kind: "x", goals: P(1, 1), hours: P(0, 1) }, { kind: "y", goals: P(1.7, 1), hours: P(2.5, 1) }] }));
   expect(cells(h)).toEqual(["0.0", "1.0", "1.7", "2.5"]);
+});
+
+test("the Herald panel renders sticky alerts and event feed", () => {
+  const h = view.renderHerald({ ...calm, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" }], stuck: [] });
+  expect(h).toContain('<h2 id="h-herald">Herald</h2>');
+  expect(h).toContain('Sticky Alerts (1)');
+  expect(h).toContain('id="awaiting"');
+  expect(h).toContain('Event history');
+});
+
+test("the Herald panel shows calm state with no alerts", () => {
+  const h = view.renderHerald(calm);
+  expect(h).toContain('No active alerts');
+  expect(h).toContain('Calm');
 });
