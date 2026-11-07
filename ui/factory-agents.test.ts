@@ -45,9 +45,10 @@ test("an outcome on a full model id joins the row of its short model; an unset m
   const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<select.*<td class="num">151<\/td>/);
   expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
-  expect(row(h, "Worker low")).toMatch(/<select.*<td class="num">7<\/td>/);
+  expect(row(h, "Worker")).toMatch(/<select/);
   expect(h).not.toMatch(/<td>claude-/);
-  expect(h).toContain("<td>Reviewer</td><td>not recorded</td>");
+  expect(row(h, "Reviewer")).toContain("<select");
+  expect(h.match(/<td>Reviewer<\/td>/g)!.length).toBe(1);
   expect(h).not.toMatch(/<td>unset<\/td>/);
 });
 
@@ -135,12 +136,15 @@ test("the Roles table carries the model choice: no Models card, a select per tie
   expect(html).not.toContain(">Models<");
   const row = (name: string) => html.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
   const opts = (r: string) => [...r.matchAll(/<option value="([^"]+)"/g)].map((x) => x[1]);
-  expect(opts(row("Worker low"))).toEqual(OFFERS["worker-low"]);
-  expect(opts(row("Worker medium"))).toEqual(OFFERS["worker-medium"]);
+  const w = row("Worker");
+  const lowSelect = w.match(/<select data-tier="worker-low".*?<\/select>/s)![0];
+  const medSelect = w.match(/<select data-tier="worker-medium".*?<\/select>/s)![0];
+  expect(opts(lowSelect)).toEqual(OFFERS["worker-low"]);
+  expect(opts(medSelect)).toEqual(OFFERS["worker-medium"]);
   expect(OFFERS["worker-low"]).toContain("deepseek-v4.1-flash");
-  expect(row("Worker low")).toContain('type="checkbox" data-tier="worker-low" aria-label="Worker low enabled" checked');
-  expect(row("Worker medium")).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
-  expect(row("Worker medium")).toContain('<option value="gpt-oss-20b" selected>');
+  expect(w).toContain('type="checkbox" data-tier="worker-low" aria-label="Worker low enabled" checked');
+  expect(w).toContain('type="checkbox" data-tier="worker-medium" aria-label="Worker medium enabled">');
+  expect(w).toContain('<option value="gpt-oss-20b" selected>');
   for (const n of ["Merge", "Reviewer", "Intake", "Director", "Monitor", "Title", "Judge"]) { expect(row(n)).toContain("<select"); expect(row(n)).not.toContain("checkbox"); }
   expect(html).not.toContain(">Succeeded<");
   expect(html).not.toContain(">Failed<");
@@ -162,18 +166,14 @@ test("the Roles card says OpenRouter is down when the flash model is down", () =
   expect(renderFactoryAgents(S, D, "live", "week", m(["deepseek-v4.1-flash"]))).toContain("Local server: up · OpenRouter: down");
 });
 
-test("an outcome joins the tier or fixed row of its role and model; one that matches none or several stays its own row", () => {
+test("an outcome joins the tier row of its role and model; non-tier roles stay their own row", () => {
   const o = (role: string, model: string, rate: number) => ({ role, model, runs: 10, succeeded: rate * 10, failed: 10 - rate * 10, stuck: 0, rate, p50: 60, cost: 1.5, baseline: 0.7 });
   const row = (h: string, name: string) => h.match(new RegExp(`<tr><td>${name}</td>.*?</tr>`))![0];
-  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "haiku", 0.9), o("worker", "sonnet", 0.8), o("intake", "opus", 0.95)] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
-  expect(row(h, "Worker low")).toMatch(/<select.*<td class="num">10<\/td><td class="num">90%/);
-  expect(row(h, "Worker medium")).toMatch(/<select.*<td class="num">10<\/td><td class="num">80%/);
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("intake", "opus", 0.95), o("triage", "opus", 0.9)] } }, "live", "week", { tiers: tiers("haiku", "sonnet"), local: "up", offers: OFFERS, down: [] });
   expect(row(h, "Intake")).toMatch(/<select.*<td class="num">10<\/td><td class="num">95%/);
-  expect(h).not.toContain("<td>Worker</td>");
   expect(h.match(/<td>Intake<\/td>/g)!.length).toBe(1);
-  const both = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes: [o("worker", "gpt-oss-20b", 0.6)] } }, "live", "week", { tiers: tiers("gpt-oss-20b", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
-  expect(row(both, "Worker")).toMatch(/<td>gpt-oss-20b<\/td><td class="num">10<\/td><td class="num warn">60%.*role=worker&condition=failed/);
-  expect(row(both, "Worker low")).not.toContain("60%");
+  expect(row(h, "Triage")).toContain("90%");
+  expect(row(h, "Worker")).toMatch(/<select/);
 });
 
 const th = (h: string) => [...h.matchAll(/<th( class="num")?>([^<]+)</g)].map((m) => [m[2], !!m[1]]);

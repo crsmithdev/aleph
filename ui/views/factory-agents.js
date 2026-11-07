@@ -19,8 +19,6 @@ const WARN_RATE = 0.7;
 
 /** Each tier's name; the models it offers come from /api/models. */
 const TIERS = {
-  "worker-low": "Worker low",
-  "worker-medium": "Worker medium",
   merge: "Merge",
   reviewer: "Reviewer",
   intake: "Intake",
@@ -48,19 +46,22 @@ function roles(a, m) {
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
     return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
   };
-  const tierRows = m ? Object.entries(TIERS) : [];
-  const roleOf = (tier) => (tier.startsWith("worker") ? "worker" : tier);
-  // Two config rows on one role and model leave that outcome unmerged.
-  const shared = (role, model) => tierRows.filter(([t]) => roleOf(t) === role && shortModel(m.tiers[t]?.model) === shortModel(model)).length > 1;
-  const merged = (role, model) => (shared(role, model) ? undefined : find(role, model));
-  const pick = ([tier, name]) => {
-    const t = m.tiers[tier], box = tier.startsWith("worker") ? `<input type="checkbox" data-tier="${esc(tier)}" aria-label="${esc(name)} enabled"${t?.enabled ? " checked" : ""}> ` : "";
-    const offers = m.offers[tier] ?? [];
-    return `<tr><td>${esc(name)}</td><td>${box}<select data-tier="${esc(tier)}" aria-label="${esc(name)} model">` +
-      offers.map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(v)}</option>`).join("") + `</select></td>${stats(merged(roleOf(tier), t?.model))}</tr>`;
+  const workerRow = () => {
+    const low = m.tiers["worker-low"], med = m.tiers["worker-medium"];
+    const offersLow = m.offers["worker-low"] ?? [], offersMed = m.offers["worker-medium"] ?? [];
+    const sel = (tier, t, offers, label) => `<span class="worker-tier"><input type="checkbox" data-tier="${esc(tier)}" aria-label="${label} enabled"${t?.enabled ? " checked" : ""}> <span class="quiet">${label}:</span> <select data-tier="${esc(tier)}" aria-label="${label} model">` +
+      offers.map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(shortModel(v))}</option>`).join("") + `</select></span>`;
+    return `<tr><td>Worker</td><td>${sel("worker-low", low, offersLow, "Worker low")} ${sel("worker-medium", med, offersMed, "Worker medium")}</td>${stats(null)}</tr>`;
   };
-  const config = m ? tierRows.map(pick).join("") : "";
-  const rows = config + outs.filter((o) => !claims.includes(o)).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
+  const pick = ([tier, name]) => {
+    const t = m.tiers[tier];
+    const offers = m.offers[tier] ?? [];
+    return `<tr><td>${esc(name)}</td><td><select data-tier="${esc(tier)}" aria-label="${esc(name)} model">` +
+      offers.map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(shortModel(v))}</option>`).join("") + `</select></td>${stats(find(tier, t?.model))}</tr>`;
+  };
+  const tierRoles = new Set(["worker", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
+  const config = m ? workerRow() + Object.entries(TIERS).map(pick).join("") : "";
+  const rows = config + (m ? outs.filter((o) => !tierRoles.has(o.role)) : outs).map((o) => `<tr><td>${esc(names[o.role] ?? o.role)}</td><td>${o.model === "unset" ? "not recorded" : esc(shortModel(o.model))}</td>${stats(o)}</tr>`).join("");
   return rows ? dataTable(heads(["Role", "Model", ...num, ""], num), rows) : empty("No agent ran in this window.");
 }
 
