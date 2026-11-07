@@ -8,7 +8,7 @@ The design reference (tokens, formats, tables, charts and components) is [docs/d
 aleph-ui --port 3020    # the default port is ALEPH_UI_PORT, else 3020
 ```
 
-On the home machine, a systemd user unit (`aleph-ui.service`) runs it, and home-proxy serves it on the LAN as `aleph.home`. After a change to the server, run `systemctl --user restart aleph-ui`. A land restarts it by itself when the change touches a file the server imports.
+On the home machine, a systemd user unit (`aleph-ui.service`) runs it, and home-proxy serves it on the LAN as `aleph.home`. The unit runs the server under `bun --watch`, so it restarts by itself when a file it loads changes: a land, a merge or a pull in `~/aleph`.
 
 The unit file is `jobs/systemd/aleph-ui.service`. To install it on the home machine, link it and enable it:
 
@@ -70,4 +70,4 @@ Add two files and change no shared file.
    };
    ```
 
-The server loads every `ui/api/*.ts` at start, so restart `aleph-ui` after you add one. To share a helper, add it to `ui/lib.js` without changing what is there.
+The server loads every `ui/api/*.ts` at start. `bun --watch` does not see a new file, so restart `aleph-ui` after you add one. To share a helper, add it to `ui/lib.js` without changing what is there.

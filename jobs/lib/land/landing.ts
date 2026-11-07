@@ -17,7 +17,6 @@ import { LOCK_BUSY, type Cause } from "../records/outcome.ts";
 import { allJobs, hasFile, isOpen, jobById, lastReal, stepOf } from "../records/job.ts";
 import { onMain } from "../records/status.ts";
 import { RELANDS, TODO_PATH } from "../transitions/continuation.ts";
-import { serverGraph } from "../infra/ui-graph.ts";
 import { landBatch } from "../infra/settings.ts";
 import { runFile } from "../records/run-files.ts";
 import { writeTitle } from "../roles/title.ts";
@@ -415,27 +414,8 @@ function conclude(leader: Member, done: Map<Member, Landing & { after?: () => vo
   return done.get(leader) ?? { outcome: { condition: "failed", cause: "other", reason: "not landed" }, code: 1 };
 }
 
-/**
- * After the land is on origin/<main>: fast-forward the repo's main checkout,
- * and, for the aleph repo, restart aleph-ui when a path between the checkout's
- * old and new HEAD is in serverGraph (the files the server imports, at the new
- * HEAD), wherever it lives. Neither fails the land; the log says what
- * happened. A checkout
- * that did not move still holds the old code, so no restart.
- */
+/** After the land is on origin/<main>: fast-forward the repo's main checkout. It does not fail the land; the log says what happened. aleph-ui runs under `bun --watch`, so it restarts by itself. */
 function followCheckout(repo: Repo, log: (step: string, out?: string) => void): void {
-  const old = git(repo.path, "rev-parse", "HEAD").out;
   const why = followMain(repo.path, repo.main);
-  if (why) { log(why); return; }
-  log("main checkout updated");
-  if (repo.key !== "aleph") return;
-  const moved = git(repo.path, "diff", "--name-only", old, "HEAD").out.split("\n").filter(Boolean);
-  const graph = serverGraph(repo.path);
-  if (!moved.some((f) => graph.has(f))) return;
-  try {
-    const r = Bun.spawnSync(["systemctl", "--user", "try-restart", "--no-block", "aleph-ui.service"], { stdout: "pipe", stderr: "pipe" });
-    log(r.exitCode === 0 ? "aleph-ui restarted" : `aleph-ui not restarted: ${(r.stderr.toString() || r.stdout.toString() || `exit ${r.exitCode}`).trim()}`);
-  } catch (e) {
-    log(`aleph-ui not restarted: ${e instanceof Error ? e.message : e}`);
-  }
+  log(why ?? "main checkout updated");
 }

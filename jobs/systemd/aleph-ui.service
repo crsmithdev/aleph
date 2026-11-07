@@ -1,4 +1,4 @@
-# The aleph UI on 127.0.0.1:3020. landing.ts restarts it by this name, and doctor.ts checks it.
+# The aleph UI on 127.0.0.1:3020. doctor.ts checks it by this name. bun --watch restarts it when a file it loads changes.
 #   systemctl --user link ~/aleph/jobs/systemd/aleph-ui.service
 #   systemctl --user enable --now aleph-ui.service
 #   journalctl --user -u aleph-ui -n 20
@@ -8,7 +8,7 @@ Description=aleph UI on 127.0.0.1:3020
 [Service]
 WorkingDirectory=%h/aleph
 Environment=PATH=%h/.local/bin:%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=%h/aleph/bin/aleph-ui --port 3020
+ExecStart=%h/.bun/bin/bun --watch %h/aleph/ui/server.ts --port 3020
 Restart=always
 RestartSec=2
 
