@@ -21,6 +21,16 @@ export const routes: Routes = {
     const s = forProject(structuredClone(state), url.searchParams.get("project"));
     const fit = await currentFit().catch(() => null);
     annotate([...s.stuck, ...s.running], fit);
-    return Response.json({ ...s, usage: summary(), speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, { headers: { "x-aleph-state-build": String(build) } });
+    const u = summary();
+    const week = u?.now?.seven_day;
+    if (week !== undefined && week >= 90 && s.herald?.history?.[0]?.tone === "fine") {
+      s.herald.history[0] = {
+        ...s.herald.history[0],
+        tone: "warning",
+        label: "Warn",
+        text: `Everything is running smoothly; weekly usage is at ${Math.round(week)}%.`,
+      };
+    }
+    return Response.json({ ...s, usage: u, speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, { headers: { "x-aleph-state-build": String(build) } });
   },
 };

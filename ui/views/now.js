@@ -108,31 +108,30 @@ let clientEvents = [];
 
 /** Extract the plain-text status line verdict and reasons from state. */
 export function statusVerdict(s, stale = false) {
-  const f = s.factory || {};
-  const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
-  if (s.stuck?.length) alerts.add(JOBS_UNHEALTHY);
-  const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
-  const alert = alerts.size > 0;
-  const reasons = [...alerts];
-  if (stale) return { tone: "error", label: "Alert", text: "Alert: this status is out of date", reasons: ["status stale"] };
-  if (alert) return { tone: "error", label: "Alert", text: `Alert: ${[...alerts].join("; ")}`, reasons };
-  if (asks.length && !f.paused) return { tone: "warning", label: "Ask", text: "Your attention is needed", reasons: [`${asks.length} ask${asks.length > 1 ? "s" : ""}`] };
-  if (f.paused) return { tone: "warning", label: "Wait", text: "The factory is paused", reasons: ["factory paused"] };
-  return { tone: "fine", label: "Fine", text: FINE, reasons: [] };
+  const safe = { factory: {}, stuck: [], asks: [], ...s };
+  const html = renderLede(safe, stale);
+  const m = html.match(/^<span class="say (\w+)">([\s\S]*?)<\/span>$/);
+  const toneClass = m ? m[1] : "fine";
+  const raw = m ? m[2] : html;
+  const text = raw.replace(/<[^>]+>/g, "").trim();
+  const tone = toneClass === "error" ? "alert" : toneClass === "warning" ? (text.startsWith("Your attention") ? "ask" : "warning") : "fine";
+  let label = "Fine";
+  if (tone === "alert") label = "Alert";
+  else if (tone === "ask") label = "Ask";
+  else if (tone === "warning") label = text.startsWith("The factory is paused") ? "Wait" : "Warn";
+  return { tone, label, text, toneClass };
 }
 
 /** Record a client-side transition if state changed. */
-function trackStatusEvent(s) {
-  const v = statusVerdict(s);
-  const tone = v.tone === "error" ? "alert" : v.tone === "warning" ? "ask" : "fine";
+function trackStatusEvent(s, stale = false) {
+  const v = statusVerdict(s, stale);
   const last = clientEvents[0];
-  if (!last || last.text !== v.text || last.tone !== tone) {
+  if (!last || last.text !== v.text || last.tone !== v.tone) {
     clientEvents.unshift({
       at: s.now || new Date().toISOString(),
-      tone,
+      tone: v.tone,
       label: v.label,
       text: v.text,
-      reason: v.reasons[0] || "",
     });
     if (clientEvents.length > 50) clientEvents.pop();
   }
@@ -140,7 +139,8 @@ function trackStatusEvent(s) {
 
 /** The Herald panel: sticky alerts on top, rolling event history stream below. */
 export function renderHerald(s) {
-  trackStatusEvent(s);
+  const cur = statusVerdict(s, outOfDateNow);
+  trackStatusEvent(s, outOfDateNow);
   const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
   const pinnedCount = asks.length + stuck.length;
@@ -154,16 +154,25 @@ export function renderHerald(s) {
       `</section>`
     : `<div class="herald-sticky calm"><span class="event-dot fine"></span> No active alerts</div>`;
 
-  const events = s.herald?.history?.length ? s.herald.history : clientEvents;
-  const feed = events.length
-    ? events.map((ev) =>
-        `<div class="event-row">` +
-          `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
-          `<span class="event-tone"><span class="event-dot ${esc(ev.tone)}"></span>${esc(ev.label || ev.tone)}</span>` +
-          `<span class="event-body">${esc(ev.text)}${ev.reason ? `<span class="reason">${esc(ev.reason)}</span>` : ""}</span>` +
-        `</div>`
-      ).join("")
-    : `<div class="empty quiet"><p>No recent events.</p></div>`;
+  let history = (s.herald?.history?.length ? s.herald.history : clientEvents).map((x) => ({ ...x }));
+  if (!history.length) {
+    history = [{ at: s.now || new Date().toISOString(), tone: cur.tone, label: cur.label, text: cur.text }];
+  } else if (history[0].text !== cur.text || history[0].tone !== cur.tone) {
+    const diff = Math.abs(Date.parse(history[0].at || "") - Date.parse(s.now || ""));
+    if (diff < 60000 && history[0].text.startsWith(cur.text.split(";")[0])) {
+      history[0] = { at: history[0].at || s.now, tone: cur.tone, label: cur.label, text: cur.text };
+    } else {
+      history.unshift({ at: s.now || new Date().toISOString(), tone: cur.tone, label: cur.label, text: cur.text });
+    }
+  }
+
+  const feed = history.map((ev) =>
+    `<div class="event-row ${esc(ev.tone)}">` +
+      `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
+      `<span class="event-tone ${esc(ev.tone)}"><span class="event-dot ${esc(ev.tone)}"></span>${esc(ev.label || ev.tone)}</span>` +
+      `<span class="event-body ${esc(ev.tone)}">${esc(ev.text)}${ev.reason ? `<span class="reason">${esc(ev.reason)}</span>` : ""}</span>` +
+    `</div>`
+  ).join("");
 
   const m = s.factory?.monitor;
   const monitorFindings = m?.findings?.length

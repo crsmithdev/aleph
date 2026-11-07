@@ -101,4 +101,13 @@ test("the Herald panel shows calm state with no alerts", () => {
   const h = view.renderHerald(calm);
   expect(h).toContain('No active alerts');
   expect(h).toContain('Calm');
+  expect(h).toContain('Everything is running smoothly');
+});
+
+test("the Herald panel shows weekly usage and warning tone in event history when weekly usage is high", () => {
+  const h = view.renderHerald({ ...calm, usage: { now: { seven_day: 93 } } });
+  expect(h).toContain("weekly usage is at 93%");
+  expect(h).toContain("Warn");
+  expect(h).toContain('class="event-row warning"');
+  expect(h).toContain('class="event-body warning"');
 });

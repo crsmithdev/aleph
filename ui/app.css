@@ -763,12 +763,18 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .event-row:last-child { border-bottom: none; }
 .event-time { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .event-tone { display: inline-flex; align-items: center; gap: var(--sp-4); font-weight: var(--fw-mid); }
+.event-tone.alert, .event-tone.error { color: var(--stuck); }
+.event-tone.warning, .event-tone.ask { color: var(--need); }
+.event-tone.fine, .event-tone.done { color: var(--done); }
 .event-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; }
-.event-dot.alert { background: var(--stuck); }
-.event-dot.fine { background: var(--done); }
-.event-dot.ask { background: var(--need); }
+.event-dot.alert, .event-dot.error { background: var(--stuck); }
+.event-dot.warning, .event-dot.ask { background: var(--need); }
+.event-dot.fine, .event-dot.done { background: var(--done); }
 .event-dot.run { background: var(--run); }
 .event-body { color: var(--ink); overflow-wrap: anywhere; }
+.event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body { color: var(--stuck); }
+.event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body { color: var(--need); }
+.event-body.fine, .event-row.fine .event-body { color: var(--ink); }
 .event-body .reason { color: var(--muted); margin-left: var(--sp-6); font-family: var(--mono); font-size: var(--fs-2xs); }
 .shead .say[data-jump="herald"] { cursor: pointer; }
 .shead .say[data-jump="herald"]:hover { text-decoration: underline; text-decoration-color: currentColor; }
