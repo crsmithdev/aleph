@@ -95,7 +95,7 @@ export function statusCards(s, d, { efficiency, performance }) {
   const lost = statCard({ k: "Lost time", v: f ? cardPct(f.lost) : "–", ...(f?.lost == null ? {} : { v2: cardHours(f.hours), q: ["lost", "hours"] }), trend: t("lost", { kind: "points", lowerIsGood: true, format: cardPct }), href: efficiency });
   const lead = statCard({ k: "Completion", v: dur(f?.leadP50), v2: dur(f?.leadP90), q: ["p50", "p90"], trend: t("leadP50", { kind: "relative", lowerIsGood: true, format: dur }), href: performance });
   const landed = statCard({ k: "Landed", v: cardPct(f?.firstPass), ...(f?.firstPass == null || f.landed == null ? {} : { v2: count(f.landed) }), q: ["clean", "landed"], trend: t("firstPass", { kind: "points", lowerIsGood: false, format: cardPct }), href: efficiency });
-  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : count(f.asks), ...(f ? { v2: count(d.asks?.manual ?? 0) } : {}), q: ["All", "Manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: String }), href: performance });
+  const asks = statCard({ k: "Asks", v: f?.asks == null ? "–" : count(f.asks), ...(f ? { v2: count(d.asks?.manual ?? 0) } : {}), q: ["all", "manual"], trend: t("asks", { kind: "relative", lowerIsGood: true, format: String }), href: performance });
   return lost + lead + landed + asks + usageCard(s);
 }
 

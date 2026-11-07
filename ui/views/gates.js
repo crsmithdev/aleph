@@ -67,7 +67,7 @@ function capForm(f, key, label, value) {
 export function renderNow(d) {
   const m = d.metrics;
   const tilesHtml = [
-    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "Asks"] } : { note: "no Ask decided" }) }),
+    statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "asks"] } : { note: "no Ask decided" }) }),
     statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed later"] }),
     statCard({ k: "Repeat answers", v: count(d.repeats.length), note: "Asks answered the same way 3+ times" }),
     statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "issues"] }),
