@@ -1,16 +1,10 @@
 import { expect, test } from "bun:test";
 // @ts-ignore now.js is plain JS, shared with the page
 import * as view from "./views/now.js";
-import { awaitingHeld, job, state } from "./fixtures/status-state.ts";
+import { awaitingHeld, state } from "./fixtures/status-state.ts";
 // @ts-ignore
 import { actMessages, openDiffs } from "./lib.js";
 import { asksOf, withAttn } from "./test-now.ts";
-
-test("a build run is a worker, with no why text", () => {
-  const h = withAttn({ ...state, running: [job({ name: "a", started: "2026-10-27T15:00:00Z", run: { kind: "build", started: "2026-10-27T16:00:00Z" } })] });
-  expect(h).toContain("worker");
-  expect(h).not.toContain("past the time box");
-});
 
 test("an awaiting row does not show checks as facts", () => {
   expect(withAttn(state)).not.toContain("s ✓");
@@ -50,11 +44,6 @@ test("Status times use the state's own now for the year check", () => {
   const page = withAttn({ ...state, now: "2027-01-05T12:00:00Z", asks: asksOf([awaitingHeld({ name: "aleph-27", started: "2026-10-27T16:50:00Z", trailers: [{ key: "Job", value: "20261028-042822-aleph-aleph-240-agent" }] })]) });
   expect(page).toContain("Started</dt><dd>2026-10-27");
   expect(page).not.toMatch(/\d\d? ?[AP]M/i);
-});
-
-test("a planner run shows as planner in the running lane", async () => {
-  const plan = { name: "plan-aleph-5", item: { title: "Big" }, condition: "running", run: { kind: "plan", started: "2026-10-27T16:50:00Z" }, started: "2026-10-27T16:50:00Z" };
-  expect(withAttn({ ...state, running: [job({ name: "plan-aleph-5", run: plan.run })] })).toContain('<span class="badge run" title="planner">planner');
 });
 
 test("app.css colours the Pause or Resume button from the need tokens", async () => {

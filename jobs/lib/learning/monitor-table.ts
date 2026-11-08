@@ -127,30 +127,35 @@ function unusable(e: Entry): boolean {
   return r.condition === "failed" || r.condition === "returned" || r.condition === "dropped" || causeOf(r) !== undefined;
 }
 
-function stageRows(src: Sources, from: number, to: number): StageRow[] {
+/** One run of a stage in `from`..`to`: the issue it was on (or its job, for a run on no issue), whether it gave nothing usable, and its seconds. A build's reviewer is a run of `review` with no time. */
+interface StageRun { stage: string; item: string; issue: boolean; unusable: boolean; secs: number | null; cost: number | null }
+
+function* stageRuns(runs: Entry[], from: number, to: number): Generator<StageRun> {
+  for (const e of runs) {
+    const r = e.run;
+    if (r.kind === "plain" || r.kind === "agent" || r.condition === "running" || !inside(r.started, from, to)) continue;
+    const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
+    // A run on no item (a firefighter sweep) is its own item.
+    yield { stage: r.kind, item: r.on ?? r.job, issue: !!r.on, unusable: unusable(e), secs: took >= 0 ? took / 1000 : null, cost: typeof r.cost === "number" ? r.cost : null };
+    // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
+    if (r.kind === "build" && r.review && r.review.call !== "running") yield { stage: "review", item: r.on ?? r.name, issue: !!r.on, unusable: r.review.call === "failed", secs: null, cost: null };
+  }
+}
+
+/** The stage table of `from`..`to`, in STAGES order. */
+export function stageRows(src: Pick<Sources, "runs" | "specChecks">, from: number, to: number): StageRow[] {
   const by = new Map<string, { runs: number; items: Set<string>; unusable: number | null; cost: number | null; secs: number[] }>();
   const row = (stage: string, known: boolean) => {
     if (!by.has(stage)) by.set(stage, { runs: 0, items: new Set(), unusable: known ? 0 : null, cost: null, secs: [] });
     return by.get(stage)!;
   };
-  for (const e of src.runs) {
-    const r = e.run;
-    if (r.kind === "plain" || r.kind === "agent" || r.condition === "running" || !inside(r.started, from, to)) continue;
-    const s = row(r.kind, true);
+  for (const x of stageRuns(src.runs, from, to)) {
+    const s = row(x.stage, true);
     s.runs++;
-    // A run on no item (a firefighter sweep) is its own item.
-    s.items.add(r.on ?? r.job);
-    if (unusable(e)) s.unusable!++;
-    if (typeof r.cost === "number") s.cost = (s.cost ?? 0) + r.cost;
-    const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
-    if (took >= 0) s.secs.push(took / 1000);
-    // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
-    if (r.kind === "build" && r.review && r.review.call !== "running") {
-      const v = row("review", true);
-      v.runs++;
-      v.items.add(r.on ?? r.name);
-      if (r.review.call === "failed") v.unusable!++;
-    }
+    s.items.add(x.item);
+    if (x.unusable) s.unusable!++;
+    if (x.cost !== null) s.cost = (s.cost ?? 0) + x.cost;
+    if (x.secs !== null) s.secs.push(x.secs);
   }
   for (const c of src.specChecks) {
     if (!inside(c.at, from, to)) continue;
@@ -163,6 +168,33 @@ function stageRows(src: Sources, from: number, to: number): StageRow[] {
     const s = by.get(stage)!, med = median(s.secs);
     return { stage, runs: s.runs, items: s.items.size, unusable: s.unusable, cost: s.cost, minutes: med === null ? null : med / 60, p90: p90(s.secs) };
   });
+}
+
+/** One issue's runs in a stage: how many, how many gave nothing usable, and their seconds in all. */
+export interface IssueTally { issue: string; runs: number; unusable: number; secs: number }
+
+/**
+ * The worst issues of each stage in `from`..`to`, and of all stages under `all`: `errors` has the issues with the most
+ * runs that gave nothing usable (at least one), `slow` the issues with the most seconds; at most `n` of each.
+ */
+export function stageWorst(runs: Entry[], from: number, to: number, n = 5): Record<string, { errors: IssueTally[]; slow: IssueTally[] }> {
+  const by = new Map<string, Map<string, IssueTally>>();
+  const add = (stage: string, x: StageRun) => {
+    if (!by.has(stage)) by.set(stage, new Map());
+    const m = by.get(stage)!, t = m.get(x.item) ?? { issue: x.item, runs: 0, unusable: 0, secs: 0 };
+    t.runs++;
+    if (x.unusable) t.unusable++;
+    t.secs += x.secs ?? 0;
+    m.set(x.item, t);
+  };
+  for (const x of stageRuns(runs, from, to)) if (x.issue) { add(x.stage, x); add("all", x); }
+  return Object.fromEntries([...by].map(([stage, m]) => {
+    const ts = [...m.values()];
+    return [stage, {
+      errors: ts.filter((t) => t.unusable).sort((a, b) => b.unusable - a.unusable || b.unusable / b.runs - a.unusable / a.runs || a.issue.localeCompare(b.issue)).slice(0, n),
+      slow: ts.filter((t) => t.secs > 0).sort((a, b) => b.secs - a.secs || a.issue.localeCompare(b.issue)).slice(0, n),
+    }];
+  }));
 }
 
 function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRow[]; held: Window["held"] } {
@@ -311,6 +343,10 @@ function readJsonl<T>(file: string): T[] {
   return raw.split("\n").flatMap((l) => { if (!l.trim()) return []; try { return [JSON.parse(l) as T]; } catch { return []; } });
 }
 
+/** The spec checks of `records`: they ran before intake, and their cost is a `spec-check` event in the job record. */
+export const specChecksOf = (records: { issue: string; events: { kind: string; at: string; data?: unknown }[] }[]): Sources["specChecks"] =>
+  records.flatMap((r) => r.events.filter((e) => e.kind === "spec-check").map((e) => ({ at: e.at, name: r.issue, cost: (e.data as { cost: number }).cost })));
+
 /** The sources from disk. It fetches nothing and writes nothing. */
 export function readSources(): Sources {
   const keys = factoryKeys(), set = new Set(keys);
@@ -321,8 +357,7 @@ export function readSources(): Sources {
     // Runs of other repos are not the factory's; a run with no repo (explain, firefighter, director, monitor) is.
     runs: allRuns().filter((e) => !e.run.repo || set.has(e.run.repo)),
     holds: allHolds(),
-    // Spec checks ran before intake; their cost is a `spec-check` event in the job record.
-    specChecks: records.flatMap((r) => r.events.filter((e) => e.kind === "spec-check").map((e) => ({ at: e.at, name: r.issue, cost: (e.data as { cost: number }).cost }))),
+    specChecks: specChecksOf(records),
     items,
     storeLog: storeLog(),
     flakes: flakes(),

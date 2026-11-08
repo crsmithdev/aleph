@@ -12,6 +12,7 @@ import { all as allRecords } from "../../jobs/lib/records/record.ts";
 import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, isLive, isStarting } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
+import { specChecksOf, stageRows, stageWorst, type IssueTally, type StageRow } from "../../jobs/lib/learning/monitor-table.ts";
 import type { Routes } from "../server.ts";
 import { staleSync } from "../stale.ts";
 import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
@@ -45,6 +46,9 @@ const PHASE_KEYS: Phase[] = ["intake", "queue", "implement", "land", "lead"];
 /** One issue's seconds per phase (null when the phase did not end in the window). `outcome` is "landed" once a land run landed it, else "unlanded". */
 /** `filed` is the issue's filing time in ms, or null when the store has none. */
 type IssueTimes = { id: string; href: string; outcome: "landed" | "unlanded"; filed: number | null } & Record<Phase, number | null>;
+/** An issue of a stage list, with its title and link while it is in the store. */
+export type StageIssue = IssueTally & { title?: string; href?: string };
+
 export interface Speed {
   window: Window;
   /** Issues that landed in the window: one per issue, however many land runs it had. Land runs with no issue count as one. */
@@ -60,6 +64,8 @@ export interface Speed {
   /** Every issue with a phase that ended in the window. */
   times: IssueTimes[];
   slowest: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[];
+  /** The stages of the window, as the monitor counts them, and the worst issues of each stage and of `all` (see stageWorst). */
+  stages: { rows: StageRow[]; worst: Record<string, { errors: StageIssue[]; slow: StageIssue[] }> };
   models: { model: string; count: number; p50: number }[];
   flaky: number;
   /** The reruns by check, most first. */
@@ -579,6 +585,14 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     // The link would be a 404 for an issue that left the store.
     if (!item && lists.list(repo)) delete t.href;
   }
+  const worst = stageWorst(entries, since.getTime(), now.getTime());
+  for (const ls of Object.values(worst)) for (const t of [...ls.errors, ...ls.slow] as StageIssue[]) {
+    const [repo, n] = splitId(t.issue);
+    const item = repo ? lists.item(repo, n) : undefined;
+    if (item) Object.assign(t, { title: item.title, href: `#/issues/${encodeURIComponent(repo)}/${n}` });
+  }
+  const records = allRecords().filter((r) => !project || r.issue.startsWith(`${project}-`));
+  const stages = { rows: stageRows({ runs: entries, specChecks: specChecksOf(records) }, since.getTime(), now.getTime()), worst };
   for (const u of issues.usage) {
     const [repo, n] = splitId(u.goal);
     const item = lists.item(repo, Number(n));
@@ -613,6 +627,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     }),
     times: ended.issues,
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
+    stages,
     models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
     issues,
     classes: cls.classes,

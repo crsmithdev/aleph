@@ -234,14 +234,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 
-  test("a dead blocker shows on Status and on the Issue page, and Stop waiting removes it", async () => {
-    await page.go("#/");
-    const row = `[...document.querySelectorAll("#lane-queued .queued-row")].find((r) => r.textContent.includes("Warm the cache on deploy"))`;
-    await page.until(row);
-    expect(await page.ev<string>(`${row}.querySelector(".blockers").textContent`)).toContain("Speed up the import");
-    expect(await page.ev(`${row}.textContent.includes("Stop waiting")`)).toBe(true);
-    await page.ev(`${row}.querySelector(".blockers a").click()`);
-    await page.until(`location.hash === "#/issues/demo/10"`);
+  test("a dead blocker shows on the Issue page, and Stop waiting removes it", async () => {
     await page.go("#/issues/demo/21");
     await page.until(`document.querySelector('.dp-blocked [data-act="unblock"]')`);
     expect(await page.ev<string>(`document.querySelector(".dp-blocked").textContent`)).toContain("Waits on");
@@ -263,97 +256,10 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 });
 
-describe.skipIf(!chromeUsable)("Status lane cards", () => {
+describe.skipIf(!chromeUsable)("Status page", () => {
   let rig: Rig, page: Page;
   beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 150_000);
   afterAll(() => rig?.stop());
-
-  const long = "A title that is long enough to wrap onto a second line in a narrow lane card, and then some more words";
-  /** The lanes of Status, rendered by the page's own renderLanes from this state, and put in place of the lanes of the live page. */
-  const fixture = `(async () => {
-    const { renderLanes } = await import("/views/now.js");
-    const long = ${JSON.stringify(long)};
-    const part = { n: 1, m: 3, parent: "r-9", href: "#/issues/r/9" };
-    const now = "2026-11-02T12:00:00Z", at = "2026-11-02T11:56:00Z";
-    const job = (name, priority, title, p, started) => ({ name, repo: "r", item: { priority, title }, part: p, started, run: { kind: "build", started } });
-    const queued = (id, priority, title, p) => ({ repo: "r", id, priority, title, part: p, at, since: at });
-    const s = { now, factory: {}, done: [],
-      runningIssues: [{ id: "r-20", href: "#/issues/r/20", stage: "working", priority: "high", title: "Short", at, since: at, of: { n: 3, m: 3 } }],
-      running: [
-        job("j-1", "medium", long, part, at),
-        job("j-2", "low", "Short", null, at),
-        job("j-3", "low", long, null, "2026-11-02T10:00:00Z"),
-        job("j-4", "high", "Short", part, "2026-11-02T10:00:00Z"),
-      ],
-      queued: [
-        queued("1", "high", long, part),
-        queued("2", "low", "Short", null),
-        queued("3", "medium", "Short", part),
-        queued("4", "low", long, null),
-      ] };
-    document.querySelector("#view .lanes").outerHTML = renderLanes(s);
-  })()`;
-
-  for (const w of [1440, 1060]) {
-    test(`at ${w} px a lane card is a meta row and one title line, marks its kind, and ends a blocked one with the id`, async () => {
-      await page.width(w);
-      await page.go("#/");
-      await page.ev(fixture);
-      await page.ev(`(async () => {
-        const { renderLanes } = await import("/views/now.js");
-        const long = ${JSON.stringify(long)}, at = "2026-11-02T11:56:00Z";
-        const run = (kind) => ({ name: "j-" + kind, repo: "r", item: { priority: "low", title: long }, started: at, run: { kind, started: at } });
-        const s = { now: "2026-11-02T12:00:00Z", factory: {}, runningIssues: [], running: [run("land"), run("build")],
-          queued: [{ repo: "r", id: "1", priority: "low", title: long, stage: "held", kind: "busy-file", ev: { action: "busy", on: ["r-7"], file: "a.ts" }, at, since: at }],
-          done: [{ id: "r-3", title: long, href: "#/x", priority: "low", finished: at, since: at, jobs: [] }] };
-        document.querySelector("#view .lanes").outerHTML = renderLanes(s);
-      })()`);
-      const m = await page.ev<any>(`(() => {
-        const cs = [...document.querySelectorAll(".lane-card")].map((e) => {
-          const r = e.getBoundingClientRect(), st = getComputedStyle(e), ih = e.querySelector(".ih").getBoundingClientRect(), t = e.querySelector(":scope > .t");
-          return { h: r.height, pad: parseFloat(st.paddingTop) + parseFloat(st.paddingBottom) + parseFloat(st.borderTopWidth) + parseFloat(st.borderBottomWidth), ih: ih.height, line: parseFloat(getComputedStyle(t).lineHeight), tm: parseFloat(getComputedStyle(t).marginTop), cls: e.className, bw: parseFloat(st.borderLeftWidth), bc: st.borderLeftColor };
-        });
-        const b = document.querySelector(".blocked"), br = b.getBoundingClientRect(), ihr = b.parentElement.getBoundingClientRect();
-        const probe = (v) => { const p = document.createElement("i"); p.style.color = v; document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; };
-        return { cs, bcolor: getComputedStyle(b).color, muted: probe("var(--muted)"), done: probe("var(--done)"), gap: ihr.right - br.right };
-      })()`);
-      expect(m.cs.length).toBe(4);
-      for (const c of m.cs) expect(c.h).toBeLessThanOrEqual(c.ih + c.tm + c.line + c.pad + 0.5);
-      const land = m.cs.find((c: any) => c.cls.includes("kind-land")), worker = m.cs.find((c: any) => c.cls.includes("kind-worker"));
-      expect(land.bc).toBe(m.done);
-      expect(worker.bw).toBeGreaterThan(1);
-      expect(m.bcolor).toBe(m.muted);
-      expect(m.gap).toBeLessThan(1.5);
-    }, 30_000);
-
-    test(`at ${w} px the Running and Queued cards share one height, meta row and title font`, async () => {
-      await page.width(w);
-      await page.go("#/");
-      await page.ev(fixture);
-      const m = await page.ev<Record<string, { n: number; h: number[]; ih: number[]; font: string[] }>>(`(() => {
-        const out = {};
-        for (const id of ["running", "queued"]) {
-          const c = [...document.querySelectorAll("#lane-" + id + " .lane-card")];
-          out[id] = { n: c.length, h: c.map((e) => e.getBoundingClientRect().height), ih: c.map((e) => e.querySelector(".ih").getBoundingClientRect().height), font: c.map((e) => { const s = getComputedStyle(e.querySelector(":scope > .t")); return s.fontSize + "/" + s.lineHeight; }) };
-        }
-        out.dim = { n: document.querySelectorAll(".lane-card .badge.quiet").length, h: [], ih: [], font: [] };
-        out.part = { n: document.querySelectorAll(".lane-card .part").length, h: [], ih: [], font: [] };
-        out.heads = { n: 0, h: [], ih: [], font: ["running", "queued", "done"].map((id) => getComputedStyle(document.querySelector("#h-" + id)).fontSize) };
-        out.why = { n: document.querySelectorAll(".lane-card .why").length, h: [], ih: [], font: [] };
-        return out;
-      })()`);
-      expect(m.running!.n).toBe(5);
-      expect(m.queued!.n).toBe(4);
-      expect(m.dim!.n).toBeGreaterThan(0);
-      expect(m.part!.n).toBeGreaterThan(0);
-      expect(m.why!.n).toBe(0);
-      expect(new Set(m.heads!.font).size).toBe(1);
-      const h = [...m.running!.h, ...m.queued!.h], ih = [...m.running!.ih, ...m.queued!.ih], font = [...m.running!.font, ...m.queued!.font];
-      for (const x of h) expect(Math.abs(x - h[0]!)).toBeLessThan(0.5);
-      for (const x of ih) expect(Math.abs(x - ih[0]!)).toBeLessThan(0.5);
-      expect(new Set(font).size).toBe(1);
-    }, 30_000);
-  }
 
   for (const w of [1100, 420]) {
     test(`at ${w} px the outcome bar shows the whole label of a 2% segment and the page does not scroll sideways`, async () => {
@@ -405,23 +311,23 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
     await page.ev('document.querySelector("#obar-probe").remove()');
   }, 30_000);
 
-  test("the empty lane text is muted and smaller than the body, and the second tile figure is a share of the value", async () => {
+  test("the empty Pipeline list text is muted and smaller than the body, and the second tile figure is a share of the value", async () => {
     await page.go("#/");
     const m = await page.ev<{ color: string; want: string; size: number; body: number; em: number; val: number }>(`import("/views/now.js").then(async (n) => {
       const { statCard } = await import("/lib.js");
       const host = document.createElement("div");
-      host.id = "lane-probe";
+      host.id = "worst-probe";
       document.querySelector("#view").prepend(host);
-      host.innerHTML = n.renderLanes({ queued: [], running: [], done: [], factory: {} }) + '<section class="tiles">' + statCard({ k: "Landed", v: "5", v2: "9" }) + "</section>";
+      host.innerHTML = n.renderPipeline({ window: "week", stages: { rows: [], worst: {} } }, "") + '<section class="tiles">' + statCard({ k: "Landed", v: "5", v2: "9" }) + "</section>";
       const css = (e) => getComputedStyle(e);
       const probe = (v) => { const p = document.createElement("i"); p.style.color = v; host.append(p); return css(p).color; };
       const em = host.querySelector(".tile.sc b em"), val = host.querySelector(".tile.sc b");
-      return { color: css(host.querySelector(".lane .empty p")).color, want: probe("var(--muted)"), size: parseFloat(css(host.querySelector(".lane .empty p")).fontSize), body: parseFloat(css(document.body).fontSize), em: parseFloat(css(em).fontSize), val: parseFloat(css(val).fontSize) };
+      return { color: css(host.querySelector(".worst .empty p")).color, want: probe("var(--muted)"), size: parseFloat(css(host.querySelector(".worst .empty p")).fontSize), body: parseFloat(css(document.body).fontSize), em: parseFloat(css(em).fontSize), val: parseFloat(css(val).fontSize) };
     })`);
     expect(m.color).toBe(m.want);
     expect(m.size).toBeLessThan(m.body);
     expect(m.em / m.val).toBeCloseTo(0.62, 2);
-    await page.ev('document.querySelector("#lane-probe").remove()');
+    await page.ev('document.querySelector("#worst-probe").remove()');
   }, 30_000);
 
   test("every indented list takes its left padding from --indent-list", async () => {
@@ -439,24 +345,5 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
       return out;
     })()`);
     expect(pads).toEqual(["18px", "18px", "18px", "18px", "18px"]);
-  }, 30_000);
-
-  test("the Herald's calm line keeps its dot and its words on one line", async () => {
-    await page.width(1280);
-    await page.go("#/");
-    // The Herald's own renderer with no alerts: the calm line goes on the page as the view draws it.
-    await page.ev(`import("/views/now.js").then(({ renderHerald }) => { document.querySelector("#herald").outerHTML = renderHerald({ factory: {}, asks: [], stuck: [] }); })`);
-    const m = await page.ev<{ dot: number[]; text: number[] }>(`(() => {
-      const line = document.querySelector(".herald-sticky.calm");
-      const d = line.querySelector(".event-dot").getBoundingClientRect();
-      const words = [...line.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
-      const r = document.createRange();
-      r.selectNodeContents(words);
-      const t = r.getBoundingClientRect();
-      return { dot: [d.left, d.right, (d.top + d.bottom) / 2], text: [t.left, t.top, t.bottom] };
-    })()`);
-    expect(m.dot[2]).toBeGreaterThan(m.text[1]);
-    expect(m.dot[2]).toBeLessThan(m.text[2]);
-    expect(m.dot[1]).toBeLessThan(m.text[0]);
   }, 30_000);
 });

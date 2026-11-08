@@ -13,30 +13,41 @@ const monitor = {
 };
 const render = (m: any) => view.view.render({ ...calm, factory: { ...calm.factory, monitor: m } });
 
-test("the Pipeline card shows the 8 stages in order with jobs per issue and p90, and no other monitor role", () => {
-  const stages = [
-    { stage: "monitor", costPerItem: P(1, 1), runsPerItem: P(1, 1), unusable: P(0, 0) },
-    { stage: "build", costPerItem: P(1.5, 2), runsPerItem: P(1.8, 1.4), unusable: P(0.25, null), p90: P(804, 700) },
-    { stage: "intake", costPerItem: P(1, 1), runsPerItem: P(1, 1), unusable: P(0, 0) },
+test("the Pipeline card shows the 8 stages of the window in order with runs per issue and p90, and no other role", () => {
+  const rows = [
+    { stage: "monitor", runs: 1, items: 1, unusable: 0, p90: 10 },
+    { stage: "build", runs: 9, items: 5, unusable: 2, p90: 804 },
+    { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null },
   ];
-  const h = view.renderPipeline({ ...calm, factory: { monitor: { ...monitor, stages } } });
+  const h = view.renderPipeline({ window: "week", stages: { rows, worst: {} } }, "");
   const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
   expect(names).toEqual(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"]);
   expect(h).toContain('<span class="pv">1.8<span class="pu"> / issue</span></span><span class="pt">13m 24s</span>');
   expect(h).toContain('<span class="pv">1.0<span class="pu"> / issue</span></span><span class="pt">–</span>');
-  expect(h).toContain('title="build: trailing 7 days 1.4"');
+  expect(h).toContain('title="Build: 9 runs on 5 issues, 2 failed"');
   expect(h.match(/class="pnode idle"/g)).toHaveLength(6);
   expect(h).not.toContain(">monitor<");
+  expect(view.renderPipeline(null)).toContain("Loading the pipeline…");
 });
 
-test("Slowest work lists the work in flight, longest since first pickup first, at most 5", () => {
-  const now = "2026-11-07T12:00:00Z";
-  const q = (id: number, since: string) => ({ repo: "aleph", id, title: `q${id}`, stage: "queued", at: since, since });
-  const queued = [q(1, "2026-11-07T11:00:00Z"), q(2, "2026-11-07T06:00:00Z"), q(3, "2026-11-07T10:00:00Z"), q(4, "2026-11-07T09:00:00Z"), q(5, "2026-11-07T08:00:00Z"), q(6, "2026-11-07T07:00:00Z")];
-  const h = view.renderPipeline({ ...calm, now, queued, running: [], runningIssues: [], factory: { monitor } });
-  expect([...h.matchAll(/class="t" title="([^"]*)"/g)].map((m) => m[1])).toEqual(["q2", "q6", "q5", "q4", "q3"]);
-  expect(h).toContain('<span class="num">6h 00m</span>');
-  expect(view.renderPipeline({ ...calm, running: [], runningIssues: [], factory: { monitor } })).toContain("Nothing is in flight.");
+test("the Pipeline card lists the picked stage's Reliability and Performance, and all stages' with none picked", () => {
+  const t = (n: number, runs: number, unusable: number, secs: number) => ({ issue: `aleph-${n}`, runs, unusable, secs, title: `T${n}`, href: `#/issues/aleph/${n}` });
+  const d = { window: "day", stages: { rows: [{ stage: "triage", runs: 4, items: 2, unusable: 1, p90: 60 }], worst: {
+    all: { errors: [t(1, 4, 3, 100)], slow: [t(2, 1, 0, 7200), t(1, 4, 3, 100)] },
+    triage: { errors: [], slow: [t(1, 4, 3, 100)] },
+  } } };
+  const all = view.renderPipeline(d, "");
+  expect(all).toContain("<span>Pipeline Reliability</span><span>failed runs</span>");
+  expect(all).toContain("<span>Pipeline Performance</span><span>time in all runs</span>");
+  expect(all).toContain('<div class="worst-row"><a class="idl" href="#/issues/aleph/1">aleph-1</a><span class="t" title="T1">T1</span><span class="num">3 of 4</span></div>');
+  expect([...all.matchAll(/class="t" title="([^"]*)"/g)].map((m) => m[1])).toEqual(["T1", "T2", "T1"]);
+  expect(all).toContain('<span class="num">2h 00m</span>');
+  expect(all).not.toContain('aria-pressed="true"');
+  const tri = view.renderPipeline(d, "triage");
+  expect(tri).toContain("<span>Triage Reliability</span>");
+  expect(tri).toContain("No run failed in this window.");
+  expect(tri).toContain('data-stage="triage" aria-pressed="true"');
+  expect(view.renderPipeline({ error: "no data" })).toContain("no data");
 });
 
 test("the Monitor panel shows the findings with numbers and **text** in bold, other HTML escaped, and no table", () => {
@@ -70,9 +81,10 @@ test("the Herald shows its alerts under an N active badge in the worst alert's t
   expect(red).toContain('<span class="badge stuck">2 active</span>');
 });
 
-test("the Herald panel shows calm state with no alerts", () => {
+test("the Herald panel shows calm state with no alerts and no alert row", () => {
   const h = view.renderHerald(calm);
-  expect(h).toContain('No active alerts');
+  expect(h).not.toContain("No active alerts");
+  expect(h).not.toContain("herald-sticky");
   expect(h).toContain('Calm');
   expect(h).toContain('Everything is running smoothly');
 });
@@ -98,12 +110,14 @@ test("an error is not pinned: the newest event is marked live and carries the er
   expect(h).not.toContain('<span class="reason">koans main is red</span>');
 });
 
-test("the Issues tab is one column of Running, Queued and Done, with Done against the total", () => {
+test("the Issues tab is one column of Running, Queued and a folded Done, with Done against the total", () => {
   const now = "2026-11-01T12:00:00Z";
   const s = { ...calm, now, runningIssues: [{ id: "aleph-1", href: "#/issues/aleph/1", stage: "build", title: "One" }], running: [], queued: [{ repo: "aleph", id: 2, title: "Two" }], done: [{ id: "aleph-3", href: "#/issues/aleph/3", title: "Three", finished: now }] };
   const { n, html } = view.heraldIssues(s);
   expect(n).toBe(3);
-  expect([...html.matchAll(/<div class="hi-head">([^<]+)<span class="count">([^<]+)</g)].map((m) => `${m[1].trim()} ${m[2]}`)).toEqual(["Running 1", "Queued 1", "Done 1 / 3"]);
+  expect([...html.matchAll(/class="hi-head">([^<]+)<span class="count">([^<]+)</g)].map((m) => `${m[1].trim()} ${m[2]}`)).toEqual(["Running 1", "Queued 1", "Done 1 / 3"]);
+  // Done is folded by default, and keeps the reader's open state.
+  expect(html).toContain('<details class="hi-sec hi-done" data-keep="herald:done"><summary class="hi-head">Done');
 });
 
 test("a server history entry for the attention status, without the final period, gives one event row; a different status gives two", () => {
