@@ -263,7 +263,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `cha
 - **Bar lists:** `barRow()` (`ui/lib.js:586`) and `barList()` (`ui/lib.js:592`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:357`) and `priorityBadge()` (`ui/lib.js:361`) are squared with `--r-tag`; `chips()` (`ui/lib.js:373`) are pills.
 - **Agent Time bar:** `bar()` in `ui/views/speed.js`, on Status and Efficiency: `.obar`, 28px high, in the five `--seg-*` colours with no text on the bar. A legend (`.olegend`) under it names each outcome with its hours and share, as `landed (40h 57%)`.
-- **Loading and empty:** a chart's loading line is `loadingLine()` (`ui/lib.js:77`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:111`. Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:594`), and each option names its series.
+- **Loading and empty:** a chart's loading line is `loadingLine()` (`ui/lib.js:77`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:111`. Units are not set in one place; the legend is one shared option (`legend` in `ui/lib.js:595`), and each option names its series.
 
 ## Metric cards
 
