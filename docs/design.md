@@ -145,7 +145,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 ### Chart gridlines and fills
 
 - Gridlines are `splitLine` at `opacity: 0.5`.
-- A stacked area series is filled at `areaStyle: { opacity: 0.6 }` (`ui/chart.js:81`), with a legend.
+- A stacked area series is filled at `areaStyle: { opacity: 0.6 }` (`ui/chart.js:82`), with a legend.
 
 ### Row actions
 
@@ -238,7 +238,7 @@ Columns of the main tables:
 | Hooks | Last Call, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
 | Denials | Denied, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
-| Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:72`) |
+| Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:84`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:192`) |
 | Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:656`) |
 
@@ -259,7 +259,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `cha
 - **Herald:** the badge says `N active` in the tone of the worst alert (a stuck job or an error is `stuck`, an Ask alone is `need`), or `Calm`. The alert cards come first with no heading, then two tabs: Events (the status history) and Issues (work running or landed today, pinned at the top, then the queue).
 - **Alerts section (Status page):** the Herald holds the Asks and the stuck, failed and error cards. The cards are one full-width column, as the Asks are. Each card has the Ask card structure (`ask-box` with the meta row, then the fold, then the buttons); a stuck, failed or error card uses the red `unstick` tone. The id, priority, date and runtime sit inside the box and show while the fold is closed. The status line links `#awaiting` (Asks) and `#jobs-stuck` (stuck jobs) point at the two lists of the section.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:20`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month. The cost chart on Agents is the one exception (see Deviations).
-- **Meters:** `meter()` (`ui/lib.js:578`) draws every share bar, one share or segments, as `.meter` (`ui/app.css:831`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
+- **Meters:** `meter()` (`ui/lib.js:578`) draws every share bar, one share or segments, as `.meter` (`ui/app.css:833`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
 - **Bar lists:** `barRow()` (`ui/lib.js:586`) and `barList()` (`ui/lib.js:592`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:357`) and `priorityBadge()` (`ui/lib.js:361`) are squared with `--r-tag`; `chips()` (`ui/lib.js:373`) are pills.
 - **Agent Time bar:** `bar()` in `ui/views/speed.js`, on Status and Efficiency: `.obar`, 28px high, in the five `--seg-*` colours with no text on the bar. A legend (`.olegend`) under it names each outcome with its hours and share, as `landed (40h 57%)`.
