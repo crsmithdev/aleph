@@ -52,13 +52,13 @@ export function renderGates(d, q = new URLSearchParams()) {
     `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE)) + `</div>`;
 }
 
-/** The environment variable that overrides each cap in caps.json. */
-const CAP_ENV = { live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP" };
+/** The environment variable that overrides each key of caps.json, as jobs/lib/infra/settings.ts names it. */
+const CAP_ENV = { live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP", intakeTries: "ALEPH_INTAKE_TRIES", jobSeconds: "ALEPH_JOB_TIMEOUT", fixRounds: "ALEPH_FIX_ROUNDS", landBatch: "ALEPH_LAND_BATCH", loadLimit: "ALEPH_LOAD_LIMIT" };
 /** A number input and a Save button for one cap; a note when its environment variable overrides caps.json. */
 function capForm(f, key, label, value) {
   const env = CAP_ENV[key], over = !!f.capEnv?.[key];
   return `<form class="capform" data-cap="${key}"><label class="sr-only" for="cap-${key}">${esc(label)}</label>` +
-    `<input id="cap-${key}" name="${key}" type="number" min="1" step="1" inputmode="numeric" value="${esc(value)}" required>` +
+    `<input id="cap-${key}" name="${key}" type="number" min="${key === "fixRounds" ? 0 : 1}" step="1" inputmode="numeric" value="${esc(value)}" required>` +
     actButton("Save", { label: "Save" }, { type: "submit" }) +
     (over ? `<small class="cap-env">${esc(env)} is set: an edit has no effect while that variable is set.</small>` : "") + `</form>`;
 }
@@ -75,13 +75,23 @@ export function renderNow(d) {
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
 }
 
-/** The controls panel: the live cap and the run cap, each with its use against its limit and a form to edit it. */
+/** The settings under the caps: each one's value and a form to edit it. */
+const SETTINGS = [
+  ["intakeTries", "Intake tries", "intake runs with no reply before an Ask"],
+  ["jobSeconds", "Job time limit", "seconds in a worker's time box"],
+  ["fixRounds", "Fix rounds", "times a failed job goes back to its worker before an Ask"],
+  ["landBatch", "Land batch", "passed runs one land pushes together"],
+  ["loadLimit", "Load limit", "the 1-minute load average under which a check, a worker or a land starts"],
+];
+
+/** The controls panel: the live cap and the run cap, each with its use against its limit, then the settings, each with a form to edit it. */
 export function renderCaps(d) {
   const f = d.factory;
   const row = (key, label, use, limit, note) => `<div class="cap-row"><b>${esc(label)}</b><span>${esc(use)} / ${esc(limit)}</span><small>${esc(note)}</small>${capForm(f, key, label, limit)}</div>`;
   return card("Controls", `<div class="caps">` +
     row("live", "Live cap", f.liveRuns, f.liveCap, "live jobs against the cap") +
-    row("run", "Job cap", f.runStarts ?? 0, f.runCap, "the most starts any one issue made in the last hour") + `</div>`, { id: "gates-caps" });
+    row("run", "Job cap", f.runStarts ?? 0, f.runCap, "the most starts any one issue made in the last hour") +
+    SETTINGS.map(([k, label, note]) => `<div class="cap-row"><b>${esc(label)}</b><span>${esc(f.settings?.[k] ?? "–")}</span><small>${esc(note)}</small>${capForm(f, k, label, f.settings?.[k] ?? "")}</div>`).join("") + `</div>`, { id: "gates-caps" });
 }
 
 /** The newest monitor report: a summary that expands to every finding and the reader's reply, or why there is no reading. */

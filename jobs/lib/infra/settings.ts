@@ -14,7 +14,7 @@ import { layout } from "./layout.ts";
 
 const num = (name: string, dflt: number): number => Number(process.env[name] ?? dflt);
 
-/** `caps.json` in the factory directory: `{ "live", "run" }`. A missing or bad file is empty; other keys are left alone. */
+/** `caps.json` in the factory directory: the caps and settings of CAP_KEYS. A missing or bad file is empty; other keys are left alone. */
 function capsFile(): Record<string, unknown> {
   try {
     const c = JSON.parse(readFileSync(join(layout().factory, "caps.json"), "utf8"));
@@ -22,14 +22,21 @@ function capsFile(): Record<string, unknown> {
   } catch { return {}; }
 }
 
-export const CAP_KEYS = ["live", "run"] as const;
+export const CAP_KEYS = ["live", "run", "intakeTries", "jobSeconds", "fixRounds", "landBatch", "loadLimit"] as const;
 export type CapKey = (typeof CAP_KEYS)[number];
+/** The environment variable that overrides each key of caps.json. */
+export const CAP_ENV: Record<CapKey, string> = {
+  live: "ALEPH_LIVE_CAP", run: "ALEPH_RUN_CAP", intakeTries: "ALEPH_INTAKE_TRIES", jobSeconds: "ALEPH_JOB_TIMEOUT",
+  fixRounds: "ALEPH_FIX_ROUNDS", landBatch: "ALEPH_LAND_BATCH", loadLimit: "ALEPH_LOAD_LIMIT",
+};
+/** The least value of each key: a job may have no fix round; every other key needs 1. */
+const capMin = (k: CapKey): number => (k === "fixRounds" ? 0 : 1);
 
-/** Merges the given caps into caps.json: whole file to a temp file, then a rename. Throws on a value that is not an integer of 1 or more. */
+/** Merges the given caps into caps.json: whole file to a temp file, then a rename. Throws on a value that is not an integer of at least its key's least value. */
 export function writeCaps(patch: Partial<Record<CapKey, unknown>>): Record<string, unknown> {
   for (const k of CAP_KEYS) {
     const v = patch[k];
-    if (v !== undefined && !(typeof v === "number" && Number.isInteger(v) && v >= 1)) throw new Error(`${k} must be an integer of 1 or more`);
+    if (v !== undefined && !(typeof v === "number" && Number.isInteger(v) && v >= capMin(k))) throw new Error(`${k} must be an integer of ${capMin(k)} or more`);
   }
   const next: Record<string, unknown> = { ...capsFile() };
   for (const k of CAP_KEYS) if (patch[k] !== undefined) next[k] = patch[k];
@@ -66,29 +73,33 @@ export const RUN_CAP = () => cap("ALEPH_RUN_CAP", "run", RUN_CAP_DEFAULT);
 /** The most director runs one tick starts, one per Ask. */
 export const DIRECTOR_CAP = () => num("ALEPH_DIRECTOR_CAP", 3);
 export const INTAKE_CAP = () => num("ALEPH_INTAKE_CAP", 5);
-export const INTAKE_TRIES = () => num("ALEPH_INTAKE_TRIES", 2);
+export const INTAKE_TRIES_DEFAULT = 2;
+export const INTAKE_TRIES = () => cap("ALEPH_INTAKE_TRIES", "intakeTries", INTAKE_TRIES_DEFAULT);
 /** How many signals make a lesson a proposal. */
 export const PROPOSE_AT = (): number => {
   const n = Number(process.env.ALEPH_PROPOSE_AT);
   return Number.isFinite(n) && n >= 1 ? n : 3;
 };
 
-export const jobSeconds = () => num("ALEPH_JOB_TIMEOUT", 1800);
+export const JOB_SECONDS_DEFAULT = 1800;
+export const jobSeconds = () => cap("ALEPH_JOB_TIMEOUT", "jobSeconds", JOB_SECONDS_DEFAULT);
 export const checkSeconds = () => num("ALEPH_CHECK_TIMEOUT", 1200);
 /** The seconds a repo's full suite may take before the Status page warns. */
 export const suiteBudgetSeconds = () => num("ALEPH_SUITE_BUDGET_S", 120);
 export const reviewSeconds = () => num("ALEPH_REVIEW_TIMEOUT", 600);
 export const reviewDiffMax = () => num("ALEPH_REVIEW_DIFF_MAX", 200000);
-export const fixRounds = () => num("ALEPH_FIX_ROUNDS", 2);
+export const FIX_ROUNDS_DEFAULT = 2;
+export const fixRounds = () => cap("ALEPH_FIX_ROUNDS", "fixRounds", FIX_ROUNDS_DEFAULT);
 /** How long a dispatch waits for another dispatch's issue lock before it skips the issue. */
 export const issueLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
 export const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
-export const landBatch = () => Math.max(1, Math.floor(num("ALEPH_LAND_BATCH", 8)) || 1);
+export const LAND_BATCH_DEFAULT = 8;
+export const landBatch = () => Math.max(1, Math.floor(cap("ALEPH_LAND_BATCH", "landBatch", LAND_BATCH_DEFAULT)) || 1);
 /** The load limit's default as the docs state it; the number depends on the machine. */
 export const LOAD_LIMIT_DEFAULT = "cores";
 /** A check, a worker or a land starts only while the 1-minute load average is under this. */
-export const loadLimit = () => num("ALEPH_LOAD_LIMIT", availableParallelism());
+export const loadLimit = () => cap("ALEPH_LOAD_LIMIT", "loadLimit", availableParallelism());
 /** How long the UI keeps a computed read, 0 when off. */
 export const uiCacheMs = () => { const n = num("ALEPH_UI_CACHE_TTL", 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 

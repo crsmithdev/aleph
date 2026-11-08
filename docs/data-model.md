@@ -191,7 +191,7 @@ No code prunes run folders or records.
 | File | Holds | Writer |
 |---|---|---|
 | `paused` | The time of the pause | `aleph pause` |
-| `caps.json` | `{live?, run?}` | Gates page; an env var wins |
+| `caps.json` | `{live?, run?, intakeTries?, jobSeconds?, fixRounds?, landBatch?, loadLimit?}` | Automation page; an env var wins |
 | `models.json` | `{<tier>: {enabled, model}}` | `aleph models` |
 | `always.json` | `{<reason>: {action, at}}` | Always button, `aleph always` |
 | `baseline.json` | `{<repo>: {commit, ok, failed?}}` | `aleph suite` |

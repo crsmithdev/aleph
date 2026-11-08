@@ -17,7 +17,7 @@ import { eventOf, layout, readFactoryLog } from "../../jobs/lib/infra/layout.ts"
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
-import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
+import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 
 import { runCli } from "../cli.ts";
@@ -252,6 +252,9 @@ export function repoHeld(): { repo: string; held: string[] }[] {
  * tick.json (its newest step time; the result is its missed keys), the suite from the newest `suite <repo>:` line of
  * tick.log for each repo, the monitor from the newest `monitor <day>:` line. A step with no record has null for both.
  */
+/** The settings the Controls panel edits besides the two caps, as the factory reads them now. */
+const settingsNow = () => ({ intakeTries: INTAKE_TRIES(), jobSeconds: jobSeconds(), fixRounds: fixRounds(), landBatch: landBatch(), loadLimit: loadLimit() });
+
 /** The schedules that run on a systemd timer of their own, by the name the Schedules table shows. */
 const TIMERS: Record<string, string> = { tick: "aleph-tick.timer", suite: "aleph-suite.timer" };
 /** An interval the Schedules form takes: a whole number of seconds, minutes or hours, as systemd writes it. */
@@ -359,7 +362,7 @@ export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queue
   const f = state.factory, hold = backendHold();
   return {
     now: state.now,
-    factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: { live: capEnvSet("ALEPH_LIVE_CAP"), run: capEnvSet("ALEPH_RUN_CAP") } },
+    factory: { paused: f.paused, liveRuns: f.liveRuns, liveCap: f.liveCap, runCap: f.runCap, runStarts: f.runStarts, capEnv: Object.fromEntries(CAP_KEYS.map((k) => [k, capEnvSet(CAP_ENV[k])])), settings: settingsNow() },
     metrics: metrics(all, holds, Date.now(), records, ms),
     schedules: schedules(),
     monitor: latestReport() && (({ day, findings, text, error }) => ({ day, findings, text, error }))(latestReport()!),
@@ -391,7 +394,7 @@ export const routes: Routes = {
     const patch: Record<string, unknown> = {};
     for (const k of CAP_KEYS) if (k in body) patch[k] = body[k];
     try { writeCaps(patch); } catch (e) { return Response.json({ error: (e as Error).message }, { status: 422 }); }
-    return Response.json({ live: LIVE_CAP(), run: RUN_CAP() });
+    return Response.json({ live: LIVE_CAP(), run: RUN_CAP(), ...settingsNow() });
   },
   "POST /api/gates/schedules": async (req) => {
     if (!sameSite(req)) return text("forbidden", 403);

@@ -316,7 +316,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case, from the word sets in [Naming](naming.md); a priority is `critical`, `high`, `medium` or `low`.
-- **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:61`). Gates shows `empty()` (`ui/views/gates.js:117`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:74`) as "No job matches." with "Widen the window or clear a filter."
+- **Empty:** one sentence with a full stop and an optional hint, through `empty()` (`ui/lib.js:61`). Gates shows `empty()` (`ui/views/gates.js:127`) as "Nothing waits for you."; Jobs shows `empty()` (`ui/views/jobs.js:74`) as "No job matches." with "Widen the window or clear a filter."
 - **Loading:** `loadingLine()` (`ui/lib.js:77`) draws the inline line, `Loading <what>…`; `loading()` (`ui/lib.js:79`) draws a view's first-load state, `Loading <title>…`.
 - **Error:** `error()` (`ui/lib.js:82`) says what failed, and the default hint is "Check that aleph-ui is running, then reload."
 - **Offline:** "The server is unreachable. Showing the last data." (`ui/index.html:31`).

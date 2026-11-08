@@ -81,7 +81,7 @@ const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securit
 test("the body of /api/gates has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
   expect(Object.keys(d).sort()).toEqual(["asks", "backend", "baseline", "codes", "factory", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules"]);
-  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts"]);
+  expect(Object.keys(d.factory).sort()).toEqual(["capEnv", "liveCap", "liveRuns", "paused", "runCap", "runStarts", "settings"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
@@ -322,7 +322,7 @@ test("a cap post writes the live cap only and leaves the old day and awaiting ke
   writeFileSync(capsPath(), JSON.stringify({ day: 999, awaiting: 5 }));
   const r = await postCaps({ live: 3, day: 7 });
   expect(r.status).toBe(200);
-  expect(await r.json()).toEqual({ live: 3, run: 3 });
+  expect(await r.json()).toMatchObject({ live: 3, run: 3, intakeTries: 2, jobSeconds: 1800, fixRounds: 2, landBatch: 8 });
   expect(JSON.parse(readFileSync(capsPath(), "utf8"))).toEqual({ day: 999, awaiting: 5, live: 3 });
 });
 
@@ -335,9 +335,23 @@ test("a cap post writes the run cap and refuses 0", async () => {
   expect((await postCaps({ run: 0 })).status).toBe(422);
 });
 
-test("the Caps section holds one form each for the live cap and the run cap, with use against limit, and no day cap", () => {
-  const h = gates.renderCaps(data());
-  expect([...h.matchAll(/data-cap="([^"]*)"/g)].map((m) => m[1])).toEqual(["live", "run"]);
+test("a cap post writes the settings; fix rounds take 0 and the rest refuse it", async () => {
+  writeFileSync(capsPath(), "{}");
+  const r = await postCaps({ fixRounds: 0, jobSeconds: 2400, intakeTries: 3, landBatch: 4, loadLimit: 12 });
+  expect(r.status).toBe(200);
+  // The preload sets ALEPH_LOAD_LIMIT, which wins over the file: the file holds the load limit.
+  expect(await r.json()).toMatchObject({ fixRounds: 0, jobSeconds: 2400, intakeTries: 3, landBatch: 4 });
+  expect(JSON.parse(readFileSync(capsPath(), "utf8")).loadLimit).toBe(12);
+  for (const k of ["jobSeconds", "intakeTries", "landBatch", "loadLimit"]) expect((await postCaps({ [k]: 0 })).status).toBe(422);
+  expect((await postCaps({ fixRounds: -1 })).status).toBe(422);
+  writeFileSync(capsPath(), "{}");
+});
+
+test("the Caps section holds a form each for the two caps, with use against limit, then one per setting, and no day cap", () => {
+  const h = gates.renderCaps({ ...data(), factory: { ...data().factory, settings: { intakeTries: 2, jobSeconds: 1800, fixRounds: 2, landBatch: 8, loadLimit: 24 } } });
+  expect([...h.matchAll(/data-cap="([^"]*)"/g)].map((m) => m[1])).toEqual(["live", "run", "intakeTries", "jobSeconds", "fixRounds", "landBatch", "loadLimit"]);
+  expect(h).toContain("<b>Job time limit</b><span>1800</span>");
+  expect(h).toContain('name="fixRounds" type="number" min="0"');
   expect(h).toContain("<span>5 / 5</span>");
   expect(h).toContain("<span>2 / 3</span>");
   expect(h).not.toContain("day");
