@@ -14,7 +14,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}${renderOutcome(speedOf(w))}<div class="insights"><div class="stack-left">${renderStages(s)}${renderHolds(s)}</div>${renderHerald(s)}</div>${renderLanes(s, w)}</div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(s)}${renderLanes(s, w)}</div>${renderHerald(s)}</div></div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -39,53 +39,30 @@ function renderOutcome(d) {
   return outcome(bar(d));
 }
 
-const MONITOR_ROWS = 10;
-const pctOf = (n) => pct(n === null ? null : n * 100);
-const TRAIL = { stages: "Trailing 7 days", holds: "Mean per day over the trailing 7 days" };
-/** A cell: the day's value, a bar scaled to the table's largest day value (`max`, null for no bar), and the trailing 7 days in the tooltip. */
-const pairCell = (p, f, max, tip) =>
-  `<td class="num" title="${esc(`${tip}: ${f(p.trailing)}`)}">${max === null ? f(p.day) : `<span class="vpair">${meter(max > 0 ? ((p.day ?? 0) / max) * 100 : 0)}${f(p.day)}</span>`}</td>`;
+/** The pipeline stages in order; the monitor's other roles (facts, director, monitor…) are not stages of an issue. */
+const PIPE = ["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"];
+const SLOWEST = 5;
 
-/** The rows by `sort` ({key, dir}), at most 10. `cols` maps a sort key to the row's value. */
-function sorted(rows, cols, sort) {
-  return sortRows(rows, cols, sort).slice(0, MONITOR_ROWS);
+/** The Pipeline card: each stage with its jobs per issue for the day and its p90 runtime, then the slowest work in flight. */
+export function renderPipeline(s) {
+  const by = new Map((s.factory?.monitor?.stages ?? []).map((r) => [r.stage, r]));
+  const node = (k) => {
+    const r = by.get(k), n = r?.runsPerItem.day ?? null;
+    return `<div class="pnode${n === null ? " idle" : ""}" title="${esc(`${k}: trailing 7 days ${mean(r?.runsPerItem.trailing ?? null)}`)}"><span class="pn">${esc(k)}</span>` +
+      `<span class="pv">${n === null ? "–" : `${mean(n)}<span class="pu"> / issue</span>`}</span><span class="pt">${n === null ? "idle" : esc(dur(r.p90?.day))}</span></div>`;
+  };
+  return card("Pipeline", `<div class="pflow">${PIPE.map(node).join("")}</div>${slowest(s)}`, { id: "pipeline", aside: `<span class="asof">jobs / issue · p90 runtime</span>` });
 }
 
-const STAGE_COLS = { stage: (r) => r.stage, runs: (r) => r.runsPerItem.day ?? -1, unusable: (r) => r.unusable.day ?? -1 };
-const HOLD_COLS = { kind: (r) => r.kind, goals: (r) => r.goals.day ?? -1, hours: (r) => r.hours.day ?? -1 };
-const SORTS = { stages: { key: "runs", dir: -1 }, holds: { key: "goals", dir: -1 } };
-
-/** The monitor's Stages table: the day's value with a bar for runs per item; the trailing 7 days is in each cell's tooltip. At most 10 rows. */
-export function renderStages(s, sort = SORTS.stages) {
-  const all = s.factory?.monitor?.stages ?? [];
-  const max = Math.max(0, ...all.map((r) => r.runsPerItem.day ?? 0));
-  const rows = sorted(all, STAGE_COLS, sort).map((r) =>
-    `<tr><td>${esc(r.stage)}</td>${pairCell(r.runsPerItem, mean, max, TRAIL.stages)}${pairCell(r.unusable, pctOf, null, TRAIL.stages)}</tr>`).join("");
-  const h = (label, key, num) => sortHead(label, key, sort, { num });
-  const head = h("Stage", "stage") + h("Jobs per Item", "runs", true) + h("No Usable Result", "unusable", true);
-  return card("Stages", rows ? dataTable(head, rows) : empty("No stage ran."), { id: "stages" });
-}
-
-/** The monitor's Holds table: the day's value with a bar for affected issues; the trailing 7-day mean per day is in each cell's tooltip. At most 10 rows. */
-export function renderHolds(s, sort = SORTS.holds) {
-  const all = s.factory?.monitor?.holds ?? [];
-  const max = Math.max(0, ...all.map((r) => r.goals.day ?? 0));
-  const rows = sorted(all, HOLD_COLS, sort).map((r) =>
-    `<tr><td>${esc(r.kind)}</td>${pairCell(r.goals, mean, max, TRAIL.holds)}${pairCell(r.hours, mean, null, TRAIL.holds)}</tr>`).join("");
-  const h = (label, key, num) => sortHead(label, key, sort, { num });
-  const head = h("Kind", "kind") + h("Affected Issues", "goals", true) + h("Took", "hours", true);
-  return card("Holds", rows ? dataTable(head, rows) : empty("No hold record."), { id: "holds" });
-}
-
-/** Sort a monitor table when its header is clicked: the same key flips the direction, a new text key goes up, a new number key down. */
-function wireSorts(root, s) {
-  root.querySelector(".insights")?.addEventListener?.("click", (e) => {
-    const b = e.target.closest?.("#stages button[data-sort], #holds button[data-sort]");
-    if (!b) return;
-    const id = b.closest("section").id, key = b.dataset.sort, cur = SORTS[id];
-    SORTS[id] = nextSort(cur, key, new Set(["runs", "unusable", "goals", "hours"]));
-    root.querySelector(`#${id}`).outerHTML = (id === "stages" ? renderStages : renderHolds)(s, SORTS[id]);
-  });
+/** The work in flight, longest since its first pickup first: running issues, running jobs and queued issues; at most SLOWEST. */
+function slowest(s) {
+  const all = [
+    ...(s.runningIssues ?? []).map((i) => ({ id: repoIdLink(i.id, i.href), stage: i.stage, title: i.title, since: i.since })),
+    ...(s.running ?? []).map((j) => ({ id: itemId(j), stage: j.phase || j.run?.kind || "running", title: j.item?.title || j.name, since: j.started })),
+    ...(s.queued ?? []).map((w) => ({ id: repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo), stage: w.stage ?? "queued", title: w.title, since: w.since })),
+  ].sort((a, b) => Date.parse(a.since) - Date.parse(b.since)).slice(0, SLOWEST);
+  const rows = all.map((x) => `<div class="slow-row">${x.id}${badge(x.stage)}<span class="t" title="${esc(x.title)}">${esc(x.title)}</span><span class="num">${esc(span(x.since, s.now))}</span></div>`).join("");
+  return `<div class="slow"><div class="slow-head"><span>Slowest work</span><span>time since first pickup</span></div>${rows || empty("Nothing is in flight.")}</div>`;
 }
 
 /** A finding as HTML: **text** and each number or percentage in bold; all other text escaped. */
@@ -147,8 +124,7 @@ export function renderHerald(s) {
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
 
   const sticky = pinnedCount > 0
-    ? `<section id="needs" class="needs herald-sticky" aria-labelledby="h-needs">` +
-        `<div class="herald-sticky-head"><span id="h-needs">Sticky Alerts (${pinnedCount})</span><span class="aside-quiet">Fixed until unstuck</span></div>` +
+    ? `<section id="needs" class="needs herald-sticky" aria-label="Alerts">` +
         group("awaiting", asks.length, asks.join(""), list) +
         group("jobs-stuck", stuck.length, stuck.join(""), list) +
       `</section>`
@@ -174,22 +150,52 @@ export function renderHerald(s) {
     `</div>`
   ).join("");
 
+  const tab = (k, label, n) => `<button type="button" role="tab" data-herald-tab="${k}" aria-selected="${heraldTab === k}">${label} <span class="count">${n}</span></button>`;
+  const issues = heraldIssues(s);
   const m = s.factory?.monitor;
   const monitorFindings = m?.findings?.length
     ? `<details class="more herald-findings" data-keep="herald:findings"><summary>Daily Monitor (${esc(m.day)})</summary><ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol></details>`
     : "";
 
-  const badgeHtml = pinnedCount > 0
-    ? `<span class="badge alert">${pinnedCount} Pinned</span>`
-    : `<span class="badge done">Calm</span>`;
+  // A stuck job or an error outranks an Ask: the badge takes the worst alert's tone.
+  const badgeHtml = pinnedCount > 0 ? tag(`${pinnedCount} active`, stuck.length || errorLines(s).length ? "stuck" : "need") : tag("Calm", "done");
 
   return `<section id="herald" class="card herald-card" aria-label="Herald">` +
     `<div class="sh"><h2 id="h-herald">Herald</h2><div class="aside">${badgeHtml}</div></div>` +
     sticky +
-    `<div class="herald-history-head">Event history</div>` +
-    `<div class="herald-feed">${feed}</div>` +
+    `<div class="tabs herald-tabs" role="tablist">${tab("events", "Events", history.length)}${tab("issues", "Issues", issues.n)}</div>` +
+    `<div class="herald-feed">${heraldTab === "issues" ? issues.html : feed}</div>` +
     monitorFindings +
   `</section>`;
+}
+
+/** The Herald tab on show; it stays across refreshes. */
+let heraldTab = "events";
+
+/** The Issues tab: what is being worked on or landed today, pinned at the top, then what is queued. */
+function heraldIssues(s) {
+  // Today is the local day, as every time on the page is local.
+  const day = new Date(s.now).toDateString();
+  const row = (id, chip, title) => `<div class="hi-row">${id}${chip}<span class="t" title="${esc(title)}">${esc(title)}</span></div>`;
+  const active = [
+    ...(s.runningIssues ?? []).map((i) => row(repoIdLink(i.id, i.href), badge(i.stage), i.title)),
+    ...(s.running ?? []).map((j) => row(itemId(j), badge("running"), j.item?.title || j.name)),
+    ...(s.done ?? []).filter((i) => i.finished && new Date(i.finished).toDateString() === day).map((i) => row(repoIdLink(i.id, i.href), badge("landed"), i.title)),
+  ];
+  const queued = (s.queued ?? []).map((w) => row(repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo), badge(w.stage ?? "queued"), w.title));
+  const sec = (title, rows, cls = "") => (rows.length ? `<div class="hi-sec ${cls}"><div class="hi-head">${title} <span class="count">${rows.length}</span></div>${rows.join("")}</div>` : "");
+  return { n: active.length + queued.length, html: sec("Working or landed today", active, "pin") + sec("Queued", queued) || empty("No issue is in flight.") };
+}
+
+/** A click on a Herald tab shows that tab; the panel is drawn again from the last state. The listener sits on `.rail`, which each render replaces, so listeners do not pile up. */
+function wireHeraldTabs(root) {
+  root.querySelector?.(".rail")?.addEventListener?.("click", (e) => {
+    const b = e.target.closest?.("[data-herald-tab]");
+    if (!b || !lastState) return;
+    heraldTab = b.dataset.heraldTab;
+    const h = root.querySelector("#herald");
+    if (h) h.outerHTML = renderHerald(lastState);
+  });
 }
 
 function wireHeraldJump(root) {
@@ -210,7 +216,7 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   keepWindow(w);
   keepProject(projectNow());
   wireScope(root);
-  wireSorts(root, s);
+  wireHeraldTabs(root);
   wireHeraldJump(root);
   await loadSpeed(w, fetcher, true);
   const tiles = root.querySelector("#scorecard");

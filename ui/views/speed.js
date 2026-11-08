@@ -125,9 +125,11 @@ const LANDED = ["landed", "returned"];
 export function bar(d, key) {
   const cs = (d.classes ?? []).filter((c) => c.hours > 0), total = cs.reduce((a, c) => a + c.hours, 0);
   if (!(total > 0)) return empty(`No agent job on an issue ended in the ${lastPeriod(d)}.`);
-  const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" title="${esc(c.text)}"><b>${esc(c.name)}</b><span>${esc(hours(c.hours))} · ${esc(pct((c.hours / total) * 100))}</span></button>`;
-  const group = (xs, t) => (xs.length ? `<div class="ogrp" style="flex:${xs.reduce((a, c) => a + c.hours, 0)}"><span class="obk">${t}</span><div class="osegs">${xs.map(seg).join("")}</div></div>` : "");
+  const said = (c) => `${hours(c.hours)} ${pct((c.hours / total) * 100)}`;
+  const seg = (c) => `<button type="button" class="seg-${esc(c.key)}" data-tile="${esc(c.key)}" style="flex:${c.hours}" aria-pressed="${c.key === key}" aria-label="${esc(`${c.name} ${said(c)}`)}" title="${esc(c.text)}"></button>`;
+  const group = (xs) => (xs.length ? `<div class="osegs" style="flex:${xs.reduce((a, c) => a + c.hours, 0)}">${xs.map(seg).join("")}</div>` : "");
   const good = cs.filter((c) => LANDED.includes(c.key)), lost = cs.filter((c) => !LANDED.includes(c.key));
   const sep = good.length && lost.length ? `<i class="osep" role="separator" title="Left of the line reached main; right of it did not"></i>` : "";
-  return `<div class="obar" role="group" aria-label="Agent time">${group(good, "Reached main")}${sep}${group(lost, "Did not reach main")}</div>`;
+  const legend = [...good, ...lost].map((c) => `<span><i class="seg-${esc(c.key)}"></i>${esc(c.name)} <em>(${esc(said(c))})</em></span>`).join("");
+  return `<div class="obar" role="group" aria-label="Agent time">${group(good)}${sep}${group(lost)}</div><div class="olegend">${legend}</div>`;
 }

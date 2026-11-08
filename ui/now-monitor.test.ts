@@ -13,54 +13,30 @@ const monitor = {
 };
 const render = (m: any) => view.view.render({ ...calm, factory: { ...calm.factory, monitor: m } });
 
-test("the left panel is the Stages table and the middle panel the Holds table, from monitor.stages and monitor.holds", () => {
-  const html = render(monitor);
-  const stages = html.slice(html.indexOf('id="stages"'), html.indexOf('id="holds"'));
-  const holds = html.slice(html.indexOf('id="holds"'), html.indexOf('id="herald"'));
-  expect(stages).toContain("<td>build</td>");
-  expect(stages).toContain('title="Trailing 7 days: 1.4"');
-  expect(stages).toContain('title="Trailing 7 days: –"');
-  expect(holds).toContain("<td>stops</td>");
-  expect(holds).toContain('title="Mean per day over the trailing 7 days: 1.5"');
-  expect(html).not.toContain("<small>(");
+test("the Pipeline card shows the 8 stages in order with jobs per issue and p90, and no other monitor role", () => {
+  const stages = [
+    { stage: "monitor", costPerItem: P(1, 1), runsPerItem: P(1, 1), unusable: P(0, 0) },
+    { stage: "build", costPerItem: P(1.5, 2), runsPerItem: P(1.8, 1.4), unusable: P(0.25, null), p90: P(804, 700) },
+    { stage: "intake", costPerItem: P(1, 1), runsPerItem: P(1, 1), unusable: P(0, 0) },
+  ];
+  const h = view.renderPipeline({ ...calm, factory: { monitor: { ...monitor, stages } } });
+  const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
+  expect(names).toEqual(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"]);
+  expect(h).toContain('<span class="pv">1.8<span class="pu"> / issue</span></span><span class="pt">13m 24s</span>');
+  expect(h).toContain('<span class="pv">1.0<span class="pu"> / issue</span></span><span class="pt">–</span>');
+  expect(h).toContain('title="build: trailing 7 days 1.4"');
+  expect(h.match(/class="pnode idle"/g)).toHaveLength(6);
+  expect(h).not.toContain(">monitor<");
 });
 
-const labels = (html: string) => [...html.matchAll(/<th[^>]*><button type="button" data-sort="([^"]+)">([^<]*)</g)].map((m) => [m[1], m[2]]);
-const firsts = (html: string) => [...html.matchAll(/<tr><td>([^<]*)<\/td>/g)].map((m) => m[1]);
-const widths = (html: string) => [...html.matchAll(/class="meter"[^>]*><i style="width:([\d.]+)%/g)].map((m) => Number(m[1]));
-const many = {
-  stages: ([["a", 1], ["b", 3], ["c", 2]] as [string, number][]).map(([stage, n]) => ({ stage, costPerItem: P(9, 9), runsPerItem: P(n, n), unusable: P(0, 0) })),
-  holds: ([["x", 1], ["y", 4], ["z", 2]] as [string, number][]).map(([kind, n]) => ({ kind, goals: P(n, n), hours: P(5 - n, 1) })),
-};
-const only = (m: any) => ({ factory: { monitor: { ...monitor, ...m } } });
-
-test("Stages and Holds heads are Title Case sortHead buttons, with no cost per item", () => {
-  const s = view.renderStages(only(many));
-  expect(labels(s)).toEqual([["stage", "Stage"], ["runs", "Jobs per Item"], ["unusable", "No Usable Result"]]);
-  expect(s).not.toContain("Cost Per Item");
-  expect(labels(view.renderHolds(only(many)))).toEqual([["kind", "Kind"], ["goals", "Affected Issues"], ["hours", "Took"]]);
-});
-
-test("rows sort by runs per item and issues, descending, by default; another key or direction reorders them", () => {
-  expect(firsts(view.renderStages(only(many)))).toEqual(["b", "c", "a"]);
-  expect(firsts(view.renderHolds(only(many)))).toEqual(["y", "z", "x"]);
-  expect(firsts(view.renderStages(only(many), { key: "runs", dir: 1 }))).toEqual(["a", "c", "b"]);
-  expect(firsts(view.renderStages(only(many), { key: "stage", dir: -1 }))).toEqual(["c", "b", "a"]);
-  expect(firsts(view.renderHolds(only(many), { key: "hours", dir: -1 }))).toEqual(["x", "z", "y"]);
-});
-
-test("the runs per item and issues cells hold a bar that scales with the value", () => {
-  expect(widths(view.renderStages(only(many)))).toEqual([100, expect.closeTo(66.7, 1), expect.closeTo(33.3, 1)]);
-  expect(widths(view.renderHolds(only(many)))).toEqual([100, 50, 25]);
-});
-
-test("each table shows at most 10 rows", () => {
-  expect(view.renderStages({ factory: { monitor: { ...monitor, stages: [] } } })).toContain('class="empty"');
-  expect(view.renderHolds({ factory: { monitor: { ...monitor, holds: [] } } })).toContain('class="empty"');
-  const rows = Array.from({ length: 12 }, (_, i) => ({ stage: `s${i}`, costPerItem: P(1, 1), runsPerItem: P(1, 1), unusable: P(0, 0) }));
-  const hs = Array.from({ length: 12 }, (_, i) => ({ kind: `k${i}`, goals: P(1, 1), hours: P(1, 1) }));
-  expect(view.renderStages({ factory: { monitor: { ...monitor, stages: rows } } }).match(/<tr><td>/g)).toHaveLength(10);
-  expect(view.renderHolds({ factory: { monitor: { ...monitor, holds: hs } } }).match(/<tr><td>/g)).toHaveLength(10);
+test("Slowest work lists the work in flight, longest since first pickup first, at most 5", () => {
+  const now = "2026-11-07T12:00:00Z";
+  const q = (id: number, since: string) => ({ repo: "aleph", id, title: `q${id}`, stage: "queued", at: since, since });
+  const queued = [q(1, "2026-11-07T11:00:00Z"), q(2, "2026-11-07T06:00:00Z"), q(3, "2026-11-07T10:00:00Z"), q(4, "2026-11-07T09:00:00Z"), q(5, "2026-11-07T08:00:00Z"), q(6, "2026-11-07T07:00:00Z")];
+  const h = view.renderPipeline({ ...calm, now, queued, running: [], runningIssues: [], factory: { monitor } });
+  expect([...h.matchAll(/class="t" title="([^"]*)"/g)].map((m) => m[1])).toEqual(["q2", "q6", "q5", "q4", "q3"]);
+  expect(h).toContain('<span class="num">6h 00m</span>');
+  expect(view.renderPipeline({ ...calm, running: [], runningIssues: [], factory: { monitor } })).toContain("Nothing is in flight.");
 });
 
 test("the Monitor panel shows the findings with numbers and **text** in bold, other HTML escaped, and no table", () => {
@@ -80,21 +56,18 @@ test("a report with no reading says why; one with no findings says nothing looks
   expect(render(null)).not.toContain('id="monitor"');
 });
 
-test("a missing day or trailing value shows – and a column shows one number of decimals", () => {
-  const cells = (html: string) => [...html.matchAll(/<td class="num"[^>]*>(.*?)<\/td>/g)].map((m) => m[1].replace(/<[^>]*>/g, "")).sort();
-  const s = view.renderStages(only({ stages: [{ stage: "a", costPerItem: P(1, 1), runsPerItem: P(null, 1), unusable: P(null, null) }, { stage: "b", costPerItem: P(1, 1), runsPerItem: P(1, 1.7), unusable: P(0.25, 0) }] }));
-  expect(cells(s)).toEqual(["–", "–", "1.0", "25%"].sort());
-  expect(s).not.toMatch(/>-</);
-  const h = view.renderHolds(only({ holds: [{ kind: "x", goals: P(1, 1), hours: P(0, 1) }, { kind: "y", goals: P(1.7, 1), hours: P(2.5, 1) }] }));
-  expect(cells(h)).toEqual(["0.0", "1.0", "1.7", "2.5"]);
-});
-
-test("the Herald panel renders sticky alerts and event feed", () => {
-  const h = view.renderHerald({ ...calm, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" }], stuck: [] });
+test("the Herald shows its alerts under an N active badge in the worst alert's tone, then the Events and Issues tabs", () => {
+  const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
+  const h = view.renderHerald({ ...calm, asks: [ask], stuck: [], running: [], runningIssues: [], done: [], queued: [] });
   expect(h).toContain('<h2 id="h-herald">Herald</h2>');
-  expect(h).toContain('Sticky Alerts (1)');
+  expect(h).toContain('<span class="badge need">1 active</span>');
   expect(h).toContain('id="awaiting"');
-  expect(h).toContain('Event history');
+  expect(h).not.toContain("Sticky Alerts");
+  expect(h).toMatch(/data-herald-tab="events" aria-selected="true">Events <span class="count">\d+<\/span>/);
+  expect(h).toContain('data-herald-tab="issues" aria-selected="false">Issues <span class="count">0</span>');
+  expect(h).toContain('class="event-row');
+  const red = view.renderHerald({ ...calm, asks: [ask], factory: { ...calm.factory, health: ["health: aleph main is red"] } });
+  expect(red).toContain('<span class="badge stuck">2 active</span>');
 });
 
 test("the Herald panel shows calm state with no alerts", () => {

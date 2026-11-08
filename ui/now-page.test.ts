@@ -68,10 +68,10 @@ test("the Landed card shows the clean share, then the clean count, and trends on
   expect(h).toContain("baseline 80%, the previous 7 days (change in percentage points)");
 });
 
-test("the Status page puts the Stages, Holds and Herald panels in one row above the lanes", () => {
+test("the Status page puts Agent Time, Pipeline and the lanes in the main column and the Herald in the rail beside it", () => {
   const monitor = { day: "2026-11-04", findings: ["one"], stages: [], holds: [] };
   const page = view.view.render({ ...state, usage: USAGE, factory: { ...state.factory, monitor } }, {}, new URLSearchParams());
-  const at = ['class="insights"', 'id="stages"', 'id="holds"', 'id="herald"', 'class="lanes"'].map((x) => page.indexOf(x));
+  const at = ['id="scorecard"', 'class="rail"', 'class="rail-main"', 'id="outcome"', 'id="pipeline"', 'class="lanes"', 'id="herald"'].map((x) => page.indexOf(x));
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
 });
 
@@ -93,8 +93,6 @@ test("the lanes: Running shows live agent runs of the cap and lists every open r
   const running = [...Array.from({ length: 12 }, (_, i) => mk(i, "agent")), mk(1, "land"), mk(2, "land")];
   const h = view.renderLanes({ ...full, running, factory: { ...full.factory, liveCap: 12, liveRuns: 12 }, done: [] });
   expect(h).toContain('<div class="sh"><h2 id="h-running">Running</h2><span class="count">12 of 12</span></div>');
-  expect(view.renderStages(full)).toContain('<div class="sh"><h2 id="h-stages">Stages</h2></div>');
-  expect(view.renderHolds(full)).toContain('<div class="sh"><h2 id="h-holds">Holds</h2></div>');
   expect((h.match(/class="[^"]*run-row/g) ?? []).length).toBe(14);
   const d = (n: number) => ({ id: `aleph-${n}`, title: `D${n}`, href: "#/x", jobs: [] });
   const done = view.renderLanes({ ...full, done: Array.from({ length: 10 }, (_, i) => d(i)) });
@@ -149,7 +147,7 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   const { resetSpeed } = await import("./views/speed.js");
   resetSpeed();
   const page = view.view.render({ ...state, usage: USAGE }, {}, new URLSearchParams());
-  const at = ['id="scorecard"', 'id="outcome"', 'class="insights"'].map((x) => page.indexOf(x));
+  const at = ['id="scorecard"', 'id="outcome"', 'id="pipeline"'].map((x) => page.indexOf(x));
   expect(at.every((i) => i >= 0) && [...at].sort((a, b) => a - b).join() === at.join()).toBe(true);
   expect(page).toContain("Loading the outcomes");
   const outcome = { outerHTML: "" };
@@ -160,10 +158,10 @@ test("the outcome bar sits between the scorecard and the panels and mountStatus 
   expect(h).toContain("<h2 id=\"h-outcome\">Agent Time</h2>");
   expect(h).not.toContain("by outcome");
   const sep = h.indexOf('class="osep"');
-  expect(h.indexOf('<span class="obk">Reached main</span>')).toBeLessThan(h.indexOf("seg-landed"));
+  expect(h).not.toContain("Reached main");
   expect(sep).toBeGreaterThan(h.indexOf("seg-landed"));
-  expect(h.indexOf('<span class="obk">Did not reach main</span>')).toBeGreaterThan(sep);
-  expect(h.lastIndexOf("seg-returned")).toBeLessThan(sep);
+  expect(h).toMatch(/<div class="olegend"><span><i class="seg-landed"><\/i>[^<]+ <em>\([^)]+h \d+%\)<\/em><\/span>/);
+  expect(h.slice(0, h.indexOf("olegend")).lastIndexOf("seg-returned")).toBeLessThan(sep);
   expect(h.indexOf("seg-failed")).toBeGreaterThan(sep);
   const needs = view.renderNeeds({ ...state, asks: [{ id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "x" }] });
   expect(needs).toContain('<h2 id="h-needs">Alerts</h2>');
@@ -177,7 +175,7 @@ test("the Status page says Jobs per Item and titles a sub-issue link, with no go
   const part = { n: 2, m: 3, parent: "Issue 1", href: "#/issues/aleph/1.2" };
   const monitor = { day: "2026-11-04", findings: [], stages: [{ stage: "build", runsPerItem: { day: 2, trailing: 1.4 }, unusable: { day: 0.25, trailing: null } }], holds: [] };
   const page = view.view.render({ ...full, usage: USAGE, factory: { ...full.factory, monitor }, queued: [{ repo: "aleph", id: 9, title: "w", part, at: "2026-10-27T16:00:00Z", since: "2026-10-27T16:00:00Z" }] }, {}, new URLSearchParams()) as string;
-  expect(page).toContain('data-sort="runs">Jobs per Item');
+  expect(page).toContain('<span class="pu"> / issue</span>');
   expect(page).toContain('title="Sub-issue 2 of 3 of Issue 1"');
   expect(page).toContain("Discards the job&#39;s branch; the issue stays open.");
   const text = page.replace(/<[^>]*>/g, "");
