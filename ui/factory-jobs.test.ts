@@ -1,12 +1,10 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { redirect, renderFactoryJobs, slowestOption, stripOption, trendOption } from "./views/factory-jobs.js";
+import { chartKey, FRAMES, redirect, renderFactoryJobs, slowestFrame, stripFrame, trendFrame } from "./views/factory-jobs.js";
+// @ts-ignore plain JS shared with the page
+import { option } from "./chart.js";
 // @ts-ignore plain JS shared with the page
 import { wireJobs } from "./views/jobs.js";
-// @ts-ignore plain JS shared with the page
-import { xLabel } from "./views/speed.js";
-// @ts-ignore plain JS shared with the page
-import { day } from "./lib.js";
 
 const P = (count: number, p50: number, p90: number, hist: number[] = [0, 1, 0, 0, 0, 0, count ? 2 : 0], worst = 9000) => ({ count, p50, p90, hist, worst });
 const F1 = new Date(2026, 9, 27, 9).getTime(), F2 = new Date(2026, 9, 28, 14).getTime();
@@ -23,12 +21,18 @@ const D: any = {
   models: [{ model: "unset", count: 2, p50: 480 }, { model: "opus", count: 1, p50: 700 }],
 };
 
-test("with no time for the stage the trend, strip and slowest boxes give way to the empty line", () => {
+const T = { hot: "H", run: "R", done: "D", need: "N", muted: "M" };
+
+test("with no time for the stage the trend, strip and slowest panels give way to the empty line", () => {
   const none = renderFactoryJobs({ ...D, buckets: D.buckets.map((b: any) => ({ ...b, queue: null, p90: {} })), times: D.times.map((i: any) => ({ ...i, queue: null })) }, null, "queue");
-  expect(none).toContain('class="empty"');
-  for (const k of ["trend", "strip", "slowest"]) expect(none).not.toContain(`data-chart="${k}"`);
+  expect(none).toContain("No time to plot in this window.");
+  expect(none).not.toContain("chartbox");
   expect(none).toContain("<h2>Slowest 10</h2>");
-  for (const k of ["trend", "strip", "slowest"]) expect(renderFactoryJobs(D, null, "queue")).toContain(`data-chart="${k}"`);
+  for (const k of ["trend", "strip", "slowest"]) expect(none).toContain(`<aleph-chart key="factory/jobs/${k}"`);
+  const shown = renderFactoryJobs(D, null, "queue");
+  for (const k of ["trend", "strip", "slowest"]) expect(shown).toContain(`<aleph-chart key="factory/jobs/${k}"`);
+  expect(shown.match(/class="chartbox"/g)).toHaveLength(3);
+  expect(shown).not.toContain("data-chart=");
 });
 
 test("five stage tiles come from the data, with the last 24h", () => {
@@ -38,51 +42,67 @@ test("five stage tiles come from the data, with the last 24h", () => {
   expect(h).toContain('data-tile="lead" aria-pressed="true"');
 });
 
-test("three chart boxes in one row replace the old cards, each says its data for the stage, and the strip holds one point per issue on a log axis with its issue link", () => {
+test("three chart panels in one row replace the old cards, each says its data for the stage, and the slowest panel links each row to its issue", () => {
   const lead = renderFactoryJobs(D, null, "lead"), queue = renderFactoryJobs(D, null, "queue");
   expect(lead).not.toContain("how long it took");
   expect(lead).not.toContain("Median by");
   const row = lead.match(/<div class="trio">(.*?)<div class="pair">/s)![1];
-  expect([...row.matchAll(/class="chartbox"[^>]*role="img" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual([
-    "Lead time p50 and p90 trend: 2 issues in the last 7 days, from 18m 20s to 1h 23m",
-    "Lead time time per issue: 2 issues in the last 7 days, from 18m 20s to 1h 23m",
-    "Lead time slowest 10: 2 issues in the last 7 days, from 18m 20s to 1h 23m",
+  expect([...row.matchAll(/<aleph-chart key="([^"]*)"/g)].map((m) => m[1])).toEqual(["factory/jobs/trend", "factory/jobs/strip", "factory/jobs/slowest"]);
+  expect([...row.matchAll(/class="chartbox"[^>]*aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual([
+    "Lead Time: p50 and p90 by Day: p90 peak 50m 00s, p50 peak 16m 40s",
+    "Lead Time: Time per Issue: landed peak 18m 20s",
+    "Slowest 10: Intake peak 1m 40s, Queue peak 10m 00s, Build peak 1h 06m, Land peak 3m 20s",
   ]);
-  expect(queue).toContain("Queue slowest 10: 3 issues");
+  // The stage's own line sits under the trend's title; each panel keeps its own empty line.
+  expect(row).toContain("<p>From filing to the last land.</p>");
+  expect(queue).toContain("<p>From intake to the first agent job. This includes waits for a slot or for another issue.</p>");
+  expect(row).toContain('<a class="idl" href="#/issues/fx/3">fx-3 Build</a>');
+  expect(queue).toContain("Queue peak 10m 00s");
   expect([...lead.matchAll(/<h2>([^<]*)<\/h2>/g)].map((m) => m[1])).toEqual(["Lead Time: p50 and p90 by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build Time by Model", "Jobs"]);
-  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead time: p50 and p90 by day", "Lead time: time per issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
-  const o = stripOption(D, "queue", { done: "D", need: "N" });
-  expect([o.xAxis.type, o.xAxis.logBase, o.xAxis.min({ min: 20 }), o.xAxis.min({ min: 60 })]).toEqual(["log", 60, 1, 60]);
-  const pts = o.series.flatMap((s: any) => s.data);
-  // fx-3 has no filing time, so it has no dot.
-  expect(pts.map((p: any) => [p.id, p.href, p.value[0], p.value[1]]).sort()).toEqual([["fx-1", "#/issues/fx/1", 600, F1], ["fx-2", "#/issues/fx/2", 300, F2]]);
-  expect([o.yAxis.type, o.yAxis.axisLabel.formatter(F1)]).toEqual(["time", xLabel(F1, "week")]);
-  expect(o.series.map((s: any) => s.color)).toEqual(["D", "N"]);
-  expect(trendOption(D, "queue", { run: "R", hot: "H" }).series.map((s: any) => [s.name, s.data, !!s.areaStyle])).toEqual([["p90", [900, 400], true], ["p50", [200, 100], true]]);
-  expect(trendOption(D, "lead", { run: "R", hot: "H" }).series.map((s: any) => s.data)).toEqual([[3000, 0], [1000, 0]]);
+  expect([...lead.matchAll(/<section class="card[^"]*" aria-label="([^"]*)"/g)].map((m) => m[1])).toEqual(["Lead Time: p50 and p90 by Day", "Lead Time: Time per Issue", "Slowest 10", "Checks", "Build time by model", "Jobs"]);
 });
 
-test("the strip's filing-time labels in the day window hold the day and the hour, so 4a on two days differ", () => {
-  const o = stripOption({ ...D, window: "day" }, "queue", { done: "D", need: "N" });
-  const a = new Date(2026, 9, 27, 4).getTime(), b = new Date(2026, 9, 28, 4).getTime();
-  const [la, lb] = [o.yAxis.axisLabel.formatter(a), o.yAxis.axisLabel.formatter(b)];
-  expect([la, lb]).toEqual([`${day(a)} ${xLabel(a, "day")}`, `${day(b)} ${xLabel(b, "day")}`]);
-  expect(la).not.toBe(lb);
+test("each Jobs frame carries the stage's data, its colours and the issue link of its rows", () => {
+  const t = trendFrame(D, "queue", "Queue", "From intake to the first agent job.");
+  expect(t.rows.map((r: any) => [r.at, r.p50, r.p90])).toEqual([[D.buckets[0].at, 200, 900], [D.buckets[1].at, 100, 400]]);
+  expect(t.by.keys.map((k: any) => [k.key, k.color])).toEqual([["p90", "hot"], ["p50", "run"]]);
+  // The p50 is not a part of the p90, so the frame opens as two lines rather than stacked areas.
+  expect([t.form, option(t, t.form, T).series.map((s: any) => s.stack ?? null)]).toEqual(["lines", [null, null]]);
+  // A bucket with no time is 0, so the level still has a point.
+  expect(trendFrame(D, "lead", "Lead Time", "x").rows.map((r: any) => r.p50)).toEqual([1000, 0]);
+  const s = stripFrame(D, "lead", "Lead Time");
+  // fx-2 has no lead time and fx-3 has no filing time, so neither has a point.
+  expect(s.rows.map((r: any) => [r.at, r.name, r.href, r.landed])).toEqual([[F1, "fx-1", "#/issues/fx/1", 1100]]);
+  expect(s.by.keys.map((k: any) => [k.key, k.color])).toEqual([["landed", "done"], ["unlanded", "need"]]);
+  const q = slowestFrame(D, "queue");
+  expect(q.rows.map((r: any) => [r.name, r.href, r.queue])).toEqual([["fx-1", "#/issues/fx/1", 600], ["fx-2", "#/issues/fx/2", 300], ["fx-3", "#/issues/fx/3", 20]]);
+  expect(Object.keys(FRAMES)).toEqual(["trend", "strip", "slowest"]);
+  expect(chartKey("trend")).toBe("factory/jobs/trend");
+});
+
+test("the strip panel draws one point per issue, in filing order", () => {
+  const d = { ...D, times: [{ ...D.times[1], lead: 700 }, D.times[0]] };
+  const s = stripFrame(d, "lead", "Lead Time");
+  expect(s.rows.map((r: any) => r.name)).toEqual(["fx-1", "fx-2"]);
+  const o = option(s, s.form, T);
+  expect(o.series.map((x: any) => x.data.map((p: any) => p?.value ?? p))).toEqual([[1100, null], [null, 700]]);
 });
 
 test("Slowest 10 holds the 10 slowest stages, by stage then by issue; for Lead Time an issue has a row per slow stage", () => {
   const many = { ...D, times: Array.from({ length: 12 }, (_, i) => ({ id: `fx-${i}`, href: `#/issues/fx/${i}`, outcome: "landed", intake: 1, queue: i === 3 ? 500 : 2, implement: 100 + i, land: 3, lead: 106 + i })) };
-  const o = slowestOption(many, "lead");
+  const f = slowestFrame(many, "lead"), o = option(f, "stacked", T);
+  expect(f.rows.map((r: any) => r.name)).toEqual(["fx-3 Queue", "fx-3 Build", "fx-4 Build", "fx-5 Build", "fx-6 Build", "fx-7 Build", "fx-8 Build", "fx-9 Build", "fx-10 Build", "fx-11 Build"]);
   expect(o.yAxis.data).toEqual(["fx-3 Queue", "fx-3 Build", "fx-4 Build", "fx-5 Build", "fx-6 Build", "fx-7 Build", "fx-8 Build", "fx-9 Build", "fx-10 Build", "fx-11 Build"]);
-  expect(o.yAxis.axisLabel.interval).toBe(0);
-  expect(o.series.map((s: any) => [s.name, s.stack])).toEqual([["Queue", "one"], ["Build", "one"]]);
+  // A linked row is named on the axis and its label is its own link, so every label shows.
+  expect([o.yAxis.triggerEvent, o.yAxis.axisLabel.interval]).toEqual([true, 0]);
+  expect(o.series.map((s: any) => [s.name, s.stack])).toEqual([["Queue", "all"], ["Build", "all"]]);
   expect(o.series[0].data[0]).toEqual({ value: 500, href: "#/issues/fx/3" });
-  expect(o.series[1].data[0]).toBeNull();
+  expect(o.series[1].data[0]).toEqual({ value: 0, href: "#/issues/fx/3" });
   expect(o.series[1].data[1]).toEqual({ value: 103, href: "#/issues/fx/3" });
-  const q = slowestOption(D, "queue");
-  expect(q.yAxis.data).toEqual(["fx-1", "fx-2", "fx-3"]);
-  expect(q.series.map((s: any) => s.name)).toEqual(["Queue"]);
-  expect(q.series[0].data.map((x: any) => x.value)).toEqual([600, 300, 20]);
+  const q = slowestFrame(D, "queue");
+  expect(q.rows.map((r: any) => r.name)).toEqual(["fx-1", "fx-2", "fx-3"]);
+  expect(q.by.keys.map((k: any) => k.name)).toEqual(["Queue"]);
+  expect(option(q, "stacked", T).series[0].data.map((x: any) => x.value)).toEqual([600, 300, 20]);
 });
 
 test("empty phases show dashes and no error", () => {

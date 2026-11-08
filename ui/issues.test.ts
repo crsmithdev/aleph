@@ -14,6 +14,10 @@ import * as v from "./views/issues.js";
 // @ts-ignore plain JS, shared with the page
 import * as lib from "./lib.js";
 // @ts-ignore plain JS, shared with the page
+import { label, option } from "./chart.js";
+// @ts-ignore plain JS, shared with the page
+import { xLabel } from "./views/speed.js";
+// @ts-ignore plain JS, shared with the page
 import { when } from "./lib.js";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
@@ -190,15 +194,17 @@ describe("views", () => {
     expect(d.tests.fac.map((r: any) => r.ran)).toEqual([120, 90]);
     expect(Object.keys((await getJson("/api/contents?project=oth")).tests)).toEqual(["oth"]);
     const page = v.view.render(d, {}, new URLSearchParams());
-    expect(page).toContain('data-chart="tests"');
-    const all = v.testsOption(d.tests, "", "week", now);
-    expect(all.series.map((s: any) => s.name)).toEqual(["fac tests", "oth tests", "fac passed on rerun", "oth passed on rerun"]);
-    expect(all.series[0].data.map((p: any) => p[1])).toEqual([120]);
-    expect(all.series[2].data.map((p: any) => p[1])).toEqual([2]);
-    const fac = v.testsOption(d.tests, "fac", "month", now);
-    expect(fac.series.map((s: any) => s.name)).toEqual(["fac tests", "fac passed on rerun"]);
-    expect(fac.series[0].data.map((p: any) => p[1])).toEqual([120]);
-    expect(v.testsOption(d.tests, "fac", "month", new Date("2026-10-02T00:00:00Z")).series[0].data).toHaveLength(1);
+    expect(page).toContain('<aleph-chart key="issues/tests"');
+    const all = v.testsFrame(d.tests, "", "week", now);
+    expect(all.by.keys.map((k: any) => k.name)).toEqual(["fac tests", "fac passed on rerun", "oth tests", "oth passed on rerun"]);
+    expect(all.rows.map((r: any) => [r.at, r["fac tests"] ?? 0, r["fac passed on rerun"] ?? 0, r["oth tests"] ?? 0]))
+      .toEqual([[Date.parse("2026-11-04T10:00:00Z"), 120, 2, 0], [Date.parse("2026-11-04T11:00:00Z"), 0, 0, 40]]);
+    const fac = v.testsFrame(d.tests, "fac", "month", now);
+    expect(fac.by.keys.map((k: any) => k.name)).toEqual(["fac tests", "fac passed on rerun"]);
+    expect(fac.rows.map((r: any) => r["fac tests"])).toEqual([120]);
+    expect(v.testsFrame(d.tests, "fac", "month", new Date("2026-10-02T00:00:00Z")).rows).toHaveLength(1);
+    // The frame counts tests, so its axis and tooltip read as whole numbers.
+    expect(option(all, "lines", {}).yAxis.axisLabel.formatter(120)).toBe("120");
   });
 
   test("the view is Issues at #/issues; #/inventory and #/projects redirect, the detail routes do not", () => {
@@ -224,12 +230,12 @@ describe("views", () => {
     expect(h).toContain('class="tiles"');
     for (const q of ["status=any", "tile=filed&status=any", "tile=age"]) {
       const page = v.view.render(d, {}, new URLSearchParams(q));
-      for (const c of ["backlog", "close"]) expect(page).toContain(`data-chart="${c}"`);
-      expect(page).not.toContain('data-chart="age"');
+      for (const c of ["backlog", "close"]) expect(page).toContain(`<aleph-chart key="issues/${c}"`);
+      expect(page).not.toContain('key="issues/age"');
       expect(page).not.toContain("Open issues by age");
     }
-    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('data-chart="backlog"'));
-    expect(h.indexOf('data-chart="backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
+    expect(h.indexOf('class="tiles"')).toBeLessThan(h.indexOf('key="issues/backlog"'));
+    expect(h.indexOf('key="issues/backlog"')).toBeLessThan(h.indexOf('data-ui="inv-search"'));
     const ths = (html: string) => [...html.matchAll(/<th(?: [^>]*)?>(?:<button[^>]*data-sort="(\w+)")?/g)].map((m) => m[1] ?? "");
     expect(ths(section(h, "issues-table"))).toEqual(["updated", "id", "title", "stage", "project", "priority", "labels", "notes", "runs", "cost", "age"]);
     expect(h).toContain(`<div class="sh"><h2>Issues</h2><span class="count">${d.issues.length}</span></div>`);
@@ -320,12 +326,12 @@ describe("views", () => {
     ] });
     expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 6, oldest: 12, runs: 5, cost: 1.5 });
     const f = v.flow(rows, "month", now);
-    expect(f.labels).toHaveLength(30);
-    expect(f.labels.at(-1)).toBe("Nov 01");
+    expect(f.ats).toHaveLength(30);
+    expect(lib.day(f.ats.at(-1), now)).toBe("Nov 01");
     expect(f.filed.at(-1)).toBe(1);
     expect(f.closed.at(-3)).toBe(1);
     const b = v.backlog(rows, "month", now);
-    expect(b.labels).toHaveLength(30);
+    expect(b.ats).toHaveLength(30);
     // Row 1 is open from Nov 01; the part from Oct 20; row 2 from Oct 21 to Oct 30; row 3 closed before it was created.
     expect(b.counts.medium.at(-1)).toBe(2);
     expect(b.counts.medium.at(-3)).toBe(2);
@@ -340,15 +346,17 @@ describe("views", () => {
     expect(c.kinds).toEqual(["task", "bug", "check", "proposal", "flake"]);
     expect(c.p50).toEqual([4, 3, null, null, null]);
     expect(c.p90[1]).toBeCloseTo(4.6);
-    expect(v.flow(rows, "week", now).labels).toHaveLength(7);
-    expect(v.flow(rows, "week", now).labels.at(-1)).toBe("Nov 01");
-    const o = v.backlogOption(b, f);
-    expect(o.yAxis).toHaveLength(2);
-    const areas = o.series.filter((x: any) => x.yAxisIndex === undefined), lines = o.series.filter((x: any) => x.yAxisIndex === 1);
-    expect(areas.map((x: any) => x.name)).toEqual(["low", "medium", "high", "critical"]);
-    expect(areas.map((x: any) => x.data)).toEqual([b.counts.low, b.counts.medium, b.counts.high, b.counts.critical]);
-    expect(lines.map((x: any) => x.name)).toEqual(["Filed", "Closed"]);
-    expect(lines.map((x: any) => x.data)).toEqual([f.filed, f.closed]);
+    expect(v.flow(rows, "week", now).ats).toHaveLength(7);
+    expect(lib.day(v.flow(rows, "week", now).ats.at(-1), now)).toBe("Nov 01");
+    // The frame carries every bucket: the four priorities, then the filed and closed counts of the same buckets.
+    const fr = v.backlogFrame(b, f, "month");
+    expect(fr.over).toEqual({ kind: "time", window: "month" });
+    expect(fr.by.keys.map((k: any) => k.name)).toEqual(["low", "medium", "high", "critical", "Filed", "Closed"]);
+    expect(fr.rows.map((r: any) => [r.at, r.medium, r.filed, r.closed])).toEqual(b.ats.map((at: number, i: number) => [at, b.counts.medium[i], f.filed[i], f.closed[i]]));
+    // The option draws the keys with a value: the priorities with none are left out.
+    const o = option(fr, "area", {});
+    expect(o.series.map((s: any) => s.name)).toEqual(["medium", "Filed", "Closed"]);
+    expect([o.yAxis.minInterval, o.yAxis.axisLabel.formatter(3)]).toEqual([1, "3"]);
     expect(v.renderTiles(v.stats(rows, now))).toContain('<b>1<em> / 0</em></b><span class="q"><span>closed</span><span class="m"> / dropped</span></span>');
   });
 
@@ -361,8 +369,8 @@ describe("views", () => {
     ] });
     const one = rows.filter((r: any) => r.id === "f-1");
     const hour = v.backlog(one, "hour", now), dayB = v.backlog(one, "day", now);
-    expect(hour.labels).toHaveLength(60);
-    expect(dayB.labels).toHaveLength(24);
+    expect(hour.ats).toHaveLength(60);
+    expect(dayB.ats).toHaveLength(24);
     for (const b of [hour, dayB]) {
       const i = b.counts.medium.findIndex((n: number) => n > 0);
       expect(b.counts.medium.slice(i).every((n: number) => n === 1)).toBe(true);
@@ -370,9 +378,9 @@ describe("views", () => {
     expect(hour.counts.medium.indexOf(1)).toBe(29);
     expect(dayB.counts.medium.indexOf(1)).toBe(23);
     const w = v.backlog(rows, "week", now), m = v.backlog(rows, "month", now);
-    expect(w.labels).toHaveLength(7);
-    expect(w.labels.at(-1)).toBe("Nov 04");
-    expect(m.labels).toHaveLength(30);
+    expect(w.ats).toHaveLength(7);
+    expect(lib.day(w.ats.at(-1), now)).toBe("Nov 04");
+    expect(m.ats).toHaveLength(30);
     expect(v.closeTimes(rows, "week", now).p50[1]).toBe(1);
     expect(v.closeTimes(rows, "month", now).p50[1]).toBe(3);
     const d = await getJson("/api/contents");
@@ -380,16 +388,22 @@ describe("views", () => {
     expect(page).toContain("<h2>Open Backlog, Filed and Closed</h2>");
     expect(page).toMatch(/<header class="ph"><h1>Issues<\/h1><span class="count">last week<\/span>/);
     expect(page).toContain("<h2>Time to Close</h2>");
-    for (const l of ["Open backlog, filed and closed, last week", "Time to close"]) expect(page).toContain(`aria-label="${l}"`);
-    for (const k of ["backlog", "close", "tests"]) expect(page).toMatch(new RegExp(`<div class="chartbox" data-chart="${k}" role="img" aria-label="[^"]+"></div>`));
+    // Each panel's title, aria label and empty line come from its frame.
+    expect(label(v.backlogFrame(w, v.flow(rows, "week", now), "week"))).toBe("Open Backlog, Filed and Closed: medium peak 1, Filed peak 1, Closed peak 1");
+    expect(page).toContain('aria-label="Open Backlog, Filed and Closed"');
+    expect(page).toContain('aria-label="Time to Close"');
+    for (const k of ["backlog", "close", "tests"]) expect(page).toMatch(new RegExp(`<aleph-chart key="issues/${k}"[^>]*><section class="card" aria-label="[^"]+">`));
+    expect(page).toMatch(/<div class="chartbox" role="img" aria-label="Open Backlog, Filed and Closed: [^"]+">/);
     expect(page).not.toContain("30 days");
   });
 
-  test("a chart card with nothing to plot shows the empty line and no chart box", () => {
+  test("a chart panel with nothing to plot shows the frame's empty line and no chart box", () => {
     const page = v.renderIssues({ issues: [], tests: { f: [{ at: "2020-01-01T00:00:00Z", ran: 5, rerunPassed: 0 }] } }, { window: "week" });
     expect(page).toContain("<h2>Tests</h2>");
-    for (const k of ["backlog", "close", "tests"]) expect(page).not.toContain(`data-chart="${k}"`);
+    for (const k of ["backlog", "close", "tests"]) expect(page).toContain(`<aleph-chart key="issues/${k}"`);
+    expect(page).not.toContain("chartbox");
     expect(page.match(/class="empty"/g)!.length).toBeGreaterThanOrEqual(3);
+    expect(page.match(/Nothing to plot in this window\./g)!.length).toBe(3);
   });
 
   test("Time to close counts from the stored times and shows hours when every value is under 2 days", () => {
@@ -401,8 +415,11 @@ describe("views", () => {
     expect(c.unit).toBe("hours");
     expect(c.p50[1]).toBe(4);
     const t = { muted: "#123456" };
-    expect(v.closeOption({ ...c, unit: "days" }, t).xAxis.axisLabel.formatter(0.05)).toBe("1h 12m");
-    expect(v.closeOption(c, t).series.find((s: any) => s.name === "p90").itemStyle.color).toBe(t.muted);
+    // The frame keeps the p50 and the p90 in seconds, so the axis formats them as a duration, and its note names the unit.
+    expect(option(v.closeFrame({ ...c, unit: "days" }), "grouped", t).xAxis.axisLabel.formatter(4320)).toBe("1h 12m");
+    expect(v.closeFrame({ ...c, unit: "days" }).note).toContain("Days from filed to closed");
+    expect(v.closeFrame(c).note).toContain("Hours from filed to closed");
+    expect(option(v.closeFrame(c), "grouped", t).series.find((s: any) => s.name === "p90").color).toBe(t.muted);
   });
 
   test("the window sets the Filed and Closed tiles; the Open tile is a Status card; the head holds the window; the form comes first", async () => {
@@ -441,12 +458,14 @@ describe("views", () => {
     expect(page).not.toContain("Filed and closed per");
     const t = new Date(2026, 10, 4, 16, 0), tr = [{ status: "done", created: "2026-11-04", createdTime: "2026-11-04 15:30", closed: "2026-11-04", closedTime: "2026-11-04 15:45" }, { status: "open", created: "2026-11-04", createdTime: "2026-11-04 09:10" }];
     const fh = v.flow(tr, "hour", t), fd = v.flow(tr, "day", t);
-    expect(fh.labels).toHaveLength(60);
+    const hourAt = (s: string) => fh.ats.findIndex((at: number) => xLabel(at, "hour") === s);
+    const dayAt = (s: string) => fd.ats.findIndex((at: number) => xLabel(at, "day") === s);
+    expect(fh.ats).toHaveLength(60);
     expect(fh.filed.reduce((a: number, b: number) => a + b)).toBe(1);
-    expect(fh.filed[fh.labels.indexOf("3:30p")]).toBe(1);
-    expect(fh.closed[fh.labels.indexOf("3:45p")]).toBe(1);
-    expect(fd.labels).toHaveLength(24);
-    expect(fd.filed[fd.labels.indexOf("9a")]).toBe(1);
+    expect(fh.filed[hourAt("3:30p")]).toBe(1);
+    expect(fh.closed[hourAt("3:45p")]).toBe(1);
+    expect(fd.ats).toHaveLength(24);
+    expect(fd.filed[dayAt("9a")]).toBe(1);
     expect(head).toContain('data-name="window"');
     for (const w of ["Hour", "Day", "Week", "Month"]) expect(head).toContain(`>${w}</button>`);
     expect(head).toContain('<select name="project"');

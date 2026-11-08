@@ -1,8 +1,8 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/contents: { issues, projects }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { xLabel } from "./speed.js";
-import { actButton, postJson, say, count, days, barList, barRow, blockersHtml, rangeBarOption, stackedAreaOption, timeSeriesOption, badge, tag, priorityBadge, card, sectionHead, chartBox, mountCharts, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, hourLabel, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, readTokens, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { actButton, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { panelOf } from "../chart.js";
 import { askRow } from "./now.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
 
@@ -265,15 +265,15 @@ export function renderTiles(s, key = "open", win = "week") {
     statCard({ k: "Jobs", v: count(s.runs), v2: money(s.cost), q: ["jobs", "recorded cost"], ...on("runs") }));
 }
 
-/** The window's buckets (60 minutes, 24 hours, 7 or 30 days): their labels and how many rows were filed and closed in each. A stored time counts to its minute; a row with only a day counts at the start of that day. */
+/** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute; a row with only a day counts at the start of that day. */
 export function flow(rows, window = "month", now = new Date()) {
   const unit = { hour: 60000, day: 3600000 }[window], n = { hour: 60, day: 24, week: 7 }[window] ?? 30;
   const edge = (i) => unit ? Math.floor(now.getTime() / unit) * unit - i * unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i).getTime();
   const at = (d, t) => { const m = unit && t ? Date.parse(String(t).replace(" ", "T")) : NaN; return m === m ? m : dayMs(d); };
-  const out = { labels: [], filed: [], closed: [] };
+  const out = { ats: [], filed: [], closed: [] };
   for (let i = n - 1; i >= 0; i--) {
     const from = edge(i), to = unit ? from + unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1).getTime();
-    out.labels.push(xLabel(from, window));
+    out.ats.push(from);
     out.filed.push(rows.filter((r) => { const t = at(r.created, r.createdTime); return t >= from && t < to; }).length);
     out.closed.push(rows.filter((r) => { const t = at(r.closed, r.closedTime); return CLOSED.includes(r.status) && t >= from && t < to; }).length);
   }
@@ -283,13 +283,13 @@ export function flow(rows, window = "month", now = new Date()) {
 const PRIORITY_ORDER = ["low", "medium", "high", "critical"];
 /** The window's buckets: how many rows were open in each, per priority. Hour is 60 minutes and day is 24 hours, sampled at each bucket's end; week and month are days. A row is open from its created time to its closed time, or by day when it has no time. */
 export function backlog(rows, win = "month", now = new Date()) {
-  const labels = [], counts = Object.fromEntries(PRIORITY_ORDER.map((p) => [p, []]));
+  const ats = [], counts = Object.fromEntries(PRIORITY_ORDER.map((p) => [p, []]));
   const fine = { hour: [60, 60_000], day: [24, 3_600_000] }[win];
   const stamp = (time, d, late) => { const t = Date.parse(String(time ?? "").replace(" ", "T")); return t === t ? t : dayMs(d) ? dayMs(d) + (late ? DAY : 0) : 0; };
   const [n, step] = fine ?? [WINDOW_DAYS[win], DAY];
   for (let i = n - 1; i >= 0; i--) {
     const d = fine ? new Date(now.getTime() - i * step) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), t = d.getTime();
-    labels.push(fine ? hourLabel(d) : day(d, now));
+    ats.push(t);
     for (const p of PRIORITY_ORDER) counts[p].push(rows.filter((r) => {
       if (r.priority !== p) return false;
       if (!fine) return dayMs(r.created) && dayMs(r.created) <= t && (!dayMs(r.closed) || t <= dayMs(r.closed));
@@ -297,7 +297,7 @@ export function backlog(rows, win = "month", now = new Date()) {
       return from && from <= t && (!to || t < to);
     }).length);
   }
-  return { labels, counts };
+  return { ats, counts };
 }
 
 const KINDS = ["task", "bug", "check", "proposal", "flake"];
@@ -327,19 +327,51 @@ export function closeTimes(rows, win = "month", now = new Date()) {
   return out;
 }
 
-export const backlogOption = (b, f) => stackedAreaOption(b.labels, PRIORITY_ORDER.map((p) => ({ name: p, data: b.counts[p] })), [{ name: "Filed", data: f.filed }, { name: "Closed", data: f.closed }]);
-/** The suite records of `tests` ({ project: records }) of `project` (all when empty) within the window: the test count of each record as a line per project, and the tests that passed only on rerun as bars. */
-export function testsOption(tests, project = "", win = "month", now = new Date()) {
-  const from = now.getTime() - WINDOW_DAYS[win in WINDOW_DAYS ? win : "week"] * 86400000, lines = [], bars = [];
-  for (const [key, records] of Object.entries(tests ?? {})) {
-    if (project && key !== project) continue;
-    const kept = records.map((r) => ({ t: Date.parse(r.at), r })).filter(({ t }) => t >= from && t <= now.getTime());
-    lines.push({ name: `${key} tests`, data: kept.map(({ t, r }) => [t, r.ran]) });
-    bars.push({ name: `${key} passed on rerun`, data: kept.map(({ t, r }) => [t, r.rerunPassed]) });
+/** The open backlog per bucket, by priority, with the filed and closed counts of the same buckets. */
+export const backlogFrame = (b, f, win) => ({
+  measure: { name: "Open Backlog, Filed and Closed", unit: "count", agg: "max" },
+  over: { kind: "time", window: win },
+  by: { keys: [...PRIORITY_ORDER.map((p) => ({ key: p, name: p })), { key: "filed", name: "Filed" }, { key: "closed", name: "Closed" }] },
+  rows: b.ats.map((at, i) => ({ at, ...Object.fromEntries(PRIORITY_ORDER.map((p) => [p, b.counts[p][i]])), filed: f.filed[i], closed: f.closed[i] })),
+  form: "area",
+  note: "Open issues over time, by priority, with the filed and closed counts of each bucket.",
+});
+
+/** The suite records of `tests` ({ project: records }) of `project` (all when empty) within the window: one row per run time, the test count of each project and the tests that passed only on rerun. */
+export function testsFrame(tests, project = "", win = "month", now = new Date()) {
+  const from = now.getTime() - WINDOW_DAYS[win in WINDOW_DAYS ? win : "week"] * 86400000, keys = [], rows = new Map();
+  for (const [k, records] of Object.entries(tests ?? {})) {
+    if (project && k !== project) continue;
+    keys.push({ key: `${k} tests`, name: `${k} tests` }, { key: `${k} passed on rerun`, name: `${k} passed on rerun` });
+    for (const r of records) {
+      const t = Date.parse(r.at);
+      if (!(t >= from && t <= now.getTime())) continue;
+      const row = rows.get(t) ?? { at: t };
+      row[`${k} tests`] = r.ran;
+      row[`${k} passed on rerun`] = r.rerunPassed;
+      rows.set(t, row);
+    }
   }
-  return timeSeriesOption(lines, bars);
+  return { measure: { name: "Tests", unit: "count", agg: "sum" }, over: { kind: "time", window: win }, by: { keys }, rows: [...rows.values()].sort((a, b) => a.at - b.at), form: "lines", note: "Tests per suite run, and the tests that passed only on rerun." };
 }
-export const closeOption = (c, t) => rangeBarOption(c.kinds, c.p50, c.p90, (v) => dur(v * (c.unit === "hours" ? 3600 : 86400)), t);
+
+/** The p50 and the p90 from filed to closed, per kind, in the unit `closeTimes` chose. */
+export const closeFrame = (c) => {
+  const scale = c.unit === "hours" ? 3600 : 86400;
+  return {
+    measure: { name: "Time to Close", unit: "seconds", agg: "max" },
+    over: { kind: "category" },
+    by: { keys: [{ key: "p50", name: "p50" }, { key: "p90", name: "p90", color: "muted" }] },
+    rows: c.kinds.map((k, i) => ({ name: k, p50: (c.p50[i] ?? 0) * scale, p90: (c.p90[i] ?? 0) * scale })),
+    form: "grouped",
+    note: `${c.unit === "hours" ? "Hours" : "Days"} from filed to closed: the p50 and the p90 of each kind.`,
+  };
+};
+
+/** Each Issues chart panel: its key and its frame. */
+export const FRAMES = { backlog: backlogFrame, close: closeFrame, tests: testsFrame };
+/** The key of an Issues chart panel: its frame, its kept form and its kept hidden series are its own. */
+export const chartKey = (k) => `issues/${k}`;
 
 /** What the filters set when a tile is selected, so the table shows the issues behind the number. */
 const TILE_FILTER = {
@@ -360,11 +392,13 @@ function renderDetail(rows, o) {
   return "";
 }
 
-const plot = (has, k, text) => (has ? chartBox(k, text) : empty("Nothing to plot in this window."));
-/** The two charts under the tiles, on every tile. */
-const renderCharts = (o, rows, tests) => `<div class="trio">${card("Open Backlog, Filed and Closed", `<p>Open issues over time, by priority (left axis); filed and closed per bucket (right axis).</p>${plot(rows.length, "backlog", "Open backlog by priority, filed and closed per bucket")}`, { cls: "wide", label: `Open backlog, filed and closed, last ${o.window in WINDOW_DAYS ? o.window : "week"}` })}` +
-  `${card("Time to Close", `<p data-close-note>Days from filed to closed: the bar is p50, the tick p90.</p>${plot(closeTimes(rows, o.window).p50.some((v) => v != null), "close", "Days from filed to closed: p50 bar and p90 tick")}`, { label: "Time to close" })}` +
-  `${card("Tests", `<p>Tests per suite run (left axis); tests that passed only on rerun (right axis).</p>${plot(testsOption(tests, o.project, o.window).series.some((x) => x.data.length), "tests", "Tests per suite run and tests that passed only on rerun")}`, { cls: "wide" })}</div>`;
+/** The three chart panels under the tiles, on every tile. The backlog and the Tests charts take two columns. */
+const renderCharts = (o, rows, tests) => {
+  const win = o.window in WINDOW_DAYS ? o.window : "week", now = new Date();
+  return `<div class="trio">${panelOf(chartKey("backlog"), backlogFrame(backlog(rows, win, now), flow(rows, win, now), win), "wide")}` +
+    panelOf(chartKey("close"), closeFrame(closeTimes(rows, win, now))) +
+    panelOf(chartKey("tests"), testsFrame(tests, o.project, win, now), "wide") + `</div>`;
+};
 
 // ---- The filters ----
 
@@ -413,18 +447,18 @@ function projectOptions(keys, project) {
   return keys.map((k) => `<option value="${esc(k)}"${k === project ? " selected" : ""}>${esc(k)}</option>`).join("");
 }
 
-let drawn = [], live = null;
+let live = null;
 /** Change the query in place: replaceState fires no hashchange, so the shell does not fetch and render again. */
 const setQuery = (changes) => { setHash(changes); refill(); };
 
 function draw(root) {
-  for (const c of drawn) c.dispose();
-  drawn = [];
   const rows = filterRows(live.rows, live.o(), ["status", "stage", "tile"]);
   const win = live.o().window, now = new Date();
-  const close = closeTimes(rows, win, now), note = root.querySelector("[data-close-note]");
-  if (note) note.textContent = `${close.unit === "hours" ? "Hours" : "Days"} from filed to closed: the bar is p50, the tick p90.`;
-  try { drawn.push(...mountCharts(root, { backlog: backlogOption(backlog(rows, win, now), flow(rows, win, now)), close: closeOption(close, readTokens()), tests: testsOption(live.tests, live.o().project, win, now) }).values()); } catch (e) { console.error("inventory chart failed", e); }
+  // Each panel draws the frame of the window shown; its form and hidden series are its own.
+  for (const [k, f] of Object.entries({ backlog: backlogFrame(backlog(rows, win, now), flow(rows, win, now), win), close: closeFrame(closeTimes(rows, win, now)), tests: testsFrame(live.tests, live.o().project, win, now) })) {
+    const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
+    if (el) el.frame = f;
+  }
 }
 
 /** Fill what follows the filters. A filter changes no route, so nothing fetches again. */

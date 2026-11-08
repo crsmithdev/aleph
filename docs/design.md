@@ -145,8 +145,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 ### Chart gridlines and fills
 
 - Gridlines are `splitLine` at `opacity: 0.5`.
-- A stacked area series is filled at `areaStyle: { opacity: 0.6 }` (`ui/lib.js:615`), with a legend.
-- A p90 band is filled at `opacity: 0.2` (`ui/views/factory-jobs.js:33`). It is one use and has no rule.
+- A stacked area series is filled at `areaStyle: { opacity: 0.6 }` (`ui/chart.js:81`), with a legend.
 
 ### Row actions
 
@@ -161,7 +160,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 
 ### Form messages
 
-- A result line after an action, or inside a form, is a `<span>` with the class `act-msg` (`ui/app.css:333`). `say()` in `ui/lib.js:733` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:662`, `674`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
+- A result line after an action, or inside a form, is a `<span>` with the class `act-msg` (`ui/app.css:333`). `say()` in `ui/lib.js:686` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:662`, `674`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
 
 ### Two-click confirm
 
@@ -170,9 +169,8 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 
 ### Chart empty state
 
-- A card with a chart shows `empty()` in place of the chart when the chart has no data: `ui/views/skills.js:56` (`This skill was not used in the window.`).
-- A chart panel (`<aleph-chart>`, `ui/chart.js`) shows its title and `empty("Nothing to plot in this window.")` when no key has a value. The Agents page is the reference.
-- Gap: the Jobs and Issues charts draw an empty plot when the window has no data.
+- A chart panel (`<aleph-chart>`, `ui/chart.js`) shows its title and its frame's empty line — `empty("Nothing to plot in this window.")` unless the frame names its own — when no key has a value. Every chart on the Agents, Jobs, Issues and Skills pages is a panel.
+- A card with a chart shows `empty()` in place of the chart when the chart has no data: `ui/views/skills.js:44` (`This skill was not used in the window.`).
 
 ## Formats
 
@@ -211,7 +209,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:568`) with `heads()` (`ui/lib.js:571`) or `sortHead()` (`ui/lib.js:694`), styled by `table.tbl` (`ui/app.css:448`). A table that can pass 50 rows is `pagedTable()` (`ui/lib.js:681`), which wraps `dataTable()` and `pager()`. Every table goes through one of the two.
+The one table is `dataTable()` (`ui/lib.js:568`) with `heads()` (`ui/lib.js:571`) or `sortHead()` (`ui/lib.js:647`), styled by `table.tbl` (`ui/app.css:448`). A table that can pass 50 rows is `pagedTable()` (`ui/lib.js:634`), which wraps `dataTable()` and `pager()`. Every table goes through one of the two.
 
 Rules, as the code states them (`ui/app.css:448`):
 
@@ -220,8 +218,8 @@ Rules, as the code states them (`ui/app.css:448`):
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:454`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:460`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `--sp-6 --sp-12 --sp-6 0`, a `--rule-2` line under each row, and `--sunk` on row hover (`ui/app.css:449`, `453`). Headers are `600 var(--fs-xs)` in `--muted`.
-- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼` (`ui/lib.js:696`).
-- **Pager:** `pager()` (`ui/lib.js:675`) shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
+- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼` (`ui/lib.js:649`).
+- **Pager:** `pager()` (`ui/lib.js:628`) shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
 - **Long text:** `clamp()` (`ui/lib.js`) sets long text clamped, followed by a button with `aria-expanded` that opens and closes it. A list that shows its first N rows uses `moreFold()` (`ui/lib.js`).
 - **Wide tables:** `.tscroll` (`ui/app.css:472`) scrolls sideways.
 - **Empty table:** `empty()` (`ui/lib.js:61`) in place of the table.
@@ -242,7 +240,7 @@ Columns of the main tables:
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
 | Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:72`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:192`) |
-| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:622`) |
+| Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:656`) |
 
 Gaps: a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` (`ui/app.css:495`) over the table.
 
@@ -251,10 +249,10 @@ Gaps: a missing cell is empty in some tables and `–` in others. Row height is 
 Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `chart()` (`ui/lib.js:184`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:174`) and redraws on a colour-scheme change.
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
-- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js:607`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`.
-- **Range bars:** `rangeBarOption()` (`ui/lib.js:633`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
-- **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: p50 and p90 areas per bucket, with 0 for a bucket with no time; a strip with one dot per issue linking to the issue, with the time on a base-60 log axis that starts at 1m unless a time is under a minute and the filing time on the vertical axis (an issue with no filing time has no dot); and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue, each linking to the issue (for Lead Time an issue has a row per slow stage). Each chart box has `role="img"` and an `aria-label` that states its data.
-- **Chart panel:** `<aleph-chart key="<view>/<chart>">` (`ui/chart.js`) draws a frame as a card that fills its grid cell. A frame names its measure (name, unit, `agg` of `sum` for a flow or `max` for a level), what it is over (time with the window, or a category) and its breakdown (`by`, keys with a colour token each). From the frame come the title (`<measure> by <dimension>`, as Agents Live by Role), the aria label (each key's total, or peak for a level), the axis and tooltip format of the unit, the series colours, the empty line and the forms on offer. The forms are a group's icon buttons in the card head: over time Area, Columns, Lines and Share (a flow opens as Columns, a level as Area); over categories Stacked, Grouped and Share. `push(row)` adds a row or replaces the row with the same `at` and keeps the window's length. New charts use the panel; the option helpers above stay only until their views move to it.
+- **Jobs page:** three chart panels in one row (`trendFrame`, `stripFrame`, `slowestFrame` in `ui/views/factory-jobs.js`), each from the stage tile selected: the p50 and the p90 of the stage per bucket as two lines, not stacked areas, with 0 for a bucket with no time; one point per issue by outcome, at its filing time, for its time in the stage (an issue with no filing time has no point); and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue (for Lead Time an issue has a row per slow stage). Each panel keeps the line under its title that describes the stage, and its rows link to their issues.
+- **Chart panel:** `<aleph-chart key="<view>/<chart>">` (`ui/chart.js`) draws a frame as a card that fills its grid cell. A frame names its measure (name, unit, `agg` of `sum` for a flow or `max` for a level), what it is over (time with the window, or a category) and its breakdown (`by`, keys with a colour token each). From the frame come the title (`<measure> by <dimension>`, as Agents Live by Role), the aria label (each key's total, or peak for a level), the axis and tooltip format of the unit, the series colours, the empty line, the line under the title and the form it opens in. The forms are a group's icon buttons in the card head: over time Area, Columns, Lines, Points and Share (a flow opens as Columns, a level as Area); over categories Stacked, Grouped and Share. A row with an `href` keeps its issue link on its point, and a category frame lists its linked rows under the chart for a reader who cannot click a bar. `push(row)` adds a row or replaces the row with the same `at` and keeps the window's length.
+- **Issues page:** three chart panels (`backlogFrame`, `closeFrame`, `testsFrame` in `ui/views/issues.js`): Open Backlog, Filed and Closed over the window, one key per priority plus the filed and closed counts of the same buckets; Time to Close by kind, the p50 and the p90 in seconds with the unit in the line under the title; and Tests, one key per project for the tests of each suite run and for the tests that passed only on rerun. The backlog and Tests panels take two columns of the row.
+- **Skills page:** one panel, Uses per Day (`usesFrame` in `ui/views/skills.js`), one row per day counted on from the API's `since`.
 - **Agents page:** three chart panels in one row (`liveFrame`, `outcomesFrame`, `costFrame` in `ui/views/factory-agents.js`): Agents Live by Role, one key per timed role, coloured by its place in the fixed role list (`--series-1` to `--series-5`, `--chart-6`, `--chart-7`); Outcomes by Role, succeeded, failed and stuck in `--done`, `--need` and `--stuck`; and Cost by Model per bucket, from `buckets[].cost` in `/api/speed`.
 - **Sticky state:** `keep(key, value)` and `kept(key, fallback)` (`ui/lib.js`) keep a JSON value in `localStorage` under `aleph.<key>`. The address holds what changes the data or what a link shares (the window, the project, a filter); `keep()` holds how a component shows it (a chart panel's form and hidden series). One key per component, never per row or item. The window and the project use it as their store.
 - **Status layout:** the status line and the metric cards span the page. Under them, the main column holds Agent Time, Pipeline and the lanes, and the Herald is a rail at the right (`clamp(300px, 24%, 340px)`), sticky and the viewport tall. Under 1100px the Herald goes under the main column; when the main column is under 760px the lanes take 2 columns.
@@ -351,7 +349,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-reran` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:696`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:544`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:649`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:544`).
 
 ## Components
 
@@ -365,7 +363,7 @@ Reference view = the view that follows the rules best.
 | Badge | `badge()` | `ui/views/jobs.js` |
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
-| Chart | `chart()` | `ui/views/factory-agents.js` |
+| Chart | `chart()`, `panelOf()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
 | Pager | `pager()` | `pager()` (`ui/views/issues.js:217`) |
@@ -376,7 +374,7 @@ Cards with their own markup, because `card()` would add a heading or change the 
 - Memory browse table (`#mem-table`, `ui/views/memory.js:290`) and inspector (`#mem-inspector`): the table card has no heading, and the inspector is an `aside` with `aria-live`.
 - Pipeline (`renderPipeline()` in `ui/views/now.js`): one box per stage in pipeline order (intake, triage, plan, spec-check, build, review, recheck, land) with the day's jobs per issue from `monitor.stages` and the p90 runtime from a `p90` field (`–` until the monitor sends it); an idle stage is dashed. The boxes are one row of 8, or 2 rows of 4 when the card is under 760px. Under them, Slowest work lists at most 5 running and queued items, longest since first pickup first.
 
-These references were chosen by reading the code, not by looking at the pages. Gap: no view is a reference for a chart's empty or loading state.
+These references were chosen by reading the code, not by looking at the pages. Gap: no view is a reference for a chart's loading state.
 
 ## Rules
 
@@ -398,9 +396,7 @@ Each deviation is a value or pattern in the code that a rule above does not allo
 | Deviation | Where | Rule | Fix |
 |---|---|---|---|
 | Time column names differ: `Started`, `Updated`, `Last`, `When`, `Date`, `Written` | Tables | Column order, time column | aleph-1360 (pending) |
-| Chart boxes without `role="img"` or `aria-label` | `ui/views/issues.js` (`backlog`, `close`, `tests`) | Charts: each chart box | aleph-1364 (pending) |
 | Code-span writer copied across views (`inline`, `code`) | `ui/views/jobs.js:120`, `ui/views/issues.js:529`, `ui/views/now.js:335`, `ui/lib.js:93` | One helper per copy | aleph-1375 (pending) |
-| Chart empty state drawn as an empty plot | Jobs and Issues charts | Chart empty state | none; follow-up |
 | Login sizes as literals | `ui/auth.ts:53-57` | Spacing and size tokens | none; follow-up |
 | Dates with no time: `Oct 28` in tables, `10/28` proposed | `ui/views/issues.js:176`; `ui/views/memory.js:140` | Absolute time and day | Chris's decision (see Formats) |
 

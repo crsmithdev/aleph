@@ -595,53 +595,6 @@ export const barList = (rows) => `<div class="bars">${rows}</div>`;
 export const legend = { type: "scroll", top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
 /** The HTML legend: one `<li>` per `[label, cls]`; a `cls` gives the item a swatch that CSS colours. */
 export const legendHtml = (items) => `<ul class="legend">${items.map(([label, cls]) => `<li>${cls ? `<i class="${cls}"></i>` : ""}${esc(label)}</li>`).join("")}</ul>`;
-/** The box a chart draws into. `key` finds its option again in `mountCharts`; `label` states its data for a screen reader. */
-export const chartBox = (key, label, cls = "") => `<div class="chartbox${cls ? ` ${cls}` : ""}" data-chart="${esc(key)}" role="img" aria-label="${esc(label)}"></div>`;
-/** Draw each chart box under `root` whose key is in `options` (key to ECharts option); returns the charts by key. */
-export function mountCharts(root, options) {
-  const out = new Map();
-  for (const el of root.querySelectorAll(".chartbox[data-chart]")) if (options[el.dataset.chart]) out.set(el.dataset.chart, chart(el, options[el.dataset.chart]));
-  return out;
-}
-/** The ECharts option for areas stacked over categories on the left axis, and `lines` over the same categories on the right axis. Each series is `{name, data}`; the first area is at the bottom. */
-export const stackedAreaOption = (labels, series, lines = []) => ({
-  animation: false,
-  grid: { left: 32, right: lines.length ? 32 : 16, top: 28, bottom: 20 },
-  legend,
-  tooltip: { trigger: "axis", confine: true },
-  xAxis: { type: "category", boundaryGap: false, data: labels, axisTick: { show: false }, axisLabel: { hideOverlap: true } },
-  yAxis: [{ type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } }, ...(lines.length ? [{ type: "value", min: 0, minInterval: 1, splitLine: { show: false }, axisTick: { show: false } }] : [])],
-  series: [
-    ...series.map((s) => ({ type: "line", name: s.name, stack: "all", symbol: "none", lineStyle: { width: 1 }, areaStyle: { opacity: 0.6 }, data: s.data })),
-    ...lines.map((s) => ({ type: "line", name: s.name, yAxisIndex: 1, symbol: "none", lineStyle: { width: 2 }, data: s.data })),
-  ],
-});
-/** The ECharts option for `lines` (the left axis) and `bars` (the right axis) over time. Each series is `{name, data}` with `data` as `[ms, value]` pairs. */
-export const timeSeriesOption = (lines, bars) => ({
-  animation: false,
-  grid: { left: 40, right: 32, top: 28, bottom: 20 },
-  legend,
-  tooltip: { trigger: "axis", confine: true },
-  xAxis: { type: "time", axisTick: { show: false } },
-  yAxis: [{ type: "value", min: 0, minInterval: 1, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false } }, { type: "value", min: 0, minInterval: 1, splitLine: { show: false }, axisTick: { show: false } }],
-  series: [
-    ...lines.map((s) => ({ type: "line", name: s.name, symbol: "circle", symbolSize: 4, lineStyle: { width: 2 }, data: s.data })),
-    ...bars.map((s) => ({ type: "bar", name: s.name, yAxisIndex: 1, barMaxWidth: 8, data: s.data })),
-  ],
-});
-/** The ECharts option for a horizontal bar per category up to `p50`, with a tick at `p90`; `fmt` labels the x axis. */
-export const rangeBarOption = (labels, p50, p90, fmt, t) => ({
-  animation: false,
-  grid: { left: 64, right: 16, top: 28, bottom: 20 },
-  legend,
-  tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
-  xAxis: { type: "value", splitLine: { lineStyle: { opacity: 0.5 } }, axisLabel: { formatter: fmt } },
-  yAxis: { type: "category", data: labels, inverse: true, axisTick: { show: false } },
-  series: [
-    { type: "bar", name: "p50", barMaxWidth: 24, data: p50 },
-    { type: "scatter", name: "p90", symbol: "rect", symbolSize: [3, 20], data: p90, itemStyle: { color: t.muted } },
-  ],
-});
 /** The sort after a click on `key`: the same key flips; a new key starts largest first when `downFirst` has it, else smallest first. */
 export const nextSort = (cur, key, downFirst) => ({ key, dir: cur?.key === key ? -cur.dir : downFirst.has(key) ? -1 : 1 });
 /** The row limit in the query `q` (URLSearchParams or object), never less than `page`. */

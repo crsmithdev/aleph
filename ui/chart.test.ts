@@ -80,3 +80,32 @@ test("the panel has a form control for its group, or the empty line under its ti
   expect(none).toContain("Nothing to plot in this window.");
   expect(none).not.toContain("chartbox");
 });
+
+test("a frame's own empty line replaces the default, and its note is under the title", () => {
+  const f = { ...time, rows: [], empty: "No time to plot in this window.", note: "From filing to the last land." };
+  expect(panel(f, "area")).toContain("No time to plot in this window.");
+  expect(panel(f, "area")).not.toContain("Nothing to plot in this window.");
+  const h = panel({ ...time, note: "From filing to the last land." }, "area");
+  expect(h).toContain("<p>From filing to the last land.</p>");
+  expect(h).toContain("<h2>Agents Live by Role</h2>");
+});
+
+test("the option and the markup carry the link of a row: the point of a time frame, the bar and the label of a category frame", () => {
+  const t = { ...time, rows: [{ at: at(27), a: 1, href: "#/factory/jobs/a1" }, { at: at(28), a: 2 }] };
+  expect(option(t, "points", T).series[0].data).toEqual([{ value: 1, href: "#/factory/jobs/a1" }, 2]);
+  const c = { ...cat, rows: [{ name: "a1", a: 1, href: "#/factory/jobs/a1" }, { name: "Worker", a: 3 }] };
+  const o = option(c, "stacked", T);
+  expect(o.series[0].data).toEqual([{ value: 1, href: "#/factory/jobs/a1" }, 3]);
+  expect(o.yAxis.triggerEvent).toBe(true);
+  expect(o.yAxis.axisLabel.interval).toBe(0);
+  const h = panel(c, "stacked");
+  expect(h).toContain('<a class="idl" href="#/factory/jobs/a1">a1</a>');
+  expect(panel({ ...c, rows: [{ name: "Worker", a: 3 }] }, "stacked")).not.toContain('<a class="idl"');
+});
+
+test("the time group offers points, for one dot per row, and a kept points form stays", () => {
+  expect(FORMS.time.map((x: any) => x.key)).toEqual(["area", "columns", "lines", "points", "share"]);
+  expect(formOf(time, "points")).toBe("points");
+  const s = option(time, "points", T).series[0];
+  expect([s.type, s.symbol, s.symbolSize, s.lineStyle.width]).toEqual(["line", "circle", 9, 0]);
+});

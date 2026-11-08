@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, legendHtml, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -51,31 +51,7 @@ test("chart on() attaches a handler that survives a re-theme", () => {
   }
 });
 
-test("chartBox() gives a box a role and a label, mountCharts() draws the boxes with an option, and legendHtml() one item per entry", () => {
-  expect(chartBox("a", 'Uses "x"', "perday")).toBe('<div class="chartbox perday" data-chart="a" role="img" aria-label="Uses &quot;x&quot;"></div>');
-  const g = globalThis as any;
-  const made: any[] = [];
-  const keep = { echarts: g.echarts, matchMedia: g.matchMedia, ResizeObserver: g.ResizeObserver, getComputedStyle: g.getComputedStyle, document: g.document };
-  g.echarts = {
-    registerTheme() {},
-    init(el: unknown) {
-      const c: any = { el, getOption: () => ({}), setOption(o: unknown) { c.option = o; }, dispose() {}, resize() {} };
-      made.push(c);
-      return c;
-    },
-  };
-  g.matchMedia = () => ({ addEventListener() {}, removeEventListener() {} });
-  g.ResizeObserver = class { observe() {} disconnect() {} };
-  g.getComputedStyle = () => ({ getPropertyValue: () => "" });
-  g.document = { documentElement: {} };
-  const boxes = ["a", "b"].map((k) => ({ dataset: { chart: k } }));
-  try {
-    const charts = mountCharts({ querySelectorAll: () => boxes }, { a: { x: 1 } });
-    expect([...charts.keys()]).toEqual(["a"]);
-    expect(made.map((c) => [c.el, c.option])).toEqual([[boxes[0], { x: 1 }]]);
-  } finally {
-    Object.assign(g, keep);
-  }
+test("legendHtml() gives one item per entry", () => {
   const h = legendHtml([["One", "c-use"], ["Two"]]);
   expect(h.match(/<li>/g)).toHaveLength(2);
   expect(h).toContain('<i class="c-use"></i>One');
@@ -198,12 +174,6 @@ test("pct shows whole percents, one decimal under 1%, <0.1% under 0.05 and – f
   expect([0.02, 0.5, 30, 2.5].map(pct)).toEqual(["<0.1%", "0.5%", "30%", "3%"]);
 });
 
-test("rangeBarOption colours the p90 tick from the muted token", () => {
-  const color = rangeBarOption(["bug"], [1], [2], "d", { muted: "#123456" }).series.find((s: any) => s.name === "p90").itemStyle.color;
-  expect(color).toBe("#123456");
-  expect(color).not.toBe("#888");
-});
-
 test("meter draws one share or segments as a .meter with a role=img aria-label", () => {
   const one = meter(42.5, "42.5 of the cap");
   expect(one).toContain('class="meter"');
@@ -245,14 +215,20 @@ test("the legend of the Tests and the Live chart ends above the grid at 390 and 
   // @ts-ignore the vendored ECharts bundle has no types
   const echarts = (await import("./vendor/echarts.min.js")).default;
   // @ts-ignore issues.js is plain JS, shared with the page
-  const { testsOption } = await import("./views/issues.js");
+  const { testsFrame } = await import("./views/issues.js");
+  // @ts-ignore chart.js is plain JS, shared with the page
+  const { option } = await import("./chart.js");
   const now = new Date("2026-11-04T12:00:00Z");
   const tests = Object.fromEntries(["aleph", "sidetone", "voiceover"].map((p) => [p, [{ at: "2026-11-04T10:00:00Z", ran: 100, rerunPassed: 1 }]]));
-  const roles = ["Worker", "Judge", "Planner", "Reviewer", "Intake"].map((name) => ({ name, data: [1, 2] }));
-  const charts = { tests: testsOption(tests, "", "week", now), live: stackedAreaOption(["a", "b"], roles) };
-  for (const [name, option] of Object.entries(charts)) for (const width of [390, 1440]) {
+  const roles = ["Worker", "Judge", "Planner", "Reviewer", "Intake"];
+  const live = {
+    measure: { name: "Agents Live", unit: "count", agg: "max" }, over: { kind: "time", window: "week" }, by: { name: "Role", keys: roles.map((n) => ({ key: n, name: n })) },
+    rows: [{ at: Date.parse("2026-11-04T10:00:00Z"), ...Object.fromEntries(roles.map((n, i) => [n, i + 1])) }, { at: Date.parse("2026-11-04T11:00:00Z"), ...Object.fromEntries(roles.map((n, i) => [n, i + 2])) }],
+  };
+  const charts = { tests: option(testsFrame(tests, "", "week", now), "lines", {}), live: option(live, "area", {}) };
+  for (const [name, chartOption] of Object.entries(charts)) for (const width of [390, 1440]) {
     const ec = echarts.init(null, chartTheme({ ink: "#000", rule: "#ccc", sans: "sans" }), { renderer: "svg", ssr: true, width, height: 240 });
-    ec.setOption(option);
+    ec.setOption(chartOption);
     const model = ec.getModel(), group = ec.getViewOfComponentModel(model.getComponent("legend")).group;
     const box = group.getBoundingRect().clone();
     box.applyTransform(group.getLocalTransform());

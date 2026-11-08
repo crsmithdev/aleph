@@ -1,7 +1,8 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
-import { card, chartBox, mountCharts, day, sentence, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, legend, loadingLine, onTile, pageHead, readTokens, when, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { card, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { panelOf } from "../chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
-import { bucketOf, lastPeriod, loadSpeed, trendOn, usable, xLabel } from "./speed.js";
+import { bucketOf, lastPeriod, loadSpeed, trendOn, usable } from "./speed.js";
 
 export const STAGES = [
   ["lead", "Lead Time", "From filing to the last land."],
@@ -19,38 +20,30 @@ const stageTile = ([key, name], d, day, on) => {
   return statCard({ k: name, v: none ? "–" : dur(c.p50), v2: none ? "–" : dur(c.p90), q: ["p50", "p90"], trend: tr, key, on });
 };
 
-const axis = { axisLabel: { formatter: (v) => dur(v) } };
+/** The line a Jobs chart shows when the window holds no time for the stage. */
+const NONE = "No time to plot in this window.";
 
-/** The p50 and p90 of a stage by bucket, two areas; a bucket with no time is 0. The p90 is drawn first, so the p50 sits on top. */
-export const trendOption = (d, key, t) => ({
-  animation: false,
-  grid: { left: 48, right: 16, top: 28, bottom: 20 },
-  legend,
-  tooltip: { trigger: "axis", confine: true, valueFormatter: (v) => (v ? dur(v) : "–") },
-  xAxis: { type: "category", boundaryGap: false, data: d.buckets.map((b) => xLabel(b.at, d.window)), axisTick: { show: false }, axisLabel: { hideOverlap: true } },
-  yAxis: { type: "value", min: 0, splitLine: { lineStyle: { opacity: 0.5 } }, ...axis },
-  series: [
-    { type: "line", name: "p90", color: t.hot, symbol: "none", data: d.buckets.map((b) => b.p90?.[key] ?? 0), lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.2 } },
-    { type: "line", name: "p50", color: t.run, symbol: "none", data: d.buckets.map((b) => b[key] ?? 0), lineStyle: { width: 1.5 }, areaStyle: { opacity: 0.35 } },
-  ],
+/** The p50 and p90 of a stage by bucket, as two lines: a bucket with no time is 0. */
+export const trendFrame = (d, key, name, text) => ({
+  measure: { name: `${name}: p50 and p90`, unit: "seconds", agg: "max" },
+  over: { kind: "time", window: d.window },
+  by: { name: bucketOf(d)[0].toUpperCase() + bucketOf(d).slice(1), keys: [{ key: "p90", name: "p90", color: "hot" }, { key: "p50", name: "p50", color: "run" }] },
+  rows: d.buckets.map((b) => ({ at: b.at, p90: b.p90?.[key] ?? 0, p50: b[key] ?? 0 })),
+  // The p50 is not a part of the p90, so the panel draws two lines, not stacked areas.
+  form: "lines",
+  note: text,
+  empty: NONE,
 });
 
-/**
- * One dot per issue with a time for the stage and a filing time, coloured by outcome. The time is on the horizontal log
- * axis in base 60, so the ticks fall on 1s, 1m and 1h; it starts at 1m unless a time is under a minute. The axis ends at
- * half again the longest time. The vertical axis is the filing time, newest at the top. A dot's `href` is its issue.
- */
-export const stripOption = (d, key, t) => ({
-  animation: false,
-  grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
-  legend,
-  tooltip: { confine: true, formatter: (p) => `${esc(p.data.id)}: ${esc(dur(p.value[0]))}, filed ${esc(when(p.value[1]))}` },
-  xAxis: { type: "log", logBase: 60, min: (v) => (v.min >= 60 ? 60 : 1), max: (v) => v.max * 1.5, axisLabel: { formatter: (v) => dur(v), hideOverlap: true } },
-  yAxis: { type: "time", axisLabel: { formatter: (v) => (d.window === "week" || d.window === "month" ? xLabel(v, d.window) : `${day(v)} ${xLabel(v, d.window)}`), hideOverlap: true } },
-  series: [["landed", t.done], ["unlanded", t.need]].map(([outcome, color]) => ({
-    type: "scatter", name: outcome, color, symbolSize: 9,
-    data: (d.times ?? []).filter((i) => i.outcome === outcome && i[key] > 0 && i.filed != null).map((i) => ({ value: [i[key], i.filed], id: i.id, href: i.href })),
-  })),
+/** One point per issue with a time for the stage and a filing time, in filing order, coloured by outcome; a point's `href` is its issue. */
+export const stripFrame = (d, key, name) => ({
+  measure: { name: `${name}: Time per Issue`, unit: "seconds", agg: "max" },
+  over: { kind: "time", window: d.window },
+  by: { keys: [{ key: "landed", name: "landed", color: "done" }, { key: "unlanded", name: "unlanded", color: "need" }] },
+  rows: (d.times ?? []).filter((i) => ["landed", "unlanded"].includes(i.outcome) && i[key] > 0 && i.filed != null).sort((a, b) => a.filed - b.filed).map((i) => ({ at: i.filed, name: i.id, href: i.href, [i.outcome]: i[key] })),
+  form: "points",
+  note: "One point per issue, by outcome: its filing time across, its time up.",
+  empty: NONE,
 });
 
 /**
@@ -65,24 +58,24 @@ export function slowest(d, key) {
     .sort((a, b) => order(a.k) - order(b.k) || a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 
-/** The slowest rows as bars, one series per stage so each stage has its colour. A bar or label click opens the issue. */
-export const slowestOption = (d, key) => {
+/** The slowest rows as bars, one key per stage so each stage keeps its colour; a row links to its issue. */
+export const slowestFrame = (d, key) => {
   const top = slowest(d, key), parts = PARTS.filter(([k]) => top.some((r) => r.k === k));
   return {
-    animation: false,
-    grid: { left: 8, right: 28, top: 28, bottom: 24, containLabel: true },
-    legend,
-    tooltip: { trigger: "item", confine: true, formatter: (p) => `${esc(p.name)}: ${esc(dur(p.value))}` },
-    xAxis: { type: "value", splitNumber: 3, axisLabel: { formatter: (v) => dur(v), hideOverlap: true } },
-    yAxis: { type: "category", inverse: true, data: top.map((r) => r.label), axisTick: { show: false }, axisLabel: { interval: 0 }, triggerEvent: true },
-    series: parts.map(([k, name]) => ({ type: "bar", stack: "one", name, barMaxWidth: 20, cursor: "pointer", data: top.map((r) => (r.k === k ? { value: r.secs, href: r.href } : null)) })),
+    measure: { name: "Slowest 10", unit: "seconds", agg: "max" },
+    over: { kind: "category" },
+    by: { keys: parts.map(([k, name]) => ({ key: k, name })) },
+    rows: top.map((r) => ({ name: r.label, href: r.href, [r.k]: r.secs })),
+    form: "stacked",
+    note: (key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage.") + " Click one to open it.",
+    empty: NONE,
   };
 };
 
-const label = (d, key, name, what) => {
-  const times = (d.times ?? []).filter((i) => i[key] > 0);
-  return `${name} ${what}: ${times.length} issues in the ${lastPeriod(d)}` + (times.length ? `, from ${dur(Math.min(...times.map((i) => i[key])))} to ${dur(Math.max(...times.map((i) => i[key])))}` : "");
-};
+/** Each Jobs chart panel: its key, and its frame from the answer and the stage. */
+export const FRAMES = { trend: trendFrame, strip: stripFrame, slowest: slowestFrame };
+/** The key of a Jobs chart panel: its frame, its kept form and its kept hidden series are its own. */
+export const chartKey = (k) => `factory/jobs/${k}`;
 
 const table = (labels, num, rows) => !rows.length ? empty("No row to show.") : pagedTable(heads(labels, num), rows.map(([h, ...cells]) => `<tr><td class="wide">${esc(h)}</td>${cells.map((c) => `<td class="num">${esc(c)}</td>`).join("")}</tr>`));
 
@@ -90,13 +83,9 @@ const table = (labels, num, rows) => !rows.length ? empty("No row to show.") : p
 export function renderFactoryJobs(d, day, stage = "lead", jobs = null, f = {}) {
   const [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
   const scope = renderScope(jobs ?? [], { ...f, window: f.window ?? (f.days ? undefined : d.window) });
-  const plot = (has, k, text) => (has ? chartBox(k, text) : empty("No time to plot in this window."));
-  const timed = (d.times ?? []).filter((i) => i[key] > 0);
   return `<div class="page sp" id="perf">${pageHead("Jobs", { count: lastPeriod(d), aside: scope })}` +
     tiles("Stages", STAGES.map((s) => stageTile(s, d, day, s[0] === key)).join("")) +
-    `<div class="trio">${card(`${name}: p50 and p90 by ${bucketOf(d)[0].toUpperCase()}${bucketOf(d).slice(1)}`, `<p>${esc(text)}</p>${plot(d.buckets.some((b) => b[key] > 0 || b.p90?.[key] > 0), "trend", label(d, key, sentence(name), "p50 and p90 trend"))}`, { label: `${sentence(name)}: p50 and p90 by ${bucketOf(d)}` })}` +
-    card(`${name}: Time per Issue`, `<p>One dot per issue, by outcome: its time across, its filing time up.</p>${plot(timed.some((i) => i.filed != null), "strip", label(d, key, sentence(name), "time per issue"))}`, { label: `${sentence(name)}: time per issue` }) +
-    card("Slowest 10", `<p>${key === "lead" ? "The slowest stages of any issue; an issue with two slow stages has two rows." : "The issues with the slowest stage."} Click one to open it.</p>${plot(timed.length, "slowest", label(d, key, sentence(name), "slowest 10"))}`) + `</div>` +
+    `<div class="trio">${panelOf(chartKey("trend"), trendFrame(d, key, name, text))}${panelOf(chartKey("strip"), stripFrame(d, key, name))}${panelOf(chartKey("slowest"), slowestFrame(d, key))}</div>` +
     `<div class="pair">${card("Checks", table(["Check", "Jobs", "p50", "p90"], ["Jobs", "p50", "p90"], d.checks.map((x) => [x.name, x.count, dur(x.p50), dur(x.p90)])))}` +
     card("Build Time by Model", table(["Model", "Jobs", "p50"], ["Jobs", "p50"], d.models.map((m) => [m.model === "unset" ? "not recorded" : m.model, m.count, dur(m.p50)])), { label: "Build time by model" }) + `</div>` +
     card("Jobs", searchBox("jobs-search", f.q, "Search ids and titles") + renderFilters(f) + `<div id="jobs-table">${jobs ? renderJobsTable(jobs, f) : loadingLine("jobs")}</div>`) + `</div>`;
@@ -108,7 +97,6 @@ export const redirect = (hash) => {
   return path === "#/status/performance" ? "#/factory/jobs" : path === "#/jobs" ? `#/factory/jobs${query ? `?${query}` : ""}` : null;
 };
 
-let drawn = [];
 let listed = null; // { url, jobs }: /api/jobs for the window shown
 const jobsNow = (q) => (listed?.url === listUrl(null, q) ? listed.jobs : null);
 
@@ -126,7 +114,7 @@ export const view = {
     keepProject(projectNow());
     const draw = (k) => renderFactoryJobs(d, usable("day"), k, jobsNow(hashQuery()), Object.fromEntries(hashQuery()));
     const wire = () => {
-      const stage = hashQuery().get("stage") ?? "lead", [key] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
+      const stage = hashQuery().get("stage") ?? "lead", [key, name, text] = STAGES.find((s) => s[0] === stage) ?? STAGES[0];
       onTile(root.querySelector("#perf"), (k) => {
         setQuery({ stage: k });
         root.innerHTML = draw(k);
@@ -134,14 +122,11 @@ export const view = {
         root.querySelector(`button[data-tile="${k}"]`)?.focus();
       });
       wireScope(root);
-      for (const c of drawn) c.dispose();
-      drawn = [];
-      if (!globalThis.echarts) return;
-      const t = readTokens(), opts = { trend: trendOption(d, key, t), strip: stripOption(d, key, t), slowest: slowestOption(d, key) };
-      const made = mountCharts(root, opts), top = slowest(d, key);
-      made.get("strip")?.on("click", (p) => { if (p.data?.href) location.hash = p.data.href; });
-      made.get("slowest")?.on("click", (p) => { const h = p.data?.href ?? (p.componentType === "yAxis" ? top.find((r) => r.label === p.value)?.href : null); if (h) location.hash = h; });
-      drawn.push(...made.values());
+      // Each panel draws the frame of the stage shown; its form and hidden series are its own.
+      for (const [k, fr] of Object.entries(FRAMES)) {
+        const el = root.querySelector(`aleph-chart[key="${chartKey(k)}"]`);
+        if (el) el.frame = fr(d, key, name, text);
+      }
     };
     wire();
     wireJobs(root, () => jobsNow(hashQuery()));
