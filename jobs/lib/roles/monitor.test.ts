@@ -91,13 +91,13 @@ test("the Status panel and the report line show the newest report", async () => 
   expect(p.findings).toHaveLength(2);
   // The rows are JSON values, from a report with known rows.
   const kept: Report = JSON.parse(readFileSync(reportFile("2026-10-20"), "utf8"));
-  const win = (runs: number, items: number, cost: number, held: number, hours: number) => ({
-    ...kept.table.today, stages: [{ stage: "build", runs, items, unusable: 1, cost, minutes: null }], holds: [{ kind: "stops", records: 2, goals: held, hours }],
+  const win = (runs: number, items: number, cost: number, held: number, hours: number, p90: number) => ({
+    ...kept.table.today, stages: [{ stage: "build", runs, items, unusable: 1, cost, minutes: null, p90 }], holds: [{ kind: "stops", records: 2, goals: held, hours }],
   });
-  kept.table.today = win(6, 3, 3, 2, 5); kept.table.trailing = win(14, 7, 14, 7, 14);
+  kept.table.today = win(6, 3, 3, 2, 5, 90); kept.table.trailing = win(14, 7, 14, 7, 14, 42);
   writeFileSync(reportFile("2026-10-20"), JSON.stringify(kept));
   const q = monitorPanel()!;
-  expect(q.stages).toEqual([{ stage: "build", costPerItem: { day: 1, trailing: 2 }, runsPerItem: { day: 2, trailing: 2 }, unusable: { day: 1 / 6, trailing: 1 / 14 } }]);
+  expect(q.stages).toEqual([{ stage: "build", costPerItem: { day: 1, trailing: 2 }, runsPerItem: { day: 2, trailing: 2 }, p90: { day: 90, trailing: 42 }, unusable: { day: 1 / 6, trailing: 1 / 14 } }]);
   expect(q.holds).toEqual([{ kind: "stops", goals: { day: 2, trailing: 1 }, hours: { day: 5, trailing: 2 } }]);
   expect(reportLine(now.getTime())).toBe("health: the monitor of 2026-10-20 names 2 things that look off; first: Build runs with no usable result rose to 38% from 20%.");
   // A report older than 3 days is no longer said.

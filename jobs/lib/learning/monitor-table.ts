@@ -52,6 +52,8 @@ export interface StageRow {
   cost: number | null;
   /** The median minutes from start to end; null when no run records both. */
   minutes: number | null;
+  /** The 90th-percentile seconds from start to end; null when no run records both. */
+  p90: number | null;
 }
 
 export interface HoldRow { kind: string; records: number; goals: number; hours: number }
@@ -111,6 +113,9 @@ const median = (xs: number[]): number | null => {
   return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2;
 };
 
+/** The nearest-rank 90th percentile of `xs`, as `pct` in ui/api/speed.ts gives it; null for none. */
+const p90 = (xs: number[]): number | null => (xs.length ? [...xs].sort((a, b) => a - b)[Math.ceil(0.9 * xs.length) - 1] : null);
+
 const inside = (iso: string | undefined, from: number, to: number): boolean => {
   const t = Date.parse(iso ?? "");
   return t >= from && t < to;
@@ -123,9 +128,9 @@ function unusable(e: Entry): boolean {
 }
 
 function stageRows(src: Sources, from: number, to: number): StageRow[] {
-  const by = new Map<string, { runs: number; items: Set<string>; unusable: number | null; cost: number | null; minutes: number[] }>();
+  const by = new Map<string, { runs: number; items: Set<string>; unusable: number | null; cost: number | null; secs: number[] }>();
   const row = (stage: string, known: boolean) => {
-    if (!by.has(stage)) by.set(stage, { runs: 0, items: new Set(), unusable: known ? 0 : null, cost: null, minutes: [] });
+    if (!by.has(stage)) by.set(stage, { runs: 0, items: new Set(), unusable: known ? 0 : null, cost: null, secs: [] });
     return by.get(stage)!;
   };
   for (const e of src.runs) {
@@ -138,7 +143,7 @@ function stageRows(src: Sources, from: number, to: number): StageRow[] {
     if (unusable(e)) s.unusable!++;
     if (typeof r.cost === "number") s.cost = (s.cost ?? 0) + r.cost;
     const took = Date.parse(r.ended ?? "") - Date.parse(r.started);
-    if (took >= 0) s.minutes.push(took / 60_000);
+    if (took >= 0) s.secs.push(took / 1000);
     // The reviewer of a build: its call is on the build's state. `failed` means it ended with no verdict.
     if (r.kind === "build" && r.review && r.review.call !== "running") {
       const v = row("review", true);
@@ -155,8 +160,8 @@ function stageRows(src: Sources, from: number, to: number): StageRow[] {
     s.cost = (s.cost ?? 0) + c.cost;
   }
   return STAGES.filter((k) => by.has(k)).map((stage) => {
-    const s = by.get(stage)!;
-    return { stage, runs: s.runs, items: s.items.size, unusable: s.unusable, cost: s.cost, minutes: median(s.minutes) };
+    const s = by.get(stage)!, med = median(s.secs);
+    return { stage, runs: s.runs, items: s.items.size, unusable: s.unusable, cost: s.cost, minutes: med === null ? null : med / 60, p90: p90(s.secs) };
   });
 }
 
@@ -353,7 +358,7 @@ export function renderTable(t: Table): string {
   for (const stage of STAGES) {
     const a = d.stages.find((s) => s.stage === stage), b = w.stages.find((s) => s.stage === stage);
     if (!a && !b) continue;
-    const z: StageRow = { stage, runs: 0, items: 0, unusable: null, cost: null, minutes: null };
+    const z: StageRow = { stage, runs: 0, items: 0, unusable: null, cost: null, minutes: null, p90: null };
     const x = a ?? z, y = b ?? z;
     const rate = (s: StageRow) => (s.unusable === null ? "-" : pct(s.unusable, s.runs));
     out.push(`| ${stage} | ${cell(String(x.runs), per(y.runs))} | ${cell(x.items ? num(x.runs / x.items) : "-", y.items ? num(y.runs / y.items) : "-")} | ${x.unusable === null ? "-" : `${x.unusable}, ${cell(rate(x), rate(y))}`} | ${cell(money(x.cost), y.cost === null ? "-" : money(y.cost / 7))} | ${cell(x.cost !== null && x.items ? money(x.cost / x.items) : "-", y.cost !== null && y.items ? money(y.cost / y.items) : "-")} | ${cell(num(x.minutes), num(y.minutes))} |`);
@@ -417,7 +422,7 @@ export interface Pair { day: number | null; trailing: number | null }
 /** What the Status panel shows of the newest report. Rates are fractions; a count in the trailing value is the mean per day. */
 export function monitorPanel(): {
   day: string; findings: string[]; error?: string;
-  stages: { stage: string; costPerItem: Pair; runsPerItem: Pair; unusable: Pair }[];
+  stages: { stage: string; costPerItem: Pair; runsPerItem: Pair; p90: Pair; unusable: Pair }[];
   holds: { kind: string; goals: Pair; hours: Pair }[];
 } | null {
   const r = latestReport();
@@ -425,13 +430,13 @@ export function monitorPanel(): {
   const d = r.table.today, w = r.table.trailing;
   const ratio = (a: number | null, b: number) => (a !== null && b ? a / b : null);
   const stage = (s: StageRow | undefined) => ({
-    costPerItem: ratio(s?.cost ?? null, s?.items ?? 0), runsPerItem: ratio(s?.runs ?? 0, s?.items ?? 0), unusable: ratio(s?.unusable ?? null, s?.runs ?? 0),
+    costPerItem: ratio(s?.cost ?? null, s?.items ?? 0), runsPerItem: ratio(s?.runs ?? 0, s?.items ?? 0), p90: s?.p90 ?? null, unusable: ratio(s?.unusable ?? null, s?.runs ?? 0),
   });
   const stages = STAGES.flatMap((name) => {
     const a = d.stages.find((s) => s.stage === name), b = w.stages.find((s) => s.stage === name);
     if (!a && !b) return [];
     const x = stage(a), y = stage(b);
-    return [{ stage: name, costPerItem: { day: x.costPerItem, trailing: y.costPerItem }, runsPerItem: { day: x.runsPerItem, trailing: y.runsPerItem }, unusable: { day: x.unusable, trailing: y.unusable } }];
+    return [{ stage: name, costPerItem: { day: x.costPerItem, trailing: y.costPerItem }, runsPerItem: { day: x.runsPerItem, trailing: y.runsPerItem }, p90: { day: x.p90, trailing: y.p90 }, unusable: { day: x.unusable, trailing: y.unusable } }];
   });
   const kinds = [...new Set([...d.holds.map((h) => h.kind), ...w.holds.map((h) => h.kind)])];
   const holds = kinds.map((kind) => {

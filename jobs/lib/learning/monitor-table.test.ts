@@ -36,9 +36,14 @@ describe("stages", () => {
   const t = measure({ ...empty, runs, specChecks: [{ at: at(DAY, 7), name: "p-1", cost: 0.5 }, { at: at(DAY, 7, 5), name: "p-1", cost: 0.5 }] }, DAY, Date.parse(at(DAY, 23)));
   const row = (stage: string, w = t.today) => w.stages.find((s) => s.stage === stage);
 
-  test("runs per item, runs with no usable result, cost and the median time; a live run is left out", () => {
-    expect(row("build")).toEqual({ stage: "build", runs: 3, items: 2, unusable: 1, cost: 6, minutes: 20 });
-    expect(row("build", t.trailing)).toEqual({ stage: "build", runs: 2, items: 1, unusable: 1, cost: 14, minutes: 50 });
+  test("runs per item, runs with no usable result, cost, the median time and the p90; a live run is left out", () => {
+    expect(row("build")).toEqual({ stage: "build", runs: 3, items: 2, unusable: 1, cost: 6, minutes: 20, p90: 1800 });
+    expect(row("build", t.trailing)).toEqual({ stage: "build", runs: 2, items: 1, unusable: 1, cost: 14, minutes: 50, p90: 3600 });
+  });
+
+  test("the p90 is the stage's own slowest runs, and a stage with no recorded end has none", () => {
+    expect(row("firefighter")).toMatchObject({ runs: 2, p90: 120 });
+    expect(row("review")).toMatchObject({ runs: 2, p90: null });
   });
 
   test("a role run that states a cause has no usable result; a run on no item is its own item", () => {
@@ -48,7 +53,7 @@ describe("stages", () => {
 
   test("the reviewer is a stage of its own, and its error is no usable result; a spec check has only its cost", () => {
     expect(row("review")).toMatchObject({ runs: 2, items: 1, unusable: 1, cost: null });
-    expect(row("spec-check")).toEqual({ stage: "spec-check", runs: 2, items: 1, unusable: null, cost: 1, minutes: null });
+    expect(row("spec-check")).toEqual({ stage: "spec-check", runs: 2, items: 1, unusable: null, cost: 1, minutes: null, p90: null });
   });
 
   test("the table puts the day's value first and the trailing mean per day in brackets", () => {
