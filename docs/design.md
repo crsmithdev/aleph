@@ -240,7 +240,7 @@ Columns of the main tables:
 | Hooks | Last Call, Hook, Calls (num), Errors (num) | `dataTable()` (`ui/views/sessions.js:101`) |
 | Denials | Denied, Reason | `dataTable()` (`ui/views/sessions.js:104`) |
 | Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` (`ui/views/efficiency.js:42`), `pagedTable()` (`ui/views/efficiency.js:45`) |
-| Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:66`) |
+| Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` (`ui/views/factory-agents.js:72`) |
 | Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` (`ui/views/jobs.js:192`) |
 | Commits | Committed, Commit, Subject, Part | `pagedTable()` (`ui/views/issues.js:622`) |
 

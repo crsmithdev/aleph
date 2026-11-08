@@ -183,6 +183,22 @@ test("an outcome joins the tier row of its role and model; non-tier roles stay t
   expect(row(h, "Worker")).toMatch(/<select/);
 });
 
+test("the Worker row adds up the worker outcomes and the Reviewer row shows its own pass and fail", () => {
+  const o = (role: string, model: string, extra: any) => ({ role, model, runs: 10, succeeded: 8, failed: 2, stuck: 0, rate: 0.8, p50: 60, cost: 1.5, baseline: 0.7, ...extra });
+  const outcomes = [
+    o("worker", "haiku", { runs: 100, succeeded: 80, failed: 20, cost: 20, firstPass: 30, built: 60, reviewPass: 0.5 }),
+    o("worker", "gpt-oss-20b", { runs: 50, succeeded: 40, failed: 10, cost: 10, firstPass: 10, built: 30, reviewPass: 1 }),
+    o("reviewer", "unset", { runs: 90, succeeded: 60, failed: 30, rate: 0.6667, pass: 60, fail: 30 }),
+  ];
+  const h = renderFactoryAgents(S, { ...D, agents: { ...agents, outcomes } }, "live", "week", { tiers: tiers("haiku", "gpt-oss-20b"), local: "up", offers: OFFERS, down: [] });
+  const w = row(h, "Worker");
+  expect(w).toContain('<td class="num">150</td><td class="num">80% </td>');
+  expect(w).toContain('<td class="num">$30.00</td><td class="num">40</td><td class="num">67%</td>');
+  expect(w).toContain('href="#/factory/jobs?role=worker&condition=failed"');
+  expect(row(h, "Reviewer")).toContain('<td class="num">90</td><td class="num warn">67% ');
+  expect(row(h, "Reviewer")).toContain('<td class="num">60</td><td class="num">30</td>');
+});
+
 const th = (h: string) => [...h.matchAll(/<th( class="num")?>([^<]+)</g)].map((m) => [m[2], !!m[1]]);
 const one = { role: "worker", model: "haiku", runs: 1234, succeeded: 1, failed: 0, stuck: 0, rate: 1, p50: 60, cost: 1.5, baseline: 0.7 };
 

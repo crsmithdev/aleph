@@ -34,10 +34,10 @@ function roles(a, m) {
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const cell = (v) => `<td class="num">${v == null ? "–" : count(v)}</td>`;
   const outs = a.outcomes ?? [];
-  // The outcome row for a config row: the one of its role and current model, when no other config row claims it.
+  // The outcome row for a config row: the one of its role and current model, when no other config row claims it. A reviewer records no model, so its row is the one of its role.
   const claims = [];
   const find = (role, model) => {
-    const o = outs.find((x) => x.role === role && shortModel(x.model) === shortModel(model));
+    const o = outs.find((x) => x.role === role && (role === "reviewer" || shortModel(x.model) === shortModel(model)));
     if (o) claims.push(o);
     return o;
   };
@@ -47,12 +47,18 @@ function roles(a, m) {
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
     return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
   };
+  /** The worker outcome rows as one, for the one Worker row: the counts add, the rate is its succeeded over its ended runs, and the reviewer pass share takes the rows' builds as its weights (a row carries no verdict count). */
+  const allWorkers = () => {
+    const rs = outs.filter((o) => o.role === "worker");
+    const n = (k) => rs.reduce((x, o) => x + (o[k] ?? 0), 0), ended = n("succeeded") + n("failed") + n("stuck"), built = n("built");
+    return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost"), firstPass: n("firstPass"), reviewPass: built ? rs.reduce((x, o) => x + (o.reviewPass ?? 0) * (o.built ?? 0), 0) / built : null } : null;
+  };
   const workerRow = () => {
     const low = m.tiers["worker-low"], med = m.tiers["worker-medium"];
     const offersLow = m.offers["worker-low"] ?? [], offersMed = m.offers["worker-medium"] ?? [];
     const sel = (tier, t, offers, label) => `<span class="worker-tier"><input type="checkbox" data-tier="${esc(tier)}" aria-label="${label} enabled"${t?.enabled ? " checked" : ""}> <span class="quiet">${label}:</span> <select data-tier="${esc(tier)}" aria-label="${label} model">` +
       offers.map((v) => `<option value="${esc(v)}"${t?.model === v ? " selected" : ""}${m.down.includes(v) ? " disabled" : ""}>${esc(shortModel(v))}</option>`).join("") + `</select></span>`;
-    return `<tr><td>Worker</td><td>${sel("worker-low", low, offersLow, "Worker low")} ${sel("worker-medium", med, offersMed, "Worker medium")}</td>${stats(null)}</tr>`;
+    return `<tr><td>Worker</td><td>${sel("worker-low", low, offersLow, "Worker low")} ${sel("worker-medium", med, offersMed, "Worker medium")}</td>${stats(allWorkers())}</tr>`;
   };
   const pick = ([tier, name]) => {
     const t = m.tiers[tier];
