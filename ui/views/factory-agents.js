@@ -4,15 +4,27 @@ import { panelOf } from "../chart.js";
 import { lastPeriod, loadSpeed, usable, usageCard } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
-const rateCard = (k, v, base, note) => statCard({ k, v: share(v), note, trend: cardTrend(v, base, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(base)}` }) });
+/** The OpenRouter spend period of a window: its UTC day, week or month; an hour reads the day. */
+const SPEND = { hour: ["day", "today"], day: ["day", "today"], week: ["week", "this week"], month: ["month", "this month"] };
 
-function scorecard(s, a, w) {
+/** The Spend tile: what OpenRouter charged, read from OpenRouter, for the window's UTC period. */
+function spendCard(m, win) {
+  const [k, said] = SPEND[win] ?? SPEND.week, v = m?.spend?.[k];
+  return statCard({ k: "Spend", v: v == null ? "–" : money(v), note: v == null ? "OpenRouter spend unknown" : `OpenRouter, ${said} (UTC)` });
+}
+
+/** The Backends tile: a light for the local server and one for OpenRouter. */
+function backendsCard(m) {
+  const light = (name, up) => `<span class="light"><span class="event-dot ${up == null ? "" : up ? "fine" : "alert"}"></span>${esc(name)}: ${up == null ? "–" : up ? "up" : "down"}</span>`;
+  const local = m ? m.local === "up" : null, router = m ? !m.down.includes("deepseek-v4.1-flash") : null;
+  return `<div class="tile sc"><span class="r1"><span class="k">Backends</span></span><span class="lights">${light("Local server", local)}${light("OpenRouter", router)}</span></div>`;
+}
+
+function scorecard(s, m, win) {
   const f = s.factory;
-  return usageCard(s) +
+  return usageCard(s) + spendCard(m, win) +
     statCard({ k: "Worker slots", v: count(f.liveRuns ?? 0), v2: f.liveCap == null ? "–" : count(f.liveCap), q: ["in use", "cap"] }) +
-    rateCard("Success rate", a?.rates?.success, a?.rates?.baseline, "ended jobs, all roles") +
-    rateCard("Worker first pass", a?.rates?.firstPass, null, "landed builds, no fix round") +
-    rateCard("Local share", a?.rates?.local, null, "jobs on gpt-oss-20b");
+    backendsCard(m);
 }
 
 /** A success rate under this line (0 to 1) shows in the warn tone. */
@@ -30,7 +42,7 @@ const TIERS = {
 };
 
 function roles(a, m) {
-  const num = ["Jobs", "Success", "p50", "Cost", "First Pass", "Reviewer Pass", "Pass", "Fail"];
+  const num = ["Jobs", "Success", "p50", "Cost"];
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const cell = (v) => `<td class="num">${v == null ? "–" : count(v)}</td>`;
   const outs = a.outcomes ?? [];
@@ -45,13 +57,13 @@ function roles(a, m) {
     if (!o) return `${cell(null).repeat(num.length)}<td>–</td>`;
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
     const warn = o.rate != null && o.rate < WARN_RATE ? " warn" : "";
-    return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td>${cell(o.firstPass)}<td class="num">${esc(share(o.reviewPass))}</td>${cell(o.pass)}${cell(o.fail)}<td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
+    return `${cell(o.runs)}<td class="num${warn}">${esc(share(o.rate))} ${trend}</td><td class="num">${esc(dur(o.p50))}</td><td class="num">${esc(money(o.cost))}</td><td><a href="#/factory/jobs?role=${esc(o.role)}&condition=failed">Failed jobs</a></td>`;
   };
-  /** The worker outcome rows as one, for the one Worker row: the counts add, the rate is its succeeded over its ended runs, and the reviewer pass share takes the rows' builds as its weights (a row carries no verdict count). */
+  /** The worker outcome rows as one, for the one Worker row: the counts add, and the rate is its succeeded over its ended runs. */
   const allWorkers = () => {
     const rs = outs.filter((o) => o.role === "worker");
-    const n = (k) => rs.reduce((x, o) => x + (o[k] ?? 0), 0), ended = n("succeeded") + n("failed") + n("stuck"), built = n("built");
-    return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost"), firstPass: n("firstPass"), reviewPass: built ? rs.reduce((x, o) => x + (o.reviewPass ?? 0) * (o.built ?? 0), 0) / built : null } : null;
+    const n = (k) => rs.reduce((x, o) => x + (o[k] ?? 0), 0), ended = n("succeeded") + n("failed") + n("stuck");
+    return rs.length ? { role: "worker", runs: n("runs"), succeeded: n("succeeded"), failed: n("failed"), stuck: n("stuck"), rate: ended ? n("succeeded") / ended : null, cost: n("cost") } : null;
   };
   const workerRow = () => {
     const low = m.tiers["worker-low"], med = m.tiers["worker-medium"];
@@ -114,9 +126,9 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const scope = scopeBar(projectNow(), win);
-  return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
+  return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
-    card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"} · OpenRouter: ${m.down.includes("deepseek-v4.1-flash") ? "down" : "up"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
+    card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + `</div>`;
 }
 
 /** The old address. */

@@ -1,5 +1,5 @@
-/** The model routes: each tier's enable and model, what each tier offers, and which models' backends are down. */
-import { backendUp, MODELS, OFFERS, readModels, setModel } from "../../jobs/lib/routing/models.ts";
+/** The model routes: each tier's enable and model, what each tier offers, which models' backends are down, and OpenRouter's spend. */
+import { backendUp, MODELS, OFFERS, openRouterSpend, readModels, setModel } from "../../jobs/lib/routing/models.ts";
 import { sameSite, text } from "../http.ts";
 import type { Routes } from "../server.ts";
 
@@ -10,8 +10,8 @@ const downModels = async (): Promise<string[]> => {
   return names.filter((_, i) => !up[i]);
 };
 const body = async () => {
-  const down = await downModels();
-  return { tiers: readModels(), offers: OFFERS, down, local: down.includes("gpt-oss-20b") ? "down" : "up" };
+  const [down, spend] = await Promise.all([downModels(), openRouterSpend()]);
+  return { tiers: readModels(), offers: OFFERS, down, local: down.includes("gpt-oss-20b") ? "down" : "up", spend };
 };
 
 export const routes: Routes = {

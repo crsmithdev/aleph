@@ -59,7 +59,8 @@ export function option(f, form, t, hidden = []) {
   const item = (r, v) => (r.href && v != null ? { value: v, href: r.href } : v);
   // A points form draws a dot only where the row has the key, so a row is one dot, not one dot per key.
   const none = f.over.kind === "time" && form === "points" ? null : 0;
-  const data = (k) => f.rows.map((r, i) => item(r, share ? (sums[i] ? ((r[k.key] ?? 0) / sums[i]) * 100 : 0) : (r[k.key] ?? none)));
+  // A share point with nothing to divide is a gap, not 0%.
+  const data = (k) => f.rows.map((r, i) => item(r, share ? (sums[i] ? ((r[k.key] ?? 0) / sums[i]) * 100 : null) : (r[k.key] ?? none)));
   const value = { type: "value", min: 0, ...(share ? { max: 100 } : {}), minInterval: f.measure.unit === "count" && !share ? 1 : 0, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: fmt } };
   const base = (k) => ({ name: k.name, data: data(k), ...(k.color ? { color: t[k.color] } : {}) });
   const o = { animation: false, legend: { ...legend, selected: Object.fromEntries(hidden.map((n) => [n, false])) }, tooltip: { trigger: "axis", confine: true, valueFormatter: fmt } };

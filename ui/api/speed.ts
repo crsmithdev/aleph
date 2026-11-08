@@ -358,7 +358,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["firefighter", "Firefighter", "firefighter"], ["director", "Director", "director"], ["monitor", "Monitor", "monitor"]] as const;
+const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["director", "Director", "director"], ["monitor", "Monitor", "monitor"]] as const;
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */
@@ -368,7 +368,7 @@ const modelName = (m: string) => /^claude-([a-z]+)-/.exec(m)?.[1] ?? m;
  * The rows of OutcomeRow for the runs that started in `since`..`now`, without `baseline`.
  * What "succeeded" means, from what each role's run records:
  * - Worker (build, older "agent"): the run ends `passed`, `waiting` or `landed`: its checks passed and the reviewer did not send it back. A run that a reviewer or a check sent back is `returned`: that is a fail, not stuck.
- * - Intake, Triage, Planner, Firefighter, Director: the run ends `passed` or `done`: the role applied its route or wrote its answer. These roles set no `failed`.
+ * - Intake, Triage, Planner, Director: the run ends `passed` or `done`: the role applied its route or wrote its answer. These roles set no `failed`.
  * - Reviewer: it runs inside the build run and records no run, model or cost. Its verdict is read from the build: a succeeded build is a pass; `failed: "review"` (or an older `review.call` of `returned`) is a fail; `review.call` of `passed` is a pass. A reviewer that gave no verdict counts as neither. Its model is not recorded, so its row has the model "unset".
  * Stuck is a run that ended `failed` with no `failed` field, or with the cause `timeout` or `stalled`. Failed is any other end that is not running. A running run counts in `runs` only.
  */

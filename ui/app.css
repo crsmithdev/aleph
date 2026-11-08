@@ -804,6 +804,8 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .event-dot.warning, .event-dot.ask { background: var(--need); }
 .event-dot.fine, .event-dot.done { background: var(--done); }
 .event-dot.run { background: var(--run); }
+.tile .lights { display: flex; flex-direction: column; gap: var(--sp-4); margin-top: var(--sp-4); }
+.tile .light { display: flex; align-items: center; gap: var(--sp-6); white-space: nowrap; }
 .event-body { color: var(--ink); overflow-wrap: anywhere; }
 .event-body.alert, .event-body.error, .event-row.alert .event-body, .event-row.error .event-body { color: var(--stuck); }
 .event-body.warning, .event-body.ask, .event-row.warning .event-body, .event-row.ask .event-body { color: var(--need); }

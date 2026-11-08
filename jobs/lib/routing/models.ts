@@ -82,6 +82,19 @@ export async function backendUp(model: string): Promise<boolean> {
   try { return (await fetch(`${LOCAL_URL}/health`, { signal: AbortSignal.timeout(2000) })).ok; } catch { return false; }
 }
 
+/** What OpenRouter charged this key in USD for the current UTC day, week and month; null with no key or no answer. */
+export async function openRouterSpend(): Promise<{ day: number; week: number; month: number } | null> {
+  const key = openRouterKey();
+  if (!key) return null;
+  try {
+    const r = await fetch(`${OPENROUTER_URL}/v1/key`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(5000) });
+    const d = ((await r.json()) as any)?.data;
+    return typeof d?.usage_daily === "number" ? { day: d.usage_daily, week: d.usage_weekly, month: d.usage_monthly } : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Whether a backend takes a call now: the local server answers /health, OpenRouter answers a one-token call, and
  * Claude's subscription needs no probe. The credit error the factory holds a backend for is a 402, and a refused

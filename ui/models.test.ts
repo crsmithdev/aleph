@@ -12,9 +12,11 @@ const post = (b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" 
 
 beforeAll(async () => {
   base = mkdtempSync(join(tmpdir(), "aleph-ui-models-"));
-  restoreEnv = withEnv({ ALEPH_FACTORY_DIR: base });
-  // The local server's /health answers or not by the flag; every other fetch goes through.
-  globalThis.fetch = ((url: any, init?: any) => String(url).endsWith("/health") ? Promise.resolve(new Response("", { status: healthy ? 200 : 503 })) : realFetch(url, init)) as typeof fetch;
+  restoreEnv = withEnv({ ALEPH_FACTORY_DIR: base, OPENROUTER_API_KEY: "k-test" });
+  // The local server's /health answers or not by the flag, OpenRouter's /v1/key gives a fixed spend; every other fetch goes through.
+  globalThis.fetch = ((url: any, init?: any) => String(url).endsWith("/health") ? Promise.resolve(new Response("", { status: healthy ? 200 : 503 }))
+    : String(url).endsWith("/v1/key") ? Promise.resolve(Response.json({ data: { usage_daily: 1.5, usage_weekly: 17.5, usage_monthly: 18 } }))
+    : realFetch(url, init)) as typeof fetch;
   ({ at, stop } = await withServer());
 });
 afterAll(() => { globalThis.fetch = realFetch; stop(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
@@ -26,6 +28,7 @@ test("GET /api/models answers each tier with enabled and model plus the local st
   expect(b.local).toBe("up");
   expect(Object.keys(b.tiers)).toEqual(["worker-low", "worker-medium", "merge", "reviewer", "intake", "director", "monitor", "title", "judge"]);
   expect(b.tiers["worker-medium"]).toEqual({ enabled: true, model: "sonnet" });
+  expect(b.spend).toEqual({ day: 1.5, week: 17.5, month: 18 });
 });
 
 test("POST /api/models writes a tier's model or enable to models.json", async () => {
