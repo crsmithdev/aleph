@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import { OFFERS } from "../jobs/lib/routing/models.ts";
 // @ts-ignore plain JS shared with the page
-import { costOption, liveOption, outcomesOption, renderFactoryAgents } from "./views/factory-agents.js";
+import { costFrame, liveFrame, outcomesFrame, renderFactoryAgents } from "./views/factory-agents.js";
+// @ts-ignore plain JS shared with the page
+import { label, option } from "./chart.js";
 // @ts-ignore plain JS shared with the page
 import { pace, usageCard, weekGone } from "./views/speed.js";
 
@@ -79,39 +81,44 @@ const outcomes = [
 ];
 const E: any = { window: "week", buckets, agents: { ...agents, outcomes } };
 
-test("the page has three chart boxes in one row, each with role img and an aria-label", () => {
+test("the page has three chart panels in one row, each with role img and an aria-label from its frame", () => {
   const html = renderFactoryAgents(S, E);
   const row = html.slice(html.indexOf('<div class="trio">'), html.indexOf('id="roles"'));
-  const boxes = [...row.matchAll(/<div class="chartbox" data-chart="(\w+)" role="img" aria-label="([^"]+)"><\/div>/g)];
-  expect(boxes.map((m) => m[1])).toEqual(["live", "outcomes", "cost"]);
-  expect(boxes[1][2]).toBe("Outcomes by role: 15 succeeded, 2 failed, 1 stuck");
-  expect(boxes[2][2]).toBe("Cost by model: opus $3.50, sonnet $0.25");
-  expect(html.match(/class="chartbox"/g)!.length).toBe(3);
+  expect([...row.matchAll(/<aleph-chart key="factory\/agents\/(\w+)">/g)].map((m) => m[1])).toEqual(["live", "outcomes", "cost"]);
+  const labels = [...row.matchAll(/<div class="chartbox" role="img" aria-label="([^"]+)"><\/div>/g)].map((m) => m[1]);
+  expect(labels).toEqual(["Agents Live by Role: Worker peak 1, Triage peak 0.5", "Outcomes by Role: Succeeded 15, Failed 2, Stuck 1", "Cost by Model: opus $3.50, sonnet $0.25"]);
+  for (const t of ["Agents Live by Role", "Outcomes by Role", "Cost by Model"]) expect(row).toContain(`<h2>${t}</h2>`);
 });
 
-test("a chart with no outcomes or cost shows the empty line in place of its box", () => {
+test("a chart with no outcomes or cost shows the empty line under its title", () => {
   const html = renderFactoryAgents(S, { ...E, buckets: [{ at: buckets[0].at, cost: {} }], agents: { ...agents, outcomes: [] } });
   const row = html.slice(html.indexOf('<div class="trio">'), html.indexOf('id="roles"'));
-  expect(row.match(/data-chart="(\w+)"/g)).toEqual(['data-chart="live"']);
+  expect(row.match(/class="chartbox"/g)!.length).toBe(1);
   expect(row.match(/class="empty"/g)!.length).toBe(2);
   expect(row).toContain("<h2>Cost by Model</h2>");
 });
 
-test("the live option has one stacked series per timed role with the point values", () => {
-  const o = liveOption(E, T);
+test("the live frame has one key per timed role, and a role's colour comes from its place in the fixed role list", () => {
+  const f = liveFrame(E);
+  expect(f.by.keys).toEqual([{ key: "worker", name: "Worker", color: "series-1" }, { key: "triage", name: "Triage", color: "series-2" }]);
+  const o = option(f, "area", T);
   expect(o.series.map((s: any) => [s.name, s.stack, s.color, s.data])).toEqual([["Worker", "all", "#1", [1, 0]], ["Triage", "all", "#2", [0.5, 0]]]);
+  const late = liveFrame({ ...E, agents: { ...agents, roles: agents.roles.map((r) => (r.key === "worker" ? { ...r, hours: null } : r)) } });
+  expect(late.by.keys).toEqual([{ key: "triage", name: "Triage", color: "series-2" }]);
 });
 
-test("the outcomes option has horizontal stacked bars of succeeded, failed and stuck, summed per role", () => {
-  const o = outcomesOption(E, T);
+test("the outcomes frame sums succeeded, failed and stuck per role, as horizontal stacked bars", () => {
+  const o = option(outcomesFrame(E), "stacked", T);
   expect(o.yAxis.type).toBe("category");
   expect(o.yAxis.data).toEqual(["Worker", "Triage"]);
-  expect(o.series.map((s: any) => [s.name, s.stack, s.data])).toEqual([["Succeeded", "all", [10, 5]], ["Failed", "all", [2, 0]], ["Stuck", "all", [1, 0]]]);
+  expect(o.series.map((s: any) => [s.name, s.stack, s.color, s.data])).toEqual([["Succeeded", "all", "#d", [10, 5]], ["Failed", "all", "#n", [2, 0]], ["Stuck", "all", "#s", [1, 0]]]);
 });
 
-test("the cost option has one stacked series per model with the bucket costs", () => {
-  const o = costOption(E);
-  expect(o.series.map((s: any) => [s.name, s.stack, s.data])).toEqual([["opus", "all", [1.5, 2]], ["sonnet", "all", [0.25, 0]]]);
+test("the cost frame has one key per model with the bucket costs, and its axis goes through money()", () => {
+  const o = option(costFrame(E), "columns", T);
+  expect(o.series.map((s: any) => [s.name, s.type, s.stack, s.data])).toEqual([["opus", "bar", "all", [1.5, 2]], ["sonnet", "bar", "all", [0.25, 0]]]);
+  expect(o.yAxis.axisLabel.formatter(1.5)).toBe("$1.50");
+  expect(label(costFrame(E))).toBe("Cost by Model: opus $3.50, sonnet $0.25");
 });
 
 test("the title is the sidebar name, whatever the data", () => {
@@ -211,18 +218,6 @@ test("an empty Roles table shows the empty line", () => {
 
 test("a failed load shows the error state", () => {
   expect(renderFactoryAgents(S, { error: "no data" })).toContain('<div class="error" role="alert"><p>no data</p>');
-});
-
-test("the chart cards are in Title Case and keep their aria labels", () => {
-  const html = renderFactoryAgents(S, E);
-  for (const [t, l] of [["Agents Live by Role", "Agents live by role"], ["Outcomes by Role", "Outcomes by role"], ["Cost by Model", "Cost by model"]]) {
-    expect(html).toContain(`<h2>${t}</h2>`);
-    expect(html).toContain(`aria-label="${l}"`);
-  }
-});
-
-test("the cost axis labels go through money()", () => {
-  expect(costOption(E).yAxis.axisLabel.formatter(1.5)).toBe("$1.50");
 });
 
 test("Worker slots shows a dash for a missing cap, and the Usage card is the Status one", () => {

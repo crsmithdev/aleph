@@ -1,6 +1,7 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { postJson, barsOption, card, cardTrend, chartBox, mountCharts, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, legend, loadingLine, money, pageHead, pct, projectNow, readTokens, scopeBar, shortModel, stackedAreaOption, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
-import { lastPeriod, loadSpeed, usable, usageCard, xLabel } from "./speed.js";
+import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, kept, loadingLine, money, pageHead, pct, projectNow, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { formOf, panel } from "../chart.js";
+import { lastPeriod, loadSpeed, usable, usageCard } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
 const rateCard = (k, v, base, note) => statCard({ k, v: share(v), note, trend: cardTrend(v, base, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(base)}` }) });
@@ -65,62 +66,52 @@ function roles(a, m) {
   return rows ? dataTable(heads(["Role", "Model", ...num, ""], num), rows) : empty("No agent ran in this window.");
 }
 
-const stacked = (o) => ({ ...o, grid: { ...o.grid, top: 28 }, legend, series: o.series.map((s) => ({ ...s, stack: "all" })) });
 const timed = (a) => a.roles.filter((r) => r.hours != null);
+/** The colour of the role at index `i` of the fixed role list, so a role keeps its colour in every window. */
+const ROLE_COLORS = ["series-1", "series-2", "series-3", "series-4", "series-5", "chart-6", "chart-7"];
 
-/** The live chart: one stacked area per timed role, in `--series-1` to `--series-5`. `t` is the page tokens. */
-export function liveOption(d, t) {
-  const o = stackedAreaOption(d.agents.points.map((p) => xLabel(p.at, d.window)), timed(d.agents).map((r) => ({ name: r.name, data: d.agents.points.map((p) => p[r.key] ?? 0) })));
-  o.series.forEach((s, i) => { s.color = t[`series-${i + 1}`]; });
-  return o;
-}
+/** The live frame: agents live per point, by role. */
+export const liveFrame = (d) => ({
+  measure: { name: "Agents Live", unit: "count", agg: "max" },
+  over: { kind: "time", window: d.window },
+  by: { name: "Role", keys: d.agents.roles.map((r, i) => ({ key: r.key, name: r.name, color: ROLE_COLORS[i % ROLE_COLORS.length] })).filter((k) => timed(d.agents).some((r) => r.key === k.key)) },
+  rows: d.agents.points.map((p) => ({ ...p })),
+});
 
-/** The outcomes chart: a stacked horizontal bar per role of succeeded, failed and stuck runs, summed over the models. */
-export function outcomesOption(d, t) {
-  const rows = d.agents.outcomes ?? [], rs = d.agents.roles.filter((r) => rows.some((o) => o.role === r.key));
-  const sum = (r, k) => rows.filter((o) => o.role === r.key).reduce((n, o) => n + (o[k] ?? 0), 0);
+/** The outcomes frame: succeeded, failed and stuck runs per role, summed over the models. */
+export function outcomesFrame(d) {
+  const rows = d.agents.outcomes ?? [], sum = (r, k) => rows.filter((o) => o.role === r.key).reduce((n, o) => n + (o[k] ?? 0), 0);
   return {
-    animation: false,
-    grid: { left: 64, right: 16, top: 28, bottom: 20 },
-    legend,
-    tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
-    xAxis: { type: "value", minInterval: 1, splitLine: { show: true } },
-    yAxis: { type: "category", inverse: true, data: rs.map((r) => r.name), axisTick: { show: false } },
-    series: [["succeeded", "Succeeded", t.done], ["failed", "Failed", t.need], ["stuck", "Stuck", t.stuck]].map(([k, name, color]) => ({ type: "bar", name, stack: "all", barMaxWidth: 32, color, data: rs.map((r) => sum(r, k)) })),
+    measure: { name: "Outcomes", unit: "count", agg: "sum" },
+    over: { kind: "category", name: "Role" },
+    by: { name: "Outcome", keys: [{ key: "succeeded", name: "Succeeded", color: "done" }, { key: "failed", name: "Failed", color: "need" }, { key: "stuck", name: "Stuck", color: "stuck" }] },
+    rows: d.agents.roles.filter((r) => rows.some((o) => o.role === r.key)).map((r) => ({ name: r.name, succeeded: sum(r, "succeeded"), failed: sum(r, "failed"), stuck: sum(r, "stuck") })),
   };
 }
 
-/** The cost chart: one stacked column per bucket, one series per model. */
-export function costOption(d) {
+/** The cost frame: cost per bucket, by model. */
+export function costFrame(d) {
   const models = [...new Set((d.buckets ?? []).flatMap((b) => Object.keys(b.cost ?? {})))].sort();
-  const o = stacked(barsOption(d.buckets.map((b) => xLabel(b.at, d.window)), models.map((m) => ({ name: m, data: d.buckets.map((b) => b.cost?.[m] ?? 0) }))));
-  o.yAxis.minInterval = 0;
-  o.yAxis.axisLabel = { ...o.yAxis.axisLabel, formatter: money };
-  o.tooltip.valueFormatter = money;
-  return o;
+  return {
+    measure: { name: "Cost", unit: "usd", agg: "sum" },
+    over: { kind: "time", window: d.window },
+    by: { name: "Model", keys: models.map((m) => ({ key: m, name: m })) },
+    rows: (d.buckets ?? []).map((b) => ({ at: b.at, ...b.cost })),
+  };
 }
 
-const labels = (d) => {
-  const rows = d.agents.outcomes ?? [], sum = (k) => rows.reduce((n, o) => n + (o[k] ?? 0), 0);
-  const cost = {};
-  for (const b of d.buckets ?? []) for (const [m, c] of Object.entries(b.cost ?? {})) cost[m] = (cost[m] ?? 0) + c;
-  return {
-    live: `Agents live by role: ${timed(d.agents).map((r) => `${r.name} ${r.hours} hours`).join(", ")}`,
-    outcomes: `Outcomes by role: ${sum("succeeded")} succeeded, ${sum("failed")} failed, ${sum("stuck")} stuck`,
-    cost: `Cost by model: ${Object.entries(cost).map(([m, c]) => `${m} ${money(c)}`).join(", ") || "none"}`,
-  };
-};
+const FRAMES = { live: liveFrame, outcomes: outcomesFrame, cost: costFrame };
+const key = (k) => `factory/agents/${k}`;
+/** A chart panel with its first markup, so the page reads the same before the element draws. */
+const panelOf = (k, f) => `<aleph-chart key="${key(k)}">${panel(f, formOf(f, kept(key(k), {}).form))}</aleph-chart>`;
 
 /** The page body. `d` is /api/speed for the window, or null while it loads. */
 export function renderFactoryAgents(s, d, _key = "live", window = "week", m = null) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
-  const scope = scopeBar(projectNow(), win), l = a ? labels(d) : null;
-  const spent = (d?.buckets ?? []).some((b) => Object.values(b.cost ?? {}).some((c) => c > 0));
-  const has = { live: a && timed(a).length, outcomes: a?.outcomes?.length, cost: spent };
-  const box = (k) => (has[k] ? chartBox(k, l[k]) : empty("Nothing to plot in this window."));
+  const scope = scopeBar(projectNow(), win);
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
-    (a ? `<div class="trio">${card("Agents Live by Role", box("live"), { label: "Agents live by role" })}${card("Outcomes by Role", box("outcomes"), { label: "Outcomes by role" })}${card("Cost by Model", box("cost"), { label: "Cost by model" })}</div>` : card("Agents", wait)) +
+    (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(k, fr(d))).join("")}</div>` : card("Agents", wait)) +
     card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"} · OpenRouter: ${m.down.includes("deepseek-v4.1-flash") ? "down" : "up"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
 }
 
@@ -128,7 +119,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
 export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/capacity" ? "#/factory/agents" : null);
 
 const windowNow = () => windowOf(hashQuery());
-let drawn = [], modelsNow = null;
+let modelsNow = null;
 
 export const view = {
   path: "/factory/agents",
@@ -143,11 +134,8 @@ export const view = {
     const draw = (d) => {
       root.innerHTML = renderFactoryAgents(s, d, "live", windowNow(), modelsNow);
       wireScope(root);
-      for (const c of drawn) c.dispose();
-      drawn = [];
-      if (!d?.agents || !globalThis.echarts) return;
-      const t = readTokens(), opts = { live: liveOption(d, t), outcomes: outcomesOption(d, t), cost: costOption(d) };
-      drawn.push(...mountCharts(root, opts).values());
+      if (!d?.agents) return;
+      for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(d);
     };
     root.onchange = async (e) => {
       const b = e.target.closest?.("#roles [data-tier]");

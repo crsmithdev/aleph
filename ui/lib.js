@@ -372,9 +372,9 @@ export const chipRow = (html, el = "span") => `<${el} class="chips">${html}</${e
 /** Labels as small rounded chips; "" for none. */
 export const chips = (labels) => (labels?.length ? chipRow(labels.map((l) => chip(labelName(l))).join("")) : "");
 
-/** A segmented control. `label` names the group for assistive tech; `items` are `{label, on, attrs}`, `attrs` the button's own attributes. */
+/** A segmented control. `label` names the group for assistive tech; `items` are `{label, on, attrs, icon?}`, `attrs` the button's own attributes. An `icon` button shows the icon, and its label is the name and the tooltip. */
 export const seg = (label, items, attrs = "") =>
-  `<div class="seg" role="group" aria-label="${esc(label)}"${attrs}>${items.map((i) => `<button type="button"${i.attrs} aria-pressed="${i.on}">${esc(i.label)}</button>`).join("")}</div>`;
+  `<div class="seg" role="group" aria-label="${esc(label)}"${attrs}>${items.map((i) => `<button type="button"${i.attrs}${i.icon ? ` aria-label="${esc(i.label)}" title="${esc(i.label)}"` : ""} aria-pressed="${i.on}">${i.icon ? `<wa-icon name="${esc(i.icon)}" aria-hidden="true"></wa-icon>` : esc(i.label)}</button>`).join("")}</div>`;
 
 const opt = (o) => (typeof o === "object" && o ? { value: String(o.value), label: String(o.label ?? o.value) } : { value: String(o), label: String(o) });
 /**
@@ -398,6 +398,19 @@ export function filterBar(groups) {
 /** The search field over a table. It stays out of what the filters redraw, so it keeps the focus while the reader types. */
 export const searchBox = (ui, value, placeholder) =>
   `<div class="fbar"><input type="search" name="q" data-ui="${esc(ui)}" value="${esc(value ?? "")}" placeholder="${esc(placeholder)}" aria-label="${esc(placeholder)}"></div>`;
+
+// ---------- sticky state: what the reader set on a component stays across refreshes, pages and reloads ----------
+// The address holds what changes the data or what a link shares (the window, the project, a filter); keep() holds
+// how a component shows it (a chart's form, its hidden series). One key per component, never per row or item.
+
+/** The value last kept for `key`, else `fallback`. Storage can be missing or blocked. */
+export function kept(key, fallback = null) {
+  try { const v = localStorage.getItem(`aleph.${key}`); return v == null ? fallback : JSON.parse(v); } catch { return fallback; }
+}
+/** Keep `value` (JSON) for `key`. With no storage the value is lost, and the component shows its default. */
+export function keep(key, value) {
+  try { localStorage.setItem(`aleph.${key}`, JSON.stringify(value)); } catch { /* no storage */ }
+}
 
 // ---------- the address: a selection or a filter lives in the hash ----------
 
@@ -443,16 +456,15 @@ export function wireScope(root) {
 /** The windows of the Factory pages, and the /api/jobs `days` of each. */
 export const WINDOWS = [{ value: "hour", label: "Hour" }, { value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }];
 export const WINDOW_DAYS = { hour: 1 / 24, day: 1, week: 7, month: 30 };
-const WINDOW_KEY = "aleph.window";
 const isWindow = (w) => Object.hasOwn(WINDOW_DAYS, w);
-/** Remember the window across the pages; storage may be missing or full. */
-export function storeWindow(w) { try { if (isWindow(w)) localStorage.setItem(WINDOW_KEY, w); } catch { /* no storage: the address still holds it */ } }
+/** Remember the window across the pages. */
+export function storeWindow(w) { if (isWindow(w)) keep("window", w); }
 /** The window of a page: the address first, then the last one chosen, else week. */
 export function windowOf(q) {
   const w = q?.get?.("window");
   if (isWindow(w)) return w;
-  try { const t = localStorage.getItem(WINDOW_KEY); if (isWindow(t)) return t; } catch { /* no storage */ }
-  return "week";
+  const t = kept("window");
+  return isWindow(t) ? t : "week";
 }
 /** Keep the window in storage and in the address (replaced in place, with no reload); week is the default and stays out of the address. */
 export function keepWindow(w) {
@@ -460,7 +472,6 @@ export function keepWindow(w) {
   if (w !== "week" && hashQuery().get("window") !== w) setQuery({ window: w });
 }
 
-const PROJECT_KEY = "aleph.project";
 let projectKeys = [];
 let keysLoad = null;
 /** The registry's repo keys, fetched once; a failed fetch gives [] and is tried again by the next call. */
@@ -471,13 +482,9 @@ export const projectKeysOnce = () => keysLoad ??= fetch("/api/projects/keys").th
 });
 const projectChoices = (cur, more = []) => [...new Set([...projectKeys, ...more, cur].filter(Boolean))].sort().map((p) => ({ value: p, label: p }));
 /** Remember the project across the pages; "" is All. */
-export function storeProject(p) { try { localStorage.setItem(PROJECT_KEY, p || ""); } catch { /* no storage: the address still holds it */ } }
+export function storeProject(p) { keep("project", p || ""); }
 /** The project of a page: the address first, then the last one chosen, else "" for All. */
-export function projectOf(q) {
-  const p = q?.get?.("project");
-  if (p) return p;
-  try { return localStorage.getItem(PROJECT_KEY) || ""; } catch { return ""; }
-}
+export const projectOf = (q) => q?.get?.("project") || kept("project", "");
 /** Keep the project in storage and in the address (replaced in place, with no reload). */
 export function keepProject(p) {
   storeProject(p);

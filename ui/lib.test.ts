@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -418,4 +418,20 @@ test("localMs reads a bare date as local midnight, not UTC midnight", () => {
     process.env.TZ = tz ?? "UTC";
     if (tz === undefined) delete process.env.TZ;
   }
+});
+
+test("keep stores JSON under aleph.<key>, kept reads it back, and with no storage kept gives the fallback", () => {
+  const g = globalThis as any, store = new Map<string, string>();
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+  try {
+    keep("factory/agents/live", { form: "lines", hidden: ["Worker"] });
+    expect(store.get("aleph.factory/agents/live")).toBe('{"form":"lines","hidden":["Worker"]}');
+    expect(kept("factory/agents/live", {})).toEqual({ form: "lines", hidden: ["Worker"] });
+    expect(kept("nope", {})).toEqual({});
+    store.set("aleph.bad", "not json");
+    expect(kept("bad", 1)).toBe(1);
+    delete g.localStorage;
+    expect(kept("factory/agents/live", {})).toEqual({});
+    expect(() => keep("x", 1)).not.toThrow();
+  } finally { delete g.localStorage; }
 });
