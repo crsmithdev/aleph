@@ -84,3 +84,24 @@ test("the Herald panel shows weekly usage and warning tone in event history when
   expect(h).toContain('class="event-row warning"');
   expect(h).toContain('class="event-body warning"');
 });
+
+test("an error is not pinned: the newest event is marked live and carries the error lines its text lacks, and no row repeats its label or a health prefix", () => {
+  const herald = { history: [{ at: "2026-11-01T00:00:00Z", tone: "alert", label: "Alert", text: "Alert: health: aleph main is red", reason: "health: aleph main is red" }] };
+  const h = view.renderHerald({ ...calm, herald, factory: { ...calm.factory, health: ["health: aleph main is red", "health: koans main is red"] } });
+  expect(h).not.toContain("ask-head");
+  expect(h).not.toContain("No active alerts");
+  expect(h).toMatch(/<span class="badge stuck">\d+ active<\/span>/);
+  expect(h).toMatch(/class="event-row alert live"/);
+  expect(h).not.toContain("Alert: health:");
+  // The status sentence sums up aleph's red main, so the live event lists that line; it already says koans's.
+  expect(h).toMatch(/class="event-row alert live">.*?koans main is red\.<span class="reason">aleph main is red<\/span>/);
+  expect(h).not.toContain('<span class="reason">koans main is red</span>');
+});
+
+test("the Issues tab is one column of Running, Queued and Done, with Done against the total", () => {
+  const now = "2026-11-01T12:00:00Z";
+  const s = { ...calm, now, runningIssues: [{ id: "aleph-1", href: "#/issues/aleph/1", stage: "build", title: "One" }], running: [], queued: [{ repo: "aleph", id: 2, title: "Two" }], done: [{ id: "aleph-3", href: "#/issues/aleph/3", title: "Three", finished: now }] };
+  const { n, html } = view.heraldIssues(s);
+  expect(n).toBe(3);
+  expect([...html.matchAll(/<div class="hi-head">([^<]+)<span class="count">([^<]+)</g)].map((m) => `${m[1].trim()} ${m[2]}`)).toEqual(["Running 1", "Queued 1", "Done 1 / 3"]);
+});

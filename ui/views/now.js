@@ -118,17 +118,19 @@ function trackStatusEvent(s, stale = false) {
 export function renderHerald(s) {
   const cur = statusVerdict(s, outOfDateNow);
   trackStatusEvent(s, outOfDateNow);
-  const asks = (s.asks ?? []).map((i) => askRow(i, s.now)).concat(errorLines(s).map(errorRow));
+  // An error is not pinned: the newest event already says it, and is marked live instead.
+  const asks = (s.asks ?? []).map((i) => askRow(i, s.now));
   const stuck = (s.stuck ?? []).map(stuckRow(s));
-  const pinnedCount = asks.length + stuck.length;
+  const errs = errorLines(s), errors = errs.length;
+  const pinnedCount = asks.length + stuck.length + errors;
   const group = (id, n, html, wrap) => (n ? `<div class="grp" id="${id}">${wrap(html)}</div>` : "");
 
-  const sticky = pinnedCount > 0
+  const sticky = asks.length + stuck.length > 0
     ? `<section id="needs" class="needs herald-sticky" aria-label="Alerts">` +
         group("awaiting", asks.length, asks.join(""), list) +
         group("jobs-stuck", stuck.length, stuck.join(""), list) +
       `</section>`
-    : `<div class="herald-sticky calm"><span class="event-dot fine"></span> No active alerts</div>`;
+    : errors ? "" : `<div class="herald-sticky calm"><span class="event-dot fine"></span> No active alerts</div>`;
 
   let history = (s.herald?.history?.length ? s.herald.history : clientEvents).map((x) => ({ ...x }));
   if (!history.length) {
@@ -142,11 +144,11 @@ export function renderHerald(s) {
     }
   }
 
-  const feed = history.map((ev) =>
-    `<div class="event-row ${esc(ev.tone)}">` +
+  const feed = history.map((ev, i) =>
+    `<div class="event-row ${esc(ev.tone)}${i === 0 && errors ? " live" : ""}">` +
       `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
       `<span class="event-tone ${esc(ev.tone)}"><span class="event-dot ${esc(ev.tone)}"></span>${esc(ev.label || ev.tone)}</span>` +
-      `<span class="event-body ${esc(ev.tone)}">${esc(ev.text)}${ev.reason ? `<span class="reason">${esc(ev.reason)}</span>` : ""}</span>` +
+      `<span class="event-body ${esc(ev.tone)}">${esc(eventText(ev))}${(i === 0 && errors ? errs : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}</span>` +
     `</div>`
   ).join("");
 
@@ -169,22 +171,29 @@ export function renderHerald(s) {
   `</section>`;
 }
 
+/** An event's text without what the row already shows: the tone label before it, and the "health: " of each health line. */
+const eventText = (ev) => {
+  const head = `${ev.label || ev.tone}: `;
+  return (ev.text.startsWith(head) ? ev.text.slice(head.length) : ev.text).replace(/(^|; )health: /g, "$1");
+};
+
 /** The Herald tab on show; it stays across refreshes. */
 let heraldTab = "events";
 
-/** The Issues tab: what is being worked on or landed today, pinned at the top, then what is queued. */
-function heraldIssues(s) {
+/** The Issues tab: one column of three lists. Running (pinned), Queued, and Done today against all three. */
+export function heraldIssues(s) {
   // Today is the local day, as every time on the page is local.
   const day = new Date(s.now).toDateString();
   const row = (id, chip, title) => `<div class="hi-row">${id}${chip}<span class="t" title="${esc(title)}">${esc(title)}</span></div>`;
-  const active = [
+  const running = [
     ...(s.runningIssues ?? []).map((i) => row(repoIdLink(i.id, i.href), badge(i.stage), i.title)),
     ...(s.running ?? []).map((j) => row(itemId(j), badge("running"), j.item?.title || j.name)),
-    ...(s.done ?? []).filter((i) => i.finished && new Date(i.finished).toDateString() === day).map((i) => row(repoIdLink(i.id, i.href), badge("landed"), i.title)),
   ];
   const queued = (s.queued ?? []).map((w) => row(repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo), badge(w.stage ?? "queued"), w.title));
-  const sec = (title, rows, cls = "") => (rows.length ? `<div class="hi-sec ${cls}"><div class="hi-head">${title} <span class="count">${rows.length}</span></div>${rows.join("")}</div>` : "");
-  return { n: active.length + queued.length, html: sec("Working or landed today", active, "pin") + sec("Queued", queued) || empty("No issue is in flight.") };
+  const done = (s.done ?? []).filter((i) => i.finished && new Date(i.finished).toDateString() === day).map((i) => row(repoIdLink(i.id, i.href), badge("landed"), i.title));
+  const total = running.length + queued.length + done.length;
+  const sec = (title, n, rows, cls = "") => `<div class="hi-sec ${cls}"><div class="hi-head">${title} <span class="count">${n}</span></div>${rows.join("")}</div>`;
+  return { n: total, html: total ? sec("Running", running.length, running, "pin") + sec("Queued", queued.length, queued) + sec("Done", `${done.length} / ${total}`, done) : empty("No issue is in flight.") };
 }
 
 /** A click on a Herald tab shows that tab; the panel is drawn again from the last state. The listener sits on `.rail`, which each render replaces, so listeners do not pile up. */

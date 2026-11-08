@@ -54,7 +54,10 @@ beforeAll(async () => {
   const fake = join(base, "fake-aleph");
   writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\necho '{}'\nexit 0\n`);
   chmodSync(fake, 0o755);
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake });
+  // systemctl answers `show` with a 1min tick and a 1h suite, and logs every call.
+  const systemctl = join(base, "systemctl");
+  writeFileSync(systemctl, `#!/bin/sh\necho "$@" >> ${join(base, "systemctl.log")}\ncase "$*" in *"show aleph-tick"*) echo "TimersMonotonic={ OnUnitActiveUSec=1min ; next_elapse=1min }";; *"show aleph-suite"*) echo "TimersMonotonic={ OnUnitActiveUSec=1h ; next_elapse=1h }";; esac\n`, { mode: 0o755 });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, XDG_CONFIG_HOME: join(base, "config") });
   setHolds([
     // An old record, from before the 7 gates, still reads.
     { at: ago(5), name: "r-3", kind: "gate", text: "5 agent runs are live" },
@@ -181,7 +184,7 @@ test("the view draws the sections in order, a closed gate, and the rule switches
   expect(order.every((x, i) => x > 0 && (i === 0 || x > order[i - 1]))).toBe(true);
   // The three metric tiles; no Gates now state cards.
   const tiles = [...h.matchAll(/<div class="tile sc"><span class="r1"><span class="k">([^<]*)<\/span>/g)].map((m) => m[1]);
-  expect(tiles).toEqual(["Automation rate", "Gate catches", "Repeat answers", "Held time"]);
+  expect(tiles).toEqual(["Automation rate", "Gate catches", "Rule candidates", "Held time"]);
   expect(h).toContain('<section class="tiles" aria-label="Metrics">');
   expect(h).not.toContain("gtile");
   expect(h).not.toContain("gt-head");
@@ -480,23 +483,25 @@ test("the Monitor draws **text** as bold in the summary and the list, and escape
 test("the body has the tick, the suite and the monitor with their last run from tick.json and tick.log; with no record each has not run", async () => {
   const dir = process.env.ALEPH_FACTORY_DIR!, logPath = join(dir, "tick.log"), was = readFileSync(logPath, "utf8");
   const none: any = (await body()).schedules;
-  expect(none).toEqual([{ name: "tick", last: null, result: null }, { name: "suite", last: null, result: null }, { name: "monitor", last: null, result: null }]);
+  expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d" }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
   expect(h).toContain("<h2>Schedules</h2>");
-  expect(h).toContain("<th>Last Run</th><th>Schedule</th><th>Result</th>");
+  expect(h).toContain("<th>Schedule</th><th>Every</th><th>Last Run</th><th>Result</th>");
+  expect(h).toContain('<input type="checkbox" checked disabled aria-label="tick on"> tick');
+  expect(h).toContain('value="1min"');
   expect(h.match(/has not run/g)).toHaveLength(3);
   const tbody = h.split("<tbody>")[1].split("</tbody>")[0];
   expect(tbody.match(/<tr>/g)).toHaveLength(3);
-  expect(tbody).toContain("<tr><td>has not run</td><td>tick</td><td></td></tr>");
+  expect(tbody).toContain("<td>has not run</td><td></td></tr>");
   expect(h).not.toContain("tick,has not run");
   writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {} }));
   writeFileSync(logPath, was + [`${ago(70)} suite plain: red`, `${ago(11)} suite plain: green`, `${ago(10)} suite held: green`, `${ago(50)} monitor 2026-11-03: 7 findings: FINDING-TEXT first`].join("\n") + "\n");
   try {
     const d: any = (await body()).schedules;
     expect(d).toEqual([
-      { name: "tick", last: ago(2), result: "1 missed" },
-      { name: "suite", last: ago(10), result: "held: green; plain: green" },
-      { name: "monitor", last: ago(50), result: "7 findings" },
+      { name: "tick", last: ago(2), result: "1 missed", every: "1min" },
+      { name: "suite", last: ago(10), result: "held: green; plain: green", every: "1h" },
+      { name: "monitor", last: ago(50), result: "7 findings", every: "1d" },
     ]);
     expect(gates.renderSchedules({ ...(await body()), schedules: d })).not.toContain("has not run");
     const t = gates.renderSchedules({ ...(await body()), schedules: d });
@@ -520,12 +525,12 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
   expect(repeats(approved as any, rescue, NOW + 3600_000)).toEqual([{ reason: "rescue", answer: "recommended", count: 3, mode: "recommended" }]);
   const d = { ...data(), repeats: r };
   const h = gates.renderRepeats(d);
-  expect(h).toContain("<h2>Repeat Answers");
+  expect(h).toContain("<h2>Rule Candidates");
   expect(h).toMatch(/<button[^>]*data-rule="intake-failed"[^>]*data-mode="retry"/);
   const bare = gates.renderNow({ ...d, metrics: { ...d.metrics, rate: null, held: undefined } });
   expect(bare).not.toMatch(/undefined|NaN/);
   expect(bare).toContain("<b>–</b>");
-  expect(gates.renderNow(d)).toMatch(/Repeat answers<\/span><\/span><b>1<\/b>/);
+  expect(gates.renderNow(d)).toMatch(/Rule candidates<\/span><\/span><b>1<\/b>/);
   const none = gates.renderRepeats(data());
   expect(none).toContain("No answer repeats.");
   expect(none).not.toContain("<button");
@@ -620,4 +625,15 @@ test("Schedules, Repeat Answers, Rules and Log show empty() with no rows; Repeat
   expect(gates.renderRules({ rules: [] })).toContain('class="empty"');
   expect(gates.renderRepeats({ repeats: [] })).toContain('class="empty"');
   expect(gates.renderRepeats({ repeats: Array.from({ length: 51 }, (_, i) => ({ reason: `r${i}`, answer: "a", count: 3 })) })).toContain("50 of 51");
+});
+
+test("POST /api/gates/schedules writes a drop-in that keeps the boot and startup triggers, reloads systemd and restarts the timer; a bad interval or name is 422", async () => {
+  const send = (b: unknown) => at("/api/gates/schedules", { method: "POST", headers: { "X-Aleph-UI": "1" }, body: JSON.stringify(b) });
+  const res = await send({ name: "tick", every: "5min" });
+  expect(res.status).toBe(200);
+  const conf = readFileSync(join(base, "config/systemd/user/aleph-tick.timer.d/interval.conf"), "utf8");
+  expect(conf).toContain("OnUnitActiveSec=\nOnBootSec=10min\nOnStartupSec=2min\nOnUnitActiveSec=5min\n");
+  expect(readFileSync(join(base, "systemctl.log"), "utf8")).toContain("--user daemon-reload\n--user restart aleph-tick.timer\n");
+  expect((await send({ name: "tick", every: "5 minutes" })).status).toBe(422);
+  expect((await send({ name: "monitor", every: "1h" })).status).toBe(422);
 });

@@ -69,7 +69,7 @@ export function renderNow(d) {
   const tilesHtml = [
     statCard({ k: "Automation rate", v: m.rate ? pct(m.rate.percent) : "–", ...(m.rate ? { v2: count(m.rate.total) } : {}), ...(m.rate ? { q: ["decided without Chris", "asks"] } : { note: "no Ask decided" }) }),
     statCard({ k: "Gate catches", v: count(m.catches.fired), v2: count(m.catches.fixed), q: ["sent back", "fixed later"] }),
-    statCard({ k: "Repeat answers", v: count(d.repeats.length), note: "Asks answered the same way 3+ times" }),
+    statCard({ k: "Rule candidates", v: count(d.repeats.length), note: "Asks you answered the same way 3+ times" }),
     statCard({ k: "Held time", v: hours(m.held?.hours), v2: count(m.held?.goals), q: ["in a hold", "issues"] }),
   ].join("");
   return `<section id="gates-now">${tiles("Metrics", tilesHtml)}</section>`;
@@ -95,10 +95,19 @@ export function renderMonitor(d) {
   return `<section id="monitor" aria-label="Monitor">${head}<details><summary>${summary}</summary>${body}</details></section>`;
 }
 
-/** The tick, the suite and the monitor: when each last ran and what came of it. */
+/** The interval of a schedule on a timer of its own, with a form to change it; the monitor runs in the tick, once a day. */
+function intervalCell(s) {
+  if (s.name === "monitor") return `<td>${esc(s.every)}</td>`;
+  return `<td><form class="capform schedform" data-schedule="${esc(s.name)}"><label class="sr-only" for="every-${esc(s.name)}">${esc(s.name)} interval</label>` +
+    `<input id="every-${esc(s.name)}" name="every" type="text" pattern="[1-9][0-9]*(s|min|h)" value="${esc(s.every ?? "")}" required>` +
+    actButton("Save", { label: "Save" }, { type: "submit" }) + `</form></td>`;
+}
+
+/** The tick, the suite and the monitor: whether each is on (every one is, and none can be turned off yet), how often it runs, when it last ran and what came of it. */
 export function renderSchedules(d) {
-  const rows = d.schedules.map((s) => `<tr><td>${s.last ? when(s.last) : "has not run"}</td><td>${esc(s.name)}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
-  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${rows ? dataTable(heads(["Last Run", "Schedule", "Result"]), rows) : empty("No schedule.")}</section>`;
+  const rows = d.schedules.map((s) => `<tr><td><label class="sched-on"><input type="checkbox" checked disabled aria-label="${esc(s.name)} on"> ${esc(s.name)}</label></td>` +
+    `${intervalCell(s)}<td>${s.last ? when(s.last) : "has not run"}</td><td>${s.result ? esc(s.result) : ""}</td></tr>`).join("");
+  return `<section id="gates-schedules" aria-label="Schedules">${sectionHead("Schedules")}${rows ? dataTable(heads(["Schedule", "Every", "Last Run", "Result"]), rows) : empty("No schedule.")}</section>`;
 }
 
 /** The Asks routed to Chris, as the Status page's cards. */
@@ -112,7 +121,7 @@ function renderWaiting(d) {
 export function renderRepeats(d) {
   const rows = d.repeats.map((r) => `<tr><td>${esc(REASONS[r.reason]?.[0] ?? r.reason)}</td><td>${esc(r.answer)}</td><td class="num">${r.count}</td><td>` +
     (r.mode ? actButton("Make it a rule", { rule: r.reason, mode: r.mode, label: "Make it a rule" }) : "") + `</td></tr>`);
-  return `<section id="gates-repeats" aria-label="Repeat answers">${sectionHead("Repeat Answers", { count: d.repeats.length })}` +
+  return `<section id="gates-repeats" aria-label="Rule candidates">${sectionHead("Rule Candidates", { count: d.repeats.length })}` +
     (rows.length ? pagedTable(heads(["Ask", "Answer", "Times", ""], ["Times"]), rows) : empty("No answer repeats.")) + `</section>`;
 }
 
@@ -192,6 +201,16 @@ export function mount(root) {
   keepProject(projectNow());
   wireScope(root);
   root.onsubmit = async (e) => {
+    const sched = e.target.closest?.("form.schedform");
+    if (sched) {
+      e.preventDefault();
+      const btn = sched.querySelector("button");
+      btn.disabled = true;
+      try {
+        await postJson("/api/gates/schedules", { name: sched.dataset.schedule, every: sched.elements.every.value.trim() });
+      } catch (err) { btn.disabled = false; say(btn, `Could not save the interval: ${err.message}`); return; }
+      return redraw(root);
+    }
     const form = e.target.closest?.("form.capform");
     if (!form) return;
     e.preventDefault();

@@ -5,7 +5,8 @@
  * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
  * `POST /api/standing/:reason` (standing.ts).
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { allHolds, backendHold, baselines, type HoldRecord, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
@@ -16,7 +17,7 @@ import { eventOf, layout, readFactoryLog } from "../../jobs/lib/infra/layout.ts"
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
-import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, writeCaps } from "../../jobs/lib/infra/settings.ts";
+import { CAP_KEYS, LIVE_CAP, RUN_CAP, capEnvSet, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
 
 import { runCli } from "../cli.ts";
@@ -251,7 +252,46 @@ export function repoHeld(): { repo: string; held: string[] }[] {
  * tick.json (its newest step time; the result is its missed keys), the suite from the newest `suite <repo>:` line of
  * tick.log for each repo, the monitor from the newest `monitor <day>:` line. A step with no record has null for both.
  */
-export function schedules(): { name: string; last: string | null; result: string | null }[] {
+/** The schedules that run on a systemd timer of their own, by the name the Schedules table shows. */
+const TIMERS: Record<string, string> = { tick: "aleph-tick.timer", suite: "aleph-suite.timer" };
+/** An interval the Schedules form takes: a whole number of seconds, minutes or hours, as systemd writes it. */
+const INTERVAL = /^[1-9]\d*(s|min|h)$/;
+
+const systemctl = (...args: string[]): { ok: boolean; out: string } => {
+  try {
+    const p = Bun.spawnSync([systemctlBin(), "--user", ...args], { stdout: "pipe", stderr: "pipe" });
+    return { ok: p.exitCode === 0, out: p.stdout.toString() + p.stderr.toString() };
+  } catch (e) { return { ok: false, out: (e as Error).message }; }
+};
+
+/** A timer's interval: its OnUnitActiveSec as systemd shows it ("1min", "1h"), or null when systemd does not answer. */
+function intervalOf(timer: string): string | null {
+  const m = /OnUnitActiveUSec=(\S+)/.exec(systemctl("show", timer, "-p", "TimersMonotonic", "--no-pager").out);
+  return m ? m[1] : null;
+}
+
+/**
+ * Sets a timer's interval with a drop-in, then reloads systemd and restarts the timer. An empty OnUnitActiveSec= clears
+ * every monotonic trigger, so the drop-in restates the boot and startup triggers of the unit file; without them no run
+ * follows a reboot. Returns an error text, or null.
+ */
+export function setTimerInterval(name: string, every: string): string | null {
+  const timer = TIMERS[name];
+  if (!timer) return `only ${Object.keys(TIMERS).join(" and ")} have an interval`;
+  if (!INTERVAL.test(every)) return `the interval is a whole number with s, min or h, as in 5min, not "${every}"`;
+  const unit = readFileSync(join(import.meta.dir, "../../jobs/systemd", timer), "utf8");
+  const keep = unit.split("\n").filter((l) => /^On(Boot|Startup)Sec=/.test(l));
+  const dir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "systemd/user", `${timer}.d`);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "interval.conf"), ["# Written by the Automation page. An empty assignment clears every monotonic trigger,", "# so the boot and startup triggers of the unit file follow it.", "[Timer]", "OnUnitActiveSec=", ...keep, `OnUnitActiveSec=${every}`, ""].join("\n"));
+  for (const args of [["daemon-reload"], ["restart", timer]]) {
+    const r = systemctl(...args);
+    if (!r.ok) return `systemctl --user ${args.join(" ")} failed: ${r.out.trim()}`;
+  }
+  return null;
+}
+
+export function schedules(): { name: string; last: string | null; result: string | null; every: string | null }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
   let t: { last?: Record<string, string>; missed?: string[] } = {};
   try { t = JSON.parse(readFileSync(join(layout().factory, "tick.json"), "utf8")); } catch {}
@@ -267,9 +307,9 @@ export function schedules(): { name: string; last: string | null; result: string
   }
   const runs = Object.entries(suite).sort(([a], [b]) => (a < b ? -1 : 1));
   return [
-    { name: "tick", last: times.length ? new Date(Math.max(...times)).toISOString() : null, result: times.length ? (missed.length ? `${missed.length} missed` : "no key missed") : null },
-    { name: "suite", last: runs.map(([, r]) => r.at).sort().at(-1) ?? null, result: runs.length ? runs.map(([k, r]) => `${k}: ${r.result}`).join("; ") : null },
-    { name: "monitor", last: monitor?.at ?? null, result: monitor?.result ?? null },
+    { name: "tick", last: times.length ? new Date(Math.max(...times)).toISOString() : null, result: times.length ? (missed.length ? `${missed.length} missed` : "no key missed") : null, every: intervalOf(TIMERS.tick) },
+    { name: "suite", last: runs.map(([, r]) => r.at).sort().at(-1) ?? null, result: runs.length ? runs.map(([k, r]) => `${k}: ${r.result}`).join("; ") : null, every: intervalOf(TIMERS.suite) },
+    { name: "monitor", last: monitor?.at ?? null, result: monitor?.result ?? null, every: "1d" },
   ];
 }
 
@@ -352,6 +392,13 @@ export const routes: Routes = {
     for (const k of CAP_KEYS) if (k in body) patch[k] = body[k];
     try { writeCaps(patch); } catch (e) { return Response.json({ error: (e as Error).message }, { status: 422 }); }
     return Response.json({ live: LIVE_CAP(), run: RUN_CAP() });
+  },
+  "POST /api/gates/schedules": async (req) => {
+    if (!sameSite(req)) return text("forbidden", 403);
+    const body: any = await req.json().catch(() => null);
+    const e = setTimerInterval(String(body?.name), String(body?.every));
+    if (e) return Response.json({ error: e }, { status: 422 });
+    return Response.json({ every: intervalOf(TIMERS[body.name]) });
   },
   "POST /api/gates/revoke/:reason": async (req, params) => {
     if (!sameSite(req)) return text("forbidden", 403);

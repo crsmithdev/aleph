@@ -794,6 +794,8 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-4); padding-right: var(--sp-4); }
 .event-row { display: grid; grid-template-columns: 55px 70px 1fr; align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-xs); }
 .event-row:last-child { border-bottom: none; }
+/* The event of an alert that still holds: tinted and ringed like an Ask card, as the Herald pins no copy of it. */
+.event-row.live { background: var(--unstick-bg); border: 1px solid var(--unstick-ring); border-radius: var(--r-card); padding: var(--sp-8) var(--sp-10); margin-bottom: var(--sp-6); }
 .event-time { font-family: var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
 .event-tone { display: inline-flex; align-items: center; gap: var(--sp-4); font-weight: var(--fw-mid); }
 .event-tone.alert, .event-tone.error { color: var(--stuck); }
@@ -1034,10 +1036,11 @@ ul.logs .step { margin: var(--sp-6) 0; }
 .capform { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-6); margin-top: var(--sp-4); }
 .capform input { width: 5em; font: inherit; font-family: var(--mono); padding: var(--sp-2) var(--sp-6); }
 .capform .cap-env { flex-basis: 100%; }
+.sched-on { display: inline-flex; align-items: center; gap: var(--sp-6); }
 .capform .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .caps { display: grid; gap: var(--sp-10); margin-bottom: var(--sp-12); }
 .cap-row { display: grid; grid-template-columns: 7em 5em auto; align-items: center; gap: var(--sp-6) var(--sp-10); }
-.cap-row span { font: var(--fw-mid) var(--fs-2xl)/1.2 var(--mono); }
+.cap-row span { font: var(--fw-mid) var(--fs-md)/1.2 var(--mono); }
 .cap-row small { grid-column: 1 / -1; grid-row: 2; font-size: var(--fs-xs); color: var(--muted); }
 .cap-row .capform { margin-top: 0; }
 
