@@ -47,6 +47,14 @@ test("the hidden series stay hidden in the legend", () => {
   expect(option(time, "area", T, ["B"]).legend.selected).toEqual({ B: false });
 });
 
+test("a day axis labels the first point of each day, and a frame of one row per day keeps every label", () => {
+  const axis = (f: any) => { const a = option(f, "area", T).xAxis; return a.data.map((s: string, i: number) => a.axisLabel.formatter(s, i)); };
+  const hour = (d: number, h: number) => new Date(2026, 9, d, h).toISOString();
+  const rows = [{ at: hour(27, 22) }, { at: hour(27, 23) }, { at: hour(28, 0) }, { at: hour(28, 1) }];
+  expect(axis({ ...time, rows })).toEqual(["Oct 27", "", "Oct 28", ""]);
+  expect(axis(time)).toEqual(["Oct 27", "Oct 28"]);
+});
+
 test("the panel has a form control for its group, or the empty line under its title", () => {
   const h = panel(time, "lines");
   expect(h.match(/data-form="(\w+)"/g)).toEqual(FORMS.time.map((x: any) => `data-form="${x.key}"`));

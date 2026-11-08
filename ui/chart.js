@@ -54,11 +54,14 @@ export function option(f, form, t, hidden = []) {
   const o = { animation: false, legend: { ...legend, selected: Object.fromEntries(hidden.map((n) => [n, false])) }, tooltip: { trigger: "axis", confine: true, valueFormatter: fmt } };
   if (f.over.kind === "time") {
     const bars = form === "columns", stack = form !== "lines";
+    // A day axis keeps one label per day: the label of a bucket is its day, so a point whose label is the label
+    // of the point before it is blank. A frame of one row per day labels every point.
+    const labels = f.rows.map((r) => xLabel(r.at, f.over.window)), perDay = (s, i) => (i && s === labels[i - 1] ? "" : s);
     return {
       ...o,
       tooltip: { ...o.tooltip, ...(bars ? { axisPointer: { type: "shadow" } } : {}) },
       grid: { left: 40, right: 16, top: 28, bottom: 20 },
-      xAxis: { type: "category", boundaryGap: bars, data: f.rows.map((r) => xLabel(r.at, f.over.window)), axisTick: { show: false }, axisLabel: { hideOverlap: true } },
+      xAxis: { type: "category", boundaryGap: bars, data: labels, axisTick: { show: false }, axisLabel: { hideOverlap: true, formatter: perDay } },
       yAxis: value,
       series: ks.map((k) => bars
         ? { ...base(k), type: "bar", stack: "all", barMaxWidth: 64 }
