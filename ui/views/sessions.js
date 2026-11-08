@@ -136,9 +136,12 @@ export function renderSessions(d, o = options()) {
 
 const renderLive = (d, o) => {
   const h = sessionsHead(d, o);
-  return renderFails(d, o) + `<div class="pair">${toolsCard(d, o)}${skillsCard(d, o)}</div>` +
+  return partialNotice(d) + renderFails(d, o) + `<div class="pair">${toolsCard(d, o)}${skillsCard(d, o)}</div>` +
     card(h.title, `${searchBox("ag-search", o.q, "Search the sessions")}<div id="ag-sessions">${renderSessionsTable(d, o)}</div>`, { ...h, label: "Sessions" }) + hooksCard(d);
 };
+
+/** The fetch reads a bounded number of pages, so a longer window gets the counts of part of it only. */
+const partialNotice = (d) => (d?.activity?.partial ? `<p class="hint" role="status">Langfuse holds more pages than the fetch reads, so these counts cover only part of the window.</p>` : "");
 
 let live = null;
 const here = () => options(hashQuery());
