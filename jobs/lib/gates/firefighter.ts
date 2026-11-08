@@ -8,7 +8,8 @@
  * rescue's (rescue.ts), and an issue that loops is the loop guard's (issue-decision.ts); their Asks are the director's.
  * A CI issue's request quotes the failure (`ciFailure`), and its job record keeps it (`ci`), so a claim that the issue is
  * already met reruns while CI on main is red (rescue.ts). Its land leaves it open; `settleCi` closes it when a CI run at
- * or after the land is green, and sends it back when one is red.
+ * or after the land is green, and sends it back when one is red. An issue whose job never landed closes the same way on
+ * a green run past its failing commit, so a green main brought by another commit settles it.
  * Older ledgers hold runs of kind `firefighter`, from when this was an agent.
  */
 import { readFileSync } from "node:fs";
@@ -145,10 +146,11 @@ export function fileRed(r: Red): Filed | null {
 }
 
 /**
- * The CI watch of a landed CI issue (`ci.landed` in its job record), from the CI state the tick saved: a green run at or
- * after the land closes the issue; a red one sends it back, open with `since` at the land so the land's trailer no
- * longer counts it done, with the failure in a note and the record. A run before the land, or a commit this clone does
- * not have yet, waits. Returns the lines of what it did.
+ * The CI watch of a CI issue, from the CI state the tick saved: a green run at or after the land closes a landed issue
+ * (`ci.landed` in its job record), and a red one sends it back, open with `since` at the land so the land's trailer no
+ * longer counts it done, with the failure in a note and the record. An issue that never landed closes when a green run
+ * sits past its failing commit (`ci.commit`), and a red one leaves it alone. A run that holds neither commit, or a
+ * commit this clone does not have yet, waits. Returns the lines of what it did.
  */
 export function settleCi(ports: Ports = defaultPorts): string[] {
   const reg = loadRegistry();
@@ -159,12 +161,17 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
     for (const i of store.reader().list(key)?.items ?? []) {
       const ref = `${key}-${issues.refOf(i)}`;
       const ci = issues.status(i) === "open" && isRedMain(i) ? record.read(ref)?.ci : undefined;
-      if (!ci?.landed || !git(repo.path, "merge-base", "--is-ancestor", ci.landed, c.sha).ok) continue;
+      if (!ci) continue;
+      // A landed issue waits for a run at or after the land; one that never landed, for a run past its failing commit.
+      const at = ci.landed ?? ci.commit;
+      if (!git(repo.path, "merge-base", "--is-ancestor", at, c.sha).ok) continue;
       if (c.ok) {
-        const why = store.close(repo, issues.refOf(i), `firefighter: GitHub CI on main is green at ${c.sha.slice(0, 7)} (${c.url}), at or after the land ${ci.landed.slice(0, 7)}: done`);
+        const why = store.close(repo, issues.refOf(i), `firefighter: GitHub CI on main is green at ${c.sha.slice(0, 7)} (${c.url}), ${ci.landed ? `at or after the land ${ci.landed.slice(0, 7)}` : `past the failing commit ${ci.commit.slice(0, 7)}`}: done`);
         out.push(why ? `${ref} not closed: ${why}` : `${ref} done: CI green at ${c.sha.slice(0, 7)}`);
         continue;
       }
+      // A red run sends back only an issue that landed: an unlanded one has no land to be sent back from.
+      if (!ci.landed) continue;
       const failure = ciFailure(ciLog(ports, repo, c.url));
       store.writeList(repo, `firefighter: ${ref} red on CI after its land`, (doc) => {
         const item = issues.find(doc, issues.refOf(i));

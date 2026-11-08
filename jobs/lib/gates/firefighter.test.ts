@@ -8,7 +8,7 @@ import * as store from "../../../issues/lib/store.ts";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import { askOf } from "../asks/ask.ts";
 import { ciStep, type GhRun } from "./ci.ts";
-import { ciFailure, firefight, LOG_CHARS, type Ports } from "./firefighter.ts";
+import { ciFailure, firefight, LOG_CHARS, settleCi, type Ports } from "./firefighter.ts";
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.fixture.ts";
@@ -181,4 +181,43 @@ test("a landed CI issue closes on a green CI at or after the land, waits on one 
   await firefight(gh);
   expect(issues.status(reds()[0])).toBe("done");
   expect(reds()[0].notes.at(-1)).toContain(`green at ${after.slice(0, 7)}`);
+});
+
+test("an unlanded CI issue closes when main turns green past its failing commit, and waits on a red or an earlier green", async () => {
+  fresh([]);
+  const repo = loadRegistry()[key];
+  const commit = (m: string) => { sh(repoPath(), "git", "commit", "-q", "--allow-empty", "-m", m); return sh(repoPath(), "git", "rev-parse", "HEAD"); };
+  const before = commit("before"), failed = commit("the failure"), fixed = commit("another's fix");
+  let runId = 200;
+  const ci = (conclusion: string, sha: string) => {
+    const url = `https://github.com/x/y/actions/runs/${++runId}`;
+    ciStep([repo], listing([{ conclusion, status: "completed", headSha: sha, url, createdAt: "2026-11-04T21:00:00Z" }]));
+    return url;
+  };
+  const gh: Ports = { gh: () => ({ ok: true, out: CI_LOG }) };
+  ci("failure", failed);
+  await firefight(gh);
+  const [it] = reds();
+  const ref = `${key}-${it.id}`;
+  expect(record.read(ref)!.ci!.landed).toBeUndefined();
+  // Red at a later commit: an unlanded issue has no land to be sent back from, so it gets no note and no reopen.
+  ci("failure", fixed);
+  expect(settleCi(gh)).toEqual([]);
+  expect(issues.status(reds()[0])).toBe("open");
+  expect(reds()[0].fm.since).toBeUndefined();
+  expect(reds()[0].notes).toEqual([]);
+  // Green at a commit before the failing one: it does not contain the failure.
+  ci("success", before);
+  expect(settleCi(gh)).toEqual([]);
+  expect(issues.status(reds()[0])).toBe("open");
+  // Green at a commit this clone does not have: it waits.
+  ci("success", "f".repeat(40));
+  expect(settleCi(gh)).toEqual([]);
+  expect(issues.status(reds()[0])).toBe("open");
+  // Green at a commit past the failing one, from a fix the job never made: done, naming that commit and its run.
+  const url = ci("success", fixed);
+  expect(settleCi(gh)).toEqual([`${ref} done: CI green at ${fixed.slice(0, 7)}`]);
+  expect(issues.status(reds()[0])).toBe("done");
+  expect(reds()[0].notes.at(-1)).toContain(`green at ${fixed.slice(0, 7)} (${url})`);
+  expect(reds()[0].notes.at(-1)).toContain(`past the failing commit ${failed.slice(0, 7)}`);
 });
