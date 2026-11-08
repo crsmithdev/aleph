@@ -3,8 +3,9 @@
  * baseline.json, a red GitHub CI on main in ci.json) and files one critical
  * issue per failing commit, with the tail of the failure's log in its request. The request names the commit
  * (`Failing commit: <sha>`), so a second tick, or a second source for the same commit, files nothing more. While the
- * repo has an open red-main issue, a new failing commit is one note on that issue, not a second issue. It also sets a
- * rescue Ask on each land live past 30 minutes (`askSlowLands`, rescue.ts). Stuck, failed and lost runs are the
+ * repo has an open red-main issue whose failure failed the same tests, a new failing commit is one note on that issue,
+ * not a second issue; a failure with other failing tests, or with none where the issue has some, files its own issue. It
+ * also sets a rescue Ask on each land live past 30 minutes (`askSlowLands`, rescue.ts). Stuck, failed and lost runs are the
  * rescue's (rescue.ts), and an issue that loops is the loop guard's (issue-decision.ts); their Asks are the director's.
  * A CI issue's request quotes the failure (`ciFailure`), and its job record keeps it (`ci`), so a claim that the issue is
  * already met reruns while CI on main is red (rescue.ts). Its land leaves it open; `settleCi` closes it when a CI run at
@@ -111,6 +112,11 @@ export function reds(ports: Ports = defaultPorts): Red[] {
 
 const mark = (commit: string) => `Failing commit: ${commit}`;
 const isRedMain = (i: issues.Issue) => store.areasOf(i).includes("red-main") || store.labels(i).includes("red-main");
+
+/** The failing tests of a failure: the names on its `(fail)` lines, each without the trailing duration such as `[12.34ms]`. */
+const failsOf = (text: string): string[] => [...new Set([...text.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm)].map((m) => m[1]))].sort();
+/** Whether two failures failed the same tests. A failure with no `(fail)` lines matches only another with none. */
+const sameFails = (a: string, b: string): boolean => { const x = failsOf(a), y = failsOf(b); return x.length === y.length && x.every((t, i) => t === y[i]); };
 /** The issue that holds this commit already: in its request, as filed, or in a note, as a later commit during an open fix. */
 const holds = (i: issues.Issue, commit: string) => isRedMain(i) && (i.request.includes(mark(commit)) || i.notes.some((n) => n.includes(mark(commit))));
 
@@ -121,8 +127,8 @@ export type Filed = { repo: string; commit: string; source: Source } & ({ filed:
 
 /**
  * File one red: nothing when an issue of the repo already holds its commit; a note on the newest open red-main issue
- * when there is one; else a new critical issue with the log's tail. The check runs again inside the write, on the
- * store as it is then, so two ticks at once file it once.
+ * whose failure failed the same tests, when there is one; else a new critical issue with the log's tail. The check runs
+ * again inside the write, on the store as it is then, so two ticks at once file it once.
  */
 export function fileRed(r: Red): Filed | null {
   if ((store.reader().list(r.repo)?.items ?? []).some((i) => holds(i, r.commit))) return null;
@@ -133,7 +139,7 @@ export function fileRed(r: Red): Filed | null {
   const request = `${mark(r.commit)}\nFailed: ${SOURCE_NAME[r.source]}\n${r.line}\n\n${what}:\n\n\`\`\`\n${log || "(no log)"}\n\`\`\`\n`;
   const w = store.writeList(repo, `firefighter: ${SOURCE_NAME[r.source]} red at ${r.commit.slice(0, 7)}`, (doc): Filed | null => {
     if (doc.items.some((i) => holds(i, r.commit))) return null;
-    const open = doc.items.filter((i) => issues.status(i) === "open" && isRedMain(i)).at(-1);
+    const open = doc.items.filter((i) => issues.status(i) === "open" && isRedMain(i) && sameFails(i.request, log)).at(-1);
     const at = { repo: r.repo, commit: r.commit, source: r.source };
     if (open) {
       issues.note(open, `firefighter: ${mark(r.commit)}; ${SOURCE_NAME[r.source]} failed again while this fix is open: ${r.line}${log ? `; log: ${oneLine(log)}` : ""}`);

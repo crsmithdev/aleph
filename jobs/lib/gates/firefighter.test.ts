@@ -79,6 +79,35 @@ test("a second failing commit while the first issue is open is one note on it; o
   expect(reds()[1].request).toContain(`Failing commit: ${C}`);
 });
 
+test("a red whose failing tests differ from the open issue's files a second issue, with no note on the first", async () => {
+  fresh([]);
+  baselineRed(A);
+  write(`baseline/${key}/checks.log`, "checks line 0\nchecks line 1");
+  await firefight(ports());
+  baselineRed(B);
+  write(`baseline/${key}/checks.log`, "(fail) x > y [12.34ms]\n1 tests failed:\n(fail) x > y [12.34ms]");
+  const f = await firefight(ports());
+  expect(f!.filed).toEqual([{ repo: key, commit: B, source: "baseline", filed: 2 }]);
+  expect(reds().map((i) => [i.id, issues.status(i)])).toEqual([[1, "open"], [2, "open"]]);
+  expect(reds()[1].request).toContain(`Failing commit: ${B}`);
+  expect(reds()[0].notes).toEqual([]);
+});
+
+test("a red whose failing tests match an older open issue notes it, though a newer issue is open, and files none", async () => {
+  fresh([]);
+  const red = (commit: string, log: string) => { baselineRed(commit); write(`baseline/${key}/checks.log`, log); };
+  red(A, "(fail) x > y [10.00ms]");
+  await firefight(ports());
+  red(B, "checks line 0");
+  await firefight(ports());
+  red(C, "(fail) x > y [20.00ms]");
+  const f = await firefight(ports());
+  expect(f!.filed).toEqual([{ repo: key, commit: C, source: "baseline", noted: 1 }]);
+  expect(reds().length).toBe(2);
+  expect(reds()[0].notes.filter((n) => n.includes(`Failing commit: ${C}`)).length).toBe(1);
+  expect(reds()[1].notes).toEqual([]);
+});
+
 test("a land live past 30 minutes sets one rescue Ask; a land live for 10 minutes sets none; no firefighter agent run starts", async () => {
   process.env.ALEPH_FIREFIGHTER_CMD = join(base, "fake");
   fresh([{ title: "slow one" }, { title: "quick one" }]);
