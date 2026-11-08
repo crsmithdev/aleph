@@ -12,7 +12,7 @@
  * a green run past its failing commit, so a green main brought by another commit settles it.
  * Older ledgers hold runs of kind `firefighter`, from when this was an agent.
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -103,7 +103,8 @@ export function reds(ports: Ports = defaultPorts): Red[] {
   }
   for (const c of redCi()) {
     if (!keys.has(c.repo) || !c.sha) continue;
-    out.push({ repo: c.repo, commit: c.sha, source: "ci", line: ciLine(c), log: () => ciLog(ports, reg[c.repo], c.url), url: c.url });
+    let log: string | undefined;
+    out.push({ repo: c.repo, commit: c.sha, source: "ci", line: ciLine(c), log: () => (log ??= ciLog(ports, reg[c.repo], c.url)), url: c.url });
   }
   return out;
 }
@@ -186,6 +187,30 @@ export function settleCi(ports: Ports = defaultPorts): string[] {
   return out;
 }
 
+/**
+ * Whether a `gh run view --log-failed` log shows a failure before any test ran: its lines name steps (`job<TAB>step<TAB>text`),
+ * and none is the typecheck or the test step of ci.yml.
+ */
+const early = (log: string): boolean => {
+  const steps = log.split("\n").filter((l) => l.split("\t").length >= 3).map((l) => l.split("\t")[1]);
+  return steps.length > 0 && !steps.some((s) => /typecheck|test:all/.test(s));
+};
+
+const reran = () => join(factoryDir(), "reran.json");
+const rerunIds = (): string[] => { try { return JSON.parse(readFileSync(reran(), "utf8")); } catch { return []; } };
+
+/** Rerun the failed jobs of a red CI run that failed before any test, once per run. True when it did. */
+function rerun(r: Red, ports: Ports): boolean {
+  const id = /\/runs\/(\d+)/.exec(r.url ?? "")?.[1], repo = loadRegistry()[r.repo];
+  if (r.source !== "ci" || !id || !repo || rerunIds().includes(id) || (store.reader().list(r.repo)?.items ?? []).some((i) => holds(i, r.commit)) || !early(r.log())) return false;
+  if (!ports.gh(repo, ["run", "rerun", id, "--failed"]).ok) return false;
+  mkdirSync(factoryDir(), { recursive: true });
+  writeFileSync(reran(), JSON.stringify([...rerunIds(), id]));
+  factoryLog(`firefighter: ${r.repo} CI run ${id} failed before any test: rerun`);
+  logEvent({ by: "firefighter", subject: r.repo, action: "rerun", on: [r.commit.slice(0, 7)], note: `reran CI run ${id} of ${r.repo}: it failed before any test` });
+  return true;
+}
+
 export interface Fired { filed: Filed[]; asked: string[] }
 
 /**
@@ -197,6 +222,7 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
   const filed: Filed[] = [];
   for (const r of (() => { try { return reds(ports); } catch (e: any) { factoryLog(`firefighter: failed: ${e?.message ?? e}`); return []; } })()) {
     try {
+      if (rerun(r, ports)) continue;
       const f = fileRed(r);
       if (!f) continue;
       filed.push(f);

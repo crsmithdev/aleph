@@ -183,6 +183,24 @@ test("a landed CI issue closes on a green CI at or after the land, waits on one 
   expect(reds()[0].notes.at(-1)).toContain(`green at ${after.slice(0, 7)}`);
 });
 
+const SETUP_LOG = "test\tRun oven-sh/setup-bun@v2\t2026-11-08T09:00:00.0000000Z ##[error]Unexpected HTTP response: 504";
+
+test("a CI run that failed in setup is rerun once; failing again, it files an issue and is not rerun", async () => {
+  fresh([]);
+  const repo = loadRegistry()[key];
+  const url = "https://github.com/x/y/actions/runs/777";
+  ciStep([repo], listing([{ conclusion: "failure", status: "completed", headSha: B, url, createdAt: "2026-11-08T09:00:00Z" }]));
+  const asked: string[][] = [];
+  const p: Ports = { gh: (_, args) => { asked.push(args); return { ok: true, out: args[1] === "rerun" ? "" : SETUP_LOG }; } };
+  await firefight(p);
+  expect(asked.filter((a) => a[1] === "rerun")).toEqual([["run", "rerun", "777", "--failed"]]);
+  expect(reds()).toEqual([]);
+  await firefight(p);
+  expect(asked.filter((a) => a[1] === "rerun").length).toBe(1);
+  expect(reds().length).toBe(1);
+  expect(reds()[0].fm.priority).toBe("critical");
+});
+
 test("an unlanded CI issue closes when main turns green past its failing commit, and waits on a red or an earlier green", async () => {
   fresh([]);
   const repo = loadRegistry()[key];
