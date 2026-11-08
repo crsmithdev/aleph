@@ -88,3 +88,12 @@ test.skip("a commit added to the branch after its checks gets the checks on land
   await land({ ...e, run }, repo, p);
   expect(p.calls).toEqual([["tipped"]]);
 });
+
+test("a land pushes to main though the repo's pre-push hook fails", async () => {
+  const hook = join(repo.path, ".git", "hooks", "pre-push");
+  await Bun.write(hook, "#!/bin/sh\nexit 1\n");
+  sh(repo.path, "chmod", "+x", hook);
+  const { r } = await landed("hooked", [["h.ts", "export {};\n"]]);
+  expect(r.outcome.condition).toBe("landed");
+  expect(remote("rev-parse", "main")).toBe(r.outcome.commit!);
+});

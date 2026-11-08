@@ -365,7 +365,7 @@ export async function land({ id, folder, run }: Entry, repo: Repo, ports: LandPo
       const ok = result.ok;
       if (ok.length) {
         phase("land");
-        if (step("push", "push", "-q", "origin", `${result.tip}:refs/heads/${main}`).ok) {
+        if (step("push", "push", "-q", "--no-verify", "origin", `${result.tip}:refs/heads/${main}`).ok) {
           for (const { m, commit } of ok) {
             const { todo, checkItem } = closeItems(repo, m.run, checkTitles.get(m), commit);
             if (todo) m.log(todo === "done" ? `todo ${onOf(m.run)} done` : `todo ${onOf(m.run)} not closed: ${todo}`);

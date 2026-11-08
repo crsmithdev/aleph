@@ -5,7 +5,8 @@
   "scripts": {
     "test": "bun test --timeout=30000 --parallel=${ALEPH_TEST_PARALLEL:-$(( $(nproc) / 2 ))}",
     "test:all": "ALEPH_BROWSER_TESTS=1 bun run test",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
