@@ -135,7 +135,7 @@ export function renderHerald(s) {
   let history = (s.herald?.history?.length ? s.herald.history : clientEvents).map((x) => ({ ...x }));
   if (!history.length) {
     history = [{ at: s.now || new Date().toISOString(), tone: cur.tone, label: cur.label, text: cur.text }];
-  } else if (history[0].text !== cur.text || history[0].tone !== cur.tone) {
+  } else if (history[0].text.replace(/\.$/, "") !== cur.text.replace(/\.$/, "") || (history[0].text === cur.text && history[0].tone !== cur.tone)) {
     const diff = Math.abs(Date.parse(history[0].at || "") - Date.parse(s.now || ""));
     if (diff < 60000 && history[0].text.startsWith(cur.text.split(";")[0])) {
       history[0] = { at: history[0].at || s.now, tone: cur.tone, label: cur.label, text: cur.text };
