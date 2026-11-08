@@ -1,6 +1,7 @@
 // The chart panel: `<aleph-chart key="view/chart">` draws a frame as a card that fills its box. The title, the
 // colours, the units, the aria label, the empty line and the forms on offer come from the frame. The form and the
-// hidden series stay per panel through keep().
+// hidden series stay per panel through keep(). A connected panel follows `/api/live` and adds each row of its own
+// key with push(), so the newest point of the chart grows with no page reload.
 //
 // A frame:
 //   measure: { name, unit: "count" | "usd" | "seconds", agg: "sum" | "max" }
@@ -9,7 +10,7 @@
 //   by: { name, keys: [{ key, name, color? }] }   color is a token name; a key keeps its colour in every window.
 //   rows: time [{ at, [key]: n }], category [{ name, [key]: n }]
 // The kind of `over` is the group, and the group gives the forms.
-import { card, chart, count, dur, empty, esc, keep, kept, legend, money, pct, readTokens, seg } from "./lib.js";
+import { card, chart, count, dur, empty, esc, hashQuery, keep, kept, legend, money, pct, projectNow, readTokens, seg, windowOf } from "./lib.js";
 import { xLabel } from "./views/speed.js";
 
 /** The forms of each group. The default is the first, except that a time frame of a flow (agg "sum") opens as columns. */
@@ -86,6 +87,32 @@ export function panel(f, form) {
   return card(title(f), `<div class="chartbox" role="img" aria-label="${esc(label(f))}"></div>`, { aside: forms });
 }
 
+// The live stream: the panels on the page, and the rows /api/live sends them.
+const panels = new Set();
+let stream = null;
+
+/** Add `row` to frame `f`, or replace the row with the same `at` (or `name`); a time frame drops its oldest row to keep `size`. */
+export function pushRow(f, row, size) {
+  const id = (r) => r.at ?? r.name, i = f.rows.findIndex((r) => id(r) === id(row));
+  if (i >= 0) f.rows[i] = row;
+  else { f.rows.push(row); if (f.over.kind === "time" && f.rows.length > size) f.rows.shift(); }
+}
+
+/** Apply a `row` event of /api/live — JSON of `{ key, row }` — to each panel of `list` whose key it names. */
+export function feed(data, list) {
+  const { key, row } = JSON.parse(data);
+  for (const p of list) if (p.key === key) p.push(row);
+}
+
+/** Open the stream while a panel is on the page, or close it with none. It carries the window and the project of the address. */
+function follow() {
+  if (!panels.size) { stream?.close(); stream = null; return; }
+  if (stream) return;
+  const project = projectNow();
+  stream = new EventSource(`/api/live?window=${windowOf(hashQuery())}${project ? `&project=${encodeURIComponent(project)}` : ""}`);
+  stream.addEventListener("row", (e) => feed(e.data, panels));
+}
+
 if (globalThis.customElements && !customElements.get("aleph-chart")) {
   customElements.define("aleph-chart", class extends HTMLElement {
     #frame = null;
@@ -102,17 +129,18 @@ if (globalThis.customElements && !customElements.get("aleph-chart")) {
 
     /** Add a row, or replace the row with the same `at` (or `name`). A time frame drops its oldest row to keep its length. */
     push(row) {
-      const f = this.#frame, id = (r) => r.at ?? r.name, i = f.rows.findIndex((r) => id(r) === id(row));
-      if (i >= 0) f.rows[i] = row;
-      else { f.rows.push(row); if (f.over.kind === "time" && f.rows.length > this.#size) f.rows.shift(); }
+      const f = this.#frame;
+      if (!f) return;
+      pushRow(f, row, this.#size);
       if (!this.#chart || !shown(f).length) return this.#render();
       this.#chart.setOption(option(f, this.#state.form, readTokens(), this.#state.hidden), { notMerge: true });
       this.querySelector(".chartbox").setAttribute("aria-label", label(f));
     }
 
-    get #key() { return this.getAttribute("key"); }
+    /** The panel's key: the frame, the kept state and the streamed rows are its own. */
+    get key() { return this.getAttribute("key"); }
     get #state() {
-      const s = kept(this.#key, {});
+      const s = kept(this.key, {});
       return { form: formOf(this.#frame, s.form), hidden: s.hidden ?? [] };
     }
 
@@ -124,16 +152,23 @@ if (globalThis.customElements && !customElements.get("aleph-chart")) {
       const box = this.querySelector(".chartbox");
       if (!box || !globalThis.echarts) return;
       this.#chart = chart(box, option(f, s.form, readTokens(), s.hidden));
-      this.#chart.on("legendselectchanged", (e) => keep(this.#key, { ...kept(this.#key, {}), hidden: Object.keys(e.selected).filter((n) => !e.selected[n]) }));
+      this.#chart.on("legendselectchanged", (e) => keep(this.key, { ...kept(this.key, {}), hidden: Object.keys(e.selected).filter((n) => !e.selected[n]) }));
       this.onclick = (e) => {
         const b = e.target.closest?.("button[data-form]");
         if (!b) return;
-        keep(this.#key, { ...kept(this.#key, {}), form: b.dataset.form });
+        keep(this.key, { ...kept(this.key, {}), form: b.dataset.form });
         this.#render();
       };
     }
 
+    connectedCallback() {
+      panels.add(this);
+      follow();
+    }
+
     disconnectedCallback() {
+      panels.delete(this);
+      follow();
       this.#chart?.dispose();
       this.#chart = null;
     }
