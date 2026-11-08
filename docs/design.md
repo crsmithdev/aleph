@@ -363,7 +363,7 @@ Reference view = the view that follows the rules best.
 | Badge | `badge()` | `ui/views/jobs.js` |
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
-| Chart | `chart()`, `panelOf()` | `ui/views/factory-agents.js` |
+| Chart | `panelOf()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
 | Pager | `pager()` | `pager()` (`ui/views/issues.js:217`) |

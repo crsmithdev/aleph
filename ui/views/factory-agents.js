@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
-import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, kept, loadingLine, money, pageHead, pct, projectNow, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
-import { formOf, panel } from "../chart.js";
+import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { panelOf } from "../chart.js";
 import { lastPeriod, loadSpeed, usable, usageCard } from "./speed.js";
 
 const share = (v) => (v == null ? "–" : pct(v * 100));
@@ -108,8 +108,6 @@ export function costFrame(d) {
 
 const FRAMES = { live: liveFrame, outcomes: outcomesFrame, cost: costFrame };
 const key = (k) => `factory/agents/${k}`;
-/** A chart panel with its first markup, so the page reads the same before the element draws. */
-const panelOf = (k, f) => `<aleph-chart key="${key(k)}">${panel(f, formOf(f, kept(key(k), {}).form))}</aleph-chart>`;
 
 /** The page body. `d` is /api/speed for the window, or null while it loads. */
 export function renderFactoryAgents(s, d, _key = "live", window = "week", m = null) {
@@ -117,7 +115,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
   const scope = scopeBar(projectNow(), win);
   return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, a, w))}` +
-    (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(k, fr(d))).join("")}</div>` : card("Agents", wait)) +
+    (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
     card("Roles", (m ? `<p class="quiet">Local server: ${m.local === "up" ? "up" : "down"} · OpenRouter: ${m.down.includes("deepseek-v4.1-flash") ? "down" : "up"}</p>` : "") + (a ? roles(a, m) : wait), { id: "roles" }) + `</div>`;
 }
 
