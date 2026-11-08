@@ -14,6 +14,7 @@ import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
+const POOL = 4, MAX_PAGES = 2000;
 
 /** The local dates of the last `days` days, oldest first, ending today. */
 function dayKeys(days: number, now: Date): string[] {
@@ -36,6 +37,8 @@ export interface Activity {
   denials: { total: number; recent: { at: string; reason: string }[] };
   /** The traces each tool ran in, for `/api/agents`. */
   toolTraces?: Record<string, string[]>;
+  /** True when the window held more pages than the fetch reads, so the counts cover only part of it. */
+  partial?: boolean;
   /** When the Langfuse half was fetched; it is reused for ALEPH_UI_CACHE_TTL seconds. */
   cachedAt?: string;
 }
@@ -49,13 +52,25 @@ function cached<T>(key: string, load: () => Promise<T>): Promise<{ value: T; cac
   return cache.get(key, uiCacheMs(), () => load().then((v) => ({ value: v as unknown, cachedAt: new Date().toISOString() }))) as Promise<{ value: T; cachedAt: string }>;
 }
 
-/** Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched together. */
-async function allPages(cfg: LangfuseConfig, path: string, params: Record<string, string>): Promise<any[]> {
-  const page = (n: number) => getJson(cfg, `${path}?${new URLSearchParams({ ...params, limit: "100", page: String(n) })}`);
+/**
+ * Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched
+ * `POOL` at a time, each page tried twice. All pages at once overloaded Langfuse and a full week
+ * timed out. `partial` says the list held more pages than `MAX_PAGES`.
+ */
+async function allPages(cfg: LangfuseConfig, path: string, params: Record<string, string>): Promise<{ rows: any[]; partial: boolean }> {
+  const url = (n: number) => `${path}?${new URLSearchParams({ ...params, limit: "100", page: String(n) })}`;
+  const page = (n: number) => getJson(cfg, url(n)).catch(() => getJson(cfg, url(n)));
   const first = await page(1);
-  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, 499) : 1;
-  const rest = await Promise.all(Array.from({ length: pages - 1 }, (_, i) => page(i + 2)));
-  return [first, ...rest].flatMap((b) => b.data ?? []);
+  const total = first.meta ? Number(first.meta.totalPages) || 1 : 1;
+  const pages = Math.min(total, MAX_PAGES);
+  const rest: any[][] = [];
+  let next = 2, failed = false;
+  const worker = async () => {
+    try { for (let n = next++; n <= pages && !failed; n = next++) rest[n - 2] = (await page(n)).data ?? []; }
+    catch (e) { failed = true; throw e; }
+  };
+  await Promise.all(Array.from({ length: Math.min(POOL, pages - 1) }, worker));
+  return { rows: [first.data ?? [], ...rest].flat(), partial: total > pages };
 }
 
 async function getJson(cfg: LangfuseConfig, path: string): Promise<any> {
@@ -66,14 +81,14 @@ async function getJson(cfg: LangfuseConfig, path: string): Promise<any> {
 }
 
 /** The ids of the traces of `project`: its session's cwd, or the trace's name, is the key. */
-async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<Set<string>> {
-  const rows = await allPages(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() });
+async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {
+  const { rows, partial } = await allPages(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() });
   const ids = new Set<string>();
   for (const t of rows) {
     const cwd = t.metadata?.cwd;
     if (t.name === project || (typeof cwd === "string" && basename(cwd) === project)) ids.add(t.id);
   }
-  return ids;
+  return { ids, partial };
 }
 
 export async function activity(days: number, project: string | null, now = new Date()): Promise<Activity> {
@@ -90,12 +105,15 @@ export async function activity(days: number, project: string | null, now = new D
   try {
     const got = await cached(`${cfg.baseUrl}|${keys[0]}|${days}|${project ?? ""}`, async () => {
       const [all, mine] = await Promise.all([
-        allPages(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }) as Promise<Observation[]>,
+        allPages(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }) as Promise<{ rows: Observation[]; partial: boolean }>,
         project ? projectTraces(cfg, project, new Date(from.getTime() - DAY), to) : null,
       ]);
-      return mine ? all.filter((o) => o.traceId && mine.has(o.traceId)) : all;
+      const rows = mine ? all.rows.filter((o) => o.traceId && mine.ids.has(o.traceId)) : all.rows;
+      // A project read from part of the traces keeps part of the window's rows: the answer is partial too.
+      return { rows, partial: all.partial || !!mine?.partial };
     });
-    obs = [...got.value];
+    obs = [...got.value.rows];
+    out.partial = got.value.partial;
     out.cachedAt = got.cachedAt;
   } catch (e) {
     out.langfuse = "error";

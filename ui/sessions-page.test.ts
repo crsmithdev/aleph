@@ -67,6 +67,12 @@ describe("the Sessions page", () => {
     expect(h).toContain('href="#/skills/aleph%3Ahandoff"');
   });
 
+  test("a window past the pages the fetch reads says the counts are of part of it; one inside them says nothing", () => {
+    const d = data();
+    expect(v.renderSessions({ ...d, activity: { ...d.activity, partial: true } }, opts())).toContain("cover only part of the window");
+    expect(v.renderSessions(d, opts())).not.toContain("cover only part of the window");
+  });
+
   test("a failed part says so and the others still show", () => {
     const off = v.renderSessions({ ...data(), activity: { langfuse: "off", tools: [] }, skills: { error: "boom" }, sessions: { error: "down" } }, opts());
     expect(off).toContain("Langfuse is not configured");
