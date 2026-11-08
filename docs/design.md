@@ -134,7 +134,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 | Display type tracking | `letter-spacing: -0.01em` on the brand mark, the shead text, the page title and display text | 4 rows (`ui/app.css:185`, `210`, `211`, `490`) | `--ls-display` |
 | Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:573`) and `.08em` (`ui/app.css:756`) | 2 rows | none; pick one when a third key comes |
 | Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
-| Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`ui/lib.js:623`, `636`, `648`, `ui/views/factory-jobs.js:31`) | none; a rule |
+| Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`ui/lib.js:613`, `626`, `638`, `ui/views/factory-jobs.js:31`) | none; a rule |
 | Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
 
 ### Focus offset
@@ -145,7 +145,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 ### Chart gridlines and fills
 
 - Gridlines are `splitLine` at `opacity: 0.5`.
-- A stacked area series is filled at `areaStyle: { opacity: 0.6 }` (`ui/lib.js:625`), with a legend.
+- A stacked area series is filled at `areaStyle: { opacity: 0.6 }` (`ui/lib.js:615`), with a legend.
 - A p90 band is filled at `opacity: 0.2` (`ui/views/factory-jobs.js:33`). It is one use and has no rule.
 
 ### Row actions
@@ -161,7 +161,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 
 ### Form messages
 
-- A result line after an action, or inside a form, is a `<span>` with the class `act-msg` (`ui/app.css:333`). `say()` in `ui/lib.js:743` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:662`, `674`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
+- A result line after an action, or inside a form, is a `<span>` with the class `act-msg` (`ui/app.css:333`). `say()` in `ui/lib.js:733` writes the text and makes the line with `role="alert"` when there is none (callers: `ui/index.html:270`, `ui/views/gates.js:195`, `214`, `ui/views/issues.js:662`, `674`, `ui/views/session.js:231`). A line placed in markup keeps its role: `ui/views/cards.js:7` (alert), `ui/views/issues.js:460`, `490`, `495` (status).
 
 ### Two-click confirm
 
@@ -211,7 +211,7 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 
 ## Tables
 
-The one table is `dataTable()` (`ui/lib.js:568`) with `heads()` (`ui/lib.js:571`) or `sortHead()` (`ui/lib.js:704`), styled by `table.tbl` (`ui/app.css:448`). A table that can pass 50 rows is `pagedTable()` (`ui/lib.js:691`), which wraps `dataTable()` and `pager()`. Every table goes through one of the two.
+The one table is `dataTable()` (`ui/lib.js:568`) with `heads()` (`ui/lib.js:571`) or `sortHead()` (`ui/lib.js:694`), styled by `table.tbl` (`ui/app.css:448`). A table that can pass 50 rows is `pagedTable()` (`ui/lib.js:681`), which wraps `dataTable()` and `pager()`. Every table goes through one of the two.
 
 Rules, as the code states them (`ui/app.css:448`):
 
@@ -220,8 +220,8 @@ Rules, as the code states them (`ui/app.css:448`):
 - **Spare width:** the widest text column is `td.wide` (`ui/app.css:454`); it is cut with an ellipsis (`max-width: 0`, `overflow: hidden`).
 - **Alignment:** text left; numbers right with the `.num` class (`ui/app.css:460`) on `th` and `td`, in `--num` with tabular figures and weight 500.
 - **Cells:** `white-space: nowrap`, padding `--sp-6 --sp-12 --sp-6 0`, a `--rule-2` line under each row, and `--sunk` on row hover (`ui/app.css:449`, `453`). Headers are `600 var(--fs-xs)` in `--muted`.
-- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼` (`ui/lib.js:706`).
-- **Pager:** `pager()` (`ui/lib.js:685`) shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
+- **Sort:** a header button with `data-sort`; the sorted header is `--ink` with `aria-sort`, and the arrow is `▲` or `▼` (`ui/lib.js:696`).
+- **Pager:** `pager()` (`ui/lib.js:675`) shows "50 of 345" and "Show 50 more"; `PAGE` is 50, set by `PAGE` (`ui/views/issues.js:29`) and `PAGE` (`ui/views/jobs.js:45`).
 - **Long text:** `clamp()` (`ui/lib.js`) sets long text clamped, followed by a button with `aria-expanded` that opens and closes it. A list that shows its first N rows uses `moreFold()` (`ui/lib.js`).
 - **Wide tables:** `.tscroll` (`ui/app.css:472`) scrolls sideways.
 - **Empty table:** `empty()` (`ui/lib.js:61`) in place of the table.
@@ -251,9 +251,8 @@ Gaps: a missing cell is empty in some tables and `–` in others. Row height is 
 Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `chart()` (`ui/lib.js:184`); the theme reads the page tokens through `readTokens()` (`ui/lib.js:174`) and redraws on a colour-scheme change.
 
 - **Series colours:** `--run`, `--done`, `--need`, `--stuck`, then `--chart-6` and `--chart-7`; agent roles use `--series-1` to `--series-5`.
-- **Bars:** `barsOption()` (`ui/lib.js:595`) for counts over categories, with no animation, `barMaxWidth: 64` and a shadow-pointer tooltip. Uses: none since the Agents cost chart moved to a panel.
-- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js:617`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`.
-- **Range bars:** `rangeBarOption()` (`ui/lib.js:643`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
+- **Stacked areas:** `stackedAreaOption()` (`ui/lib.js:607`) for a count split by a category over time; one series per category, stacked, at 60% opacity, with a legend; optional `lines` draw on a right axis. Uses: the open backlog by priority, with filed and closed lines, in `ui/views/issues.js`.
+- **Range bars:** `rangeBarOption()` (`ui/lib.js:633`) for a spread per category: a horizontal bar to the p50 and a tick at the p90, one row per category. Use: time to close by kind in `ui/views/issues.js`.
 - **Jobs page:** three charts of the same height in one row (`trendOption`, `stripOption`, `slowestOption` in `ui/views/factory-jobs.js`), drawn by `chart()` with the theme tokens: p50 and p90 areas per bucket, with 0 for a bucket with no time; a strip with one dot per issue linking to the issue, with the time on a base-60 log axis that starts at 1m unless a time is under a minute and the filing time on the vertical axis (an issue with no filing time has no dot); and the 10 slowest stages as bars coloured by stage, ordered by stage then by issue, each linking to the issue (for Lead Time an issue has a row per slow stage). Each chart box has `role="img"` and an `aria-label` that states its data.
 - **Chart panel:** `<aleph-chart key="<view>/<chart>">` (`ui/chart.js`) draws a frame as a card that fills its grid cell. A frame names its measure (name, unit, `agg` of `sum` for a flow or `max` for a level), what it is over (time with the window, or a category) and its breakdown (`by`, keys with a colour token each). From the frame come the title (`<measure> by <dimension>`, as Agents Live by Role), the aria label (each key's total, or peak for a level), the axis and tooltip format of the unit, the series colours, the empty line and the forms on offer. The forms are a group's icon buttons in the card head: over time Area, Columns, Lines and Share (a flow opens as Columns, a level as Area); over categories Stacked, Grouped and Share. `push(row)` adds a row or replaces the row with the same `at` and keeps the window's length. New charts use the panel; the option helpers above stay only until their views move to it.
 - **Agents page:** three chart panels in one row (`liveFrame`, `outcomesFrame`, `costFrame` in `ui/views/factory-agents.js`): Agents Live by Role, one key per timed role, coloured by its place in the fixed role list (`--series-1` to `--series-5`, `--chart-6`, `--chart-7`); Outcomes by Role, succeeded, failed and stuck in `--done`, `--need` and `--stuck`; and Cost by Model per bucket, from `buckets[].cost` in `/api/speed`.
@@ -266,7 +265,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `cha
 - **Bar lists:** `barRow()` (`ui/lib.js:586`) and `barList()` (`ui/lib.js:592`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:357`) and `priorityBadge()` (`ui/lib.js:361`) are squared with `--r-tag`; `chips()` (`ui/lib.js:373`) are pills.
 - **Agent Time bar:** `bar()` in `ui/views/speed.js`, on Status and Efficiency: `.obar`, 28px high, in the five `--seg-*` colours with no text on the bar. A legend (`.olegend`) under it names each outcome with its hours and share, as `landed (40h 57%)`.
-- **Loading and empty:** a chart's loading line is `loadingLine()` (`ui/lib.js:77`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:111`. Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:598`), and each option names its series.
+- **Loading and empty:** a chart's loading line is `loadingLine()` (`ui/lib.js:77`), which returns `<p class="quiet" role="status">Loading <what>…</p>`; the Agents view calls it at `ui/views/factory-agents.js:111`. Units are not set in one place; the legend is one shared option (`legend`, `ui/lib.js:594`), and each option names its series.
 
 ## Metric cards
 
@@ -352,7 +351,7 @@ Contrast ratios, computed from the hex values in `ui/app.css` (text on its backg
 | `--focus` on `--surface` (ring, 3:1 for a non-text mark) | 5.21 | 5.67 |
 | white on `--seg-reran` (the lowest of the five) | 4.70 | 4.70 |
 
-All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:706`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:544`).
+All pairs listed pass 4.5:1. `ui/stuck-contrast.test.ts` tests the stuck pair. A state is shown by a text badge as well as colour, but a bar's tone and the diff colours rely on colour. The focus ring (`ui/app.css:182`) is visible on all controls. Sort headers set `aria-sort` (`ui/lib.js:696`) and selector cards set `aria-pressed` (`statCard()`, `ui/lib.js:544`).
 
 ## Components
 
@@ -366,7 +365,7 @@ Reference view = the view that follows the rules best.
 | Badge | `badge()` | `ui/views/jobs.js` |
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
-| Chart | `chart()`, `barsOption()` | `ui/views/factory-agents.js` |
+| Chart | `chart()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
 | Pager | `pager()` | `pager()` (`ui/views/issues.js:217`) |

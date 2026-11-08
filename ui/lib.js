@@ -591,16 +591,6 @@ export function barRow(label, pct, value, { top = false, key, on = false, bar } 
 /** The rows of a bar list on one grid, so their bars start and end together. */
 export const barList = (rows) => `<div class="bars">${rows}</div>`;
 
-/** The ECharts option for bars over categories. Each series is `{name, data, color?}`; a `color` function gives each bar its own. */
-export const barsOption = (labels, series, { labels: showValues = false } = {}) => ({
-  animation: false,
-  grid: { left: 32, right: 8, top: showValues ? 20 : 8, bottom: 20 },
-  xAxis: { type: "category", data: labels, axisTick: { show: false } },
-  yAxis: { type: "value", minInterval: 1, splitLine: { show: true } },
-  tooltip: { trigger: "axis", confine: true, axisPointer: { type: "shadow" } },
-  series: series.map((s) => ({ type: "bar", barMaxWidth: 64, name: s.name, data: s.data, ...(s.color ? { itemStyle: { color: s.color } } : {}), ...(showValues ? { label: { show: true, position: "top", textBorderWidth: 0, textBorderColor: "transparent" } } : {}) })),
-});
-
 /** The legend of every chart: one line at the top that scrolls when its items do not fit, so it never covers the grid. */
 export const legend = { type: "scroll", top: 0, right: 0, itemWidth: 10, itemHeight: 10 };
 /** The HTML legend: one `<li>` per `[label, cls]`; a `cls` gives the item a swatch that CSS colours. */

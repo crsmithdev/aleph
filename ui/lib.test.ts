@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -198,49 +198,10 @@ test("pct shows whole percents, one decimal under 1%, <0.1% under 0.05 and – f
   expect([0.02, 0.5, 30, 2.5].map(pct)).toEqual(["<0.1%", "0.5%", "30%", "3%"]);
 });
 
-test("bar value labels have no outline in the dark or the light theme", async () => {
-  // @ts-ignore the vendored ECharts bundle has no types
-  const echarts = (await import("./vendor/echarts.min.js")).default;
-  const tokens = { surface: "#1b1b1f", rule: "#3a3a40", run: "#5b9bd5", done: "#60b060", need: "#e0a040", stuck: "#e05050", "chart-6": "#9070c0", "chart-7": "#40a0a0", sans: "sans" };
-  const themes = {
-    dark: { ...tokens, bg: "#111114", ink: "#e6e6e6" },
-    light: { ...tokens, bg: "#ffffff", ink: "#111114" },
-  };
-  for (const [name, t] of Object.entries(themes)) {
-    const ec = echarts.init(null, chartTheme(t), { renderer: "svg", ssr: true, width: 400, height: 300 });
-    ec.setOption(barsOption(["a", "b"], [{ name: "n", data: [1, 2] }], { labels: true }));
-    const svg: string = ec.renderToSVGString();
-    ec.dispose();
-    // Value labels sit centred over the bars; the axis labels are right-aligned, so they do not match.
-    const values = svg.match(/<text[^>]*text-anchor="middle"[^>]*>[12]<\/text>/g) ?? [];
-    expect(values.length, name).toBe(2);
-    for (const el of values) expect(el.includes(' stroke="') && !el.includes('stroke-width="0"'), name).toBe(false);
-  }
-});
-
 test("rangeBarOption colours the p90 tick from the muted token", () => {
   const color = rangeBarOption(["bug"], [1], [2], "d", { muted: "#123456" }).series.find((s: any) => s.name === "p90").itemStyle.color;
   expect(color).toBe("#123456");
   expect(color).not.toBe("#888");
-});
-
-test("bar value labels take the theme ink, not ECharts' #333, in the dark and the light theme", async () => {
-  // @ts-ignore the vendored ECharts bundle has no types
-  const echarts = (await import("./vendor/echarts.min.js")).default;
-  const tokens = { surface: "#1b1b1f", rule: "#3a3a40", run: "#5b9bd5", done: "#60b060", need: "#e0a040", stuck: "#e05050", "chart-6": "#9070c0", "chart-7": "#40a0a0", sans: "sans" };
-  const themes = {
-    dark: { ...tokens, bg: "#111114", ink: "#e6e6e6" },
-    light: { ...tokens, bg: "#ffffff", ink: "#111114" },
-  };
-  for (const [name, t] of Object.entries(themes)) {
-    const ec = echarts.init(null, chartTheme(t), { renderer: "svg", ssr: true, width: 400, height: 300 });
-    ec.setOption(barsOption(["a", "b"], [{ name: "n", data: [1, 2] }], { labels: true }));
-    const svg: string = ec.renderToSVGString();
-    ec.dispose();
-    const values = svg.match(/<text[^>]*text-anchor="middle"[^>]*>[12]<\/text>/g) ?? [];
-    expect(values.length, name).toBe(2);
-    for (const el of values) expect(el.match(/fill="([^"]*)"/)?.[1], name).toBe(t.ink);
-  }
 });
 
 test("meter draws one share or segments as a .meter with a role=img aria-label", () => {
