@@ -42,10 +42,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   }, 30_000);
 
   test("a view's handlers do not outlive it", async () => {
+    // go() can return while #view still shows the page before, so wait for the new view's own markup.
     await page.go("#/factory/jobs");
-    expect(await page.ev('typeof document.querySelector("#view").onclick')).toBe("function");
+    await page.until('document.querySelector("#view #perf") && typeof document.querySelector("#view").onclick === "function"');
     expect(await page.ev('typeof document.querySelector("#view").oninput')).toBe("function");
     await page.go("#/issues");
+    await page.until('document.querySelector("#view #inv-filters")');
     expect(await page.ev('[document.querySelector("#view").onclick, document.querySelector("#view").onchange]')).toEqual([null, null]);
     expect(await page.ev('document.querySelector("#view").oninput')).toBeNull();
     await click('#inv-filters .seg button[data-value="done"]');
