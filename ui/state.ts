@@ -82,6 +82,8 @@ export interface NewIssue { id: string; title: string; priority?: string; status
 export interface RunningIssue { id: string; title: string; href: string; stage: string; priority: string; of: { n: number; m: number }; /** When the work on it was first picked up. */ since: string; /** When it was last changed. */ at: string }
 
 /** A done issue as the Done list shows it: the issue is the head, its jobs are links. */
+export interface DoneItem { id: string; title: string; href: string; priority: string; finished: string; /** When the work on it was first picked up; "" if never. */ since: string; part?: Part; jobs: Job[] }
+
 /** One status transition or factory event in the Herald feed. */
 export interface HeraldHistoryItem {
   at: string;

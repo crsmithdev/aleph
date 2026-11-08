@@ -379,9 +379,9 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
     await page.ev('document.querySelector("#obar-probe").remove()');
   }, 30_000);
 
-  test("the empty lane text is muted and smaller than the body, and the second tile figure uses --fs-2xl", async () => {
+  test("the empty lane text is muted and smaller than the body, and the second tile figure is a share of the value", async () => {
     await page.go("#/");
-    const m = await page.ev<{ color: string; want: string; size: number; body: number; em: number; fs: number }>(`import("/views/now.js").then(async (n) => {
+    const m = await page.ev<{ color: string; want: string; size: number; body: number; em: number; val: number }>(`import("/views/now.js").then(async (n) => {
       const { statCard } = await import("/lib.js");
       const host = document.createElement("div");
       host.id = "lane-probe";
@@ -389,12 +389,12 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
       host.innerHTML = n.renderLanes({ queued: [], running: [], done: [], factory: {} }) + '<section class="tiles">' + statCard({ k: "Landed", v: "5", v2: "9" }) + "</section>";
       const css = (e) => getComputedStyle(e);
       const probe = (v) => { const p = document.createElement("i"); p.style.color = v; host.append(p); return css(p).color; };
-      const sz = (v) => { const p = document.createElement("i"); p.style.fontSize = v; host.append(p); return parseFloat(css(p).fontSize); };
-      return { color: css(host.querySelector(".lane .empty p")).color, want: probe("var(--muted)"), size: parseFloat(css(host.querySelector(".lane .empty p")).fontSize), body: parseFloat(css(document.body).fontSize), em: parseFloat(css(host.querySelector(".tile.sc b em")).fontSize), fs: sz("var(--fs-2xl)") };
+      const em = host.querySelector(".tile.sc b em"), val = host.querySelector(".tile.sc b");
+      return { color: css(host.querySelector(".lane .empty p")).color, want: probe("var(--muted)"), size: parseFloat(css(host.querySelector(".lane .empty p")).fontSize), body: parseFloat(css(document.body).fontSize), em: parseFloat(css(em).fontSize), val: parseFloat(css(val).fontSize) };
     })`);
     expect(m.color).toBe(m.want);
     expect(m.size).toBeLessThan(m.body);
-    expect(m.em).toBe(m.fs);
+    expect(m.em / m.val).toBeCloseTo(0.62, 2);
     await page.ev('document.querySelector("#lane-probe").remove()');
   }, 30_000);
 
@@ -413,5 +413,24 @@ describe.skipIf(!chromeUsable)("Status lane cards", () => {
       return out;
     })()`);
     expect(pads).toEqual(["18px", "18px", "18px", "18px", "18px"]);
+  }, 30_000);
+
+  test("the Herald's calm line keeps its dot and its words on one line", async () => {
+    await page.width(1280);
+    await page.go("#/");
+    // The Herald's own renderer with no alerts: the calm line goes on the page as the view draws it.
+    await page.ev(`import("/views/now.js").then(({ renderHerald }) => { document.querySelector("#herald").outerHTML = renderHerald({ factory: {}, asks: [], stuck: [] }); })`);
+    const m = await page.ev<{ dot: number[]; text: number[] }>(`(() => {
+      const line = document.querySelector(".herald-sticky.calm");
+      const d = line.querySelector(".event-dot").getBoundingClientRect();
+      const words = [...line.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+      const r = document.createRange();
+      r.selectNodeContents(words);
+      const t = r.getBoundingClientRect();
+      return { dot: [d.left, d.right, (d.top + d.bottom) / 2], text: [t.left, t.top, t.bottom] };
+    })()`);
+    expect(m.dot[2]).toBeGreaterThan(m.text[1]);
+    expect(m.dot[2]).toBeLessThan(m.text[2]);
+    expect(m.dot[1]).toBeLessThan(m.text[0]);
   }, 30_000);
 });

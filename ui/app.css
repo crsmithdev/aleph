@@ -779,7 +779,7 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-card { display: flex; flex-direction: column; gap: var(--sp-12); min-width: 0; padding: var(--gap-in); border: 1px solid var(--rule); border-radius: var(--r-card); background: var(--surface); font-size: var(--fs-sm); position: relative; transition: box-shadow .3s ease, border-color .3s ease; }
 .herald-card.pulsing { border-color: var(--focus); box-shadow: 0 0 0 3px var(--focus); }
 .herald-sticky { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-10); margin-bottom: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-8); }
-.herald-sticky.calm { border-bottom: none; padding-bottom: 0; margin-bottom: 0; font-size: var(--fs-xs); color: var(--muted); }
+.herald-sticky.calm { border-bottom: none; padding-bottom: 0; margin-bottom: 0; font-size: var(--fs-xs); color: var(--muted); flex-direction: row; align-items: center; gap: var(--sp-4); }
 .herald-sticky-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .herald-tabs { display: flex; gap: var(--sp-2); border-bottom: 1px solid var(--rule); }
 .herald-tabs button { font: var(--fw-strong) var(--fs-xs) var(--sans); color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: var(--sp-4) var(--sp-10) var(--sp-6); cursor: pointer; }

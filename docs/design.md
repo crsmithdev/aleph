@@ -108,7 +108,7 @@ Type, size and effect tokens (`ui/app.css:47-71`):
 | `--indent-list` | 18px | `padding-left` of an indented list |
 | `--sans`, `--mono`, `--num`, `--display`, `--metric`, `--brand` | Work Sans, Hack Nerd Font, Merriweather families | body, code, numbers, titles |
 
-Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers, `--fw-strong` 600 for headings and table headers. 700 stays a literal on `.mark` (`ui/app.css:185`) and `.tile b` (`ui/app.css:732`).
+Weights are tokens: `--fw-text` 400 for text, `--fw-mid` 500 for ids and numbers, `--fw-strong` 600 for headings and table headers. 700 stays a literal on `.mark` (`ui/app.css:185`) and `.tile b` (`ui/app.css:759`).
 
 Breakpoints are not tokens, because custom properties do not work in `@media`. There are two named widths: 720px and 1100px (wide). The queries in `ui/app.css` are `(max-width: 720px)` 11 times, `(max-width: 1100px)` 4 and `(min-width: 721px)` 1.
 
@@ -132,7 +132,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 | Rule | Value | Uses | Token to come |
 |---|---|---|---|
 | Display type tracking | `letter-spacing: -0.01em` on the brand mark, the shead text, the page title and display text | 4 rows (`ui/app.css:185`, `210`, `211`, `490`) | `--ls-display` |
-| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:573`) and `.08em` (`ui/app.css:731`) | 2 rows | none; pick one when a third key comes |
+| Small-caps key tracking | one value for uppercase keys; today `.06em` (`ui/app.css:573`) and `.08em` (`ui/app.css:756`) | 2 rows | none; pick one when a third key comes |
 | Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
 | Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`ui/lib.js:601`, `614`, `626`, `ui/views/factory-jobs.js:31`) | none; a rule |
 | Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
@@ -259,7 +259,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `cha
 - **Herald:** the badge says `N active` in the tone of the worst alert (a stuck job or an error is `stuck`, an Ask alone is `need`), or `Calm`. The alert cards come first with no heading, then two tabs: Events (the status history) and Issues (work running or landed today, pinned at the top, then the queue).
 - **Alerts section (Status page):** the Herald holds the Asks and the stuck, failed and error cards. The cards are one full-width column, as the Asks are. Each card has the Ask card structure (`ask-box` with the meta row, then the fold, then the buttons); a stuck, failed or error card uses the red `unstick` tone. The id, priority, date and runtime sit inside the box and show while the fold is closed. The status line links `#awaiting` (Asks) and `#jobs-stuck` (stuck jobs) point at the two lists of the section.
 - **Axes:** category x axis, value y axis from 0 with whole-number steps. The x label is `xLabel()` (`ui/views/speed.js:20`): `4a` or `1:36p` in the hour and day windows, `Oct 25` in week and month. The cost chart on Agents is the one exception (see Deviations).
-- **Meters:** `meter()` (`ui/lib.js:556`) draws every share bar, one share or segments, as `.meter` (`ui/app.css:764`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
+- **Meters:** `meter()` (`ui/lib.js:556`) draws every share bar, one share or segments, as `.meter` (`ui/app.css:827`, 10px) with `role="img"` and an `aria-label`, or `aria-hidden` beside a visible value. Uses: bar lists, the Efficiency table, Status cells, Sessions tools, Memory recall and the Usage card.
 - **Bar lists:** `barRow()` (`ui/lib.js:564`) and `barList()` (`ui/lib.js:570`): label, meter, value on one grid.
 - **Badges and chips:** `badge()` (`ui/lib.js:357`) and `priorityBadge()` (`ui/lib.js:361`) are squared with `--r-tag`; `chips()` (`ui/lib.js:373`) are pills.
 - **Agent Time bar:** `bar()` in `ui/views/speed.js`, on Status and Efficiency: `.obar`, 28px high, in the five `--seg-*` colours with no text on the bar. A legend (`.olegend`) under it names each outcome with its hours and share, as `landed (40h 57%)`.
@@ -267,7 +267,7 @@ Charts are ECharts, themed by `chartTheme()` (`ui/lib.js:159`) and drawn by `cha
 
 ## Metric cards
 
-A metric card is the standard data card. The Status scorecard set the design; every page with metric cards uses it. `statCard()` (`ui/lib.js:524`) draws one card, `tiles()` (`ui/lib.js:532`) lays the cards out as an auto-fit grid of 150px minimum that stretches to fill the row, and the CSS is `.tile` (`ui/app.css:726`). Do not write card markup by hand.
+A metric card is the standard data card. The Status scorecard set the design; every page with metric cards uses it. `statCard()` (`ui/lib.js:524`) draws one card, `tiles()` (`ui/lib.js:532`) lays the cards out as an auto-fit grid of 150px minimum that stretches to fill the row, and the CSS is `.tile` (`ui/app.css:751`). Do not write card markup by hand.
 
 A card has 3 rows and nothing else:
 
@@ -305,7 +305,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 ## Content
 
 - **Markdown:** `md()` (`ui/lib.js:112`) renders into `.md` (`ui/app.css:596`); headings are `600 var(--fs-lg)` in the sans face.
-- **Code:** `pre` (`ui/app.css:721`) and `code` (`ui/app.css:180`) use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:721`) or scroll (`.md pre`, `ui/app.css:598`).
+- **Code:** `pre` (`ui/app.css:746`) and `code` (`ui/app.css:180`) use `--mono` at `--fs-xs`; blocks sit on `--sunk` with `--r-tag` and wrap (`ui/app.css:746`) or scroll (`.md pre`, `ui/app.css:598`).
 - **Diffs:** `.diff-panel` (`ui/app.css:349`) on `--sunk`, max height 480px, added lines `--add`, removed `--del`, hunks `--muted` (`.diff-panel .d-hunk`, `ui/app.css:354`). `diffHtml()` (`ui/lib.js:271`) renders a diff on the Job page and in an Ask card, and `loadDiff()` (`ui/lib.js:279`) loads it.
 - **Command box:** `cmd()` (`ui/lib.js:86`) renders `.cmd` (`ui/app.css:312`), a mono button that copies on click with a `.cp` control (`ui/app.css:323`); `primary` (`.cmd.primary`, `ui/app.css:320`) inverts it.
 - **Not determined:** the wrap rule of every long-text view was not traced.
@@ -327,7 +327,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Shell:** a sidebar (`#nav`, `ui/app.css:568`, grouped by `work`, `factory`, `claude`) and `main` (`ui/index.html:30`); the sidebar collapses to 48px on desktop (`ui/app.css:584`) and its state is kept in `localStorage` (`ui/index.html:47`, `51`).
 - **Page:** `.page` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below (`ui/app.css:208`, `ui/app.css:542`).
 - **Skeleton:** `pageHead()` (`ui/lib.js:302`) with the serif title and a muted count, then `card()` sections (`ui/lib.js:542`) with a `sectionHead()` (`ui/lib.js:687`); Status has its own `.shead` (`ui/app.css:209`). A detail page starts with `crumb()` (`ui/lib.js:344`).
-- **Grid:** `.tiles` (`ui/app.css:725`) holds the metric cards (see Metric cards); `.lanes` (`ui/app.css:189`) is 3 columns, 2 at 1100px and below (`ui/app.css:536`), 1 at 720px and below (`ui/app.css:538`).
+- **Grid:** `.tiles` (`ui/app.css:750`) holds the metric cards (see Metric cards); `.lanes` (`ui/app.css:189`) is 3 columns, 2 at 1100px and below (`ui/app.css:536`), 1 at 720px and below (`ui/app.css:538`).
 - **Phone:** at 720px and below, 11 `@media` queries change the layout; tables scroll inside `.tscroll` (`ui/app.css:472`). What each table does at a phone width was not seen in a browser.
 
 ## Accessibility
