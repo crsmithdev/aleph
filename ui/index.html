@@ -34,9 +34,9 @@
   </main>
 </div>
 <script>
-  // A classic script, so that a collapsed sidebar is collapsed before the first paint.
+  // A classic script, so that a collapsed sidebar is collapsed before the first paint. The key and the JSON value are keep()'s; the older "1"/"0" key still counts.
   {
-    const KEY = "aleph-sidebar-collapsed";
+    const KEY = "aleph.sidebar-collapsed", OLD = "aleph-sidebar-collapsed";
     const shell = document.querySelector(".shell"), button = document.getElementById("collapse");
     const show = (collapsed) => {
       shell.classList.toggle("collapsed", collapsed);
@@ -44,18 +44,18 @@
       button.setAttribute("aria-label", collapsed ? "Expand the sidebar" : "Collapse the sidebar");
       button.setAttribute("aria-expanded", String(!collapsed));
     };
-    try { show(localStorage.getItem(KEY) === "1"); } catch {}
+    try { const v = localStorage.getItem(KEY); show(v === null ? localStorage.getItem(OLD) === "1" : JSON.parse(v) === true); } catch {}
     button.addEventListener("click", () => {
       const collapsed = !shell.classList.contains("collapsed");
       show(collapsed);
-      try { localStorage.setItem(KEY, collapsed ? "1" : "0"); } catch {}
+      try { localStorage.setItem(KEY, JSON.stringify(collapsed)); } catch {}
     });
   }
 </script>
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState } from "/lib.js";
+  import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
@@ -149,13 +149,13 @@
     if (!first && $("view").querySelector("button.act.ask")) return;
     // A refresh render throws away what the reader set (open folds, shown diffs, typed text); put it back.
     const saved = first ? null : recordState($("view"));
-    // Keyed <details> also keep their open state by data-keep.
-    const kept = new Map();
-    if (!first) $("view").querySelectorAll("details[data-keep]").forEach((d) => kept.set(d.dataset.keep, d.open));
     try { $("view").innerHTML = view.render(data, params, query); }
     catch (e) { $("view").innerHTML = `<div class="page">${error(`${view.title} failed to render: ${e.message}`, "This is a bug in the view.")}</div>`; return; }
     if (saved) restoreState($("view"), saved);
-    $("view").querySelectorAll("details[data-keep]").forEach((d) => { if (kept.has(d.dataset.keep)) d.open = kept.get(d.dataset.keep); });
+    // Keyed <details> keep their open state by data-keep, and that state goes through keep(),
+    // one key per fold: it survives a redraw and a reload. A fold the reader never touched
+    // has no kept state, and shows its own default.
+    restoreFolds($("view"));
     // `mount` runs after render, for what needs a DOM (the charts); a view without one is left alone.
     try { mountView(view, $("view"), data, query); }
     catch (e) { console.error(view.title, "mount failed", e); }
@@ -352,6 +352,7 @@
     views = mods.flat().filter((v) => v && typeof v.path === "string" && typeof v.render === "function")
       .map((v) => ({ ...v, _route: compile(v.path) }));
     addEventListener("hashchange", route);
+    wireFolds($("view"));
     route();
   }
   start();

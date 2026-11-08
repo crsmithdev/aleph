@@ -117,6 +117,30 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.until('!document.querySelector(".shell.collapsed")');
   }, 30_000);
 
+  test("an open fold and a collapsed sidebar are both still set after a page reload", async () => {
+    // A reader who collapsed the sidebar under the older key still sees it collapsed.
+    await page.ev('localStorage.clear(); localStorage.setItem("aleph-sidebar-collapsed", "1")');
+    await page.reload();
+    expect(await page.ev('!!document.querySelector(".shell.collapsed")')).toBe(true);
+    await page.ev("localStorage.clear()");
+    await click("#collapse");
+    await page.until('!document.querySelector(".shell.collapsed")');
+    await page.go("#/");
+    await page.until('document.querySelector("#view details[data-keep]")');
+    const fold = '[...document.querySelectorAll("#view details[data-keep]")][0]';
+    await page.ev(`${fold}.open = true`);
+    // The fold's state must reach storage before the reload, or the reload races the write.
+    await page.until(`localStorage.getItem("aleph." + ${fold}.dataset.keep) === "true"`);
+    await click("#collapse");
+    await page.until('document.querySelector(".shell.collapsed")');
+    await page.reload();
+    await page.until(`${fold}`);
+    expect(await page.ev(`[!!document.querySelector(".shell.collapsed"), ${fold}.open]`)).toEqual([true, true]);
+    await page.ev(`${fold}.open = false`);
+    await click("#collapse");
+    await page.until('!document.querySelector(".shell.collapsed")');
+  }, 30_000);
+
   test("at phone width the nav wraps, the page does not scroll sideways, and group headers hide", async () => {
     await page.go("#/");
     await page.width(420);

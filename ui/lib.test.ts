@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, chartBox, legendHtml, mountCharts, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, barsOption, rangeBarOption, stackedAreaOption, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -138,6 +138,22 @@ test("restoreState ignores state for elements the new HTML no longer has", () =>
   const after = fakeRoot("<p>nothing</p>");
   expect(() => restoreState(after, state)).not.toThrow();
   expect(() => restoreState(after, null)).not.toThrow();
+});
+
+test("a fold keeps its open state through keep() and kept(), and a fold with no kept state shows its default", () => {
+  const g = globalThis as any, store = new Map<string, string>();
+  g.localStorage = { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, v) };
+  try {
+    let toggle: any;
+    const root = (ds: any[]) => ({ querySelectorAll: (sel: string) => (sel === "details[data-keep]" ? ds : []), addEventListener: (t: string, f: any) => { if (t === "toggle") toggle = f; } });
+    wireFolds(root([]));
+    const opened = { dataset: { keep: "more:a1" }, open: true };
+    toggle({ target: { closest: () => opened } });
+    expect(store.get("aleph.more:a1")).toBe("true");
+    const fresh = [{ dataset: { keep: "more:a1" }, open: false }, { dataset: { keep: "ask:a2" }, open: false }];
+    restoreFolds(root(fresh));
+    expect(fresh.map((f) => f.open)).toEqual([true, false]);
+  } finally { delete g.localStorage; }
 });
 
 test("chips gives labels as chips, nothing for none", () => {

@@ -412,6 +412,21 @@ export function keep(key, value) {
   try { localStorage.setItem(`aleph.${key}`, JSON.stringify(value)); } catch { /* no storage */ }
 }
 
+/** Each `<details data-keep>` of `root` keeps its open state under its own key, as the reader left it. */
+export function wireFolds(root) {
+  root.addEventListener("toggle", (e) => {
+    const d = e.target.closest?.("details[data-keep]");
+    if (d) keep(d.dataset.keep, d.open);
+  }, true);
+}
+/** Apply the kept open state to each fold of the freshly rendered `root`; a fold with no kept state shows its default. */
+export function restoreFolds(root) {
+  for (const d of root.querySelectorAll("details[data-keep]")) {
+    const open = kept(d.dataset.keep);
+    if (open != null) d.open = open;
+  }
+}
+
 // ---------- the address: a selection or a filter lives in the hash ----------
 
 /** The hash's query. */
