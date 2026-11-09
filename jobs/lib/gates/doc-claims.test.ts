@@ -37,6 +37,13 @@ describe("a doc that does not match fails, quoting the claim", () => {
     ]);
   });
 
+  test("a CSS selector cited in a stylesheet that does not hold it", () => {
+    expect(one("`.no-such-class` in `ui/app.css`, `.chat .clamp` in `ui/app.css`, `.chat .clam` in `ui/app.css`")).toEqual([
+      'docs/x.md:1: "`.no-such-class` in `ui/app.css`": ui/app.css has no .no-such-class',
+      'docs/x.md:1: "`.chat .clam` in `ui/app.css`": ui/app.css has no .chat .clam',
+    ]);
+  });
+
   test("a name paired with a line that does not hold it", () => {
     const f = readFileSync(join(ROOT, "jobs/lib/gates/doc-claims.ts"), "utf8").split("\n");
     const at = f.findIndex((l) => l.includes("export function docProblems")) + 1;

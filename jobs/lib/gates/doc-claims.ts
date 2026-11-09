@@ -11,6 +11,7 @@
  * - each `path:line` in backticks against the length of that file (a bare file name must name one file of the tree);
  * - each `` `name` (`path:line`) ``, `` `name` in `path:line` `` and `` (`name`, `path:line`) `` against the lines of that file: the name must be at the line or in the range;
  * - each `` `name` in `path` `` (also `from`, `of`, `` `path`'s `name` ``) against the text of that file;
+ * - each `` `.selector` in `path.css` `` (also `from`, `of`) against the text of that file;
  * - each `` `path` imports only `a` and `b` `` against the imports of that file;
  * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source.
  */
@@ -144,6 +145,7 @@ export function lineRefsIn(docs: Doc[]): { path: string; from: number; line: num
 
 const IDENT = String.raw`[A-Za-z_$][\w$]*`;
 const SYMBOL_IN = new RegExp(String.raw`\`(${IDENT})(?:\(\))?\`\s+(?:in|from|of)\s+\`(${PATH})\``, "g");
+const SELECTOR_IN = new RegExp(String.raw`\`([.#][\w.#>+~: -]*[\w)])\`\s+(?:in|from|of)\s+\`((?:[\w.-]+/)*[\w.-]+\.css)\``, "g");
 const SYMBOL_OF = new RegExp(String.raw`\`(${PATH})\`'s\s+\`(${IDENT})(?:\(\))?\``, "g");
 
 /** The code names a doc places in a file: `` `name` in `path` ``, `from`, `of`, and `` `path`'s `name` ``. */
@@ -151,6 +153,7 @@ export function symbolsIn(docs: Doc[]): { symbol: string; path: string; quote: s
   const out: { symbol: string; path: string; quote: string; file: string; line: number }[] = [];
   each(docs, (d, text, line) => {
     for (const m of text.matchAll(SYMBOL_IN)) out.push({ symbol: m[1], path: m[2], quote: m[0], file: d.file, line });
+    for (const m of text.matchAll(SELECTOR_IN)) out.push({ symbol: m[1], path: m[2], quote: m[0], file: d.file, line });
     for (const m of text.matchAll(SYMBOL_OF)) out.push({ symbol: m[2], path: m[1], quote: m[0], file: d.file, line });
   });
   return out;
@@ -255,7 +258,8 @@ export function docProblems(docs: Doc[], truth: Truth): string[] {
   for (const s of symbolsIn(docs)) {
     const text = fileText(truth.root, s.path);
     if (text === null) continue;
-    if (!new RegExp(String.raw`(?<![\w$])${s.symbol.replace(/\$/g, "\\$")}(?![\w$])`).test(text)) problems.push(`${s.file}:${s.line}: "${s.quote}": ${s.path} has no ${s.symbol}`);
+    const dash = s.path.endsWith(".css") ? "-" : "";
+    if (!new RegExp(String.raw`(?<![\w$${dash}])${s.symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\w$${dash}])`).test(text)) problems.push(`${s.file}:${s.line}: "${s.quote}": ${s.path} has no ${s.symbol}`);
   }
   for (const c of importClaimsIn(docs)) {
     const text = fileText(truth.root, c.path);
