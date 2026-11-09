@@ -494,8 +494,8 @@ test("the Monitor draws **text** as bold in the summary and the list, and escape
   }
 });
 
-test("the body has the tick, the suite and the monitor with their last run from tick.json and tick.log; with no record each has not run", async () => {
-  const dir = process.env.ALEPH_FACTORY_DIR!, logPath = join(dir, "tick.log"), was = readFileSync(logPath, "utf8");
+test("the body has the tick, the suite and the monitor with their last run from tick.json; with no record each has not run", async () => {
+  const dir = process.env.ALEPH_FACTORY_DIR!;
   const none: any = (await body()).schedules;
   expect(none).toEqual([{ name: "tick", last: null, result: null, every: "1min" }, { name: "suite", last: null, result: null, every: "1h" }, { name: "monitor", last: null, result: null, every: "1d" }]);
   const h = gates.renderSchedules({ ...(await body()), schedules: none });
@@ -508,8 +508,8 @@ test("the body has the tick, the suite and the monitor with their last run from 
   expect(tbody.match(/<tr>/g)).toHaveLength(3);
   expect(tbody).toContain("<td>has not run</td><td></td></tr>");
   expect(h).not.toContain("tick,has not run");
-  writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {} }));
-  writeFileSync(logPath, was + [`${ago(70)} suite plain: red`, `${ago(11)} suite plain: green`, `${ago(10)} suite held: green`, `${ago(50)} monitor 2026-11-03: 7 findings: FINDING-TEXT first`].join("\n") + "\n");
+  const ran = { "suite plain": { at: ago(11), result: "green" }, "suite held": { at: ago(10), result: "green" }, monitor: { at: ago(50), result: "7 findings" } };
+  writeFileSync(join(dir, "tick.json"), JSON.stringify({ last: { ci: ago(9), firefight: ago(2) }, missed: ["stalled:x"], suite: {}, ran }));
   try {
     const d: any = (await body()).schedules;
     expect(d).toEqual([
@@ -520,10 +520,8 @@ test("the body has the tick, the suite and the monitor with their last run from 
     expect(gates.renderSchedules({ ...(await body()), schedules: d })).not.toContain("has not run");
     const t = gates.renderSchedules({ ...(await body()), schedules: d });
     expect(t).toContain("<td>7 findings</td>");
-    expect(t).not.toContain("FINDING-TEXT");
   } finally {
     rmSync(join(dir, "tick.json"));
-    writeFileSync(logPath, was);
   }
 });
 

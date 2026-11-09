@@ -3,7 +3,7 @@
  * What it reads of its state is in factory-status.ts. Its state lives in
  * ~/.aleph/factory. See docs/factory.md.
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -397,6 +397,31 @@ export async function baseline(repo: Repo, checks: Checks): Promise<Baseline> {
 }
 
 /**
+ * The one write of tick.json. The tick, the suite and the monitor each write it from their own processes: under one
+ * lock it reads the file, lets `change` make the new record, and puts it in place with a rename, so no write loses
+ * the keys of another and no reader sees half a file.
+ */
+export async function editTick(change: (s: any) => any): Promise<void> {
+  const file = join(factoryDir(), "tick.json");
+  const release = await lock("tick-file");
+  if (!release) throw new Error("tick.json lock busy");
+  try {
+    let s: any = {};
+    try { s = JSON.parse(readFileSync(file, "utf8")); } catch {}
+    mkdirSync(factoryDir(), { recursive: true });
+    const tmp = `${file}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(change(s)));
+    renameSync(tmp, file);
+  } finally {
+    release();
+  }
+}
+
+/** The result of a scheduled step (`suite <repo>`, `monitor`) and its time, in `ran` of tick.json. */
+export const recordRan = (key: string, result: string): Promise<void> =>
+  editTick((s) => ({ ...s, ran: { ...s.ran, [key]: { at: new Date().toISOString(), result } } }));
+
+/**
  * `aleph suite`, from its own timer: the full checks on origin/<main> of each factory repo whose main moved since
  * the last record (`baseline`). While the factory is paused it does nothing. A repo that turns green starts a
  * dispatch, so the issues its red or unchecked main held start at once.
@@ -408,7 +433,7 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
     const was = mainState(repo).state;
     const b = await baseline(repo, checks);
     out[repo.key] = b.state === "green" ? "green" : b.line;
-    factoryLog(`suite ${repo.key}: ${out[repo.key]}`);
+    await recordRan(`suite ${repo.key}`, out[repo.key]);
     if (b.state === "green" && was !== "green") dispatchDetached();
   }
   return out;

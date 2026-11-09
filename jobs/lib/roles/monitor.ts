@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { endLost, openRun } from "./agent-run.ts";
 import { lock } from "../records/ledger.ts";
-import { factoryLog } from "../infra/layout.ts";
+import { recordRan } from "../transitions/factory.ts";
 import { addDays, measure, monitorDir, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
 import { monitorOn } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -88,10 +88,10 @@ export async function monitorStep(now = new Date()): Promise<Report | null> {
   if (!day) return null;
   try {
     const r = await runMonitor(day);
-    if (r) factoryLog(`monitor ${day}: ${r.error ? `no reading: ${r.error}` : `${r.findings.length} findings`}`);
+    if (r) await recordRan("monitor", r.error ? "no reading" : r.findings.length ? `${r.findings.length} findings` : "nothing looks off");
     return r;
   } catch (e: any) {
-    factoryLog(`monitor ${day}: failed: ${e?.message ?? e}`);
+    await recordRan("monitor", "failed");
     return null;
   }
 }

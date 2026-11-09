@@ -6,12 +6,12 @@
  * not is logged as `missed: <key>`, so the cause gets fixed, and is started. A tick that finds nothing due reads
  * only local files: no agent run and no fetch.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { reader } from "../../../issues/lib/store.ts";
 import { ciStep } from "../gates/ci.ts";
 import { pendingCases, subjectOfCase } from "../roles/director.ts";
-import { correctionsStep, directIfNew, doneChecker, episodeStep, runDispatch, stalled } from "./factory.ts";
+import { correctionsStep, directIfNew, editTick, doneChecker, episodeStep, runDispatch, stalled } from "./factory.ts";
 import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writeStalls } from "../gates/factory-status.ts";
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
@@ -41,11 +41,6 @@ export function readTick(): TickState {
   } catch {
     return { last: {}, missed: [], suite: {} };
   }
-}
-
-function writeTick(s: TickState): void {
-  mkdirSync(factoryDir(), { recursive: true });
-  writeFileSync(stateFile(), JSON.stringify(s));
 }
 
 /** Whether `step` is due at `now`: it never ran, or it ran EVERY_MS[step] or more ago. */
@@ -130,6 +125,6 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
   }
   const m = await monitorStep(new Date(now));
   if (m) out.monitor = m.day;
-  writeTick(s);
+  await editTick((t) => ({ ...t, ...s }));
   return out;
 }

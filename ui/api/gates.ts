@@ -251,8 +251,8 @@ export function repoHeld(): { repo: string; held: string[] }[] {
 
 /**
  * The tick, the hourly suite and the daily monitor, each with the time and result of its last run: the tick from
- * tick.json (its newest step time; the result is its missed keys), the suite from the newest `suite <repo>:` line of
- * tick.log for each repo, the monitor from the newest `monitor <day>:` line. A step with no record has null for both.
+ * tick.json (its newest step time; the result is its missed keys), the suite from
+ * the `ran` record of tick.json for each repo, the monitor from its `ran` record. A step with no record has null for both.
  */
 /** The settings the Controls panel edits besides the two caps, as the factory reads them now. */
 const settingsNow = () => ({ intakeTries: INTAKE_TRIES(), jobSeconds: jobSeconds(), fixRounds: fixRounds(), landBatch: landBatch(), loadLimit: loadLimit() });
@@ -298,18 +298,13 @@ export function setTimerInterval(name: string, every: string): string | null {
 
 export function schedules(): { name: string; last: string | null; result: string | null; every: string | null }[] {
   // tick.ts is not read here: it loads the factory's actions, which the server must not.
-  let t: { last?: Record<string, string>; missed?: string[] } = {};
+  let t: { last?: Record<string, string>; missed?: string[]; ran?: Record<string, { at: string; result: string }> } = {};
   try { t = JSON.parse(readFileSync(join(layout().factory, "tick.json"), "utf8")); } catch {}
   const missed = t.missed ?? [];
   const times = Object.values(t.last ?? {}).map((x) => Date.parse(x!)).filter((x) => !Number.isNaN(x));
   const suite: Record<string, { at: string; result: string }> = {};
-  let monitor: { at: string; result: string } | null = null;
-  for (const l of readFactoryLog().split("\n")) {
-    const m = /^(\S+) (suite (\S+)|monitor \S+): (.*)$/.exec(l);
-    if (!m) continue;
-    if (m[3]) suite[m[3]] = { at: m[1], result: m[4] };
-    else monitor = { at: m[1], result: m[4].replace(/^(\d+ findings?|no reading|failed).*$/, "$1").replace(/^0 findings$/, "nothing looks off") };
-  }
+  for (const [k, v] of Object.entries(t.ran ?? {})) if (k.startsWith("suite ")) suite[k.slice(6)] = v;
+  const monitor = t.ran?.monitor ?? null;
   const runs = Object.entries(suite).sort(([a], [b]) => (a < b ? -1 : 1));
   return [
     { name: "tick", last: times.length ? new Date(Math.max(...times)).toISOString() : null, result: times.length ? (missed.length ? `${missed.length} missed` : "no key missed") : null, every: intervalOf(TIMERS.tick) },
