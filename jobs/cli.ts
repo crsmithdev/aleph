@@ -20,7 +20,7 @@ import * as issues from "../issues/lib/todo.ts";
 import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
-import { behind, directorStep, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
+import { behind, directorStep, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { runTick } from "./lib/transitions/tick.ts";
 import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
 import { health } from "./lib/gates/factory-status.ts";
@@ -319,9 +319,14 @@ async function tickCmd(): Promise<void> {
  * `aleph report`: the runs not yet shown, how far each factory repo's
  * checkout is behind origin, and the health lines: the factory's alarms, then the
  * monitor's flake counts and its newest report. With --hook it prints the
- * SessionStart hook's JSON, and nothing when there is nothing to say.
+ * SessionStart hook's JSON from hookLines, read-only, and nothing when there is nothing to act on.
  */
 function reportCmd(): void {
+  if (rest.includes("--hook")) {
+    const lines = hookLines();
+    if (lines.length) out({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } });
+    return;
+  }
   const lines = [report()];
   for (const repo of Object.values(loadRegistry()).filter((r) => r.sandbox)) {
     fetchOrigin(repo.path);
@@ -331,10 +336,7 @@ function reportCmd(): void {
   const m = reportLine();
   if (m) lines.push(shortText(m));
   const text = lines.filter(Boolean).join("\n\n");
-  if (!rest.includes("--hook")) { console.log(text || "nothing new"); return; }
-  if (!text) return;
-  const msg = `aleph report\n\n${text}`;
-  out({ systemMessage: msg, hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: msg } });
+  console.log(text || "nothing new");
 }
 
 /** `aleph status <repo>-<n>[.<k>]`: the item's stage, from the store and the ledger; with no issue, see statusRecent. */

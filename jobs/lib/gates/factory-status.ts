@@ -340,7 +340,7 @@ export interface Health { text: string; kind: "alert" | "warn"; key?: string }
 const alert = (key: string, text: string): Health => ({ text, kind: "alert", key });
 
 /** The health lines of work that stayed stalled for STALL_MS, and of land runs live past LAND_STUCK_MS. */
-function stallLines(now: number, jobs?: Job[]): Health[] {
+export function stallLines(now: number, jobs?: Job[]): Health[] {
   if (paused()) return [];
   const old = Object.entries(readStalls()).filter(([, at]) => now - Date.parse(at) >= STALL_MS).map(([k]) => k);
   const n = (kind: string) => old.filter((k) => k.startsWith(`${kind}:`)).length;

@@ -18,7 +18,7 @@ import { isLive, isStarting } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { clearRerun, issueBrief } from "./continuation.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
-import { allJobs, checkedBy, lookMinutes, openJob } from "../records/job.ts";
+import { allJobs, checkedBy, isOpen, lastReal, lookMinutes, openJob } from "../records/job.ts";
 import { mine, proposals, readStore } from "../learning/corrections.ts";
 import { directAll, pendingCases, subjectOfCase, type Decision, type Ports as DirectorPorts } from "../roles/director.ts";
 import { episodesDir, writeEpisodes } from "../learning/episode.ts";
@@ -29,7 +29,7 @@ import { drop, land, recheck, refusal, startIssue } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, TIER_MODEL, TIERS, type Tier } from "../routing/route.ts";
-import { appendSuiteHistory, mainRed, writeBaseline, clearCap, backendHold, heldGoal, issueFacts, issueJob, markCap, markStreak, nextRun, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, runsToday, spentToday } from "../gates/factory-status.ts";
+import { appendSuiteHistory, mainRed, writeBaseline, clearCap, backendHold, heldGoal, issueFacts, issueJob, markCap, markStreak, nextRun, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
@@ -444,11 +444,31 @@ export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()
   return out;
 }
 
-/** How far a checkout is behind origin/<main>, with the diff a pull would bring. */
-export function behind(repo: Repo): string | null {
+/** How far a checkout is behind origin/<main>, with the diff a pull would bring; with `short`, the key and the count alone. */
+export function behind(repo: Repo, short = false): string | null {
   const n = Number(git(repo.path, "rev-list", "--count", `HEAD..origin/${repo.main}`).out || 0);
   if (!n) return null;
+  if (short) return `${repo.key} is ${n} commit${n > 1 ? "s" : ""} behind origin/${repo.main}`;
   return `${repo.path} is ${n} commit${n > 1 ? "s" : ""} behind origin/${repo.main}; git pull brings:\n${git(repo.path, "diff", "--stat", "HEAD", `origin/${repo.main}`).out}`;
+}
+
+/** The SessionStart hook's lines: a pause, the asks, the alarms and each sandbox checkout that is behind. It writes nothing. */
+export function hookLines(now = Date.now()): string[] {
+  const lines = paused() ? ["factory paused"] : [];
+  const refs = allJobs().filter((j) => isOpen(j) && isWaiting(lastReal(j).run.condition) && runAskOf(lastReal(j).run)).map((j) => j[0].run.name);
+  for (const repo of Object.values(loadRegistry())) {
+    for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) {
+      if (issues.status(item) === "open" && askOf(refIn(repo.key, item))) refs.push(`${repo.key}-${issues.idOf(item)}`);
+    }
+  }
+  refs.push(...proposals().map((l) => l.id));
+  if (refs.length) lines.push(`${refs.length} asks wait for Chris: ${refs.slice(0, 5).join(", ")}`);
+  lines.push(...redMains().map((r) => r.line), ...stallLines(now).map((h) => h.text));
+  for (const repo of Object.values(loadRegistry()).filter((r) => r.sandbox)) {
+    fetchOrigin(repo.path);
+    lines.push(behind(repo, true) ?? "");
+  }
+  return lines.filter(Boolean);
 }
 
 const money = (n: number) => (n > 0 && n < 0.005 ? "<$0.01" : `$${n.toFixed(2)}`);
