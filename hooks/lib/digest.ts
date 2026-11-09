@@ -10,6 +10,8 @@ export interface Digest {
   prompt: string;
   edits: string[];
   commands: string[];
+  /** The transcript cwd of each call, edits then commands; undefined when the entry has none. */
+  dirs: [string, string | undefined][];
   items: string[];
   finalMessage: string;
   text: string;
@@ -86,6 +88,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "",
   let prompt = "";
   const edits: string[] = [];
   const commands: string[] = [];
+  const dirs: [string, string | undefined][] = [];
   const items: string[] = [];
   let finalMessage = "";
 
@@ -110,9 +113,11 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "",
       const out = results.get(block.id);
       if (EDIT_TOOLS.has(name)) {
         edits.push(inp.file_path ?? "?");
+        dirs.push([inp.file_path ?? "?", e.cwd]);
         items.push(`EDIT ${name} ${inp.file_path ?? "?"}`);
       } else if (name === "Bash") {
         commands.push(String(inp.command ?? ""));
+        dirs.push([String(inp.command ?? ""), e.cwd]);
         items.push(`RUN ${head(inp.command, 400)}\n  → ${out ? bashResult(resultText(out)) : "(no result)"}`);
       } else {
         items.push(`CALL ${name} ${head(inp)}${out ? `\n  → ${tail(resultText(out), 200)}` : ""}`);
@@ -129,7 +134,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "",
     `TURN (in order):\n${body || "(no tool calls)"}`,
     `FINAL MESSAGE:\n${finalMessage}`,
   ].join("\n\n");
-  return { prompt, edits, commands, items, finalMessage, text };
+  return { prompt, edits, commands, dirs, items, finalMessage, text };
 }
 
 /** Never inside an aleph job: a worker's prompt is not Chris speaking. */

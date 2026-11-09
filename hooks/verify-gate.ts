@@ -43,11 +43,11 @@ const after = snapshot(cwd);
 const d = digest(input.transcript_path ?? "", promptId, input.last_assistant_message ?? "");
 // Only a change to code wakes the gate: docs, artifacts outside the repo and chat answers do not.
 // A file in another worktree (the main checkout too) counts only when the cwd is in that worktree or an edit or command
-// of the turn names a path in it. A path's worktree is the deepest one that holds it; a relative path resolves from the cwd.
+// of the turn names a path in it. A path's worktree is the deepest one that holds it; a relative path resolves from the cwd of its tool call, else the Stop cwd.
 const trees = [...new Set(Object.keys({ ...before, ...after }).map((k) => k.split("\0")[0]))];
 const treeOf = (p: string) => trees.filter((t) => p === t || p.startsWith(`${t}/`)).sort((a, b) => b.length - a.length)[0];
-const named = new Set([cwd, ...[...d.edits, ...d.commands].flatMap((t) => t.replace(/\$\{?HOME\}?/g, homedir()).split(/[\s'"`<>|;&()=,]+/))]
-  .map((p) => treeOf(resolve(cwd, p.replace(/^~(?=\/|$)/, homedir())))));
+const named = new Set([[cwd], ...d.dirs.map(([t, dir]) => t.replace(/\$\{?HOME\}?/g, homedir()).split(/[\s'"`<>|;&()=,]+/).map((p) => resolve(dir ?? cwd, p.replace(/^~(?=\/|$)/, homedir()))))]
+  .flat().map(treeOf));
 const codeChanged = typeof before === "object" && after !== null && changedFiles(before, after).some((f) => isCode(f) && named.has(treeOf(f)));
 const changed = codeChanged || (after === null && d.edits.some(isCode));
 const unbacked = (message: string, transcript: string | undefined, id: string) => unbackedHashes(message, backing(readEntries(transcript ?? "", id)));

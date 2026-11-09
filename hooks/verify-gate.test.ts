@@ -247,6 +247,9 @@ describe("verify-gate hook", () => {
     expect(JSON.parse((await stop("p8", [toolUse("t1", "Bash", { command: "echo x > .worktrees/sib/p8.ts" }), toolResult("t1", "", { stdout: "", stderr: "" })])).stdout).decision).toBe("block");
     expect(JSON.parse((await stop("p11", [toolUse("t1", "Bash", { command: "echo x >.worktrees/sib/p11.ts" }), toolResult("t1", "", { stdout: "", stderr: "" })])).stdout).decision).toBe("block");
     expect((await stop("p12", [], root, w2)).stdout).toBe("");
+    const at = (cwd: string, command: string) => [{ type: "assistant", cwd, message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command } }] } }, toolResult("t1", "", { stdout: "", stderr: "" })];
+    expect(JSON.parse((await stop("p14", at(w, "echo x > p14.ts"))).stdout).decision).toBe("block");
+    expect((await stop("p15", at(w2, "echo x > .worktrees/sib/p15.ts"))).stdout).toBe("");
     expect(JSON.parse((await stop("p13", [toolUse("t1", "Bash", { command: `cd ${root} && echo x > p13.ts` }), toolResult("t1", "", { stdout: "", stderr: "" })], root, w2)).stdout).decision).toBe("block");
   });
 });
