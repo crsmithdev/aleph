@@ -5,8 +5,7 @@ import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
 import { held, job, state } from "./fixtures/status-state.ts";
 import { asksOf, issue, withFactory } from "./test-now.ts";
-// @ts-ignore status-words.js is plain JS, shared with the page
-import { labelOf } from "./views/status-words.js";
+import { labelOf } from "../lib/status-words.ts";
 
 const calmState = { ...withFactory({}), asks: [], stuck: [] };
 

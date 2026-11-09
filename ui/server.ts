@@ -24,7 +24,7 @@ const START = String(Date.now());
 const VIEW_FILE = /^[\w-]+\.js$/;
 const TS = new Bun.Transpiler({ loader: "ts" });
 /** The modules that views import, by URL, and each one's file under ui/. `lib/naming.ts` sits at the same path from the page and from the repo, so `ui/lib.js` imports it as `../lib/naming.ts`; the page gets it as JS. */
-const SHARED = new Map([["/lib.js", "lib.js"], ["/chart.js", "chart.js"], ["/system-parts.js", "system-parts.js"], ["/decision.js", "decision.js"], ["/timeline.js", "timeline.js"], ["/lib/naming.ts", "../lib/naming.ts"]]);
+const SHARED = new Map([["/lib.js", "lib.js"], ["/chart.js", "chart.js"], ["/system-parts.js", "system-parts.js"], ["/decision.js", "decision.js"], ["/timeline.js", "timeline.js"], ["/lib/naming.ts", "../lib/naming.ts"], ["/lib/status-words.ts", "../lib/status-words.ts"]]);
 
 /** `/api/jobs/:name` as a regex and its parameter names. */
 export function compile(path: string): { pattern: RegExp; names: string[] } {

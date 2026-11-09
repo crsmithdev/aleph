@@ -17,8 +17,7 @@ import { idOf, parentRef, parseIssueRef, PRIORITIES, refOf, status } from "../is
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
-// @ts-ignore plain JS, shared with the page
-import { ALERT, ASK, FINE, isAlert, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED } from "./views/status-words.js";
+import { ALERT, ASK, FINE, isAlert, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED } from "../lib/status-words.ts";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }

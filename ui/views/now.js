@@ -5,7 +5,7 @@ import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sec
 import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
-import { ALERT, ASK, FINE, isAlert, isWarn, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "./status-words.js";
+import { ALERT, ASK, FINE, isAlert, isWarn, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
 
 export const view = {
   path: "/",

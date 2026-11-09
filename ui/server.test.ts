@@ -111,6 +111,13 @@ test("lib/naming.ts reaches the page as JS at the path ui/lib.js imports", async
   expect(js).not.toContain("export interface");
 });
 
+test("lib/status-words.ts reaches the page as JS", async () => {
+  const r = await at("/lib/status-words.ts");
+  expect(r.headers.get("content-type")).toContain("text/javascript");
+  const js = await r.text();
+  expect(js).toContain("export const labelOf = (tone, text) =>");
+});
+
 test("x-aleph-login is on every API answer behind the gate, and absent without a password", async () => {
   expect((await at("/api/_test/x")).headers.get("x-aleph-login")).toBeNull();
   expect((await at("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password: "x" }) })).status).toBe(404);

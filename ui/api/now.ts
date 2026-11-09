@@ -5,8 +5,7 @@ import type { State } from "../state.ts";
 import { loadState } from "../state-load.ts";
 import { cachedSpeed } from "./speed.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
-// @ts-ignore plain JS, shared with the page
-import { FINE, labelOf, WEEKLY_WARN, weekly } from "../views/status-words.js";
+import { FINE, labelOf, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
 
 /** The state with only `project`'s jobs and queued issues; the factory and ticks stay whole. */
 function forProject(s: State, project: string | null): State {
