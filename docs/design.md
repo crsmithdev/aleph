@@ -134,7 +134,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 | Display type tracking | `letter-spacing: -0.01em` on the brand mark, the shead text, the page title and display text | 4 rows (`.mark`, `.shead .say`, `.shead .asof` and `.ph h1` in `ui/app.css`) | `--ls-display` |
 | Small-caps key tracking | one value for uppercase keys; today `.05em` in `.worst-head` and `.herald-sticky-head`, `.06em` in `#nav li.head` and `.08em` in `.tile .k`, all in `ui/app.css` | 4 rows | none; pick one now that 4 keys are here |
 | Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
-| Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`splitLine` in `ui/chart.js`) | none; a rule |
+| Chart gridline | `opacity: 0.5` on `splitLine` | 2 rows (`splitLine` in `ui/chart.js`) | none; a rule |
 | Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
 
 ### Focus offset
