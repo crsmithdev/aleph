@@ -25,3 +25,10 @@ export const OTHER_REPO_RED = /^(?!aleph )\S+ (main is red|CI on main has failed
 export const isWarn = (l) => /full suite took/.test(l) || OTHER_REPO_RED.test(l.replace(/^health:\s*/, ""));
 /** A health line that is an alert. */
 export const isAlert = (l) => !QUIET_HEALTH.test(l) && !isWarn(l);
+
+/** The Herald label of a status sentence: its tone and its text decide it. */
+export const labelOf = (tone, text) =>
+  tone === "alert" ? "Alert"
+  : text.startsWith(lead(ASK)) ? "Ask"
+  : tone !== "warning" ? "Fine"
+  : text.startsWith(lead(PAUSED)) ? "Wait" : "Warn";

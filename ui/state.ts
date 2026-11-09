@@ -18,7 +18,7 @@ import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
 // @ts-ignore plain JS, shared with the page
-import { ALERT, ASK, FINE, isAlert, JOBS_UNHEALTHY, lead, PAUSED, TICK_STOPPED } from "./views/status-words.js";
+import { ALERT, ASK, FINE, isAlert, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED } from "./views/status-words.js";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
@@ -459,7 +459,7 @@ export function state(now = new Date()): State {
   if (stuck.length) alertLines.push(JOBS_UNHEALTHY);
   const tone = alertLines.length ? "alert" : (att.items.length || factory.paused) ? "warning" : "fine";
   const text = alertLines.length ? `${ALERT}${alertLines.join("; ")}` : att.items.length ? lead(ASK) : factory.paused ? lead(PAUSED) : FINE;
-  recordStatusTransition({ at: now.toISOString(), tone, label: tone === "alert" ? "Alert" : tone === "warning" ? "Ask" : "Fine", text, reason: alertLines[0] });
+  recordStatusTransition({ at: now.toISOString(), tone, label: labelOf(tone, text), text, reason: alertLines[0] });
   const redOf = mainRed();
   return {
     now: now.toISOString(),

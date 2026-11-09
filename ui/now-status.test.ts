@@ -5,6 +5,8 @@ import * as view from "./views/now.js";
 import { attend } from "./asks.ts";
 import { held, job, state } from "./fixtures/status-state.ts";
 import { asksOf, issue, withFactory } from "./test-now.ts";
+// @ts-ignore status-words.js is plain JS, shared with the page
+import { labelOf } from "./views/status-words.js";
 
 const calmState = { ...withFactory({}), asks: [], stuck: [] };
 
@@ -166,4 +168,12 @@ test("the status-line links point at anchors in the rendered Alerts section", ()
   const ids = [...lede.matchAll(/href="#([^"]+)"/g)].map((m) => m[1]);
   expect(ids).toContain("jobs-stuck");
   for (const id of ids) expect(alerts).toContain(`id="${id}"`);
+});
+
+test("one mapping gives each status sentence its Herald label, on the page too", () => {
+  expect(labelOf("warning", "The factory is paused")).toBe("Wait");
+  expect(labelOf("warning", "Your attention is needed")).toBe("Ask");
+  expect(labelOf("alert", "Alert: the build is failing on main")).toBe("Alert");
+  expect(labelOf("fine", "Everything is fine")).toBe("Fine");
+  expect(view.statusVerdict({ ...calmState, factory: { ...calmState.factory, paused: true } }).label).toBe("Wait");
 });

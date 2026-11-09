@@ -4,7 +4,7 @@
 import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
-import { ALERT, ASK, FINE, isAlert, isWarn, JOBS_UNHEALTHY, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "./status-words.js";
+import { ALERT, ASK, FINE, isAlert, isWarn, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "./status-words.js";
 
 export const view = {
   path: "/",
@@ -108,11 +108,7 @@ export function statusVerdict(s, stale = false) {
   const raw = m ? m[2] : html;
   const text = raw.replace(/<[^>]+>/g, "").trim();
   const tone = toneClass === "error" ? "alert" : toneClass === "warning" ? (text.startsWith(lead(ASK)) ? "ask" : "warning") : "fine";
-  let label = "Fine";
-  if (tone === "alert") label = "Alert";
-  else if (tone === "ask") label = "Ask";
-  else if (tone === "warning") label = text.startsWith(lead(PAUSED)) ? "Wait" : "Warn";
-  return { tone, label, text, toneClass };
+  return { tone, label: labelOf(tone, text), text, toneClass };
 }
 
 /** Record a client-side transition if state changed. */

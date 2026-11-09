@@ -6,7 +6,7 @@ import { loadState } from "../state-load.ts";
 import { cachedSpeed } from "./speed.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page
-import { FINE, WEEKLY_WARN, weekly } from "../views/status-words.js";
+import { FINE, labelOf, WEEKLY_WARN, weekly } from "../views/status-words.js";
 
 /** The state with only `project`'s jobs and queued issues; the factory and ticks stay whole. */
 function forProject(s: State, project: string | null): State {
@@ -29,7 +29,7 @@ export const routes: Routes = {
       s.herald.history[0] = {
         ...s.herald.history[0],
         tone: "warning",
-        label: "Warn",
+        label: labelOf("warning", `${FINE}; ${weekly(week)}.`),
         text: `${FINE}; ${weekly(week)}.`,
       };
     }
