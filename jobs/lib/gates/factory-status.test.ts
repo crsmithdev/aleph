@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
 import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts";
-import { issueFacts, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
+import { firefighterLines, issueFacts, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
+import { factoryLog, logEvent } from "../infra/layout.ts";
 
 const NOW = Date.parse("2026-11-04T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -80,4 +81,10 @@ test("an issue with no run that the hold held stays held with no new routing, un
   expect(heldGoal("fac-2")).toBeNull();
   await probeHold(async () => true);
   expect(heldGoal("fac-1")).toBeNull();
+});
+
+test("firefighterLines returns the line of a firefighter event and not a firefighter line of tick.log", () => {
+  factoryLog("firefighter: from the text log");
+  logEvent({ by: "firefighter", subject: "fac", action: "filed", note: "from the event log" });
+  expect(firefighterLines().map((l) => l.line)).toEqual(["firefighter: from the event log"]);
 });

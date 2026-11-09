@@ -13,7 +13,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate, Hold } from "./issue-decision.ts";
 import { event, type Event } from "../../../lib/naming.ts";
-import { factoryLog, layout, readEvents, readFactoryLog } from "../infra/layout.ts";
+import { factoryLog, layout, readEvents } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { allRuns, held, jobIdOf, isWaiting, isBuild, loadRegistry, lock, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
@@ -393,11 +393,7 @@ export function health(now = Date.now(), o: { jobs?: Job[] } = {}): Health[] {
 /** The firefighter's lines of the factory log in the last 24 hours, newest last, at most `n`: what the Status page shows. An event shows its note. */
 export function firefighterLines(now = Date.now(), n = 8): { at: string; line: string }[] {
   const events = readEvents(now - DAY).filter((e) => e.by === "firefighter").map((e) => ({ at: e.at, line: `firefighter: ${e.note ?? `${e.action} ${e.subject}`}` }));
-  const text = readFactoryLog().split("\n").flatMap((l) => {
-    const m = /^(\S+) (.*)$/.exec(l);
-    return m && /^firefighter[: ]/.test(m[2]) && now - Date.parse(m[1]) < DAY ? [{ at: m[1], line: m[2] }] : [];
-  });
-  return [...events, ...text].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).slice(-n);
+  return events.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0)).slice(-n);
 }
 
 /** Insertions plus deletions in a `git show --shortstat` line. */

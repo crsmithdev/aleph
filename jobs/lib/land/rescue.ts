@@ -138,7 +138,7 @@ export async function askSlowLands(now = Date.now()): Promise<string[]> {
       const question = `${name}: its land run ${last.id} is live for ${minutes} minutes, and 99% of lands end within 20. Wait, kill and rerun, or drop?`;
       const ask = normalizeAsk({ question, options: SLOW_LAND_OPTIONS, recommended: "Wait", why: [`Run: ${name}, land, running since ${r.started}`] }, { kind: "input", reason: "rescue" })!;
       const why = askFromRun(last, repo, issueOf(runs), ask, question);
-      if (why) { factoryLog(`firefighter: ${name}: no rescue Ask for its slow land: ${why}`); continue; }
+      if (why) { logEvent({ by: "firefighter", subject: name, action: "failed", note: `${name}: no rescue Ask for its slow land: ${why}` }); continue; }
       logEvent({ by: "firefighter", subject: name, action: "waiting", sub: "rescue", on: [jobIdOf(runs[0])], to: "director", note: `${name}: its land is live for ${minutes} minutes; a rescue Ask goes to the director` });
       out.push(name);
     } finally {

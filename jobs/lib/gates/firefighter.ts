@@ -22,7 +22,7 @@ import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";
 import { git } from "../infra/git.ts";
-import { factoryLog, logEvent } from "../infra/layout.ts";
+import { logEvent } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { askSlowLands } from "../land/rescue.ts";
 import { runFile } from "../records/run-files.ts";
@@ -212,7 +212,6 @@ function rerun(r: Red, ports: Ports): boolean {
   if (!ports.gh(repo, ["run", "rerun", id, "--failed"]).ok) return false;
   mkdirSync(factoryDir(), { recursive: true });
   writeFileSync(reran(), JSON.stringify([...rerunIds(), id]));
-  factoryLog(`firefighter: ${r.repo} CI run ${id} failed before any test: rerun`);
   logEvent({ by: "firefighter", subject: r.repo, action: "reran", on: [r.commit.slice(0, 7)], note: `reran CI run ${id} of ${r.repo}: it failed before any test` });
   return true;
 }
@@ -226,7 +225,7 @@ export interface Fired { filed: Filed[]; asked: string[] }
 export async function firefight(ports: Ports = defaultPorts, now = Date.now()): Promise<Fired | null> {
   if (gates({ only: ["pause"] })) return null;
   const filed: Filed[] = [];
-  for (const r of (() => { try { return reds(ports); } catch (e: any) { factoryLog(`firefighter: failed: ${e?.message ?? e}`); return []; } })()) {
+  for (const r of (() => { try { return reds(ports); } catch (e: any) { logEvent({ by: "firefighter", subject: "reds", action: "failed", note: `failed: ${e?.message ?? e}` }); return []; } })()) {
     try {
       if (rerun(r, ports)) continue;
       const f = fileRed(r);
@@ -236,11 +235,11 @@ export async function firefight(ports: Ports = defaultPorts, now = Date.now()): 
         ? { by: "firefighter", subject: `${f.repo}-${f.filed}`, action: "filed", note: `filed ${f.repo}-${f.filed} (critical) for ${r.line}` }
         : { by: "firefighter", subject: `${f.repo}-${f.noted}`, action: "red", on: [r.commit.slice(0, 7)], note: `noted ${f.repo}-${f.noted}: also red at ${r.commit.slice(0, 7)}: ${r.line}` });
     } catch (e: any) {
-      factoryLog(`firefighter: ${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}`);
+      logEvent({ by: "firefighter", subject: r.repo, action: "failed", note: `${r.repo} red at ${r.commit.slice(0, 7)} not filed: ${e?.message ?? e}` });
     }
   }
-  try { for (const l of settleCi(ports)) factoryLog(`firefighter: ${l}`); } catch (e: any) { factoryLog(`firefighter: CI watch: failed: ${e?.message ?? e}`); }
+  try { for (const l of settleCi(ports)) logEvent({ by: "firefighter", subject: "ci", action: "changed", note: l }); } catch (e: any) { logEvent({ by: "firefighter", subject: "ci", action: "failed", note: `CI watch: failed: ${e?.message ?? e}` }); }
   let asked: string[] = [];
-  try { asked = await askSlowLands(now); } catch (e: any) { factoryLog(`firefighter: slow lands: failed: ${e?.message ?? e}`); }
+  try { asked = await askSlowLands(now); } catch (e: any) { logEvent({ by: "firefighter", subject: "lands", action: "failed", note: `slow lands: failed: ${e?.message ?? e}` }); }
   return { filed, asked };
 }

@@ -11,7 +11,7 @@ import { ciStep, type GhRun } from "./ci.ts";
 import { ciFailure, firefight, LOG_CHARS, settleCi, type Ports } from "./firefighter.ts";
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents, readFactoryLog } from "../infra/layout.ts";
 import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.fixture.ts";
 
 useDirectorFixture();
@@ -226,6 +226,7 @@ test("a CI run that failed in setup is rerun once; failing again, it files an is
   expect(asked.filter((a) => a[1] === "rerun")).toEqual([["run", "rerun", "777", "--failed"]]);
   expect(readEvents()).toContainEqual(expect.objectContaining({ by: "firefighter", subject: key, action: "reran", on: [B.slice(0, 7)] }));
   expect(reds()).toEqual([]);
+  expect(readEvents().filter((e) => e.by === "firefighter").map((e) => e.action)).toEqual(["reran"]);
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun").length).toBe(1);
   expect(reds().length).toBe(1);
@@ -269,4 +270,14 @@ test("an unlanded CI issue closes when main turns green past its failing commit,
   expect(issues.status(reds()[0])).toBe("done");
   expect(reds()[0].notes.at(-1)).toContain(`green at ${fixed.slice(0, 7)} (${url})`);
   expect(reds()[0].notes.at(-1)).toContain(`past the failing commit ${failed.slice(0, 7)}`);
+});
+
+test("a step that fails is an event of the firefighter with the failure in its note, and no line in tick.log", async () => {
+  fresh([]);
+  ciStep([loadRegistry()[key]], listing([{ conclusion: "failure", status: "completed", headSha: B, url: "https://github.com/x/y/actions/runs/42", createdAt: "2026-11-03T10:00:00Z" }]));
+  await firefight({ gh: () => { throw new Error("gh broke"); } });
+  const events = readEvents().filter((e) => e.by === "firefighter" && e.action === "failed");
+  expect(events.length).toBeGreaterThan(0);
+  expect(events.some((e) => e.note?.includes("gh broke"))).toBe(true);
+  expect(readFactoryLog()).not.toContain("firefighter:");
 });
