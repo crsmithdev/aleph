@@ -200,7 +200,8 @@ No code prunes run folders or records.
 | `suite-history.jsonl` | One line per suite run | `aleph suite` |
 | `flaky.json` | `[{repo, check, run, at, tests?}]` | Checks that passed on the rerun |
 | `ci.json` | GitHub CI state per repo | Tick |
-| `tick.json`, `tick.log` | Last due times, missed keys; the factory log | Tick and every step |
+| `tick.json`, `tick.log` | Last due times, missed keys; the factory log as text | Tick and every step |
+| `events/<day>.jsonl` | The event log: one event as JSON per line, by UTC day | `logEvent`, and each run state change |
 | `stalls.json`, `smoke.json` | Stall first-seen times; the smoke test | Tick |
 | `corrections.json` | Signals and lessons | Corrections |
 | `monitor/<day>.json` | The day's table and findings | Monitor |

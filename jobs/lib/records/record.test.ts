@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Run } from "./ledger.ts";
 import { fixRounds } from "../infra/settings.ts";
+import { eventsDir, readEvents } from "../infra/layout.ts";
 import * as record from "./record.ts";
 
 let dir: string;
@@ -18,6 +19,22 @@ test("update writes the whole record through a rename and leaves no temporary fi
   record.update("aleph-7", (r) => { r.wait = { kind: "after", reason: "after aleph-6", since: AT }; });
   expect(record.read("aleph-7")).toEqual({ issue: "aleph-7", ask: null, wait: { kind: "after", reason: "after aleph-6", since: AT }, rounds: 0, cost: 0, runs: [], events: [] });
   expect(readdirSync(dir)).toEqual(["aleph-7.json"]);
+});
+
+test("a write that changes a run's state logs one event by gate in the file of its day; a write that keeps it logs none", () => {
+  const mine = () => readEvents().filter((e) => e.subject === "aleph-31");
+  const r = run({ on: "aleph-31", name: "aleph-31", n: 2 });
+  record.putRun("r31", r);
+  record.putRun("r31", { ...r, phase: "worker" });
+  record.patchRun("r31", { condition: "failed", cause: "timeout" });
+  record.putRun("f31", { ...r, kind: "facts" as Run["kind"] });
+  expect(mine().map(({ by, subject, action, sub, on }) => ({ by, subject, action, sub, on }))).toEqual([
+    { by: "gate", subject: "aleph-31", action: "running", sub: undefined, on: ["aleph-31#2"] },
+    { by: "gate", subject: "aleph-31", action: "failed", sub: "timeout", on: ["aleph-31#2"] },
+  ]);
+  const day = mine()[0].at.slice(0, 10);
+  expect(readdirSync(eventsDir())).toContain(`${day}.jsonl`);
+  expect(readEvents(Date.parse(mine()[1].at) + 1).filter((e) => e.subject === "aleph-31")).toEqual([]);
 });
 
 test("a run keys by its issue, else by its job id", () => {

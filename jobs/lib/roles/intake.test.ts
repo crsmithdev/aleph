@@ -9,6 +9,7 @@ import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, rea
 import { allRuns, readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
+import { readEvents } from "../infra/layout.ts";
 
 // The test's clock: the counts and the fixtures read it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -311,7 +312,6 @@ const grant = (reason: string, action: string) => {
   mkdirSync(factory(), { recursive: true });
   writeFileSync(join(factory(), "always.json"), JSON.stringify({ [reason]: { action, at: new Date(NOW).toISOString() } }));
 };
-const tickLog = () => readFileSync(join(factory(), "tick.log"), "utf8");
 
 describe("a run with no reply", () => {
   beforeEach(() => { process.env.ALEPH_FACTORY_DIR = join(base, `factory-${++lists}`); });
@@ -343,7 +343,7 @@ describe("a run with no reply", () => {
     const n = calls().length;
     await run();
     expect(calls().length).toBe(n + 1);
-    expect(tickLog()).toContain(`"by":"rule","subject":"${repo.key}-1","action":"reran","sub":"intake"`);
+    expect(readEvents()).toContainEqual(expect.objectContaining({ by: "rule", subject: `${repo.key}-1`, action: "reran", sub: "intake" }));
   });
 
   test("close: the item is done with the note", async () => {

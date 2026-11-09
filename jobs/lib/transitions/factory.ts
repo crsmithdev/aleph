@@ -203,7 +203,8 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       release();
     }
   }
-  factoryLog(`started ${started.join(", ") || "none"}${planned.length ? `; planning ${planned.join(", ")}` : ""}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
+  // A tick that does nothing writes no line: one in five lines of tick.log said `started none`.
+  if (started.length || planned.length || skipped.length) factoryLog(`started ${started.join(", ") || "none"}${planned.length ? `; planning ${planned.join(", ")}` : ""}${skipped.length ? `; skipped ${skipped.join("; ")}` : ""}`);
   return { started, skipped, ...(landed.length ? { landed } : {}), ...(planned.length ? { planned } : {}) };
 }
 
@@ -329,7 +330,7 @@ export async function episodeStep(): Promise<string[]> {
   try {
     if (gates({ only: ["pause"] })) return [];
     const r = await writeEpisodes(sandboxRepos());
-    factoryLog(`episodes ${r.written.join(", ") || "none"}`);
+    if (r.written.length) factoryLog(`episodes ${r.written.join(", ")}`);
     for (const f of r.failed) factoryLog(`episode failed: ${f}`);
     return r.written;
   } catch (e: any) {

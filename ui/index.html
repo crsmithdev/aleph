@@ -58,7 +58,7 @@
   import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
-  // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), api?, refresh?, live? }, and
+  // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), event?(root, ev), api?, refresh?, live? }, and
   // may export redirect(hash) -> new hash | null for an address it took over:
   // `api` is the URL its data comes from (":params" filled in from the route),
   // `refresh` the seconds between reloads, `live` that /api/events also reloads it,
@@ -183,6 +183,8 @@
     let lost = false;
     events = new EventSource("/api/events");
     events.addEventListener("change", reload);
+    // An event of the event log, as it is written: a view with `event` shows it before the reload that `change` brings.
+    events.addEventListener("ev", (m) => { try { shown?.view?.event?.($("view"), JSON.parse(m.data)); } catch (e) { console.error("event failed", e); } });
     events.onerror = () => { lost = true; };
     events.onopen = () => { if (lost) reload(); };
   }

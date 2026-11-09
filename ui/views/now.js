@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -20,6 +20,13 @@ export const view = {
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
+  // An event from the stream goes into the Herald at once; the reload that follows draws it from the state.
+  event: (root, ev) => {
+    streamed.push(ev);
+    if (streamed.length > HERALD_KEEP) streamed.shift();
+    const h = root.querySelector("#herald");
+    if (h && lastState) h.outerHTML = renderHerald(lastState);
+  },
 };
 
 let lastState = null, outOfDateNow = false;
@@ -99,6 +106,29 @@ export function renderMonitor(s) {
 }
 
 let clientEvents = [];
+/** The events the stream sent since the page loaded, oldest first; the Herald merges them with the state's. */
+let streamed = [];
+const HERALD_KEEP = 50;
+
+/** The events of the state and of the stream, each once, newest first. */
+export function heraldEvents(s, more = streamed) {
+  const key = (e) => `${e.at} ${e.by} ${e.subject} ${e.action} ${(e.on ?? []).join(",")}`;
+  const all = new Map([...(s.herald?.events ?? []), ...more].map((e) => [key(e), e]));
+  return [...all.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, HERALD_KEEP);
+}
+
+/** The tone of an event's row: a start runs, a wait asks, a failure warns, an end is fine; any other action is quiet. */
+const TONES = { running: "run", reran: "run", waiting: "ask", escalated: "ask", failed: "warning", returned: "warning", red: "warning", passed: "fine", landed: "fine", done: "fine", filed: "fine", answered: "fine" };
+
+/** An event's row: the time, the action in its tone, then the subject, the sub and the content, and the note quiet after them. */
+export function eventRow(ev) {
+  const tone = TONES[ev.action] ?? "quiet";
+  const body = [shownId(ev.subject), ev.sub, contentText(ev)].filter(Boolean).join(" ");
+  return `<div class="event-row ${tone}" data-by="${esc(ev.by)}">` +
+    `<span class="event-time">${esc(clock(ev.at) || when(ev.at))}</span>` +
+    `<span class="event-tone ${tone}"><span class="event-dot ${tone}"></span>${esc(ev.action)}</span>` +
+    `<span class="event-body">${esc(body)}${ev.note ? `<span class="reason">${esc(ev.note)}</span>` : ""}</span></div>`;
+}
 
 /** Extract the plain-text status line verdict and reasons from state. */
 export function statusVerdict(s, stale = false) {
@@ -157,13 +187,16 @@ export function renderHerald(s) {
     }
   }
 
-  const feed = history.map((ev, i) =>
+  const status = history.map((ev, i) => ({ at: ev.at ?? "", html:
     `<div class="event-row ${esc(ev.tone)}${i === 0 && errors ? " live" : ""}">` +
       `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
       `<span class="event-tone ${esc(ev.tone)}"><span class="event-dot ${esc(ev.tone)}"></span>${esc(ev.label || ev.tone)}</span>` +
       `<span class="event-body ${esc(ev.tone)}">${esc(eventText(ev))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}</span>` +
-    `</div>`
-  ).join("");
+    `</div>` }));
+  // The status changes and the events in one feed, newest first; the live status row stays on top.
+  const live = errors ? status.shift() : null;
+  const rows = [...status, ...heraldEvents(s).map((ev) => ({ at: ev.at, html: eventRow(ev) }))].sort((x, y) => (x.at < y.at ? 1 : x.at > y.at ? -1 : 0));
+  const feed = (live ? [live, ...rows] : rows).map((r) => r.html).join("");
 
   const m = s.factory?.monitor;
   const monitorFindings = m?.findings?.length

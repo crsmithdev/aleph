@@ -3,6 +3,8 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
+import { readEvents } from "../jobs/lib/infra/layout.ts";
+import type { Event } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";
 import { monitorPanel } from "../jobs/lib/learning/monitor-table.ts";
@@ -95,6 +97,8 @@ export interface HeraldHistoryItem {
 }
 
 const statusHistory: HeraldHistoryItem[] = [];
+/** The most events the Herald gets with the state; the stream adds the ones after. */
+const HERALD_EVENTS = 50;
 const MAX_STATUS_HISTORY = 50;
 
 export function recordStatusTransition(item: HeraldHistoryItem): void {
@@ -136,8 +140,8 @@ export interface State {
   done: DoneItem[];
   /** When each done issue finished (ms), newest first: the Done lane counts the selected window from it. */
   doneStamps: { id: string; at: number }[];
-  /** Recent status transitions and events for the Herald panel. */
-  herald?: { history: HeraldHistoryItem[] };
+  /** Recent status transitions for the Herald panel, and the newest HERALD_EVENTS events of the event log in the last day, oldest first. */
+  herald?: { history: HeraldHistoryItem[]; events: Event[] };
 }
 
 const DONE = 10;
@@ -463,7 +467,7 @@ export function state(now = new Date()): State {
   return {
     now: now.toISOString(),
     factory: { ...factory, judge: judgeChoice(), ...timers, monitor: monitorPanel() },
-    herald: { history: currentStatusHistory() },
+    herald: { history: currentStatusHistory(), events: readEvents(now.getTime() - 86_400_000).slice(-HERALD_EVENTS) },
     asks: att.items, done, doneStamps: doneItems.map(({ at, repo, item }) => ({ id: `${repo.key}-${refOf(item)}`, at })),
     stuck, running, runningIssues,
     queued: byPriority(queued.map(({ repo, item, stage, since, at }) => {

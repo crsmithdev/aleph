@@ -13,7 +13,7 @@ import { allHolds, backendHold, baselines, type HoldRecord, factoryRepos, gates,
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
-import { eventOf, layout, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
+import { eventOf, layout, readEvents, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
@@ -159,14 +159,16 @@ function oldLine(at: string, line: string): LogEntry[] {
   return [];
 }
 
-/** The log events of tick.log: each event line, and the old text lines that `oldLine` reads. */
-function tickEntries(): LogEntry[] {
-  return readFactoryLog().split("\n").flatMap((l) => {
+/**
+ * The events of the event log from `since` (ms), and the old text lines of tick.log that `oldLine` reads. A run's state
+ * changes are the gate's events, and the log does not list them. The event lines of tick.log are in the event log too.
+ */
+function tickEntries(since: number): LogEntry[] {
+  const old = readFactoryLog().split("\n").flatMap((l) => {
     const m = /^(\S+) (.*)$/.exec(l);
-    if (!m) return [];
-    const e = eventOf(m[2]);
-    return e ? [e] : oldLine(m[1], m[2]);
+    return m && !eventOf(m[2]) ? oldLine(m[1], m[2]) : [];
   });
+  return [...readEvents(since).filter((e) => e.by !== "gate"), ...old];
 }
 
 /** The event of an old hold record, as near as its text gives it; the text is the note when no form fits. */
@@ -230,7 +232,7 @@ export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, projec
   const holds = collapse(allHolds().filter((h) => h.kind !== "started").map((h) => h.event ?? oldHold(h)));
   const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "human", subject: reason, action: "changed", ...(askSub(reason) ? { sub: askSub(reason) } : {}), note: `set to ${g.action}` }));
-  return [...holds, ...set, ...tickEntries(), ...noteEntries()]
+  return [...holds, ...set, ...tickEntries(now - ms), ...noteEntries()]
     .filter((e) => now - Date.parse(e.at) < ms && (!project || inProject(e.subject, project)))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     .filter((e) => (seen[e.by] = (seen[e.by] ?? 0) + 1) <= max);

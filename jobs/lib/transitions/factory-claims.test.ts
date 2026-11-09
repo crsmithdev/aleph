@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, watch, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -13,6 +13,7 @@ import { markRescued } from "./continuation.ts";
 import { ciStep } from "../gates/ci.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
+import { readEvents } from "../infra/layout.ts";
 
 beforeEach(setup);
 afterEach(teardown);
@@ -151,7 +152,7 @@ test("a standing rescue: recommended drops the unsafe stuck run, no Ask, an alwa
   expect(f.calls).toContain(`drop fac-${id}`);
   expect(ask(id)).toBeNull();
   expect(notes(id)).toContain("always: Rerun");
-  expect(readFileSync(join(ctx.base, "factory", "tick.log"), "utf8")).toContain(`"by":"rule","subject":"fac-${id}","action":"reran","sub":"rescue","on":["fac-${id}#1"],"result":"dropped"`);
+  expect(readEvents()).toContainEqual(expect.objectContaining({ by: "rule", subject: `fac-${id}`, action: "reran", sub: "rescue", on: [`fac-${id}#1`], result: "dropped" }));
 });
 
 test("a rescue that finds the lock taken waits, then acts once on the state it finds under the lock", async () => {

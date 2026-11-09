@@ -118,3 +118,26 @@ test("a server history entry for the attention status, without the final period,
   const other = view.renderHerald({ ...base, now, herald: { history: [{ at, tone: "alert", label: "Alert", text: "Alert: health: aleph main is red" }] } });
   expect(other.match(/class="event-row/g)?.length).toBe(2);
 });
+
+test("the Herald merges the state's events and the streamed ones, each once, newest first, with the status rows", () => {
+  const ev = (at: string, action: string, o: object = {}) => ({ at, by: "gate", subject: "aleph-5", action, on: ["aleph-5#1"], ...o });
+  const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [{ at: "2026-11-09T11:00:00Z", tone: "fine", label: "Fine", text: "Everything is fine" }], events: [ev("2026-11-09T11:30:00Z", "running")] } };
+  const merged = view.heraldEvents(s, [ev("2026-11-09T11:30:00Z", "running"), ev("2026-11-09T11:45:00Z", "failed", { sub: "timeout", note: "timed out" })]);
+  expect(merged.map((e: any) => e.action)).toEqual(["failed", "running"]);
+  const h = view.renderHerald(s);
+  const order = [...h.matchAll(/class="event-row (\w+)/g)].map((m) => m[1]);
+  // The fixture's status now (12:00) is newest, then the event at 11:30, then the status at 11:00.
+  expect(order).toEqual(["alert", "run", "fine"]);
+  expect(view.eventRow(merged[0])).toContain('<span class="event-tone warning"><span class="event-dot warning"></span>failed</span>');
+  expect(view.eventRow(merged[0])).toContain('aleph-5 timeout aleph-5#1<span class="reason">timed out</span>');
+});
+
+test("an event from the stream goes into the Herald at once", () => {
+  const s = { ...calm, now: "2026-11-09T12:00:00Z", herald: { history: [], events: [] } };
+  view.view.render(s, {}, new URLSearchParams());
+  let html = "";
+  const herald = { set outerHTML(v: string) { html = v; } };
+  view.view.event({ querySelector: (q: string) => (q === "#herald" ? herald : null) }, { at: "2026-11-09T11:59:00Z", by: "gate", subject: "aleph-6", action: "landed", on: ["aleph-6#2"] });
+  expect(html).toContain(">landed</span>");
+  expect(html).toContain("aleph-6 aleph-6#2");
+});

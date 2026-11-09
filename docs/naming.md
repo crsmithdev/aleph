@@ -36,7 +36,7 @@ Text that people read does not use these old words: goal (an issue), part (an is
 
 ## Events
 
-Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them. A log event is one line of `tick.log`: the time, a space and the event as JSON, which `logEvent` in `jobs/lib/infra/layout.ts` writes. A gate hold keeps its event in the job record.
+Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them. A log event is one line of the event log, `factory/events/<day>.jsonl`: the event as JSON, in the file of its UTC day, which `logEvent` in `jobs/lib/infra/layout.ts` writes. A day before today never changes, so a reader reads only the days of its window (`readEvents`). Each write that changes a run's state logs one event by `gate` on the run's subject, with the state as the action and the job ID in `on`. A gate hold keeps its event in the job record. `tick.log` holds the event lines from before the event log, which the event log also holds.
 
 | Field | Form | Example |
 |---|---|---|

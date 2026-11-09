@@ -8,6 +8,7 @@ import { approve, decline, explainLesson, mine, proposals, readStore } from "./c
 import { missingSections } from "../roles/issue-spec.ts";
 import { storeRepos } from "../../../tests/git-fixture.ts";
 import { writeRun } from "../records/ledger.ts";
+import { readEvents } from "../infra/layout.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 
@@ -175,7 +176,7 @@ describe("standing proposals", () => {
     const [item] = readList(repo)!.items;
     expect(item.fm.kind).toBe("proposal");
     expect(titleProblem(item.title)).toBeNull();
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain('"by":"rule","subject":"fac-1","action":"filed","note":"proposal-check:fac: approved ');
+    expect(readEvents().find((e) => e.by === "rule" && e.subject === "fac-1" && e.action === "filed")?.note).toStartWith("proposal-check:fac: approved ");
   });
 
   test("decline marks it declined", async () => {
@@ -183,7 +184,7 @@ describe("standing proposals", () => {
     pickFirst = true;
     await mine(NOW);
     expect(stored().lessons[0].state).toBe("declined");
-    expect(readFileSync(join(base, "factory", "tick.log"), "utf8")).toContain('"action":"dropped","note":"proposal-check:fac: declined"');
+    expect(readEvents()).toContainEqual(expect.objectContaining({ action: "dropped", note: "proposal-check:fac: declined" }));
   });
 });
 

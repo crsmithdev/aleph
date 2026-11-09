@@ -56,6 +56,22 @@ test("a change in the factory folder or to the store's origin/main sends a chang
   expect(await changeAfter(() => writeFileSync(join(ref, "main"), "abc"))).toBe(true);
 });
 
+test("a run that starts sends its event as an ev, before the change, with the event as JSON", async () => {
+  const ctl = new AbortController();
+  const res = await fetch(`http://127.0.0.1:${server.port}/api/events`, { signal: ctl.signal });
+  const reader = res.body!.getReader();
+  await reader.read();
+  putRun("r3", run("r-3"));
+  let text = "";
+  try {
+    while (!text.includes("event: change")) text += new TextDecoder().decode((await reader.read()).value);
+  } finally { ctl.abort(); }
+  const ev = /event: ev\ndata: (.*)\n/.exec(text);
+  expect(ev).not.toBeNull();
+  expect(JSON.parse(ev![1])).toMatchObject({ by: "gate", subject: "r-3", action: "running" });
+  expect(text.indexOf("event: ev")).toBeLessThan(text.indexOf("event: change"));
+});
+
 // The watchers pass names relative to the folder, as the tests above show; these files must not count.
 test("a temporary record file and a log count as no change", () => {
   expect(countsInRecords("r-1.json.123.tmp")).toBe(false);

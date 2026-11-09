@@ -14,7 +14,7 @@ import * as gates from "./views/gates.js";
 import * as record from "../jobs/lib/records/record.ts";
 import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
 import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { logEvent } from "../jobs/lib/infra/layout.ts";
+import { eventsDir, logEvent } from "../jobs/lib/infra/layout.ts";
 import { contentText, setCodes } from "../lib/naming.ts";
 
 /** Make `rows` the only hold records: each issue's `hold` and `started` events in its job record. */
@@ -142,14 +142,13 @@ test("a hold writes its event, and the log shows it as busy with the job and the
 
 test("a director decision shows its action and sub, and its long note only behind the row's button", () => {
   const note = `Director: landed over the reviewer hold. ${"word ".repeat(60)}`.trim();
-  const logPath = join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), was = readFileSync(logPath, "utf8");
   try {
     logEvent({ by: "director", subject: "r-12", action: "landed", sub: "override", note });
     const e = log().find((x) => x.subject === "r-12")!;
     expect(line(e)).toBe(`director | r-12 | landed | override | - | ${note}`);
     const h = gates.renderLog({ log: { entries: [e] } });
     expect(h).toContain(`<td>landed</td><td>override</td><td class="what"><div class="clamp">${note}</div><button class="link clamp-btn" type="button" aria-expanded="false">Show more</button></td>`);
-  } finally { writeFileSync(logPath, was); }
+  } finally { rmSync(eventsDir(), { recursive: true, force: true }); }
 });
 
 test("POST /api/gates/revoke/:reason runs `aleph always revoke`, and refuses a request without the UI header", async () => {
@@ -235,6 +234,7 @@ test("the body's automation rate counts every decision in the 7 days, past the l
     expect(after.total - before.total).toBe(LOG_MAX);
   } finally {
     writeFileSync(logPath, was);
+    rmSync(eventsDir(), { recursive: true, force: true });
   }
 });
 
@@ -555,11 +555,11 @@ test("GET /api/gates takes window and project: the log and the metrics keep that
   const m = (min: number) => min * 60 * 24;
   writeFileSync(logPath, [
     `${ago(30)} always: rescue: recommended on alpha-1`,
-    `${ago(60 * 5)} {"at":"${ago(60 * 5)}","by":"rule","subject":"alpha-2","action":"reran","sub":"rescue"}`,
     `${ago(m(3))} always: rescue: recommended on beta-1`,
     `${ago(m(10))} always: rescue: recommended on beta-2`,
     `${ago(m(40))} always: rescue: recommended on alpha-3`,
   ].join("\n") + "\n");
+  logEvent({ at: ago(60 * 5), by: "rule", subject: "alpha-2", action: "reran", sub: "rescue" });
   const get = async (q: string) => { const r = await at(`/api/gates${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
   const items = (d: any) => d.log.entries.map((e: any) => e.subject).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
   try {
@@ -579,6 +579,7 @@ test("GET /api/gates takes window and project: the log and the metrics keep that
     expect((await get("?window=year")).status).toBe(400);
   } finally {
     writeFileSync(logPath, was);
+    rmSync(eventsDir(), { recursive: true, force: true });
   }
 });
 

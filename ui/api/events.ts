@@ -1,11 +1,12 @@
 /**
  * `GET /api/events`: a server-sent stream. It sends a `change` event when a file that `/api/state` reads changes, and the
- * page then loads the view again. The event has no data. The watchers run only while a client is connected.
+ * page then loads the view again; that event has no data. It sends an `ev` event for each line added to the event log,
+ * with the event as JSON, at once. The watchers run only while a client is connected.
  */
-import { existsSync, mkdirSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readSync, statSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
 import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
-import { layout } from "../../jobs/lib/infra/layout.ts";
+import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
 import { recordsDir } from "../../jobs/lib/records/record.ts";
 import type { Routes } from "../server.ts";
 
@@ -32,6 +33,24 @@ function changed(): void {
   settle ??= setTimeout(() => { settle = undefined; send(CHANGE); }, SETTLE_MS);
 }
 
+/** How far into each day file of the event log the stream has sent, by file name. */
+const sent = new Map<string, number>();
+
+/** Send the whole lines a day file gained since the last send, each as an `ev` event. */
+function tail(file: string): void {
+  const path = join(eventsDir(), file);
+  let size: number;
+  try { size = statSync(path).size; } catch { return; }
+  const from = sent.get(file) ?? 0;
+  if (size <= from) return;
+  const buf = Buffer.alloc(size - from), fd = openSync(path, "r");
+  try { readSync(fd, buf, 0, buf.length, from); } finally { closeSync(fd); }
+  const text = buf.toString("utf8"), end = text.lastIndexOf("\n");
+  if (end < 0) return;
+  sent.set(file, from + Buffer.byteLength(text.slice(0, end + 1)));
+  for (const line of text.slice(0, end).split("\n")) if (line) send(encoder.encode(`event: ev\ndata: ${line}\n\n`));
+}
+
 function follow(dir: string, options: WatchOptions, counts: (file: string) => boolean): void {
   if (!existsSync(dir)) return;
   const w = watch(dir, options, (_event, file) => { if (file && counts(String(file))) changed(); });
@@ -51,12 +70,19 @@ function start(): void {
   follow(factoryDir(), {}, countsInFactory);
   // Each issue write moves this ref; the page reads the issues from it.
   follow(join(store, ".git", "refs", "remotes", "origin"), {}, (file) => file === "main");
+  // The stream sends only what is added after it starts: the page has the earlier events from /api/state.
+  mkdirSync(eventsDir(), { recursive: true });
+  for (const f of readdirSync(eventsDir())) sent.set(f, statSync(join(eventsDir(), f)).size);
+  const w = watch(eventsDir(), {}, (_event, file) => { if (file && String(file).endsWith(".jsonl")) tail(String(file)); });
+  w.on("error", (e) => console.error(`ui/api/events: watch of ${eventsDir()} failed: ${e.message}`));
+  watchers.push(w);
   ping = setInterval(() => send(PING), PING_MS);
 }
 
 function stop(): void {
   for (const w of watchers) w.close();
   watchers = [];
+  sent.clear();
   clearInterval(ping);
   clearTimeout(settle);
   settle = undefined;

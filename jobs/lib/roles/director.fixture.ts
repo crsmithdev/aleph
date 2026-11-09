@@ -10,6 +10,7 @@ import type { Ask } from "../asks/ask.ts";
 import type { Ports } from "./director.ts";
 import { stamp, writeRun, type Run } from "../records/ledger.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
+import { readEvents } from "../infra/layout.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export let base: string;
@@ -61,9 +62,8 @@ export const reply = (actions: object[], text?: object) => writeFileSync(join(ba
 /** The fake's whole reply: an object, such as `{ case: {...} }`, as structured output; a string as plain text. */
 export const replyWith = (o: object | string) => writeFileSync(join(base, "reply.json"), typeof o === "string" ? o : result(o));
 export const calls = () => (existsSync(join(base, "calls")) ? readFileSync(join(base, "calls"), "utf8").split("\n").filter(Boolean).length : 0);
-const log = () => readFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), "utf8");
-/** The events of tick.log, oldest first: its JSON lines. */
-export const events = () => log().split("\n").filter((l) => l.includes(" {")).map((l) => JSON.parse(l.slice(l.indexOf(" ") + 1)));
+/** The events of the event log, oldest first, but the gate's: those say a run's state changed. */
+export const events = () => readEvents().filter((e) => e.by !== "gate");
 
 /** A branch off main that changes `file`. */
 export function branch(name: string, file: string, content = "x\n"): void {
