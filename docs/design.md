@@ -201,9 +201,9 @@ Every absolute time goes through `when()`; a chart axis uses `day()` or `hourLab
 |---|---|
 | `ui/lib.js` (31 rows: `pad`, `clock`, `money`, `count`, `mean`, `hours`, `bytes`, `pct`, `durMs`, `when`, `hourLabel`, `day`, the bar row) | The helpers themselves. |
 | `ui/activity.ts`, `ui/api/speed.ts` | Local-day date arithmetic for bucket starts, not display. |
-| `getDate()` in `ui/views/issues.js` | Local-day date arithmetic for windows and age bins, not display. |
-| `toFixed()` in `ui/views/jobs.js` | Rounds a window length to a stable number, not display. |
-| `style` in `ui/views/session.js` and `ui/timeline.js` | Inline style widths and offsets in percent, read by CSS only. |
+| `getDate()` called in `ui/views/issues.js` | Local-day date arithmetic for windows and age bins, not display. |
+| `toFixed()` called in `ui/views/jobs.js` | Rounds a window length to a stable number, not display. |
+| `style` set in `ui/views/session.js` and `ui/timeline.js` | Inline style widths and offsets in percent, read by CSS only. |
 | `ui/api/skills.ts` | A server log line. |
 | `ui/views/memory.js` | A bar width in percent, read by CSS only. |
 
@@ -228,19 +228,19 @@ Columns of the main tables:
 
 | Table | Columns, in order | Source |
 |---|---|---|
-| Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` in `ui/views/issues.js` |
-| Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` in `ui/views/jobs.js` |
-| Sessions | Started, Last Turn, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` in `ui/views/sessions.js` |
-| Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` in `ui/views/memory.js` |
-| Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Took (num), Cost (num) | `dataTable()` in `ui/views/session.js` |
-| Observations | Kind, Name, Detail, Took (num) | `dataTable()` in `ui/views/session.js` |
+| Issues | Updated, Id, Title, Stage, Project, Priority, Labels, Notes (num), Runs (num), Cost (num), Age (num) | `dataTable()` from `ui/lib.js`, called in `ui/views/issues.js` |
+| Jobs | Started, Job, Title, State, Project, Model, Took (num), Cost (num) | `dataTable()` from `ui/lib.js`, called in `ui/views/jobs.js` |
+| Sessions | Started, Last Turn, Session, First Prompt, Project, Kinds, Turns (num), Cost (num) | `dataTable()` from `ui/lib.js`, called in `ui/views/sessions.js` |
+| Memory notes | Written, Title, Kind, Scope, Read, Status | `dataTable()` from `ui/lib.js`, called in `ui/views/memory.js` |
+| Turns of a session | Started, Turn (num), Prompt, Output, Model, Tools (num), Took (num), Cost (num) | `dataTable()` from `ui/lib.js`, called in `ui/views/session.js` |
+| Observations | Kind, Name, Detail, Took (num) | `dataTable()` from `ui/lib.js`, called in `ui/views/session.js` |
 | Gates log | Logged, By, Subject, Action, Sub, Content, Times (num) | `dataTable()` (`ui/views/gates.js` `renderLog`) |
-| Hooks | Last Call, Hook, Calls (num), Errors (num) | `dataTable()` in `ui/views/sessions.js` |
-| Denials | Denied, Reason | `dataTable()` in `ui/views/sessions.js` |
-| Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` and `pagedTable()` in `ui/views/efficiency.js` |
-| Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` in `ui/views/factory-agents.js` |
-| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` in `ui/views/jobs.js` |
-| Commits | Committed, Commit, Subject, Part | `pagedTable()` in `ui/views/issues.js` |
+| Hooks | Last Call, Hook, Calls (num), Errors (num) | `dataTable()` from `ui/lib.js`, called in `ui/views/sessions.js` |
+| Denials | Denied, Reason | `dataTable()` from `ui/lib.js`, called in `ui/views/sessions.js` |
+| Efficiency | Issue, Why, Took (num), Runs (num); Issue, Usage (num), Runs (num) | `dataTable()` and `pagedTable()` from `ui/lib.js`, called in `ui/views/efficiency.js` |
+| Agents by role | Role, Model, one number column per measure, Jobs | `dataTable()` from `ui/lib.js`, called in `ui/views/factory-agents.js` |
+| Job checks | Check, Result, Ran (num), Passed (num), Failed (num), Skipped (num), Took (num), Log; then each failed test with its failure | `pagedTable()` from `ui/lib.js`, called in `ui/views/jobs.js` |
+| Commits | Committed, Commit, Subject, Part | `pagedTable()` from `ui/lib.js`, called in `ui/views/issues.js` |
 
 Gaps: a missing cell is empty in some tables and `–` in others. Row height is set by padding, not by a value. Expansion is by `<details>` in lists, not in tables. Filters are a `.fbar` in `ui/app.css` over the table.
 
@@ -316,7 +316,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case, from the word sets in [Naming](naming.md); a priority is `critical`, `high`, `medium` or `low`.
-- **Empty:** one sentence with a full stop and an optional hint, through `empty()` in `ui/lib.js`. Gates shows `empty()` in `ui/views/gates.js` as "Nothing waits for you."; Jobs shows `empty()` in `ui/views/jobs.js` as "No job matches." with "Widen the window or clear a filter."
+- **Empty:** one sentence with a full stop and an optional hint, through `empty()` in `ui/lib.js`. Gates shows `empty()` called in `ui/views/gates.js` as "Nothing waits for you."; Jobs shows `empty()` called in `ui/views/jobs.js` as "No job matches." with "Widen the window or clear a filter."
 - **Loading:** `loadingLine()` in `ui/lib.js` draws the inline line, `Loading <what>…`; `loading()` in `ui/lib.js` draws a view's first-load state, `Loading <title>…`.
 - **Error:** `error()` in `ui/lib.js` says what failed, and the default hint is "Check that aleph-ui is running, then reload."
 - **Offline:** "The server is unreachable. Showing the last data." (`ui/index.html`).
@@ -324,7 +324,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Layout and responsive
 
-- **Shell:** a sidebar (`#nav` in `ui/app.css`, grouped by `work`, `factory`, `claude`) and `main` in `ui/index.html`; the sidebar collapses to 48px on desktop (`.shell.collapsed` in `ui/app.css`) and its state is kept in `localStorage` (`ui/index.html`).
+- **Shell:** a sidebar (`#nav` in `ui/app.css`, grouped by `work`, `factory`, `claude`) and the `main` element of the page (`ui/index.html`); the sidebar collapses to 48px on desktop (`.shell.collapsed` in `ui/app.css`) and its state is kept in `localStorage` (`ui/index.html`).
 - **Page:** `.page` in `ui/app.css` is at most 2400px wide with `28px 24px 64px` padding, `20px 16px 48px` at 720px and below.
 - **Skeleton:** `pageHead()` in `ui/lib.js` with the serif title and a muted count, then `card()` sections in `ui/lib.js` with a `sectionHead()` in `ui/lib.js`; Status has its own `.shead` in `ui/app.css`. A detail page starts with `crumb()` in `ui/lib.js`.
 - **Grid:** `.tiles` in `ui/app.css` holds the metric cards (see Metric cards); `.lanes` in `ui/app.css` is 3 columns, 2 when the main column is under 760px, 1 under 480px.
@@ -359,15 +359,15 @@ Reference view = the view that follows the rules best.
 |---|---|---|
 | Page header | `pageHead()` | `ui/views/jobs.js` |
 | Card | `card()` | `ui/views/factory-agents.js` |
-| Table | `dataTable()`, `sortHead()` | `dataTable()` in `ui/views/jobs.js` |
+| Table | `dataTable()`, `sortHead()` | `dataTable()` called in `ui/views/jobs.js` |
 | Badge | `badge()` | `ui/views/jobs.js` |
 | Chip | `chips()` | `ui/views/issues.js` |
 | Button | `.act`, `.cmd` | `ui/views/issues.js` |
 | Chart | `panelOf()` | `ui/views/factory-agents.js` |
 | Metric card (the standard data card) | `statCard()`, `cardTrend()`, `tiles()` | `ui/views/speed.js` `statusCards()` |
 | Filter bar | `filterBar()` | `ui/views/jobs.js` |
-| Pager | `pager()` | `pager()` in `ui/views/issues.js` |
-| Empty state | `empty()` | `empty()` in `ui/views/jobs.js` |
+| Pager | `pager()` | `pager()` called in `ui/views/issues.js` |
+| Empty state | `empty()` | `empty()` called in `ui/views/jobs.js` |
 
 Cards with their own markup, because `card()` would add a heading or change the element:
 

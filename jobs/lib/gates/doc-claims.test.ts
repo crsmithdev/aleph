@@ -37,6 +37,21 @@ describe("a doc that does not match fails, quoting the claim", () => {
     ]);
   });
 
+  test("a name cited in a file that only imports or calls it, not in the file that defines it", () => {
+    const d = "jobs/lib/gates/doc-claims.ts";
+    const u = "jobs/lib/gates/doc-claims-repo.ts";
+    expect(one(`\`docProblems\` in \`${u}\`, \`docProblems\` in \`${d}\``)).toEqual([`docs/x.md:1: "\`docProblems\` in \`${u}\`": ${u} has no docProblems`]);
+    const at = readFileSync(join(ROOT, d), "utf8").split("\n").findIndex((l) => l.includes("export function docProblems")) + 1;
+    const use = readFileSync(join(ROOT, u), "utf8").split("\n").findIndex((l) => l.includes("docProblems(")) + 1;
+    expect(one(`\`docProblems\` in \`${u}:${use}\``)).toEqual([`docs/x.md:1: "\`docProblems\` in \`${u}:${use}\`": ${u} has no docProblems`]);
+    expect(one(`\`docProblems\` in \`${d}:${at}\``)).toEqual([]);
+    const rows = readFileSync(join(ROOT, d), "utf8").split("\n");
+    const def = rows.findIndex((l) => l.includes("function fileText")) + 1;
+    const call = rows.findIndex((l) => l.includes("fileText(truth.root")) + 1;
+    expect(one(`\`fileText\` (\`${d}:${call}\`)`)).toEqual([`docs/x.md:1: "\`fileText\` (\`${d}:${call}\`)": fileText is at line ${def} of ${d}`]);
+    expect(one(`\`fileText\` (\`${d}:${def}\`)`)).toEqual([]);
+  });
+
   test("a CSS selector cited in a stylesheet that does not hold it", () => {
     expect(one("`.no-such-class` in `ui/app.css`, `.chat .clamp` in `ui/app.css`, `.chat .clam` in `ui/app.css`")).toEqual([
       'docs/x.md:1: "`.no-such-class` in `ui/app.css`": ui/app.css has no .no-such-class',

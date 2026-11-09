@@ -9,8 +9,8 @@
  * - each `ALEPH_*` name against the source;
  * - each repo path in backticks, in a relative link or in a link to this repo on GitHub, against the tree;
  * - each `path:line` in backticks against the length of that file (a bare file name must name one file of the tree);
- * - each `` `name` (`path:line`) ``, `` `name` in `path:line` `` and `` (`name`, `path:line`) `` against the lines of that file: the name must be at the line or in the range;
- * - each `` `name` in `path` `` (also `from`, `of`, `` `path`'s `name` ``) against the text of that file;
+ * - each `` `name` (`path:line`) ``, `` `name` in `path:line` `` and `` (`name`, `path:line`) `` against the lines of that file: the line or range must define the name;
+ * - each `` `name` in `path` `` (also `from`, `of`, `` `path`'s `name` ``) against the text of that file: it must define the name (a function, class, const, let, var, interface, type, enum or member key; a non-identifier such as a selector need only appear);
  * - each `` `.selector` in `path.css` `` (also `from`, `of`) against the text of that file;
  * - each `` `path` imports only `a` and `b` `` against the imports of that file;
  * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source.
@@ -209,6 +209,18 @@ function resolveRef(path: string, truth: Truth): { path?: string; why?: string }
   return { why: hits.length ? `names ${hits.length} files (${hits.join(", ")})` : "names no file of the repo" };
 }
 
+const MEMBER = String.raw`^\s*(?:(?:public|private|protected|static|readonly|async|get|set|abstract|override)\s+)*\*?`;
+
+/** The 1-based lines of `rows` that hold `name`: its definition when it is an identifier, else any mention. */
+function holdLines(rows: string[], name: string, css = false): number[] {
+  const n = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const dash = css ? "-" : "";
+  const has = new RegExp(!css && new RegExp(`^${IDENT}$`).test(name)
+    ? String.raw`\b(?:function\*?|class|const|let|var|interface|type|enum)\s+${n}\b|[{,]\s*${n}\s*:|${MEMBER}${n}\s*(?:\??:|=[^=>]|[(<][^;]*\{\s*$)`
+    : String.raw`(?<![\w$${dash}])${n}(?![\w$${dash}])`);
+  return rows.flatMap((l, i) => has.test(l) ? [i + 1] : []);
+}
+
 /** A module a doc names, as the file imports it: a relative one resolved from the file's folder. */
 const moduleKey = (from: string, spec: string): string => spec.startsWith(".") ? normPath(join(dirname(from), spec)) : spec;
 
@@ -247,19 +259,16 @@ export function docProblems(docs: Doc[], truth: Truth): string[] {
     const lines = text.endsWith("\n") ? text.split("\n").length - 1 : text.split("\n").length;
     if (r.line < 1 || r.line > lines) problems.push(`${at}: "${r.quote}" cites line ${r.line} of ${path}, which has ${lines} lines`);
     else if (r.name) {
-      const rows = text.split("\n");
-      const has = new RegExp(String.raw`(?<![\w$-])${r.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\w$-])`);
-      if (!rows.slice(r.from - 1, r.line).some((l) => has.test(l))) {
-        const now = rows.findIndex((l) => has.test(l)) + 1;
-        problems.push(`${at}: "${r.quote}": ${now ? `${r.name} is at line ${now} of ${path}` : `${path} has no ${r.name}`}`);
+      const hits = holdLines(text.split("\n"), r.name);
+      if (!hits.some((h) => h >= r.from && h <= r.line)) {
+        problems.push(`${at}: "${r.quote}": ${hits.length ? `${r.name} is at line ${hits[0]} of ${path}` : `${path} has no ${r.name}`}`);
       }
     }
   }
   for (const s of symbolsIn(docs)) {
     const text = fileText(truth.root, s.path);
     if (text === null) continue;
-    const dash = s.path.endsWith(".css") ? "-" : "";
-    if (!new RegExp(String.raw`(?<![\w$${dash}])${s.symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\w$${dash}])`).test(text)) problems.push(`${s.file}:${s.line}: "${s.quote}": ${s.path} has no ${s.symbol}`);
+    if (!holdLines(text.split("\n"), s.symbol, s.path.endsWith(".css")).length) problems.push(`${s.file}:${s.line}: "${s.quote}": ${s.path} has no ${s.symbol}`);
   }
   for (const c of importClaimsIn(docs)) {
     const text = fileText(truth.root, c.path);
