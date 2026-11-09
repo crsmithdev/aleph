@@ -18,6 +18,8 @@ for (const name of readdirSync(tmpdir()).filter((n) => n.startsWith(PREFIX))) {
     rmSync(join(tmpdir(), name), { recursive: true, force: true });
   }
 }
+// A factory agent's shell has ALEPH_AGENT set (jobs/lib/routing/models.ts); the hooks a test runs must act as in Chris's session.
+delete process.env.ALEPH_AGENT;
 const dir = mkdtempSync(join(tmpdir(), `${PREFIX}${procId(process.pid)}-`));
 const vars: Record<string, string> = {
   ALEPH_ISSUES: join(dir, "issues"), ALEPH_JOBS_DIR: join(dir, "runs"),
