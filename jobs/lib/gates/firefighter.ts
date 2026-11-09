@@ -213,7 +213,7 @@ function rerun(r: Red, ports: Ports): boolean {
   mkdirSync(factoryDir(), { recursive: true });
   writeFileSync(reran(), JSON.stringify([...rerunIds(), id]));
   factoryLog(`firefighter: ${r.repo} CI run ${id} failed before any test: rerun`);
-  logEvent({ by: "firefighter", subject: r.repo, action: "rerun", on: [r.commit.slice(0, 7)], note: `reran CI run ${id} of ${r.repo}: it failed before any test` });
+  logEvent({ by: "firefighter", subject: r.repo, action: "reran", on: [r.commit.slice(0, 7)], note: `reran CI run ${id} of ${r.repo}: it failed before any test` });
   return true;
 }
 

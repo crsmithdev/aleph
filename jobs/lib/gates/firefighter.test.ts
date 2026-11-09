@@ -11,6 +11,7 @@ import { ciStep, type GhRun } from "./ci.ts";
 import { ciFailure, firefight, LOG_CHARS, settleCi, type Ports } from "./firefighter.ts";
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
+import { readEvents } from "../infra/layout.ts";
 import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.fixture.ts";
 
 useDirectorFixture();
@@ -223,6 +224,7 @@ test("a CI run that failed in setup is rerun once; failing again, it files an is
   const p: Ports = { gh: (_, args) => { asked.push(args); return { ok: true, out: args[1] === "rerun" ? "" : SETUP_LOG }; } };
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun")).toEqual([["run", "rerun", "777", "--failed"]]);
+  expect(readEvents()).toContainEqual(expect.objectContaining({ by: "firefighter", subject: key, action: "reran", on: [B.slice(0, 7)] }));
   expect(reds()).toEqual([]);
   await firefight(p);
   expect(asked.filter((a) => a[1] === "rerun").length).toBe(1);
