@@ -227,4 +227,26 @@ describe("verify-gate hook", () => {
     expect(last.attributes.find((a: any) => a.key === "langfuse.observation.metadata.kind").value).toEqual({ stringValue: "fail-open" });
     expect(last.attributes.find((a: any) => a.key === "langfuse.observation.level").value).toEqual({ stringValue: "WARNING" });
   });
+  test("a code change in another worktree wakes the gate only when the turn names a path in it", async () => {
+    writeFileSync(join(root, ".git", "info", "exclude"), ".worktrees/\nt.jsonl\n");
+    const w = join(root, ".worktrees", "sib");
+    run(root, "worktree", "add", "-q", w, "-b", "feature/sib");
+    writeFileSync(verdictFile, '{"verdict":"deny","reason":"judge was called"}');
+    const w2 = join(root, ".worktrees", "sib2");
+    run(root, "worktree", "add", "-q", w2, "-b", "feature/sib2");
+    const stop = async (id: string, calls: object[], tree = w, cwd = root) => {
+      await fire("UserPromptSubmit", id, { cwd });
+      writeFileSync(join(tree, `${id}.ts`), id);
+      transcript(transcriptPath, id, [user("go"), ...calls, say("Done.")]);
+      return fire("Stop", id, { cwd, last_assistant_message: "Done." });
+    };
+    expect((await stop("p6", [])).stdout).toBe("");
+    expect((await stop("p9", [toolUse("t1", "Bash", { command: "echo x > .worktrees/sib/p9.ts" }), toolResult("t1", "", { stdout: "", stderr: "" })], w2)).stdout).toBe("");
+    expect((await stop("p10", [toolUse("t1", "Edit", { file_path: "/elsewhere/.worktrees/sib/p10.ts" }), toolResult("t1", "ok")])).stdout).toBe("");
+    expect(JSON.parse((await stop("p7", [toolUse("t1", "Edit", { file_path: join(w, "p7.ts") }), toolResult("t1", "ok")])).stdout).decision).toBe("block");
+    expect(JSON.parse((await stop("p8", [toolUse("t1", "Bash", { command: "echo x > .worktrees/sib/p8.ts" }), toolResult("t1", "", { stdout: "", stderr: "" })])).stdout).decision).toBe("block");
+    expect(JSON.parse((await stop("p11", [toolUse("t1", "Bash", { command: "echo x >.worktrees/sib/p11.ts" }), toolResult("t1", "", { stdout: "", stderr: "" })])).stdout).decision).toBe("block");
+    expect((await stop("p12", [], root, w2)).stdout).toBe("");
+    expect(JSON.parse((await stop("p13", [toolUse("t1", "Bash", { command: `cd ${root} && echo x > p13.ts` }), toolResult("t1", "", { stdout: "", stderr: "" })], root, w2)).stdout).decision).toBe("block");
+  });
 });

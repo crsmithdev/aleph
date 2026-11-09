@@ -9,6 +9,7 @@ type Entry = Record<string, any>;
 export interface Digest {
   prompt: string;
   edits: string[];
+  commands: string[];
   items: string[];
   finalMessage: string;
   text: string;
@@ -84,6 +85,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "",
 
   let prompt = "";
   const edits: string[] = [];
+  const commands: string[] = [];
   const items: string[] = [];
   let finalMessage = "";
 
@@ -110,6 +112,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "",
         edits.push(inp.file_path ?? "?");
         items.push(`EDIT ${name} ${inp.file_path ?? "?"}`);
       } else if (name === "Bash") {
+        commands.push(String(inp.command ?? ""));
         items.push(`RUN ${head(inp.command, 400)}\n  → ${out ? bashResult(resultText(out)) : "(no result)"}`);
       } else {
         items.push(`CALL ${name} ${head(inp)}${out ? `\n  → ${tail(resultText(out), 200)}` : ""}`);
@@ -126,7 +129,7 @@ export function digest(transcriptPath: string, promptId: string, stopFinal = "",
     `TURN (in order):\n${body || "(no tool calls)"}`,
     `FINAL MESSAGE:\n${finalMessage}`,
   ].join("\n\n");
-  return { prompt, edits, items, finalMessage, text };
+  return { prompt, edits, commands, items, finalMessage, text };
 }
 
 /** Never inside an aleph job: a worker's prompt is not Chris speaking. */
