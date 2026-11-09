@@ -5,7 +5,7 @@
  * `POST /api/gates/revoke/:reason`: `aleph always revoke <reason>`, the Ask-me side of a rule. The grant side is
  * `POST /api/standing/:reason` (standing.ts).
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
@@ -13,7 +13,7 @@ import { allHolds, backendHold, baselines, type HoldRecord, factoryRepos, gates,
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
-import { eventOf, layout, readEvents, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
+import { eventOf, eventsDir, layout, readEvents, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
@@ -160,15 +160,27 @@ function oldLine(at: string, line: string): LogEntry[] {
 }
 
 /**
- * The events of the event log from `since` (ms), and the old text lines of tick.log that `oldLine` reads. A run's state
- * changes are the gate's events, and the log does not list them. The event lines of tick.log are in the event log too.
+ * The one-time conversion of the old text lines of tick.log into the event log: each entry of `oldLine` goes to the day file of
+ * its line's time. The file `tick.converted` in the factory dir marks it done, so a second run adds nothing.
+ */
+export function convertTick(): void {
+  const mark = join(layout().factory, "tick.converted");
+  if (existsSync(mark)) return;
+  mkdirSync(eventsDir(), { recursive: true });
+  for (const l of readFactoryLog().split("\n")) {
+    const m = /^(\S+) (.*)$/.exec(l);
+    if (m && !eventOf(m[2])) for (const e of oldLine(m[1], m[2])) appendFileSync(join(eventsDir(), `${e.at.slice(0, 10)}.jsonl`), `${JSON.stringify(e)}\n`);
+  }
+  writeFileSync(mark, "");
+}
+
+/**
+ * The events of the event log from `since` (ms), after the conversion of the old text lines of tick.log. A run's state
+ * changes are the gate's events, and the log does not list them.
  */
 function tickEntries(since: number): LogEntry[] {
-  const old = readFactoryLog().split("\n").flatMap((l) => {
-    const m = /^(\S+) (.*)$/.exec(l);
-    return m && !eventOf(m[2]) ? oldLine(m[1], m[2]) : [];
-  });
-  return [...readEvents(since).filter((e) => e.by !== "gate"), ...old];
+  convertTick();
+  return readEvents(since).filter((e) => e.by !== "gate");
 }
 
 /** The event of an old hold record, as near as its text gives it; the text is the note when no form fits. */

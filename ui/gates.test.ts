@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS } from "../jobs/lib/asks/ask.ts";
 import { SECURITY_PATHS } from "../jobs/lib/gates/gate.ts";
-import { LOG_MAX, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
+import { LOG_MAX, convertTick, gatesBody, log, metrics, repeats, rules, securityFacts } from "./api/gates.ts";
 import type { AskItem } from "./asks.ts";
 import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore lib.js is plain JS, shared with the page
@@ -14,7 +14,7 @@ import * as gates from "./views/gates.js";
 import * as record from "../jobs/lib/records/record.ts";
 import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
 import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { eventsDir, logEvent } from "../jobs/lib/infra/layout.ts";
+import { eventsDir, logEvent, readEvents } from "../jobs/lib/infra/layout.ts";
 import { contentText, setCodes } from "../lib/naming.ts";
 
 /** Make `rows` the only hold records: each issue's `hold` and `started` events in its job record. */
@@ -225,15 +225,13 @@ test("the automation rate is the rule and director decisions over those and Chri
 });
 
 test("the body's automation rate counts every decision in the 7 days, past the log's cap of each actor", async () => {
-  const logPath = join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), was = readFileSync(logPath, "utf8");
-  const before = (await body()).metrics.rate;
-  writeFileSync(logPath, was + Array.from({ length: LOG_MAX }, (_, i) => `${ago(5 + i / 100)} always: rescue: recommended on r-${i}`).join("\n") + "\n");
+  const before = (await body()).metrics.rate ?? { auto: 0, total: 0 };
+  for (let i = 0; i < LOG_MAX; i++) logEvent({ at: ago(5 + i / 100), by: "rule", subject: `r-${i}`, action: "reran", sub: "rescue" });
   try {
     const after = (await body()).metrics.rate;
     expect(after.auto - before.auto).toBe(LOG_MAX);
     expect(after.total - before.total).toBe(LOG_MAX);
   } finally {
-    writeFileSync(logPath, was);
     rmSync(eventsDir(), { recursive: true, force: true });
   }
 });
@@ -295,12 +293,34 @@ test("log collapses a run of identical gate events into one with times, first an
   });
 });
 
-test("an old revoke line in tick.log is a human change of the rule, and an old always line a rule event; its second line is no entry", async () => {
-  const { appendFileSync } = await import("node:fs");
-  appendFileSync(join(base, "factory", "tick.log"), `${ago(0.5)} always: revoked rescue\n${ago(0.4)} always: rescue: recommended on r-9\n${ago(0.4)} r-9: always: Rerun; dropped, and the goal reruns\n`);
+const oldLines = () => {
+  const dir = process.env.ALEPH_FACTORY_DIR!;
+  rmSync(join(dir, "tick.converted"), { force: true });
+  rmSync(eventsDir(), { recursive: true, force: true });
+  writeFileSync(join(dir, "tick.log"), `${ago(0.5)} always: revoked rescue\n${ago(0.4)} always: rescue: recommended on r-9\n${ago(0.4)} r-9: always: Rerun; dropped, and the goal reruns\n`);
+};
+const mine = () => readEvents(0).filter((x) => x.subject === "rescue" || x.subject === "r-9");
+
+test("the conversion turns an old revoke line into a human change of the rule and an old always line into a rule event; its second line is no entry", async () => {
+  oldLines();
+  convertTick();
+  expect(mine()).toEqual([
+    expect.objectContaining({ by: "human", subject: "rescue", action: "changed", sub: "rescue", to: "human", note: "set to Ask me" }),
+    expect.objectContaining({ by: "rule", subject: "r-9", action: "reran", sub: "rescue", result: "dropped" }),
+  ]);
   const e: any[] = ((await body()) as any).log.entries;
   expect(e.find((x) => x.note === "set to Ask me")).toMatchObject({ by: "human", subject: "rescue", action: "changed", sub: "rescue", to: "human" });
   expect(e.filter((x) => x.subject === "r-9")).toEqual([expect.objectContaining({ by: "rule", action: "reran", sub: "rescue", result: "dropped" })]);
+});
+
+test("a second conversion adds no event, and the Gates log no longer reads tick.log", async () => {
+  oldLines();
+  convertTick();
+  convertTick();
+  expect(mine()).toHaveLength(2);
+  appendFileSync(join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), `${ago(0.3)} always: rescue: recommended on r-10\n`);
+  expect(((await body()) as any).log.entries.find((x: any) => x.subject === "r-10")).toBeUndefined();
+  rmSync(eventsDir(), { recursive: true, force: true });
 });
 
 const capsPath = () => join(process.env.ALEPH_FACTORY_DIR!, "caps.json");
@@ -549,14 +569,8 @@ test("repeats() lists the answers that Chris gave 3 times to one Ask reason; ren
 });
 
 test("GET /api/gates takes window and project: the log and the metrics keep that window and that repo; no parameter keeps 7 days of every repo; a bad window is 400", async () => {
-  const logPath = join(process.env.ALEPH_FACTORY_DIR!, "tick.log"), was = readFileSync(logPath, "utf8");
   const m = (min: number) => min * 60 * 24;
-  writeFileSync(logPath, [
-    `${ago(30)} always: rescue: recommended on alpha-1`,
-    `${ago(m(3))} always: rescue: recommended on beta-1`,
-    `${ago(m(10))} always: rescue: recommended on beta-2`,
-    `${ago(m(40))} always: rescue: recommended on alpha-3`,
-  ].join("\n") + "\n");
+  for (const [min, id] of [[30, "alpha-1"], [m(3), "beta-1"], [m(10), "beta-2"], [m(40), "alpha-3"]] as const) logEvent({ at: ago(min), by: "rule", subject: id, action: "reran", sub: "rescue" });
   logEvent({ at: ago(60 * 5), by: "rule", subject: "alpha-2", action: "reran", sub: "rescue" });
   const get = async (q: string) => { const r = await at(`/api/gates${q}`); return { status: r.status, d: r.status === 200 ? await r.json() as any : null }; };
   const items = (d: any) => d.log.entries.map((e: any) => e.subject).filter((i: string) => /^(alpha|beta)-/.test(i)).sort();
@@ -576,7 +590,6 @@ test("GET /api/gates takes window and project: the log and the metrics keep that
     expect(items((await get("?project=beta&window=month")).d)).toEqual(["beta-1", "beta-2"]);
     expect((await get("?window=year")).status).toBe(400);
   } finally {
-    writeFileSync(logPath, was);
     rmSync(eventsDir(), { recursive: true, force: true });
   }
 });
