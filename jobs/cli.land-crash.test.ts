@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, base, env, file, jobRuns, jobsDir, moveMain, remote, sh, state, stateNow, until, setup, teardown } from "./cli.helpers";
+import { CLI, base, env, file, jobRuns, jobsDir, moveMain, remote, sh, state, stateNow, setup, teardown, waitCmd, when } from "./cli.helpers";
 import { issueAdd, issueShow, job, land as landJob } from "./inproc";
 
 beforeAll(setup);
@@ -29,7 +29,7 @@ test("a land killed at its checks leaves main alone, and the next land finishes 
   rmSync(reached); // The job's own checks ran the gate too.
   writeFileSync(hold, "");
   const land = startLand("killcheck");
-  await until(() => existsSync(reached));
+  await when(() => existsSync(reached));
   await killLand("killcheck", land);
   expect(remoteGit("rev-parse", "main")).toBe(before);
   rmSync(hold); // The check the killed land left behind ends too.
@@ -47,11 +47,11 @@ test("a land killed after its push went through closes the issue on the next lan
   await fjobFor("killpush", "commit killpush.txt", id);
   const hold = join(base, "push-hold"), reached = join(base, "push-reached");
   // The hook runs after the ref moved and before git push returns to the land.
-  writeFileSync(join(remote, "hooks", "post-receive"), `#!/bin/sh\n[ -f ${hold} ] || exit 0\ntouch ${reached}\nwhile [ -f ${hold} ]; do sleep 0.05; done\n`, { mode: 0o755 });
+  writeFileSync(join(remote, "hooks", "post-receive"), `#!/bin/sh\n[ -f ${hold} ] || exit 0\ntouch ${reached}\n${waitCmd("gone", hold)}\n`, { mode: 0o755 });
   writeFileSync(hold, "");
   const before = remoteGit("rev-parse", "main");
   const land = startLand("killpush");
-  await until(() => existsSync(reached));
+  await when(() => existsSync(reached));
   await killLand("killpush", land);
   const pushed = remoteGit("rev-parse", "main");
   expect(pushed).not.toBe(before);

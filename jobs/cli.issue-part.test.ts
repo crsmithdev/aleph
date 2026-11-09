@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
-import { aleph, base, dispatching, itemsRemote, jobsDir, sh, setup, teardown, until } from "./cli.helpers";
+import { aleph, base, dispatched, itemsRemote, jobsDir, sh, setup, teardown } from "./cli.helpers";
 import { issueAdd, issueClose, issueShow } from "./inproc";
 
 // Acceptance criterion 14 at the CLI seam: `aleph issue add <repo> "<title>" --goal -` files the issue and its part `.1`
@@ -28,7 +28,7 @@ describe("aleph issue add --spec -", () => {
     expect(issue).toContain(`<!-- spec -->\n${SPEC.trim()}`);
     expect(issue).not.toMatch(/^(labels|waiting_on|goals|status):/m);
     // An intake would run as a detached `aleph intake`: wait until none is alive, then look for its run.
-    await until(() => !dispatching());
+    await dispatched();
     expect(intakeRuns()).toEqual([]);
     const shown = await aleph(["issue", "show", "fac", String(n), "--json"]);
     expect(shown.json).toMatchObject({ source: "chris", areas: [] });

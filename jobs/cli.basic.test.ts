@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { waitFor } from "../tests/wait.ts";
-import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, seedRun, setupLog, sh, state, told, worktree, setup, teardown } from "./cli.helpers";
+import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.helpers";
 import { actionJob, drop, jobView } from "./inproc";
 
 // The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,
@@ -68,7 +67,7 @@ describe("job", () => {
   // flaky: tests/flaky.md#basic-no-name
   test.skip("with no name, jobs lists the open jobs, then the jobs that ended in the last 24 hours, the latest first", async () => {
     // The runs are seeded with their end times: the order comes from the test, not from how fast the jobs ran.
-    const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000).toISOString();
+    const hoursAgo = (h: number) => new Date(now - h * 3600_000).toISOString();
     const ended = (name: string, h: number) => seedRun("demo", { kind: "build", condition: "dropped", name, job: name, ended: hoursAgo(h) });
     ended("older", 2);
     ended("newer", 1);
@@ -119,25 +118,14 @@ describe("guards", () => {
       // Five hold on a gate file nobody creates, so none ends before the drops; the sixth comes back refused.
       // No wall-clock window: the starts queue on the dispatch lock, which bounds each wait itself.
       // The held runs never end, so the first start to come back is the sixth, whatever it says.
-      // Bounded: if all six start, nothing returns, so fail with what each run shows instead of waiting out the test.
-      const none = Symbol("no start returned");
-      const first = await Promise.race([...started, Bun.sleep(150_000).then(() => none)]);
-      if (first === none) {
-        const seen = (await aleph(["jobs"])).json.filter((j: any) => names.includes(j.name)).map((j: any) => {
-          const at = (f: string) => existsSync(join(jobsDir, j.run, f)) ? readFileSync(join(jobsDir, j.run, f), "utf8").trim() : null;
-          return { name: j.name, condition: j.condition, phase: j.phase, pid: at("pid"), exit: at("exit") };
-        });
-        for (const j of await mine()) if (j.condition === "running") await aleph(["drop", j.name]);
-        const late = await Promise.allSettled(started);
-        const stderr = late.map((l, i) => `${names[i]}: ${l.status === "fulfilled" ? l.value.stderr : String(l.reason)}`);
-        throw new Error(`no start returned in 150 s\n${JSON.stringify(seen, null, 1)}\nstderr (after drop; look for "wrote no pid"):\n${stderr.join("\n")}`);
-      }
-      const refused = first as Awaited<(typeof started)[number]>;
+      // If all six start, nothing returns, and the test timeout ends the wait.
+      const refused = await Promise.race(started);
       expect(refused.code, refused.stdout + refused.stderr + endedRun(refused)).toBe(1);
       expect(refused.stderr).toContain("5 agent runs are live");
       // The refusal comes as soon as the fifth unit wrote `pid`; on a loaded machine some are still in phase setup.
-      let live: any[] = [];
-      await waitFor(async () => (live = await mine()).length === 5 && live.every((j: any) => j.condition === "running" && j.phase === "worker"), { timeout: 90_000, every: 100 });
+      const worker = (n: string) => jobRuns(n).some((r) => (stateNow(r) as any).phase === "worker" && stateNow(r).condition === "running");
+      await when(() => names.filter(worker).length === 5, jobsDir);
+      const live = await mine();
       expect(live.length).toBe(5);
       expect(live.every((j: any) => j.condition === "running" && j.phase === "worker")).toBe(true);
       for (const j of live) expect((await aleph(["drop", j.name])).code).toBe(0);

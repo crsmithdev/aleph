@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { allRuns, readRun, writeRun, type Run } from "./lib/records/ledger.ts";
@@ -6,7 +6,6 @@ import { unitAlive } from "./lib/infra/process.ts";
 export { unitAlive };
 import { config as storeConfig } from "../issues/lib/store.ts";
 import { renderItem } from "../issues/lib/todo.ts";
-import { waitFor } from "../tests/wait.ts";
 import { fixture } from "../tests/git-fixture.ts";
 
 export const CLI = join(import.meta.dir, "cli.ts");
@@ -15,6 +14,8 @@ export let server: ReturnType<typeof Bun.serve>;
 export let lf: ReturnType<typeof Bun.serve>;
 export let lfStatus = 200;
 export let lfPosts: any[] = [];
+/** The test's clock: the time setup made `base`, read once from its folder. The stamps a test writes sit at known distances from it. */
+export let now: number;
 export const told: string[] = [];
 export let onTell: ((text: string) => void) | undefined;
 
@@ -26,50 +27,76 @@ export let onTell: ((text: string) => void) | undefined;
  * While it runs, `$START_LOG.busy.<pid>` exists: see `starting`.
  */
 export function startScript(path: string, jobsDir: string): void {
-  writeFileSync(path, `#!/bin/bash
-busy="$START_LOG.busy.$$"
-touch "$busy"
-joberr="$START_LOG.err.$$"
-trap 'rm -f "$busy" "$joberr"' EXIT
-echo "$2" >> "$START_LOG"
-before=$(ls -d ${jobsDir}/*-"$2"-* 2>/dev/null)
-ALEPH_JOB_FOREGROUND=1 bun ${CLI} job "$1" "$2" --spec - --on "$3" > /dev/null 2> "$joberr" < /dev/stdin &
-job=$!
-for ((;;)); do
-  for d in $(ls -d ${jobsDir}/*-"$2"-* 2>/dev/null); do
-    [ -e "$d/pid" ] && ! grep -qxF "$d" <<< "$before" && exit 0
-  done
-  kill -0 $job 2>/dev/null || { cat "$joberr" >&2; exit 1; }
-  grep -q "wrote no pid" "$joberr" && { cat "$joberr" >&2; exit 1; }
-  sleep 0.1
-done
+  writeFileSync(path, `#!/usr/bin/env bun
+import { appendFileSync, existsSync, readdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs";
+const [kind, name, on] = process.argv.slice(2), log = process.env.START_LOG!, dir = ${JSON.stringify(jobsDir)};
+const busy = log + ".busy." + process.pid, joberr = log + ".err." + process.pid;
+writeFileSync(busy, "");
+writeFileSync(joberr, "");
+appendFileSync(log, name + "\\n");
+const runs = () => readdirSync(dir).filter((d) => d.includes("-" + name + "-"));
+const before = runs();
+const job = Bun.spawn(["bun", ${JSON.stringify(CLI)}, "job", kind, name, "--spec", "-", "--on", on], { env: { ...process.env, ALEPH_JOB_FOREGROUND: "1" }, stdin: "inherit", stdout: "ignore", stderr: Bun.file(joberr) });
+let gone = false;
+const end = (code: number) => {
+  const err = readFileSync(joberr);
+  rmSync(busy, { force: true });
+  rmSync(joberr, { force: true });
+  if (code) process.stderr.write(err);
+  process.exit(code);
+};
+const check = () => {
+  if (runs().some((d) => !before.includes(d) && existsSync(dir + "/" + d + "/pid"))) end(0);
+  if (gone || readFileSync(joberr, "utf8").includes("wrote no pid")) end(1);
+};
+watch(dir, { recursive: true }, check);
+watch(joberr, check);
+job.exited.then(() => { gone = true; check(); });
+check();
 `, { mode: 0o755 });
 }
 
-/** A start command from `startScript` that logs to `startLog` has not exited: its run folder may not be there yet. */
-export const starting = (startLog: string): boolean => {
+/** The pids of the start commands from `startScript` that log to `startLog` and have not exited: their run folder may not be there yet. */
+const startPids = (startLog: string): number[] => {
   const dir = join(startLog, ".."), name = startLog.slice(dir.length + 1) + ".busy.";
-  return readdirSync(dir).some((f) => f.startsWith(name));
+  return readdirSync(dir).filter((f) => f.startsWith(name)).map((f) => Number(f.slice(name.length)));
 };
+export const starting = (startLog: string): boolean => startPids(startLog).length > 0;
 
-/** An `aleph dispatch` or `aleph intake` of this test file's factory is running, e.g. a detached one from a transition. */
-export const dispatching = (): boolean => {
+/** The pids of the `aleph dispatch` and `aleph intake` processes of this test file's factory, e.g. a detached one from a transition. */
+const dispatchPids = (): number[] => {
   const mine = `ALEPH_FACTORY_DIR=${join(base, "factory")}\0`;
-  return readdirSync("/proc").filter((p) => /^\d+$/.test(p)).some((p) => {
+  return readdirSync("/proc").filter((p) => /^\d+$/.test(p)).filter((p) => {
     try {
       const cmd = readFileSync(`/proc/${p}/cmdline`, "utf8").split("\0");
       return cmd.includes(CLI) && ["dispatch", "intake"].includes(cmd[cmd.indexOf(CLI) + 1]) && readFileSync(`/proc/${p}/environ`, "utf8").includes(mine);
     } catch {
       return false;
     }
-  });
+  }).map(Number);
 };
 
+/** Returns when process `pid` has exited: `tail --pid` waits on the process, not on a timer. */
+const exited = (pid: number): Promise<number> => Bun.spawn(["tail", `--pid=${pid}`, "-f", "/dev/null"], { stdio: ["ignore", "ignore", "ignore"] }).exited;
+/** Waits for the exit of every process `pids` lists, until it lists none. */
+async function drained(pids: () => number[]): Promise<void> {
+  for (let p = pids(); p.length; p = pids()) await Promise.all(p.map(exited));
+}
+/** Returns when no `aleph dispatch` or `aleph intake` of this test file's factory is running. */
+export const dispatched = (): Promise<void> => drained(dispatchPids);
 /**
- * Nothing of this test file's factory is moving: no start in flight, no dispatch, and no unit alive. A run writes its
+ * Returns when nothing of this test file's factory is moving: no start in flight, no dispatch, and no unit alive. A run writes its
  * state before its run-end dispatch, so a state alone does not show this.
  */
-export const quiet = (startLog: string): boolean => !starting(startLog) && !dispatching() && readdirSync(jobsDir).every((r) => !unitAlive(join(jobsDir, r)));
+export const idle = (startLog: string): Promise<void> => drained(() => [...startPids(startLog), ...dispatchPids(),
+  ...readdirSync(jobsDir).filter((r) => unitAlive(join(jobsDir, r))).map((r) => Number(readFileSync(join(jobsDir, r, "pid"), "utf8")))]);
+
+/** Returns when `f` holds. It checks on each change in the folder `dir` (and below), so no timer decides. */
+export async function when(f: () => boolean, dir = base): Promise<void> {
+  const { promise, resolve } = Promise.withResolvers<void>();
+  const w = watch(dir, { recursive: true }, () => f() && resolve());
+  try { if (!f()) await promise; } finally { w.close(); }
+}
 
 /** The run folders on the issue `fac-<id>`, by name: `<stamp>-fac-<id>-<n>`. A folder is there a moment before its record. */
 export const issueRuns = (id: string | number): string[] => (existsSync(jobsDir) ? readdirSync(jobsDir).filter((r) => new RegExp(`^\\d{8}-\\d{6}-fac-${id}-\\d+$`).test(r)) : []);
@@ -91,18 +118,6 @@ export function diagnose(label: string, ids: number[], ...results: { code: numbe
     `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`, `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`].join("\n");
 }
 const tail_ = (s: string) => s.trimEnd().split("\n").slice(-15).join("\n");
-
-/**
- * Waits up to 30 s for `f`. When it fails, the error holds the tails of the factory's tick.log (every dispatch
- * writes why it skipped an issue there) and dispatch.log, and of the run-end dispatch logs, so a flake names its cause.
- */
-export async function until(f: () => boolean): Promise<void> {
-  // Under the 30 s test timeout, so that a timeout here reports the logs below.
-  if (await waitFor(f, { timeout: 25_000, every: 100 })) return;
-  const runEnd = existsSync(jobsDir) ? readdirSync(jobsDir).sort().slice(-4).map((r) => `--- ${r}/dispatch.log\n${tail(join(jobsDir, r, "dispatch.log"), 5)}`) : [];
-  throw new Error([`until: not true after 25 s`, `--- factory/tick.log\n${tail(join(base, "factory", "tick.log"))}`,
-    `--- factory/dispatch.log\n${tail(join(base, "factory", "dispatch.log"))}`, ...runEnd].join("\n"));
-}
 
 export const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export function sh(cwd: string, ...args: string[]): string {
@@ -187,6 +202,17 @@ case $prompt in
 esac
 `;
 
+// Returns once `file` exists (mode "exists") or is gone (mode "gone"): it watches the folder, so no timer decides.
+const WAIT = `#!/usr/bin/env bun
+import { existsSync, watch } from "node:fs";
+import { dirname } from "node:path";
+const [mode, file] = process.argv.slice(2), done = () => existsSync(file) === (mode === "exists") && process.exit(0);
+watch(dirname(file), done);
+done();
+`;
+/** A shell command that returns once `file` exists or is gone. */
+export const waitCmd = (mode: "exists" | "gone", file: string): string => `${join(base, "wait")} ${mode} ${file}`;
+
 export const FAKE = `#!/bin/bash
 prompt=$(cat)
 printf '%s' "$prompt" > "$FAKE_LOG/prompt"
@@ -215,10 +241,10 @@ case $action in
       git commit -qm "restore the list"
     else mkdir -p docs; echo "$RANDOM" > "$f"; echo "# To do (by hand)" > docs/todo.md; git add "$f" docs/todo.md; git commit -qm "add $f"; fi ;;
   untracked) echo x > stray.txt ;;
-  hold\\ *) f=\${action#hold }; while [ ! -e "$f" ]; do sleep 0.1; done; echo "$RANDOM" > "held-$(basename "$f").txt"; git add .; git commit -qm "held $f" ;;
-  sleep) sleep 60 ;;
-  quiet) echo '{"type":"system"}'; sleep 30 ;;
-  chatty) echo c > c.txt; git add c.txt; git commit -qm "add c.txt"; for i in 1 2 3 4 5; do echo '{"type":"system"}'; sleep 1; done ;;
+  hold\\ *) f=\${action#hold }; "$FAKE_LOG/../wait" exists "$f"; echo "$RANDOM" > "held-$(basename "$f").txt"; git add .; git commit -qm "held $f" ;;
+  sleep) tail --pid=$PPID -f /dev/null ;;
+  quiet) echo '{"type":"system"}'; tail --pid=$PPID -f /dev/null ;;
+  chatty) echo c > c.txt; git add c.txt; git commit -qm "add c.txt"; for i in 1 2 3 4 5; do echo '{"type":"system"}'; done ;;
   exit3) exit 3 ;;
   question) echo '{"type":"result","result":"I looked.\\nQUESTION: which colour?","structured_output":{"summary":"I looked.","defaults":[],"followups":[],"flakes":[],"already_met":null,"question":"which colour?"}}'; exit 0 ;;
   error) echo '{"type":"result","is_error":true,"result":"API Error: 500"}'; exit 0 ;;
@@ -275,14 +301,11 @@ function referring(dir: string): number[] {
   return out;
 }
 
-/** SIGKILLs every process that refers to `dir` and waits, up to 10 s, until none is left. */
-function killReferring(dir: string): void {
-  const end = Date.now() + 10_000;
-  for (;;) {
-    const pids = referring(dir);
-    if (!pids.length || Date.now() > end) return;
+/** SIGKILLs every process that refers to `dir` and waits until none is left. */
+async function killReferring(dir: string): Promise<void> {
+  for (let pids = referring(dir); pids.length; pids = referring(dir)) {
     for (const pid of pids) { try { process.kill(pid, "SIGKILL"); } catch {} }
-    Bun.sleepSync(50);
+    await Promise.all(pids.map(exited));
   }
 }
 
@@ -292,7 +315,7 @@ function sweepLeftovers(): void {
     for (const name of readdirSync(tmpdir()).filter((n) => n.startsWith("aleph-jobs-"))) {
       try {
         const dir = join(tmpdir(), name);
-        if (Date.now() - statSync(dir).mtimeMs < 2 * 3600_000 || referring(dir).length) continue;
+        if (now - statSync(dir).mtimeMs < 2 * 3600_000 || referring(dir).length) continue;
         rmSync(dir, { recursive: true, force: true });
       } catch {}
     }
@@ -321,8 +344,9 @@ function buildRepos(dir: string): void {
 }
 
 export function setup(): void {
-  sweepLeftovers();
   base = mkdtempSync(join(tmpdir(), "aleph-jobs-"));
+  now = statSync(base).mtimeMs;
+  sweepLeftovers();
   for (const d of ["run", "fake", "jobs", "vault"]) mkdirSync(join(base, d));
   jobsDir = join(base, "jobs");
   // The test process reads and seeds the records the units write.
@@ -333,6 +357,7 @@ export function setup(): void {
   reviewer = join(base, "fake-reviewer");
   writeFileSync(reviewer, REVIEWER, { mode: 0o755 });
   writeFileSync(fake, FAKE, { mode: 0o755 });
+  writeFileSync(join(base, "wait"), WAIT, { mode: 0o755 });
   // A fake ssh, so that no test reaches a real host.
   writeFileSync(join(fakeLog, "ssh"), `#!/bin/sh\necho "$@" > "${join(base, "fake", "ssh.args")}"\nexit 1\n`, { mode: 0o755 });
 
@@ -344,15 +369,15 @@ export function setup(): void {
   fixture("cli-jobs", buildRepos, base);
 
   // Says it started, then waits while the hold file is there, so a test can kill the land at this check.
-  const gate = { name: "gate", run: `touch ${join(base, "gate-reached")}; while [ -f ${join(base, "gate-hold")} ]; do sleep 0.05; done`, when: ["gate/**"] };
+  const gate = { name: "gate", run: `touch ${join(base, "gate-reached")}; ${waitCmd("gone", join(base, "gate-hold"))}`, when: ["gate/**"] };
   const checks = [
     { name: "tests", run: "test ! -f FAIL" },
     { name: "no job variables", run: 'test -z "$ALEPH_JOB_ID$ALEPH_JOB_RUN"' },
     { name: "android build", run: `echo built >> ${join(base, "android.log")}`, when: ["android/**"] },
-    { name: "slow", run: "sleep 60", when: ["slow/**"] },
+    { name: "slow", run: "tail --pid=$PPID -f /dev/null", when: ["slow/**"] },
     // Says it started, then waits while the hold file is there, so a test can kill the land at this check.
-    // Holds two lands between their fetch and their push at the same time.
-    { name: "pause", run: "sleep 1", when: ["pair/**"] },
+    // Holds two lands between their fetch and their push at the same time, while the pair-hold file is there.
+    { name: "pause", run: waitCmd("gone", join(base, "pair-hold")), when: ["pair/**"] },
     // Pushes to the remote from another clone once, so the land's own push loses the race.
     // Writes a to-do note to main once, during the land's checks.
     { name: "todo race", run: `if [ -f ${join(base, "todo-once")} ]; then rm ${join(base, "todo-once")}; bun ${CLI} issue note demo 1 "during the land"; fi`, when: ["todo-race/**"] },
@@ -367,7 +392,7 @@ export function setup(): void {
     // The factory: the same clone, its runs on the host.
     fac: {
       path: repo, sandbox: true, held: ["held/**"], autoland: false,
-      checks: [gate, { name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}; while [ -f ${join(base, "slowbase")} ]; do sleep 0.1; done` }],
+      checks: [gate, { name: "tests", run: 'if [ -f FAIL ]; then for i in 1 2 3; do echo "FAIL is present $i"; done; exit 1; fi' }, { name: "flaky", run: `for f in flaky/*; do m=${join(base, "flakym-")}$(basename $f); if [ ! -f $m ]; then touch $m; exit 1; fi; done`, when: ["flaky/**"] }, { name: "tree", run: `git rev-parse 'HEAD^{tree}' >> ${join(base, "trees")}; ${waitCmd("gone", join(base, "slowbase"))}` }],
     },
     // Last, so the unknown-repo listing keeps its order up to fac.
     aleph: { path: repo, checks: [], autoland: false },
@@ -385,10 +410,10 @@ export function setup(): void {
     },
   });
 }
-export function teardown(): void {
+export async function teardown(): Promise<void> {
   try { server?.stop(true); } catch {}
   try { lf?.stop(true); } catch {}
-  try { if (base) killReferring(base); } catch {}
+  try { if (base) await killReferring(base); } catch {}
   if (base) rmSync(base, { recursive: true, force: true });
   delete process.env.ALEPH_RECORDS_DIR;
 }
@@ -396,14 +421,14 @@ export function teardown(): void {
 /** Brings the test store's checkout up to origin/main. A detached dispatch or intake writing the store at the same moment can make one fetch find no ref, so it retries. */
 function pullItems(): void {
   for (let attempt = 1; ; attempt++) {
-    try { sh(items, "git", "pull", "-q", "--rebase", "origin", "main"); return; } catch (e) { if (attempt === 5) throw e; Bun.sleepSync(200 * attempt); }
+    try { sh(items, "git", "pull", "-q", "--rebase", "origin", "main"); return; } catch (e) { if (attempt === 5) throw e; }
   }
 }
 
 /** Pushes the test store's commit. A detached dispatch can write the store first, so a refused push rebases and tries again, as the store's own writes do. */
 function pushItems(): void {
   for (let attempt = 1; ; attempt++) {
-    try { sh(items, "git", "push", "-q", "origin", "main"); return; } catch (e) { if (attempt === 5) throw e; Bun.sleepSync(200 * attempt); pullItems(); }
+    try { sh(items, "git", "push", "-q", "origin", "main"); return; } catch (e) { if (attempt === 5) throw e; pullItems(); }
   }
 }
 
@@ -455,7 +480,7 @@ export function seedRun(repoKey: string, run: Partial<Run> & Pick<Run, "kind" | 
   const id = `20261030-${String(++seeded).padStart(6, "0")}-${repoKey}-seed-${run.kind}`;
   const folder = join(jobsDir, id);
   mkdirSync(folder, { recursive: true });
-  writeRun(folder, { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date().toISOString(), ...run } as Run);
+  writeRun(folder, { job: id, name: id, repo: repoKey, told: true, shown: true, started: new Date(now).toISOString(), ...run } as Run);
   return id;
 }
 

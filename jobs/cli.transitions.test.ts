@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, issueRuns, jobsDir, startScript, stateNow as state, setup, teardown, dispatching, starting, unitAlive, until, addOld, seedItem } from "./cli.helpers";
+import { aleph, base, issueRuns, jobsDir, now, startScript, stateNow as state, setup, teardown, idle, when, addOld, seedItem } from "./cli.helpers";
 import { dispatch, drop, issueClose } from "./inproc";
 
 beforeAll(setup);
@@ -16,9 +16,6 @@ describe("every transition dispatches at once", () => {
   const started = () => (existsSync(startLog) ? readFileSync(startLog, "utf8").trim().split("\n").filter(Boolean) : []);
   const gate = (n: string) => join(base, `tgate-${n}`);
   const runs = (id: number) => issueRuns(id);
-  // Settled: no start is in flight (its run folder may not be there yet), and every run has ended and its unit,
-  // with its run-end dispatch, has exited.
-  const settled = (id: number) => !starting(startLog) && runs(id).every((r) => state(r).condition !== "running" && !unitAlive(join(jobsDir, r)));
   // addOld's item, then the dispatch that `add` ran, in-process.
   const add = async (title: string, action: string, extra: string[] = [], env: Record<string, string> = {}) => {
     const id = await addOld(title, action, extra, { ALEPH_DISPATCH: "off" });
@@ -37,7 +34,7 @@ describe("every transition dispatches at once", () => {
   const track = (id: number) => { ids.push(id); return id; };
   beforeAll(() => {
     mkdirSync(join(base, "factory"), { recursive: true });
-    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date().toISOString(), ok: true, failed: [] }));
+    writeFileSync(join(base, "factory", "probe.json"), JSON.stringify({ at: new Date(now).toISOString(), ok: true, failed: [] }));
     startLog = join(base, "tstart.log");
     startCmd = join(base, "tstart-cmd");
     startScript(startCmd, jobsDir);
@@ -47,17 +44,17 @@ describe("every transition dispatches at once", () => {
     // What an earlier test left: release its holds, then close its jobs and issues.
     for (const g of gates) writeFileSync(gate(g), "");
     for (const id of ids.splice(0)) {
-      await until(() => settled(id));
+      await idle(startLog);
       // The issue goes first: while it is open and has no live job, a detached dispatch can rerun it.
       expect((await issueClose("fac", id, "drop", "test over")).code).toBe(0);
       // A job that passed, landed or was dropped has no open job to drop. Any other refusal leaves it open,
       // and a stuck or failed one holds every later dispatch.
       const d = await drop(`fac-${id}`);
       if (d.code !== 0) expect(d.stderr).toContain("no open job");
-      await until(() => settled(id));
+      await idle(startLog);
     }
     // A detached dispatch from this test may still hold a lock that the next test's dispatch meets.
-    await until(() => !dispatching());
+    await idle(startLog);
     rmSync(startLog, { force: true });
   }, 120_000);
 
@@ -65,10 +62,10 @@ describe("every transition dispatches at once", () => {
     // A dispatch left by an earlier test's run may still be alive. It starts any open issue it sees, so the
     // issue is seeded already dropped.
     const x = track(await seed("dropped, then reopened", open("reopen"), { kind: "goal", status: "dropped" }, { ALEPH_DISPATCH: "off" }));
-    await until(() => !dispatching());
+    await idle(startLog);
     expect(started()).toEqual([]);
     expect((await aleph(["issue", "edit", "fac", String(x), "--status", "open"], on())).code).toBe(0);
-    await until(() => started().includes(`fac-${x}`));
+    await when(() => started().includes(`fac-${x}`));
   }, 60_000);
 
   test("a stuck run holds only its own issue: the next issue starts beside it", async () => {
@@ -76,9 +73,10 @@ describe("every transition dispatches at once", () => {
     process.env.ALEPH_RESCUE = "off";
     try {
       const s = track(await add("ends stuck", "commit-all FAIL gate/x", ["--labels", "goal"], { ALEPH_FIX_ROUNDS: "0" }));
-      await until(() => runs(s).some((r) => ["stuck", "failed"].includes(state(r).condition)));
+      await idle(startLog);
+      expect(runs(s).some((r) => ["stuck", "failed"].includes(state(r).condition))).toBe(true);
       const b = track(await add("starts beside it", open("hold-b"), ["--labels", "goal"]));
-      await until(() => started().includes(`fac-${b}`));
+      await when(() => started().includes(`fac-${b}`));
       expect(started()).toEqual([`fac-${s}`, `fac-${b}`]);
     } finally {
       delete process.env.ALEPH_RESCUE;

@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { waitFor } from "../tests/wait.ts";
-import { aleph, base, diagnose, issueRuns, jobsDir, quiet, startScript, stateNow, setup, teardown, until as untilQuiet, seedItem } from "./cli.helpers";
+import { aleph, base, diagnose, issueRuns, jobsDir, startScript, stateNow, setup, teardown, idle, when, seedItem } from "./cli.helpers";
 import { drop, issueClose } from "./inproc";
 
 beforeAll(setup);
@@ -17,7 +16,6 @@ describe("a factory run", () => {
     const gate = (n: string) => join(base, `gate-${n}`);
     const issue = async (n: string) =>
       seedItem("fac", `dispatch ${n}`, { kind: "goal" }, `ACTION: hold ${gate(n)}\n`.trim()) as number;
-    const until = async (f: () => boolean) => { await waitFor(f, { timeout: 30_000, every: 100 }); expect(f()).toBe(true); };
     const settled = (id: number) => issueRuns(id).every((r) => stateNow(r).condition === "passed");
     const ids: number[] = [];
     beforeAll(() => {
@@ -26,11 +24,11 @@ describe("a factory run", () => {
       startScript(startCmd, jobsDir);
     });
     // A run writes its passed state before its run-end dispatch: that dispatch may still start the next issue. Wait it out.
-    beforeEach(async () => { await untilQuiet(() => quiet(startLog)); rmSync(startLog, { force: true }); });
+    beforeEach(async () => { await idle(startLog); rmSync(startLog, { force: true }); });
     afterAll(async () => {
       for (const n of ["d", "e", "f"]) writeFileSync(gate(n), "");
-      // The released holds finish their runs; wait for that, at most as long as the fixed wait it replaces.
-      await waitFor(() => ids.every(settled), { timeout: 3000, every: 100 });
+      // The released holds finish their runs; wait for that.
+      await when(() => ids.every(settled), jobsDir);
       for (const id of ids) {
         await drop(`fac-${id}`);
         await issueClose("fac", id, "drop", "test over");
@@ -45,7 +43,7 @@ describe("a factory run", () => {
       expect(started().filter((n) => n === `fac-${d}`)).toHaveLength(1);
       expect([...x.json.started, ...y.json.started].filter((n: string) => n === `fac-${d}`)).toHaveLength(1);
       writeFileSync(gate("d"), "");
-      await until(() => settled(d));
+      await when(() => settled(d), jobsDir);
     }, 60_000);
 
     // flaky: tests/flaky.md#dispatch-once-cap-1
@@ -62,7 +60,7 @@ describe("a factory run", () => {
       if (live.length !== 1) throw new Error(`live ${live.length}, not 1\n${why()}`);
       writeFileSync(gate("e"), "");
       writeFileSync(gate("f"), "");
-      await until(() => settled(e) && settled(f));
+      await when(() => settled(e) && settled(f), jobsDir);
     }, 60_000);
 
   });
