@@ -151,7 +151,7 @@ export const MERGE_SECONDS = 600;
  * `lands` is the job's land runs, read from the ledger when absent.
  */
 export function nextStep(run: Run, autoland: boolean, lands?: Run[]): Run["next"] {
-  if (isBuild(run.kind) && run.failed) return "worker";
+  if (isBuild(run.kind) && run.failed) return run.failed === "doc-claims" ? "recheck" : "worker";
   if (isAgentRun(run.kind)) return run.condition === "passed" && (run.land || autoland) ? "land" : undefined;
   return run.kind === "land" ? afterLand(run, lands) : undefined;
 }

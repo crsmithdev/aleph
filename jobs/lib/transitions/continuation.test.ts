@@ -45,6 +45,11 @@ describe("next step after a build or recheck", () => {
     expect(nextStep(run({ condition: "failed" }), true)).toBeUndefined();
   });
 
+  test("a doc-claims fail is rechecked; the other failures go back to the worker", () => {
+    expect(nextStep(run({ condition: "returned", failed: "doc-claims" }), false)).toBe("recheck");
+    for (const failed of ["keep-gate", "tests", "review"]) expect(nextStep(run({ condition: "returned", failed }), false)).toBe("worker");
+  });
+
   test("a check fail with no test record goes back to the worker with the check's log as its note", () => {
     const ended = run({ condition: "returned", cause: "check", checkName: "types", reason: "types failed", failed: "types", round: 1 });
     expect(nextStep(ended, false)).toBe("worker");

@@ -284,7 +284,7 @@ export const lastEvent = (key: string, kind: string): JobEvent | undefined => re
 
 /** What the job does next: a function of its record only. The fields are the event fields of docs/naming.md. */
 export interface Step {
-  step: "ask" | "run" | "worker" | "land" | "rescue" | "wait" | "start" | "none";
+  step: "ask" | "run" | "worker" | "land" | "recheck" | "rescue" | "wait" | "start" | "none";
   /** The job's state word. */
   action: string;
   /** Why the run stopped, from its `cause`. */
@@ -317,6 +317,7 @@ export function next(r: JobRecord): Step {
   if (last?.condition === "running") return { step: "run", action: "running", on: [jobIdOfRun(last)] };
   if (last?.condition === "waiting") return { step: "ask", action: "waiting", on: [jobIdOfRun(last)], to: "human" };
   if (last?.next === "worker") return { step: "worker", action: "returned", ...subOf(last), count: `${r.rounds} / ${fixRounds()}` };
+  if (last?.next === "recheck") return { step: "recheck", action: "returned", ...subOf(last) };
   if (last?.next === "land") return { step: "land", action: last.condition };
   if (last?.condition === "passed") return { step: "wait", action: "passed", to: "human" };
   if (last && (last.condition === "returned" || last.condition === "failed")) {

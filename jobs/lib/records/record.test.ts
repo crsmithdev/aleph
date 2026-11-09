@@ -95,6 +95,7 @@ test("next: each run condition gives its step", () => {
   const cases: [Partial<Run>[], record.Step["step"]][] = [
     [[{ condition: "running" }], "run"],
     [[{ condition: "returned", failed: "tests", next: "worker" }], "worker"],
+    [[{ condition: "returned", failed: "doc-claims", next: "recheck" }], "recheck"],
     [[{ condition: "passed", next: "land" }], "land"],
     [[{ kind: "land", condition: "failed", next: "land" }], "land"],
     [[{ condition: "passed" }], "wait"],

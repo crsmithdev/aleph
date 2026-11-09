@@ -77,7 +77,7 @@ export interface Run {
   /** A factory run after fix rounds: how many fix rounds the job had before it. */
   round?: number;
   /** What the unit started after this run ended: the worker again, or another land. */
-  next?: "worker" | "land";
+  next?: "worker" | "land" | "recheck";
   /** A factory run: the price of its worker's `result` event, at API rates. */
   cost?: number;
   /** A factory run: the worker's `defaults`, each as `<choice> -> <what it chose>`. */

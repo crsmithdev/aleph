@@ -32,7 +32,7 @@ import { oracleCommands, outsideSurface } from "./issue-spec.ts";
 import { docClaimProblems } from "../../../hooks/lib/docclaims.ts";
 import { postTrace } from "../learning/trace.ts";
 import { runLogged, runPath, startUnit } from "../transitions/launch.ts";
-import { land as startLand, startJob } from "../transitions/transitions.ts";
+import { land as startLand, recheck as startRecheck, startJob } from "../transitions/transitions.ts";
 import { onMain } from "../records/status.ts";
 import { writeTitle } from "./title.ts";
 import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile, workerCmd } from "../infra/settings.ts";
@@ -250,7 +250,7 @@ export async function startKept(go: typeof start = start): Promise<string[]> {
     const { folder, run } = lastReal(j);
     const mark = runFile(folder, PAUSED_NEXT);
     const { step } = stepOf(j);
-    if ((step !== "worker" && step !== "land") || !existsSync(mark)) continue;
+    if ((step !== "worker" && step !== "land" && step !== "recheck") || !existsSync(mark)) continue;
     try { rmSync(mark); } catch { continue; }
     await go(folder, run, step);
     started.push(run.name);
@@ -279,6 +279,8 @@ async function start(folder: string, run: Run, next: NonNullable<Run["next"]>): 
   try {
     const s = next === "land"
       ? await startLand(run.name, {}, { output: { file: log } })
+      : next === "recheck"
+      ? await startRecheck(run.name, { output: { file: log } })
       : await startJob({ repo: run.repo!, name: run.name, spec: back.note, land: true, ...(merge ? { merge: true, model: MERGE_MODEL } : {}) }, { output: { file: log } });
     appendFileSync(log, JSON.stringify(s.started, null, 2) + "\n");
     await s.child?.exited;
