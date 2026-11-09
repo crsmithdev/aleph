@@ -649,7 +649,8 @@ function asksOf(records: JobRecord[], since: number, now: number): Speed["asks"]
 }
 
 const cache = staleSync<Speed>();
-export const clearCache = () => cache.clear();
+/** Drop the kept answers and baselines: the next request builds them from the files as they are now. */
+export const clearCache = () => { cache.clear(); baselines.clear(); };
 /** `speed`, kept `ALEPH_UI_FETCH_TTL` seconds like the other fetches. */
 export const cachedSpeed = (window: Window, fit: Fit | null = null, project?: string): Speed => cache.get(project ? `${window}:${project}` : window, uiFetchTtl() * 1000, () => speed(window, new Date(), fit, project));
 

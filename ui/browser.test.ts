@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 
 describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
-  let rig: Rig, page: Page;
-  beforeAll(async () => { rig = await startRig(); page = await rig.open(); }, 150_000);
+  let rig: Rig, page: Page, env: Record<string, string>;
+  beforeAll(async () => { rig = await startRig((e) => { env = e; }); page = await rig.open(); }, 150_000);
   afterAll(() => rig?.stop());
 
   const hash = () => page.ev<string>("location.hash");
@@ -169,8 +169,13 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("a timed refresh re-renders, except over an armed button", async () => {
     // The shell reads the global setInterval when the route starts: keep the route's refresh as window.tick, and run it here.
+    // The refresh loads only after a quiet minute: window.later() moves the page's clock past it.
     // A fetch of /api/state waits for window.gate, and counts in window.fetched after the load that reads it ends.
     await page.ev(`(() => {
+      const now = Date.now;
+      window.skew = 0;
+      Date.now = () => now() + window.skew;
+      window.later = () => { window.skew += 61_000; window.tick(); };
       window.setInterval = (f) => { window.tick = f; return 0; };
       const rf = window.fetch;
       window.fetch = (u, o) => !String(u).startsWith("/api/state") ? rf(u, o) : (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then((r) => {
@@ -186,7 +191,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const buttons = `document.querySelector('#view button.act[data-act="drop"], #view :not(.choice) > button.act[data-act="land"]')`;
     const refresh = async () => {
       const n = await page.ev("window.fetched ?? 0");
-      await page.ev("window.tick()");
+      await page.ev("window.later()");
       await page.when(`(window.fetched ?? 0) > ${n}`);
     };
     await page.when(buttons);
@@ -201,13 +206,23 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     // A refresh is in flight when the button is armed: its answer must not render over it.
     await page.ev("void (window.gate = new Promise((ok) => { window.release = ok; }))");
     const n = await page.ev("window.fetched ?? 0");
-    await page.ev("window.tick()");
+    await page.ev("window.later()");
     await page.ev(`${buttons}.click()`);
     await page.ev(mark);
     await page.ev("window.gate = null; window.release()");
     await page.when(`(window.fetched ?? 0) > ${n}`);
     expect(await page.ev('[!!document.querySelector("#view button.act.ask"), document.querySelector("#view > *").dataset.mark]')).toEqual([true, "1"]);
     await page.reload(); // Takes the patched timer and fetch away.
+  }, 30_000);
+
+  test("a change in the factory folder reloads a live page that used to poll", async () => {
+    // The page fetches /api/state again only on a change: its quiet timer waits a minute.
+    const loads = 'performance.getEntriesByType("resource").filter((e) => e.name.includes("/api/state")).length';
+    await page.go("#/factory/agents");
+    await page.when('document.querySelector("#view aleph-chart")');
+    const n = await page.ev<number>(loads);
+    writeFileSync(join(env.ALEPH_FACTORY_DIR, "nudge.json"), "{}");
+    await page.when(`${loads} > ${n}`);
   }, 30_000);
 
   test("an action the server refuses shows the server's reason on the row", async () => {

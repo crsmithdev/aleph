@@ -132,6 +132,7 @@ export const view = {
   order: 2,
   icon: "robot",
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
+  live: true,
   refresh: 60,
   render: (s, _params, q) => renderFactoryAgents(s, usable(windowOf(q)), "live", windowOf(q)),
   mount: async (root, s) => {

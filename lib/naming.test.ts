@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import * as n from "./naming.ts";
 
 beforeEach(() => n.setCodes({ aleph: "a", sidetone: "s", "btcx-tools": "b", cloudchamber: "cc" }));
+// The codes are global: the files that run after this one start with none.
+afterAll(() => n.setCodes({}));
 
 describe("ids", () => {
   test("short and full forms map both ways", () => {

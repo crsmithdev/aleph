@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
-import { feed, FORMS, formOf, label, option, panel, pushRow, title } from "./chart.js";
+import { FORMS, formOf, label, option, panel, title } from "./chart.js";
 
 const keys = [{ key: "a", name: "A", color: "series-1" }, { key: "b", name: "B" }, { key: "z", name: "Z" }];
 const at = (d: number) => new Date(2026, 9, d).toISOString();
@@ -53,22 +53,6 @@ test("a day axis labels the first point of each day, and a frame of one row per 
   const rows = [{ at: hour(27, 22) }, { at: hour(27, 23) }, { at: hour(28, 0) }, { at: hour(28, 1) }];
   expect(axis({ ...time, rows })).toEqual(["Oct 27", "", "Oct 28", ""]);
   expect(axis(time)).toEqual(["Oct 27", "Oct 28"]);
-});
-
-test("a streamed row reaches the panel with its key: its frame gains or replaces the row, and another panel keeps its own", () => {
-  const at29 = at(29);
-  const panelOf = (key: string, rows: any[]) => {
-    const frame = { ...time, rows };
-    return { key, frame, push: (row: any) => pushRow(frame, row, frame.rows.length) };
-  };
-  const live = panelOf("factory/agents/live", [{ at: at(28), a: 2, b: 1 }]);
-  const cost = panelOf("factory/agents/cost", [{ at: at(28), a: 7 }]);
-  const list = [live, cost];
-  feed(JSON.stringify({ key: "factory/agents/live", row: { at: at(28), a: 5 } }), list);
-  expect(live.frame.rows).toEqual([{ at: at(28), a: 5 }]);
-  feed(JSON.stringify({ key: "factory/agents/live", row: { at: at29, a: 6 } }), list);
-  expect(live.frame.rows).toEqual([{ at: at29, a: 6 }]);
-  expect(cost.frame.rows).toEqual([{ at: at(28), a: 7 }]);
 });
 
 test("the panel has a form control for its group, or the empty line under its title", () => {

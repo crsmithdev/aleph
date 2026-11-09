@@ -108,6 +108,7 @@ export const view = {
   order: 0,
   icon: "stopwatch",
   api: (_params, q = new URLSearchParams()) => withProject(`/api/speed?window=${windowOf(q)}`, q),
+  live: true,
   refresh: 60,
   render: (d, _params, q) => renderFactoryJobs(d, usable("day"), q?.get("stage") ?? "lead", jobsNow(q ?? new URLSearchParams()), Object.fromEntries(q ?? [])),
   mount: async (root, d) => {

@@ -11,6 +11,7 @@ export const view = {
   order: -2,
   icon: "shield-halved",
   api: (_params, q = new URLSearchParams()) => withProject(`/api/gates?window=${windowOf(q)}`, q),
+  live: true,
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),
   mount: (root) => mount(root),

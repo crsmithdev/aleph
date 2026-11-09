@@ -1,8 +1,9 @@
 /**
- * `GET /api/events`: a server-sent stream. It sends a `state` event when a file that `/api/state` reads changes. The
- * event is a JSON object with the top-level keys of the `/api/state` response that changed since the last state that
- * client got, for the project of `?project=`; the first one has every key. It sends an `ev` event for each line added to the event log,
- * with the event as JSON, at once. The watchers run only while a client is connected.
+ * `GET /api/events`: a server-sent stream. It sends `change` when a file that the live pages read changes (a run
+ * record, a file of the factory folder, the issue store's ref); the page then loads its view again. Changes 500 ms
+ * apart send one `change`, and two `change` events are at least 2 s apart, with the last change always sent. It sends
+ * an `ev` event for each line added to the event log, with the event as JSON, at once, and a `ping` every 25 s, so
+ * that the page can tell a quiet stream from a dead one. The watchers run only while a client is connected.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readSync, statSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
 import { join } from "node:path";
@@ -10,43 +11,36 @@ import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
 import { recordsDir } from "../../jobs/lib/records/record.ts";
 import type { Routes } from "../server.ts";
-import { stateBody } from "./now.ts";
+import { clearCache } from "./speed.ts";
 
 /** Changes this close together send one event. */
 const SETTLE_MS = 500;
+/** The least time between two `change` events: each one makes every open page fetch and the server build. */
+const GAP_MS = 2_000;
 /** Under the server's idle timeout, so that it keeps a quiet stream open. */
 const PING_MS = 25_000;
 
 const encoder = new TextEncoder();
-const PING = encoder.encode(": ping\n\n");
+const event = (name: string, data: string) => encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
 
-/** Each client with its project and the JSON of each key of the last state it got. */
-const clients = new Map<ReadableStreamDefaultController<Uint8Array>, { project: string | null; last: Map<string, string> }>();
+const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
 let watchers: FSWatcher[] = [];
-let ping: Timer | undefined, settle: Timer | undefined;
+let ping: Timer | undefined, settle: Timer | undefined, sentAt = 0;
 
 function send(bytes: Uint8Array): void {
-  for (const c of clients.keys()) {
+  for (const c of clients) {
     try { c.enqueue(bytes); } catch { clients.delete(c); }
   }
 }
 
-/** Send each client the keys of its state that differ from the last it got. */
-async function push(): Promise<void> {
-  for (const [c, mine] of [...clients]) {
-    const { body } = await stateBody(mine.project);
-    const diff: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(body)) {
-      const json = JSON.stringify(v);
-      if (mine.last.get(k) !== json) { mine.last.set(k, json); diff[k] = v; }
-    }
-    if (!Object.keys(diff).length) continue;
-    try { c.enqueue(encoder.encode(`event: state\ndata: ${JSON.stringify(diff)}\n\n`)); } catch { clients.delete(c); }
-  }
-}
-
+/** The kept speed answers are from before the change; the fetch that `change` brings builds them again. */
 function changed(): void {
-  settle ??= setTimeout(() => { settle = undefined; push().catch((e) => console.error(`ui/api/events: state failed: ${e.message}`)); }, SETTLE_MS);
+  settle ??= setTimeout(() => {
+    settle = undefined;
+    sentAt = Date.now();
+    clearCache();
+    send(event("change", JSON.stringify({ at: sentAt })));
+  }, Math.max(SETTLE_MS, sentAt + GAP_MS - Date.now()));
 }
 
 /** How far into each day file of the event log the stream has sent, by file name. */
@@ -76,8 +70,8 @@ function follow(dir: string, options: WatchOptions, counts: (file: string) => bo
 
 /** A job record counts; its temporary file does not, as the rename that puts it in place does. */
 export const countsInRecords = (file: string): boolean => file.endsWith(".json");
-/** The logs change on every line of output and the page does not show them. */
-export const countsInFactory = (file: string): boolean => !file.endsWith(".log");
+/** The logs change on every line of output and the page does not show them; a temporary file is renamed into place, and the rename counts. */
+export const countsInFactory = (file: string): boolean => !file.endsWith(".log") && !file.endsWith(".tmp");
 
 function start(): void {
   const { store } = layout();
@@ -92,7 +86,7 @@ function start(): void {
   const w = watch(eventsDir(), {}, (_event, file) => { if (file && String(file).endsWith(".jsonl")) tail(String(file)); });
   w.on("error", (e) => console.error(`ui/api/events: watch of ${eventsDir()} failed: ${e.message}`));
   watchers.push(w);
-  ping = setInterval(() => send(PING), PING_MS);
+  ping = setInterval(() => send(event("ping", JSON.stringify({ at: Date.now() }))), PING_MS);
 }
 
 function stop(): void {
@@ -105,14 +99,14 @@ function stop(): void {
 }
 
 export const routes: Routes = {
-  "GET /api/events": (_req, _params, url) => {
+  "GET /api/events": () => {
     let mine: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({
       start(c) {
         mine = c;
         if (!clients.size) start();
-        clients.set(c, { project: url.searchParams.get("project"), last: new Map() });
-        c.enqueue(PING);
+        clients.add(c);
+        c.enqueue(event("ping", JSON.stringify({ at: Date.now() })));
       },
       cancel() {
         clients.delete(mine);

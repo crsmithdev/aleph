@@ -55,7 +55,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, mergeState, parseHash, recordState, restoreState, wireFolds, restoreFolds, withProject } from "/lib.js";
+  import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), event?(root, ev), api?, refresh?, live? }, and
@@ -124,11 +124,10 @@
     if (out !== wasOut) { wasOut = out; v.outOfDate($("view"), out); }
   }
 
-  async function load(route, first, pushed) {
+  async function load(route, first) {
     const { view, params, query } = route;
     let data = null;
-    if (pushed) data = pushed;
-    else if (view.api) {
+    if (view.api) {
       const url = typeof view.api === "function" ? view.api(params, query) : view.api.replace(/:(\w+)/g, (_, n) => encodeURIComponent(params[n] ?? ""));
       try {
         const res = await api(url);
@@ -165,37 +164,40 @@
     if (view.outOfDate) view.outOfDate($("view"), false);
   }
 
-  // One reload at a time; events that come during it make one more. A push that comes during it is held: a fetch
-  // in flight replaces the data, so the held keys are merged again and drawn after it, unless a fetch comes next.
-  // A push does not re-render while the reader types or has a button armed; `refresh` catches up, except over an armed button, which stands for five seconds at most.
-  let reloading = false, again = false, held = null;
-  async function reload(pushed) {
-    if (pushed && shown?.data) shown.data = mergeState(shown.data, pushed);
-    if (reloading) { if (pushed) held = mergeState(held ?? {}, pushed); else again = true; return; }
+  // One reload at a time; a change that comes during it makes one more. A change does not re-render while the reader
+  // types or has a button armed; the quiet timer of `refresh` catches up, except over an armed button, which stands for five seconds at most.
+  let reloading = false, again = false;
+  async function reload() {
+    if (reloading) { again = true; return; }
     if (!shown?.view?.live || document.activeElement?.matches("input, textarea, select") || $("view").querySelector("button.act.ask")) return;
     reloading = true;
-    try { await load(shown, false, pushed && shown.data); } finally { reloading = false; }
-    const h = held;
-    held = null;
+    try { await load(shown, false); } finally { reloading = false; }
     if (again) { again = false; reload(); }
-    else if (h) reload(h);
   }
 
   // The stream is open only for a live view in a visible tab: a browser allows few connections to one host.
-  let events = null;
+  // The server pings every 25 s; a stream with no message for 60 s, or one the browser gave up on (a 502 from the
+  // proxy while the server restarts ends it for good), is opened again, and the view loads in full.
+  let events = null, heardAt = 0;
   function follow() {
     events?.close();
     events = null;
     if (!shown?.view?.live || document.hidden) return;
     let lost = false;
-    events = new EventSource(withProject("/api/events", shown.query));
-    // The keys of /api/state that changed; the page merges them and redraws without a fetch.
-    events.addEventListener("state", (m) => reload(JSON.parse(m.data)));
-    // An event of the event log, as it is written: a view with `event` shows it before the redraw that `state` brings.
-    events.addEventListener("ev", (m) => { try { shown?.view?.event?.($("view"), JSON.parse(m.data)); } catch (e) { console.error("event failed", e); } });
-    events.onerror = () => { lost = true; };
-    events.onopen = () => { if (lost) reload(); };
+    const es = events = new EventSource("/api/events");
+    heardAt = Date.now();
+    const heard = () => { heardAt = Date.now(); };
+    es.addEventListener("ping", heard);
+    es.addEventListener("change", () => { heard(); reload(); });
+    // An event of the event log, as it is written: a view with `event` shows it before the reload that `change` brings.
+    es.addEventListener("ev", (m) => { heard(); try { shown?.view?.event?.($("view"), JSON.parse(m.data)); } catch (e) { console.error("event failed", e); } });
+    es.onerror = () => {
+      lost = true;
+      if (es.readyState === EventSource.CLOSED && es === events) setTimeout(() => { if (es === events) { follow(); reload(); } }, 2000);
+    };
+    es.onopen = () => { heard(); if (lost) reload(); };
   }
+  setInterval(() => { if (events && Date.now() - heardAt > 60_000) { follow(); reload(); } }, 5000);
   document.addEventListener("visibilitychange", () => { follow(); if (!document.hidden) reload(); });
 
   function route() {
@@ -222,7 +224,9 @@
     $("view").innerHTML = loading(m.view.title);
     goodAt = Date.now(); failed = false; wasOut = false;
     load(shown, true);
-    if (m.view.refresh) timer = setInterval(() => { if (!$("view").querySelector("button.act.ask")) load(m, false); }, m.view.refresh * 1000);
+    // `refresh` is a quiet timer: it loads the view when no load came for that many seconds, for what changes with the
+    // clock and not with a file (liveness, ages, the next tick). A hidden tab does not load.
+    if (m.view.refresh) timer = setInterval(() => { if (!document.hidden && Date.now() - goodAt >= m.view.refresh * 1000 && !$("view").querySelector("button.act.ask")) load(m, false); }, 5000);
   }
 
   setInterval(checkOut, 1000);

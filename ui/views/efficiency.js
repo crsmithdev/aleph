@@ -76,6 +76,7 @@ export const view = {
   order: 1,
   icon: "chart-pie",
   api: (_params, q = new URLSearchParams()) => withProject(`/api/speed?window=${windowOf(q)}&baseline=1`, q),
+  live: true,
   refresh: 60,
   render: (d, _params, q) => renderEfficiency(d, q?.get("tile") ?? ALL),
   mount: async (root, d) => {

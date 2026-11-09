@@ -2,8 +2,6 @@
 // colours, the units, the aria label, the empty line and the forms on offer come from the frame. The form and the
 // hidden series stay per panel through keep(). A row with an `href` links to its issue: the option carries the link
 // of every point, a category frame lists its linked rows under the chart, and a click on a bar or a label opens it.
-// A connected panel follows `/api/live` and adds each row of its own key with push(), so the newest point of the
-// chart grows with no page reload.
 //
 // A frame:
 //   measure: { name, unit: "count" | "usd" | "seconds", agg: "sum" | "max" }
@@ -14,7 +12,7 @@
 //   form: the form the panel opens in, where its group offers it. note: a line under the title.
 //   empty: the line the panel shows instead of the chart when no key has a value.
 // The kind of `over` is the group, and the group gives the forms.
-import { card, chart, count, dur, empty, esc, hashQuery, idLink, keep, kept, legend, money, pct, projectNow, readTokens, seg, windowOf } from "./lib.js";
+import { card, chart, count, dur, empty, esc, idLink, keep, kept, legend, money, pct, readTokens, seg } from "./lib.js";
 import { xLabel } from "./views/speed.js";
 
 /** The forms of each group. The default is the first, except that a time frame of a flow (agg "sum") opens as columns. */
@@ -108,57 +106,19 @@ export function panel(f, form) {
 /** A chart panel with its first markup, so the page reads the same before the element draws. `cls` is the panel's grid class. */
 export const panelOf = (key, f, cls = "") => `<aleph-chart key="${esc(key)}"${cls ? ` class="${esc(cls)}"` : ""}>${panel(f, formOf(f, kept(key, {}).form))}</aleph-chart>`;
 
-// The live stream: the panels on the page, and the rows /api/live sends them.
-const panels = new Set();
-let stream = null;
-
-/** Add `row` to frame `f`, or replace the row with the same `at` (or `name`); a time frame drops its oldest row to keep `size`. */
-export function pushRow(f, row, size) {
-  const id = (r) => r.at ?? r.name, i = f.rows.findIndex((r) => id(r) === id(row));
-  if (i >= 0) f.rows[i] = row;
-  else { f.rows.push(row); if (f.over.kind === "time" && f.rows.length > size) f.rows.shift(); }
-}
-
-/** Apply a `row` event of /api/live — JSON of `{ key, row }` — to each panel of `list` whose key it names. */
-export function feed(data, list) {
-  const { key, row } = JSON.parse(data);
-  for (const p of list) if (p.key === key) p.push(row);
-}
-
-/** Open the stream while a panel is on the page, or close it with none. It carries the window and the project of the address. */
-function follow() {
-  if (!panels.size) { stream?.close(); stream = null; return; }
-  if (stream) return;
-  const project = projectNow();
-  stream = new EventSource(`/api/live?window=${windowOf(hashQuery())}${project ? `&project=${encodeURIComponent(project)}` : ""}`);
-  stream.addEventListener("row", (e) => feed(e.data, panels));
-}
-
 if (globalThis.customElements && !customElements.get("aleph-chart")) {
   customElements.define("aleph-chart", class extends HTMLElement {
     #frame = null;
     #chart = null;
-    #size = 1;
 
     get frame() { return this.#frame; }
-    /** Draw a new frame; its row count is the length that push() keeps. */
+    /** Draw a new frame. */
     set frame(f) {
       this.#frame = f;
-      this.#size = Math.max(f.rows.length, 1);
       this.#render();
     }
 
-    /** Add a row, or replace the row with the same `at` (or `name`). A time frame drops its oldest row to keep its length. */
-    push(row) {
-      const f = this.#frame;
-      if (!f) return;
-      pushRow(f, row, this.#size);
-      if (!this.#chart || !shown(f).length) return this.#render();
-      this.#chart.setOption(option(f, this.#state.form, readTokens(), this.#state.hidden), { notMerge: true });
-      this.querySelector(".chartbox").setAttribute("aria-label", label(f));
-    }
-
-    /** The panel's key: the frame, the kept state and the streamed rows are its own. */
+    /** The panel's key: the frame and the kept state are its own. */
     get key() { return this.getAttribute("key"); }
     get #state() {
       const s = kept(this.key, {});
@@ -187,14 +147,7 @@ if (globalThis.customElements && !customElements.get("aleph-chart")) {
       };
     }
 
-    connectedCallback() {
-      panels.add(this);
-      follow();
-    }
-
     disconnectedCallback() {
-      panels.delete(this);
-      follow();
       this.#chart?.dispose();
       this.#chart = null;
     }
