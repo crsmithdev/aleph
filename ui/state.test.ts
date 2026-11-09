@@ -1,7 +1,8 @@
-import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import * as store from "../issues/lib/store.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add, setStatus } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
@@ -191,6 +192,31 @@ describe("an issue that acceptance failed twice", () => {
       expect(card).toContain("Reviewer: passed");
     } finally {
       (rmSync(join(jobsDir, "20261027-000060-a"), { recursive: true }), removeRun("20261027-000060-a"));
+    }
+  });
+
+  test("a trailer commit from before the item's since does not make it done, and the build loads the list once", () => {
+    const repo = join(base, "repo");
+    const headBefore = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", "HEAD"], { cwd: repo, stdout: "pipe", stderr: "ignore" });
+    const before = headBefore.exitCode === 0 ? headBefore.stdout.toString().trim() : null;
+    let id = 0;
+    try {
+      writeList({ key: "fac" }, "reopened item", (doc) => { id = add(doc, "reopened item").id; return true; });
+      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", `Old land\n\nIssue: fac-${id}`);
+      sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "Reopen");
+      const since = sh(repo, "git", "rev-parse", "HEAD");
+      sh(repo, "git", "update-ref", "refs/remotes/origin/main", since);
+      writeList({ key: "fac" }, "reopen", (doc) => { doc.items.find((i) => i.id === id)!.fm.since = since; return true; });
+      // The trailer commit sits before `since`: the item is not done.
+      const loads = [spyOn(store, "readList"), spyOn(store, "readFetched")];
+      try {
+        expect(state(now).done.some((d) => d.id === `fac-${id}`)).toBe(false);
+        expect(loads.flatMap((l) => l.mock.calls).filter(([r]) => r.key === "fac")).toHaveLength(1);
+      } finally { for (const l of loads) l.mockRestore(); }
+    } finally {
+      Bun.spawnSync(["git", "update-ref", "-d", "refs/remotes/origin/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
+      if (before) sh(repo, "git", "update-ref", "refs/heads/main", before);
+      else Bun.spawnSync(["git", "update-ref", "-d", "refs/heads/main"], { cwd: repo, stdout: "ignore", stderr: "ignore" });
     }
   });
 

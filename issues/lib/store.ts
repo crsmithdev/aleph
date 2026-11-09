@@ -103,11 +103,11 @@ function readFiles(dir: string, specs: string[]): string[] {
  * The item files of a repo's list at the commit last loaded, by store and repo key: a commit never changes, so a
  * later load of the same commit reads no blob. Only the latest commit is kept for each list.
  */
-const texts = new Map<string, { sha: string; files: string[] | null; floor?: Floor }>();
+const texts = new Map<string, { sha: string; files: string[] | null; items?: Issue[]; floor?: Floor }>();
 
 /** A repo's items at `rev`, in number order, or null when the store has no list for it. One ls-tree finds the config and the items. */
 function load(dir: string, rev: string, key: string): Doc | null {
-  // The commit `rev` names: the files of a commit loaded before are reused, and they are parsed afresh, as the caller may change the items.
+  // The commit `rev` names: the files of a commit loaded before are reused with their parsed items, which a caller gets as copies.
   const sha = /^[0-9a-f]{40}$/.test(rev) ? rev : git(dir, "rev-parse", "--verify", "-q", `${rev}^{commit}`).out;
   const id = `${dir}\0${key}`;
   const known = /^[0-9a-f]{40}$/.test(sha), at = known ? sha : rev;
@@ -121,7 +121,7 @@ function load(dir: string, rev: string, key: string): Doc | null {
     if (known) texts.set(id, hit);
   }
   if (!hit.files) return null;
-  const items = hit.files.map(parseItem);
+  const items = structuredClone(hit.items ??= hit.files.map(parseItem));
   return { repo: key, items: items.sort((a, b) => a.id - b.id || (a.sub ?? -1) - (b.sub ?? -1)), ...(hit.floor ? { floor: hit.floor } : {}) };
 }
 

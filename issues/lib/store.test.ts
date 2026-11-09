@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -80,6 +80,27 @@ describe("the read", () => {
     store.writeList(a, "prio", (doc) => { issues.find(doc, 1)!.fm.priority = "low"; issues.find(doc, 2)!.fm.priority = "critical"; issues.find(doc, 3)!.fm.priority = "weird"; return true; });
     store.writeList(b, "prio", (doc) => { issues.find(doc, 1)!.fm.priority = "medium"; issues.find(doc, 2)!.fm.priority = "critical"; return true; });
     expect(store.buildableIssues([a, b]).map((g) => `${g.repo.key}:${g.item.id}`)).toEqual([`${a.key}:2`, `${b.key}:2`, `${a.key}:3`, `${b.key}:1`, `${a.key}:1`]);
+  });
+
+});
+
+describe("the parse cache", () => {
+
+  test("a load at the same commit parses each item file once, a caller's change stays out of it, and a new commit shows", () => {
+    const r = repo([{ title: "one" }, { title: "two" }]);
+    store.readFetched(r);
+    const parse = spyOn(issues, "parseItem");
+    try {
+      const first = store.readFetched(r)!;
+      first.items[0].title = "changed";
+      first.items[0].notes.push("- stray");
+      const second = store.readFetched(r)!;
+      expect(second.items.map((i) => i.title)).toEqual(["one", "two"]);
+      expect(second.items[0].notes).toEqual([]);
+      expect(parse).not.toHaveBeenCalled();
+    } finally { parse.mockRestore(); }
+    store.writeList(r, "retitle", (doc) => { issues.find(doc, 1)!.title = "newer"; return true; });
+    expect(store.readFetched(r)!.items[0].title).toBe("newer");
   });
 
 });

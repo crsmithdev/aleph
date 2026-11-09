@@ -279,7 +279,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       if (doc) {
         try {
           const f = facts(repo, doc, jobs), main = `refs/remotes/origin/${f.main}`;
-          for (const st of stages(repo.path, main, f, Object.keys(f.items), landedIndex(repo.path, main, repo.key))) m.set(st.id.slice(repo.key.length + 1), st);
+          for (const st of stages(repo.path, main, f, Object.keys(f.items), landedIndex(repo.path, main, repo.key, (n) => f.items[n]?.since))) m.set(st.id.slice(repo.key.length + 1), st);
         } catch {}
       }
       staged.set(repo.key, m);
