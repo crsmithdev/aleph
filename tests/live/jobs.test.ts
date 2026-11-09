@@ -4,7 +4,7 @@
  * session id (criteria 5 and 18). ALEPH_LIVE=1 bun test tests/live/jobs.test.ts
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, watch, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -45,15 +45,18 @@ describeLive("live job", () => {
     const p = Bun.spawnSync(["bun", CLI, "job", "scratch", "hello", "--spec", join(base, "spec.md"), "--model", "sonnet"], { cwd: base, env, stdout: "pipe", stderr: "pipe" });
     expect(p.exitCode).toBe(0);
     const folder: string = JSON.parse(p.stdout.toString()).folder;
-    const run = folder.split("/").at(-1);
+    const run = folder.split("/").at(-1)!;
 
     // The dispatcher has exited; the run lives on in its own unit.
     const pid = readFileSync(join(folder, "pid"), "utf8").trim();
-    expect(readFileSync(`/proc/${pid}/cgroup`, "utf8")).toContain(`aleph-${run}.service`);
+    expect(readFileSync(`/proc/${pid}/cgroup`, "utf8")).toContain(`aleph-${run.slice(16)}.service`);
 
-    const deadline = Date.now() + 280_000;
-    while (!existsSync(join(folder, "exit")) && Date.now() < deadline) await Bun.sleep(2000);
-    const state = JSON.parse(readFileSync(join(folder, "state.json"), "utf8"));
+    // The unit writes exit last: wait for that file to appear, not for a timer.
+    await new Promise<void>((done) => {
+      const w = watch(folder, () => { if (existsSync(join(folder, "exit"))) { w.close(); done(); } });
+      if (existsSync(join(folder, "exit"))) { w.close(); done(); }
+    });
+    const state = JSON.parse(readFileSync(join(folder, "..", ".records", `${run}.json`), "utf8")).runs[0];
     expect(state.condition).toBe("passed");
     expect(state.session).toMatch(/^[0-9a-f-]{36}$/);
     expect(readFileSync(join(folder, "output.log"), "utf8")).toContain(state.session);
