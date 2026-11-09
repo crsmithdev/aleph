@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { OFFERS } from "../jobs/lib/routing/models.ts";
 // @ts-ignore plain JS shared with the page
-import { costFrame, liveFrame, outcomesFrame, renderFactoryAgents } from "./views/factory-agents.js";
+import { costFrame, liveFrame, outcomesFrame, renderFactoryAgents, view } from "./views/factory-agents.js";
 // @ts-ignore plain JS shared with the page
 import { label, option } from "./chart.js";
 // @ts-ignore plain JS shared with the page
@@ -240,4 +240,24 @@ test("Worker slots shows a dash for a missing cap, and the Usage card is the Sta
   expect(html).toContain("<b>1<em> / –</em></b>");
   expect(html).not.toContain("undefined");
   expect(html).toContain(usageCard(S));
+});
+
+test("the Agents view does not redraw over another page after the /api/models fetch", async () => {
+  const was = { fetch: globalThis.fetch, location: (globalThis as any).location };
+  let answer = (_v: any) => {};
+  (globalThis as any).location = { hash: "" };
+  globalThis.fetch = ((url: string) =>
+    url === "/api/models" ? new Promise((ok) => { answer = ok; }) : Promise.resolve({ ok: false, status: 500 })) as any;
+  const root: any = { innerHTML: "", querySelector: (sel: string) => (sel === "#capacity" && root.innerHTML.includes('id="capacity"') ? {} : null) };
+  try {
+    const done = view.mount(root, S);
+    expect(root.innerHTML).toContain('id="capacity"');
+    root.innerHTML = '<div class="page" id="jobs">Jobs</div>';
+    answer({ json: async () => ({ down: [] }) });
+    await done;
+    expect(root.innerHTML).toBe('<div class="page" id="jobs">Jobs</div>');
+  } finally {
+    globalThis.fetch = was.fetch;
+    (globalThis as any).location = was.location;
+  }
 });

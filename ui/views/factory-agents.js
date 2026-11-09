@@ -150,13 +150,13 @@ export const view = {
       const b = e.target.closest?.("#roles [data-tier]");
       if (!b || e.type !== "change") return;
       const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch(() => null);
-      if (m) { modelsNow = m; draw(usable(windowNow())); }
+      if (m) { modelsNow = m; if (root.querySelector("#capacity")) draw(usable(windowNow())); }
     };
     keepWindow(windowNow());
     keepProject(projectNow());
     draw(usable(windowNow()));
     modelsNow = await fetch("/api/models").then((r) => r.json()).catch(() => null);
-    draw(usable(windowNow()));
+    if (root.querySelector("#capacity")) draw(usable(windowNow()));
     const d = await loadSpeed(windowNow());
     if (root.querySelector("#capacity")) draw(d);
   },
