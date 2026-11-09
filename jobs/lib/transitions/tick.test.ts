@@ -9,11 +9,11 @@ import { readList, writeList } from "../../../issues/lib/store.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
-import { setPaused, writeBaseline } from "../gates/factory-status.ts";
+import { setPaused, writeBaseline, writeStalls } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";
-import { loadRegistry, writeRun, type Repo } from "../records/ledger.ts";
-import { due, readTick, sweep, type SweepPorts } from "./tick.ts";
+import { loadRegistry, lock, writeRun, type Repo } from "../records/ledger.ts";
+import { due, readTick, runTick, sweep, type SweepPorts, type TickPorts } from "./tick.ts";
 
 // The test's clock: the run that holds the live slot is `starting` against it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");
@@ -191,4 +191,30 @@ test("a periodic step is due when it never ran or its period has passed", () => 
   expect(due(s, "ci", NOW + 4 * MIN)).toBe(false);
   expect(due(s, "ci", NOW + 5 * MIN)).toBe(true);
   expect(due(s, "episodes", NOW)).toBe(true);
+});
+
+test("a tick that finds the tick lock held runs no step, writes nothing and says so", async () => {
+  // The lock gives up on a clock that moves; this file's clock is frozen at NOW.
+  setSystemTime();
+  try {
+    seed([{ body: "a", ask: true }]);
+    // A key a tick would see as missed: a tick that ran would start its dispatch.
+    writeStalls({ [`ask:${key}-1`]: new Date(NOW).toISOString() });
+    const file = join(process.env.ALEPH_FACTORY_DIR!, "tick.json");
+    mkdirSync(process.env.ALEPH_FACTORY_DIR!, { recursive: true });
+    const before = JSON.stringify({ last: {}, missed: [], suite: {} });
+    writeFileSync(file, before);
+    const calls: string[] = [];
+    const ports: TickPorts = { dispatch: async () => { calls.push("dispatch"); }, suite: () => { calls.push("suite"); }, intake: () => { calls.push("intake"); } };
+    const release = (await lock("tick", 0))!;
+    try {
+      expect(await runTick(NOW, ports)).toEqual({ tick: "lock busy" });
+      expect(calls).toEqual([]);
+      expect(readFileSync(file, "utf8")).toBe(before);
+    } finally { release(); }
+    // The lock is free: the next tick runs its steps and writes its own `last`.
+    await runTick(NOW, ports);
+    expect(calls).toEqual(["dispatch"]);
+    expect(JSON.parse(readFileSync(file, "utf8")).last.ci).toBe(new Date(NOW).toISOString());
+  } finally { setSystemTime(NOW); }
 });

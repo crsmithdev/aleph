@@ -16,7 +16,7 @@ import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writ
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { factoryLog } from "../infra/layout.ts";
-import { allJobs, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";
+import { allJobs, loadRegistry, lock, type Entry, type Repo } from "../records/ledger.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "../roles/monitor.ts";
 import { editedWaits, toRescue } from "../land/rescue.ts";
@@ -94,37 +94,47 @@ export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPort
 export interface TickPorts extends SweepPorts { intake(repo: Repo, id: number): void }
 const tickPorts: TickPorts = { ...sweepPorts, intake: intakeDetached };
 
-/** `aleph tick`: each step that is due at `now`. Returns what it did, for the tick's JSON. */
+/**
+ * `aleph tick`: each step that is due at `now`. Returns what it did, for the tick's JSON. One tick holds the `tick`
+ * lock from before it reads tick.json until after its write, so two ticks cannot run the same steps twice: a tick
+ * that finds the lock busy runs no step, writes nothing and says so.
+ */
 export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promise<Record<string, unknown>> {
-  const s = readTick();
-  const at = new Date(now).toISOString();
-  const out: Record<string, unknown> = {};
-  const c = await correctionsStep(now);
-  if (c) out.corrections = c;
-  // Before the sweep, so the issues a lifted hold frees are keys it starts this tick.
-  const lifted = await probeHold();
-  if (lifted) out.hold = lifted;
+  const release = await lock("tick", 0);
+  if (!release) return { tick: "lock busy" };
   try {
-    const m = await sweep(now, s, p);
-    if (m.length) out.missed = m;
-  } catch (e: any) { factoryLog(`sweep: failed: ${e?.message ?? e}`); }
-  if (due(s, "episodes", now)) { s.last.episodes = at; out.episodes = await episodeStep(); }
-  if (due(s, "ci", now)) {
-    s.last.ci = at;
-    try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
+    const s = readTick();
+    const at = new Date(now).toISOString();
+    const out: Record<string, unknown> = {};
+    const c = await correctionsStep(now);
+    if (c) out.corrections = c;
+    // Before the sweep, so the issues a lifted hold frees are keys it starts this tick.
+    const lifted = await probeHold();
+    if (lifted) out.hold = lifted;
+    try {
+      const m = await sweep(now, s, p);
+      if (m.length) out.missed = m;
+    } catch (e: any) { factoryLog(`sweep: failed: ${e?.message ?? e}`); }
+    if (due(s, "episodes", now)) { s.last.episodes = at; out.episodes = await episodeStep(); }
+    if (due(s, "ci", now)) {
+      s.last.ci = at;
+      try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
+    }
+    await smokeStep(undefined, undefined, now);
+    if (due(s, "firefight", now)) {
+      s.last.firefight = at;
+      const f = await firefight(undefined, now);
+      // A filed red is an issue for intake; a slow land's rescue Ask is the director's.
+      const reg = loadRegistry();
+      for (const x of f?.filed ?? []) if ("filed" in x && reg[x.repo]) p.intake(reg[x.repo]!, x.filed);
+      if (f?.asked.length) directIfNew();
+      if (f && (f.filed.length || f.asked.length)) out.firefighter = f;
+    }
+    const m = await monitorStep(new Date(now));
+    if (m) out.monitor = m.day;
+    await editTick((t) => ({ ...t, ...s }));
+    return out;
+  } finally {
+    release();
   }
-  await smokeStep(undefined, undefined, now);
-  if (due(s, "firefight", now)) {
-    s.last.firefight = at;
-    const f = await firefight(undefined, now);
-    // A filed red is an issue for intake; a slow land's rescue Ask is the director's.
-    const reg = loadRegistry();
-    for (const x of f?.filed ?? []) if ("filed" in x && reg[x.repo]) p.intake(reg[x.repo]!, x.filed);
-    if (f?.asked.length) directIfNew();
-    if (f && (f.filed.length || f.asked.length)) out.firefighter = f;
-  }
-  const m = await monitorStep(new Date(now));
-  if (m) out.monitor = m.day;
-  await editTick((t) => ({ ...t, ...s }));
-  return out;
 }
