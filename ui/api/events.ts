@@ -1,6 +1,7 @@
 /**
- * `GET /api/events`: a server-sent stream. It sends a `change` event when a file that `/api/state` reads changes, and the
- * page then loads the view again; that event has no data. It sends an `ev` event for each line added to the event log,
+ * `GET /api/events`: a server-sent stream. It sends a `state` event when a file that `/api/state` reads changes. The
+ * event is a JSON object with the top-level keys of the `/api/state` response that changed since the last state that
+ * client got, for the project of `?project=`; the first one has every key. It sends an `ev` event for each line added to the event log,
  * with the event as JSON, at once. The watchers run only while a client is connected.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readSync, statSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
@@ -9,6 +10,7 @@ import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
 import { recordsDir } from "../../jobs/lib/records/record.ts";
 import type { Routes } from "../server.ts";
+import { stateBody } from "./now.ts";
 
 /** Changes this close together send one event. */
 const SETTLE_MS = 500;
@@ -16,21 +18,35 @@ const SETTLE_MS = 500;
 const PING_MS = 25_000;
 
 const encoder = new TextEncoder();
-const CHANGE = encoder.encode("event: change\ndata: \n\n");
 const PING = encoder.encode(": ping\n\n");
 
-const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
+/** Each client with its project and the JSON of each key of the last state it got. */
+const clients = new Map<ReadableStreamDefaultController<Uint8Array>, { project: string | null; last: Map<string, string> }>();
 let watchers: FSWatcher[] = [];
 let ping: Timer | undefined, settle: Timer | undefined;
 
 function send(bytes: Uint8Array): void {
-  for (const c of clients) {
+  for (const c of clients.keys()) {
     try { c.enqueue(bytes); } catch { clients.delete(c); }
   }
 }
 
+/** Send each client the keys of its state that differ from the last it got. */
+async function push(): Promise<void> {
+  for (const [c, mine] of [...clients]) {
+    const { body } = await stateBody(mine.project);
+    const diff: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(body)) {
+      const json = JSON.stringify(v);
+      if (mine.last.get(k) !== json) { mine.last.set(k, json); diff[k] = v; }
+    }
+    if (!Object.keys(diff).length) continue;
+    try { c.enqueue(encoder.encode(`event: state\ndata: ${JSON.stringify(diff)}\n\n`)); } catch { clients.delete(c); }
+  }
+}
+
 function changed(): void {
-  settle ??= setTimeout(() => { settle = undefined; send(CHANGE); }, SETTLE_MS);
+  settle ??= setTimeout(() => { settle = undefined; push().catch((e) => console.error(`ui/api/events: state failed: ${e.message}`)); }, SETTLE_MS);
 }
 
 /** How far into each day file of the event log the stream has sent, by file name. */
@@ -89,13 +105,13 @@ function stop(): void {
 }
 
 export const routes: Routes = {
-  "GET /api/events": () => {
+  "GET /api/events": (_req, _params, url) => {
     let mine: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({
       start(c) {
         mine = c;
         if (!clients.size) start();
-        clients.add(c);
+        clients.set(c, { project: url.searchParams.get("project"), last: new Map() });
         c.enqueue(PING);
       },
       cancel() {

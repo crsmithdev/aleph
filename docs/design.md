@@ -301,6 +301,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 - **Disclosure:** `<details>` for the fold in a list and for the Ask card (`.ask-fold` in `ui/app.css`); the open state of each is kept across a redraw by `recordState()` in `ui/lib.js` and `restoreState()` in `ui/lib.js`.
 - **Page-head controls:** the heads of Status, Jobs, Efficiency, Agents and Issues hold, on the right and in this order, a Project select and then the Hour / Day / Week / Month control (`scopeBar()` in `ui/lib.js`). The Sessions head is the one page with its own window: `scopeBar()` draws a Project select and then 7 / 30 / 90 days (`days`), which stays out of the shared `aleph.window` storage because the API takes only those values. The project and the window stay in the address and across pages (`projectOf()`, `windowOf()`), and each page's requests carry both. Pause or Resume is on the Status head only, as the `act warn` classes (`ui/views/now.js`): it is an action with consequences, not a plain button.
 - **Motion:** `.15s ease-out` on borders and backgrounds; no animation.
+- **Live push:** when a file that `/api/state` reads changes, `/api/events` sends a `state` event with the top-level keys of the response that changed since the last state that client got, for the `?project=` the page opened the stream with. The page merges them (`mergeState` in `ui/lib.js`) and redraws without a fetch; a reconnect loads the view in full.
 
 ## Content
 

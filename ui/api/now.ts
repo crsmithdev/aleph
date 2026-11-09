@@ -14,24 +14,30 @@ function forProject(s: State, project: string | null): State {
   return { ...s, stuck: mine(s.stuck), running: mine(s.running), done: s.done.filter((i) => i.id.startsWith(`${project}-`)), doneStamps: s.doneStamps.filter((i) => i.id.startsWith(`${project}-`)), queued: mine(s.queued), runningIssues: s.runningIssues.filter((i) => i.id.startsWith(`${project}-`)), asks: s.asks.filter((a) => a.repo === undefined || a.repo === project) };
 }
 
+/** The `/api/state` body for one project (null for all) and the number of the build it came from. */
+export async function stateBody(project: string | null) {
+  // Built in the worker, from a build that starts after this request: the server answers others meanwhile.
+  // The build is shared with the requests that came with this one, so this request annotates its own copy.
+  const { state, build } = await loadState();
+  const s = forProject(structuredClone(state), project);
+  const fit = await currentFit().catch(() => null);
+  annotate([...s.stuck, ...s.running], fit);
+  const u = summary();
+  const week = u?.now?.seven_day;
+  if (week !== undefined && week >= WEEKLY_WARN && s.herald?.history?.[0]?.tone === "fine") {
+    s.herald.history[0] = {
+      ...s.herald.history[0],
+      tone: "warning",
+      label: labelOf("warning", `${FINE}; ${weekly(week)}.`),
+      text: `${FINE}; ${weekly(week)}.`,
+    };
+  }
+  return { body: { ...s, usage: u, speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, build };
+}
+
 export const routes: Routes = {
   "GET /api/state": async (_req, _params, url) => {
-    // Built in the worker, from a build that starts after this request: the server answers others meanwhile.
-    // The build is shared with the requests that came with this one, so this request annotates its own copy.
-    const { state, build } = await loadState();
-    const s = forProject(structuredClone(state), url.searchParams.get("project"));
-    const fit = await currentFit().catch(() => null);
-    annotate([...s.stuck, ...s.running], fit);
-    const u = summary();
-    const week = u?.now?.seven_day;
-    if (week !== undefined && week >= WEEKLY_WARN && s.herald?.history?.[0]?.tone === "fine") {
-      s.herald.history[0] = {
-        ...s.herald.history[0],
-        tone: "warning",
-        label: labelOf("warning", `${FINE}; ${weekly(week)}.`),
-        text: `${FINE}; ${weekly(week)}.`,
-      };
-    }
-    return Response.json({ ...s, usage: u, speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, { headers: { "x-aleph-state-build": String(build) } });
+    const { body, build } = await stateBody(url.searchParams.get("project"));
+    return Response.json(body, { headers: { "x-aleph-state-build": String(build) } });
   },
 };

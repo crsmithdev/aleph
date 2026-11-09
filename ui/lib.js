@@ -507,6 +507,10 @@ export function keepProject(p) {
 }
 /** The project of the address now, for a request made outside a route call. */
 export const projectNow = () => (typeof location === "undefined" ? "" : projectOf(hashQuery()));
+/** The data a `state` event updates: the event's keys replace the data's, the other keys stay. */
+export function mergeState(data, ev) {
+  return { ...data, ...ev };
+}
 /** A request URL with the page's project added, when there is one. */
 export const withProject = (url, q) => { const p = projectOf(q); return p ? `${url}${url.includes("?") ? "&" : "?"}project=${encodeURIComponent(p)}` : url; };
 /**
