@@ -135,7 +135,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 | Small-caps key tracking | one value for uppercase keys; today `.05em` in `.worst-head` and `.herald-sticky-head`, `.06em` in `#nav li.head` and `.08em` in `.tile .k`, all in `ui/app.css` | 4 rows | none; pick one now that 4 keys are here |
 | Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
 | Chart gridline | `opacity: 0.5` on `splitLine` | 2 rows (`splitLine` in `ui/chart.js`) | none; a rule |
-| Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
+| Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 12 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
 
 ### Focus offset
 
@@ -312,7 +312,7 @@ The Roles table on Agents has one row per role and model ("Worker · haiku"). It
 
 ## Voice and copy
 
-- **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Jobs per Item`); CSS uppercases two keys (`text-transform: uppercase`, 2 rows: the nav group heads at `#nav li.head` in `ui/app.css` and the metric card key at `.tile .k` in `ui/app.css`).
+- **Headers:** Title Case for page titles, section titles and column headers (`Efficiency`, `Uses per Day`, `First Prompt`); an article, conjunction or preposition of three letters or fewer stays lower case unless it is the first word (`Jobs per Item`); CSS uppercases four keys (`text-transform: uppercase`, 4 rows in `ui/app.css`: the nav group heads at `#nav li.head`, the metric card key at `.tile .k`, the table head at `.worst-head` and the Herald's sticky head at `.herald-sticky-head`).
 - **Counts in headings:** a count in a section heading sits in a `.count` span after the `h2`, muted and in the same size for every section (`Running`, `Queued`, `Done`); the `h2` holds only the title.
 - **Buttons:** short verbs (`Show 50 more`, `Log out`).
 - **States:** lower case, from the word sets in [Naming](naming.md); a priority is `critical`, `high`, `medium` or `low`.
