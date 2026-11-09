@@ -86,7 +86,7 @@ test("the warn fraction is tunable", () => {
 function hook(payload: object, env: Record<string, string> = {}): string {
   const p = Bun.spawnSync(["bun", join(HOOKS, "context-gate.ts")], {
     stdin: Buffer.from(JSON.stringify(payload)),
-    env: { ...process.env, ...env },
+    env: { ...process.env, ALEPH_JOB_ID: "", CLAUDE_CODE_ENTRYPOINT: "cli", ...env },
   });
   return p.stdout.toString().trim();
 }
@@ -110,4 +110,11 @@ test("the hook warns on the wire and stays quiet below the fraction", () => {
 
 test("other events pass through", () => {
   expect(hook({ hook_event_name: "SubagentStop", session_id: "s3", transcript_path: transcript([turn(900_000)]) })).toBe("");
+});
+
+test("the hook is silent in a headless session", () => {
+  const path = transcript([turn(40_000), { type: "system", subtype: "compact_boundary" }]);
+  const payload = { hook_event_name: "Stop", session_id: "s3", transcript_path: path };
+  expect(hook(payload, { ALEPH_JOB_ID: "a1" })).toBe("");
+  expect(hook(payload, { CLAUDE_CODE_ENTRYPOINT: "sdk-cli" })).toBe("");
 });

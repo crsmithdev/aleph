@@ -5,12 +5,14 @@
  *   Stop  fill below the warn fraction     → pass silently
  *         above it                         → pass, warn Chris
  *         session has compacted            → block once, ask for a handoff
+ *   A headless session (a factory worker, `claude -p`) has no Chris to warn or hand off to: pass silently.
  */
 import { peek, put } from "./lib/handshake.ts";
 import { assess, read, threshold } from "./lib/context.ts";
 
 const input = JSON.parse(await Bun.stdin.text());
 if (input.hook_event_name !== "Stop") process.exit(0);
+if (process.env.ALEPH_JOB_ID || process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk")) process.exit(0);
 
 const sessionId: string | undefined = input.session_id;
 const transcript: string = input.transcript_path ?? "";

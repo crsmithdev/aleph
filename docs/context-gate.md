@@ -33,7 +33,7 @@ request re-reads the pile.
 | 3 | **Trigger:** fill from the last assistant request in the transcript; the window from `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, then the `autoCompactWindow` setting, then 1M; the threshold is window − 33k. | The same places Claude Code reads them. 33k is `min(maxOutput, 20k) + 13k`, measured in 2.1.283. |
 | 4 | **Warn** above 0.75 of the threshold: a `systemMessage` to Chris, the turn passes. It names the budget, not a prediction. `ALEPH_CONTEXT_WARN` moves the fraction. | The decision to end a session is Chris's, and a warning at 275k leaves ~92k to finish the thought. The setting does not reliably force compaction, so the warn claims only what it knows. |
 | 5 | **Gate** once the session has compacted: block the Stop with a reason that asks for `aleph:handoff` and a `/clear`. Once a session, never on a retry. A `microcompact_boundary` is not compaction. | After a compaction the context is a summary; a handoff written from the summary is worse than one written now. Blocking twice is a stuck turn. Microcompaction only evicts old tool results, so the conversation survives, and it fires early in a tool-heavy session while lowering the fill. |
-| 6 | **Scope:** main agent `Stop` only. No span, no score. | Subagents report to the main agent. `obs.ts` already records the Stop event, and the verdict is in the transcript. |
+| 6 | **Scope:** main agent `Stop` in an interactive session only. No span, no score. | Subagents report to the main agent. A headless session (`ALEPH_JOB_ID` set, or `CLAUDE_CODE_ENTRYPOINT` `sdk-*`) has no Chris to read a warn or a handoff. `obs.ts` already records the Stop event, and the verdict is in the transcript. |
 
 ## Mechanism
 
