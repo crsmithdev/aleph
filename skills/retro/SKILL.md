@@ -1,42 +1,91 @@
 ---
 name: retro
-description: "Retrospective on a coding session: read its trace and transcript, propose fixes to the agent's environment (identity, skills, hooks, vault, tooling)."
+description: "Retrospective: find behavioral and technical patterns that repeat across sessions, factory runs, git history and issues, and propose fixes to the agent's environment (identity, skills, hooks, checks, vault, tooling)."
 disable-model-invocation: true
 ---
 
-The user has asked for a **retrospective**. You are suggesting improvements to the coding agent's **environment** to improve future runs.
+The user has asked for a **retrospective**. You find **patterns**: things that happen again and again across the history, and propose changes to the agent's **environment** so they stop. One event is an anecdote. A pattern has at least two occurrences in different sessions, runs or days.
+
+## Scope
+
+The argument sets the scope:
+
+- No argument: the last 7 days, every source below.
+- A window (`3d`, `30d`, `since 2026-11-01`): that window, every source.
+- A repo name: the default window, only that repo's sessions, runs, commits and issues.
+- A session id: one session. Read its trace and transcript in full and skip the survey in step 3.
+
+## Sources
+
+Survey each source with a counting command first, and read raw text only for the clusters the counts show. The commands below are tested starting points; adapt the filters to the pattern you chase.
+
+**Transcripts**: `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`. `entrypoint` is `cli` for Chris's sessions and `sdk-cli` for headless factory workers: analyse the two apart. A user message whose content starts with `Stop hook feedback:` is a verify-gate denial, not Chris.
+
+```sh
+S=$(find ~/.claude/projects -name '*.jsonl' -mtime -7)
+# tool errors, normalised and counted
+echo "$S" | xargs jq -r 'select(.type=="user") | .message.content[]? | select(.type=="tool_result" and .is_error==true) | (.content|if type=="array" then .[0].text else . end) // "" | split("\n")[0:2] | join(" ") | .[0:100]' 2>/dev/null | sed -E 's/[0-9a-f]{7,}|[0-9]+/N/g' | sort | uniq -c | sort -rn | head -30
+# Chris's prompts
+echo "$S" | xargs jq -r 'select(.type=="user" and .entrypoint=="cli" and (.message.content|type)=="string") | .message.content | select(startswith("<") or startswith("Stop hook") | not)' 2>/dev/null
+```
+
+**Langfuse**: one trace per turn, grouped by session; it holds every tool call, generation, verify-gate verdict and price. Keys are in `~/.aleph/.env`.
+
+```sh
+curl -s -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" "${LANGFUSE_BASE_URL:-http://127.0.0.1:3010}/api/public/sessions?fromTimestamp=<iso>&limit=100"
+```
+
+`/api/public/sessions/<id>` gives one session's traces, and `/api/public/observations?traceId=<id>` gives one trace's spans.
+
+**Factory**: `~/.aleph/runs/<run>/` holds one run (`exit`, `result.md`, `stderr.log`, `spec.md`, `diff.stat`). `~/.aleph/factory/` holds `corrections.json` (lessons already mined, with their state), `flaky.json`, `stalls.json`, `followups.log` and `suite-history.jsonl`. `~/.aleph/needs-you-log.md` lists items that reached Chris and what would have kept them off the list.
+
+**Git**: every repo in `~/.aleph/repos.json`. Count reverts and fix commits, files that churn, and fixes to code that landed days before.
+
+```sh
+git -C <repo> log --since=7.days --format='%h %s'
+git -C <repo> log --since=7.days --name-only --format= | sort | uniq -c | sort -rn | head
+```
+
+**Issues**: `aleph issue list <repo> --status <open|done|dropped> [--kind bug]`. Look for titles that repeat, bugs filed against the same area, and issues dropped after work started.
 
 ## Steps
 
 1. Call the Skill tool with `aleph:writing-for-agents` for the writing style guide.
 
-2. Read the primary sources for the session the user specifies; default to the current one. The Langfuse session (one trace per turn, id `sha256("turn:" + prompt_id)[:32]`) has every tool call, generation, verify-gate verdict and price; the transcript is `~/.claude/projects/<cwd-slug>/<session_id>.jsonl`. Read the trace first. Fetch the session and its traces from the Langfuse public API:
+2. Set the scope from the argument.
 
-```sh
-curl -s -u "$LANGFUSE_PUBLIC_KEY:$LANGFUSE_SECRET_KEY" \
-  "${LANGFUSE_BASE_URL:-http://127.0.0.1:3010}/api/public/sessions/<session_id>"
-```
+3. **Survey**. Run a counting command on every source in scope. Done when each source has a count or a stated reason it has none.
 
-For the observations of one trace, call `/api/public/observations?traceId=<trace_id>` the same way.
+4. **Cluster**. Group occurrences that share a cause into candidate patterns, across sources: a tool error in transcripts, a failed run and a fix commit can be one pattern. Read the raw evidence for each cluster with two or more occurrences until you can name its cause. Drop a candidate that `corrections.json` or an open issue already covers, and name what covers it.
 
-3. Look for candidates for improvement in these categories.
+5. **Classify** each pattern by the categories below. Done when every category has a verdict: a pattern with evidence, or "none found".
 
-- **Navigation**: how easy was it for the agent to find the right files? Are there hidden dependencies between files? Would a **navigation pointer** make it easier? _Use when_ the session took a long time to find a piece of information.
-- **Automated checks**: are there automated checks that could catch errors the agent made? Linting, typing, tests, filesystem linters? Read the repo's own check command first (its `package.json` or build-tool `lint`/`check` scripts, its CI workflow): a check that exists but is not wired, or fails without notice, is the finding, not a new check. A repo with no **guardrail** (no pre-commit hook and no CI job that runs its lint, typecheck or test command) is a finding by itself. Classify each mistake first. A **mechanical** one (a fixed syntax pattern, a banned API, an import shape, a file-location rule) gets a deterministic check: a rule in the repo's linter, a pre-commit hook, a CI job or an aleph hook, whichever is cheapest. Keep a written instruction (`CLAUDE.md`, a skill) for **judgement calls** that no check can replace. _Use when_ the agent made a mistake an automated check could have caught, or the repo has no guardrail.
-- **Identity**: is there a steering instruction in `identity/CLAUDE.md` or `~/.claude/CLAUDE.md` that belongs elsewhere (see "Where a fix lives")? _Use when_ the always-loaded files are growing, or an instruction fired where it wasn't wanted.
-- **Verify gate**: did the gate deny a turn that was fine, or pass one that wasn't? _Use when_ a `guardrail` span in the trace has a surprising verdict.
-- **Memory**: did the agent re-derive something the vault already held, or learn something it never wrote down? _Use when_ a fact was looked up twice or lost between sessions.
-- **Tool economy**: did the agent make expensive tool calls that could be streamlined? Is there any custom tooling (CLI's, MCP's) that is particularly token-inefficient? _Use when_ the agent made an expensive tool call.
-- **No-ops**: look for instructions in steering files that don't modify the agent's behavior. _Use when_ the steering files are large and unwieldy.
-- **Information access**: look for opportunities to increase the agent's access to information. Teeing dev server logs, readonly access to third-party services. _Use when_ a crucial piece of information was not available to the agent.
+6. **Report** the patterns in order of cost (occurrences × the time or tokens each one wasted). Each one states its count, two or more cited occurrences (session id and line, trace id, run id, commit or issue), the proposed change, and where the change lives. Apply nothing until Chris asks. When he approves one, file it with `aleph issue add`.
 
-4. Present these candidates to the user, each with the evidence from the trace and the proposed change. Don't apply anything until asked.
+## Categories
 
-Done when **every category in step 3 has a verdict** (a candidate with trace evidence, or "none found"), the candidates are in order of severity, and each cites a span or a transcript line.
+**Behavioral**: what the agent or Chris does.
+
+- **Corrections**: Chris gives the same correction or repeats a request in more than one session. The fix is a rule where it would have fired.
+- **Verify gate**: the gate denies turns that were fine, or the same denial reason repeats.
+- **Memory**: the agent re-derives a fact the vault holds, or learns a fact and never writes it down.
+- **Rework**: work is done, undone and redone: reverts, dropped issues, a factory job rerun on the same failure.
+- **Interruptions**: tool calls Chris rejects, permission prompts, needs-you items. Each class of these is a candidate for a standing rule or an Always permission.
+
+**Technical**: what the code and tools do.
+
+- **Recurring errors**: the same tool error or test failure across sessions or runs. Classify each mistake first. A **mechanical** one (a fixed syntax pattern, a banned API, an import shape, a file-location rule, a schema limit) gets a deterministic check: a linter rule, a pre-commit hook, a CI job or an aleph hook, whichever is cheapest. A check that exists but is not wired is the finding, not a new check. A **judgement call** gets a written instruction.
+- **Flakes and stalls**: tests or runs that fail and pass on the same code.
+- **Hot spots**: files that churn or draw repeated fixes. Propose a seam, a test or a navigation pointer.
+- **Navigation**: sessions that spend many calls to find the same file or fact. A **navigation pointer** fixes it.
+- **Tool economy**: tool calls or CLIs that repeat expensive output. Propose a cheaper call or a tool change.
+- **Information access**: a fact the agent needed and could not reach (server logs, CI logs, a third-party service).
+- **No-ops**: instructions in steering files that change no behavior. Propose to delete them.
 
 ## Where a fix lives
 
 - `identity/CLAUDE.md`, `~/.claude/CLAUDE.md`: loaded every session. Only what would cause mistakes if missing; navigation pointers over content.
 - Skills: sometimes-relevant workflows and reference. The description is the always-loaded part; write it as the trigger.
-- Hooks: anything that must happen every time with no exceptions.
+- Hooks and checks: anything that must happen every time with no exceptions.
 - The vault (`/aleph:vault`): facts about how things actually behave, decisions, corrections.
+- Factory code (`jobs/`): a pattern in headless runs that a prompt, spec check or gate change would stop.
