@@ -1,5 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/state; the agents come from /api/speed for the window.
 import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { lastPeriod, loadSpeed, usable, usageCard } from "./speed.js";
 
@@ -31,15 +32,7 @@ function scorecard(s, m, win) {
 const WARN_RATE = 0.7;
 
 /** Each tier's name; the models it offers come from /api/models. */
-const TIERS = {
-  merge: "Merge",
-  reviewer: "Reviewer",
-  intake: "Intake",
-  director: "Director",
-  monitor: "Monitor",
-  title: "Title",
-  judge: "Judge",
-};
+const TIERS = Object.fromEntries(["merge", "reviewer", "intake", "director", "monitor", "title", "judge"].map((k) => [k, NAMES[k]]));
 
 function roles(a, m) {
   const num = ["Jobs", "Success", "p50", "Cost"];

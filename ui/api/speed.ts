@@ -19,7 +19,7 @@ import { reader, storeDir, uiFetchTtl } from "../../issues/lib/store.ts";
 import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
-import { clip, parseId } from "../../lib/naming.ts";
+import { clip, NAMES, parseId } from "../../lib/naming.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 
@@ -364,7 +364,7 @@ export function phases(runs: Run[], filings: Filed, since: number, now: number):
 }
 
 // The roles with their run kind. A land and a recheck run only checks and git, so they are not agents.
-const AGENT_ROLES = [["worker", "Worker", "build"], ["intake", "Intake", "intake"], ["triage", "Triage", "triage"], ["planner", "Planner", "plan"], ["director", "Director", "director"], ["monitor", "Monitor", "monitor"]] as const;
+const AGENT_ROLES = ([["worker", "build"], ["intake", "intake"], ["triage", "triage"], ["planner", "plan"], ["director", "director"], ["monitor", "monitor"]] as const).map(([key, kind]) => [key, NAMES[key], kind] as const);
 type AgentKey = (typeof AGENT_ROLES)[number][0];
 
 /** "claude-opus-5-5" as "opus"; "sonnet" stays. */

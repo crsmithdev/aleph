@@ -2,6 +2,7 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
 import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
 import { ALERT, ASK, FINE, isAlert, isWarn, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "./status-words.js";
@@ -41,7 +42,7 @@ function renderOutcome(d) {
 }
 
 /** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. */
-const PIPE = { intake: "Intake", triage: "Triage", plan: "Plan", "spec-check": "Spec Check", build: "Build", review: "Review", recheck: "Recheck", land: "Land" };
+const PIPE = Object.fromEntries(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
 /** The stage the Pipeline card shows the worst issues of; "" for all stages. It stays per reader through keep(). */
 const PIPE_KEY = "status/pipeline";
 const pipeOn = () => { const k = kept(PIPE_KEY, ""); return Object.hasOwn(PIPE, k) ? k : ""; };

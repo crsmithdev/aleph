@@ -1,17 +1,18 @@
 // The Jobs page: how long each stage of the work takes. `d` is /api/speed for the window.
 import { card, pagedTable, dur, empty, error, esc, failMessage, hashQuery, heads, loadingLine, onTile, pageHead, keepProject, keepWindow, projectNow, withProject, searchBox, setQuery, statCard, cardTrend, tiles, windowOf, wireScope } from "../lib.js";
+import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { listUrl, renderFilters, renderJobsTable, renderScope, windowShown, wireJobs } from "./jobs.js";
 import { bucketOf, lastPeriod, loadSpeed, trendOn, usable } from "./speed.js";
 
 export const STAGES = [
-  ["lead", "Lead Time", "From filing to the last land."],
-  ["intake", "Intake", "From filing to the end of the first intake."],
-  ["queue", "Queue", "From intake to the first agent job. This includes waits for a slot or for another issue."],
-  ["implement", "Build", "From the first agent job to the last finish with work to land."],
-  ["land", "Land", "From the finish to the land. This includes waits for a review or for Chris."],
+  ["lead", NAMES.lead, "From filing to the last land."],
+  ["intake", NAMES.intake, "From filing to the end of the first intake."],
+  ["queue", NAMES.queue, "From intake to the first agent job. This includes waits for a slot or for another issue."],
+  ["implement", NAMES.build, "From the first agent job to the last finish with work to land."],
+  ["land", NAMES.land, "From the finish to the land. This includes waits for a review or for Chris."],
 ];
-const PARTS = [["intake", "Intake"], ["queue", "Queue"], ["implement", "Build"], ["land", "Land"]];
+const PARTS = [["intake", NAMES.intake], ["queue", NAMES.queue], ["implement", NAMES.build], ["land", NAMES.land]];
 
 /** A stage card: p50 / p90 over the window, with the last 24h p50 against the window's as the trend. */
 const stageTile = ([key, name], d, day, on) => {
