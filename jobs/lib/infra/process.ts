@@ -109,6 +109,9 @@ export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
 export function activeEnd(e: Entry): Run {
   const r = e.run as Run, a = Date.parse(r.started), b = Date.parse(r.ended ?? "");
   if (!(b >= a)) return r;
+  // A folder that has had no writes for SETTLED_MS keeps its end; this read stats every file of it.
+  const key = `${e.folder}@${r.ended}`, kept = ends.get(key);
+  if (kept !== undefined) return kept === b ? r : { ...r, ended: new Date(kept).toISOString() };
   let end = b;
   try {
     let last = -Infinity;
@@ -117,5 +120,11 @@ export function activeEnd(e: Entry): Run {
     if (existsSync(join(e.folder, "exit"))) end = Math.min(end, statSync(join(e.folder, "exit")).mtimeMs);
   } catch { return r; }
   end = Math.max(a, end);
+  if (Date.now() - b > SETTLED_MS) ends.set(key, end);
   return end === b ? r : { ...r, ended: new Date(end).toISOString() };
 }
+
+/** How long after `ended` a run folder is taken to be done changing. */
+const SETTLED_MS = 10 * 60_000;
+/** The end `activeEnd` found for a settled run, by folder and `ended`. */
+const ends = new Map<string, number>();

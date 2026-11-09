@@ -3,7 +3,6 @@ import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/learning/corrections.ts";
 import type { State } from "../state.ts";
 import { loadState } from "../state-load.ts";
-import { cachedSpeed } from "./speed.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
 import { FINE, labelOf, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
 
@@ -32,7 +31,7 @@ export async function stateBody(project: string | null) {
       text: `${FINE}; ${weekly(week)}.`,
     };
   }
-  return { body: { ...s, usage: u, speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, build };
+  return { body: { ...s, usage: u, proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, build };
 }
 
 export const routes: Routes = {

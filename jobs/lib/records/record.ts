@@ -311,9 +311,9 @@ export function removeRun(id: string): void {
 }
 
 /** Every run of every record, oldest first by id. */
-export function allRunRecords(live = false): RunRecord[] {
+export function allRunRecords(live = false, records = all(live)): RunRecord[] {
   const out: RunRecord[] = [];
-  for (const r of all(live)) for (const x of r.runs) { keys.set(x.id, r.issue); out.push(view(r, x)); }
+  for (const r of records) for (const x of r.runs) { keys.set(x.id, r.issue); out.push(view(r, x)); }
   return out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 

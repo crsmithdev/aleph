@@ -8,7 +8,7 @@
 import { existsSync } from "node:fs";
 import { flakeNames, flakes } from "../../jobs/lib/gates/factory-status.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
-import { all as allRecords } from "../../jobs/lib/records/record.ts";
+import { all as allRecords, type JobRecord } from "../../jobs/lib/records/record.ts";
 import { allRuns, isAgentRun, isBuild, onOf, type Entry, type Run } from "../../jobs/lib/records/ledger.ts";
 import { activeEnd, isLive, isStarting } from "../../jobs/lib/infra/process.ts";
 import { causeOf, type Cause } from "../../jobs/lib/records/outcome.ts";
@@ -515,7 +515,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const agents: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[] = [];
   const models = new Map<string, number[]>();
 
-  const entries = allRuns().filter((e) => !project || e.run.repo === project);
+  const read = allRecords();
+  const entries = allRuns(false, read).filter((e) => !project || e.run.repo === project);
   const all = entries.map((x) => x.run as Run);
   const landed: Run[] = [];
   for (const r of all) {
@@ -591,7 +592,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     const item = repo ? lists.item(repo, n) : undefined;
     if (item) Object.assign(t, { title: item.title, href: `#/issues/${encodeURIComponent(repo)}/${n}` });
   }
-  const records = allRecords().filter((r) => !project || r.issue.startsWith(`${project}-`));
+  const records = read.filter((r) => !project || r.issue.startsWith(`${project}-`));
   const stages = { rows: stageRows({ runs: entries, specChecks: specChecksOf(records) }, since.getTime(), now.getTime()), worst };
   for (const u of issues.usage) {
     const [repo, n] = splitId(u.goal);
@@ -619,7 +620,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     done: issuesLanded,
     kinds: Object.fromEntries(KINDS.map((k) => [k, stat(times[k])])) as Speed["kinds"],
     phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(ended[k].map((x) => x.secs))])) as Speed["phases"],
-    asks: asksOf(since.getTime(), now.getTime(), project),
+    asks: asksOf(records, since.getTime(), now.getTime()),
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
     buckets: Array.from({ length: n }, (_, i) => {
       const d = startOf(i);
@@ -640,9 +641,9 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   };
 }
 
-function asksOf(since: number, now: number, project?: string): Speed["asks"] {
+function asksOf(records: JobRecord[], since: number, now: number): Speed["asks"] {
   const inWindow = (t: number) => t >= since && t <= now;
-  const asks = allRecords().filter((r) => !project || r.issue.startsWith(`${project}-`)).flatMap((r) => (r.asks ?? []).filter((a) => inWindow(Date.parse(a.set))).map((a) => ({ a, r })));
+  const asks = records.flatMap((r) => (r.asks ?? []).filter((a) => inWindow(Date.parse(a.set))).map((a) => ({ a, r })));
   const escalated = ({ a, r }: (typeof asks)[number]) => r.events.some((e) => e.kind === "director" && (e.data as { outcome?: string } | undefined)?.outcome === "escalated" && e.at >= a.set && (!a.cleared || e.at < a.cleared));
   return { count: asks.length, manual: asks.filter(escalated).length };
 }
