@@ -123,7 +123,7 @@ These values repeat in the code with no token. Until a token lands, write the va
 | Proposed token | Value | Uses | Where |
 |---|---|---|---|
 | `--ls-display` | `letter-spacing: -0.01em` | 4 rows | `.mark`, `.shead .say`, `.shead .asof` and `.ph h1` in `ui/app.css` |
-| `--ls-caps` | one tracking for uppercase keys | 2 rows (`.06em`, `.08em`) | `#nav li.head` and `.tile .k` in `ui/app.css` |
+| `--ls-caps` | one tracking for uppercase keys | 4 rows (`.05em`, `.06em`, `.08em`) | `#nav li.head`, `.tile .k`, `.worst-head` and `.herald-sticky-head` in `ui/app.css` |
 
 ## Patterns
 
@@ -132,7 +132,7 @@ Each pattern below has 3 or more uses in the code, or is a fixed part of a compo
 | Rule | Value | Uses | Token to come |
 |---|---|---|---|
 | Display type tracking | `letter-spacing: -0.01em` on the brand mark, the shead text, the page title and display text | 4 rows (`.mark`, `.shead .say`, `.shead .asof` and `.ph h1` in `ui/app.css`) | `--ls-display` |
-| Small-caps key tracking | one value for uppercase keys; today `.06em` in `#nav li.head` and `.08em` in `.tile .k`, both in `ui/app.css` | 2 rows | none; pick one when a third key comes |
+| Small-caps key tracking | one value for uppercase keys; today `.05em` in `.worst-head` and `.herald-sticky-head`, `.06em` in `#nav li.head` and `.08em` in `.tile .k`, all in `ui/app.css` | 4 rows | none; pick one now that 4 keys are here |
 | Focus offset | `outline-offset: 2px` outside a control; `-2px` inside a container (segmented control, row, Ask head) | 2 and 5 rows (grep of `ui/app.css`) | none; a rule |
 | Chart gridline | `opacity: 0.5` on `splitLine` | 4 rows (`splitLine` in `ui/chart.js`) | none; a rule |
 | Line height | a unitless multiplier, in `line-height` or the `font:` shorthand (`1.35`, `1.45`, `1.55`) | 15 `line-height` rows, 0 in px (grep of `ui/app.css` and `ui/index.html`) | none; a rule |
