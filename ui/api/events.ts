@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
 import { recordsDir } from "../../jobs/lib/records/record.ts";
+import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
 import { clearCache } from "./speed.ts";
 
@@ -24,6 +25,8 @@ const encoder = new TextEncoder();
 const event = (name: string, data: string) => encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
 
 const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
+/** The session token of each client that opened its stream with the gate on. */
+const tokens = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 let watchers: FSWatcher[] = [];
 let ping: Timer | undefined, settle: Timer | undefined, sentAt = 0;
 
@@ -89,6 +92,17 @@ function start(): void {
   ping = setInterval(() => send(event("ping", JSON.stringify({ at: Date.now() }))), PING_MS);
 }
 
+/** A session that logs out loses its streams. */
+onLogout.push((token) => {
+  for (const [c, t] of tokens) {
+    if (t !== token) continue;
+    tokens.delete(c);
+    clients.delete(c);
+    c.close();
+  }
+  if (!clients.size) stop();
+});
+
 function stop(): void {
   for (const w of watchers) w.close();
   watchers = [];
@@ -99,17 +113,20 @@ function stop(): void {
 }
 
 export const routes: Routes = {
-  "GET /api/events": () => {
+  "GET /api/events": (req) => {
     let mine: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({
       start(c) {
         mine = c;
         if (!clients.size) start();
         clients.add(c);
+        const t = gateOn() ? cookieToken(req) : null;
+        if (t) tokens.set(c, t);
         c.enqueue(event("ping", JSON.stringify({ at: Date.now() })));
       },
       cancel() {
         clients.delete(mine);
+        tokens.delete(mine);
         if (!clients.size) stop();
       },
     });

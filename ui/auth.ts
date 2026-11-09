@@ -31,13 +31,16 @@ function writeSessions(tokens: string[]): void {
   writeFileSync(p, JSON.stringify(tokens));
 }
 
-function cookieToken(req: Request): string | null {
+export function cookieToken(req: Request): string | null {
   for (const part of (req.headers.get("cookie") ?? "").split(";")) {
     const eq = part.indexOf("=");
     if (eq > 0 && part.slice(0, eq).trim() === COOKIE) return part.slice(eq + 1).trim() || null;
   }
   return null;
 }
+
+/** Called with the token of each session that logs out. */
+export const onLogout: ((token: string) => void)[] = [];
 
 const hasSession = (req: Request) => {
   const t = cookieToken(req);
@@ -99,7 +102,10 @@ export const routes: Routes = {
   },
   "POST /api/logout": (req) => {
     const t = cookieToken(req);
-    if (t) writeSessions(readSessions().filter((s) => s !== t));
+    if (t) {
+      writeSessions(readSessions().filter((s) => s !== t));
+      for (const f of onLogout) f(t);
+    }
     return new Response(null, { status: 204, headers: { "set-cookie": `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0` } });
   },
 };
