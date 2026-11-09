@@ -3,13 +3,15 @@
  * record, a file of the factory folder, the issue store's ref); the page then loads its view again. Changes 500 ms
  * apart send one `change`, and two `change` events are at least 2 s apart, with the last change always sent. It sends
  * an `ev` event for each line added to the event log, with the event as JSON, at once, and a `ping` every 25 s, so
- * that the page can tell a quiet stream from a dead one. The watchers run only while a client is connected.
+ * that the page can tell a quiet stream from a dead one. With `?project=<key>` the `ev` events are only those of an issue
+ * or job of that project and those whose subject names no project (a routine); `change` and `ping` go to every client. The watchers run only while a client is connected.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readSync, statSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
 import { join } from "node:path";
 import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
 import { recordsDir } from "../../jobs/lib/records/record.ts";
+import { parseId } from "../../lib/naming.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
 import { clearCache } from "./speed.ts";
@@ -24,14 +26,17 @@ const PING_MS = 25_000;
 const encoder = new TextEncoder();
 const event = (name: string, data: string) => encoder.encode(`event: ${name}\ndata: ${data}\n\n`);
 
-const clients = new Set<ReadableStreamDefaultController<Uint8Array>>();
+/** The open streams, each with the project it follows ("" for all). */
+const clients = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 /** The session token of each client that opened its stream with the gate on. */
 const tokens = new Map<ReadableStreamDefaultController<Uint8Array>, string>();
 let watchers: FSWatcher[] = [];
 let ping: Timer | undefined, settle: Timer | undefined, sentAt = 0;
 
-function send(bytes: Uint8Array): void {
-  for (const c of clients) {
+function send(bytes: Uint8Array, subject?: string): void {
+  for (const [c, project] of clients) {
+    const repo = parseId(subject)?.repo;
+    if (project && repo && repo !== project) continue;
     try { c.enqueue(bytes); } catch { clients.delete(c); }
   }
 }
@@ -61,7 +66,12 @@ function tail(file: string): void {
   const text = buf.toString("utf8"), end = text.lastIndexOf("\n");
   if (end < 0) return;
   sent.set(file, from + Buffer.byteLength(text.slice(0, end + 1)));
-  for (const line of text.slice(0, end).split("\n")) if (line) send(encoder.encode(`event: ev\ndata: ${line}\n\n`));
+  for (const line of text.slice(0, end).split("\n")) {
+    if (!line) continue;
+    let subject = "";
+    try { subject = String(JSON.parse(line).subject ?? ""); } catch {}
+    send(encoder.encode(`event: ev\ndata: ${line}\n\n`), subject);
+  }
 }
 
 function follow(dir: string, options: WatchOptions, counts: (file: string) => boolean): void {
@@ -114,12 +124,13 @@ function stop(): void {
 
 export const routes: Routes = {
   "GET /api/events": (req) => {
+    const project = new URL(req.url).searchParams.get("project") || "";
     let mine: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({
       start(c) {
         mine = c;
         if (!clients.size) start();
-        clients.add(c);
+        clients.set(c, project);
         const t = gateOn() ? cookieToken(req) : null;
         if (t) tokens.set(c, t);
         c.enqueue(event("ping", JSON.stringify({ at: Date.now() })));

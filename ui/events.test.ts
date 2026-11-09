@@ -27,9 +27,9 @@ afterAll(() => {
 });
 
 /** Opens the stream, waits for its first ping, runs `act` and returns the text up to and with the first `change` event, or null when the stream ends first. */
-async function changeAfter(act: () => void): Promise<string | null> {
+async function changeAfter(act: () => void, query = ""): Promise<string | null> {
   const ctl = new AbortController();
-  const res = await fetch(`http://127.0.0.1:${server.port}/api/events`, { signal: ctl.signal });
+  const res = await fetch(`http://127.0.0.1:${server.port}/api/events${query}`, { signal: ctl.signal });
   expect(res.headers.get("content-type")).toBe("text/event-stream");
   const reader = res.body!.getReader();
   const first = new TextDecoder().decode((await reader.read()).value); // the first ping: the watchers are on
@@ -67,6 +67,15 @@ test("a run that starts sends its event as an ev, before the change, with the ev
   expect(JSON.parse(ev![1])).toMatchObject({ by: "gate", subject: "r-3", action: "running" });
   expect(text.indexOf("event: ev")).toBeLessThan(text.indexOf("event: change"));
 });
+
+test("a stream with a project sends only the ev events of that project, and a change to all", async () => {
+  const text = (await changeAfter(() => { for (const on of ["q-1", "q-1.1", "p-x-1", "p-1"]) putRun(on, run(on)); }, "?project=p"))!;
+  const subjects = [...text.matchAll(/event: ev\ndata: (.*)\n/g)].map((m) => JSON.parse(m[1]).subject);
+  expect(subjects).toContain("p-1");
+  expect(subjects).not.toContain("q-1");
+  expect(subjects).not.toContain("q-1.1");
+  expect(subjects).not.toContain("p-x-1");
+}, 10_000);
 
 test("a change drops the kept speed answer, so the fetch it brings builds a new one", async () => {
   const before = cachedSpeed("week");

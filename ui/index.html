@@ -55,7 +55,7 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">
-  import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds } from "/lib.js";
+  import { setCodes } from "/lib/naming.ts"; import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, withProject } from "/lib.js";
 
   // The shell. Each module listed by /api/views exports
   // view = { path, title, group, order, icon?, render(data, params), mount?(root, data), event?(root, ev), api?, refresh?, live? }, and
@@ -184,7 +184,7 @@
     events = null;
     if (!shown?.view?.live || document.hidden) return;
     let lost = false;
-    const es = events = new EventSource("/api/events");
+    const es = events = new EventSource(withProject("/api/events", shown.query));
     heardAt = Date.now();
     const heard = () => { heardAt = Date.now(); };
     es.addEventListener("ping", heard);
