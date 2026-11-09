@@ -18,7 +18,7 @@ describe("a factory run", () => {
 
     test("a silent reviewer is stopped at ALEPH_STALL_SECONDS and holds the run with no worker rerun", async () => {
       const silent = join(base, "silent-reviewer");
-      writeFileSync(silent, "#!/bin/bash\nexec sleep 60\n", { mode: 0o755 });
+      writeFileSync(silent, "#!/bin/bash\nexec tail -f /dev/null\n", { mode: 0o755 });
       const t = await job("fac", "rstall", "Goal: g\nACTION: commit rstall.txt\n", {}, { ALEPH_REVIEWER_CMD: silent, ALEPH_STALL_SECONDS: "2" });
       expect(state(t.json.run)).toMatchObject({ condition: "waiting", reason: "reviewer: no verdict (stalled: no output for 2 seconds)" });
       expect(runsOf("rstall").length).toBe(1);

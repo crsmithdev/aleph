@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readList, writeList } from "../../../issues/lib/store.ts";
@@ -18,6 +18,8 @@ export function sh(cwd: string, ...args: string[]): void {
 
 const KEYS = ["ALEPH_ISSUES", "ALEPH_REPOS", "ALEPH_JOBS_DIR", "ALEPH_FACTORY_DIR", "ALEPH_VAULT", "XDG_RUNTIME_DIR", "ALEPH_LIVE_CAP", "SIDETONE_TELL_URL", "ALEPH_DISPATCH"];
 let dir: string;
+/** The test's clock: the time setup made its temp directory, read once from that directory. mk's runs start at it. */
+let now: number;
 let saved: Record<string, string | undefined>;
 
 /** The test's temp directory. `dir` is reassigned per test, so tests read it through this getter, never a copy. */
@@ -26,6 +28,7 @@ export const ctx = { get base(): string { return dir; } };
 // Each test gets its own factory repo, work store and registry, so the baseline and the issue list start empty.
 export function setup(): void {
   dir = mkdtempSync(join(tmpdir(), "aleph-factory-"));
+  now = statSync(dir).mtimeMs;
   saved = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
   Object.assign(process.env, {
     ALEPH_ISSUES: join(dir, "items"), ALEPH_REPOS: join(dir, "repos.json"), ALEPH_JOBS_DIR: join(dir, "jobs"),
@@ -60,7 +63,7 @@ export function mk(name: string, kind: Run["kind"], state: Run["condition"], ext
   const folder = join(ctx.base, "jobs", id);
   mkdirSync(folder, { recursive: true });
   for (const [f, text] of Object.entries(files)) writeFileSync(join(folder, f), text);
-  writeRun(folder, { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date().toISOString(), ...extra } as Run);
+  writeRun(folder, { kind, job: id, name, repo: "fac", condition: state, on: `fac-${name.split("-")[1]}`, told: true, shown: true, started: new Date(now).toISOString(), ...extra } as Run);
   return { folder, job: extra.job ?? id };
 }
 export const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join("\n") + "\n";

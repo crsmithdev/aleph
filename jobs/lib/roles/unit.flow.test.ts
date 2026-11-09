@@ -32,7 +32,7 @@ describe("job", () => {
 
     test("a follow-up started after the wall clock steps back sorts after the job's runs", async () => {
       const before = jobRuns("alpha", "build");
-      setSystemTime(new Date(Date.now() - 60_000));
+      setSystemTime(new Date("2020-01-01T00:00:00Z"));
       const r = await actionJob("alpha", "commit s.txt").finally(() => setSystemTime());
       expect(r.code).toBe(0);
       expect(r.json.job).toBe(before[0]);
@@ -107,13 +107,13 @@ describe("the state rule", () => {
 
   test("a worker past its limit is stopped and fails as timed out", async () => {
     // The fake worker sleeps 60 s: the time box is the limit's cut, and a worker that ran out would pass the test's limit.
-    const r = await actionJob("stuck", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
+    const r = await actionJob("stuck", "sleep", { ALEPH_JOB_TIMEOUT: "2" });
     expect(state(r.json.run)).toMatchObject({ condition: "failed", cause: "timeout" });
-    expect(state(r.json.run).reason).toContain("1-second time box");
+    expect(state(r.json.run).reason).toContain("2-second time box");
   });
 
   test("a check past its limit is stopped and gives no verdict", async () => {
-    const r = await actionJob("slowcheck", "commit slow/x.txt", { ALEPH_CHECK_TIMEOUT: "1" });
+    const r = await actionJob("slowcheck", "commit slow/x.txt", { ALEPH_CHECK_TIMEOUT: "2" });
     expect(state(r.json.run)).toMatchObject({ condition: "failed", cause: "infra", reason: "no verdict: check slow timed out" });
   });
 });

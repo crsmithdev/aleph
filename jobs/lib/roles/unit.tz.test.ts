@@ -52,11 +52,11 @@ function committed(setup: string[] = [], checks: { name: string; run: string }[]
 const extraTrees = (path: string) => sh(path, "git", "worktree", "list", "--porcelain").split("\n").filter((l) => l.startsWith("worktree ")).length - 1;
 
 test("checksAt hands each check's process to onSpawn, so a drop can kill a running check, and a killed check gives no verdict", async () => {
-  const { repo, sha } = committed([], [{ name: "slow", run: "sleep 60" }]);
+  const { repo, sha } = committed([], [{ name: "slow", run: "tail -f /dev/null" }]);
   const spawned: ReturnType<typeof Bun.spawn>[] = [];
   const why = await checksAt({
     folder: base, repo, changed: [], phase: () => {},
-    onSpawn: (p) => { spawned.push(p); setTimeout(() => p.kill("SIGKILL"), 200); },
+    onSpawn: (p) => { spawned.push(p); p.kill("SIGKILL"); },
   }, sha, process.env);
   // A killed check does not run again here.
   expect(spawned).toHaveLength(1);
@@ -99,8 +99,14 @@ test("runOnCommit puts the hidden files in .hidden", async () => {
 
 test("runOnCommit: two runs for one repo at the same time do not remove each other's worktree", async () => {
   const { repo, sha } = committed();
-  const [a, b] = await Promise.all([runOnCommit(repo, sha, "sleep 0.3; cat f.txt"), runOnCommit(repo, sha, "cat f.txt; exit 3")]);
-  expect([a, b]).toEqual([{ code: 0, output: "x\n" }, { code: 3, output: "x\n" }]);
+  // Two FIFOs order the runs: a is in its worktree, then b runs and removes its own, then a reads f.txt.
+  const [up, go] = [join(base, "up"), join(base, "go")];
+  sh(base, "mkfifo", up, go);
+  const a = runOnCommit(repo, sha, `echo > ${up}; read _ < ${go}; cat f.txt`);
+  await Bun.spawn(["cat", up], { stdout: "ignore" }).exited;
+  const b = await runOnCommit(repo, sha, "cat f.txt; exit 3");
+  await Bun.spawn(["sh", "-c", `echo > ${go}`]).exited;
+  expect([await a, b]).toEqual([{ code: 0, output: "x\n" }, { code: 3, output: "x\n" }]);
 });
 
 test("runOnCommit: a commit that git cannot check out returns infra", async () => {

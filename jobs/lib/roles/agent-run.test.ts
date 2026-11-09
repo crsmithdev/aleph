@@ -6,6 +6,7 @@ import { agentCause, endLost, openRun, type Opening } from "./agent-run.ts";
 import { allRuns, jobIdOf, lock, readRun, runsDir, stamp, writeRun } from "../records/ledger.ts";
 
 let base: string;
+const NOW = new Date("2026-06-01T12:00:00Z");
 const saved = { ...process.env };
 const opening: Opening = { role: "facts", who: "the reviewer", model: "m-1", seconds: 60, flags: ["--tools", "Read"], name: "demo", command: "facts demo", shown: false };
 const fake = (body: string) => {
@@ -44,19 +45,21 @@ test("a run holds its state, its prompt, its output and its ending", async () =>
 });
 
 test("a role run that joins a job sorts after the job's earlier runs, even when the clock steps back", () => {
-  const later = stamp(new Date(Date.now() + 60_000));
+  setSystemTime(NOW);
+  const later = stamp(new Date(NOW.getTime() + 60_000));
   const earlier = join(runsDir(), `${later}-step-build`);
   mkdirSync(earlier, { recursive: true });
-  writeRun(earlier, { kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: new Date().toISOString() });
+  writeRun(earlier, { kind: "build", job: "step-job", name: "step", condition: "landed", told: true, started: NOW.toISOString() });
   const run = openRun({ ...opening, name: "step", job: "step-job" });
   const ids = allRuns().map((e) => e.folder);
   expect(ids.indexOf(run.folder)).toBeGreaterThan(ids.indexOf(earlier));
 });
 
 test("two jobs on one subject are #1 and #2, after the runs from before job IDs, and their folders are <stamp>-<subject>-<n>", () => {
-  const old = join(runsDir(), `${stamp(new Date(Date.now() - 60_000))}-intake-r-9-intake`);
+  setSystemTime(NOW);
+  const old = join(runsDir(), `${stamp(new Date(NOW.getTime() - 60_000))}-intake-r-9-intake`);
   mkdirSync(old, { recursive: true });
-  writeRun(old, { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", condition: "done", told: true, started: new Date().toISOString() });
+  writeRun(old, { kind: "intake", job: "old-9", name: "intake-r-9", on: "r-9", condition: "done", told: true, started: NOW.toISOString() });
   const one = openRun({ ...opening, on: "r-9" });
   const two = openRun({ ...opening, on: "r-9" });
   const e = (f: string) => allRuns().find((x) => x.folder === f)!;
@@ -93,23 +96,21 @@ test("a run records the cost of its result event, also when the command fails, a
 });
 
 test("a run past its time box is killed and says it timed out", async () => {
-  fake("exec sleep 30");
-  process.env.ALEPH_FACTS_TIMEOUT = "0.2";
+  fake("exec tail -f /dev/null");
+  process.env.ALEPH_FACTS_TIMEOUT = "2";
   const run = openRun(opening);
   await expect(run.ask("x")).rejects.toThrow("the reviewer timed out");
   expect(existsSync(join(run.folder, "output.log"))).toBe(true);
 });
 
 test("the time box ends the call's children too, so a child that holds the output pipe does not hold the run", async () => {
-  fake(`sleep 30 & echo $! > ${join(base, "child")}; exec sleep 30`);
-  process.env.ALEPH_FACTS_TIMEOUT = "0.2";
-  const t0 = Date.now();
+  fake(`tail -f /dev/null & echo $! > ${join(base, "child")}; exec tail -f /dev/null`);
+  process.env.ALEPH_FACTS_TIMEOUT = "2";
   await expect(openRun(opening).ask("x")).rejects.toThrow("the reviewer timed out");
-  expect(Date.now() - t0).toBeLessThan(10_000);
   const child = Number(readFileSync(join(base, "child"), "utf8"));
   // The pipe closed, so the child is dead; its new parent may take a moment to reap it under load.
+  await Bun.spawn(["tail", "--pid", String(child), "-f", "/dev/null"]).exited;
   const alive = () => { try { process.kill(child, 0); return true; } catch { return false; } };
-  for (const end = Date.now() + 5_000; alive() && Date.now() < end;) await Bun.sleep(20);
   expect(alive()).toBe(false);
 });
 

@@ -1,6 +1,6 @@
 // The shared setup of the director's test files: one work store, one repo and a fake agent per file (the director's
 // command), and a new repo key per test.
-import { afterAll, beforeAll, beforeEach } from "bun:test";
+import { afterAll, beforeAll, beforeEach, setSystemTime } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -76,9 +76,10 @@ export function branch(name: string, file: string, content = "x\n"): void {
 }
 
 let runs = 0;
+const NOW = Date.parse("2026-11-01T12:00:00Z");
 /** One run in the ledger, with its files; returns its folder. */
 export function run(o: Partial<Run> & { name: string }, files: Record<string, string> = {}, minutesAgo = 0): string {
-  const at = new Date(Date.now() - minutesAgo * 60_000);
+  const at = new Date(NOW - minutesAgo * 60_000);
   const id = `${stamp(at)}-${key}-${o.name}-${++runs}-agent`;
   const folder = join(process.env.ALEPH_JOBS_DIR!, id);
   mkdirSync(folder, { recursive: true });
@@ -101,6 +102,7 @@ export const ports = (): Ports => ({
 /** Registers the hooks: the store, the repo, the fake and the tell server for the file, and clean fakes for each test. */
 export function useDirectorFixture(): void {
   beforeAll(() => {
+    setSystemTime(new Date(NOW));
     base = mkdtempSync(join(tmpdir(), "aleph-director-"));
     sh(base, "git", "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
     sh(base, "git", "clone", "-q", join(base, "items.git"), join(base, "items"));
@@ -124,6 +126,6 @@ export function useDirectorFixture(): void {
       // Not the factory's ~/.aleph/sandbox: a concurrent copy of this file names its land folder the same in the same second, and removes it.
     });
   });
-  afterAll(() => { server.stop(true); rmSync(base, { recursive: true, force: true }); });
+  afterAll(() => { setSystemTime(); server.stop(true); rmSync(base, { recursive: true, force: true }); });
   beforeEach(() => { rmSync(join(base, "calls"), { force: true }); landed = []; dropped = []; told = []; reply([]); });
 }

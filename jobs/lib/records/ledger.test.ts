@@ -43,7 +43,7 @@ describe("lock", () => {
 
   test("a held lock gives up at once with no wait, even on a frozen clock", async () => {
     const release = (await lock("frozen"))!;
-    setSystemTime(new Date());
+    setSystemTime(new Date(0));
     try {
       expect(await lock("frozen", 0)).toBeNull();
     } finally {
@@ -64,7 +64,7 @@ describe("lock", () => {
     (await lock("none", 0))!();
     seed("empty", "");
     expect(await lock("empty", 0)).toBeNull();
-    const old = new Date(Date.now() - 120_000);
+    const old = new Date(0);
     utimesSync(dir("empty"), old, old);
     (await lock("empty", 0))!();
   });
@@ -72,7 +72,7 @@ describe("lock", () => {
   test("a guard left by a crash does not block the takeover for good", async () => {
     seed("g", dead());
     mkdirSync(`${dir("g")}.reclaim`);
-    const old = new Date(Date.now() - 60_000);
+    const old = new Date(0);
     utimesSync(`${dir("g")}.reclaim`, old, old);
     (await lock("g", 2000))!();
   });
@@ -84,7 +84,7 @@ import { lock } from ${JSON.stringify(join(import.meta.dir, "ledger.ts"))};
 for (let i = 0; i < 12; i++) {
   const release = (await lock("race", 25000))!;
   closeSync(openSync(process.argv[2], "wx")); // Throws if another process is inside.
-  await Bun.sleep(1);
+  await new Promise((r) => setImmediate(r));
   rmSync(process.argv[2]);
   release();
 }

@@ -80,7 +80,7 @@ function branch(name: string, commits: [string, string][]): void {
 export function job(name: string, commits: [string, string][], extra: Partial<Run> = {}, agent: Partial<Run> = {}): Entry {
   if (commits.length) branch(name, commits);
   const buildId = `20261101-000000-demo-${name}-build`;
-  const started = new Date().toISOString();
+  const started = "2026-11-01T00:00:00.000Z";
   const base = { name, repo: "demo", job: buildId, branch: `job/${name}`, told: true, started } as const;
   mkdirSync(join(dir, "jobs", buildId));
   writeFileSync(join(dir, "jobs", buildId, "spec.md"), "");
@@ -95,7 +95,7 @@ export function job(name: string, commits: [string, string][], extra: Partial<Ru
 
 /** A land run that counts as live, queued behind a leader. */
 export function queued(e: Entry): Entry {
-  const s = Bun.spawn(["bash", "-c", "sleep 300; :", e.folder], { stdout: "ignore", stderr: "ignore" });
+  const s = Bun.spawn(["bash", "-c", "tail -f /dev/null; :", e.folder], { stdout: "ignore", stderr: "ignore" });
   sleepers.push(s);
   writeFileSync(join(e.folder, "pid"), String(s.pid));
   return e;
