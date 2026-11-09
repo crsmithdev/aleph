@@ -112,7 +112,12 @@ export async function serve(port: number, { warm = true, pageDir, apiDir, root =
         if (r.method !== req.method) { allowed = true; continue; }
         const params: Record<string, string> = {};
         r.names.forEach((n, i) => { params[n] = decodeURIComponent(m[i + 1]); });
-        const res = await r.handler(req, params, url);
+        let res = await r.handler(req, params, url);
+        if (res.headers.get("content-type")?.includes("application/json") && req.headers.get("accept-encoding")?.includes("gzip")) {
+          const body = new Uint8Array(await res.arrayBuffer());
+          res = new Response(body.length > 1024 ? Bun.gzipSync(body) : body, res);
+          if (body.length > 1024) { res.headers.set("content-encoding", "gzip"); res.headers.set("vary", "Accept-Encoding"); }
+        }
         res.headers.set("x-aleph-version", version(dir));
         if (codePrint(root, loaded) !== loadedPrint) res.headers.set("x-aleph-stale", "1");
         if (gateOn()) res.headers.set("x-aleph-login", "1");

@@ -29,7 +29,7 @@ beforeAll(async () => {
   cpSync(join(import.meta.dir, "..", "lib"), join(base, "lib"), { recursive: true });
   mkdirSync(apiDir);
   writeFileSync(join(pageDir, "views", "_test.js"), `export const view = { path: "/_test/:id", title: "Test", group: "factory", order: 9, api: "/api/_test/:id", render: (d) => d.id };\n`);
-  writeFileSync(join(apiDir, "_test.ts"), `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }) };\n`);
+  writeFileSync(join(apiDir, "_test.ts"), `import type { Routes } from "../server.ts";\nexport const routes: Routes = { "GET /api/_test/:id": (_req, params, url) => Response.json({ id: params.id, project: url.searchParams.get("project") }), "GET /api/_big/:n": (_req, params) => Response.json("x".repeat(Number(params.n))) };\n`);
   ({ server, stop, at } = await withServer({ warm: false, pageDir, apiDir }));
 });
 afterAll(() => {
@@ -175,4 +175,20 @@ test("x-aleph-stale appears once a file of the server graph changes, and not for
   } finally {
     stopRoot();
   }
+});
+
+test("a JSON answer over 1024 bytes is gzipped when the request accepts gzip, and plain otherwise", async () => {
+  const get = (n: number, enc: string) => at(`/api/_big/${n}`, { headers: { "accept-encoding": enc }, decompress: false } as RequestInit);
+  const big = JSON.stringify("x".repeat(2000));
+  const gz = await get(2000, "gzip, deflate");
+  expect(gz.headers.get("content-encoding")).toBe("gzip");
+  expect(gz.headers.get("vary")).toBe("Accept-Encoding");
+  expect(gz.headers.get("x-aleph-version")).toBeTruthy();
+  expect(new TextDecoder().decode(Bun.gunzipSync(new Uint8Array(await gz.arrayBuffer())))).toBe(big);
+  const plain = await get(2000, "identity");
+  expect(plain.headers.get("content-encoding")).toBeNull();
+  expect(await plain.text()).toBe(big);
+  const small = await get(1022, "gzip");
+  expect(small.headers.get("content-encoding")).toBeNull();
+  expect(await small.text()).toBe(JSON.stringify("x".repeat(1022)));
 });
