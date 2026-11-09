@@ -48,7 +48,7 @@ function flag(name: string): string | undefined {
 // A flag's value is not a positional. Every flag here takes one, so leaving a
 // name off this list silently folds its value into the next argument: `todo add
 // <repo> "<title>" --labels jobs` put "jobs" on the end of the title.
-const VALUED = ["--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day"];
+const VALUED = ["--media", "--spec", "--request", "--model", "--on", "--priority", "--labels", "--status", "--label", "--kind", "--title", "--after", "--reopened-since", "--before", "--undo", "--fate", "--day"];
 const FATES: Fate[] = ["duplicate", "met", "manual"];
 const positional = rest.filter((a, i) => !a.startsWith("--") && !VALUED.includes(rest[i - 1]));
 /** What a start is written down as in its run's `command.txt`: the argv as typed. */
@@ -181,8 +181,10 @@ async function todoCmd(): Promise<void> {
     source: flag("source"),
     status: stat,
     ...(afterArg === undefined ? {} : { after: afterArg.split(",").map((s) => s.trim()).filter(Boolean) }),
+    // `--media <file>` may repeat.
+    media: rest.flatMap((a, i) => (a === "--media" && rest[i + 1] !== undefined ? [rest[i + 1]] : [])),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   const registry = loadRegistry();
   const ref = parseId(repoKey);
   if (ref && sub !== "add") {
@@ -216,7 +218,7 @@ async function todoCmd(): Promise<void> {
     }
     case "show": {
       const i = verbs.show(repo, id);
-      if (json) { out({ ...verbs.brief(repo.key)(i), request: i.request, spec: i.spec, notes: i.notes }); return; }
+      if (json) { out({ ...verbs.brief(repo.key)(i), request: i.request, spec: i.spec, notes: i.notes, media: store.mediaOf(i) }); return; }
       console.log(`## ${issues.refOf(i)}. ${i.title}`);
       const ask = askOf(refIn(repo.key, i));
       console.log(`${issues.status(i)}   source ${store.sourceOf(i)}   priority ${i.fm.priority ?? "-"}   updated ${i.fm.updated ?? "-"}`);
@@ -225,6 +227,8 @@ async function todoCmd(): Promise<void> {
       if (i.request.trim()) console.log(`\n## Request\n\n${i.request}`);
       if (i.spec.trim()) console.log(`\n${i.spec}`);
       if (i.notes.length) console.log(`\n### Notes\n${i.notes.join("\n")}`);
+      const media = store.mediaOf(i);
+      if (media.length) console.log(`\n### Media\n${media.map((m) => `- ${m}`).join("\n")}`);
       return;
     }
     case "note": {
@@ -233,6 +237,13 @@ async function todoCmd(): Promise<void> {
       warn(n.follow);
       out(n.result);
       if (n.answered) intakeDetached(repo, n.result.id);
+      return;
+    }
+    case "attach": {
+      // `aleph issue attach <repo> <n> <file>...`: images or PDFs.
+      const a = verbs.attach(repo, id, args.slice(1));
+      warn(a.follow);
+      out(a.result);
       return;
     }
     case "decide": {

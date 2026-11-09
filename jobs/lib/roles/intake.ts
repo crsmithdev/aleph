@@ -9,7 +9,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { areasOf, isSorted, labels, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
+import { areasOf, isSorted, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, lock, type Repo, type Run } from "../records/ledger.ts";
 import { causeOf } from "../records/outcome.ts";
@@ -263,6 +263,12 @@ function commitOnMain(repo: Repo, commit: string): string | null {
 /** The rules for the parts' titles and `after` lists. */
 const PART_RULES = `Each "title" is ${issues.TITLE_RULE}. When the work is part of a larger group, it opens with the group in brackets ("[Status layout] Put the metrics on the left"), and the 60 characters include the brackets. Each part's Goal says only what that part does: the checks of each part are written from its own Goal. A part's "after" lists the earlier parts (the first is 1) that must land first, only when it changes a file that part changes or uses what that part adds: parts with an empty "after" run side by side, so do not chain parts in a line by habit.`;
 
+/** The media Chris attached, for the planner: each file to read before it decides. */
+function mediaSection(key: string, item: issues.Issue): string {
+  const files = mediaFiles(key, item);
+  return files.length ? `\n# Media\n\nThe issue has these files attached: screenshots, mockups or documents. Read each one with Read before you decide. They show what the issue means, and the steps you give must cover what they show.\n\n${files.map((f) => `- ${f}`).join("\n")}\n` : "";
+}
+
 export function prompt(repo: Repo, item: issues.Issue, doc = reader().list(repo.key)): string {
   const parts = doc ? partsOf(doc, item) : [];
   const split = planSet(item)
@@ -277,7 +283,7 @@ export function prompt(repo: Repo, item: issues.Issue, doc = reader().list(repo.
 Source: ${sourceOf(item)}. Kind: ${String(item.fm.kind ?? "task")}.
 
 ${item.request.trim() || "(no text)"}
-${item.spec.trim() ? `\n# Its spec now\n\n${item.spec.trim()}\n\nKeep what is right in it, and fix what the rules below find wrong.\n` : ""}${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${split}
+${mediaSection(repo.key, item)}${item.spec.trim() ? `\n# Its spec now\n\n${item.spec.trim()}\n\nKeep what is right in it, and fix what the rules below find wrong.\n` : ""}${item.notes.length ? `\nNotes:\n${item.notes.join("\n")}\n` : ""}${split}
 # Open issues of ${repo.key}
 
 ${openIssues(repo, item)}
@@ -471,7 +477,7 @@ async function intakeItem(repo: Repo, id: number, counts: Counts, skipped: strin
       return;
     }
     // `shown`: the tick's own line reports an intake, so the report has no line for the run.
-    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob"], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
+    const run = openRun({ role: "intake", who: "intake", model: INTAKE_MODEL(), seconds: 900, flags: ["--tools", "Read", "Grep", "Glob", ...(mediaOf(item).length ? ["--add-dir", mediaDir()] : [])], schema: INTAKE_SCHEMA, name: `intake-${name}`, command: `intake ${name}: ${item.title}`, shown: true, repo: repo.key, on: name });
     const noAnswer = (reason: string) => run.end(reason, { cause: "unanswered" });
     try {
       // The agent reads a fresh clone at `origin/<main>`; the prompt's commits and the done check read the fetched `origin/<main>`.

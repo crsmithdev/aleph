@@ -100,6 +100,7 @@ The Status page shows the wrong weekly usage.
 | `areas` | list | Labels |
 | `from` | `<repo>-<n>` | The parent: intake split this issue from it |
 | `after` | list of ids | The issues that must be done first |
+| `media` | list of names | The attached images and PDFs, in `<repo>/backlog/media/<repo>-<id>/` ([Media](issues.md#media)) |
 | `parked` | `"true"` | Stops all work on the issue |
 | `closed_as`, `closed_at`, `closed_why` | `done`, `dropped` | How it closed |
 | `plan` | `"true"` | Intake will split it |

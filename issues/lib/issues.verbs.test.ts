@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Refusal } from "../../lib/refusal.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { breakItem, doc, env, fx, parse, remoteItem, sec, seed, sh, tasks, useFixture } from "../fixture.ts";
+import * as store from "./store.ts";
 import { config } from "./store.ts";
 import { renderItem } from "./todo.ts";
+import { addPart } from "./parts.fixture.ts";
 import * as verbs from "./issues.ts";
 import { askOf, refIn, setAsk } from "../../jobs/lib/asks/ask.ts";
 
@@ -177,4 +179,24 @@ test("drop: clears the Ask on the issue", async () => {
   expect(askOf(refIn(proj().key, { id: 4 } as any))).not.toBeNull();
   verbs.close(proj(), 4, "drop", "not needed");
   expect(askOf(refIn(proj().key, { id: 4 } as any))).toBeNull();
+});
+
+test("media: add and attach store images in the store, and a run reads them back", async () => {
+  const png = join(fx.base, "shot.png"), pdf = join(fx.base, "spec sheet.pdf");
+  writeFileSync(png, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0, 255, 1]));
+  writeFileSync(pdf, "%PDF-1.4");
+  const a = await add("Fix the header", { request: "see the shot", media: [png] });
+  verbs.attach(proj(), a.item.id, [png, pdf]);
+  const item = verbs.show(proj(), a.item.id);
+  expect(store.mediaOf(item)).toEqual(["shot.png", "shot-2.png", "spec_sheet.pdf"]);
+  const files = store.mediaFiles("proj", item);
+  expect(readFileSync(files[0])).toEqual(readFileSync(png));
+  expect(readFileSync(files[2], "utf8")).toBe("%PDF-1.4");
+  // A run on a part of the issue reads the issue's media, then its own.
+  store.writeList(proj(), "a part", (d) => addPart(d, d.items.find((i) => i.id === a.item.id)!, { title: "Fix the logo", spec: "## Goal\nx" }));
+  const part = verbs.attach(proj(), `${a.item.id}.1`, [pdf]);
+  expect(part.result.media).toEqual(["spec_sheet.pdf"]);
+  expect(store.runMedia("proj", `${a.item.id}.1`)).toEqual([...files, join(store.mediaDir(), `proj-${a.item.id}.1`, "spec_sheet.pdf")]);
+  writeFileSync(join(fx.base, "clip.mp4"), "x");
+  expect((await code(() => verbs.attach(proj(), a.item.id, [join(fx.base, "clip.mp4")]))).code).toBe(1);
 });

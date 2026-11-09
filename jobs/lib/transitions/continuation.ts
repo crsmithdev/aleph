@@ -11,7 +11,7 @@
  */
 import { skillSection } from "../roles/role-skill.ts";
 import { existsSync, readFileSync } from "node:fs";
-import { reader } from "../../../issues/lib/store.ts";
+import { reader, runMedia } from "../../../issues/lib/store.ts";
 import { needsOf } from "../asks/ask.ts";
 import { git } from "../infra/git.ts";
 import { jobById, jobsNamed, notes, readFile, tailOf, type Job } from "../records/job.ts";
@@ -86,6 +86,9 @@ export function brief(id: string, folder: string, run: Run, repo: Repo): string 
     return mergeBrief(land ?? run, repo, run.repo && n !== undefined ? reader().item(run.repo, n)?.title : undefined);
   }
   const parts = [(repo.sandbox ? FACTORY(run, repo.main, repo.checks ?? []) : FIXED(run)), `## Spec\n\n${jobSpec(folder, run)}`];
+  const n = onOf(run);
+  const media = run.repo && n !== undefined ? runMedia(run.repo, n) : [];
+  if (media.length) parts.push(`## Media\n\nChris attached these files to the issue: screenshots, mockups or documents. Read each one with Read before you start, and make the change match what they show.\n\n${media.map((f) => `- ${f}`).join("\n")}`);
   const runs = jobById(run.job) ?? [];
   if (runs.length) for (const n of notes(runs)) parts.push(`## Note ${n.name}\n\n${n.text.trim()}`);
   const prev = runs[runs.findIndex((e) => e.id === id) - 1];

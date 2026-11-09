@@ -346,4 +346,27 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     })()`);
     expect(pads).toEqual(["18px", "18px", "18px", "18px", "18px"]);
   }, 30_000);
+  test("Issue: an attached image shows in Media, and a pasted screenshot attaches", async () => {
+    // A PNG drawn on a canvas, filed through the API as the new-issue form files it.
+    const filed = await page.ev<{ key: string; n: number }>(`(async () => {
+      const key = (await fetch("/api/issues").then((r) => r.json()).then((d) => (d.issues ?? d)[0].repo));
+      const c = Object.assign(document.createElement("canvas"), { width: 40, height: 30 });
+      c.getContext("2d").fillRect(0, 0, 20, 15);
+      const data = c.toDataURL("image/png").split(",")[1];
+      const r = await fetch("/api/issues", { method: "POST", headers: { "content-type": "application/json", "x-aleph-ui": "1" }, body: JSON.stringify({ repo: key, title: "Fix the header colour", body: "see the shot", media: [{ name: "shot.png", data }] }) }).then((r) => r.json());
+      return { key, n: r.added };
+    })()`);
+    await page.go(`#/issues/${filed.key}/${filed.n}`);
+    await page.until(`[...document.querySelectorAll(".media-grid img")].some((i) => i.complete && i.naturalWidth === 40)`);
+    await page.ev(`(async () => {
+      const blob = await fetch(document.querySelector(".media-grid img").src).then((r) => r.blob());
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "", { type: "image/png" }));
+      const form = document.querySelector('form[data-ui="issue-media"]');
+      form.querySelector("input[type=file]").dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      form.requestSubmit();
+    })()`);
+    await page.until(`document.querySelectorAll(".media-grid img").length === 2`);
+    expect(await page.ev<string[]>(`[...document.querySelectorAll(".media-grid img")].map((i) => i.alt)`)).toEqual(["shot.png", "pasted.png"]);
+  }, 60_000);
 });

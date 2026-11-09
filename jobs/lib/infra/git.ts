@@ -40,9 +40,9 @@ export function git(cwd: string, ...args: string[]): { ok: boolean; out: string 
   return gitWith({}, cwd, ...args);
 }
 
-export function gitWith(o: { env?: Record<string, string>; stdin?: string }, cwd: string, ...args: string[]): { ok: boolean; out: string } {
+export function gitWith(o: { env?: Record<string, string>; stdin?: string | Uint8Array }, cwd: string, ...args: string[]): { ok: boolean; out: string } {
   const p = spawnGit(["git", ...args], {
-    cwd, env: { ...baseEnv(), ...o.env }, stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin]), stdout: "pipe", stderr: "pipe",
+    cwd, env: { ...baseEnv(), ...o.env }, stdin: o.stdin === undefined ? "ignore" : new Blob([o.stdin as BlobPart]), stdout: "pipe", stderr: "pipe",
   });
   return { ok: p.exitCode === 0, out: (p.stdout.toString() + (p.exitCode === 0 ? "" : p.stderr.toString())).trimEnd() };
 }
@@ -93,7 +93,7 @@ export function show(cwd: string, rev: string, path: string): string | null {
 }
 
 /** `tree` with each path in `files` set to its content, or removed when it is null. */
-export function treeWithFiles(cwd: string, tree: string, files: Record<string, string | null>): string {
+export function treeWithFiles(cwd: string, tree: string, files: Record<string, string | Uint8Array | null>): string {
   const index = join(tmpdir(), `aleph-index-${process.pid}-${crypto.randomUUID()}`);
   const env = { GIT_INDEX_FILE: index };
   try {

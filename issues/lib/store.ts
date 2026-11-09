@@ -16,6 +16,8 @@ import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../job
 import { layout } from "../../jobs/lib/infra/layout.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
+import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { uiFetchTtl as fetchTtlSetting } from "../../jobs/lib/infra/settings.ts";
 
 export { labels };
@@ -27,6 +29,8 @@ const MAIN = "main";
 const ATTEMPTS = 5;
 
 export const storeDir = (): string => layout().store;
+/** Where runs read the items' media: `<store>-media`, outside the store's checkout. */
+export const mediaDir = (): string => `${storeDir()}-media`;
 const tasksDir = (key: string): string => `${key}/backlog/tasks`;
 const configPath = (key: string): string => `${key}/backlog/config.yml`;
 const floorPath = (key: string): string => `${key}/backlog/floor.json`;
@@ -146,9 +150,11 @@ export function readLists(repos: Place[]): (Doc | null)[] {
  * `change` again. `change` returns null to write nothing. A repo the store
  * has no list for starts blank only when `create` is set.
  */
-export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false): { value: T; commit: string; follow: string | null } | null {
+export function writeList<T>(repo: Place, message: string, change: (doc: Doc) => T | null, create = false, blobs: Record<string, Uint8Array> = {}): { value: T; commit: string; follow: string | null } | null {
   const dir = storeDir();
   for (let attempt = 1; ; attempt++) {
+    // `change` fills `blobs` again on each attempt: a retry can give the item another number.
+    for (const k of Object.keys(blobs)) delete blobs[k];
     fetchNow(dir);
     const base = git(dir, "rev-parse", `origin/${MAIN}`).out;
     const found = load(dir, base, repo.key);
@@ -157,7 +163,7 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     const before = new Map(doc.items.map((i) => [issues.refOf(i), renderItem(repo.key, i)]));
     const value = change(doc);
     if (value === null) return null;
-    const files: Record<string, string> = found === null ? { [configPath(repo.key)]: config(repo.key) } : {};
+    const files: Record<string, string | Uint8Array> = { ...(found === null ? { [configPath(repo.key)]: config(repo.key) } : {}), ...blobs };
     for (const item of doc.items) {
       const text = renderItem(repo.key, item);
       if (before.get(issues.refOf(item)) !== text) files[itemPath(repo.key, item)] = text;
@@ -174,6 +180,44 @@ export function writeList<T>(repo: Place, message: string, change: (doc: Doc) =>
     }
     if (attempt === ATTEMPTS) throw new Error(`push refused ${ATTEMPTS} times: ${push.out}`);
   }
+}
+
+// The media: images and PDFs attached to an item, stored beside the list and named in the item's `media` field.
+
+export const MEDIA_TYPES: Record<string, string> = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", pdf: "application/pdf" };
+/** The largest file an item takes. */
+export const MEDIA_BYTES = 20 * 1024 * 1024;
+
+/** The store path of an item's media file. */
+export const mediaPath = (key: string, item: Issue, name: string): string => `${key}/backlog/media/${key}-${issues.refOf(item)}/${name}`;
+/** The names of an item's media files. */
+export const mediaOf = (item: Issue): string[] => list(item.fm.media);
+
+/**
+ * The item's media files on disk, read from origin/main into `<store>-media`, so a run reads them whatever state
+ * the store's checkout is in. A file already there with the same size is not read again.
+ */
+export function mediaFiles(key: string, item: Issue): string[] {
+  const dir = storeDir();
+  return mediaOf(item).map((name) => {
+    const out = join(mediaDir(), `${key}-${issues.refOf(item)}`, name);
+    const spec = `origin/${MAIN}:${mediaPath(key, item, name)}`;
+    const size = Number(git(dir, "cat-file", "-s", spec).out);
+    if (existsSync(out) && statSync(out).size === size) return out;
+    const blob = spawnGit(["git", "cat-file", "blob", spec], { cwd: dir, stdout: "pipe", stderr: "pipe" });
+    if (blob.exitCode !== 0) throw new Error(`no media ${name} on the store's main: ${blob.stderr.toString().trim()}`);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, blob.stdout);
+    return out;
+  });
+}
+
+/** The media files a run on item `id` reads: its own, and for a part its issue's too. */
+export function runMedia(key: string, id: number | string, lists: Reader = reader()): string[] {
+  const item = lists.item(key, id);
+  if (!item) return [];
+  const parent = item.sub === undefined ? undefined : lists.item(key, item.id);
+  return [...(parent ? mediaFiles(key, parent) : []), ...mediaFiles(key, item)];
 }
 
 // The fields.

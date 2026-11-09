@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
-import { buildableIssues, isBuildable, isSorted, partsOf, readList, writeList } from "../../../issues/lib/store.ts";
+import { buildableIssues, isBuildable, isSorted, mediaDir, mediaPath, partsOf, readList, writeList } from "../../../issues/lib/store.ts";
 
 import { INTAKE_SCHEMA, addParts, intakeIssue, parseRoute, problems, prompt, realOracle, type Counts, type Spec } from "./intake.ts";
 import { allRuns, readRun, stamp, writeRun, type Repo } from "../records/ledger.ts";
@@ -406,3 +406,20 @@ test("intake does not close a red-main issue while its main is still red: it ask
   expect((await run()).counts).toEqual({ close: 1 });
   expect(issues.status(item(1))).toBe("done");
 });
+
+test("intake reads the media attached to the issue", async () => {
+  reset([{ title: "a", body: "VERDICT:goal" }]);
+  writeList(repo, "media", (doc) => {
+    const i = issues.find(doc, 1)!;
+    i.fm.media = ["shot.png"];
+    blobs[mediaPath(repo.key, i, "shot.png")] = new Uint8Array([1, 2, 3]);
+    return true;
+  }, false, blobs);
+  await run();
+  const file = join(mediaDir(), `${repo.key}-1`, "shot.png");
+  expect(readFileSync(file)).toEqual(Buffer.from([1, 2, 3]));
+  expect(readFileSync(join(base, "calls.prompt"), "utf8")).toContain(`# Media\n\nThe issue has these files attached`);
+  expect(readFileSync(join(base, "calls.prompt"), "utf8")).toContain(`- ${file}`);
+  expect(calls()[0]).toContain(`--add-dir ${mediaDir()}`);
+});
+const blobs: Record<string, Uint8Array> = {};

@@ -495,6 +495,7 @@ function renderForm(rows, o = {}) {
     `<label>Project <select name="repo" required>${projectOptions(o.keys ?? repos, o.project)}</select></label>` +
     `<label>Title <input name="title" required></label>` +
     `<label>Text <textarea name="body" rows="12">${esc(BODY_TEMPLATE)}</textarea></label>` +
+    `<label>Media ${mediaInput}</label>` +
     `<label>Labels <input name="labels" placeholder="comma separated"></label>` +
     `<label><input type="checkbox" name="spec"> The text is a spec: build it in the factory</label>` +
     `<label>After <input name="after" placeholder="repo-n, repo-n.k"></label>` +
@@ -531,6 +532,42 @@ const issueHead = (d, ref) => pageHead(d.title, { cls: "view-only",
   `<form id="issue-edit" data-ui="issue-edit" class="edit-only" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}"><span class="act-msg" role="status"></span> ${actButton("Cancel", { edit: "cancel" })} ${actButton("Save", {}, { primary: true, type: "submit" })}</form>` });
 
 /** The form that appends a note. */
+/** The file input of the media forms: paste or drop onto its form adds to it too. */
+const mediaInput = `<input type="file" name="media" multiple accept="image/png,image/jpeg,image/gif,image/webp,application/pdf">`;
+
+/** The issue's media: each image as a thumbnail that opens the file, each PDF as a link; then the attach form. */
+function renderMedia(d, ref) {
+  const url = (name) => `/api/issues/${encodeURIComponent(d.repo)}/${encodeURIComponent(ref)}/media/${encodeURIComponent(name)}`;
+  const items = (d.media ?? []).map((name) => /\.pdf$/i.test(name)
+    ? `<li><a class="media-doc" href="${url(name)}" target="_blank" rel="noopener">${esc(name)}</a></li>`
+    : `<li><a href="${url(name)}" target="_blank" rel="noopener"><img src="${url(name)}" alt="${esc(name)}" loading="lazy"></a></li>`).join("");
+  return (items ? `<ul class="media-grid">${items}</ul>` : empty("No media.")) +
+    `<form data-ui="issue-media" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
+    `<label>Attach images or PDFs ${mediaInput}</label>` +
+    `${actButton("Attach", {}, { type: "submit" })} <span class="act-msg" role="status"></span></form>`;
+}
+
+/** The files of a form's media input as `{ name, data }`, `data` in base64. */
+async function mediaOf(form) {
+  const files = [...(form.elements.media?.files ?? [])];
+  return Promise.all(files.map(async (f) => {
+    const bytes = new Uint8Array(await f.arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return { name: f.name || `pasted.${(f.type.split("/")[1] || "png")}`, data: btoa(bin) };
+  }));
+}
+
+/** Add `files` to the media input of `form`. */
+function addMedia(form, files) {
+  const input = form?.elements?.media;
+  if (!input || !files.length) return false;
+  const dt = new DataTransfer();
+  for (const f of [...input.files, ...files]) dt.items.add(f);
+  input.files = dt.files;
+  return true;
+}
+
 const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" data-repo="${esc(d.repo)}" data-ref="${esc(ref)}">` +
   `<label>Add a note <textarea name="text" rows="3" required></textarea></label>` +
   `${actButton("Add note", {}, { type: "submit" })} <span class="act-msg" role="status"></span></form>`;
@@ -662,7 +699,7 @@ export function renderIssue(d) {
   return `<div class="page dp-page issue-page">${crumb(inventory, place)}` + issueHead(d, ref) + pills + fields + blocked + (d.ask ? askRow(d.ask) : "") +
     issueKpis(d, segments) + renderTimeline(segments) +
     part("request", "Description", "request", d.request) + part("spec", "Spec", "spec", d.spec) +
-    `<div class="dp-detail">${detailPanel("Notes", esc(d.notes.length), notes)}${detailPanel("Commits", esc(d.commits.length), commits)}</div></div>`;
+    `<div class="dp-detail">${detailPanel("Media", esc((d.media ?? []).length), renderMedia(d, ref))}${detailPanel("Notes", esc(d.notes.length), notes)}${detailPanel("Commits", esc(d.commits.length), commits)}</div></div>`;
 }
 
 // Interaction: the shell renders with innerHTML and has no hooks, so the view
@@ -709,9 +746,37 @@ if (typeof document !== "undefined") {
     const labels = v("labels").split(",").map((s) => s.trim()).filter(Boolean);
     if (form.elements.spec.checked && !labels.includes("spec")) labels.push("spec");
     try {
-      const data = await postJson("/api/issues", { repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after") });
+      const data = await postJson("/api/issues", { repo: v("repo"), title: v("title"), body: form.elements.body.value, labels, after: v("after"), media: await mediaOf(form) });
       location.hash = `/issues/${encodeURIComponent(v("repo"))}/${data.added}`;
     } catch (err) { say(form.querySelector("button"), `Could not file it: ${err.message}`); }
+  });
+}
+
+if (typeof document !== "undefined") {
+  const MEDIA_FORMS = 'form[data-ui="issue-form"], form[data-ui="issue-media"]';
+  const accepted = (f) => /^image\/(png|jpeg|gif|webp)$|^application\/pdf$/.test(f.type);
+  // A pasted screenshot goes to the media input of the form it was pasted in.
+  document.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.files ?? [])].filter(accepted);
+    if (addMedia(e.target.closest?.(MEDIA_FORMS), files)) e.preventDefault();
+  });
+  document.addEventListener("dragover", (e) => { if (e.target.closest?.(MEDIA_FORMS)) e.preventDefault(); });
+  document.addEventListener("drop", (e) => {
+    const form = e.target.closest?.(MEDIA_FORMS);
+    if (!form) return;
+    e.preventDefault();
+    addMedia(form, [...(e.dataTransfer?.files ?? [])].filter(accepted));
+  });
+  document.addEventListener("submit", async (e) => {
+    const form = e.target.closest && e.target.closest('form[data-ui="issue-media"]');
+    if (!form) return;
+    e.preventDefault();
+    try {
+      const media = await mediaOf(form);
+      if (!media.length) return say(form.querySelector("button"), "Pick, paste or drop a file first.");
+      await postJson(`/api/issues/${encodeURIComponent(form.dataset.repo)}/${encodeURIComponent(form.dataset.ref)}/media`, { media });
+      location.reload();
+    } catch (err) { say(form.querySelector("button"), `Could not attach it: ${err.message}`); }
   });
 }
 

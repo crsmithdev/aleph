@@ -6,6 +6,8 @@
  * detached dispatch and intake that follow a write. A store `follow` warning
  * comes back in the result for the caller to print.
  */
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, extname } from "node:path";
 import { Refusal, refuse } from "../../lib/refusal.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
@@ -26,6 +28,8 @@ export interface Fields {
   source?: string;
   status?: string;
   after?: string[];
+  /** Local image or PDF files to attach. */
+  media?: string[];
 }
 
 export const brief = (key: string) => (i: issues.Issue) => ({ id: i.id, ...(i.sub === undefined ? {} : { ref: issues.refOf(i) }), title: i.title, status: issues.status(i), priority: i.fm.priority ?? null, updated: i.fm.updated ?? null, source: store.sourceOf(i), after: store.afterOf(i), areas: store.areasOf(i), plan: store.planSet(i) || undefined, tracker: store.isTracker(i) || undefined, since: i.fm.since ?? undefined, ask: askOf(refIn(key, i)), notes: i.notes.length });
@@ -58,9 +62,9 @@ function pick(repo: store.Place, doc: issues.Doc, id: number | string): issues.I
 }
 
 // Every verb but `add` needs a list on main; `add` starts one.
-function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) => T | null, create = false) {
+function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) => T | null, create = false, blobs?: Record<string, Uint8Array>) {
   try {
-    return store.writeList(repo, message, change, create);
+    return store.writeList(repo, message, change, create, blobs);
   } catch (e: any) {
     if (e instanceof Refusal) throw e;
     return refuse(e?.message ?? String(e));
@@ -71,6 +75,42 @@ function write<T>(repo: store.Place, message: string, change: (doc: issues.Doc) 
 export const isAnswer = (text: string, jobId: string | undefined): boolean => !jobId && !/^(intake|triage|job \S+ landed)\b/.test(text);
 
 export interface Added { repo: string; added: number; title: string; commit: string; maybeSame?: { id: number; title: string }[] }
+
+/** The media files to attach, read and checked before anything is written: an image or a PDF of at most MEDIA_BYTES. */
+function readMedia(paths: string[]): { name: string; data: Uint8Array }[] {
+  return paths.map((p) => {
+    const ext = extname(p).slice(1).toLowerCase();
+    if (!store.MEDIA_TYPES[ext]) refuse(`media must be ${Object.keys(store.MEDIA_TYPES).join(", ")}: ${p}`);
+    if (!existsSync(p)) refuse(`no such file: ${p}`);
+    if (statSync(p).size > store.MEDIA_BYTES) refuse(`${p} is over ${store.MEDIA_BYTES / 1024 / 1024} MB`);
+    return { name: basename(p).replace(/[^\w.-]/g, "_"), data: readFileSync(p) };
+  });
+}
+
+/** Put `files` on `item`: each in `blobs`, its name in the item's `media`. A name already there gets a number. */
+function attachTo(key: string, item: issues.Issue, files: { name: string; data: Uint8Array }[], blobs: Record<string, Uint8Array>): string[] {
+  const names = store.mediaOf(item);
+  for (const f of files) {
+    let name = f.name;
+    for (let n = 2; names.includes(name); n++) name = f.name.replace(/(\.[^.]+)$/, `-${n}$1`);
+    names.push(name);
+    blobs[store.mediaPath(key, item, name)] = f.data;
+  }
+  item.fm.media = names;
+  return names;
+}
+
+/** Attach image or PDF files to item `id`, as one commit. */
+export function attach(repo: store.Place, id: number | string, paths: string[]) {
+  if (!paths.length) refuse("name a file to attach");
+  const files = readMedia(paths);
+  const blobs: Record<string, Uint8Array> = {};
+  const w = write(repo, `todo: media on item ${id}`, (doc) => {
+    const i = pick(repo, doc, id);
+    return { id: i.id, media: attachTo(repo.key, i, files, blobs) };
+  }, false, blobs)!;
+  return { result: { repo: repo.key, id: w.value.id, media: w.value.media, commit: w.commit }, follow: w.follow };
+}
 
 /** A ref for `--after`: `<repo>-<n>` or `<repo>-<n>.<k>`. */
 function checkAfter(after: string[]): void {
@@ -89,6 +129,8 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
   const spec = fields.spec?.trim();
   if (fields.spec !== undefined && !spec) refuse("--spec - needs the spec on stdin");
   checkAfter(fields.after ?? []);
+  const files = readMedia(fields.media ?? []);
+  const blobs: Record<string, Uint8Array> = {};
   const t = await triage(store.reader().list(repo.key), title, fields.request ?? spec ?? "");
   const w = write(repo, "todo: add an item", (doc) => {
     const labels = fields.labels ?? t.labels;
@@ -97,8 +139,9 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
     const issue = issues.add(doc, title, { kind: fields.kind, priority: fields.priority, labels, request: fields.request, spec, source: process.env.CLAUDECODE && !implied ? "agent" : undefined });
     if (fields.status === "parked") issues.setStatus(issue, "parked");
     if (fields.after?.length) setAfter(repo, doc, issue, fields.after);
+    if (files.length) attachTo(repo.key, issue, files, blobs);
     return { issue };
-  }, true)!;
+  }, true, blobs)!;
   const { issue } = w.value;
   const result: Added = { repo: repo.key, added: issue.id, title: issue.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) };
   return { result, item: issue, follow: w.follow };

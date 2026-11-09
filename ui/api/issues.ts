@@ -16,7 +16,10 @@ import { Refusal } from "../../lib/refusal.ts";
 import * as issues from "../../issues/lib/issues.ts";
 // @ts-ignore plain JS, shared with the page
 import { proseDecision } from "../decision.js";
-import { afterOf, areasOf, parentOf, partsOf, readList, readLists } from "../../issues/lib/store.ts";
+import { afterOf, areasOf, MEDIA_TYPES, mediaFiles, mediaOf, parentOf, partsOf, readList, readLists } from "../../issues/lib/store.ts";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join } from "node:path";
 import * as todos from "../../issues/lib/todo.ts";
 import type { Routes } from "../server.ts";
 import { attend } from "../asks.ts";
@@ -169,7 +172,51 @@ function detail(params: Record<string, string>, url: URL): Response {
     ask = attend({ runs: [], issues: [c] }, []).items[0];
   }
 
-  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: `#/issues/${encodeURIComponent(repo.key)}/${parent.replace(`${repo.key}-`, "")}` } } : {}), notes: item.notes, media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+}
+
+/**
+ * Run `f` on the uploaded files, each `{ name, data }` with `data` in base64, written to a folder of their own that
+ * goes after `f`: the CLI copies them into the store.
+ */
+async function withUploads<T>(given: unknown, f: (paths: string[]) => Promise<T>): Promise<T> {
+  const files = Array.isArray(given) ? given : [];
+  const dir = mkdtempSync(join(tmpdir(), "aleph-upload-"));
+  try {
+    const paths = files.map((m: any, i: number) => {
+      const p = join(dir, String(i), basename(String(m?.name ?? "file")));
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, Buffer.from(String(m?.data ?? ""), "base64"));
+      return p;
+    });
+    return await f(paths);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** `aleph issue attach <repo> <id>` with the uploaded files. */
+async function attachMedia(req: Request, params: Record<string, string>): Promise<Response> {
+  if (!sameSite(req)) return Response.json({ error: "forbidden" }, { status: 403 });
+  const repo = loadRegistry()[params.repo];
+  const n = refOf(params.id);
+  if (!repo || n === null) return Response.json({ error: "no such issue" }, { status: 404 });
+  const b: any = await req.json().catch(() => ({}));
+  if (!Array.isArray(b?.media) || !b.media.length) return Response.json({ error: "send the files as media" }, { status: 400 });
+  const { stdout: out, stderr: err, code } = await withUploads(b.media, (paths) => runCli(["issue", "attach", repo.key, String(n), ...paths]));
+  if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
+  try { return Response.json(JSON.parse(out)); } catch { return Response.json({ output: out.trim() }); }
+}
+
+/** One media file of an issue, read from the store's main. */
+function media(params: Record<string, string>): Response {
+  const repo = loadRegistry()[params.repo];
+  const doc = repo && /^\d+(\.\d+)?$/.test(params.n) ? readList(repo) : null;
+  const item = doc ? todos.find(doc, params.n) : undefined;
+  const i = item ? mediaOf(item).indexOf(params.name) : -1;
+  if (!repo || !item || i < 0) return Response.json({ error: "no such file" }, { status: 404 });
+  const ext = params.name.split(".").pop()!.toLowerCase();
+  return new Response(Bun.file(mediaFiles(repo.key, item)[i]), { headers: { "content-type": MEDIA_TYPES[ext] ?? "application/octet-stream", "cache-control": "private, max-age=3600" } });
 }
 
 async function create(req: Request, url: URL): Promise<Response> {
@@ -191,7 +238,7 @@ async function create(req: Request, url: URL): Promise<Response> {
   if (kind) args.push("--kind", kind);
   const after = str(b.after)?.trim();
   if (after) args.push("--after", after);
-  const { stdout: out, stderr: err, code } = await runCli(args, { stdin: String(b.body ?? "") });
+  const { stdout: out, stderr: err, code } = await withUploads(b.media, (paths) => runCli([...args, ...paths.flatMap((p) => ["--media", p])], { stdin: String(b.body ?? "") }));
   if (code !== 0) return Response.json({ error: (err || out).trim() || `aleph exited ${code}` }, { status: 422 });
   let added: unknown = {};
   try { added = JSON.parse(out); } catch { added = { output: out.trim() }; }
@@ -338,6 +385,8 @@ export const routes: Routes = {
   "POST /api/issues/:repo/:id/unblock": (req, params) => unblock(req, params),
   "POST /api/issues/:repo/:id/edit": (req, params) => edit(req, params),
   "POST /api/issues/:repo/:id/note": (req, params) => addNote(req, params),
+  "POST /api/issues/:repo/:id/media": (req, params) => attachMedia(req, params),
+  "GET /api/issues/:repo/:n/media/:name": (_req, params) => media(params),
   "POST /api/issues/:repo/:id/drop": (req, params) => drop(req, params),
   "POST /api/issues/:repo/:id/decide": (req, params) => decide(req, params),
   "GET /api/issues": (_req, _p, url) => list(url),
