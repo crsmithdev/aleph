@@ -348,7 +348,7 @@ export async function lock(name: string, waitMs = 20_000): Promise<(() => void) 
         if (e.code !== "EEXIST" && e.code !== "ENOTEMPTY") throw e;
       }
       if (isStale(dir)) { reclaim(dir); await Bun.sleep(5); continue; }
-      if (Date.now() > deadline) return null;
+      if (Date.now() >= deadline) return null;
       await Bun.sleep(50);
     }
   } finally {

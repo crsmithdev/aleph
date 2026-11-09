@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -39,6 +39,17 @@ describe("lock", () => {
     expect(await lock("a", 0)).toBeNull();
     release();
     (await lock("a", 0))!();
+  });
+
+  test("a held lock gives up at once with no wait, even on a frozen clock", async () => {
+    const release = (await lock("frozen"))!;
+    setSystemTime(new Date());
+    try {
+      expect(await lock("frozen", 0)).toBeNull();
+    } finally {
+      setSystemTime();
+      release();
+    }
   });
 
   test("a dead owner's lock is taken over; a live owner's is not", async () => {
