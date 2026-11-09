@@ -39,13 +39,8 @@ function roles(a, m) {
   const names = Object.fromEntries(a.roles.map((r) => [r.key, r.name]));
   const cell = (v) => `<td class="num">${v == null ? "–" : count(v)}</td>`;
   const outs = a.outcomes ?? [];
-  // The outcome row for a config row: the one of its role and current model, when no other config row claims it. A reviewer records no model, so its row is the one of its role.
-  const claims = [];
-  const find = (role, model) => {
-    const o = outs.find((x) => x.role === role && (role === "reviewer" || shortModel(x.model) === shortModel(model)));
-    if (o) claims.push(o);
-    return o;
-  };
+  // The outcome row for a config row: the one of its role and current model. A reviewer records no model, so its row is the one of its role.
+  const find = (role, model) => outs.find((x) => x.role === role && (role === "reviewer" || shortModel(x.model) === shortModel(model)));
   const stats = (o) => {
     if (!o) return `${cell(null).repeat(num.length)}<td>–</td>`;
     const trend = cardTrend(o.rate, o.baseline, null, { kind: "points", lowerIsGood: false, format: share, basis: "the baseline", tip: `Baseline ${share(o.baseline)}` });
