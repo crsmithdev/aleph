@@ -1,7 +1,7 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -16,7 +16,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s, w)}</div>${renderHerald(s)}</div></div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -165,8 +165,6 @@ export function renderHerald(s) {
     `</div>`
   ).join("");
 
-  const tab = (k, label, n) => `<button type="button" role="tab" data-herald-tab="${k}" aria-selected="${heraldTab === k}">${label} <span class="count">${n}</span></button>`;
-  const issues = heraldIssues(s);
   const m = s.factory?.monitor;
   const monitorFindings = m?.findings?.length
     ? `<details class="more herald-findings" data-keep="herald:findings"><summary>Daily Monitor (${esc(m.day)})</summary><ol class="findings">${m.findings.map((f) => `<li>${findingHtml(f)}</li>`).join("")}</ol></details>`
@@ -178,8 +176,7 @@ export function renderHerald(s) {
   return `<section id="herald" class="card herald-card" aria-label="Herald">` +
     `<div class="sh"><h2 id="h-herald">Herald</h2><div class="aside">${badgeHtml}</div></div>` +
     sticky +
-    `<div class="tabs herald-tabs" role="tablist">${tab("events", "Events", history.length)}${tab("issues", "Issues", issues.n)}</div>` +
-    `<div class="herald-feed">${heraldTab === "issues" ? issues.html : feed}</div>` +
+    `<div class="herald-feed">${feed}</div>` +
     monitorFindings +
   `</section>`;
 }
@@ -189,38 +186,6 @@ const eventText = (ev) => {
   const head = `${ev.label || ev.tone}: `;
   return (ev.text.startsWith(head) ? ev.text.slice(head.length) : ev.text).replace(/(^|; )health: /g, "$1");
 };
-
-/** The Herald tab on show; it stays across refreshes. */
-let heraldTab = "events";
-
-/** The Issues tab: one column of three lists. Running (pinned), Queued, and Done today against all three, folded. */
-export function heraldIssues(s) {
-  // Today is the local day, as every time on the page is local.
-  const day = new Date(s.now).toDateString();
-  const row = (id, chip, title) => `<div class="hi-row">${id}${chip}<span class="t" title="${esc(title)}">${esc(title)}</span></div>`;
-  const running = [
-    ...(s.runningIssues ?? []).map((i) => row(repoIdLink(i.id, i.href), badge(i.stage), i.title)),
-    ...(s.running ?? []).map((j) => row(itemId(j), badge("running"), j.item?.title || j.name)),
-  ];
-  const queued = (s.queued ?? []).map((w) => row(repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo), badge(w.stage ?? "queued"), w.title));
-  const done = (s.done ?? []).filter((i) => i.finished && new Date(i.finished).toDateString() === day).map((i) => row(repoIdLink(i.id, i.href), badge("landed"), i.title));
-  const total = running.length + queued.length + done.length;
-  const sec = (title, n, rows, cls = "") => `<div class="hi-sec ${cls}"><div class="hi-head">${title} <span class="count">${n}</span></div>${rows.join("")}</div>`;
-  // Done is folded and quiet by default; a reader who opens it keeps it open.
-  const doneSec = `<details class="hi-sec hi-done" data-keep="herald:done"><summary class="hi-head">Done <span class="count">${done.length} / ${total}</span></summary>${done.join("")}</details>`;
-  return { n: total, html: total ? sec("Running", running.length, running, "pin") + sec("Queued", queued.length, queued) + doneSec : empty("No issue is in flight.") };
-}
-
-/** A click on a Herald tab shows that tab; the panel is drawn again from the last state. The listener sits on `.rail`, which each render replaces, so listeners do not pile up. */
-function wireHeraldTabs(root) {
-  root.querySelector?.(".rail")?.addEventListener?.("click", (e) => {
-    const b = e.target.closest?.("[data-herald-tab]");
-    if (!b || !lastState) return;
-    heraldTab = b.dataset.heraldTab;
-    const h = root.querySelector("#herald");
-    if (h) h.outerHTML = renderHerald(lastState);
-  });
-}
 
 function wireHeraldJump(root) {
   root.querySelector?.(".shead .say")?.addEventListener?.("click", (e) => {
@@ -240,7 +205,6 @@ export async function mountStatus(root, s, fetcher = fetch, q) {
   keepWindow(w);
   keepProject(projectNow());
   wireScope(root);
-  wireHeraldTabs(root);
   wireHeraldJump(root);
   wirePipeline(root, w);
   await loadSpeed(w, fetcher, true);
@@ -336,9 +300,9 @@ const holdLine = (ev) => (ev ? [ev.action, contentText(ev)].filter(Boolean).join
 /** The "3/4" link of a part to its parent; "" for a card that is no part. */
 const partLink = (p) => (p ? `<a class="part" href="${esc(p.href)}" title="Sub-issue ${p.n} of ${p.m} of ${esc(p.parent)}">${p.n}/${p.m}</a>` : "");
 
-/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration. `chips` is HTML. */
-function metaRow({ id, chips, part, at, since, now, end }) {
-  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span></div>`;
+/** The meta row, line 1 of every card: id, status chip, priority chip, "n/m", date, duration, the hold. `chips` is HTML. */
+function metaRow({ id, chips, part, at, since, now, end, hold }) {
+  return `<div class="ih">${id}${chips}${partLink(part)}<span class="num date">${esc(when(at) || "–")}</span><span class="num dur">${esc(span(since, end ?? now))}</span>${hold ? `<span class="blocked">${esc(hold)}</span>` : ""}</div>`;
 }
 
 /** The time from `since` to `to` as `dur` writes it; "–" when the work was never picked up. */
@@ -346,6 +310,70 @@ export function span(since, to) {
   const ms = Date.parse(to) - Date.parse(since);
   if (!since || !(ms >= 0)) return "–";
   return dur(ms / 1000);
+}
+
+/** The count of a section: `N of cap` where a cap applies. */
+const section = (id, title, n, body, cap) =>
+  sectionHead(title, { id, count: n === null ? null : `${n}${cap > 0 ? ` of ${cap}` : ""}` }) + body;
+
+const cards = (html, cls = "") => `<div class="cards${cls ? " " + cls : ""}">${html}</div>`;
+
+/** The title of a card: one line, an ellipsis after that. */
+const titleOf = (title, href) => (href ? `<a href="${esc(href)}" class="t" title="${esc(title)}">${esc(title)}</a>` : `<span class="t" title="${esc(title)}">${esc(title)}</span>`);
+
+/** An item card of a lane: the 2-line face (the meta row, then the title on 1 line); `below` is HTML after the face. */
+function laneCard(cls, row, title, href, below = "") {
+  return `<article class="job-card small lane-card ${cls}">${row}${titleOf(title, href)}${below}</article>`;
+}
+
+/** A lane: header with the count, its cards or one quiet line. */
+const lane = (id, title, n, rows, none, cap = 0) =>
+  `<section id="lane-${id}" class="lane" aria-labelledby="h-${id}">${section(id, title, n, rows ? cards(rows, "one") : empty(none), cap)}</section>`;
+
+/** Done: the done parts and issues /api/state sends, newest first, each its own card. */
+function doneLane(s, win) {
+  const rows = (s.done ?? []).map((i) =>
+    laneCard("done-row", metaRow({ id: repoIdLink(i.id, i.href), chips: badge("done") + priorityBadge(i.priority), part: i.part, at: i.finished, since: i.since, now: s.now, end: i.finished }), i.title, i.href)).join("");
+  const from = Date.parse(s.now) - WINDOW_DAYS[win] * 86_400_000;
+  const total = (s.doneStamps ?? []).filter((d) => d.at >= from).length;
+  return lane("done", "Done", (s.done ?? []).length, rows, "Nothing is done yet.", total);
+}
+
+function queuedLane(s) {
+  const rows = (s.queued ?? []).map((w) => {
+    const dead = (w.waits ?? []).filter((b) => b.dead);
+    const id = repoIdLink(`${w.repo}-${w.id}`, `#/issues/${encodeURIComponent(w.repo)}/${encodeURIComponent(w.id)}`, w.repo);
+    const hold = holdLine(w.ev);
+    return laneCard("queued-row", metaRow({ id, chips: (hold ? "" : badge(w.stage ?? "queued")) + priorityBadge(w.priority), part: w.part, at: w.at, since: w.since, now: s.now, hold }), w.title, "",
+      dead.length ? `<div class="blockers">${blockersHtml(dead, w.repo, w.id)}</div>` : "");
+  }).join("");
+  return lane("queued", "Queued", (s.queued ?? []).length, rows, "Nothing is queued.");
+}
+
+/** A parent that waits to close: all its parts are done. */
+function runningIssue(i, now) {
+  return laneCard("run-row issue-run", metaRow({ id: repoIdLink(i.id, i.href), chips: badge(i.stage) + priorityBadge(i.priority), at: i.at, since: i.since, now }), i.title, i.href);
+}
+
+const TIERS = { haiku: "low", sonnet: "medium", opus: "high" };
+
+/** The Running lane's rows: intake, land and agent runs. The count is the live agent runs, as the cap counts them. */
+function runningLane(s) {
+  const issues = (s.runningIssues ?? []).map((i) => runningIssue(i, s.now)).join("");
+  const rows = issues + (s.running ?? []).map((j) => {
+    const run = j.run ?? { kind: "build", started: j.started };
+    const worker = run.kind === "agent" || run.kind === "build";
+    const kind = worker ? "worker" : run.kind === "plan" ? "planner" : run.kind;
+    const tier = TIERS[j.tier ?? shortModel(j.model)];
+    const label = worker ? ["worker", tier, j.model && shortModel(j.model)].filter(Boolean).join(" · ") : kind;
+    return laneCard(`run-row kind-${kind}`, metaRow({ id: itemId(j), chips: `${tag(label, "run", j.phase || kind)}` + priorityBadge(j.item?.priority), part: j.part, at: run.started, since: j.started, now: s.now }), j.item?.title || j.name, jobHref(j));
+  }).join("");
+  return lane("running", "Running", s.factory.liveRuns ?? (s.runningIssues ?? []).length + (s.running ?? []).length, rows, "Nothing is running.", s.factory.liveCap ?? 0);
+}
+
+/** The three lanes: Running, Queued, Done. */
+export function renderLanes(s, win = "week") {
+  return `<div class="lanes">${runningLane(s)}${queuedLane(s)}${doneLane(s, win)}</div>`;
 }
 
 

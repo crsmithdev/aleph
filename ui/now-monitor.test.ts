@@ -67,15 +67,14 @@ test("a report with no reading says why; one with no findings says nothing looks
   expect(render(null)).not.toContain('id="monitor"');
 });
 
-test("the Herald shows its alerts under an N active badge in the worst alert's tone, then the Events and Issues tabs", () => {
+test("the Herald shows its alerts under an N active badge in the worst alert's tone, then the events", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
   const h = view.renderHerald({ ...calm, asks: [ask], stuck: [], running: [], runningIssues: [], done: [], queued: [] });
   expect(h).toContain('<h2 id="h-herald">Herald</h2>');
   expect(h).toContain('<span class="badge need">1 active</span>');
   expect(h).toContain('id="awaiting"');
   expect(h).not.toContain("Sticky Alerts");
-  expect(h).toMatch(/data-herald-tab="events" aria-selected="true">Events <span class="count">\d+<\/span>/);
-  expect(h).toContain('data-herald-tab="issues" aria-selected="false">Issues <span class="count">0</span>');
+  expect(h).not.toContain("data-herald-tab");
   expect(h).toContain('class="event-row');
   const red = view.renderHerald({ ...calm, asks: [ask], factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }] } });
   expect(red).toContain('<span class="badge stuck">2 active</span>');
@@ -110,23 +109,12 @@ test("an error is not pinned: the newest event is marked live and carries the er
   expect(h).not.toContain('<span class="reason">koans main is red</span>');
 });
 
-test("the Issues tab is one column of Running, Queued and a folded Done, with Done against the total", () => {
-  const now = "2026-11-01T12:00:00Z";
-  const s = { ...calm, now, runningIssues: [{ id: "aleph-1", href: "#/issues/aleph/1", stage: "build", title: "One" }], running: [], queued: [{ repo: "aleph", id: 2, title: "Two" }], done: [{ id: "aleph-3", href: "#/issues/aleph/3", title: "Three", finished: now }] };
-  const { n, html } = view.heraldIssues(s);
-  expect(n).toBe(3);
-  expect([...html.matchAll(/class="hi-head">([^<]+)<span class="count">([^<]+)</g)].map((m) => `${m[1].trim()} ${m[2]}`)).toEqual(["Running 1", "Queued 1", "Done 1 / 3"]);
-  // Done is folded by default, and keeps the reader's open state.
-  expect(html).toContain('<details class="hi-sec hi-done" data-keep="herald:done"><summary class="hi-head">Done');
-});
-
 test("a server history entry for the attention status, without the final period, gives one event row; a different status gives two", () => {
   const ask = { id: "a1", kind: "input", at: "2026-11-01T00:00:00Z", text: "Please review" };
   const base = { ...calm, asks: [ask], stuck: [], running: [], runningIssues: [], done: [], queued: [] };
   const now = "2026-10-27T12:00:00Z", at = "2026-10-27T11:58:00Z";
   const same = view.renderHerald({ ...base, now, herald: { history: [{ at, tone: "warning", label: "Ask", text: "Your attention is needed" }] } });
   expect(same.match(/class="event-row/g)?.length).toBe(1);
-  expect(same).toContain('Events <span class="count">1</span>');
   const other = view.renderHerald({ ...base, now, herald: { history: [{ at, tone: "alert", label: "Alert", text: "Alert: health: aleph main is red" }] } });
   expect(other.match(/class="event-row/g)?.length).toBe(2);
 });

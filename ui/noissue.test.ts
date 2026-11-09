@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 // @ts-ignore plain JS, shared with the page
 import { renderIssues } from "./views/issues.js";
 // @ts-ignore plain JS, shared with the page
-import { heraldIssues } from "./views/now.js";
+import { renderLanes } from "./views/now.js";
 
 /** What a reader sees: no style or script blocks, no tags, no attribute values. */
 const visible = (html: string) =>
@@ -11,10 +11,10 @@ const noIssue = (html: string) => expect(visible(html)).not.toMatch(/goal/i);
 // Attributes the reader meets too: placeholders, titles and aria labels.
 const attrs = (html: string) => [...html.matchAll(/\b(?:title|placeholder|aria-label|data-label)="([^"]*)"/g)].map((m) => m[1]).join(" ");
 
-// The Issue page, the Issues page and the Status Herald use the work model's names, so they say issue (see state.test.ts and issues.test.ts); the pages below keep the old rule.
+// The Issue page, the Issues page and the Status lanes use the work model's names, so they say issue (see state.test.ts and issues.test.ts); the pages below keep the old rule.
 describe("the UI never says goal", () => {
   const pages: [string, string][] = [
-    ["now issues", heraldIssues({ now: "2026-11-08T12:00:00Z", running: [], runningIssues: [], queued: [{ repo: "aleph", id: 3, title: "x", kind: "ready" }], done: [] }).html],
+    ["now issues", renderLanes({ running: [], runningIssues: [], queued: [{ repo: "aleph", id: 3, title: "x", kind: "ready" }], done: [], doneStamps: [], factory: { health: [] } })],
   ];
   for (const [name, html] of pages) test(name, () => { noIssue(html); noIssue(attrs(html)); });
 

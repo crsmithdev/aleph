@@ -185,6 +185,10 @@ code, .mono { font-family: var(--mono); font-size: var(--fs-xs); }
 .mark { display: flex; align-items: center; gap: var(--sp-8); text-decoration: none; font: 700 var(--fs-2xl)/1 var(--brand); letter-spacing: -0.01em; margin-right: var(--sp-4); }
 .mark svg { width: 22px; height: 22px; flex: none; }
 
+/* ---------- Now: lanes ---------- */
+.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-20); align-items: start; }
+.lane { min-width: 0; }
+.lane-card .ih { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4) var(--sp-8); }
 /* ---------- Now: blockers and needs ---------- */
 .blockers { flex-basis: 100%; display: grid; gap: var(--sp-4); }
 .blocker { overflow-wrap: anywhere; }
@@ -287,6 +291,7 @@ section { margin: 0 0 var(--sp-28); }
 /* empty state, after old aleph's EmptyState: one sentence, one hint */
 .empty { padding: var(--sp-4) 0 0; }
 .empty p { margin: 0; }
+.lane .empty p { color: var(--muted); font-size: var(--fs-sm); }
 .empty .hint { color: var(--muted); font-size: var(--fs-sm); margin-top: var(--sp-2); }
 
 /* ---------- needs you ---------- */
@@ -697,6 +702,9 @@ pre.stat b { color: var(--need); }
 /* Status: the main column, and the Herald as a rail at the right that stays in view, the viewport tall. */
 .rail { display: grid; grid-template-columns: minmax(0, 1fr) clamp(480px, 38%, 600px); gap: var(--gap); align-items: start; }
 .rail-main { container: rail-main / inline-size; display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+/* Under 760px three lanes cut their cards' chips, so the lanes take 2 columns; under 480px, 1. */
+@container rail-main (max-width: 760px) { .rail-main .lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container rail-main (max-width: 480px) { .rail-main .lanes { grid-template-columns: minmax(0, 1fr); } }
 .rail > .herald-card { position: sticky; top: var(--sp-16); height: calc(100vh - 2 * var(--sp-16)); }
 @media (max-width: 1100px) { .rail { grid-template-columns: minmax(0, 1fr); } .rail > .herald-card { position: static; height: auto; } .rail .herald-feed { max-height: 380px; } }
 /* Pipeline: one box per stage in order, 2 rows of 4 when the card is narrow, then the slowest work. */
@@ -716,7 +724,7 @@ pre.stat b { color: var(--need); }
 .pu { display: none; font-size: var(--fs-2xs); font-weight: var(--fw-text); color: var(--muted); }
 @container (min-width: 96px) { .pu { display: inline; } }
 .pt { font-size: var(--fs-2xs); color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.worst-head, .hi-head { display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding-bottom: var(--sp-4); }
+.worst-head { display: flex; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding-bottom: var(--sp-4); }
 .worst-head span + span { text-transform: none; letter-spacing: 0; font-weight: var(--fw-text); }
 /* Reliability and Performance side by side; one column under 760px. */
 .worsts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap-in); }
@@ -725,14 +733,7 @@ pre.stat b { color: var(--need); }
 .worst .empty p { color: var(--muted); font-size: var(--fs-sm); }
 .worst-row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; gap: var(--sp-10); align-items: baseline; padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); }
 .worst-row:last-child { border-bottom: 0; }
-.worst-row .t, .hi-row .t { color: var(--ink); font-weight: var(--fw-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Done in the Herald's Issues tab is folded and quiet. */
-.hi-done > summary { cursor: pointer; list-style: none; justify-content: flex-start; gap: var(--sp-4); }
-.hi-done > summary .count { margin-left: auto; }
-.hi-done > summary::-webkit-details-marker { display: none; }
-.hi-done > summary::before { content: "▸ "; }
-.hi-done[open] > summary::before { content: "▾ "; }
-.hi-done .hi-row { opacity: 0.7; }
+.worst-row .t { color: var(--ink); font-weight: var(--fw-mid); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 input:where(:not([type="checkbox"], [type="radio"])), select, textarea { font: var(--fs-sm) var(--sans); color: var(--ink); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--r-ctl); padding: var(--sp-4) var(--sp-8); }
 input[type="search"] { background: var(--sunk); }
 form.stack { display: grid; gap: var(--sp-8); max-width: 640px; margin-top: var(--sp-8); }
@@ -778,16 +779,6 @@ table.tbl .tr.warn, table.tbl td.num.warn { color: var(--need); }
 .herald-card.pulsing { border-color: var(--focus); box-shadow: 0 0 0 3px var(--focus); }
 .herald-sticky { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-10); margin-bottom: var(--sp-8); display: flex; flex-direction: column; gap: var(--sp-8); }
 .herald-sticky-head { display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-xs); font-weight: var(--fw-strong); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-.herald-tabs { display: flex; gap: var(--sp-2); border-bottom: 1px solid var(--rule); }
-.herald-tabs button { font: var(--fw-strong) var(--fs-xs) var(--sans); color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: var(--sp-4) var(--sp-10) var(--sp-6); cursor: pointer; }
-.herald-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--focus); }
-.herald-tabs .count { font-weight: var(--fw-text); color: var(--muted); }
-.hi-sec { display: flex; flex-direction: column; }
-.hi-sec.pin { position: sticky; top: 0; background: var(--surface); z-index: var(--z-sticky); border-bottom: 1px solid var(--rule); padding-bottom: var(--sp-4); margin-bottom: var(--sp-4); }
-.hi-head { padding-top: var(--sp-6); font-size: var(--fs-2xs); }
-.hi-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "id st ." "t t t"; gap: var(--sp-2) var(--sp-6); align-items: baseline; padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-xs); }
-.hi-row:last-child { border-bottom: 0; }
-.hi-row > :first-child { grid-area: id; } .hi-row > .badge { grid-area: st; justify-self: start; } .hi-row .t { grid-area: t; }
 .herald-feed { overflow-y: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-4); padding-right: var(--sp-4); }
 .event-row { display: grid; grid-template-columns: 55px 70px 1fr; align-items: baseline; gap: var(--sp-8); padding: var(--sp-6) 0; border-bottom: 1px solid var(--rule-2); font-size: var(--fs-xs); }
 .event-row:last-child { border-bottom: none; }
@@ -974,18 +965,24 @@ ul.logs .step { margin: var(--sp-6) 0; }
 
 /* ---------- Status cards: the 3-line face ---------- */
 /* Line 1 is the meta row; lines 2 and 3 are the title. The "why it waits" text gives up space first: it truncates, its tooltip holds the whole text. The date and the duration never shrink. */
-.issue-row { container-type: inline-size; }
+.lane-card, .issue-row { container-type: inline-size; }
 .job-card.small .ih { display: flex; flex-wrap: nowrap; align-items: center; gap: var(--sp-6); min-width: 0; overflow: hidden; }
 .job-card.small .ih > .idl, .job-card.small .ih > .id { flex: none; white-space: nowrap; }
 .job-card.small .ih > .badge { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .kind-tag { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-card.small .ih > .part { flex: none; font: var(--fw-strong) var(--fs-xs) var(--mono); white-space: nowrap; }
 .job-card.small .ih > .num { flex: none; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
-.issue-row > .t {
+.lane-card > .t, .issue-row > .t {
   display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
   margin: var(--sp-4) 0 0; font-family: var(--sans); font-size: 1em; font-weight: var(--fw-strong); line-height: 1.35; min-height: 1.35em; text-decoration: none; color: inherit; overflow-wrap: anywhere;
 }
 /* The meta row has one fixed height whatever it holds; the container query below does not change it. */
+.lane-card > .ih { box-sizing: border-box; height: 22px; min-height: 22px; max-height: 22px; flex-wrap: nowrap; align-items: center; overflow: hidden; white-space: nowrap; }
+.lane-card > .ih > * { line-height: 1; align-self: center; }
+.cards > .job-card.small.lane-card { border-left: 4px solid var(--rule); }
+.cards > .job-card.small.lane-card.kind-land { border-left-color: var(--done); }
+.cards > .job-card.small.lane-card.kind-worker { border-left-color: var(--run); }
+.lane-card .blockers { margin-top: var(--sp-6); font-size: var(--fs-sm); }
 .job-card.small .ih > .blocked { flex: none; margin-left: auto; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
 @container (max-width: 420px) {
   .job-card.small .ih { gap: var(--sp-4); }
