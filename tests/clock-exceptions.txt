@@ -11,5 +11,3 @@ jobs/lib/roles/unit.tz.test.ts
 tests/live/jobs.test.ts
 tests/live/langfuse.test.ts
 tests/wait.ts
-ui/browser.test.ts
-ui/test-browser.ts

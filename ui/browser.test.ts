@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { chromeUsable, startRig, type Page, type Rig } from "./test-browser.ts";
 
@@ -44,21 +44,21 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("a view's handlers do not outlive it", async () => {
     // go() can return while #view still shows the page before, so wait for the new view's own markup.
     await page.go("#/factory/jobs");
-    await page.until('document.querySelector("#view #perf") && typeof document.querySelector("#view").onclick === "function"');
+    await page.when('document.querySelector("#view #perf") && typeof document.querySelector("#view").onclick === "function"');
     expect(await page.ev('typeof document.querySelector("#view").oninput')).toBe("function");
     await page.go("#/issues");
-    await page.until('document.querySelector("#view #inv-filters")');
+    await page.when('document.querySelector("#view #inv-filters")');
     expect(await page.ev('[document.querySelector("#view").onclick, document.querySelector("#view").onchange]')).toEqual([null, null]);
     expect(await page.ev('document.querySelector("#view").oninput')).toBeNull();
     await click('#inv-filters .seg button[data-value="done"]');
-    await page.until('location.hash === "#/issues?status=done"');
+    await page.when('location.hash === "#/issues?status=done"');
   }, 30_000);
 
   test("a badly encoded address shows the view's own answer, not the page before it, and throws nothing", async () => {
     await page.go("#/issues");
     const before = page.errors.length;
     await page.ev('void (location.hash = "#/jobs/%zz")');
-    await page.until('!document.querySelector("#view .contents") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
+    await page.when('!document.querySelector("#view .contents") && !/^\\s*Loading/.test(document.querySelector("#view").textContent)');
     expect(page.errors.slice(before)).toEqual([]);
   }, 30_000);
 
@@ -76,28 +76,28 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     const titles = () => page.ev<string>('[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|")');
     const first = await titles();
     await click("#issues-table th:first-child button[data-sort]");
-    await page.until(`[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|") !== ${JSON.stringify(first)}`);
+    await page.when(`[...document.querySelectorAll("#issues-table tbody tr")].map((r) => r.textContent).join("|") !== ${JSON.stringify(first)}`);
     await page.go("#/issues");
     const search = 'document.querySelector("#view input[type=search]")';
     await page.ev(`(() => { const i = ${search}; i.value = "zzzz-no-such-issue"; i.dispatchEvent(new Event("input", { bubbles: true })); })()`);
-    await page.until('document.querySelectorAll("#issues-table tbody tr").length < ' + all);
+    await page.when('document.querySelectorAll("#issues-table tbody tr").length < ' + all);
   }, 30_000);
 
   test("Memory: a row opens in the inspector", async () => {
     await page.go("#/memory");
-    await page.until('document.querySelectorAll("#mem-table tr.nrow").length > 0');
+    await page.when('document.querySelectorAll("#mem-table tr.nrow").length > 0');
     const all = await page.ev<number>('document.querySelectorAll("#mem-table tr.nrow").length');
     await page.ev('document.querySelector("#mem-table tr.nrow").click()');
-    await page.until('document.querySelector("#mem-table tr.nrow[aria-selected=true]")');
+    await page.when('document.querySelector("#mem-table tr.nrow[aria-selected=true]")');
     expect(all).toBeGreaterThan(0);
   }, 30_000);
 
   test("Automation: a log row's clamp button opens and closes the text from the keyboard", async () => {
-    const own = await startRig((env) => { mkdirSync(env.ALEPH_FACTORY_DIR, { recursive: true }); writeFileSync(join(env.ALEPH_FACTORY_DIR, "tick.log"), `${new Date().toISOString()} director: aleph-1: why: decided: ${"word ".repeat(60)}\n`); });
+    const own = await startRig((env) => { mkdirSync(env.ALEPH_FACTORY_DIR, { recursive: true }); writeFileSync(join(env.ALEPH_FACTORY_DIR, "tick.log"), `${new Date(statSync(env.ALEPH_FACTORY_DIR).mtimeMs).toISOString()} director: aleph-1: why: decided: ${"word ".repeat(60)}\n`); });
     try {
       const pg = await own.open("#/automation");
       const btn = "#gates-log .clamp-btn";
-      await pg.until(`document.querySelector("${btn}")`);
+      await pg.when(`document.querySelector("${btn}")`);
       await pg.ev('document.querySelector("#gates-log").scrollIntoView()');
       for (let i = 0; i < 80 && !(await pg.ev<boolean>(`document.activeElement?.matches("${btn}")`)); i++) await pg.key("Tab");
       const state = () => pg.ev<[string, boolean]>(`[document.activeElement.getAttribute("aria-expanded"), document.activeElement.previousElementSibling.classList.contains("clamp")]`);
@@ -111,12 +111,12 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("the sidebar collapses, keeps its links, and remembers it over a reload", async () => {
     await click("#collapse");
-    await page.until('document.querySelector(".shell.collapsed")');
+    await page.when('document.querySelector(".shell.collapsed")');
     expect(await page.ev('document.querySelector("#nav a").getBoundingClientRect().width')).toBeLessThan(60);
     await page.reload();
     expect(await page.ev('!!document.querySelector(".shell.collapsed")')).toBe(true);
     await click("#collapse");
-    await page.until('!document.querySelector(".shell.collapsed")');
+    await page.when('!document.querySelector(".shell.collapsed")');
   }, 30_000);
 
   test("an open fold and a collapsed sidebar are both still set after a page reload", async () => {
@@ -126,21 +126,21 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     expect(await page.ev('!!document.querySelector(".shell.collapsed")')).toBe(true);
     await page.ev("localStorage.clear()");
     await click("#collapse");
-    await page.until('!document.querySelector(".shell.collapsed")');
+    await page.when('!document.querySelector(".shell.collapsed")');
     await page.go("#/");
-    await page.until('document.querySelector("#view details[data-keep]")');
+    await page.when('document.querySelector("#view details[data-keep]")');
     const fold = '[...document.querySelectorAll("#view details[data-keep]")][0]';
     await page.ev(`${fold}.open = true`);
     // The fold's state must reach storage before the reload, or the reload races the write.
-    await page.until(`localStorage.getItem("aleph." + ${fold}.dataset.keep) === "true"`);
+    await page.when(`localStorage.getItem("aleph." + ${fold}.dataset.keep) === "true"`);
     await click("#collapse");
-    await page.until('document.querySelector(".shell.collapsed")');
+    await page.when('document.querySelector(".shell.collapsed")');
     await page.reload();
-    await page.until(`${fold}`);
+    await page.when(`${fold}`);
     expect(await page.ev(`[!!document.querySelector(".shell.collapsed"), ${fold}.open]`)).toEqual([true, true]);
     await page.ev(`${fold}.open = false`);
     await click("#collapse");
-    await page.until('!document.querySelector(".shell.collapsed")');
+    await page.when('!document.querySelector(".shell.collapsed")');
   }, 30_000);
 
   test("at phone width the nav wraps, the page does not scroll sideways, and group headers hide", async () => {
@@ -156,7 +156,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(390);
     for (const route of ["#/", "#/issues", "#/jobs", "#/agents"]) {
       await page.go(route);
-      await page.until('document.querySelector("#view .tile b, #view .empty, #view h2")');
+      await page.when('document.querySelector("#view .tile b, #view .empty, #view h2")');
       const r = await page.ev<any>(`(() => ({
         tall: [...document.querySelectorAll(".tile b")].filter((b) => b.getBoundingClientRect().height >= 1.5 * parseFloat(getComputedStyle(b).fontSize)).map((b) => b.textContent),
         seg: [...document.querySelectorAll(".seg")].filter((s) => new Set([...s.querySelectorAll("button")].map((b) => b.offsetTop)).size > 1 && !(s.scrollWidth > s.clientWidth && /auto|scroll/.test(getComputedStyle(s).overflowX))).length,
@@ -167,36 +167,52 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.width(1200);
   }, 60_000);
 
-  // flaky: tests/flaky.md#browser-timed-refresh
-  test.skip("a timed refresh re-renders, except over an armed button", async () => {
-    // Refresh every 200 ms: the shell reads the global setInterval when the route starts.
-    // Each fetch waits 300 ms, so a refresh is in flight when the button is armed: its answer must not render over it.
-    await page.ev("(() => { const real = window.setInterval; window.setInterval = (f, ms) => real(f, Math.min(ms, 200)); const rf = window.fetch; window.fetch = (...a) => new Promise((r) => setTimeout(r, 300)).then(() => rf(...a)).finally(() => { window.fetched = (window.fetched ?? 0) + 1; }); })()");
+  test("a timed refresh re-renders, except over an armed button", async () => {
+    // The shell reads the global setInterval when the route starts: keep the route's refresh as window.tick, and run it here.
+    // A fetch of /api/state waits for window.gate, and counts in window.fetched after the load that reads it ends.
+    await page.ev(`(() => {
+      window.setInterval = (f) => { window.tick = f; return 0; };
+      const rf = window.fetch;
+      window.fetch = (u, o) => !String(u).startsWith("/api/state") ? rf(u, o) : (window.gate ?? Promise.resolve()).then(() => rf(u, o)).then((r) => {
+        const j = r.json.bind(r);
+        const count = () => { window.fetched = (window.fetched ?? 0) + 1; };
+        r.json = () => j().then((d) => { setTimeout(count); return d; });
+        return r;
+      });
+    })()`);
     await page.go("#/issues");
     await page.go("#/");
     const mark = 'document.querySelector("#view > *").dataset.mark = "1"';
     const buttons = `document.querySelector('#view button.act[data-act="drop"], #view :not(.choice) > button.act[data-act="land"]')`;
-    await page.until(buttons);
+    const refresh = async () => {
+      const n = await page.ev("window.fetched ?? 0");
+      await page.ev("window.tick()");
+      await page.when(`(window.fetched ?? 0) > ${n}`);
+    };
+    await page.when(buttons);
     await page.ev(mark);
-    await page.until('!document.querySelector("#view > *").dataset.mark'); // A refresh ran.
+    await refresh();
+    expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBeUndefined(); // The refresh rendered.
     // What the reader opened comes back after a refresh.
-    await page.until('document.querySelector("#view details[data-keep]")');
     await page.ev('document.querySelector("#view details[data-keep]").open = true');
     await page.ev(mark);
-    await page.until('!document.querySelector("#view > *").dataset.mark');
-    expect(await page.ev('document.querySelector("#view details[data-keep]").open')).toBe(true);
+    await refresh();
+    expect(await page.ev('[document.querySelector("#view details[data-keep]").open, !!document.querySelector("#view > *").dataset.mark]')).toEqual([true, false]);
+    // A refresh is in flight when the button is armed: its answer must not render over it.
+    await page.ev("void (window.gate = new Promise((ok) => { window.release = ok; }))");
+    const n = await page.ev("window.fetched ?? 0");
+    await page.ev("window.tick()");
     await page.ev(`${buttons}.click()`);
     await page.ev(mark);
-    // Two refreshes answered while the button is armed: neither rendered over it.
-    const n = await page.ev("window.fetched ?? 0");
-    await page.until(`(window.fetched ?? 0) >= ${n} + 2`);
+    await page.ev("window.gate = null; window.release()");
+    await page.when(`(window.fetched ?? 0) > ${n}`);
     expect(await page.ev('[!!document.querySelector("#view button.act.ask"), document.querySelector("#view > *").dataset.mark]')).toEqual([true, "1"]);
-    await page.reload(); // Takes the patched timer away.
+    await page.reload(); // Takes the patched timer and fetch away.
   }, 30_000);
 
   test("an action the server refuses shows the server's reason on the row", async () => {
     await page.go("#/");
-    await page.until(`document.querySelector('#view button.act[data-act="land"], #view button.act[data-act="recheck"]')`);
+    await page.when(`document.querySelector('#view button.act[data-act="land"], #view button.act[data-act="recheck"]')`);
     await page.ev(`(() => {
       const f = window.fetch;
       window.fetch = (u, o) => o?.method === "POST" ? Promise.resolve(new Response(JSON.stringify({ error: "it cannot wait" }), { status: 422 })) : f(u, o);
@@ -204,14 +220,14 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       b.click();
       if (b.classList.contains("ask")) b.click();
     })()`);
-    await page.until('document.querySelector("#view .act-msg")?.textContent.includes("it cannot wait")');
+    await page.when('document.querySelector("#view .act-msg")?.textContent.includes("it cannot wait")');
     expect(await page.ev('document.querySelector("#view .act-msg").closest("article").isConnected')).toBe(true);
     await page.reload(); // Takes the patched fetch away.
   }, 30_000);
 
   test("Enter in the reason box confirms a Deny, and the card leaves before any reload of the state", async () => {
     await page.go("#/");
-    await page.until('document.querySelector("#view article.issue-row")');
+    await page.when('document.querySelector("#view article.issue-row")');
     // A real Ask card with a Deny, from the view's own renderer. After the POST every other fetch hangs, and the mark on #view shows that no render replaced it.
     await page.ev(`import("/views/now.js").then(({ askRow }) => {
       const f = window.fetch;
@@ -227,7 +243,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       inp.value = "not now";
       inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     })`);
-    await page.until("!window.card.isConnected");
+    await page.when("!window.card.isConnected");
     expect(await page.ev('document.querySelector("#view > *").dataset.mark')).toBe("1");
     const posts = await page.ev<[string, string][]>("window.posts");
     expect(posts.map(([u, body]) => [u, JSON.parse(body)])).toEqual([["/api/issues/tools/4/drop", { reason: "Chris denied: not now" }]]);
@@ -236,10 +252,10 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
 
   test("a dead blocker shows on the Issue page, and Stop waiting removes it", async () => {
     await page.go("#/issues/demo/21");
-    await page.until(`document.querySelector('.dp-blocked [data-act="unblock"]')`);
+    await page.when(`document.querySelector('.dp-blocked [data-act="unblock"]')`);
     expect(await page.ev<string>(`document.querySelector(".dp-blocked").textContent`)).toContain("Waits on");
     await page.ev(`document.querySelector('.dp-blocked [data-act="unblock"]').click()`);
-    await page.until(`!document.querySelector('.dp-blocked [data-act="unblock"]')`);
+    await page.when(`!document.querySelector('.dp-blocked [data-act="unblock"]')`);
     expect(await page.ev<string>(`document.querySelector(".dp-blocked")?.textContent ?? ""`)).not.toContain("Waits on");
     expect(page.errors).toEqual([]);
   }, 30_000);
@@ -251,8 +267,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("a 401 reloads the page", async () => {
     await page.go("#/");
     await page.ev(`(() => { window.__before = 1; const f = window.fetch; window.fetch = (u, o) => String(u).startsWith("/api/") ? Promise.resolve(new Response("", { status: 401 })) : f(u, o); location.hash = "#/issues"; })()`);
-    await page.until("window.__before === undefined");
-    await page.until('document.querySelector("#nav li")');
+    await page.when("window.__before === undefined");
+    await page.when('document.querySelector("#nav li")');
   }, 30_000);
 });
 
@@ -357,7 +373,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       return { key, n: r.added };
     })()`);
     await page.go(`#/issues/${filed.key}/${filed.n}`);
-    await page.until(`[...document.querySelectorAll(".media-grid img")].some((i) => i.complete && i.naturalWidth === 40)`);
+    await page.when(`[...document.querySelectorAll(".media-grid img")].some((i) => i.complete && i.naturalWidth === 40)`);
     await page.ev(`(async () => {
       const blob = await fetch(document.querySelector(".media-grid img").src).then((r) => r.blob());
       const dt = new DataTransfer();
@@ -366,7 +382,7 @@ describe.skipIf(!chromeUsable)("Status page", () => {
       form.querySelector("input[type=file]").dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
       form.requestSubmit();
     })()`);
-    await page.until(`document.querySelectorAll(".media-grid img").length === 2`);
+    await page.when(`document.querySelectorAll(".media-grid img").length === 2`);
     expect(await page.ev<string[]>(`[...document.querySelectorAll(".media-grid img")].map((i) => i.alt)`)).toEqual(["shot.png", "pasted.png"]);
   }, 60_000);
 });
