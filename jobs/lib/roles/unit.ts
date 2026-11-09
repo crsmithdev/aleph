@@ -375,7 +375,11 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
 
   // The state rule: the first match wins.
   if (w.step.stalled) return fail("stalled", stallReason());
-  if (w.step.timedOut) return fail("stalled", "timed out: worker");
+  if (w.step.timedOut) {
+    const s = workSeconds(run);
+    const last = result.trim() && ` Last message: ${result.trim().slice(0, 500)}`;
+    return fail("timeout", `The worker ran past its ${s % 60 === 0 ? `${s / 60}-minute` : `${s}-second`} time box and was stopped.${last}`);
+  }
   if (w.cause?.kind === "credit") return fail("credit", w.cause.reason);
   if (w.step.code !== 0) return { outcome: { condition: "failed", cause: "other", reason: `worker exited ${w.step.code}` }, code: w.step.code };
   const question = questionOf(result);

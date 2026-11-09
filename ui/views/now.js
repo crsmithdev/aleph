@@ -449,12 +449,28 @@ const alertCard = (kind, key, meta, title, problem, body = "") =>
 const askShell = (cls, attrs, key, meta, label, title, tag, desc, rest) =>
   `<article class="job-card small issue-row ${cls}" ${attrs}>` +
   `<div class="ask-box">${meta}<details class="ask-fold" data-keep="ask:${esc(key)}"><summary class="ask-head"><span class="ask-dot" aria-hidden="true"></span><span class="t"><b class="ask-kind">${esc(label)}:</b> <span class="ask-title">${esc(title)}</span></span>${tag ? `<span class="ask-tag">${esc(tag)}</span>` : ""}</summary>${desc}</details>${rest}</div></article>`;
+/** One plain sentence of what went wrong for a stuck job, from its cause; a time box or a stall takes its length from the reason. */
+const stuckSentence = (j) => {
+  const span = /(\d+)[- ](minute|second)/.exec(j.reason ?? "");
+  const check = j.checkName ? `The check ${j.checkName}` : "A check";
+  return {
+    timeout: `The worker ran past its ${span ? `${span[1]}-${span[2]} ` : ""}time box and was stopped.`,
+    stalled: `The worker gave no output${span ? ` for ${span[1]} ${span[2]}s` : ""} and was stopped.`,
+    check: `${check} failed.`,
+    infra: j.checkName ? `${check} gave no verdict.` : "A factory step failed outside the work.",
+    "no-commit": "The worker made no commit.",
+    locked: "Another run held the job's lock.",
+    credit: "The API account ran out of credit.",
+    conflict: "The branch has a merge conflict with main.",
+    moved: "Main moved during the land.",
+    review: "The reviewer held the change.",
+    unanswered: "The agent ended without an answer.",
+  }[j.cause] ?? (j.condition === "failed" ? "The run failed." : "The run stopped.");
+};
 const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
-  // A failed check names the check, as the news lines do; any other cause stays the state and cause.
-  const check = j.cause === "check" && contentText({ file: j.checkName });
-  const hold = b ? holdLine({ action: "after", on: [b.id] }) : [j.condition, j.cause, check].filter(Boolean).join(" ");
+  const hold = b ? holdLine({ action: "after", on: [b.id] }) : stuckSentence(j);
   const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : act("recheck", j.name, "Re-check");
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;

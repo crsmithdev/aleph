@@ -106,9 +106,10 @@ describe("the state rule", () => {
   });
 
   test("a worker past its limit is stopped and fails as timed out", async () => {
-    // The fake worker sleeps 60 s: "timed out: worker" is the limit's cut, and a worker that ran out would pass the test's limit.
+    // The fake worker sleeps 60 s: the time box is the limit's cut, and a worker that ran out would pass the test's limit.
     const r = await actionJob("stuck", "sleep", { ALEPH_JOB_TIMEOUT: "1" });
-    expect(state(r.json.run)).toMatchObject({ condition: "failed", reason: "timed out: worker" });
+    expect(state(r.json.run)).toMatchObject({ condition: "failed", cause: "timeout" });
+    expect(state(r.json.run).reason).toContain("1-second time box");
   });
 
   test("a check past its limit is stopped and gives no verdict", async () => {
