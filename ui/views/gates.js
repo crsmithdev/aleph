@@ -48,7 +48,7 @@ const PAGE = 50;
 
 export function renderGates(d, q = new URLSearchParams()) {
   return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days`, aside: scopeBar(projectNow(), windowOf(q)) })}` +
-    renderNow(d) + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
+    renderNow(d) + (d.backend ? `<p class="quiet" id="gates-backend">Waiting for ${esc(d.backend.via)}: ${esc(d.backend.why)}</p>` : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
     `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE)) + `</div>`;
 }
 

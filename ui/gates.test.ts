@@ -663,3 +663,9 @@ test("POST /api/gates/schedules writes a drop-in that keeps the boot and startup
   expect((await send({ name: "tick", every: "5 minutes" })).status).toBe(422);
   expect((await send({ name: "monitor", every: "1h" })).status).toBe(422);
 });
+
+test("the Automation page names the held backend and its reason, and no line when none is held", () => {
+  const held = gates.renderGates({ ...data(), backend: { via: "OpenRouter", why: "probe failed" } });
+  expect(held).toContain(`id="gates-backend">Waiting for OpenRouter: probe failed</p>`);
+  expect(gates.renderGates({ ...data(), backend: null })).not.toContain("gates-backend");
+});
