@@ -10,11 +10,11 @@ import type { Observation } from "../lib/otlp.ts";
 import { loadRegistry } from "../jobs/lib/records/ledger.ts";
 import { today } from "../issues/lib/todo.ts";
 import { staleAsync } from "./stale.ts";
+import { allPages } from "./langfuse-pages.ts";
 import { uiCacheMs } from "../jobs/lib/infra/settings.ts";
 
 const DAY = 24 * 3600_000;
 const HOOKS = ["verify-gate", "vault-recall"];
-const POOL = 4, MAX_PAGES = 2000;
 
 /** The local dates of the last `days` days, oldest first, ending today. */
 function dayKeys(days: number, now: Date): string[] {
@@ -52,37 +52,9 @@ function cached<T>(key: string, load: () => Promise<T>): Promise<{ value: T; cac
   return cache.get(key, uiCacheMs(), () => load().then((v) => ({ value: v as unknown, cachedAt: new Date().toISOString() }))) as Promise<{ value: T; cachedAt: string }>;
 }
 
-/**
- * Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched
- * `POOL` at a time, each page tried twice. All pages at once overloaded Langfuse and a full week
- * timed out. `partial` says the list held more pages than `MAX_PAGES`.
- */
-async function allPages(cfg: LangfuseConfig, path: string, params: Record<string, string>): Promise<{ rows: any[]; partial: boolean }> {
-  const url = (n: number) => `${path}?${new URLSearchParams({ ...params, limit: "100", page: String(n) })}`;
-  const page = (n: number) => getJson(cfg, url(n)).catch(() => getJson(cfg, url(n)));
-  const first = await page(1);
-  const total = first.meta ? Number(first.meta.totalPages) || 1 : 1;
-  const pages = Math.min(total, MAX_PAGES);
-  const rest: any[][] = [];
-  let next = 2, failed = false;
-  const worker = async () => {
-    try { for (let n = next++; n <= pages && !failed; n = next++) rest[n - 2] = (await page(n)).data ?? []; }
-    catch (e) { failed = true; throw e; }
-  };
-  await Promise.all(Array.from({ length: Math.min(POOL, pages - 1) }, worker));
-  return { rows: [first.data ?? [], ...rest].flat(), partial: total > pages };
-}
-
-async function getJson(cfg: LangfuseConfig, path: string): Promise<any> {
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const res = await fetch(`${cfg.baseUrl}${path}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`${res.status} on ${path.split("?")[0]}`);
-  return res.json();
-}
-
 /** The ids of the traces of `project`: its session's cwd, or the trace's name, is the key. */
 async function projectTraces(cfg: LangfuseConfig, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {
-  const { rows, partial } = await allPages(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() });
+  const { rows, partial } = await allPages(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString() }, 15_000);
   const ids = new Set<string>();
   for (const t of rows) {
     const cwd = t.metadata?.cwd;
@@ -105,7 +77,7 @@ export async function activity(days: number, project: string | null, now = new D
   try {
     const got = await cached(`${cfg.baseUrl}|${keys[0]}|${days}|${project ?? ""}`, async () => {
       const [all, mine] = await Promise.all([
-        allPages(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }) as Promise<{ rows: Observation[]; partial: boolean }>,
+        allPages(cfg, "/api/public/observations", { fromStartTime: from.toISOString(), toStartTime: to.toISOString() }, 15_000) as Promise<{ rows: Observation[]; partial: boolean }>,
         project ? projectTraces(cfg, project, new Date(from.getTime() - DAY), to) : null,
       ]);
       const rows = mine ? all.rows.filter((o) => o.traceId && mine.ids.has(o.traceId)) : all.rows;

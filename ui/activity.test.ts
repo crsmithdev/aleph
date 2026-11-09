@@ -18,6 +18,8 @@ let pileUp = false;
 let obsPages: any[][] = [];
 /** The pages that answer 500 on their first request and their rows on the second. */
 let failOnce = new Set<number>();
+/** The pages that answer 500 at once on every request. */
+let failAlways = new Set<number>();
 /** The observations requests open at one time, and the most that were open together. */
 let open = 0, peak = 0;
 let base: string, fake: ReturnType<typeof Bun.serve>;
@@ -55,6 +57,7 @@ beforeAll(() => {
         obsHits++; open++; peak = Math.max(peak, open); nextHit();
         if (open === 4) atFour();
         try {
+          if (failAlways.has(n)) return new Response("boom", { status: 500 });
           if (!pileUp || n > 1) await hold;
           if (failOnce.delete(n)) return new Response("boom", { status: 500 });
           return Response.json({ data: obsPages[n - 1] ?? [], meta: { totalPages: obsPages.length } });
@@ -164,6 +167,41 @@ describe("activity", () => {
       expect(a.partial).toBe(true);
       expect(a.tools.map((t) => [t.name, t.calls])).toEqual([["Bash", 2000]]);
     } finally {
+      obsPages = [observations];
+      restoreTtl();
+      clearCache();
+    }
+  });
+
+  test("a list past the cap answers a failed page only after every request has ended, and once read says partial", async () => {
+    const restoreTtl = withEnv({ ALEPH_UI_CACHE_TTL: "0" });
+    clearCache();
+    obsPages = manyPages(2001);
+    failAlways = new Set([3]);
+    pileUp = true;
+    let release = () => {};
+    hold = new Promise<void>((r) => { release = r; });
+    try {
+      let ended = false;
+      const running = activity(7, null, now).then((a) => { ended = true; return a; });
+      for (let i = 0; i < 100; i++) await new Promise((r) => setTimeout(r, 0));
+      // Page 3 failed twice, but pages 2, 4 and 5 are still open on `hold`.
+      expect(open).toBe(3);
+      expect(ended).toBe(false);
+      release();
+      const failed = await running;
+      expect(failed.langfuse).toBe("error");
+      expect(open).toBe(0);
+      failAlways = new Set();
+      pileUp = false;
+      const a = await activity(7, null, now);
+      expect(a.langfuse).toBe("ok");
+      expect(a.partial).toBe(true);
+    } finally {
+      release();
+      hold = Promise.resolve();
+      pileUp = false;
+      failAlways = new Set();
       obsPages = [observations];
       restoreTtl();
       clearCache();

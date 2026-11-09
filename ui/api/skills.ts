@@ -12,11 +12,12 @@ import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
+import { allPages } from "../langfuse-pages.ts";
 import { skillsDir as skillsDirSetting, skillsStore } from "../../jobs/lib/infra/settings.ts";
 
 const DAY = 86400_000;
 const TTL = 120_000;
-const PAGE = 100, POOL = 4, MAX_PAGES = 2000, PAGE_TIMEOUT = 30_000;
+const PAGE_TIMEOUT = 30_000;
 const OVERLAP = 2 * 3600_000;
 const REBUILD = DAY;
 
@@ -54,13 +55,6 @@ function projectOf(cwd: string | undefined, tags: string[] | undefined): string 
   return Object.keys(loadRegistry()).includes(tag) ? tag : "";
 }
 
-async function getJson(cfg: LangfuseConfig, path: string, q: Record<string, string>): Promise<any> {
-  const auth = Buffer.from(`${cfg.publicKey}:${cfg.secretKey}`).toString("base64");
-  const res = await fetch(`${cfg.baseUrl}${path}?${new URLSearchParams(q)}`, { headers: { authorization: `Basic ${auth}` }, signal: AbortSignal.timeout(PAGE_TIMEOUT) });
-  if (!res.ok) throw new Error(`${res.status} on ${path}`);
-  return res.json();
-}
-
 /** Like Promise.all, but a failure waits for the other promises to end first, then throws the first error: no request outlives its caller. */
 async function settled<T extends readonly unknown[]>(ps: { [K in keyof T]: Promise<T[K]> }): Promise<T> {
   const rs = await Promise.allSettled(ps);
@@ -69,28 +63,13 @@ async function settled<T extends readonly unknown[]>(ps: { [K in keyof T]: Promi
   return rs.map((r) => (r as PromiseFulfilledResult<unknown>).value) as unknown as T;
 }
 
-/**
- * Every row of a paged Langfuse list: page 1 says how many pages there are, the rest are fetched
- * POOL at a time, each tried twice. All pages at once overloaded Langfuse and every page timed out.
- * Logs the page count and the time per page, so the journal shows what a load costs.
- */
-async function allPages<T>(cfg: LangfuseConfig, path: string, q: Record<string, string>, label: string): Promise<T[]> {
+/** Every row of a paged Langfuse list. Logs the page count and the time per page, so the journal shows what a load costs. */
+async function allRows<T>(cfg: LangfuseConfig, path: string, q: Record<string, string>, label: string): Promise<T[]> {
   const t0 = Date.now();
-  const page = (n: number) => getJson(cfg, path, { ...q, limit: String(PAGE), page: String(n) }).catch(() => getJson(cfg, path, { ...q, limit: String(PAGE), page: String(n) }));
-  const first = await page(1);
-  const pages = first.meta ? Math.min(Number(first.meta.totalPages) || 1, MAX_PAGES) : 1;
-  const out: any[][] = [first.data ?? []];
-  let next = 2;
-  let failed = false;
-  const worker = async () => {
-    try { for (let n = next++; n <= pages && !failed; n = next++) out[n - 1] = (await page(n)).data ?? []; }
-    catch (e) { failed = true; throw e; }
-  };
-  await settled(Array.from({ length: Math.min(POOL, pages - 1) }, worker));
-  const rows = out.flat();
+  const { rows, pages } = await allPages<T>(cfg, path, q, PAGE_TIMEOUT);
   const ms = Date.now() - t0;
-  console.log(`skills: ${label}: ${rows.length} rows, ${pages} pages in ${(ms / 1000).toFixed(1)} s (${Math.round(ms / pages)} ms per page, ${POOL} at a time)`);
-  return rows as T[];
+  console.log(`skills: ${label}: ${rows.length} rows, ${pages} pages in ${(ms / 1000).toFixed(1)} s (${Math.round(ms / pages)} ms per page, 4 at a time)`);
+  return rows;
 }
 
 /** Only the fields `analyse` reads: the store holds 30 days of rows, in memory and on disk. */
@@ -117,9 +96,9 @@ const compactTrace = (t: any): TraceInfo => ({ id: t.id, sessionId: t.sessionId,
 async function fetchRows(cfg: LangfuseConfig, from: Date, to: Date): Promise<{ obs: Observation[]; traces: TraceInfo[] }> {
   const span = { fromStartTime: from.toISOString(), toStartTime: to.toISOString() };
   const [agents, tools, traces] = await settled([
-    allPages<any>(cfg, "/api/public/observations", { ...span, type: "AGENT" }, "turns"),
-    allPages<any>(cfg, "/api/public/observations", { ...span, type: "TOOL" }, "tool calls"),
-    allPages<any>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), fields: "core" }, "traces"),
+    allRows<any>(cfg, "/api/public/observations", { ...span, type: "AGENT" }, "turns"),
+    allRows<any>(cfg, "/api/public/observations", { ...span, type: "TOOL" }, "tool calls"),
+    allRows<any>(cfg, "/api/public/traces", { fromTimestamp: from.toISOString(), toTimestamp: to.toISOString(), fields: "core" }, "traces"),
   ]);
   return { obs: [...agents, ...tools].map(compact), traces: traces.map(compactTrace) };
 }
