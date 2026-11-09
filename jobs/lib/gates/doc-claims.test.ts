@@ -46,6 +46,17 @@ describe("a doc that does not match fails, quoting the claim", () => {
     expect(one(`\`docProblems()\` (\`${p}:${at}\`), \`docProblems\` in \`${p}:${at - 2}-${at + 2}\`, \`${p}:1\``)).toEqual([]);
   });
 
+  test("a comma pair: a name, then the line of the file that must hold it", () => {
+    const f = readFileSync(join(ROOT, "jobs/lib/gates/doc-claims.ts"), "utf8").split("\n");
+    const at = f.findIndex((l) => l.includes("export function docProblems")) + 1;
+    const p = "jobs/lib/gates/doc-claims.ts";
+    expect(one(`(\`docProblems()\`, \`${p}:1\`)`)).toEqual([`docs/x.md:1: "(\`docProblems()\`, \`${p}:1\`)": docProblems is at line ${at} of ${p}`]);
+    expect(one(`(\`docProblems()\`, \`${p}:${at}\`), (\`docProblems\`, \`${p}:${at - 2}-${at + 2}\`)`)).toEqual([]);
+    expect(one("(`noSuchFunction()`, `jobs/lib/infra/settings.ts:1`)")).toEqual([
+      'docs/x.md:1: "(`noSuchFunction()`, `jobs/lib/infra/settings.ts:1`)": jobs/lib/infra/settings.ts has no noSuchFunction',
+    ]);
+  });
+
   test("a name paired with a line of a file that has no such name", () => {
     expect(one("`noSuchFunction()` (`jobs/lib/infra/settings.ts:1`)")).toEqual([
       'docs/x.md:1: "`noSuchFunction()` (`jobs/lib/infra/settings.ts:1`)": jobs/lib/infra/settings.ts has no noSuchFunction',

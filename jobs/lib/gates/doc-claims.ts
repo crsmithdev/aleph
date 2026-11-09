@@ -9,7 +9,7 @@
  * - each `ALEPH_*` name against the source;
  * - each repo path in backticks, in a relative link or in a link to this repo on GitHub, against the tree;
  * - each `path:line` in backticks against the length of that file (a bare file name must name one file of the tree);
- * - each `` `name` (`path:line`) `` and `` `name` in `path:line` `` against the lines of that file: the name must be at the line or in the range;
+ * - each `` `name` (`path:line`) ``, `` `name` in `path:line` `` and `` (`name`, `path:line`) `` against the lines of that file: the name must be at the line or in the range;
  * - each `` `name` in `path` `` (also `from`, `of`, `` `path`'s `name` ``) against the text of that file;
  * - each `` `path` imports only `a` and `b` `` against the imports of that file;
  * - each `--flag` of an `aleph` or `aleph-ui` command against the CLI source.
@@ -132,8 +132,11 @@ export function lineRefsIn(docs: Doc[]): { path: string; from: number; line: num
   const out: { path: string; from: number; line: number; name?: string; quote: string; file: string; at: number }[] = [];
   each(docs, (d, text, at) => {
     for (const m of text.matchAll(/`((?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_-][A-Za-z0-9_.-]*\.[a-z]{1,5}):(\d+)(?:-(\d+))?`/g)) {
-      const pair = text.slice(0, m.index).match(/`([^`]+?)(?:\(\))?`(?: \(| in )$/);
-      out.push({ path: m[1], from: Number(m[2]), line: Number(m[3] ?? m[2]), name: pair?.[1], quote: pair ? pair[0] + m[0] + (pair[0].endsWith("(") ? ")" : "") : m[0], file: d.file, at });
+      const before = text.slice(0, m.index);
+      const pair = before.match(/`([^`]+?)(?:\(\))?`(?: \(| in )$/)
+        ?? (text[m.index + m[0].length] === ")" ? before.match(/\(`([^`]+?)(?:\(\))?`,\s*$/) : null);
+      const closed = pair && (pair[0].endsWith("(") || pair[0].startsWith("("));
+      out.push({ path: m[1], from: Number(m[2]), line: Number(m[3] ?? m[2]), name: pair?.[1], quote: pair ? pair[0] + m[0] + (closed ? ")" : "") : m[0], file: d.file, at });
     }
   });
   return out;
