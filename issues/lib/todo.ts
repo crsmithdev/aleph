@@ -208,7 +208,7 @@ export function note(item: Issue, text: string, now = new Date()): string {
 
 /** Replace the fields given. Notes are never edited: they stay append-only. */
 export function edit(item: Issue, change: { kind?: string; title?: string; request?: string; spec?: string; priority?: string; areas?: string[] }, now = new Date()): void {
-  const bad = change.title === undefined ? null : titleProblem(change.title, { part: parentRef(item) !== undefined });
+  const bad = change.title === undefined || change.title === item.title ? null : titleProblem(change.title, { part: parentRef(item) !== undefined });
   if (bad) throw new Error(bad);
   if (change.kind !== undefined) item.fm.kind = change.kind;
   if (change.title !== undefined) item.title = change.title;

@@ -42,7 +42,7 @@ export function cutTitle(source: string, max = TITLE): string {
 }
 
 /** `group` and the model's title for `rest` in the room `group` leaves, when `titleProblem` accepts it, else `group` and `cutTitle(rest)`. */
-async function fit(group: string, rest: string): Promise<string> {
+export async function fit(group: string, rest: string): Promise<string> {
   const room = TITLE - group.length;
   const t = (await writeLine(system(room), rest, 200)).trim().replace(/\.$/, "");
   return t && !titleProblem(group + t, { part: group !== "" }) ? group + t : group + cutTitle(rest, room);

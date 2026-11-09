@@ -26,6 +26,7 @@ import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
 import { health } from "./lib/gates/factory-status.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
+import { fit } from "./lib/roles/title.ts";
 import { checkName, checked, drop, land, recheck, repoOf, startJob, startPlain, type Start } from "./lib/transitions/transitions.ts";
 import type { Fate } from "./lib/records/outcome.ts";
 import { refuse, Refusal } from "../lib/refusal.ts";
@@ -184,7 +185,7 @@ async function todoCmd(): Promise<void> {
     // `--media <file>` may repeat.
     media: rest.flatMap((a, i) => (a === "--media" && rest[i + 1] !== undefined ? [rest[i + 1]] : [])),
   };
-  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
+  const sub = verb ?? refuse("usage: aleph issue <add|list|show|note|attach|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   const registry = loadRegistry();
   const ref = parseId(repoKey);
   if (ref && sub !== "add") {
@@ -270,6 +271,12 @@ async function todoCmd(): Promise<void> {
       if (repo.sandbox) dispatchDetached();
       return;
     }
+    case "retitle": {
+      const r = await verbs.retitle(repo, fit);
+      warn(r.follow);
+      for (const t of r.result.retitled) console.log(`${repo.key}-${t.id}: ${t.title}`);
+      return;
+    }
     case "lint": {
       if (fixing) {
         const l = verbs.lintFix(repo);
@@ -283,7 +290,7 @@ async function todoCmd(): Promise<void> {
       for (const f of l.findings) console.error(`item ${f.id}: ${f.problem}${f.fixable ? " (--fix repairs this)" : ""}`);
       refuse(`${l.findings.length} problem${l.findings.length > 1 ? "s" : ""} in the ${repo.key} list`);
     }
-    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
+    default: refuse("usage: aleph issue <add|list|show|note|edit|decide|done|drop|lint|retitle> <repo> ... [--kind task|bug|check|flake|proposal|acceptance]");
   }
 }
 

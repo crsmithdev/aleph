@@ -259,6 +259,28 @@ export function lintFix(repo: store.Place) {
   return { result: { repo: repo.key, fixed: w?.value.fixed ?? [], remaining }, follow: w?.follow ?? null };
 }
 
+/** Give each open or parked issue that `titleProblem` refuses a new title from `fit` (the part's `[Group] ` kept), with a note of the old title. Returns the ids changed. */
+export async function retitle(repo: store.Place, fit: (group: string, rest: string) => Promise<string>) {
+  const bad = (i: issues.Issue) => ["open", "parked"].includes(issues.status(i)) && issues.titleProblem(i.title, { part: issues.parentRef(i) !== undefined });
+  const fresh = new Map<string, string>();
+  for (const i of readIssues(repo).items.filter(bad)) {
+    const group = (issues.parentRef(i) !== undefined && /^\[[^\]]*\] /.exec(i.title)?.[0]) || "";
+    fresh.set(issues.refOf(i), await fit(group, i.title.slice(group.length)));
+  }
+  const w = fresh.size ? write(repo, "todo: retitle", (doc) => {
+    const done: { id: string; title: string }[] = [];
+    for (const [ref, title] of fresh) {
+      const i = issues.find(doc, ref);
+      if (!i) continue;
+      issues.note(i, `retitled from: ${i.title}`);
+      issues.edit(i, { title });
+      done.push({ id: ref, title });
+    }
+    return done.length ? done : null;
+  }) : null;
+  return { result: { repo: repo.key, retitled: w?.value ?? [] }, follow: w?.follow ?? null };
+}
+
 /** The repos with a ledger run or an item update in the last 7 days, the latest first, each with its list (null when the store has none). */
 export function recentLists<R extends store.Place>(repos: R[]): { repo: R; doc: issues.Doc | null }[] {
   let docs: (issues.Doc | null)[] = [];

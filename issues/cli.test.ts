@@ -2,7 +2,7 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { env, fx, remoteItem, seed, sh, tasks, useFixture } from "./fixture.ts";
-import { renderItem } from "./lib/todo.ts";
+import { renderItem, titleProblem } from "./lib/todo.ts";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
@@ -174,6 +174,7 @@ test("aleph issue is the only command: aleph todo is gone", () => {
   expect(sh(fx.base, "git", "--git-dir", fx.remote, "rev-parse", "main")).toBe(before);
   const usage = aleph("nonsense").err;
   expect(usage).toContain("|issue|");
+  expect(aleph("issue").err).toContain("retitle");
   expect(usage).not.toContain("todo");
 });
 
@@ -187,4 +188,15 @@ test("a short ID names the issue in the repo slot of show and note", () => {
   expect(a.title).toBe(b.title);
   expect(aleph("issue", "note", "p3", "short-form-note").code).toBe(0);
   expect(remoteItem(3)).toContain("short-form-note");
+});
+
+test("retitle prints the ids it retitled", () => {
+  seed("# To do\n\n## 9. Check foo: bar\n---\nid: 9\nstatus: open\ncreated: 2026-09-01\nupdated: 2026-09-01\npriority: medium\n---\n\nBody.\n");
+  const r = aleph("issue", "retitle", "proj");
+  expect(r.code).toBe(0);
+  const item = remoteItem(9);
+  const title = /^title: (.*)$/m.exec(item)![1];
+  expect(titleProblem(title)).toBeNull();
+  expect(r.out).toBe(`proj-9: ${title}\n`);
+  expect(item).toContain("retitled from: Check foo: bar");
 });

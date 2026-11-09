@@ -92,3 +92,12 @@ test("localRefs shows each id as its short id and keeps the id of a project with
   expect(issues.localRefs("aleph", "after aleph-12, koans-3")).toBe("after a12, koans-3");
   setCodes({});
 });
+
+test("edit takes the title it already has, even a bad one, and still refuses another bad title", () => {
+  const doc = issues.blank("r");
+  const item = issues.add(doc, "Fix the lane");
+  item.title = "Check foo: bar";
+  issues.edit(item, { title: "Check foo: bar", priority: "high" });
+  expect(item.fm.priority).toBe("high");
+  expect(() => issues.edit(item, { title: "Check baz: bar" })).toThrow("': ' prefix");
+});

@@ -6,6 +6,7 @@ import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { breakItem, doc, env, fx, parse, remoteItem, sec, seed, sh, tasks, useFixture } from "../fixture.ts";
 import * as store from "./store.ts";
 import { config } from "./store.ts";
+import * as issues from "./todo.ts";
 import { renderItem } from "./todo.ts";
 import { addPart } from "./parts.fixture.ts";
 import * as verbs from "./issues.ts";
@@ -199,4 +200,27 @@ test("media: add and attach store images in the store, and a run reads them back
   expect(store.runMedia("proj", `${a.item.id}.1`)).toEqual([...files, join(store.mediaDir(), `proj-${a.item.id}.1`, "spec_sheet.pdf")]);
   writeFileSync(join(fx.base, "clip.mp4"), "x");
   expect((await code(() => verbs.attach(proj(), a.item.id, [join(fx.base, "clip.mp4")]))).code).toBe(1);
+});
+
+test("retitle gives a bad title of an open or parked issue a new one, keeps a part's group and leaves a done issue", async () => {
+  const a = await add("Fix the first"), b = await add("Fix the second"), c = await add("Fix the third");
+  store.writeList(proj(), "bad titles", (d) => {
+    const [x, y, z] = [a, b, c].map((n) => issues.find(d, n.item.id)!);
+    x.title = "Check foo: bar";
+    y.title = "[Group] Check foo: bar.";
+    y.fm.from = `proj-${x.id}`;
+    y.fm.parked = "true";
+    z.title = "Done foo: bar";
+    z.fm.closed_as = "done";
+    return true;
+  });
+  const stub = async (group: string, rest: string) => group + rest.replace(/^.*: /, "Fix ").replace(/\.$/, "");
+  const r = await verbs.retitle(proj(), stub);
+  expect(r.result.retitled.map((t) => t.id)).toEqual([String(a.item.id), String(b.item.id)]);
+  expect(verbs.lint(proj()).findings.filter((f) => /title/.test(f.problem))).toEqual([]);
+  expect(show(a.item.id).title).toBe("Fix bar");
+  expect(show(b.item.id).title).toBe("[Group] Fix bar");
+  expect(show(a.item.id).notes.join("\n")).toContain("retitled from: Check foo: bar");
+  expect(show(b.item.id).notes.join("\n")).toContain("retitled from: [Group] Check foo: bar.");
+  expect(show(c.item.id).title).toBe("Done foo: bar");
 });
