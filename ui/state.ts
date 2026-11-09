@@ -312,7 +312,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
 export function state(now = new Date()): State {
   const registry = loadRegistry();
   // The ledger is read once: every part below takes these jobs (and their runs) instead of reading it again.
-  const jobs = allJobs();
+  const jobs = allJobs(true);
   const { lists, toJob, stagesOf, isDone, blocker } = jobProjector(registry, jobs);
 
   const needs: Job[] = [], stuck: Job[] = [], running: Job[] = [];

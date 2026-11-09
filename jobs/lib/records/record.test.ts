@@ -10,7 +10,7 @@ import * as record from "./record.ts";
 let dir: string;
 const saved = process.env.ALEPH_RECORDS_DIR;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "aleph-record-")); process.env.ALEPH_RECORDS_DIR = dir; });
-afterEach(() => { setSystemTime(); rmSync(dir, { recursive: true, force: true }); if (saved === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = saved; });
+afterEach(() => { setSystemTime(); rmSync(dir, { recursive: true, force: true }); rmSync(record.archiveDir(), { recursive: true, force: true }); if (saved === undefined) delete process.env.ALEPH_RECORDS_DIR; else process.env.ALEPH_RECORDS_DIR = saved; });
 
 const AT = "2026-11-04T10:00:00.000Z";
 const run = (o: Partial<Run> = {}): Run => ({ kind: "build", job: "j1", name: "aleph-7", repo: "aleph", on: "aleph-7", condition: "running", told: false, started: AT, ...o });
@@ -202,4 +202,32 @@ test("a land or build run of the job that joins after the run an Ask is on clear
   expect(r.asks!.at(-1)!.cleared).toBe("2026-11-04T10:05:00.000Z");
   const s = record.next(r);
   expect(s).toEqual({ step: "rescue", action: "failed" });
+});
+
+const DAY = 864e5, T0 = Date.parse("2026-11-20T00:00:00.000Z");
+const startedAgo = (days: number) => new Date(T0 - days * DAY).toISOString();
+
+test("archiveOld moves a finished record whose newest run started over 7 days ago, and keeps a running, a waiting, an Ask and a newer one", () => {
+  record.putRun("z1", run({ on: "a-1", job: "a1", condition: "done", started: startedAgo(8) }));
+  record.putRun("z2", run({ on: "a-2", job: "a2", condition: "done", started: startedAgo(9) }));
+  record.putRun("z3", run({ on: "a-2", job: "a2", condition: "running", started: startedAgo(8) }));
+  record.putRun("z4", run({ on: "a-3", job: "a3", condition: "waiting", started: startedAgo(9) }));
+  record.putRun("z5", run({ on: "a-4", job: "a4", condition: "done", started: startedAgo(9) }));
+  record.setIssueAsk("a-4", { kind: "approval", reason: "x", question: "", options: [], why: [] } as any);
+  record.putRun("z6", run({ on: "a-5", job: "a5", condition: "done", started: startedAgo(6) }));
+  expect(record.archiveOld(T0)).toEqual(["a-1"]);
+  expect(readdirSync(dir).filter((f) => f.endsWith(".json")).sort()).toEqual(["a-2.json", "a-3.json", "a-4.json", "a-5.json"]);
+  expect(readdirSync(record.archiveDir())).toEqual(["a-1.json"]);
+});
+
+test("an archived record still reads in all and allRunRecords, and putRun of a new run moves it back with the old runs", () => {
+  record.putRun("y1", run({ condition: "done", started: startedAgo(8) }));
+  record.archiveOld(T0);
+  expect(record.all().map((r) => r.issue)).toEqual(["aleph-7"]);
+  expect(record.all(true)).toEqual([]);
+  expect(record.allRunRecords().map((x) => x.id)).toEqual(["y1"]);
+  record.putRun("y2", run({ condition: "running", started: startedAgo(0) }));
+  expect(readdirSync(record.archiveDir())).toEqual([]);
+  expect(readdirSync(dir).filter((f) => f.endsWith(".json"))).toEqual(["aleph-7.json"]);
+  expect(record.read("aleph-7")!.runs.map((x) => x.id)).toEqual(["y1", "y2"]);
 });

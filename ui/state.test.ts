@@ -10,7 +10,7 @@ import { jobProjector, state } from "./state.ts";
 import { withEnv } from "./test-server.ts";
 import { loadRegistry, writeRun } from "../jobs/lib/records/ledger.ts";
 import { allJobs } from "../jobs/lib/records/job.ts";
-import { removeRun } from "../jobs/lib/records/record.ts";
+import { archiveOld, removeRun } from "../jobs/lib/records/record.ts";
 import { spawn } from "node:child_process";
 import { facts } from "../jobs/lib/records/status.ts";
 import { state as fixture } from "./fixtures/status-state.ts";
@@ -87,6 +87,20 @@ describe("state", () => {
     expect("triage" in s).toBe(false);
     expect(s.running.map((j) => j.name)).toEqual(["fac-4"]);
     for (const id of ["20261027-000030-a", "20261027-000031-a", "20261027-000032-a"]) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
+  });
+
+  test("a build reads the records that are not archived, while allJobs still reads the archived ones", () => {
+    const ids = ["20261027-000070-a", "20261027-000071-a"];
+    run(ids[0], { job: "fac-70", name: "fac-70", condition: "failed", reason: "a check failed", on: "fac-70", started: ago(240), ended: ago(239) });
+    run(ids[1], { job: "fac-71", name: "fac-71", condition: "failed", reason: "a check failed", on: "fac-71", started: ago(3), ended: ago(2) });
+    try {
+      expect(archiveOld(now.getTime())).toEqual(["fac-70"]);
+      const names = (s: ReturnType<typeof state>) => s.stuck.map((j) => j.name).filter((m) => m === "fac-70" || m === "fac-71");
+      expect(names(state(now))).toEqual(["fac-71"]);
+      expect(allJobs().map((j) => j[0].run.name)).toContain("fac-70");
+    } finally {
+      for (const id of ids) (rmSync(join(jobsDir, id), { recursive: true }), removeRun(id));
+    }
   });
 
   test("factory.liveRuns counts live agent runs only; land and plan runs stay in running", () => {

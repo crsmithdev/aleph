@@ -16,6 +16,7 @@ import { baselines, factoryDir, factoryRepos, gates, probeHold, readStalls, writ
 import { firefight } from "../gates/firefighter.ts";
 import { git } from "../infra/git.ts";
 import { factoryLog } from "../infra/layout.ts";
+import { archiveOld } from "../records/record.ts";
 import { allJobs, loadRegistry, lock, type Entry, type Repo } from "../records/ledger.ts";
 import { intakeDetached, suiteDetached } from "./launch.ts";
 import { monitorStep } from "../roles/monitor.ts";
@@ -121,6 +122,8 @@ export async function runTick(now = Date.now(), p: TickPorts = tickPorts): Promi
       try { ciStep(factoryRepos()); } catch (e: any) { factoryLog(`ci: failed: ${e?.message ?? e}`); }
     }
     await smokeStep(undefined, undefined, now);
+    const old = archiveOld(now);
+    if (old.length) out.archived = old;
     if (due(s, "firefight", now)) {
       s.last.firefight = at;
       const f = await firefight(undefined, now);

@@ -186,15 +186,15 @@ export function updateRun(folder: string, change: Partial<Run>): Run {
 export interface Entry { id: string; folder: string; run: Run }
 
 /** Every run, oldest first: ids start with the time, so they sort. */
-export function allRuns(): Entry[] {
+export function allRuns(live = false): Entry[] {
   const dir = runsDir();
-  return record.allRunRecords().map(({ id, ...run }) => ({ id, folder: join(dir, id), run }));
+  return record.allRunRecords(live).map(({ id, ...run }) => ({ id, folder: join(dir, id), run }));
 }
 
-/** Runs grouped by job, each group oldest first, in the order the jobs started. */
-export function allJobs(): Entry[][] {
+/** Runs grouped by job, each group oldest first, in the order the jobs started. With `live`, only the records that are not archived. */
+export function allJobs(live = false): Entry[][] {
   const jobs = new Map<string, Entry[]>();
-  for (const e of allRuns()) {
+  for (const e of allRuns(live)) {
     const list = jobs.get(e.run.job) ?? [];
     list.push(e);
     jobs.set(e.run.job, list);

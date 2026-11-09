@@ -56,6 +56,10 @@ export function recordsDir(): string {
   return join(e.HOME || homedir(), ".aleph", "jobs");
 }
 
+/** The archive: finished records older than `ARCHIVE_DAYS` move here, beside the records folder. */
+export const archiveDir = (): string => `${recordsDir()}-archive`;
+const ARCHIVE_DAYS = 7;
+
 /** The record key of a run: the issue it is on, else its job id. */
 export const keyOf = (run: Pick<Run, "on" | "job">): string => run.on ?? run.job;
 
@@ -81,7 +85,8 @@ function takeAsk(r: JobRecord, x: RunRecord): RunRecord {
   return run as RunRecord;
 }
 
-const fileOf = (key: string) => join(recordsDir(), `${key.replaceAll("/", "_")}.json`);
+const nameOf = (key: string) => `${key.replaceAll("/", "_")}.json`;
+const fileOf = (key: string) => join(recordsDir(), nameOf(key));
 
 /** A record with nothing in it yet. */
 export const empty = (key: string): JobRecord => ({ issue: key, ask: null, wait: null, rounds: 0, cost: 0, runs: [], events: [] });
@@ -106,19 +111,44 @@ function parse(text: string): JobRecord {
 
 /** The record of `key`, or null when there is none. */
 export function read(key: string): JobRecord | null {
-  try { return parse(readFileSync(fileOf(key), "utf8")); } catch { return null; }
+  for (const file of [fileOf(key), join(archiveDir(), nameOf(key))]) {
+    try { return parse(readFileSync(file, "utf8")); } catch { /* not in this folder */ }
+  }
+  return null;
 }
 
-/** Every record. */
-export function all(): JobRecord[] {
-  const dir = recordsDir();
-  if (!existsSync(dir)) return [];
+/** The folders of the records: the records folder, and with `live` false the archive too. */
+const folders = (live: boolean): string[] => (live ? [recordsDir()] : [recordsDir(), archiveDir()]);
+
+/** Every record, archived ones too; with `live` only the records that are not archived. */
+export function all(live = false): JobRecord[] {
   const out: JobRecord[] = [];
-  for (const f of readdirSync(dir).sort()) {
-    if (!f.endsWith(".json")) continue;
-    try { out.push(parse(readFileSync(join(dir, f), "utf8"))); } catch { /* a file mid-rename is not there yet */ }
+  for (const dir of folders(live)) {
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir).sort()) {
+      if (!f.endsWith(".json")) continue;
+      try { out.push(parse(readFileSync(join(dir, f), "utf8"))); } catch { /* a file mid-rename is not there yet */ }
+    }
   }
   return out;
+}
+
+/** Move each finished record whose newest run started over `ARCHIVE_DAYS` days before `now` into the archive. Returns the keys moved. */
+export function archiveOld(now = Date.now()): string[] {
+  const cut = new Date(now - ARCHIVE_DAYS * 864e5).toISOString();
+  const moved: string[] = [];
+  for (const { issue } of all(true)) {
+    const release = lockSync(issue);
+    try {
+      const r = read(issue);
+      if (!r || r.ask || r.wait || !r.runs.length) continue;
+      if (r.runs.some((x) => x.condition === "running" || x.condition === "waiting" || x.started >= cut)) continue;
+      mkdirSync(archiveDir(), { recursive: true });
+      renameSync(fileOf(issue), join(archiveDir(), nameOf(issue)));
+      moved.push(issue);
+    } finally { release(); }
+  }
+  return moved;
 }
 
 /** The fields a write derives from the runs: `cost` and `rounds`. */
@@ -203,6 +233,8 @@ export function write(r: JobRecord): void {
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(r, null, 1) + "\n");
   renameSync(tmp, file);
+  // A write to an archived record takes it out of the archive: one record for each issue.
+  rmSync(join(archiveDir(), nameOf(r.issue)), { force: true });
 }
 
 // ---------------------------------------------------------------------------
@@ -215,16 +247,17 @@ const keys = new Map<string, string>();
 function keyOfId(id: string): string | undefined {
   const known = keys.get(id);
   if (known) return known;
-  const dir = recordsDir();
-  if (!existsSync(dir)) return undefined;
   const needle = JSON.stringify({ id }).slice(1, -1).replace(":", ": ");
-  for (const f of readdirSync(dir)) {
-    if (!f.endsWith(".json")) continue;
-    let text: string;
-    try { text = readFileSync(join(dir, f), "utf8"); } catch { continue; }
-    if (!text.includes(needle)) continue;
-    const r: JobRecord = parse(text);
-    if (r.runs.some((x) => x.id === id)) { keys.set(id, r.issue); return r.issue; }
+  for (const dir of folders(false)) {
+    if (!existsSync(dir)) continue;
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith(".json")) continue;
+      let text: string;
+      try { text = readFileSync(join(dir, f), "utf8"); } catch { continue; }
+      if (!text.includes(needle)) continue;
+      const r: JobRecord = parse(text);
+      if (r.runs.some((x) => x.id === id)) { keys.set(id, r.issue); return r.issue; }
+    }
   }
   return undefined;
 }
@@ -278,9 +311,9 @@ export function removeRun(id: string): void {
 }
 
 /** Every run of every record, oldest first by id. */
-export function allRunRecords(): RunRecord[] {
+export function allRunRecords(live = false): RunRecord[] {
   const out: RunRecord[] = [];
-  for (const r of all()) for (const x of r.runs) { keys.set(x.id, r.issue); out.push(view(r, x)); }
+  for (const r of all(live)) for (const x of r.runs) { keys.set(x.id, r.issue); out.push(view(r, x)); }
   return out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 

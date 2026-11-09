@@ -176,6 +176,8 @@ One folder per run: `<YYYYMMDD-HHMMSS>-<subject>-<n>`, for example `20261105-080
 
 No code prunes run folders or records.
 
+The tick moves each finished record into the archive folder `<records>-archive` (`jobs-archive` beside `jobs/`) when no run of it runs or waits, it has no Ask and no wait, and its newest run started over 7 days ago. `/api/state` reads only the records that are not archived; every other reader of `record.all()` and `allJobs()` reads both folders. A write to an archived record (`update`, so `putRun`, `patchRun` and `addEvent`) moves it back out first.
+
 ## Asks
 
 `jobs/lib/asks/ask.ts`. An Ask sits on the job record.
