@@ -18,6 +18,7 @@ import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import * as store from "../../../issues/lib/store.ts";
+import { failedTests } from "./checks.ts";
 import { loadRegistry, type Repo } from "../records/ledger.ts";
 import { ciOf, gh, redCi, ciLine, type Gh } from "./ci.ts";
 import { baselines, factoryDir, factoryRepos, gates, redLine } from "./factory-status.ts";
@@ -114,7 +115,7 @@ const mark = (commit: string) => `Failing commit: ${commit}`;
 const isRedMain = (i: issues.Issue) => store.areasOf(i).includes("red-main") || store.labels(i).includes("red-main");
 
 /** The failing tests of a failure: the names on its `(fail)` lines, each without the trailing duration such as `[12.34ms]`. */
-const failsOf = (text: string): string[] => [...new Set([...text.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm)].map((m) => m[1]))].sort();
+const failsOf = (text: string): string[] => failedTests(text).sort();
 /** Whether two failures failed the same tests. A failure with no `(fail)` lines matches only another with none. */
 const sameFails = (a: string, b: string): boolean => { const x = failsOf(a), y = failsOf(b); return x.length === y.length && x.every((t, i) => t === y[i]); };
 /** The issue that holds this commit already: in its request, as filed, or in a note, as a later commit during an open fix. */

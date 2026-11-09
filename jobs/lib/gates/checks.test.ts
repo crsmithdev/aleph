@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addedLines, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
+import { addedLines, failedTests, keepGate, mutants, newCases, runChecks, runsBunTest, shell, withJunit, type CheckExec, type Runner, type Source } from "./checks.ts";
 import { flakes } from "./factory-status.ts";
 import type { CheckResult, Repo } from "../records/ledger.ts";
 
@@ -47,6 +47,10 @@ test("a check that passes runs once", async () => {
   expect(r).toMatchObject({ failed: null, calls: ["a"] });
   expect(r.results[0].rerun).toBeUndefined();
   expect(flakes()).toEqual([]);
+});
+
+test("failedTests gives each failed test once, without its duration", () => {
+  expect(failedTests("(fail) suite > one [12.50ms]\nok\n(fail) three\n\n(fail) suite > one [12.50ms]")).toEqual(["suite > one", "three"]);
 });
 
 test("a pass on the second run is a flake that names the failed tests once each", async () => {

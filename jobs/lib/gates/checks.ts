@@ -35,7 +35,7 @@ export interface CheckTask { folder: string; repo: Repo; changed: string[]; phas
 export type CheckExec = (check: Check, out: string, limit: number) => Promise<{ code: number; timedOut: boolean; killed?: boolean }>;
 
 /** The names on bun's `(fail)` lines, each one once: its summary repeats them. */
-const failedTests = (log: string): string[] => [...new Set(log.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm).map((m) => m[1]))];
+export const failedTests = (log: string): string[] => [...new Set(log.matchAll(/^\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/gm).map((m) => m[1]))];
 
 const tail = (file: string, n: number) => existsSync(file) ? readFileSync(file, "utf8").trimEnd().split("\n").slice(-n).join("\n") : "";
 
