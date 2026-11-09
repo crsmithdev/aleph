@@ -2,7 +2,7 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { env, fx, remoteItem, seed, sh, tasks, useFixture } from "./fixture.ts";
-import { renderItem, titleProblem } from "./lib/todo.ts";
+import { clock, renderItem, titleProblem } from "./lib/todo.ts";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 // Matches `--timeout=30000` in the package.json test script, so running this file by name gets the same limit.
@@ -113,14 +113,16 @@ test("dates are local, not UTC", () => {
   const lib = join(import.meta.dir, "lib", "todo.ts");
   const p = Bun.spawnSync(
     ["bun", "-e", `import {today,minute} from ${JSON.stringify(lib)};
+       import {setSystemTime} from "bun:test";
        const e = new Date(2026, 8, 28, 18, 6);
-       console.log(today(e), minute(e), today(), new Date().getDate());`],
+       setSystemTime(e);
+       console.log(today(e), minute(e), today());`],
     { env: { ...(process.env as Record<string, string>), TZ: "America/Los_Angeles" }, stdout: "pipe" },
   );
-  const [day, date, time, now, dayOfMonth] = p.stdout.toString().trim().split(/[\s]+/);
+  const [day, date, time, now] = p.stdout.toString().trim().split(/[\s]+/);
   expect(`${day}`).toBe("2026-09-28");
   expect(`${date} ${time}`).toBe("2026-09-28 18:06");
-  expect(now.endsWith(`-${dayOfMonth.padStart(2, "0")}`)).toBe(true);
+  expect(now).toBe("2026-09-28");
 });
 
 test("edit replaces the title, body, priority and labels it is given, and keeps the notes", () => {
@@ -157,7 +159,7 @@ test("list and lint with no repo cover the repos with a run or an item update in
   mkdirSync(join(jobs, "r1"));
   const saved = process.env.ALEPH_JOBS_DIR;
   process.env.ALEPH_JOBS_DIR = jobs;
-  writeRun(join(jobs, "r1"), { kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: new Date().toISOString() } as any);
+  writeRun(join(jobs, "r1"), { kind: "agent", name: "x", repo: "proj", job: "r1", condition: "landed", started: clock().toISOString() } as any);
   // Assigning undefined would set the string "undefined", and a later test's records would land in ./undefined/.
   if (saved === undefined) delete process.env.ALEPH_JOBS_DIR; else process.env.ALEPH_JOBS_DIR = saved;
   expect(alephWith(e, "issue", "list").out).toBe("proj\n  3  open    medium   An old item\nfresh\n  1  open    medium   A new item\n");

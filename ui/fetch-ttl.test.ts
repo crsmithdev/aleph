@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
+import { watch } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,15 +8,19 @@ import { cacheFetches, readFetched, readList, uiFetchTtl, writeList } from "../i
 import { routes } from "./api/issues.ts";
 import { withEnv, withServer } from "./test-server.ts";
 import { state } from "./state.ts";
-import { waitFor } from "../tests/wait.ts";
 import { writeRun } from "../jobs/lib/records/ledger.ts";
 
 let base: string, log: string, stale: string, staleRemote: string;
 let restoreEnv: () => void;
 const fetches = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "fetch").length;
 const doneCount = (): number => readFileSync(log, "utf8").split("\n").filter((l) => l === "done").length;
+/** Resolves when `cond` holds, checked on each write to the shim's log: an event, not a timer. */
+const reached = (cond: () => boolean): Promise<void> => new Promise((done) => {
+  const w = watch(log, () => { if (cond()) { w.close(); done(); } });
+  if (cond()) { w.close(); done(); }
+});
 /** Wait until every fetch the shim has logged has ended. */
-const settled = async (): Promise<void> => { await waitFor(() => doneCount() >= fetches(), { timeout: 10_000 }); };
+const settled = (): Promise<void> => reached(() => doneCount() >= fetches());
 const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(a, { cwd }); if (p.exitCode) throw new Error(p.stderr.toString()); };
 
 beforeAll(() => {
@@ -40,7 +45,7 @@ beforeAll(() => {
   for (const [repo, name] of [["a", "a-1"], ["b", "b-1"]]) {
     const folder = join(base, "jobs", `20261027-100000-${repo}-${name}-agent`);
     mkdirSync(folder, { recursive: true });
-    writeRun(join(folder), { kind: "build", condition: "running", started: new Date().toISOString(), name, job: name, repo, on: `${repo}-1` } as any);
+    writeRun(join(folder), { kind: "build", condition: "running", started: "2026-10-27T10:00:00.000Z", name, job: name, repo, on: `${repo}-1` } as any);
   }
   restoreEnv = withEnv({ PATH: `${join(base, "bin")}:${process.env.PATH}`, ALEPH_ISSUES: items, ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_UI_FETCH_TTL: "30" });
   cacheFetches(uiFetchTtl());
@@ -52,7 +57,7 @@ afterAll(() => {
 });
 
 test("the UI fetches the work store at most once per 30 s, across reads and requests, and only the first fetch waits", async () => {
-  const t0 = Date.now() + 1_000_000;
+  const t0 = 2_000_000_000_000;
   const now = spyOn(Date, "now");
   now.mockReturnValue(t0);
   const before = fetches();
@@ -66,7 +71,7 @@ test("the UI fetches the work store at most once per 30 s, across reads and requ
   state();
   now.mockRestore();
   // After the first, a fetch runs in the background.
-  await waitFor(() => fetches() >= before + 2, { timeout: 2000 });
+  await reached(() => fetches() >= before + 2);
   expect(fetches()).toBe(before + 2);
 });
 
@@ -75,7 +80,7 @@ test("a write fetches in the foreground even with the cache on, and builds on th
   const other = join(base, "other");
   sh(base, "git", "clone", "-q", join(base, "items.git"), other);
   writeList({ key: "a" }, "give a a list", (doc) => { add(doc, "one"); return true; }, true);
-  const t0 = Date.now() + 2_000_000;
+  const t0 = 3_000_000_000_000;
   const now = spyOn(Date, "now");
   now.mockReturnValue(t0);
   try {
@@ -84,7 +89,7 @@ test("a write fetches in the foreground even with the cache on, and builds on th
     const before = fetches();
     readList({ key: "a" });
     // The read past the TTL starts one background fetch; its log line can come late under load.
-    await waitFor(() => fetches() >= before + 1, { timeout: 2000 });
+    await reached(() => fetches() >= before + 1);
     expect(fetches()).toBe(before + 1);
     await settled();
     readList({ key: "a" });
@@ -124,12 +129,12 @@ test("a background fetch that brings an older remote state cannot move origin/ma
   const w = writeList({ key: "a" }, "write after the snapshot", (doc) => { add(doc, "written"); return true; });
   expect(w).not.toBeNull();
   const now = spyOn(Date, "now");
-  now.mockReturnValue(Date.now() + 60_000);
+  now.mockReturnValue(4_000_000_000_000);
   writeFileSync(stale, "");
   await settled();
   const dones = doneCount();
   try { readList({ key: "a" }); } finally { now.mockRestore(); }
-  await waitFor(() => doneCount() > dones, { timeout: 2000 });
+  await reached(() => doneCount() > dones);
   expect(doneCount()).toBeGreaterThan(dones);
   expect(Bun.spawnSync(["git", "rev-parse", "origin/main"], { cwd: items }).stdout.toString().trim()).toBe(w!.commit);
   expect(readFetched({ key: "a" })!.items.some((i) => i.title === "written")).toBe(true);

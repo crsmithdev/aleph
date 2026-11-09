@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, setSystemTime, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +7,9 @@ import { withEnv, withServer } from "./test-server.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/skills.js";
 
-const today = new Date().toISOString().slice(0, 10);
+const today = "2026-11-09";
+const NOW = Date.parse(`${today}T12:00:00.000Z`);
+setSystemTime(NOW);
 const daysAgo = (n: number, time = "10:00:00") => new Date(Date.parse(today) - n * 86400_000).toISOString().slice(0, 10) + `T${time}.000Z`;
 
 let tmp: string, lf: ReturnType<typeof Bun.serve>, stopApp: () => void, restoreEnv: () => void, appAt: (path: string) => Promise<Response>, down = false, hits = 0, asked: URL[] = [];
@@ -71,6 +73,7 @@ beforeAll(async () => {
   ({ stop: stopApp, at: appAt } = await withServer({ warm: false }));
 });
 afterAll(() => {
+  setSystemTime();
   stopApp(); lf.stop(true);
   restoreEnv();
 });
@@ -83,14 +86,16 @@ test("?project= that is no registry key is no filter", async () => {
 });
 
 test("a 502 goes out only after every request of the failed fetch has ended", async () => {
-  let inflight = 0, requests = 0;
+  let inflight = 0, requests = 0, fail!: () => void;
+  const failed = new Promise<void>((r) => { fail = r; });
   const slow = Bun.serve({
     port: 0,
     async fetch(req) {
       requests++;
-      if (new URL(req.url).searchParams.get("type") === "AGENT") return new Response("down", { status: 503 });
+      if (new URL(req.url).searchParams.get("type") === "AGENT") { fail(); return new Response("down", { status: 503 }); }
       inflight++;
-      await Bun.sleep(100);
+      await failed; // still open after the failed AGENT request has been answered
+      await new Promise((r) => setTimeout(r, 0));
       inflight--;
       return new Response("down", { status: 503 });
     },
@@ -99,7 +104,7 @@ test("a 502 goes out only after every request of the failed fetch has ended", as
   process.env.LANGFUSE_BASE_URL = `http://127.0.0.1:${slow.port}`;
   try {
     expect((await get("/api/skills")).status).toBe(502);
-    // Each request is held 100 ms by the server: one still open when the 502 went out would show here.
+    // Each other request is held open past the failed one: one still open when the 502 went out would show here.
     expect(inflight).toBe(0);
   } finally {
     slow.stop(true);
@@ -114,8 +119,8 @@ test("after a restart, a reload fetches only the rows of the last two hours and 
   const { status, body } = await get("/api/skills");
   expect(status).toBe(200);
   const from = Date.parse(asked.find((u) => u.pathname === "/api/public/observations")!.searchParams.get("fromStartTime")!);
-  expect(Date.now() - from).toBeLessThan(2 * 3600_000 + 60_000);
-  expect(Date.now() - from).toBeGreaterThan(2 * 3600_000 - 60_000);
+  expect(NOW - from).toBeLessThan(2 * 3600_000 + 60_000);
+  expect(NOW - from).toBeGreaterThan(2 * 3600_000 - 60_000);
   expect(body.skills.find((s: any) => s.name === "aleph:pickup")).toMatchObject({ uses: 2, errors: 1 }); // t2 is two days old
 });
 
@@ -125,7 +130,7 @@ test("after a restart, a reload fetches only the rows of the last two hours and 
 
 test("pages are fetched concurrently, and serve() warms the skills and /api/agents caches so the first requests hit Langfuse zero times", async () => {
   // Overlap is counted per list: the two lists run side by side even when each one pages serially.
-  const active: Record<string, number> = {}, peak: Record<string, number> = {};
+  const active: Record<string, number> = {}, peak: Record<string, number> = {}, arrived: Record<string, number> = {}, waiting: Record<string, (() => void)[]> = {};
   let calls = 0, all = 0;
   const paged = Bun.serve({
     port: 0,
@@ -135,12 +140,17 @@ test("pages are fetched concurrently, and serve() warms the skills and /api/agen
       // Other warm-ups (memory's `vault misses` subprocess) reach this mock too: only the skills lists count.
       // The Agents warm-up reads the 7-day window through the same lists: only the 30-day reads count.
       const from = Date.parse(u.searchParams.get("fromStartTime") ?? u.searchParams.get("fromTimestamp") ?? "");
-      const mine = (u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "")) && from < Date.now() - 10 * 86400_000;
-      if (mine) { calls++; active[u.pathname] = (active[u.pathname] ?? 0) + 1; peak[u.pathname] = Math.max(peak[u.pathname] ?? 0, active[u.pathname]); }
-      await Bun.sleep(40);
-      if (mine) active[u.pathname]--;
+      const mine = (u.pathname === "/api/public/traces" || ["AGENT", "TOOL"].includes(u.searchParams.get("type") ?? "")) && from < NOW - 10 * 86400_000;
       const page = Number(u.searchParams.get("page") ?? 1);
-      const data = u.pathname === "/api/public/observations" && page === 1 ? observations.filter((o) => Date.parse(o.startTime) >= Date.now() - 30 * 86400_000) : [];
+      if (mine) { calls++; active[u.pathname] = (active[u.pathname] ?? 0) + 1; peak[u.pathname] = Math.max(peak[u.pathname] ?? 0, active[u.pathname]); }
+      // Pages after the first wait for a second page of the same list: a serial fetch never gets one.
+      if (mine && page > 1) {
+        arrived[u.pathname] = (arrived[u.pathname] ?? 0) + 1;
+        if (arrived[u.pathname] >= 2) (waiting[u.pathname] ?? []).forEach((go) => go());
+        else await new Promise<void>((go) => (waiting[u.pathname] ??= []).push(go));
+      }
+      if (mine) active[u.pathname]--;
+      const data = u.pathname === "/api/public/observations" && page === 1 ? observations.filter((o) => Date.parse(o.startTime) >= NOW - 30 * 86400_000) : [];
       return Response.json({ data: u.pathname === "/api/public/traces" && page === 1 ? traces : data, meta: { totalPages: 4 } });
     },
   });

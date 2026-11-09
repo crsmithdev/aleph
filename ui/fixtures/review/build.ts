@@ -7,7 +7,7 @@
 import { copyFileSync, lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { writeList } from "../../../issues/lib/store.ts";
-import { add, note, setStatus } from "../../../issues/lib/todo.ts";
+import { add, clock, note, setStatus } from "../../../issues/lib/todo.ts";
 import { addPart } from "../../../issues/lib/parts.fixture.ts";
 import { putRun, setIssueAsk } from "../../../jobs/lib/records/record.ts";
 
@@ -65,7 +65,7 @@ export function buildReviewFixture(dest: string, src = import.meta.dir): Record<
     sh(r.path, "git", "remote", "add", "origin", bare);
     sh(r.path, "git", "push", "-q", "-u", "origin", "main");
   }
-  const shift = Date.now() - 2 * 3600_000 - ANCHOR;
+  const shift = clock().getTime() - 2 * 3600_000 - ANCHOR;
   copyPlain(join(src, "jobs"), join(dest, "jobs"));
   // The fixture keeps each run as a state.json; the copy keeps it in its job record, where the ledger reads it.
   const records = process.env.ALEPH_RECORDS_DIR;

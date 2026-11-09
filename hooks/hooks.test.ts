@@ -114,7 +114,7 @@ describe("obs hook", () => {
   // flaky: tests/flaky.md#hooks-tools-nest
   test.skip("tools nest under the turn in its trace with real duration; Stop completes the same turn span", async () => {
     // Each hook reads the clock once; ALEPH_NOW puts the two reads 250 ms apart.
-    const t0 = Date.now();
+    const t0 = Date.parse("2026-09-03T10:00:00.000Z");
     const at = (ms: number) => ({ ALEPH_NOW: new Date(t0 + ms).toISOString() });
     const pre = await fire({ hook_event_name: "PreToolUse", prompt_id: "p1", tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "ls" } }, at(0));
     expect(pre.code).toBe(0);
@@ -309,7 +309,7 @@ describe("handshake prune", () => {
     put("tool:old", { start: 1 });
     put("tool:new", { start: 2 });
     const { utimesSync } = await import("node:fs");
-    const old = new Date(Date.now() - 2 * 86_400_000);
+    const old = new Date(0);
     utimesSync(join(dir, "tool:old.json"), old, old);
     prune();
     expect(peek("tool:old")).toBeNull();
@@ -380,7 +380,7 @@ describe("pricing", () => {
 });
 
 describe("obs hook waits for the transcript", () => {
-  test("a final assistant entry written 300 ms after Stop is still counted", async () => {
+  test("a final assistant entry written after the hook first reads the transcript is still counted", async () => {
     const dir = mkdtempSync(join(tmpdir(), "aleph-late-"));
     const transcript = join(dir, "t.jsonl");
     const usage = { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
@@ -388,7 +388,9 @@ describe("obs hook waits for the transcript", () => {
       { type: "user", promptId: "pl", isSidechain: false, timestamp: "2026-09-03T10:00:00.000Z", message: { role: "user", content: "hi" } },
       { type: "assistant", isSidechain: false, requestId: "req_1", timestamp: "2026-09-03T10:00:01.000Z", message: { role: "assistant", model: "claude-haiku-4-5-20251001", usage, content: [{ type: "tool_use", id: "t", name: "Bash", input: {} }] } },
     ];
-    writeFileSync(transcript, first.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    const last = { type: "assistant", isSidechain: false, requestId: "req_2", timestamp: "2026-09-03T10:00:03.000Z", message: { role: "assistant", model: "claude-haiku-4-5-20251001", usage, content: [{ type: "text", text: "all done here" }] } };
+    // The transcript is a FIFO: the hook's first read opens it, and that open is the event the test waits for.
+    expect(Bun.spawnSync(["mkfifo", transcript]).exitCode).toBe(0);
     const posted: any[] = [];
     const server = Bun.serve({ port: 0, fetch: async (req) => { posted.push(await req.json()); return new Response("{}"); } });
     const spool = mkdtempSync(join(tmpdir(), "aleph-late-spool-"));
@@ -397,9 +399,13 @@ describe("obs hook waits for the transcript", () => {
       env: { ...process.env, LANGFUSE_BASE_URL: `http://127.0.0.1:${server.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk", ALEPH_SPOOL: spool },
       stdout: "pipe", stderr: "pipe",
     });
-    await Bun.sleep(300);
-    const { appendFileSync } = await import("node:fs");
-    appendFileSync(transcript, JSON.stringify({ type: "assistant", isSidechain: false, requestId: "req_2", timestamp: "2026-09-03T10:00:03.000Z", message: { role: "assistant", model: "claude-haiku-4-5-20251001", usage, content: [{ type: "text", text: "all done here" }] } }) + "\n");
+    const { closeSync, openSync, renameSync, writeSync } = await import("node:fs");
+    const fd = openSync(transcript, "w");
+    // The first read gets the transcript without the final entry; each later read opens the full file in the FIFO's place.
+    writeFileSync(join(dir, "full.jsonl"), [...first, last].map((l) => JSON.stringify(l)).join("\n") + "\n");
+    renameSync(join(dir, "full.jsonl"), transcript);
+    writeSync(fd, first.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    closeSync(fd);
     expect(await proc.exited).toBe(0);
     server.stop();
     const spans = posted[0].resourceSpans[0].scopeSpans[0].spans;
@@ -614,14 +620,13 @@ describe("secret scan", () => {
 });
 
 describe("fetchObservations", () => {
-  function fake(failPage?: number, opts: { pages?: number; delay?: number; failOnce?: number } = {}) {
+  function fake(failPage?: number, opts: { pages?: number; failOnce?: number } = {}) {
     const state = { open: 0, maxOpen: 0, seen: new Set<number>() };
     const server = Bun.serve({
       port: 0,
       fetch: async (req) => {
         const page = Number(new URL(req.url).searchParams.get("page"));
         state.maxOpen = Math.max(state.maxOpen, ++state.open);
-        await Bun.sleep(opts.delay ?? 100);
         state.open--;
         const again = state.seen.has(page);
         state.seen.add(page);
@@ -637,7 +642,7 @@ describe("fetchObservations", () => {
   test("a 500 on page 3 throws", async () => {
     const { server, cfg } = fake(3);
     try {
-      await expect(fetchObservations(cfg, new Date(0), new Date())).rejects.toThrow("500 on observations");
+      await expect(fetchObservations(cfg, new Date(0), new Date(1))).rejects.toThrow("500 on observations");
     } finally { server.stop(true); }
   });
 });
