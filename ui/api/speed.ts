@@ -275,11 +275,15 @@ const FILED = /^([^/]+)\/backlog\/tasks\/\1-(\d+)((?:\.\d+)*)\.md$/;
 export interface Filed { issue: Map<string, number | null> }
 let filedAt: Filed & { head: string } = { head: "", issue: new Map() };
 
-/** When each issue came into the store, in ms. Null for one that a bulk commit added. Each read adds only the commits since the last. */
-export function filed(dir = storeDir()): Filed {
+/** The commit of the store's origin/main, or "" when the store has none. */
+const originMain = (dir: string): string => {
   const rev = existsSync(dir) ? git(dir, "rev-parse", "origin/main") : null;
-  if (!rev?.ok) return { issue: new Map() };
-  const head = rev.out;
+  return rev?.ok ? rev.out : "";
+};
+
+/** When each issue came into the store, in ms. Null for one that a bulk commit added. Each read adds only the commits since the last. */
+export function filed(dir = storeDir(), head = originMain(dir)): Filed {
+  if (!head) return { issue: new Map() };
   if (head === filedAt.head) return filedAt;
   const known = filedAt.head && git(dir, "merge-base", "--is-ancestor", filedAt.head, head).ok;
   const next = known ? filedAt : { head, issue: new Map() };
@@ -570,7 +574,8 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     }).sort((a, b) => b.week - a.week).slice(0, 8);
     issues.week = per.length ? round(pct(per, 0.5), 2) : null;
   }
-  const lists = reader({ fetch: false });
+  const head = originMain(storeDir());
+  const lists = reader({ fetch: false, rev: head || undefined });
   const statusOf = (ref: string): string | undefined => {
     const [repo, n] = splitId(ref);
     const item = repo ? lists.item(repo, n) : undefined;
@@ -600,7 +605,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     if (item) u.title = item.title;
     else if (lists.list(repo)) delete u.href;
   }
-  const ended = phaseTimes(all, filed(), since.getTime(), now.getTime());
+  const ended = phaseTimes(all, filed(storeDir(), head), since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number, q = 0.5) => {
     const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
     return inBucket.length ? round(pct(inBucket, q)) : null;

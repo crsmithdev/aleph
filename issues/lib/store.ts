@@ -133,8 +133,8 @@ export function readList(repo: Place): Doc | null {
 }
 
 /** The repo's list on the store's origin/main as last fetched, with no fetch; null when the store has none. */
-export function readFetched(repo: Place): Doc | null {
-  return load(storeDir(), `origin/${MAIN}`, repo.key);
+export function readFetched(repo: Place, rev = `origin/${MAIN}`): Doc | null {
+  return load(storeDir(), rev, repo.key);
 }
 
 /** Each repo's list on the store's origin/main, after one fetch; null when the store has none. */
@@ -273,14 +273,14 @@ export interface Reader {
   item(key: string, id: number | string): Issue | undefined;
 }
 
-/** A reader of the store's lists; it fetches at most once, on its first list. `fetch: false` reads origin/main as last fetched. */
-export function reader(o: { fetch?: boolean } = {}): Reader {
+/** A reader of the store's lists; it fetches at most once, on its first list. `fetch: false` reads origin/main as last fetched, or the commit `rev`. */
+export function reader(o: { fetch?: boolean; rev?: string } = {}): Reader {
   const lists = new Map<string, Doc | null>();
   let fetched = o.fetch === false;
   const list = (key: string): Doc | null => {
     if (!lists.has(key)) {
       let doc: Doc | null = null;
-      const read = fetched ? readFetched : readList;
+      const read = fetched ? (r: Place) => readFetched(r, o.rev) : readList;
       fetched = true;
       try { doc = read({ key }); } catch {}
       lists.set(key, doc);

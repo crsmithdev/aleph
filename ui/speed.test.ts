@@ -478,3 +478,25 @@ test("every Status card with a second value has a qualifier, Lost time too, and 
   }
   expect(statusCards(s, d, {})).toContain('<b>30%<em> / 6.0h</em></b><span class="q"><span>lost</span><span class="m"> / hours</span>');
 });
+
+test("speed: a build on an unchanged store spawns one git process and reads the same filing times and titles", () => {
+  const store = join(base, "issues");
+  mkdirSync(join(store, "tt/backlog/tasks"), { recursive: true });
+  writeFileSync(join(store, "tt/backlog/config.yml"), "");
+  writeFileSync(join(store, "tt/backlog/tasks/tt-7.md"), "---\nid: tt-7\ntitle: Seven\nstatus: To Do\n---\n");
+  const who = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", GIT_AUTHOR_DATE: "@5000 +0000", GIT_COMMITTER_DATE: "@5000 +0000" };
+  for (const a of [["init", "-q"], ["add", "."], ["commit", "-qm", "tt: add"], ["update-ref", "refs/remotes/origin/main", "HEAD"]]) Bun.spawnSync(["git", "-C", store, ...a], { env: { ...process.env, ...who } });
+  run({ kind: "build", condition: "passed", repo: "tt", on: "tt-7", cost: 1, ...secs(0, 9, 600) });
+  run({ kind: "land", condition: "landed", repo: "tt", on: "tt-7", ...secs(0, 9, 40) });
+  const read = () => { const d = speed("week", now, { pooled: 0.1, byModel: {} } as any); return [d.times.map((x) => x.filed), d.issues.usage.map((u) => u.title)]; };
+  const first = read();
+  expect(first[1]).toContain("Seven");
+  const spawn = Bun.spawnSync, calls: string[][] = [];
+  Bun.spawnSync = ((cmd: string[], ...rest: unknown[]) => (calls.push(cmd), (spawn as Function)(cmd, ...rest))) as typeof Bun.spawnSync;
+  try {
+    expect(read()).toEqual(first);
+  } finally {
+    Bun.spawnSync = spawn;
+  }
+  expect(calls.filter((c) => c[0] === "git").length).toBeLessThanOrEqual(1);
+});
