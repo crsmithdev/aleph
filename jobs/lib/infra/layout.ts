@@ -3,7 +3,7 @@
  * reader (docs/data-model.md): the layout
  * (issues, runs, factory) under ~/.aleph. The environment wins, variable by variable.
  */
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { event, type Event } from "../../../lib/naming.ts";
@@ -23,11 +23,15 @@ export function layout(): Layout {
   };
 }
 
-/** One line in the factory's tick.log. */
+/** One line in the factory's tick.log. A tick.log from an earlier UTC day becomes `tick.<day>.log`; those files last 14 days. */
 export function factoryLog(line: string): void {
-  const dir = layout().factory;
+  const dir = layout().factory, now = new Date(), log = join(dir, "tick.log");
   mkdirSync(dir, { recursive: true });
-  appendFileSync(join(dir, "tick.log"), `${new Date().toISOString()} ${line}\n`);
+  const today = now.toISOString().slice(0, 10), last = existsSync(log) ? statSync(log).mtime.toISOString().slice(0, 10) : today;
+  if (last < today) renameSync(log, join(dir, `tick.${last}.log`));
+  const oldest = new Date(now.getTime() - 14 * 864e5).toISOString().slice(0, 10);
+  for (const f of readdirSync(dir)) if (/^tick\.\d{4}-\d\d-\d\d\.log$/.test(f) && f.slice(5, 15) < oldest) rmSync(join(dir, f));
+  appendFileSync(log, `${now.toISOString()} ${line}\n`);
 }
 
 /** The event log: one file per UTC day, `<day>.jsonl`, one event as JSON per line. A day before today never changes. */
@@ -68,7 +72,9 @@ export function eventOf(rest: string): Event | null {
   try { return JSON.parse(rest); } catch { return null; }
 }
 
-/** The whole tick.log, or "" when there is none. */
+/** The kept `tick.<day>.log` files in day order, then tick.log; "" when there is none. */
 export function readFactoryLog(): string {
-  try { return readFileSync(join(layout().factory, "tick.log"), "utf8"); } catch { return ""; }
+  const dir = layout().factory;
+  const days = existsSync(dir) ? readdirSync(dir).filter((f) => /^tick\.\d{4}-\d\d-\d\d\.log$/.test(f)).sort() : [];
+  return [...days, "tick.log"].map((f) => { try { return readFileSync(join(dir, f), "utf8"); } catch { return ""; } }).join("");
 }

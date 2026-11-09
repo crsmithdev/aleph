@@ -1,12 +1,12 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLI } from "../../cli.helpers.ts";
 import { renderItem } from "../../../issues/lib/todo.ts";
 import { config, storeDir } from "../../../issues/lib/store.ts";
 import { runsDir, writeRun } from "../records/ledger.ts";
-import { layout } from "./layout.ts";
+import { factoryLog, layout, readFactoryLog } from "./layout.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
@@ -70,4 +70,21 @@ test("layout() names the new layout only, and the CLI reads the data there", asy
   const jobs = await aleph("jobs");
   expect(jobs.code).toBe(0);
   expect(jobs.stdout).toContain("j1");
+});
+
+test("factoryLog moves an earlier day's tick.log aside and deletes files older than 14 days", () => {
+  const dir = layout().factory, at = new Date("2026-11-09T12:00:00Z");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "tick.log"), "old line\n");
+  utimesSync(join(dir, "tick.log"), new Date("2026-11-07T08:00:00Z"), new Date("2026-11-07T08:00:00Z"));
+  writeFileSync(join(dir, "tick.2026-10-27.log"), "13\n");
+  writeFileSync(join(dir, "tick.2026-10-25.log"), "15\n");
+  setSystemTime(at);
+  try { factoryLog("new line"); } finally { setSystemTime(); }
+  expect(readFileSync(join(dir, "tick.log"), "utf8")).toBe("2026-11-09T12:00:00.000Z new line\n");
+  expect(readFileSync(join(dir, "tick.2026-11-07.log"), "utf8")).toBe("old line\n");
+  expect(existsSync(join(dir, "tick.2026-10-27.log"))).toBe(true);
+  expect(existsSync(join(dir, "tick.2026-10-25.log"))).toBe(false);
+  // The one-time conversion of tick.log reads the kept days too, so the rotation loses no old line.
+  expect(readFactoryLog()).toBe("13\nold line\n2026-11-09T12:00:00.000Z new line\n");
 });
