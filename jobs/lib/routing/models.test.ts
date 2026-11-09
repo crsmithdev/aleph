@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { serverArgs } from "./gpt-oss-start.ts";
-import { MODELS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf } from "./models.ts";
+import { AGENT_SETTINGS, MODELS, modelArgv, modelEnv, onGpu, readModels, setModel, viaOf } from "./models.ts";
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "models-")); process.env.ALEPH_FACTORY_DIR = dir; });
@@ -70,9 +70,15 @@ test("a Claude model adds no env; gpt-oss-20b adds the local server and takes th
 });
 
 test("the argv passes the model's id, and no --model when there is none", () => {
-  expect(modelArgv("claude", "deepseek-v4.1-flash", ["--x"])).toEqual(["claude", "-p", "--strict-mcp-config", "--disable-slash-commands", "--model", "deepseek/deepseek-v4.1-flash", "--x"]);
+  expect(modelArgv("claude", "deepseek-v4.1-flash", ["--x"])).toEqual(["claude", "-p", "--strict-mcp-config", "--disable-slash-commands", "--settings", AGENT_SETTINGS, "--model", "deepseek/deepseek-v4.1-flash", "--x"]);
   expect(modelArgv("claude", "claude-opus-5-5", [])).toContain("claude-opus-5-5");
-  expect(modelArgv("claude", undefined, ["--x"])).toEqual(["claude", "-p", "--strict-mcp-config", "--disable-slash-commands", "--x"]);
+  expect(modelArgv("claude", undefined, ["--x"])).toEqual(["claude", "-p", "--strict-mcp-config", "--disable-slash-commands", "--settings", AGENT_SETTINGS, "--x"]);
+});
+
+test("an agent role leaves out Chris's CLAUDE.md and says it is an agent", () => {
+  const s = JSON.parse(AGENT_SETTINGS);
+  expect(s.claudeMdExcludes).toContain(join(homedir(), ".claude", "CLAUDE.md"));
+  expect(s.env).toEqual({ ALEPH_AGENT: "1" });
 });
 
 test("every tier offers its Claude model first, then every model Claude does not serve", () => {

@@ -454,8 +454,8 @@ export function coreNotes(notes: Note[], scope: string): Note[] {
  * cut at whole lines to START_BUDGET bytes. `cut` counts the core lines left
  * out; the last line then points to the rest.
  */
-export function startContext(root: string, notes: Note[], scope: string): { text: string; cut: number } {
-  const memory = notes.find((n) => n.rel === "MEMORY.md")?.text.trim();
+export function startContext(root: string, notes: Note[], scope: string, head?: string): { text: string; cut: number } {
+  const memory = (head ?? notes.find((n) => n.rel === "MEMORY.md")?.text)?.trim();
   const lines = coreNotes(notes, scope).map((n) => `- ${String(n.fm.core).trim()} [[${n.title}]]`);
   const render = (kept: string[]) => {
     const cut = lines.length - kept.length;

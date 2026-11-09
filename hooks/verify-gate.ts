@@ -25,7 +25,8 @@ const sessionId: string | undefined = input.session_id;
 const cwd: string = input.cwd ?? process.cwd();
 const MAX_DENIALS = 2;
 
-if (!promptId || !sessionId) process.exit(0);
+// A factory agent's work is judged by the factory's own gates.
+if (!promptId || !sessionId || process.env.ALEPH_AGENT) process.exit(0);
 
 if (event === "UserPromptSubmit") {
   const snap = snapshot(cwd);

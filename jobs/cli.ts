@@ -323,6 +323,7 @@ async function tickCmd(): Promise<void> {
  */
 function reportCmd(): void {
   if (rest.includes("--hook")) {
+    if (process.env.ALEPH_AGENT) return;
     const lines = hookLines();
     if (lines.length) out({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } });
     return;

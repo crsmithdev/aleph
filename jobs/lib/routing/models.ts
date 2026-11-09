@@ -3,7 +3,8 @@
  * does not serve differs only in the env the call adds, which `modelEnv` gives from MODELS. The tier map lives in
  * models.json in the factory folder as tier -> {enabled, model}; a missing file or tier means enabled on its Claude model.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { layout } from "../infra/layout.ts";
 import { openRouterKey } from "../../../lib/env.ts";
@@ -70,9 +71,16 @@ export function modelEnv(model: string | undefined): Record<string, string | und
   return { ANTHROPIC_BASE_URL: OPENROUTER_URL, ANTHROPIC_AUTH_TOKEN: openRouterKey() ?? "", ANTHROPIC_API_KEY: "", ...ids };
 }
 
+/**
+ * The settings of every agent role: Chris's own CLAUDE.md is left out, and `ALEPH_AGENT` tells the aleph hooks that
+ * a factory agent runs, so they give it identity/AGENT.md in place of that file and skip what is for Chris.
+ */
+const userMd = join(homedir(), ".claude", "CLAUDE.md");
+export const AGENT_SETTINGS = JSON.stringify({ claudeMdExcludes: [...new Set([userMd, existsSync(userMd) ? realpathSync(userMd) : userMd])], env: { ALEPH_AGENT: "1" } });
+
 /** The argv of a `claude -p` call on `model` (no `--model` when it is undefined), then the caller's flags. */
 export const modelArgv = (cmd: string, model: string | undefined, flags: string[]): string[] =>
-  [cmd, "-p", "--strict-mcp-config", NO_SKILLS, ...(model ? ["--model", MODELS[model]?.id ?? model] : []), ...flags];
+  [cmd, "-p", "--strict-mcp-config", NO_SKILLS, "--settings", AGENT_SETTINGS, ...(model ? ["--model", MODELS[model]?.id ?? model] : []), ...flags];
 
 /** Whether a model's backend can take a call now: the local server answers /health, or an OpenRouter key is set. */
 export async function backendUp(model: string): Promise<boolean> {

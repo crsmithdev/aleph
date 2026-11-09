@@ -72,6 +72,7 @@ async function postSpan(input: any, start: number, meta: { candidates: number; a
 }
 
 async function main() {
+  if (process.env.ALEPH_AGENT) return;
   const input = JSON.parse((await Bun.stdin.text()) || "{}");
   const prompt: string = typeof input.prompt === "string" ? input.prompt.trim() : "";
   if (prompt.length < MIN_PROMPT || judgeChoice() === "haiku") return;

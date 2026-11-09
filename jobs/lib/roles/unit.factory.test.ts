@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeLog, file, repo, sh, state, told, setup, teardown, worktree } from "../../cli.helpers";
 import { actionJob, drop, issueAdd, issueClose, issueList, issueShow } from "../../inproc.ts";
+import { AGENT_SETTINGS } from "../routing/models.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 beforeAll(setup);
@@ -23,7 +24,7 @@ describe("a factory run", () => {
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
     expect(detached()).toEqual([]);
     expect(file(r.json.run, "prompt.md")).toContain(`in \`${worktree("fpass")}\`, branch \`factory/fpass\`.\nWork only there.`);
-    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain("--disable-slash-commands --tools Read Write Edit Bash Grep Glob");
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain(`--disable-slash-commands --settings ${AGENT_SETTINGS} --tools Read Write Edit Bash Grep Glob`);
     expect(s.checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
   });
