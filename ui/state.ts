@@ -17,7 +17,7 @@ import { idOf, parentRef, parseIssueRef, PRIORITIES, refOf, status } from "../is
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
-import { ALERT, ASK, FINE, isAlert, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED } from "../lib/status-words.ts";
+import { ALERT, ASK, FINE, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED } from "../lib/status-words.ts";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
@@ -116,7 +116,7 @@ export interface State {
     nextTick: string | null;
     /** True when there is no next elapse and aleph-tick.service is activating or active: a tick is running, not a dead timer. */
     tickInProgress: boolean;
-    health: string[];
+    health: { text: string; kind: "alert" | "warn"; key?: string }[];
     /** The firefighter's factory log lines of the last 24 hours, newest last. */
     firefighter: { at: string; line: string }[];
     /** The monitor's newest daily report: the first metric, the reader's findings in rank order, and the table. Null before the first report. */
@@ -453,7 +453,7 @@ export function state(now = new Date()): State {
     if (j.trailers) a.trailers = j.trailers;
   }
   const timers = tickTimer();
-  const alertLines = (factory.health || []).filter(isAlert);
+  const alertLines = (factory.health || []).filter((h) => h.kind === "alert").map((h) => h.text);
   if (timers.nextTick === null && !timers.tickInProgress) alertLines.push(TICK_STOPPED);
   if (stuck.length) alertLines.push(JOBS_UNHEALTHY);
   const tone = alertLines.length ? "alert" : (att.items.length || factory.paused) ? "warning" : "fine";

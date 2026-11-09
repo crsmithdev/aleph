@@ -215,17 +215,17 @@ test("a blocked issue does not stall; a live agent run leaves a ready issue out"
 test("health says a stall only after 15 minutes of ticks, and stops when the work moves", async () => {
   const id = newIssue();
   const t0 = Date.parse("2026-11-01T12:00:00Z"), min = 60_000;
-  const said = (at: number) => health(at).filter((l) => l.includes("can start"));
+  const said = (at: number) => health(at).filter((l) => l.text.includes("can start"));
   // The sweep's ports start nothing: the issue stays ready.
   const stallStep = (at: number) => sweep(at, readTick(), { dispatch: async () => {}, suite: () => {} });
   await stallStep(t0);
   await stallStep(t0 + 5 * min);
   expect(said(t0 + 14 * min)).toEqual([]);
-  expect(said(t0 + 15 * min)).toEqual(["health: 1 goal can start, but no run started in 15 minutes"]);
+  expect(said(t0 + 15 * min)).toEqual([{ text: "health: 1 goal can start, but no run started in 15 minutes", kind: "alert", key: "queue-stuck" }]);
   await change(id, (item) => { issues.setStatus(item, "done"); });
   await stallStep(t0 + 16 * min);
   expect(said(t0 + 16 * min)).toEqual([]);
-  expect(health(t0).some((l) => l.includes("24 hours"))).toBe(false);
+  expect(health(t0).some((l) => l.text.includes("24 hours"))).toBe(false);
 });
 
 test("health warns when the last full suite of a repo took more than the budget", () => {
@@ -234,12 +234,12 @@ test("health warns when the last full suite of a repo took more than the budget"
     mkdirSync(dir, { recursive: true });
     writeRun(dir, { kind: "build", job: id, name: id, repo: "fac", condition: "done", told: true, started: ended, ended, checks: [{ name: "tests", ok: true, seconds, ...extra }, { name: "types", ok: true, seconds: 1 }] } as Run);
   };
-  const said = () => health().filter((l) => l.includes("full suite"));
+  const said = () => health().filter((l) => l.text.includes("full suite"));
   suite("20261103-000001-a", "2026-11-03T00:01:00Z", 135);
-  expect(said()).toEqual(["health: fac full suite took 135 s; the budget is 120 s"]);
+  expect(said()).toEqual([{ text: "health: fac full suite took 135 s; the budget is 120 s", kind: "warn" }]);
   // A pass on rerun does not count: its time holds two runs.
   suite("20261103-000002-b", "2026-11-03T00:02:00Z", 300, { rerun: true });
-  expect(said()).toEqual(["health: fac full suite took 135 s; the budget is 120 s"]);
+  expect(said()).toEqual([{ text: "health: fac full suite took 135 s; the budget is 120 s", kind: "warn" }]);
   process.env.ALEPH_SUITE_BUDGET_S = "200";
   try { expect(said()).toEqual([]); } finally { delete process.env.ALEPH_SUITE_BUDGET_S; }
   // The last run is the one that ended last, not the one that started last.

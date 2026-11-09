@@ -77,7 +77,7 @@ test("the Herald shows its alerts under an N active badge in the worst alert's t
   expect(h).toMatch(/data-herald-tab="events" aria-selected="true">Events <span class="count">\d+<\/span>/);
   expect(h).toContain('data-herald-tab="issues" aria-selected="false">Issues <span class="count">0</span>');
   expect(h).toContain('class="event-row');
-  const red = view.renderHerald({ ...calm, asks: [ask], factory: { ...calm.factory, health: ["health: aleph main is red"] } });
+  const red = view.renderHerald({ ...calm, asks: [ask], factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }] } });
   expect(red).toContain('<span class="badge stuck">2 active</span>');
 });
 
@@ -99,7 +99,7 @@ test("the Herald panel shows weekly usage and warning tone in event history when
 
 test("an error is not pinned: the newest event is marked live and carries the error lines its text lacks, and no row repeats its label or a health prefix", () => {
   const herald = { history: [{ at: "2026-11-01T00:00:00Z", tone: "alert", label: "Alert", text: "Alert: health: aleph main is red", reason: "health: aleph main is red" }] };
-  const h = view.renderHerald({ ...calm, herald, factory: { ...calm.factory, health: ["health: aleph main is red", "health: koans main is red"] } });
+  const h = view.renderHerald({ ...calm, herald, factory: { ...calm.factory, health: [{ text: "health: aleph main is red", kind: "alert", key: "red-main" }, { text: "health: koans main is red", kind: "warn" }] } });
   expect(h).not.toContain("ask-head");
   expect(h).not.toContain("No active alerts");
   expect(h).toMatch(/<span class="badge stuck">\d+ active<\/span>/);

@@ -50,7 +50,7 @@ const listing = (runs: GhRun[] | null): Gh => () => (runs ? { ok: true, out: JSO
 test("a red CI is a health line and one firefighter red at its latest failed head; a repo gh cannot read keeps its last state", () => {
   let runs: GhRun[] | null = [run("failure", "c4", "2026-10-29T04:00:00Z"), run("failure", "c3", "2026-10-29T03:00:00Z"), run("success", "c2", "2026-10-29T02:00:00Z")];
   expect(ciStep([repo], listing(runs)).map((c) => c.sinceSha)).toEqual(["c3"]);
-  expect(health()).toContain("health: fac CI on main has failed 2 runs in a row since 2026-10-29 03:00 UTC (c3): https://ci/c4");
+  expect(health()).toContainEqual({ text: "health: fac CI on main has failed 2 runs in a row since 2026-10-29 03:00 UTC (c3): https://ci/c4", kind: "warn", key: "red-ci" });
   const ci = () => reds({ gh: () => ({ ok: true, out: "" }) }).filter((r) => r.source === "ci").map((r) => r.commit);
   expect(ci()).toEqual(["c4"]);
   // A third failed run is a new failing head.
@@ -60,8 +60,8 @@ test("a red CI is a health line and one firefighter red at its latest failed hea
   ciStep([repo], listing(null));
   expect(redCi().map((c) => c.runs)).toEqual([3]);
   ciStep([repo], listing([run("failure", "c9", "2026-10-29T09:00:00Z")]));
-  expect(health()).toContain("health: fac CI on main has failed at least 1 run in a row since before 2026-10-29 09:00 UTC (c9): https://ci/c9");
+  expect(health().map((l) => l.text)).toContain("health: fac CI on main has failed at least 1 run in a row since before 2026-10-29 09:00 UTC (c9): https://ci/c9");
   ciStep([repo], listing([run("success", "c6", "2026-10-29T06:00:00Z")]));
   expect(redCi()).toEqual([]);
-  expect(health().some((l) => l.includes("CI on main"))).toBe(false);
+  expect(health().some((l) => l.text.includes("CI on main"))).toBe(false);
 });

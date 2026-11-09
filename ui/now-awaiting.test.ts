@@ -110,7 +110,7 @@ const errorCard = (o: object): string => {
 };
 
 test("an error card for a red main says fix and the line, in place of the Fix prefix", () => {
-  const card = errorCard({ health: ["health: aleph main is red at abc1234: tsc"] });
+  const card = errorCard({ health: [{ text: "health: aleph main is red at abc1234: tsc", kind: "alert", key: "red-main" }] });
   expect(card).toContain("fix");
   expect(card).toContain("aleph main is red at abc1234: tsc");
   expect(card).not.toContain("Fix: ");
@@ -125,7 +125,13 @@ test("an error card for a stopped tick says check and the line, in place of the 
 });
 
 test("an error card has no situation line, because the line it would hold is empty", () => {
-  for (const o of [{ health: ["health: aleph main is red at abc1234: tsc"] }, { nextTick: null }]) {
+  for (const o of [{ health: [{ text: "health: aleph main is red at abc1234: tsc", kind: "alert", key: "red-main" }] }, { nextTick: null }]) {
     expect(errorCard(o)).not.toContain('class="situation"');
   }
+});
+
+test("an alert health line makes an error card and a warn line makes none", () => {
+  const cards = (kind: string) => view.renderNeeds({ ...state, asks: [], stuck: [], factory: { ...state.factory, health: [{ text: "health: x is wrong", kind }] } }).match(/data-kind="error"/g)?.length ?? 0;
+  expect(cards("alert")).toBe(1);
+  expect(cards("warn")).toBe(0);
 });

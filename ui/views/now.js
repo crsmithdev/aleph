@@ -5,7 +5,7 @@ import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sec
 import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
-import { ALERT, ASK, FINE, isAlert, isWarn, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
+import { ALERT, ASK, FINE, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
 
 export const view = {
   path: "/",
@@ -161,7 +161,7 @@ export function renderHerald(s) {
     `<div class="event-row ${esc(ev.tone)}${i === 0 && errors ? " live" : ""}">` +
       `<span class="event-time">${esc(ev.at ? (clock(ev.at) || when(ev.at)) : "")}</span>` +
       `<span class="event-tone ${esc(ev.tone)}"><span class="event-dot ${esc(ev.tone)}"></span>${esc(ev.label || ev.tone)}</span>` +
-      `<span class="event-body ${esc(ev.tone)}">${esc(eventText(ev))}${(i === 0 && errors ? errs : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}</span>` +
+      `<span class="event-body ${esc(ev.tone)}">${esc(eventText(ev))}${(i === 0 && errors ? errs.map((l) => l.text) : ev.reason ? [ev.reason] : []).filter((l) => !ev.text.includes(l)).map((l) => `<span class="reason">${esc(l)}</span>`).join("")}</span>` +
     `</div>`
   ).join("");
 
@@ -277,21 +277,21 @@ const MAX_SAID = 3;
 
 /** What the status sentence says for an error line, most serious first. A line with no entry is said as it is, after these. */
 const ALERTS = [
-  [/ CI on main has failed/, "GitHub CI is broken"],
-  [/main is red/, "the build is failing on main"],
-  [new RegExp(TICK_STOPPED), TICK_STOPPED],
+  ["red-ci", "GitHub CI is broken"],
+  ["red-main", "the build is failing on main"],
+  ["tick", TICK_STOPPED],
   // No line says this one: a stuck job adds it. It is here for its rank.
-  [/(?!)/, JOBS_UNHEALTHY],
-  [/did not land|land run of/, "lands are stuck"],
-  [/can start, but no run started/, "queued jobs are not starting"],
-  [/did not move to jobs/, "new issues are not becoming jobs"],
+  ["jobs", JOBS_UNHEALTHY],
+  ["lands-stuck", "lands are stuck"],
+  ["queue-stuck", "queued jobs are not starting"],
+  ["issues-stuck", "new issues are not becoming jobs"],
 ];
 const alertRank = (t) => { const k = ALERTS.findIndex(([, said]) => said === t); return k < 0 ? ALERTS.length : k; };
 
 /** The status sentence: "Alert: " and what is wrong; otherwise what asks for you, which leads, or the fine sentence, then a weekly usage of WEEKLY_WARN or more and the warning health lines; at most MAX_SAID parts, each a link but the usage and warning parts, which are plain text. The Awaiting-you cards list everything. Notices (a check that passed on rerun) are not shown here; `aleph report` has the health line. */
 export function renderLede(s, stale = false) {
   const f = s.factory;
-  const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([re]) => re.test(l))?.[1] ?? l.replace(/\.$/, "")));
+  const alerts = new Set(errorLines(s).map((l) => ALERTS.find(([key]) => key === l.key)?.[1] ?? l.text.replace(/\.$/, "")));
   if (s.stuck.length) alerts.add(JOBS_UNHEALTHY);
   const said = [...alerts].sort((a, b) => alertRank(a) - alertRank(b)).map((t) => [t, t === JOBS_UNHEALTHY && s.stuck.length ? "#jobs-stuck" : "#awaiting"]);
   // An Ask still with the director does not need Chris yet.
@@ -302,7 +302,7 @@ export function renderLede(s, stale = false) {
   if (f.paused && alert) said.push([PAUSED, ""]);
   const week = s.usage?.now?.seven_day;
   if (week >= WEEKLY_WARN) said.push([weekly(week), ""]);
-  for (const l of f.health || []) if (isWarn(l)) said.push([localId(l.replace(/^health:\s*/, "")), ""]);
+  for (const l of f.health || []) if (l.kind === "warn") said.push([localId(l.text.replace(/^health:\s*/, "")), ""]);
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
   if (stale) return `<span class="say error">${ALERT}this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
   if (alert) return `<span class="say error">${ALERT}${parts}.</span>`;
@@ -364,12 +364,12 @@ const TICK_GRACE_MS = 5 * 60_000;
 /** Lines of the factory's own trouble that are errors: health (a red main among them) and a stopped tick; each once. */
 function errorLines(s) {
   const f = s.factory;
-  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter(isAlert).map((l) => localId(l));
+  const out = (f.health || []).filter((l) => l.kind === "alert").map((l) => ({ text: localId(l.text.replace(/^health:\s*/, "")), key: l.key }));
   if (f.nextTick !== undefined && f.tickInProgress !== true) {
-    if (f.nextTick === null) out.push(`${TICK_STOPPED}: aleph-tick.timer has no next run`);
-    else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`${TICK_STOPPED}: aleph-tick.timer was due at ${f.nextTick}`);
+    if (f.nextTick === null) out.push({ text: `${TICK_STOPPED}: aleph-tick.timer has no next run`, key: "tick" });
+    else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push({ text: `${TICK_STOPPED}: aleph-tick.timer was due at ${f.nextTick}`, key: "tick" });
   }
-  return [...new Set(out)];
+  return out.filter((l, i) => out.findIndex((o) => o.text === l.text) === i);
 }
 
 /** The agent line of a held or stuck job: a live run exists for it. */
@@ -466,7 +466,7 @@ export function askRow(i, now = new Date().toISOString()) {
 }
 
 /** An error line as a card: the action word and the line, because the page has no action that fixes it. */
-const errorRow = (l) => alertCard("error", l, "", `${/main is red/.test(l) ? "fix" : "check"} ${l}`, "");
+const errorRow = (l) => alertCard("error", l.text, "", `${l.key === "red-main" ? "fix" : "check"} ${l.text}`, "");
 
 /** "10/28 14:05": the time of the state. */
 const renderAsOf = (s) => when(s.now);

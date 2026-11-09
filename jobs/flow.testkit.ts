@@ -33,7 +33,7 @@ export const reportText = (): Promise<string> => asCli({}, () => {
     fetchOrigin(repo.path);
     lines.push(behind(repo) ?? "");
   }
-  lines.push(...health().map(shortText), ...flakeLines().map(shortText));
+  lines.push(...health().map((h) => shortText(h.text)), ...flakeLines().map(shortText));
   const m = reportLine();
   if (m) lines.push(shortText(m));
   return lines.filter(Boolean).join("\n\n") || "nothing new";

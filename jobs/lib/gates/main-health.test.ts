@@ -51,5 +51,14 @@ test("every red main, the baselines first, with the ids the firefighter keys its
   const reds = redMains();
   expect(reds.map((r) => [r.repo, r.source, r.id])).toEqual([["fac", "baseline", `red:fac:${"a".repeat(40)}`], ["demo", "ci", "ci:demo:d0:d1"]]);
   expect(reds[0].line).toBe("fac main is red at aaaaaaa: types");
-  expect(health()).toContain("health: fac main is red at aaaaaaa: types");
+  expect(health()).toContainEqual({ text: "health: fac main is red at aaaaaaa: types", kind: "warn", key: "red-main" });
+});
+
+test("a red baseline of aleph is an alert, and one of another repo is a warning", async () => {
+  await writeBaseline("aleph", () => ({ repo: "aleph", commit: "c".repeat(40), ok: false, failed: "tests" }));
+  await writeBaseline("fac", () => ({ repo: "fac", commit: "a".repeat(40), ok: false, failed: "types" }));
+  expect(health().map((l) => [l.kind, l.key, l.text])).toEqual([
+    ["alert", "red-main", "health: aleph main is red at ccccccc: tests"],
+    ["warn", "red-main", "health: fac main is red at aaaaaaa: types"],
+  ]);
 });

@@ -335,17 +335,21 @@ export const readStalls = (): Record<string, string> => {
   try { return JSON.parse(readFileSync(stallFile(), "utf8")); } catch { return {}; }
 };
 
+/** A health line: its text, its kind, and for an alert the key the status sentence ranks it by (lib/status-words.ts). */
+export interface Health { text: string; kind: "alert" | "warn"; key?: string }
+const alert = (key: string, text: string): Health => ({ text, kind: "alert", key });
+
 /** The health lines of work that stayed stalled for STALL_MS, and of land runs live past LAND_STUCK_MS. */
-function stallLines(now: number, jobs?: Job[]): string[] {
+function stallLines(now: number, jobs?: Job[]): Health[] {
   if (paused()) return [];
   const old = Object.entries(readStalls()).filter(([, at]) => now - Date.parse(at) >= STALL_MS).map(([k]) => k);
   const n = (kind: string) => old.filter((k) => k.startsWith(`${kind}:`)).length;
-  const lines: string[] = [];
+  const lines: Health[] = [];
   const slow = (jobs?.flat() ?? allRuns()).filter((e) => e.run.kind === "land" && isLive(e.folder) && now - Date.parse(e.run.started) >= LAND_STUCK_MS);
-  if (n("land")) lines.push(`health: ${n("land")} passed run${n("land") > 1 ? "s" : ""} did not land in 15 minutes`);
-  for (const e of slow) lines.push(`health: the land run of ${e.run.name} is live for over 30 minutes`);
-  if (n("goal")) lines.push(`health: ${n("goal")} goal${n("goal") > 1 ? "s" : ""} can start, but no run started in 15 minutes`);
-  if (n("ingest")) lines.push(`health: ${n("ingest")} new issue${n("ingest") > 1 ? "s" : ""} did not move to jobs in 15 minutes`);
+  if (n("land")) lines.push(alert("lands-stuck", `health: ${n("land")} passed run${n("land") > 1 ? "s" : ""} did not land in 15 minutes`));
+  for (const e of slow) lines.push(alert("lands-stuck", `health: the land run of ${e.run.name} is live for over 30 minutes`));
+  if (n("goal")) lines.push(alert("queue-stuck", `health: ${n("goal")} goal${n("goal") > 1 ? "s" : ""} can start, but no run started in 15 minutes`));
+  if (n("ingest")) lines.push(alert("issues-stuck", `health: ${n("ingest")} new issue${n("ingest") > 1 ? "s" : ""} did not move to jobs in 15 minutes`));
   return lines;
 }
 
@@ -359,7 +363,7 @@ export function flakeNames(f: Flake): { kind: "test" | "check"; name: string }[]
  * A health line for each repo whose last full suite took more than the budget. The full suite is
  * the check named `tests` or `test`. Only a pass on the first try counts: a rerun doubles the time.
  */
-export function suiteLines(runs: Entry[] = allRuns()): string[] {
+export function suiteLines(runs: Entry[] = allRuns()): Health[] {
   const last = new Map<string, { at: string; seconds: number }>();
   for (const { run } of runs) {
     const c = run.repo && (run.checks ?? []).find((c) => /^tests?$/.test(c.name) && c.ok && !c.rerun && c.files === undefined);
@@ -368,7 +372,7 @@ export function suiteLines(runs: Entry[] = allRuns()): string[] {
     if (at >= (last.get(run.repo!)?.at ?? "")) last.set(run.repo!, { at, seconds: c.seconds });
   }
   const budget = suiteBudgetSeconds();
-  return [...last].filter(([, s]) => s.seconds > budget).map(([repo, s]) => `health: ${repo} full suite took ${s.seconds} s; the budget is ${budget} s`);
+  return [...last].filter(([, s]) => s.seconds > budget).map(([repo, s]): Health => ({ text: `health: ${repo} full suite took ${s.seconds} s; the budget is ${budget} s`, kind: "warn" }));
 }
 
 /**
@@ -376,13 +380,13 @@ export function suiteLines(runs: Entry[] = allRuns()): string[] {
  * full suite. The flake counts are the monitor's (monitor-table.ts). `jobs` is the
  * caller's, when it has read them already.
  */
-export function health(now = Date.now(), o: { jobs?: Job[] } = {}): string[] {
-  const lines: string[] = [];
+export function health(now = Date.now(), o: { jobs?: Job[] } = {}): Health[] {
+  const lines: Health[] = [];
   lines.push(...stallLines(now, o.jobs));
   lines.push(...suiteLines(o.jobs?.flat()));
   const smoke = smokeLine();
-  if (smoke) lines.push(smoke);
-  for (const r of redMains()) lines.push(`health: ${r.line}`);
+  if (smoke) lines.push({ text: smoke, kind: "alert" });
+  for (const r of redMains()) lines.push({ text: `health: ${r.line}`, kind: r.repo === "aleph" ? "alert" : "warn", key: r.source === "ci" ? "red-ci" : "red-main" });
   return lines;
 }
 
