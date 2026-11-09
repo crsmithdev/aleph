@@ -86,7 +86,7 @@ test("the Herald panel shows calm state with no alerts and no alert row", () => 
   expect(h).not.toContain("No active alerts");
   expect(h).not.toContain("herald-sticky");
   expect(h).toContain('Calm');
-  expect(h).toContain('Everything is running smoothly');
+  expect(h).toContain('Everything is fine');
 });
 
 test("the Herald panel shows weekly usage and warning tone in event history when weekly usage is high", () => {

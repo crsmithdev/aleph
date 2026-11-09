@@ -15,7 +15,7 @@ const ciRed = "health: aleph CI on main has failed 2 runs in a row since 2026-11
 const mainRed = "health: aleph main is red at abc1234: tsc";
 
 test("with nothing wrong the status sentence is the fine sentence", () => {
-  expect(said({})).toBe("Everything is running smoothly.");
+  expect(said({})).toBe("Everything is fine.");
   expect(view.renderLede(calmState)).toContain('class="say fine"');
 });
 
@@ -41,7 +41,7 @@ test("the page and the status sentence show a health line's issue id in its shor
     const page = view.view.render(withFactory({ health: ["health: the land run of aleph-5 is live for over 30 minutes"] }));
     expect(page).toContain("the land run of a5 is live for over 30 minutes");
     expect(page).not.toContain("aleph-5");
-    expect(said({ health: ["health: koans main is red at def5678: aleph-6 is the cause"] })).toBe("Everything is running smoothly; koans main is red at def5678: a6 is the cause.");
+    expect(said({ health: ["health: koans main is red at def5678: aleph-6 is the cause"] })).toBe("Everything is fine; koans main is red at def5678: a6 is the cause.");
   } finally {
     setCodes({});
   }
@@ -56,9 +56,9 @@ test("stuck and failed jobs are one alert that links to their cards", () => {
 test("a red main or CI of a repo other than aleph is a warning, not an alert", () => {
   const koans = "health: koans main is red at def5678: lint";
   const koansCi = "health: koans CI on main has failed 1 run in a row since 2026-11-01 10:00 UTC (def5678): https://x";
-  expect(said({ health: [koans] })).toBe("Everything is running smoothly; koans main is red at def5678: lint.");
+  expect(said({ health: [koans] })).toBe("Everything is fine; koans main is red at def5678: lint.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [koans] } })).toContain('class="say warning"');
-  expect(said({ health: [koansCi] })).toStartWith("Everything is running smoothly; koans CI on main has failed");
+  expect(said({ health: [koansCi] })).toStartWith("Everything is fine; koans CI on main has failed");
   expect(said({ health: [mainRed, koans] })).toBe("Alert: the build is failing on main; koans main is red at def5678: lint.");
 });
 
@@ -74,11 +74,11 @@ test("what asks for you leads the status sentence, in the warning colour", () =>
   expect(raw(asks("approval"))).toBe('<span class="say warning"><a href="#awaiting">Your attention is needed</a>.</span>');
   expect(raw(asks("input", "input"))).toBe(raw(asks("approval")));
   expect(raw(asks("input", "approval"))).toBe(raw(asks("approval")));
-  expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is running smoothly.</span>');
+  expect(raw({}, { runsToday: 12 })).toBe('<span class="say fine">Everything is fine.</span>');
   expect(raw(asks("approval"), { health: [mainRed] })).toContain('say error">Alert: <a href="#awaiting">the build is failing on main</a>; <a href="#awaiting">your attention is needed</a>.');
 });
 
-test("a paused factory does not say it runs smoothly", () => {
+test("a paused factory does not say everything is fine", () => {
   expect(said({ paused: true })).toBe("The factory is paused.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, paused: true } })).toContain('class="say warning"');
   expect(said({ paused: true, runsToday: 12 })).toBe("The factory is paused.");
@@ -96,7 +96,7 @@ test("an alert keeps its red sentence and holds the weekly usage part; three ale
 
 test("a full suite over its budget is a warning part, not an alert and not a card", () => {
   const slow = "health: aleph full suite took 135 s; the budget is 120 s";
-  expect(said({ health: [slow] })).toBe("Everything is running smoothly; aleph full suite took 135 s; the budget is 120 s.");
+  expect(said({ health: [slow] })).toBe("Everything is fine; aleph full suite took 135 s; the budget is 120 s.");
   expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, health: [slow] } })).toContain('class="say warning"');
   expect(said({ health: [mainRed, slow] })).toBe("Alert: the build is failing on main; aleph full suite took 135 s; the budget is 120 s.");
   expect(view.view.render(withFactory({ health: [slow] }))).not.toContain('data-kind="error"');
@@ -153,7 +153,7 @@ test("a dead factory tick says the alert, in red", () => {
     expect(said(o)).toBe(dead);
     expect(view.renderLede({ ...calmState, factory: { ...calmState.factory, ...o } })).toContain('class="say error"');
   }
-  const fine = "Everything is running smoothly.";
+  const fine = "Everything is fine.";
   for (const o of [{ nextTick: "2026-10-27T17:12:00Z" }, { nextTick: "2026-10-27T16:56:00Z" }, { nextTick: null, tickInProgress: true }, { nextTick: "2026-10-27T16:00:00Z", tickInProgress: true }]) expect(said(o)).toBe(fine);
   expect(said({ paused: true, nextTick: null })).toBe("Alert: the factory tick has stopped; the factory is paused.");
 });

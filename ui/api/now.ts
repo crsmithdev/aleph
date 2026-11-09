@@ -5,6 +5,8 @@ import type { State } from "../state.ts";
 import { loadState } from "../state-load.ts";
 import { cachedSpeed } from "./speed.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
+// @ts-ignore plain JS, shared with the page
+import { FINE, WEEKLY_WARN, weekly } from "../views/status-words.js";
 
 /** The state with only `project`'s jobs and queued issues; the factory and ticks stay whole. */
 function forProject(s: State, project: string | null): State {
@@ -23,12 +25,12 @@ export const routes: Routes = {
     annotate([...s.stuck, ...s.running], fit);
     const u = summary();
     const week = u?.now?.seven_day;
-    if (week !== undefined && week >= 90 && s.herald?.history?.[0]?.tone === "fine") {
+    if (week !== undefined && week >= WEEKLY_WARN && s.herald?.history?.[0]?.tone === "fine") {
       s.herald.history[0] = {
         ...s.herald.history[0],
         tone: "warning",
         label: "Warn",
-        text: `Everything is running smoothly; weekly usage is at ${Math.round(week)}%.`,
+        text: `${FINE}; ${weekly(week)}.`,
       };
     }
     return Response.json({ ...s, usage: u, speed: cachedSpeed("week", fit), proposals: proposals().map(({ id, kind, title, target, sentence, count, signals }) => ({ id, kind, title, target, sentence, count, signals: signals.map(({ source, at, quote, link }) => ({ source, at, quote, link })) })) }, { headers: { "x-aleph-state-build": String(build) } });

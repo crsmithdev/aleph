@@ -1,9 +1,10 @@
 // The Now view: the factory's front page. Each render function takes the
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (index.html) runs the buttons `act` makes.
-import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, windowOf, wireScope, withProject, localId, pct, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, clock, codeText, contentText, facts, tiles, badge, card, sectionHead, meter, dataTable, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, windowOf, wireScope, withProject, localId, openDiffs, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
+import { ALERT, ASK, FINE, isAlert, isWarn, JOBS_UNHEALTHY, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "./status-words.js";
 
 export const view = {
   path: "/",
@@ -106,11 +107,11 @@ export function statusVerdict(s, stale = false) {
   const toneClass = m ? m[1] : "fine";
   const raw = m ? m[2] : html;
   const text = raw.replace(/<[^>]+>/g, "").trim();
-  const tone = toneClass === "error" ? "alert" : toneClass === "warning" ? (text.startsWith("Your attention") ? "ask" : "warning") : "fine";
+  const tone = toneClass === "error" ? "alert" : toneClass === "warning" ? (text.startsWith(lead(ASK)) ? "ask" : "warning") : "fine";
   let label = "Fine";
   if (tone === "alert") label = "Alert";
   else if (tone === "ask") label = "Ask";
-  else if (tone === "warning") label = text.startsWith("The factory is paused") ? "Wait" : "Warn";
+  else if (tone === "warning") label = text.startsWith(lead(PAUSED)) ? "Wait" : "Warn";
   return { tone, label, text, toneClass };
 }
 
@@ -275,24 +276,13 @@ function renderStatusLine(s, stale = false, w = "day") {
   return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
 }
 
-export const FINE = "Everything is running smoothly";
-const JOBS_UNHEALTHY = "jobs are unhealthy";
 const MAX_SAID = 3;
-/** The weekly usage, in percent, from which the status sentence says how high it is. The raw value is compared, so 89.6 is not yet. */
-const WEEKLY_WARN = 90;
-
-/** Health lines that are counts for later, not problems: they stay off the headline and the cards. */
-const QUIET_HEALTH = /passed on rerun|holds \d+ flake notes?/;
-/** A red main or a red CI of a repo other than aleph: that repo's trouble, not the factory's, so a warning. */
-const OTHER_REPO_RED = /^(?!aleph )\S+ (main is red|CI on main has failed)/;
-/** Health lines that are warnings, not alerts: the status sentence says them in the warning colour, and they make no card. */
-const isWarn = (l) => /full suite took/.test(l) || OTHER_REPO_RED.test(l.replace(/^health:\s*/, ""));
 
 /** What the status sentence says for an error line, most serious first. A line with no entry is said as it is, after these. */
 const ALERTS = [
   [/ CI on main has failed/, "GitHub CI is broken"],
   [/main is red/, "the build is failing on main"],
-  [/the factory tick has stopped/, "the factory tick has stopped"],
+  [new RegExp(TICK_STOPPED), TICK_STOPPED],
   // No line says this one: a stuck job adds it. It is here for its rank.
   [/(?!)/, JOBS_UNHEALTHY],
   [/did not land|land run of/, "lands are stuck"],
@@ -310,18 +300,18 @@ export function renderLede(s, stale = false) {
   // An Ask still with the director does not need Chris yet.
   const asks = (s.asks ?? []).filter((a) => a.escalated !== false);
   // With no alert, no pause and a fresh status, the Ask part leads the sentence, so it starts with a capital.
-  if (asks.length) said.push([alerts.size || f.paused || stale ? "your attention is needed" : "Your attention is needed", "#awaiting"]);
+  if (asks.length) said.push([alerts.size || f.paused || stale ? ASK : lead(ASK), "#awaiting"]);
   const alert = alerts.size > 0;
-  if (f.paused && alert) said.push(["the factory is paused", ""]);
+  if (f.paused && alert) said.push([PAUSED, ""]);
   const week = s.usage?.now?.seven_day;
-  if (week >= WEEKLY_WARN) said.push([`weekly usage is at ${pct(week)}`, ""]);
+  if (week >= WEEKLY_WARN) said.push([weekly(week), ""]);
   for (const l of f.health || []) if (isWarn(l)) said.push([localId(l.replace(/^health:\s*/, "")), ""]);
   const parts = said.slice(0, MAX_SAID).map(([t, href]) => (href ? `<a href="${href}">${esc(t)}</a>` : esc(t))).join("; ");
-  if (stale) return `<span class="say error">Alert: this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
-  if (alert) return `<span class="say error">Alert: ${parts}.</span>`;
+  if (stale) return `<span class="say error">${ALERT}this status is out of date${parts ? `; ${parts}` : ""}.</span>`;
+  if (alert) return `<span class="say error">${ALERT}${parts}.</span>`;
   if (asks.length && !f.paused) return `<span class="say warning">${parts}.</span>`;
-  const lead = f.paused ? "The factory is paused" : FINE;
-  return `<span class="say ${parts || f.paused ? "warning" : "fine"}">${lead}${parts ? `; ${parts}` : ""}.</span>`;
+  const head = f.paused ? lead(PAUSED) : FINE;
+  return `<span class="say ${parts || f.paused ? "warning" : "fine"}">${head}${parts ? `; ${parts}` : ""}.</span>`;
 }
 
 const list = (html) => `<div class="list">${html}</div>`;
@@ -377,10 +367,10 @@ const TICK_GRACE_MS = 5 * 60_000;
 /** Lines of the factory's own trouble that are errors: health (a red main among them) and a stopped tick; each once. */
 function errorLines(s) {
   const f = s.factory;
-  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter((l) => !QUIET_HEALTH.test(l) && !isWarn(l)).map((l) => localId(l));
+  const out = (f.health || []).map((l) => l.replace(/^health:\s*/, "")).filter(isAlert).map((l) => localId(l));
   if (f.nextTick !== undefined && f.tickInProgress !== true) {
-    if (f.nextTick === null) out.push("the factory tick has stopped: aleph-tick.timer has no next run");
-    else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`the factory tick has stopped: aleph-tick.timer was due at ${f.nextTick}`);
+    if (f.nextTick === null) out.push(`${TICK_STOPPED}: aleph-tick.timer has no next run`);
+    else if (Date.parse(s.now) - Date.parse(f.nextTick) > TICK_GRACE_MS) out.push(`${TICK_STOPPED}: aleph-tick.timer was due at ${f.nextTick}`);
   }
   return [...new Set(out)];
 }

@@ -17,6 +17,8 @@ import { idOf, parentRef, parseIssueRef, PRIORITIES, refOf, status } from "../is
 import { facts, landedIndex, stages } from "../jobs/lib/records/status.ts";
 import type { Stage } from "../jobs/lib/records/stage.ts";
 import type { Wk } from "./usage.ts";
+// @ts-ignore plain JS, shared with the page
+import { ALERT, ASK, FINE, isAlert, JOBS_UNHEALTHY, lead, PAUSED, TICK_STOPPED } from "./views/status-words.js";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
@@ -452,11 +454,11 @@ export function state(now = new Date()): State {
     if (j.trailers) a.trailers = j.trailers;
   }
   const timers = tickTimer();
-  const alertLines = (factory.health || []).filter((l) => !/passed on rerun|holds \d+ flake notes?|full suite took|^(?!aleph )\S+ (main is red|CI on main has failed)/.test(l.replace(/^health:\s*/, "")));
-  if (timers.nextTick === null && !timers.tickInProgress) alertLines.push("the factory tick has stopped");
-  if (stuck.length) alertLines.push("jobs are unhealthy");
+  const alertLines = (factory.health || []).filter(isAlert);
+  if (timers.nextTick === null && !timers.tickInProgress) alertLines.push(TICK_STOPPED);
+  if (stuck.length) alertLines.push(JOBS_UNHEALTHY);
   const tone = alertLines.length ? "alert" : (att.items.length || factory.paused) ? "warning" : "fine";
-  const text = alertLines.length ? `Alert: ${alertLines.join("; ")}` : att.items.length ? "Your attention is needed" : factory.paused ? "The factory is paused" : "Everything is running smoothly";
+  const text = alertLines.length ? `${ALERT}${alertLines.join("; ")}` : att.items.length ? lead(ASK) : factory.paused ? lead(PAUSED) : FINE;
   recordStatusTransition({ at: now.toISOString(), tone, label: tone === "alert" ? "Alert" : tone === "warning" ? "Ask" : "Fine", text, reason: alertLines[0] });
   const redOf = mainRed();
   return {
