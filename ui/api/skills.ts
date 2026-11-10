@@ -185,7 +185,7 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
     list.sort((a, b) => a.startTime!.localeCompare(b.startTime!));
     const t = info.get(trace);
     const meta = { ...list.find((o) => o.metadata?.cwd)?.metadata, ...t?.metadata };
-    const session = t?.sessionId ?? (list.find((o) => (o as any).sessionId) as any)?.sessionId ?? list.find((o) => o.metadata?.session_id)?.metadata?.session_id ?? "";
+    const session = t?.sessionId ?? list.find((o) => o.sessionId)?.sessionId ?? list.find((o) => o.metadata?.session_id)?.metadata?.session_id ?? "";
     const proj = traceProject(meta.cwd, t?.tags);
     if (project && proj !== project) continue; // traceIn's rule, from the project already worked out
     const turn = list.find((o) => o.name === "turn");
@@ -202,7 +202,7 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
       if (name) here.push({ use: { skill: String(name), via: "tool", trace, session, project: proj, time: o.startTime!, prompt: firstLine(prompt), start: o.startTime! }, from: o.startTime!, self: o });
     }
     if (!here.length) continue;
-    const failed = list.filter((o) => String((o as any).level ?? "").toUpperCase() === "ERROR" || (o as any).statusMessage);
+    const failed = list.filter((o) => String(o.level ?? "").toUpperCase() === "ERROR" || o.statusMessage);
     for (const { use, from, self } of here) {
       uses.push(use);
       const counts = tools.get(use.skill) ?? tools.set(use.skill, new Map()).get(use.skill)!;

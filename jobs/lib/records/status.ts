@@ -159,7 +159,7 @@ const DAY_MS = 24 * 3600_000;
 const RECENT_DAYS = 7;
 
 /** The indices of the repos with a ledger run or an item update in the last week, the latest first. `docs[n]` is `repos[n]`'s list. */
-export function recentRepos(repos: Repo[], docs: (issues.Doc | null)[]): number[] {
+export function recentRepos(repos: Pick<Repo, "key">[], docs: (issues.Doc | null)[]): number[] {
   const since = Date.now() - RECENT_DAYS * DAY_MS;
   const last = new Map<string, number>();
   const seen = (k: string, t: number) => { if (t >= since && t > (last.get(k) ?? 0)) last.set(k, t); };

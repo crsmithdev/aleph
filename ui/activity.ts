@@ -40,14 +40,14 @@ export interface Activity {
   partial?: boolean;
 }
 
-const isError = (o: Observation) => (o as any).level === "ERROR";
+const isError = (o: Observation) => o.level === "ERROR";
 
 /** The fields of an observation that the counts read. A row holds 2.4 KB of input and output on average (2026-11-10). */
 const slim = (o: any): Observation => ({
   id: o.id, traceId: o.traceId, name: o.name, type: o.type, startTime: o.startTime, level: o.level,
   metadata: { tool: o.metadata?.tool, verdict: o.metadata?.verdict },
   ...(o.name === "verify-gate" ? { output: o.output } : {}),
-}) as any;
+});
 
 /** The ids of the traces of `project`, by the scope rule. */
 async function projectTraces(lf: Langfuse, project: string, from: Date, to: Date): Promise<{ ids: Set<string>; partial: boolean }> {

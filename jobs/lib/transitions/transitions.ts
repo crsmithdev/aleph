@@ -59,7 +59,7 @@ const refusedBy = (e: any): Refused => {
 
 export function checkName(name: string | undefined): string {
   if (!name || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/.test(name)) refuse("the name must be letters, digits and hyphens");
-  return name!;
+  return name;
 }
 
 const quote = (argv: string[]) => argv.map((a) => /^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replaceAll("'", `'\\''`)}'`).join(" ");
@@ -122,7 +122,7 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, c
     }
   } finally {
     gpu?.();
-    release!();
+    release();
   }
   return { started: { run: id!, job: run.job ?? id!, folder: join(runsDir(), id!) }, child };
 }
@@ -159,11 +159,11 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
   if (on !== undefined) {
     const p = parseId(on) ?? parseId(`${repo.key}-${on}`);
     if (p?.repo !== repo.key) refuse("--on takes an issue number");
-    on = p!.sub === undefined ? p!.n : tail(p!);
+    on = p.sub === undefined ? p.n : tail(p);
     let doc: issues.Doc | null = null;
     try { doc = store.readList(repo); } catch (e: any) { refuse(e?.message ?? String(e)); }
     if (!doc) refuse(`the work store has no list for ${repo.key}`);
-    if (!issues.find(doc!, on)) refuse(`${repo.key} has no issue ${on}`);
+    if (!issues.find(doc, on)) refuse(`${repo.key} has no issue ${on}`);
   }
 
   const release = await lock(`job-${repo.key}-${name}`);
@@ -189,7 +189,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
       addNote(open!, a.spec);
     });
   } finally {
-    release!();
+    release();
   }
 }
 
@@ -210,7 +210,7 @@ export async function startPlain(a: { name: string; argv: string[]; cwd: string 
         writeFileSync(runFile(folder, "command.txt"), quote(a.argv) + "\n");
       });
   } finally {
-    release!();
+    release();
   }
 }
 
@@ -238,7 +238,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
       const needs = isWaiting(agent.condition) ? needsOf(agent.ask) : undefined;
       refuse(`${name} is ${agent.condition}${needs ? ` (${needs})` : ""}, not passed`);
     }
-    const { manual, held } = terms!;
+    const { manual, held } = terms;
     const unchecked = manual && !a.checked;
     const repo = loadRegistry()[agent.repo!];
     const item = onOf(agent);
@@ -256,7 +256,7 @@ export async function land(name: string, a: { checked?: boolean; lander?: "Chris
       ...(agent.on !== undefined ? { on: agent.on } : {}),
     }, repo.path, o.command ?? ["land", name, ...(a.checked ? ["--checked"] : [])], o.output, () => {});
   } finally {
-    release!();
+    release();
   }
 }
 
@@ -266,13 +266,13 @@ export function checked(name: string): { job: string; name: string; condition: "
   const found = latestJob(name);
   const last = found ? counting(found) : undefined;
   if (!last || last.run.condition !== "landed" || last.run.check !== "open") refuse(`${name} has no open check`);
-  patchRun(last!.id, { check: "done" });
-  const repo = last!.run.repo ? loadRegistry()[last!.run.repo] : undefined;
-  const item = last!.run.checkItem;
+  patchRun(last.id, { check: "done" });
+  const repo = last.run.repo ? loadRegistry()[last.run.repo] : undefined;
+  const item = last.run.checkItem;
   const why = repo && item !== undefined ? store.close(repo, item, "checked by Chris") : null;
   if (why) console.error(`warn: issue ${item} not closed: ${why}`);
   dispatchDetached();
-  return { job: last!.run.job, name, condition: "landed", check: "done" };
+  return { job: last.run.job, name, condition: "landed", check: "done" };
 }
 
 /**
@@ -304,7 +304,7 @@ export async function recheck(name: string, o: StartOpts = {}): Promise<Start> {
       ...(on !== undefined ? { on: `${repo.key}-${on}` } : {}), ...(runs.some((e) => e.run.land) ? { land: true } : {}), told: false, shown: false, started: new Date().toISOString(),
     }, repo.path, o.command ?? ["recheck", name], o.output, () => {});
   } finally {
-    release!();
+    release();
   }
   // The recheck is live now: a dispatch may start what waited on its run.
   dispatchDetached();
@@ -345,7 +345,7 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
     if (!a.quiet) dispatchDetached();
     return { job: last.run.job, name, condition: "dropped", reason };
   } finally {
-    release!();
+    release();
   }
 }
 

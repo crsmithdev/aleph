@@ -220,7 +220,8 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
       condition: v.condition, started: v.started, run: { id: v.run.id, kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
-    for (const k of ["phase", "reason", "question", "ended", "cost", "model", "tier"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
+    for (const k of ["phase", "reason", "question", "ended", "model", "tier"] as const) if (v[k] !== undefined) job[k] = v[k];
+    if (v.cost !== undefined) job.cost = v.cost;
     if (v.commit) {
       job.commit = v.commit;
       const url = commitUrl(repo, v.commit, bases);
@@ -323,7 +324,7 @@ export function state(now = new Date()): State {
   }
 
   // A dropped issue holds no Ask and no stuck run.
-  const droppedJob = (j: Job) => j.item !== null && status(lists.item(j.repo, j.item.id) ?? { fm: {} } as any) === "dropped";
+  const droppedJob = (j: Job) => { const it = j.item !== null ? lists.item(j.repo, j.item.id) : undefined; return it !== undefined && status(it) === "dropped"; };
   for (const list of [needs, stuck]) list.splice(0, list.length, ...list.filter((j) => !droppedJob(j)));
 
   for (const j of [...needs, ...stuck]) {

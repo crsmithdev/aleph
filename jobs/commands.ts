@@ -183,10 +183,10 @@ function jobs(ctx: Ctx): void {
   }
   const runs = findJob(name, null, all);
   if (!runs) refuse(`no job named ${name}`);
-  const last = counting(runs!);
+  const last = counting(runs);
   const checks = readFile(last, "checks.log");
   ctx.out({
-    ...summary(runs!, fates), question: last.run.question, result: readFile(last, "result.md"),
+    ...summary(runs, fates), question: last.run.question, result: readFile(last, "result.md"),
     checks: checks?.trimEnd().split("\n").slice(-40).join("\n"), land: readFile(last, "land.log"),
   });
 }
@@ -400,7 +400,7 @@ function statusCmd(ctx: Ctx): void {
   try { s = repoStages(repo, { fetch: true, items: [itemRef] })[0]; } catch (e: any) { refuse(e?.message ?? String(e)); }
   if (!s) refuse(`${key} has no issue ${n}`);
   if (ctx.rest.includes("--json")) return ctx.out(s);
-  ctx.log(issues.localRefs(key, [s!.id, s!.stage, s!.why].filter(Boolean).join(" ")));
+  ctx.log(issues.localRefs(key, [s.id, s.stage, s.why].filter(Boolean).join(" ")));
 }
 
 /** `aleph status` with no issue: the stage of each open issue in each recent repo. */

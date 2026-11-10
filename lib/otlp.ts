@@ -117,4 +117,7 @@ export interface Observation {
   output?: unknown;
   metadata?: Record<string, any> | null;
   startTime?: string;
+  level?: string;
+  statusMessage?: string;
+  sessionId?: string;
 }

@@ -294,7 +294,7 @@ export async function retitle(repo: store.Place, fit: (group: string, rest: stri
 export function recentLists<R extends store.Place>(repos: R[]): { repo: R; doc: issues.Doc | null }[] {
   let docs: (issues.Doc | null)[] = [];
   try { docs = store.readLists(repos); } catch (e: any) { refuse(e?.message ?? String(e)); }
-  return recentRepos(repos as any, docs).map((n) => ({ repo: repos[n], doc: docs[n] }));
+  return recentRepos(repos, docs).map((n) => ({ repo: repos[n], doc: docs[n] }));
 }
 
 /** `list` with no repo: each recent repo's rows that pass the filter. */

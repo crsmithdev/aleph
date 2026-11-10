@@ -118,7 +118,7 @@ export function view(j: Job): JobView {
     followups: j.findLast((e) => e.run.followups !== undefined)?.run.followups ?? [],
   };
   if (r.repo) v.repo = r.repo;
-  for (const k of ["phase", "reason", "question", "say", "session", "ended"] as const) if (r[k]) (v as any)[k] = r[k];
+  for (const k of ["phase", "reason", "question", "say", "session", "ended"] as const) if (r[k]) v[k] = r[k];
   const needs = needsOf(r.ask);
   if (needs) v.needs = needs;
   if (r.ask?.reason === "question" && !v.question) v.question = r.ask.question;
