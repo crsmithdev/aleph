@@ -70,7 +70,7 @@ const busy = (runs: Entry[], kind: string, on: string) => runs.some((e) => e.run
 export async function sweep(now: number, s: TickState, p: SweepPorts = sweepPorts): Promise<string[]> {
   if (gates({ only: ["pause"] })) { writeStalls({}); s.missed = []; return []; }
   const jobs = allJobs(), runs = jobs.flat(), lists = reader({ fetch: false });
-  const keys = stalled(jobs, lists, doneChecker(false));
+  const keys = await stalled(jobs, lists, doneChecker(false));
   for (const c of pendingCases(factoryRepos(), runs, lists)) if (!busy(runs, "director", subjectOfCase(c))) keys.push(`ask:${c.on}`);
   for (const j of toRescue(jobs)) keys.push(`rescue:${j[0].run.name}`);
   for (const j of editedWaits(jobs)) keys.push(`edited:${j[0].run.name}`);

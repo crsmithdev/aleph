@@ -155,19 +155,19 @@ test("an issue that shares only a quiet file with an open job starts", async () 
   expect(calls).toEqual([`fac-${second}`]);
 });
 
-test("stalled lists what could move: a ready issue, a new issue and a passed run, each until a gate or a live run explains it", () => {
+test("stalled lists what could move: a ready issue, a new issue and a passed run, each until a gate or a live run explains it", async () => {
   const id = newIssue();
   const fresh = writeList({ key: "fac" }, "add an issue", (doc) => issues.add(doc, "new thing").id, true)!.value;
-  expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
+  expect(await stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
   writeFileSync(join(ctx.base, "repos.json"), JSON.stringify({ fac: { path: join(ctx.base, "repo"), sandbox: true, autoland: true } }));
   const { folder } = mk(`fac-${id}`, "build", "passed", { next: "land" });
-  expect(stalled()).toEqual([`land:fac-${id}`, `ingest:fac-${fresh}`]);
+  expect(await stalled()).toEqual([`land:fac-${id}`, `ingest:fac-${fresh}`]);
   setPaused(true);
-  expect(stalled()).toEqual([]);
+  expect(await stalled()).toEqual([]);
   setPaused(false);
   writeRun(folder, { ...readRun(folder)!, condition: "failed", next: undefined });
   // A stuck run holds only its own issue, which its open job keeps not ready; the new issue can still move.
-  expect(stalled()).toEqual([`ingest:fac-${fresh}`]);
+  expect(await stalled()).toEqual([`ingest:fac-${fresh}`]);
 });
 
 test("stalled counts a red baseline until a later suite run is green, also after main moves", async () => {
@@ -178,9 +178,9 @@ test("stalled counts a red baseline until a later suite run is green, also after
   await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: false, failed: "tests" }));
   sh(repo, "git", "commit", "-q", "--allow-empty", "-m", "next");
   sh(repo, "git", "push", "-q", "origin", "main");
-  expect(stalled()).toEqual([]);
+  expect(await stalled()).toEqual([]);
   await writeBaseline("fac", () => ({ repo: "fac", commit: head(), ok: true }));
-  expect(stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
+  expect(await stalled()).toEqual([`goal:fac-${id}`, `ingest:fac-${fresh}`]);
 });
 
 test("writeBaseline waits for the baseline-file lock, here and in another process, and both entries survive", async () => {
@@ -207,10 +207,10 @@ test("a blocked issue does not stall; a live agent run leaves a ready issue out"
   const blocker = newIssue();
   const after = newIssue();
   await change(after, (item) => { item.fm.after = [`fac-${blocker}`]; });
-  expect(stalled()).toEqual([`goal:fac-${blocker}`]);
+  expect(await stalled()).toEqual([`goal:fac-${blocker}`]);
   setSystemTime(NOW);
   mk("fac-other", "build", "running", { made: NOW });
-  expect(stalled()).toEqual([]);
+  expect(await stalled()).toEqual([]);
 });
 
 test("health says a stall only after 15 minutes of ticks, and stops when the work moves", async () => {

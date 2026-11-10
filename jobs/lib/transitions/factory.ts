@@ -26,17 +26,15 @@ import { episodesDir, writeEpisodes } from "../learning/episode.ts";
 import { readdirSync } from "node:fs";
 import { waitingToLand } from "../land/landing.ts";
 import { baselineChecks, type CheckTask, type ChecksStop } from "../gates/checks.ts";
-import { drop, land, recheck, refusal, startIssue } from "./transitions.ts";
+import { drop, land, recheck, refusal, startIssue, type Refused } from "./transitions.ts";
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
-import { route, TIER_MODEL, TIERS, type Tier } from "../routing/route.ts";
-import { appendSuiteHistory, mainRed, writeBaseline, clearCap, backendHold, heldGoal, issueFacts, issueJob, markCap, markStreak, nextRun, setPaused, baselines, changedLinesOf, factoryDir, factoryGates, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
+import { route, type Tier } from "../routing/route.ts";
+import { appendSuiteHistory, mainRed, writeBaseline, clearCap, issueFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
-
-/** A start refused because the live cap filled: the line `gates` gives for it. */
-const LIVE_REFUSAL = / agent runs are live/;
+import { decideStart, unrouted } from "../gates/start-decision.ts";
 import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
 
 
@@ -72,7 +70,7 @@ export function doneChecker(fetch = true, later?: (repo: string, id: number | st
 /** Dispatch is off when `ALEPH_DISPATCH=off`: a run's end and `aleph issue` then start nothing; the tick's sweep still does. */
 
 /** `tier` is the router's rating when the dispatch has it already; undefined lets the start rate the spec itself. */
-type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<string | null>;
+type Start = (repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null) => Promise<Refused | null>;
 export type Checks = (repo: Repo, commit: string, logs: string, record?: CheckTask["record"]) => Promise<ChecksStop | null>;
 type Land = (name: string) => Promise<string | null>;
 /**
@@ -154,21 +152,8 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
       // Read after the jobs: a note added before the last run's drop is in the rerun's spec. It may also have gained an after.
       const item = open ? listed : buildableIssue(repo, ref);
       if (!item) { skip(name, "not-ready", "not a goal", { action: "parent" }); continue; }
-      const facts = { ...issueFacts(repo, item, jobs), done, red };
       // A pass that began before a pause must not start a run after it.
-      const run = nextRun(repo.key, name, jobs);
-      let d = issueDecision({ ...facts, ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { backend: heldGoal(name) }) });
-      let tier: Tier | null | undefined;
-      // An issue with no run yet starts on its tier's backend: while a backend is held, rate the issue, and check that backend.
-      if (!run && d.kind === "ready" && backendHold()) {
-        tier = await route(issueBrief(item, name, jobs).spec);
-        d = issueDecision({ ...facts, ...factoryGates(jobs, tier ? { model: TIER_MODEL[tier] } : {}) });
-      }
-      // The live cap held the issue, but a tier on the local backend has room: rate the issue, and check its tier's cap.
-      if (d.kind === "live-cap" && tier === undefined && TIERS.some((t) => !factoryGates(jobs, { model: TIER_MODEL[t] })["live-cap"])) {
-        tier = await route(issueBrief(item, name, jobs).spec);
-        if (tier) d = issueDecision({ ...facts, ...factoryGates(jobs, { model: TIER_MODEL[tier] }) });
-      }
+      const d = await decideStart(repo, { ...issueFacts(repo, item, jobs), done, red }, jobs, () => route(issueBrief(item, name, jobs).spec));
       if (d.kind !== "ready" && d.kind !== "loop-guard") { held(name, repo, d); continue; }
       // Read again just before the start or the Ask: an item done, dropped or parked since it was read gets neither, whatever the trigger.
       const latest = reader().item(repo.key, ref);
@@ -195,10 +180,9 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
         continue;
       }
       const { spec, rerun } = issueBrief(item, name, jobs);
-      const why = await start(repo, name, ref, spec, tier);
+      const no = await start(repo, name, ref, spec, d.tier);
       // A refused start: the item landed or its job runs (another dispatch got there first), or the last live slot filled.
-      // The refusal is text from the start: the live cap, an item already landed, or a job already running.
-      if (why) skip(name, LIVE_REFUSAL.test(why) ? "live-cap" : "not-ready", why, { action: LIVE_REFUSAL.test(why) ? "full" : / already landed as /.test(why) ? "done" : "running", note: why });
+      if (no) skip(name, no.gate, no.why, no.ev);
       else { recordHold(name, "started", "started"); started.push(name); clearCap(name); if (rerun) clearRerun(name); }
     } finally {
       release();
@@ -441,7 +425,7 @@ export async function suiteStep(checks: Checks = baselineChecks): Promise<Record
  * What the factory could move now and does not, as `land:<job>`, `goal:<job>` and `ingest:<id>`: a passed run with no
  * land live; an issue that can start with no agent run live; an issue to take in or plan with no intake run live. The gates that stop each step leave its work out, because each gate has its own line.
  */
-export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()): string[] {
+export async function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()): Promise<string[]> {
   if (gates({ only: ["pause"], jobs })) return [];
   const runs = jobs.flat();
   const live = (kind: string) => runs.some((e) => e.run.kind === kind && isLive(e.folder));
@@ -449,10 +433,9 @@ export function stalled(jobs = allJobs(), lists = reader(), done = doneChecker()
   const out = live("land") ? [] : waitingToLand(jobs).map((name) => `land:${name}`);
   if (!liveRuns(runs)) {
     for (const { repo, item } of openIssues(lists)) {
+      // No model call: the stall check agrees with the dispatch on all but the router's tier.
       const facts = issueFacts(repo, item, jobs);
-      const run = nextRun(repo.key, facts.name, jobs);
-      const stop = { ...factoryGates(jobs, run ?? undefined), ...(run ? {} : { backend: heldGoal(facts.name) }) };
-      if (issueDecision({ ...facts, ...stop, done, red: redOf(repo) }).kind === "ready") out.push(`goal:${facts.name}`);
+      if ((await decideStart(repo, { ...facts, done, red: redOf(repo) }, jobs, unrouted)).kind === "ready") out.push(`goal:${facts.name}`);
     }
   }
   if (!live("intake") && !gates({ only: ["live-cap"], jobs })) {

@@ -17,11 +17,12 @@ import { keepDiff } from "../records/jobdiff.ts";
 import { agentOf, landTerms, removeBranch } from "../land/landing.ts";
 import { git } from "../infra/git.ts";
 import { onMain } from "../records/status.ts";
-import { refuse } from "../../../lib/refusal.ts";
+import { Refusal, refuse } from "../../../lib/refusal.ts";
 import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
 import { logEvent } from "../infra/layout.ts";
 import { route, TIER_MODEL, type Tier } from "../routing/route.ts";
+import type { Gate, Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";
 import { fullId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
@@ -38,6 +39,22 @@ export async function refusal(f: () => Promise<unknown>): Promise<string | null>
     return String(e?.message ?? e).trim() || "refused";
   }
 }
+
+/** A start refused for a gate: `gate` and `ev` are the hold the dispatch records. */
+export class Held extends Refusal {
+  constructor(why: string, readonly gate: Gate, readonly ev: Hold) { super(why); }
+}
+
+const hold = (gate: Gate, ev: Hold, why: string): never => { throw new Held(why, gate, ev); };
+
+/** A refused start as the dispatch records it: the gate, the line, and the log event, whose note is the line. */
+export interface Refused { why: string; gate: Gate; ev: Hold }
+
+/** The hold of a start that threw `e`. A refusal with no gate is a job that runs already. */
+const refusedBy = (e: any): Refused => {
+  const why = String(e?.message ?? e).trim() || "refused";
+  return e instanceof Held ? { why, gate: e.gate, ev: { ...e.ev, note: why } } : { why, gate: "not-ready", ev: { action: "running", note: why } };
+};
 
 export function checkName(name: string | undefined): string {
   if (!name || !/^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/.test(name)) refuse("the name must be letters, digits and hyphens");
@@ -71,11 +88,11 @@ async function dispatch(run: Omit<Run, "job"> & { job?: string }, cwd: string, c
     if (isBuild(run.kind)) {
       // The run's model, or its tier's, names its backend: a backend the factory holds starts no run, whatever the caller.
       const f = factoryGates(undefined, run);
-      if (f.backend) refuse(f.backend.why);
-      if (f["live-cap"]) refuse(`${f["live-cap"].why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
+      if (f.backend) hold("backend", f.backend.ev!, f.backend.why);
+      if (f["live-cap"]) hold("live-cap", { action: "full" }, `${f["live-cap"].why}: ${liveEntries().map((e) => e.run.name).join(", ")}`);
       if (onLocal(run, readModels())) {
         gpu = await lock("gpu", 0);
-        if (!gpu) refuse("a local call holds the GPU");
+        if (!gpu) hold("live-cap", { action: "gpu" }, "a local call holds the GPU");
       }
     }
     id = makeRun(run, (folder, n) => {
@@ -161,7 +178,7 @@ export async function startJob(a: JobArgs, o: StartOpts = {}): Promise<Start> {
     const first = open?.[0];
     const item = on ?? (open && issueOf(open));
     const landedAs = onMain(repo, { item: first ? item : undefined, fetch: first !== undefined && item !== undefined })?.commit;
-    if (landedAs) refuse(`${name}: the item already landed as ${landedAs}`);
+    if (landedAs) hold("not-ready", { action: "done" }, `${name}: the item already landed as ${landedAs}`);
     const worktree = first?.run.worktree ?? join(repo.path, ".worktrees", `job-${name}`);
     // A follow-up without --on keeps the item the job started with.
     on ??= (open && issueOf(open));
@@ -336,9 +353,10 @@ export async function drop(name: string, a: { reason?: string; quiet?: boolean; 
 
 /**
  * Start the run for an issue: `aleph job` in-process, or `ALEPH_START_CMD` (tests) as a process.
- * A foreground unit is waited for, its output dropped. Returns the refusal, or null.
+ * A foreground unit is waited for, its output dropped. Returns the refusal, or null. A refusal from
+ * `ALEPH_START_CMD` is text from another process, so it names no gate.
  */
-export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<string | null> {
+export async function startIssue(repo: Repo, name: string, id: number | string, spec: string, tier?: Tier | null): Promise<Refused | null> {
   const routed = tier !== undefined ? tier : await route(spec);
   const model = routed ? TIER_MODEL[routed] : null;
   logEvent({ by: "rule", subject: name, action: "started", note: `model ${model ?? "default"}` });
@@ -346,7 +364,12 @@ export async function startIssue(repo: Repo, name: string, id: number | string, 
   if (start) {
     const p = Bun.spawn([start, repo.key, name, String(id)], { env: process.env, stdin: new Blob([spec]), stdout: "ignore", stderr: "pipe" });
     const code = await p.exited;
-    return code === 0 ? null : (await new Response(p.stderr).text()).trim() || `exit ${code}`;
+    return code === 0 ? null : refusedBy((await new Response(p.stderr).text()).trim() || `exit ${code}`);
   }
-  return refusal(async () => { await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(model ? { model } : {}) }, { output: "ignore" })).child?.exited; });
+  try {
+    await (await startJob({ repo: repo.key, name, spec, on: id, land: true, ...(model ? { model } : {}) }, { output: "ignore" })).child?.exited;
+    return null;
+  } catch (e) {
+    return refusedBy(e);
+  }
 }
