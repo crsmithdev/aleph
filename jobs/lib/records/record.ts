@@ -200,13 +200,17 @@ export function update(key: string, fn: (r: JobRecord) => JobRecord | void): Job
     const had = draft.ask ? `ask ${draft.askRun ?? ""}` : "";
     const was = new Map(draft.runs.map((x) => [x.id, x.condition]));
     const after = derive(fn(draft) ?? draft);
+    let asked: Parameters<typeof logEvent>[0][] = [];
     if ((after.ask ? `ask ${after.askRun ?? ""}` : "") !== had) {
       const at = new Date().toISOString(), open = after.asks?.find((a) => !a.cleared);
       if (open) open.cleared = at;
       if (after.ask) (after.asks ??= []).push({ set: at, reason: after.ask.reason, recommended: after.ask.recommended });
+      asked = [open && { at, by: "gate", subject: key, action: "answered" }, after.ask && { at, by: "gate", subject: key, action: "question" }]
+        .filter((e) => e) as Parameters<typeof logEvent>[0][];
     }
     write(after);
     logChanges(was, after.runs);
+    for (const e of asked) logEvent(e);
     return after;
   } finally {
     release();
@@ -221,7 +225,7 @@ function logChanges(was: Map<string, string>, runs: RunRecord[]): void {
   for (const x of runs) {
     if (x.kind === "facts" || was.get(x.id) === x.condition) continue;
     const sub = x.condition === "running" ? undefined : x.cause ?? x.fate;
-    try { logEvent({ by: "gate", subject: subjectOf(x), action: x.condition, sub, on: [jobIdOfRun(x)] }); }
+    try { logEvent({ by: "gate", subject: subjectOf(x), action: x.condition, sub, on: [jobIdOfRun(x)], ...(x.condition === "running" ? {} : { cost: x.cost }), ...(x.condition === "landed" ? { commit: x.commit } : {}) }); }
     catch (e) { console.error(`record: no event for ${x.id}: ${(e as Error).message}`); }
   }
 }

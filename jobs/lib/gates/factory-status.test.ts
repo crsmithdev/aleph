@@ -3,7 +3,7 @@ import { readList } from "../../../issues/lib/store.ts";
 import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts";
 import { firefighterLines, issueFacts, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
-import { factoryLog, logEvent } from "../infra/layout.ts";
+import { factoryLog, logEvent, readEvents } from "../infra/layout.ts";
 
 const NOW = Date.parse("2026-11-04T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -81,6 +81,13 @@ test("an issue with no run that the hold held stays held with no new routing, un
   expect(heldGoal("fac-2")).toBeNull();
   await probeHold(async () => true);
   expect(heldGoal("fac-1")).toBeNull();
+});
+
+test("recordHold logs its hold event once, and not again for the same kind and text", () => {
+  const ev = { action: "paused" };
+  recordHold("fac-3", "live-cap", "3 agent runs are live", ev);
+  recordHold("fac-3", "live-cap", "3 agent runs are live", ev);
+  expect(readEvents().filter((e) => e.subject === "fac-3").map((e) => e.action)).toEqual(["paused"]);
 });
 
 test("firefighterLines returns the line of a firefighter event and not a firefighter line of tick.log", () => {

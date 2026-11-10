@@ -121,13 +121,13 @@ export const shortText = (text: unknown): string => String(text ?? "").replace(/
 /** An event with its words checked; throws on a word outside its set. */
 export interface Event {
   at: string; by: string; subject: string; action: string; sub?: string; on?: string[]; file?: string; count?: string;
-  result?: string; to?: string; note?: string;
+  result?: string; to?: string; note?: string; cost?: number; commit?: string;
 }
-export function event({ at, by, subject, action, sub, on, file, count, result, to, note }: Omit<Event, "at"> & { at?: string }): Event {
+export function event({ at, by, subject, action, sub, on, file, count, result, to, note, cost, commit }: Omit<Event, "at"> & { at?: string }): Event {
   const bad = ([["by", by, ACTORS], ["action", action, ACTIONS], ["sub", sub, SUBS], ["result", result, STATES], ["to", to, ["human", "director"]],
   ] as [string, string | undefined, string[]][]).find(([, v, set]) => v !== undefined && !set.includes(v));
   if (bad) throw new Error(`naming: ${bad[0]} "${bad[1]}" is not in its set`);
-  const e = { at: at ?? new Date().toISOString(), by, subject, action, sub, on, file, count, result, to, note };
+  const e = { at: at ?? new Date().toISOString(), by, subject, action, sub, on, file, count, result, to, note, cost, commit };
   return Object.fromEntries(Object.entries(e).filter(([, v]) => v !== undefined && !(Array.isArray(v) && !v.length))) as unknown as Event;
 }
 

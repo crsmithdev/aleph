@@ -10,6 +10,7 @@ import * as issues from "./todo.ts";
 import { renderItem } from "./todo.ts";
 import { addPart } from "./parts.fixture.ts";
 import * as verbs from "./issues.ts";
+import { readEvents } from "../../jobs/lib/infra/layout.ts";
 import { askOf, refIn, setAsk } from "../../jobs/lib/asks/ask.ts";
 
 setDefaultTimeout(30000);
@@ -223,4 +224,15 @@ test("retitle gives a bad title of an open or parked issue a new one, keeps a pa
   expect(show(a.item.id).notes.join("\n")).toContain("retitled from: Check foo: bar");
   expect(show(b.item.id).notes.join("\n")).toContain("retitled from: [Group] Check foo: bar.");
   expect(show(c.item.id).title).toBe("Done foo: bar");
+});
+
+test("add logs a filed event, and close logs a done or a dropped event, on the issue's full ID", async () => {
+  const before = readEvents().length;
+  const added = (await add("Teach the gate to count")).result.added;
+  verbs.close(proj(), added, "done");
+  const b = (await add("Count the other gate")).result.added;
+  verbs.close(proj(), b, "drop", "not needed");
+  const mine = (n: number) => readEvents().slice(before).filter((e) => e.subject === `proj-${n}`).map((e) => e.action);
+  expect(mine(added)).toEqual(["filed", "done"]);
+  expect(mine(b)).toEqual(["filed", "dropped"]);
 });

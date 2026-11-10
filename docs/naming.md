@@ -36,7 +36,7 @@ Text that people read does not use these old words: goal (an issue), part (an is
 
 ## Events
 
-Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them. A log event is one line of the event log, `factory/events/<day>.jsonl`: the event as JSON, in the file of its UTC day, which `logEvent` in `jobs/lib/infra/layout.ts` writes. A day before today never changes, so a reader reads only the days of its window (`readEvents`). Each write that changes a run's state logs one event by `gate` on the run's subject, with the state as the action and the job ID in `on`. A gate hold keeps its event in the job record. `tick.log` holds the event lines from before the event log, which the event log also holds.
+Every event has these fields: a log row, a job's end, a Status card line, a report line. A writer stores the fields. Only the display joins them. A log event is one line of the event log, `factory/events/<day>.jsonl`: the event as JSON, in the file of its UTC day, which `logEvent` in `jobs/lib/infra/layout.ts` writes. A day before today never changes, so a reader reads only the days of its window (`readEvents`). Each write that changes a run's state logs one event by `gate` on the run's subject, with the state as the action and the job ID in `on`; an event of a run that ends has its `cost`, and one of a run that lands its `commit`. An Ask set logs `question` and an Ask cleared logs `answered`, on the record's key. `add` logs `filed` and `close` logs `done` or `dropped`, on the issue's full ID. A gate hold logs its event when it writes a new hold, and also keeps it in the job record. `tick.log` holds the event lines from before the event log, which the event log also holds.
 
 | Field | Form | Example |
 |---|---|---|
@@ -49,6 +49,8 @@ Every event has these fields: a log row, a job's end, a Status card line, a repo
 | `count` | `<n> / <limit or window>` | `3 / 1h` |
 | `result` | the state of the `on` job | `dropped` |
 | `to` | who decides next: `human` or `director` | `director` |
+| `cost` | dollars of the run that ended, number | `1.5` |
+| `commit` | the commit a landed run made | `abc1234` |
 | `note` | free text | |
 
 The content is the fields after `sub`, joined by a space. `→` comes before `result`, `file` and `to`. A file that a `to` follows, with no `on` before it, takes the `to`'s arrow and has no arrow of its own (`docclaims.ts → human`). A file with no other field before it and no `to` after it still takes an arrow (`→ tests`):

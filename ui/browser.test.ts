@@ -137,7 +137,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       await pg.when(`document.querySelector("${btn}")`);
       await pg.ev(`(() => { const b = document.querySelector("${btn}"); b.focus(); b.click(); b.old = true; })()`);
       // A newer row with its own note lands above the open one; the redraw must keep the same button, not the first one.
-      const day = join(dir, "events", `${new Date(at).toISOString().slice(0, 10)}.jsonl`), ev = JSON.parse(readFileSync(day, "utf8").trim());
+      // The fixture logs other events on the same day, so the test takes the one row with the note.
+      const day = join(dir, "events", `${new Date(at).toISOString().slice(0, 10)}.jsonl`), ev = JSON.parse(readFileSync(day, "utf8").split("\n").find((l) => l.includes("word "))!);
       appendFileSync(day, `${JSON.stringify(ev).replaceAll("word ", "other ").replace(ev.at, new Date(Date.parse(ev.at) + 1000).toISOString())}\n`);
       await pg.ev('document.dispatchEvent(new Event("visibilitychange"))');
       await pg.when(`document.querySelectorAll("${btn}").length === 2 && !document.querySelector("${btn}").old`);

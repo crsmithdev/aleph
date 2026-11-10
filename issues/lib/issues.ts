@@ -9,6 +9,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { Refusal, refuse } from "../../lib/refusal.ts";
+import { logEvent } from "../../jobs/lib/infra/layout.ts";
 import { git } from "../../jobs/lib/infra/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";
@@ -143,6 +144,7 @@ export async function add(repo: store.Place, title: string, fields: Fields = {})
     return { issue };
   }, true, blobs)!;
   const { issue } = w.value;
+  logEvent({ by: "rule", subject: refIn(repo.key, issue), action: "filed" });
   const result: Added = { repo: repo.key, added: issue.id, title: issue.title, commit: w.commit, ...(t.maybeSame.length ? { maybeSame: t.maybeSame } : {}) };
   return { result, item: issue, follow: w.follow };
 }
@@ -242,6 +244,7 @@ export function close(repo: store.Place, id: number | string, how: "done" | "dro
     return i;
   })!;
   if (how === "drop") clearAsk(refIn(repo.key, w.value));
+  logEvent({ by: "rule", subject: refIn(repo.key, w.value), action: how === "done" ? "done" : "dropped" });
   return { result: { repo: repo.key, id: w.value.id, status: issues.status(w.value), title: w.value.title, commit: w.commit }, follow: w.follow };
 }
 

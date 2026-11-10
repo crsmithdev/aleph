@@ -13,7 +13,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, lastReal, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate, Hold } from "./issue-decision.ts";
 import { event, type Event } from "../../../lib/naming.ts";
-import { factoryLog, layout, readEvents } from "../infra/layout.ts";
+import { factoryLog, layout, logEvent, readEvents } from "../infra/layout.ts";
 import * as record from "../records/record.ts";
 import { allRuns, held, jobIdOf, isWaiting, isBuild, loadRegistry, lock, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { isLive, isStarting } from "../infra/process.ts";
@@ -66,6 +66,7 @@ export function recordHold(name: string, kind: Gate | "started", text: string, e
   record.update(name, (r) => {
     const last = holdsOf(r).at(-1);
     if (last && last.kind === kind && last.text === text) return;
+    if (logged) logEvent(logged);
     r.events.push(kind === "started" ? { at, kind: "started", what: text } : { at, kind: "hold", what: text, data: { gate: kind, ...(logged ? { event: logged } : {}) } });
     r.wait = stopsStart({ at, name, kind, text }) ? { kind, reason: text, since: at } : null;
   });

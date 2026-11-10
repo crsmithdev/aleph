@@ -37,6 +37,21 @@ test("a write that changes a run's state logs one event by gate in the file of i
   expect(readEvents(Date.parse(mine()[1].at) + 1).filter((e) => e.subject === "aleph-31")).toEqual([]);
 });
 
+test("a run that ends logs its cost, a run that lands also its commit, and an Ask set then cleared logs two events", () => {
+  const r = run({ on: "aleph-32", name: "aleph-32", n: 1 });
+  record.putRun("r32", r);
+  record.patchRun("r32", { condition: "landed", cost: 1.5, commit: "abc1234" });
+  record.update("aleph-32", (x) => { x.ask = { kind: "input", reason: "question", question: "q", options: [], why: [] }; });
+  record.update("aleph-32", (x) => { x.ask = null; });
+  const mine = readEvents().filter((e) => e.subject === "aleph-32");
+  expect(mine.map(({ action, cost, commit }) => ({ action, cost, commit }))).toEqual([
+    { action: "running", cost: undefined, commit: undefined },
+    { action: "landed", cost: 1.5, commit: "abc1234" },
+    { action: "question", cost: undefined, commit: undefined },
+    { action: "answered", cost: undefined, commit: undefined },
+  ]);
+});
+
 test("a run keys by its issue, else by its job id", () => {
   expect(record.keyOf({ on: "aleph-7", job: "j1" })).toBe("aleph-7");
   expect(record.keyOf({ job: "20260925-192116-aleph-vault-date-agent" })).toBe("20260925-192116-aleph-vault-date-agent");
