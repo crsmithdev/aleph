@@ -120,7 +120,7 @@ const rerun = (reason: string, args: Record<string, string>): Action => {
 };
 
 function actionsFor(reason: string, c: Ctx, more: string[] = []): Action[] {
-  const run: Record<string, string> = c.run ? { name: c.run.name } : {};
+  const run: Record<string, string> = c.run ? { name: c.run.name, run: c.run.run?.id } : {};
   const p = c.issue ? parseId(c.id) : null;
   const issue = { repo: p?.repo ?? "", id: p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "" };
   const a = (act: string, label: string, hint: string, args: Record<string, string>): Action => ({ act, label, hint, primary: false, args, recommended: false });

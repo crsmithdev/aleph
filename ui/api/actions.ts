@@ -7,16 +7,20 @@
  */
 import { askOf, isWaiting, loadRegistry, onOf } from "../../jobs/lib/records/ledger.ts";
 import { jobDiff, NO_DIFF } from "../../jobs/lib/records/jobdiff.ts";
-import { latestJob } from "../../jobs/lib/records/job.ts";
+import { lastReal, latestJob } from "../../jobs/lib/records/job.ts";
 import { may } from "../../jobs/lib/asks/ask.ts";
 import { runCli } from "../cli.ts";
 import { Refusal } from "../../lib/refusal.ts";
 import * as issues from "../../issues/lib/issues.ts";
+import { afterOf } from "../../issues/lib/store.ts";
 import { sameSite, text } from "../http.ts";
 import type { Handler, Routes } from "../server.ts";
 
 /** The last run of the job called `name`, or undefined when the ledger has none. */
 const find = (name: string) => latestJob(name)?.at(-1);
+
+/** A 409 when the page's `run` is not the job's latest run: a rerun came after the page showed it. */
+const stale = (name: string, body: any) => (body?.run === lastReal(latestJob(name)!).id ? null : text(`${name} has a newer run than the page showed`, 409));
 
 const diff: Handler = (_req, { name }) => {
   const runs = latestJob(name);
@@ -29,8 +33,10 @@ const action = (verb: "land" | "recheck" | "drop"): Handler => async (req, { nam
   if (!sameSite(req)) return text("forbidden", 403);
   if (!find(name)) return text(`no job named ${name}`, 404);
   const args = [verb, name];
+  const body: any = await req.json().catch(() => ({}));
+  const old = stale(name, body);
+  if (old) return old;
   if (verb === "drop") {
-    const body: any = await req.json().catch(() => ({}));
     if (typeof body?.reason === "string" && body.reason.trim()) args.push(body.reason.trim());
   }
   return Response.json(await runCli(args));
@@ -42,6 +48,8 @@ const answerAndRerun: Handler = async (req, { name }) => {
   if (!last) return text(`no job named ${name}`, 404);
   if (!isWaiting(last.run.condition) || may("chris", "answer", askOf(last.run), { run: true })) return text("this run is not waiting for an answer", 409);
   const body: any = await req.json().catch(() => ({}));
+  const old = stale(name, body);
+  if (old) return old;
   const said = typeof body?.answer === "string" ? body.answer.trim() : "";
   if (!said) return text("answer is required", 400);
   return Response.json(await runCli(["drop", name, `Chris answered the worker's question "${askOf(last.run)?.question ?? last.run.question ?? ""}": ${said}`]));
@@ -53,6 +61,8 @@ const wait: Handler = async (req, { name }) => {
   const last = find(name);
   if (!last) return text(`no job named ${name}`, 404);
   const body: any = await req.json().catch(() => ({}));
+  const old = stale(name, body);
+  if (old) return old;
   const on = typeof body?.on === "string" ? body.on.trim() : "";
   const m = /^(.+)-(\d+(?:\.\d+)?)$/.exec(on);
   const repo = last.run.repo, issue = onOf(last.run);
@@ -60,11 +70,15 @@ const wait: Handler = async (req, { name }) => {
   // In process, as the firefighter does.
   const place = loadRegistry()[repo];
   if (!place) return text(`no repo named ${repo}`, 400);
-  try { issues.edit(place, issue, { after: [on] }); } catch (e: any) {
+  let was: string[];
+  try { was = afterOf(issues.show(place, issue)); issues.edit(place, issue, { after: [on] }); } catch (e: any) {
     if (!(e instanceof Refusal)) throw e;
     return Response.json({ error: e.message }, { status: 422 });
   }
-  return Response.json(await runCli(["drop", name, `Chris chose to wait for ${on}: this job cannot succeed until it lands.`]));
+  const done = await runCli(["drop", name, `Chris chose to wait for ${on}: this job cannot succeed until it lands.`]);
+  // All or none: a failed drop puts the old `after` back.
+  if (done.code !== 0) issues.edit(place, issue, { after: was });
+  return Response.json(done);
 };
 
 export const routes: Routes = {

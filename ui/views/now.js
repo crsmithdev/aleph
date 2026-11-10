@@ -471,11 +471,11 @@ const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
   const hold = b ? holdLine({ action: "after", on: [b.id] }) : stuckSentence(j);
-  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : act("recheck", j.name, "Re-check");
+  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, run: j.run?.id, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, run: j.run?.id, label: "Re-check" });
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;
   return alertCard("stuck", j.name, meta, j.item?.title || j.name, hold,
-    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(act("drop", j.name, "Drop"), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(actButton("Drop", { act: "drop", name: j.name, run: j.run?.id, label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
     agentLine(j) + jobDetails(s, j));
 };
 

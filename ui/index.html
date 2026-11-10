@@ -352,7 +352,7 @@
     b.disabled = true;
     if (name) actMessages.delete(name);
     try {
-      const r = await postJson(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {});
+      const r = await postJson(name ? `/api/${act}/${encodeURIComponent(name)}` : `/api/${act}`, { run: b.dataset.run, ...(act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {}) });
       if (r.code !== 0) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${(r.error || r.stderr || r.stdout || `code ${r.code}`).trim().split("\n").pop()}`); return; }
     } catch (err) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${err.message}`); return; }
     b.closest("article.issue-row")?.remove();

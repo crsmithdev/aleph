@@ -16,6 +16,7 @@ afterAll(() => setSystemTime());
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void, at: (path: string, init?: RequestInit) => Promise<Response>, calls: string;
 const post = (p: string, headers: Record<string, string> = { "X-Aleph-UI": "1" }, body?: object) =>
   at(p, { method: "POST", headers, body: body ? JSON.stringify(body) : undefined });
+const rid = (n: string) => `20261027-100000-r-${n}-agent`;
 const sh = (cwd: string, ...a: string[]) => { const p = Bun.spawnSync(["git", "-C", cwd, ...a]); if (p.exitCode) throw new Error(p.stderr.toString()); };
 const recorded = () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").filter(Boolean) : []);
 
@@ -44,7 +45,7 @@ beforeAll(async () => {
   sh(items, "push", "-q", "origin", "main");
   calls = join(base, "calls");
   const fake = join(base, "fake-aleph");
-  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\nif [ "$3" = "no-such-reason" ]; then echo "no such reason" >&2; exit 1; fi\necho out\nexit 0\n`);
+  writeFileSync(fake, `#!/bin/sh\necho "$*" >> ${calls}\nif [ "$4" = "--spec" ]; then cat >> ${calls}.stdin; fi\nif [ "$1 $2" = "issue edit" ] && [ -e ${base}/fail-edit ]; then echo "edit refused" >&2; exit 1; fi\nif [ "$1" = "drop" ] && [ -e ${base}/fail-drop ]; then echo "drop failed" >&2; exit 1; fi\nif [ "$3" = "no-such-reason" ]; then echo "no such reason" >&2; exit 1; fi\necho out\nexit 0\n`);
   chmodSync(fake, 0o755);
   restoreEnv = withEnv({ GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t", ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: join(base, "factory"), ALEPH_CLI: fake });
   for (const [name, extra] of [["x", { branch: "job/x" }], ["nobranch", {}], ["asks", { ask: { kind: "input", reason: "question", question: "which colour?", options: [], why: [] } }], ["stuckjob", { condition: "failed" }], ["wt", { on: "r-7" }], ["wtgone", { on: "r-99" }], ["won", { on: "r-5" }], ["wgoal", { on: "r-6.1" }]] as const) {
@@ -62,7 +63,7 @@ afterAll(() => {
 });
 
 test("POST /api/wait 400s without a blocker or an item", async () => {
-  expect((await post("/api/wait/x", undefined, {})).status).toBe(400);
+  expect((await post("/api/wait/x", undefined, { run: rid("x") })).status).toBe(400);
 });
 
 const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id === n && (n === 6 ? i.sub === 1 : i.sub === undefined))!.fm.after;
@@ -70,7 +71,7 @@ const waiting = (n: number) => readList({ key: "r" })!.items.find((i) => i.id ==
 test("POST /api/wait reads the issue from `on`, and the integer part of a part's dotted `on`", async () => {
   for (const [job, n] of [["won", 5], ["wgoal", 6]] as const) {
     const before = recorded().length;
-    const res = await post(`/api/wait/${job}`, { "X-Aleph-UI": "1" }, { on: "r-9.1" });
+    const res = await post(`/api/wait/${job}`, { "X-Aleph-UI": "1" }, { run: rid(job), on: "r-9.1" });
     expect(res.status).toBe(200);
     expect(waiting(n)).toEqual(["r-9.1"]);
     const calledNow = recorded().slice(before);
@@ -82,7 +83,7 @@ test("POST /api/wait reads the issue from `on`, and the integer part of a part's
 test("POST /api/wait is 422 when the edit is refused, and drops nothing", async () => {
   const before = recorded().length;
   // Issue 99 is not in the store: the in-process edit refuses it.
-  const res = await post("/api/wait/wtgone", { "X-Aleph-UI": "1" }, { on: "r-9.1" });
+  const res = await post("/api/wait/wtgone", { "X-Aleph-UI": "1" }, { run: rid("wtgone"), on: "r-9.1" });
   expect(res.status).toBe(422);
   expect(((await res.json()) as any).error).toContain("no issue 99");
   expect(recorded().slice(before)).toEqual([]);
@@ -97,9 +98,9 @@ test("a POST without the header, or from another origin, is 403 and runs nothing
 });
 
 test("POST /api/drop passes the reason", async () => {
-  expect((await post("/api/drop/x", { "X-Aleph-UI": "1" }, { reason: "not needed" })).status).toBe(200);
+  expect((await post("/api/drop/x", { "X-Aleph-UI": "1" }, { run: rid("x"), reason: "not needed" })).status).toBe(200);
   expect(recorded().at(-1)).toBe("drop x not needed");
-  await post("/api/drop/x");
+  await post("/api/drop/x", undefined, { run: rid("x") });
   expect(recorded().at(-1)).toBe("drop x");
 });
 
@@ -139,17 +140,42 @@ test("POST /api/answer/:name drops the question run with the answer as its reaso
   const hdr = { "X-Aleph-UI": "1" };
   expect((await post("/api/answer/asks", {}, { answer: "blue" })).status).toBe(403);
   expect((await post("/api/answer/nope", hdr, { answer: "blue" })).status).toBe(404);
-  expect((await post("/api/answer/asks", hdr, { answer: "  " })).status).toBe(400);
-  expect((await post("/api/answer/asks", hdr, {})).status).toBe(400);
-  expect((await post("/api/answer/stuckjob", hdr, { answer: "blue" })).status).toBe(409);
+  expect((await post("/api/answer/asks", hdr, { run: rid("asks"), answer: "  " })).status).toBe(400);
+  expect((await post("/api/answer/asks", hdr, { run: rid("asks") })).status).toBe(400);
+  expect((await post("/api/answer/stuckjob", hdr, { run: rid("stuckjob"), answer: "blue" })).status).toBe(409);
   expect(recorded().length).toBe(before);
-  const res = await post("/api/answer/asks", hdr, { answer: "blue" });
+  const res = await post("/api/answer/asks", hdr, { run: rid("asks"), answer: "blue" });
   expect(res.status).toBe(200);
   expect((await res.json()).code).toBe(0);
   const last = recorded().at(-1)!;
   expect(last.startsWith("drop asks ")).toBe(true);
   expect(last).toContain("which colour?");
   expect(last).toContain("blue");
+});
+
+test("an action for a run that is not the job's latest is 409 and runs nothing", async () => {
+  const before = recorded().length;
+  const hdr = { "X-Aleph-UI": "1" };
+  for (const [verb, job, body] of [["land", "x", {}], ["recheck", "x", {}], ["drop", "x", {}], ["answer", "asks", { answer: "blue" }], ["wait", "won", { on: "r-9.1" }]] as const) {
+    expect((await post(`/api/${verb}/${job}`, hdr, { ...body, run: "an-older-run" })).status).toBe(409);
+    expect((await post(`/api/${verb}/${job}`, hdr, body)).status).toBe(409);
+  }
+  expect(recorded().length).toBe(before);
+  for (const verb of ["land", "recheck"]) {
+    expect((await post(`/api/${verb}/x`, hdr, { run: rid("x") })).status).toBe(200);
+    expect(recorded().at(-1)).toBe(`${verb} x`);
+  }
+});
+
+test("POST /api/wait puts the old `after` back when the drop fails", async () => {
+  const fail = join(base, "fail-drop");
+  writeFileSync(fail, "");
+  try {
+    const was = waiting(5);
+    const res = await post("/api/wait/won", { "X-Aleph-UI": "1" }, { run: rid("won"), on: "r-8" });
+    expect(((await res.json()) as any).code).toBe(1);
+    expect(waiting(5)).toEqual(was);
+  } finally { rmSync(fail); }
 });
 
 describe("POST /api/standing/:reason", () => {

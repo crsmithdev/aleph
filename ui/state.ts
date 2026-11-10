@@ -36,7 +36,7 @@ export interface Job {
   condition: string; phase?: string; reason?: string; question?: string;
   started: string;
   /** The current (last) run: its kind and start. `started` is the job's first. */
-  run: { kind: string; started: string };
+  run: { id: string; kind: string; started: string };
   ended?: string; cost?: number; model?: string; tier?: string;
   /** The cost as an estimated share of the weekly plan limit; set by the routes, none under 6 hours of usage snapshots. */
   wk?: Wk;
@@ -237,7 +237,7 @@ export function jobProjector(registry: Record<string, Repo> = loadRegistry(), jo
     const found = todo !== undefined && v.repo ? lists.item(v.repo, todo) : undefined;
     const job: Job = {
       name: v.name, repo: v.repo ?? "", item: found ? { id: idOf(found), title: found.title, priority: priorityOf(found) } : todo !== undefined ? { id: todo, title: "" } : null,
-      condition: v.condition, started: v.started, run: { kind: v.run.kind, started: v.run.started },
+      condition: v.condition, started: v.started, run: { id: v.run.id, kind: v.run.kind, started: v.run.started },
       defaults: v.defaults, followups: v.followups,
     };
     for (const k of ["phase", "reason", "question", "ended", "cost", "model", "tier"] as const) if (v[k] !== undefined) (job as any)[k] = v[k];
