@@ -5,6 +5,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { today } from "../../../lib/day.ts";
 import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { byPriority, afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
@@ -202,14 +203,12 @@ async function closeIssues(repo: Repo, done: (ref: string) => boolean): Promise<
   return lines;
 }
 
-const localDay = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
-
 /** True from 03:00 local, when the store has not been mined on this local date. */
 export function correctionsDue(now = Date.now()): boolean {
   if (new Date(now).getHours() < 3) return false;
   const at = readStore().minedAt;
   const t = Date.parse(at);
-  return !at || Number.isNaN(t) || localDay(t) !== localDay(now);
+  return !at || Number.isNaN(t) || today(new Date(t)) !== today(new Date(now));
 }
 
 /** The tick's daily correction mining (corrections.ts), under the pause gate. An error is logged, never thrown. */

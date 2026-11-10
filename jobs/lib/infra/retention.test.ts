@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, renameSync,
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { archiveDir, putRun, recordsDir } from "../records/record.ts";
+import { today } from "../../../lib/day.ts";
 import { birthDay, retain } from "./retention.ts";
 
 const NOW = Date.parse("2026-11-09T12:00:00Z");
@@ -67,7 +68,7 @@ test("retain trims usage rows and old registry backups", () => {
 
 test("retain moves dispatch.log aside by the day it began, once a day, and deletes the aside files over 90 days old", () => {
   const dir = join(base, "factory");
-  const day = (d: number) => ago(d).toISOString().slice(0, 10);
+  const day = (d: number) => today(ago(d));
   for (const d of [91, 10]) writeFileSync(join(dir, `dispatch.${day(d)}.log`), "x");
   // The log began 2 days ago and had a write today, before this tick.
   writeFileSync(join(dir, "dispatch.day"), day(2));

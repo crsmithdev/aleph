@@ -8,6 +8,7 @@
  * parent comes from its id.
  */
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
+import { today } from "../../lib/day.ts";
 import { FULL, parseId, shortText } from "../../lib/naming.ts";
 
 export const STATUSES = ["open", "parked", "done", "dropped"] as const;
@@ -39,12 +40,9 @@ export interface Doc {
 /** The highest number used by work no longer in the list: `next` for the repo, `parts` by issue number. */
 export interface Floor { next: number; parts: Record<string, number> }
 
-// Local time, not UTC. `toISOString` stamps the UTC date, so west of Greenwich
-// every issue filed in the evening carried tomorrow's date.
+export { today };
 const pad = (n: number): string => String(n).padStart(2, "0");
 
-export const today = (now = new Date()): string =>
-  `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 /** A time as ISO 8601 UTC, the form every issue time and note stamp has. */
 export const minute = (now = new Date()): string => now.toISOString();
 const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;

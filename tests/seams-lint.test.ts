@@ -40,3 +40,7 @@ test("roles, land and gates do not import the orchestrator", () => {
 test("the issue store reads from jobs/ only an issue's Ask in its job record", () => {
   expect(offenders(/from "(?:\.\.\/)+jobs\/(?!lib\/records\/record\.ts")/, ["issues/lib/issues.ts"], ["issues/**"])).toEqual([]);
 });
+
+test("only lib/day.ts writes a date as toISOString().slice(0, 10)", () => {
+  expect(offenders(/toISOString\(\)\.slice\(0, 10\)/, ["lib/day.ts"])).toEqual([]);
+});

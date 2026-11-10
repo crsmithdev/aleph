@@ -7,6 +7,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { today } from "../../../lib/day.ts";
 import { langfuse } from "../../../lib/langfuse.ts";
 import { traceIdFor } from "../../../lib/otlp.ts";
 import { partsOf, readList } from "../../../issues/lib/store.ts";
@@ -20,7 +21,6 @@ import { landedCommits, repoStages } from "../records/status.ts";
 
 export const KEEP_DAYS = 14;
 export const episodesDir = () => { touch("episodes"); return join(factoryDir(), "episodes"); };
-const today = () => new Date().toISOString().slice(0, 10);
 const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
 /** The ledger runs of an item: its own runs, a part's under `on: <repo>-<n>.<k>`. */

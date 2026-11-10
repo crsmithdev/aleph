@@ -7,14 +7,15 @@
 import { existsSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { factoryDir } from "../gates/factory-status.ts";
+import { today } from "../../../lib/day.ts";
 import { runsDir } from "../records/ledger.ts";
 import { all } from "../records/record.ts";
 import { reposFile, usageFile } from "./settings.ts";
 
 const KEEP_DAYS = 90;
 
-/** The UTC day a file began: its birth time, or its mtime when the file system gives no birth time. */
-export const birthDay = (st: { birthtime: Date; mtime: Date }): string => (st.birthtime.getTime() > 0 ? st.birthtime : st.mtime).toISOString().slice(0, 10);
+/** The local day a file began: its birth time, or its mtime when the file system gives no birth time. */
+export const birthDay = (st: { birthtime: Date; mtime: Date }): string => today(st.birthtime.getTime() > 0 ? st.birthtime : st.mtime);
 
 /** The newest change in a folder: the folder and its entries. */
 const changed = (dir: string): number => Math.max(statSync(dir).mtimeMs, ...readdirSync(dir).map((f) => statSync(join(dir, f)).mtimeMs));
@@ -48,12 +49,12 @@ export function retain(now = Date.now()): number {
     for (const f of readdirSync(dirname(reg))) if (f.startsWith(`${basename(reg)}.bak-`) && statSync(join(dirname(reg), f)).mtimeMs < cut) drop(join(dirname(reg), f));
   }
 
-  // dispatch.day holds the UTC day the current dispatch.log began, so the aside file takes the day of its oldest line.
+  // dispatch.day holds the local day the current dispatch.log began, so the aside file takes the day of its oldest line.
   const fdir = factoryDir(), log = join(fdir, "dispatch.log"), mark = join(fdir, "dispatch.day");
-  const today = new Date(now).toISOString().slice(0, 10), oldest = new Date(cut).toISOString().slice(0, 10);
-  const start = existsSync(mark) ? readFileSync(mark, "utf8").trim() : existsSync(log) ? birthDay(statSync(log)) : today;
-  if (start < today && existsSync(log)) renameSync(log, join(fdir, `dispatch.${start}.log`));
-  if ((start !== today || !existsSync(mark)) && existsSync(fdir)) writeFileSync(mark, today);
+  const day = today(new Date(now)), oldest = today(new Date(cut));
+  const start = existsSync(mark) ? readFileSync(mark, "utf8").trim() : existsSync(log) ? birthDay(statSync(log)) : day;
+  if (start < day && existsSync(log)) renameSync(log, join(fdir, `dispatch.${start}.log`));
+  if ((start !== day || !existsSync(mark)) && existsSync(fdir)) writeFileSync(mark, day);
   if (existsSync(fdir)) for (const f of readdirSync(fdir)) if (/^dispatch\.\d{4}-\d\d-\d\d\.log$/.test(f) && f.slice(9, 19) < oldest) drop(join(fdir, f));
   return n;
 }

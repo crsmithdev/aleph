@@ -5,6 +5,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join, relative } from "node:path";
+import { today } from "../../lib/day.ts";
 import { vaultDir } from "../../lib/paths.ts";
 import { parseFrontmatter, splitFrontmatter, type Frontmatter } from "../../lib/frontmatter.ts";
 
@@ -55,10 +56,7 @@ export interface Note {
 
 export interface Finding { note: string; rule: string; detail: string }
 
-export function today(d = new Date()): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+export { today };
 
 export function clock(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, "0");
