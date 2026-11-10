@@ -86,5 +86,33 @@ test("a copy of code a boundary protects, in a changed file, blocks with the own
   sh("git", "checkout", "-qb", "copy");
   write("ui/pay.ts", body);
   const out = JSON.parse(stop({ hook_event_name: "Stop", session_id: "s3", cwd: root }));
-  expect(out.reason).toContain('ui/pay.ts:1 copies lib/money.ts:1 (settle), which boundary "money" keeps in its owner');
+  expect(out.reason).toContain('ui/pay.ts:1 (settle) copies lib/money.ts:1 (settle), which boundary "money" keeps in its owner');
+});
+
+const SETTLE = "export function settle(total: number, rate: number): number {\n  const fee = total * rate;\n  const tax = fee * 0.2;\n  const net = total - fee - tax;\n  if (net < 0) throw new Error(\"negative\");\n  return Math.round(net * 100) / 100;\n}\n";
+const RENAMED = SETTLE.replaceAll("settle", "payout").replaceAll("fee", "cut").replaceAll("0.2", "0.25");
+const RENAMES = { ignoreIdentifiers: true, ignoreLiterals: true };
+
+test("a renamed copy that the base did not have blocks as a new copy", () => {
+  write("lib/money.ts", SETTLE);
+  write(".jscpd.json", JSON.stringify(RENAMES));
+  write("ui/pay.ts", RENAMED);
+  const out = JSON.parse(stop({ hook_event_name: "Stop", session_id: "s4", cwd: root }));
+  expect(out.reason).toMatch(/lib\/money\.ts:1-\d+ \(\d+ lines\), a copy the base did not have|ui\/pay\.ts:1-\d+ \(\d+ lines\), a copy the base did not have/);
+});
+
+test("a copy the base already had does not block, and an accepted pair does not block", () => {
+  sh("git", "checkout", "-q", "main");
+  write("lib/money.ts", SETTLE);
+  write("ui/pay.ts", RENAMED);
+  write(".jscpd.json", JSON.stringify(RENAMES));
+  sh("git", "add", "-A");
+  sh("git", "commit", "-qm", "two copies");
+  sh("git", "checkout", "-qb", "edit");
+  write("ui/pay.ts", RENAMED + "export const unit = 1;\n");
+  expect(stop({ hook_event_name: "Stop", session_id: "s5", cwd: root })).toBe("");
+  write("ui/web.ts", RENAMED.replaceAll("payout", "webPay"));
+  expect(stop({ hook_event_name: "Stop", session_id: "s6", cwd: root })).toContain("a copy the base did not have");
+  write(".one-way.json", JSON.stringify({ accepted: [{ copies: ["ui/web.ts", "lib/money.ts", "ui/pay.ts"], reason: "web needs its own" }] }));
+  expect(stop({ hook_event_name: "Stop", session_id: "s7", cwd: root })).toBe("");
 });

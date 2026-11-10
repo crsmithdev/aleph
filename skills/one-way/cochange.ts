@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * Co-change from git history: which files change together, and which files the history says are fixed again and
- * again. The retro seeds its hunt with it (`seed`); the Stop hook asks it which companions a change left out (`holes`).
+ * again. The seed adds jscpd's copies of code (clones.ts). The retro seeds its hunt with it (`seed`); the Stop hook asks it which companions a change left out (`holes`).
  *
  * A rule A → B says: a commit that changes A also changes B. Its confidence is the Wilson lower bound of
  * co(A,B) / n(A), so a pair seen 3 times of 3 does not outrank one seen 40 times of 44. Merges and commits of more
@@ -12,6 +12,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { scan } from "./clones.ts";
 
 const WIDE = 30;
 const SUPPORT = 10;
@@ -84,13 +85,17 @@ export function accepted(root: string): Accepted[] {
 }
 
 const fileOf = (copy: string) => copy.split(":")[0];
-const isAccepted = (list: Accepted[], a: string, b: string) =>
+export const isAccepted = (list: Accepted[], a: string, b: string) =>
   list.some((e) => e.copies.some((c) => fileOf(c) === a) && e.copies.some((c) => fileOf(c) === b));
 
+/** The commit where the branch left the default branch, or "" when there is none. */
+export function base(root: string): string {
+  return git(root, "merge-base", "HEAD", "origin/HEAD").trim() || git(root, "merge-base", "HEAD", "main").trim();
+}
+
 /** The files the current change touches: the branch since it left the default branch, plus the working tree. */
-export function changed(root: string): Set<string> {
-  const base = git(root, "merge-base", "HEAD", "origin/HEAD").trim() || git(root, "merge-base", "HEAD", "main").trim();
-  const branch = base ? git(root, "diff", "--name-only", `${base}...HEAD`).split("\n") : [];
+export function changed(root: string, from = base(root)): Set<string> {
+  const branch = from ? git(root, "diff", "--name-only", `${from}...HEAD`).split("\n") : [];
   const tree = git(root, "status", "--porcelain", "--untracked-files=all").split("\n").map((l) => l.slice(3).split(" -> ").pop()!);
   return new Set([...branch, ...tree].filter(Boolean));
 }
@@ -107,7 +112,7 @@ export function holes(root: string, change: Set<string>, all: Map<string, Rule[]
   return [...best.values()].sort((x, y) => y.conf - x.conf);
 }
 
-/** The files whose commits most often read as a fix, and the strongest pairs: the retro's first candidates. */
+/** The files whose commits most often read as a fix, the strongest pairs and the largest copies of code: the retro's first candidates. */
 export function seed(root: string, since = "90.days") {
   const commits = history(root, 5000, since);
   const fixes = new Map<string, string[]>();
@@ -116,6 +121,7 @@ export function seed(root: string, since = "90.days") {
   return {
     fixes: [...fixes].sort((x, y) => y[1].length - x[1].length).slice(0, 25).map(([file, cs]) => ({ file, count: cs.length, commits: cs.slice(0, 5) })),
     pairs: pairs.slice(0, 25).map(({ a, b, co, n, conf }) => ({ a, b, co, n, conf: Math.round(conf * 100) / 100 })),
+    clones: scan(root).clones.sort((x, y) => y.lines - x.lines).slice(0, 40).map((c) => `${c.a.name}:${c.a.start}-${c.a.end} ~ ${c.b.name}:${c.b.start}-${c.b.end} (${c.lines} lines)`),
   };
 }
 

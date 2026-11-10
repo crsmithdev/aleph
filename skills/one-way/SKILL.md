@@ -40,10 +40,15 @@ Two files in the repo keep a concept in one place after it is consolidated:
 
 `hook.ts` runs at each Stop on the change since the branch left the default branch, plus the working tree:
 
+Both jscpd checks are one run of `clones.ts`, with the repo's `.jscpd.json` (no file, no jscpd checks).
+
 - **co-change**: `cochange.ts` reads the last 2000 commits that are not merges, skips commits of more than
   30 files and test files, and makes a rule A → B when n(A) ≥ 10 and the Wilson lower bound of co(A,B)/n(A)
   is ≥ 0.6. A changed A whose companion B (≥ 0.7) is left out is a finding, with the commits as evidence.
 - **boundaries**: a changed file that holds a copy of code a `.jscpd.json` boundary protects.
+- **new copies**: a changed file that holds a copy of code, renamed copies included, that the branch's base
+  did not have. jscpd compares the tree with the base (`--baseline-from-ref`), so copies already on main do
+  not block.
 
 It blocks once per session for one set of findings and never blocks a stop a hook already continued. When it
 blocks, do one of three things for each finding: change the companion, call the owner, or add the pair to
@@ -55,8 +60,10 @@ Each signal points at a candidate concept. A candidate becomes a finding only wh
 read it.
 
 - **Repeated fixes.** Files whose commits read as fixes again and again, and pairs that change together.
-  `bun <skill dir>/cochange.ts seed --since 90.days` lists both. Then read the subjects that repeat a noun
+  `bun <skill dir>/cochange.ts seed --since 90.days` lists both, plus the copies of code below. Then read the subjects that repeat a noun
   ("verdict", "lock", "scope"). This is the strongest signal: the drift already cost a fix.
+- **Copies of code.** The `clones` list of the seed: jscpd's copies, renamed ones included, largest first.
+  Most are pasted code; read each for the concept behind it.
 - **Same underlying API.** Two places that call the same library, CLI or system API for the same job
   (`Bun.spawn` of one program, one paged HTTP endpoint, `Intl.DateTimeFormat`). Search for the call, not the
   name; check `package.json` for a dependency that already does the job.

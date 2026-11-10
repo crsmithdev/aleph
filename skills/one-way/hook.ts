@@ -4,49 +4,34 @@
  *
  *   co-change   a file that history says changes with a changed file (confidence ≥ 0.7) is left out
  *   boundaries  a changed file holds a copy of code that `.jscpd.json` keeps inside its owner
+ *   new copies  a changed file holds a copy of code (renamed copies too) that the branch's base did not have
  *
  * A finding blocks the stop once per session, with the evidence, so the agent changes the companion, calls the
  * owner, or records the second way in `.one-way.json`. The same findings do not block twice, and a stop that a
  * Stop hook already continued is never blocked.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { peek, put } from "../../hooks/lib/handshake.ts";
-import { accepted, changed, history, holes, rules } from "./cochange.ts";
+import { scan } from "./clones.ts";
+import { accepted, base, changed, history, holes, isAccepted, rules } from "./cochange.ts";
 
-const JSCPD = join(import.meta.dir, "../../node_modules/.bin/jscpd");
-
-type Copy = { rule: string; copy: string; owner: string };
-
-/** The boundary violations whose copy lies in a changed file. */
-export function violations(root: string, change: Set<string>): Copy[] {
-  const config = join(root, ".jscpd.json");
-  if (!existsSync(config) || !JSON.parse(readFileSync(config, "utf8")).boundaries) return [];
-  const out = mkdtempSync(join(tmpdir(), "one-way-"));
-  try {
-    Bun.spawnSync([JSCPD, "--reporters", "json", "--output", out, "--silent", "."], { cwd: root, stdout: "ignore", stderr: "ignore" });
-    const report = JSON.parse(readFileSync(join(out, "jscpd-report.json"), "utf8"));
-    return (report.boundaries ?? []).flatMap((b: any) =>
-      b.violations
-        .filter((v: any) => change.has(v.copy.name))
-        .map((v: any) => ({ rule: b.name, copy: `${v.copy.name}:${v.copy.start}`, owner: `${v.protected.name}:${v.protected.start}${v.protected.function ? ` (${v.protected.function})` : ""}` })));
-  } finally {
-    rmSync(out, { recursive: true, force: true });
-  }
-}
+const at = (s: { name: string; start: number; function?: string }) => `${s.name}:${s.start}${s.function ? ` (${s.function})` : ""}`;
 
 /** The block reason for the findings, or null when there are none. */
 export function reason(root: string): string | null {
-  const change = changed(root);
+  const from = base(root);
+  const change = changed(root, from);
   if (!change.size) return null;
-  const left = holes(root, change, rules(history(root)), accepted(root));
-  const copies = violations(root, change);
-  if (!left.length && !copies.length) return null;
+  const ok = accepted(root);
+  const left = holes(root, change, rules(history(root)), ok);
+  const { clones, violations } = scan(root, from || undefined);
+  const copies = violations.filter((v) => change.has(v.copy.name));
+  const pasted = clones.filter((c) => c.isNew && (change.has(c.a.name) || change.has(c.b.name)) && !copies.some((v) => v.copy.name === c.a.name || v.copy.name === c.b.name) && !isAccepted(ok, c.a.name, c.b.name));
+  if (!left.length && !copies.length && !pasted.length) return null;
   const lines = [
     ...left.map((h) => `- ${h.a} changed; ${h.b} changed with it in ${h.co} of ${h.n} commits (confidence ${h.conf.toFixed(2)}, e.g. ${h.shas.join(" ")}). Change ${h.b} too, or record the pair in .one-way.json.`),
-    ...copies.map((c) => `- ${c.copy} copies ${c.owner}, which boundary "${c.rule}" keeps in its owner. Call the owner instead.`),
+    ...copies.map((v) => `- ${at(v.copy)} copies ${at(v.owner)}, which boundary "${v.rule}" keeps in its owner. Call the owner instead.`),
+    ...pasted.map((c) => `- ${c.b.name}:${c.b.start}-${c.b.end} repeats ${c.a.name}:${c.a.start}-${c.a.end} (${c.lines} lines), a copy the base did not have. Call or extend the first, or record the pair in .one-way.json.`),
   ];
   return `One way: this change may add a second way or leave a copy behind.\n${lines.join("\n")}\nA second way on purpose goes in .one-way.json as {"copies": [...], "reason": "..."} under "accepted".`;
 }
