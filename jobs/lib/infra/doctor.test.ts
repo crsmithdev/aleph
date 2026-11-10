@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { wallStepSince } from "./clock.ts";
 import { emptyObjects, fix, gitChecks, homeCheck, linkCheck, lostCheck, unitChecks, doctor } from "./doctor.ts";
 import { writeRun } from "../records/ledger.ts";
-import { mkdirSync, symlinkSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync as rm, symlinkSync } from "node:fs";
 
 let dir: string, repo: string;
 const saved = { ...process.env };
@@ -84,6 +84,20 @@ test("aleph.home answers or does not", async () => {
   expect(await homeCheck()).toMatchObject({ ok: true, detail: `http://127.0.0.1:${s.port}/ answered 200` });
   process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/down`;
   expect((await homeCheck()).ok).toBe(false);
+  s.stop(true);
+});
+
+test("aleph.home sends the factory token, which comes back after the sessions file is deleted", async () => {
+  const sessions = join(dir, "factory", "ui-sessions.json");
+  const s = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => {
+    const t = /aleph_session=([^;]+)/.exec(r.headers.get("cookie") ?? "")?.[1];
+    const ok = t && JSON.parse(readFileSync(sessions, "utf8")).includes(t);
+    return new Response(new URL(r.url).pathname === "/api/state" ? "{}" : "x", { status: ok ? 200 : 401 });
+  } });
+  process.env.ALEPH_HOME_URL = `http://127.0.0.1:${s.port}/`;
+  expect((await homeCheck()).ok).toBe(true);
+  rm(sessions);
+  expect((await homeCheck()).ok).toBe(true);
   s.stop(true);
 });
 

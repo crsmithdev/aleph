@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { layout } from "../infra/layout.ts";
 import { uiPort } from "../infra/settings.ts";
+import { factoryCookie } from "../infra/ui-token.ts";
 
 /** The file that holds the count of failures in a row. */
 export const smokeFile = () => join(layout().factory, "smoke.json");
@@ -21,7 +22,7 @@ interface Smoke { fails: number; reason?: string; at?: string }
 export async function smokeProblem(base = `http://127.0.0.1:${port()}`): Promise<string | null> {
   for (const path of PATHS) {
     try {
-      const r = await fetch(base + path, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      const r = await fetch(base + path, { signal: AbortSignal.timeout(TIMEOUT_MS), headers: { cookie: factoryCookie() } });
       if (!r.ok) return `${path} answered ${r.status}`;
     } catch (e) {
       return `${path}: ${e instanceof Error ? e.message : e}`;

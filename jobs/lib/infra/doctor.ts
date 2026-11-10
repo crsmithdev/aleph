@@ -5,6 +5,7 @@
 import { existsSync, lstatSync, readdirSync, readlinkSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { git } from "./git.ts";
+import { factoryCookie } from "./ui-token.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { isLost } from "./process.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
@@ -140,7 +141,7 @@ export async function homeCheck(): Promise<Check> {
   const url = HOME_URL();
   let status: number;
   try {
-    status = (await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual" })).status;
+    status = (await fetch(url, { signal: AbortSignal.timeout(5000), redirect: "manual", headers: { cookie: factoryCookie() } })).status;
     if (status >= 400) return bad("aleph.home", `${url} answered ${status}`);
   } catch (e: any) {
     return bad("aleph.home", `${url}: ${e?.message ?? e}`);
@@ -148,7 +149,7 @@ export async function homeCheck(): Promise<Check> {
   // A JSON route is gzipped by the server, so its body proves that home-proxy passes gzip through intact.
   const api = new URL("/api/state", url).href;
   try {
-    const r = await fetch(api, { signal: AbortSignal.timeout(5000), headers: { "accept-encoding": "gzip" }, decompress: false });
+    const r = await fetch(api, { signal: AbortSignal.timeout(5000), headers: { "accept-encoding": "gzip", cookie: factoryCookie() }, decompress: false });
     if (!r.ok) return bad("aleph.home", `${api} answered ${r.status}`);
     const body = new Uint8Array(await r.arrayBuffer());
     JSON.parse(new TextDecoder().decode(r.headers.get("content-encoding") === "gzip" ? Bun.gunzipSync(body) : body));

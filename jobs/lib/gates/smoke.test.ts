@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { smokeLine, smokeProblem, smokeStep } from "./smoke.ts";
@@ -10,6 +10,7 @@ let server: ReturnType<typeof Bun.serve>;
 let base = "";
 
 beforeAll(() => {
+  process.env.ALEPH_FACTORY_DIR = join(dir, "factory");
   server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("x", { status }) });
   base = `http://127.0.0.1:${server.port}`;
 });
@@ -33,4 +34,15 @@ test("the health line needs two failures in a row, and a pass clears it", async 
   status = 200;
   await smokeStep(file, base);
   expect(smokeLine(file)).toBeNull();
+});
+
+test("the smoke test sends the factory token and adds it to ui-sessions.json", async () => {
+  const gated = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: (r) => {
+    const t = /aleph_session=([^;]+)/.exec(r.headers.get("cookie") ?? "")?.[1];
+    const ok = t && JSON.parse(readFileSync(join(dir, "factory", "ui-sessions.json"), "utf8")).includes(t);
+    return new Response("x", { status: ok ? 200 : 401 });
+  } });
+  expect(await smokeProblem(`http://127.0.0.1:${gated.port}`)).toBeNull();
+  expect(JSON.parse(readFileSync(join(dir, "factory", "ui-sessions.json"), "utf8"))).toHaveLength(1);
+  gated.stop(true);
 });

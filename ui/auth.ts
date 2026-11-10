@@ -5,32 +5,13 @@
  * `<ALEPH_FACTORY_DIR>/ui-sessions.json`, so a restart keeps every device logged in.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import type { Routes } from "./server.ts";
-import { layout } from "../jobs/lib/infra/layout.ts";
+import { readSessions, writeSessions } from "../jobs/lib/infra/ui-token.ts";
 import { uiPassword } from "../jobs/lib/infra/settings.ts";
 
 const COOKIE = "aleph_session";
 const password = () => uiPassword();
 export const gateOn = () => password() !== "";
-
-function sessionsPath(): string {
-  return join(layout().factory, "ui-sessions.json");
-}
-
-function readSessions(): string[] {
-  try {
-    const v = JSON.parse(readFileSync(sessionsPath(), "utf8"));
-    return Array.isArray(v) ? v.filter((t): t is string => typeof t === "string") : [];
-  } catch { return []; }
-}
-
-function writeSessions(tokens: string[]): void {
-  const p = sessionsPath();
-  mkdirSync(join(p, ".."), { recursive: true });
-  writeFileSync(p, JSON.stringify(tokens));
-}
 
 export function cookieToken(req: Request): string | null {
   for (const part of (req.headers.get("cookie") ?? "").split(";")) {
