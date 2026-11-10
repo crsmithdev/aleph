@@ -80,3 +80,36 @@ test("a handoff that makes the context too long falls back to the summary and pa
   expect(ctx).toContain(join(root, "handoffs", "projects", "proj.md"));
   expect(ctx).toContain("run the aleph:pickup skill with no argument");
 });
+
+const named = (name: string, text: string) => writeFileSync(join(root, "handoffs", `${name}.md`), text);
+
+test("a named handoff whose cwd holds the session's directory asks for a pickup by name", () => {
+  named("voice", `summary: finish the bridge\ncwd: ${join(root, "proj")}\n\nnamed-body-3301\n`);
+  mkdirSync(join(root, "proj", "sub"));
+  for (const dir of [join(root, "proj"), join(root, "proj", "sub")]) {
+    const out = JSON.parse(run(dir));
+    expect(out.systemMessage).toMatch(/^handoff waiting \(voice, \d\d:\d\d\): finish the bridge$/);
+    expect(out.hookSpecificOutput.additionalContext).toContain("run the aleph:pickup skill with the argument voice");
+    expect(out.hookSpecificOutput.additionalContext).toContain("named-body-3301");
+  }
+});
+
+test("a named handoff for another directory, with no cwd, or archived prints nothing", () => {
+  named("voice", `summary: x\ncwd: ${join(root, "other")}\n`);
+  named("bare", "summary: x\n");
+  named("2026-11-10-120000-voice", `summary: x\ncwd: ${join(root, "proj")}\n`);
+  mkdirSync(join(root, "proj-2"));
+  named("near", `summary: x\ncwd: ${join(root, "proj")}\n`);
+  expect(run(join(root, "proj"))).not.toBe("");
+  expect(run(join(root, "proj-2"))).toBe("");
+  expect(run(join(root, "proj"))).not.toContain("voice");
+});
+
+test("a project handoff and a named handoff both show", () => {
+  write("proj", "summary: project work\n");
+  named("voice", `summary: voice work\ncwd: ${join(root, "proj")}\n`);
+  const out = JSON.parse(run(join(root, "proj")));
+  expect(out.systemMessage.split("\n")).toHaveLength(2);
+  expect(out.hookSpecificOutput.additionalContext).toContain("with no argument");
+  expect(out.hookSpecificOutput.additionalContext).toContain("with the argument voice");
+});

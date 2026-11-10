@@ -21,6 +21,8 @@ Speed matters: the user waits for this file.
 
 The first line of the file is `summary: <what the next session does, in one line of at most 100 characters>`. The session start shows this line to the user.
 
+With an argument, the second line is `cwd: !`pwd``. The session start picks up a named handoff in a session that starts in that directory or below it.
+
 Then these sections, in this order:
 
 ## Intent
