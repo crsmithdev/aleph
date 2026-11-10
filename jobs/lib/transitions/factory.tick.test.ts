@@ -2,8 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { base, issueRuns, remote, sh, state, setup, teardown, seedItem } from "../../cli.helpers";
-import { issueShow } from "../../inproc.ts";
-import { tick } from "../../flow.testkit.ts";
+import { issueShow, tick } from "../../flow.testkit.ts";
 
 // The ticks run in-process, as `aleph tick` runs them; each run's unit is a process of its own.
 beforeAll(setup);

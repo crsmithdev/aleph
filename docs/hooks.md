@@ -42,7 +42,7 @@ All other hooks **fail open**. An error exits without a block, or prints nothing
 
 ### aleph report
 
-`aleph report --hook` (`reportCmd` in `jobs/cli.ts`) fetches `origin` for each factory repo, then injects:
+`aleph report --hook` (`reportCmd` in `jobs/commands.ts`) fetches `origin` for each factory repo, then injects:
 
 - the runs that no session has shown yet;
 - how far each checkout is behind `origin/main`;

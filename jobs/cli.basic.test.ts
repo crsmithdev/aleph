@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, base, branchExists, fakeLog, file, job, jobRuns, jobsDir, now, seedRun, setupLog, sh, state, stateNow, told, worktree, setup, teardown, when } from "./cli.helpers";
-import { actionJob, drop, jobView } from "./inproc";
+import { actionJob, cli, drop, jobView } from "./flow.testkit.ts";
 
 // The wiring of `aleph job`, `jobs`, `drop` and `run`, and the cases whose code is in jobs/cli.ts itself: the jobs list,
 // the news, the --fate check, and six `aleph job` processes at once. The other cases run in-process in jobs/lib/roles/unit.flow.test.ts.
@@ -164,10 +164,10 @@ describe("run", () => {
 
 describe("models", () => {
   test("set title gpt-oss-20b is printed by models; a bad tier exits non-zero", async () => {
-    expect((await aleph(["models", "set", "title", "gpt-oss-20b"])).code).toBe(0);
-    const r = await aleph(["models"]);
+    expect((await cli(["models", "set", "title", "gpt-oss-20b"])).code).toBe(0);
+    const r = await cli(["models"]);
     expect(r.json).toMatchObject({ title: { enabled: true, model: "gpt-oss-20b" }, merge: { enabled: true, model: "haiku" } });
-    const bad = await aleph(["models", "set", "nonexistent", "gpt-oss-20b"]);
+    const bad = await cli(["models", "set", "nonexistent", "gpt-oss-20b"]);
     expect(bad.code).not.toBe(0);
     expect(bad.stderr).toContain("unknown tier");
   });

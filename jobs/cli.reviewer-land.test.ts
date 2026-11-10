@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, other, repo, seedItem, sh, setup, teardown } from "./cli.helpers";
+import { base, other, repo, seedItem, sh, setup, teardown } from "./cli.helpers";
 import { clearAsk, setAsk } from "./lib/asks/ask.ts";
 import { allRuns } from "./lib/records/ledger.ts";
-import { actionJob, drop } from "./inproc";
+import { actionJob, cli, drop } from "./flow.testkit.ts";
 
 // The wiring of `aleph report`; the reviewer and the land run in-process in jobs/lib/land/review.land.test.ts.
 beforeAll(setup);
@@ -19,10 +19,10 @@ test("the report hook prints one line for each thing to act on, and nothing when
     sh(other, "git", "commit", "-qm", `add held/${f}.txt`);
   }
   sh(other, "git", "push", "-q", "origin", "main");
-  await aleph(["pause"]);
+  await cli(["pause"]);
   const id = seedItem("fac", "Needs Chris");
   setAsk(`fac-${id}`, { kind: "input", reason: "question", question: "Which?", options: [], why: [] });
-  const text = (await aleph(["report", "--hook"])).json.hookSpecificOutput.additionalContext;
+  const text = (await cli(["report", "--hook"])).json.hookSpecificOutput.additionalContext;
   const lines = text.split("\n").filter(Boolean);
   expect(lines).toHaveLength(3);
   expect(lines[0]).toBe("factory paused");
@@ -30,10 +30,10 @@ test("the report hook prints one line for each thing to act on, and nothing when
   expect(lines[1]).toContain(`fac-${id}`);
   expect(lines[2]).toBe("fac is 2 commits behind origin/main");
   expect(text).not.toContain("git pull brings");
-  await aleph(["resume"]);
+  await cli(["resume"]);
   clearAsk(`fac-${id}`);
   sh(repo, "git", "merge", "-q", "--ff-only", "origin/main");
-  const quiet = await aleph(["report", "--hook"]);
+  const quiet = await cli(["report", "--hook"]);
   expect(quiet.stdout.trim()).toBe("");
   expect(quiet.code).toBe(0);
 }, 60_000);
@@ -44,7 +44,7 @@ test("the report hook marks no run shown and rewrites no episodes-seen file", as
   writeFileSync(join(episodes, "page.md"), "x\n");
   writeFileSync(seen, "old\n");
   await actionJob("fhook", "error", {}, "fac");
-  const h = await aleph(["report", "--hook"]);
+  const h = await cli(["report", "--hook"]);
   expect(h.stdout).not.toContain("fhook failed");
   expect(allRuns().find((e) => e.run.name === "fhook")!.run.shown).toBe(false);
   expect(readFileSync(seen, "utf8")).toBe("old\n");

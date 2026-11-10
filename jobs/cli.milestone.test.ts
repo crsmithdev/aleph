@@ -1,13 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { CLI, aleph, base, fakeLog, file, other, remote, sh, state, setup, teardown } from "./cli.helpers";
-import { actionJob as job, drop, issueAdd, issueClose, job as startJob, land, status as statusOf } from "./inproc";
+import { CLI, base, fakeLog, file, other, remote, sh, state, setup, teardown } from "./cli.helpers";
+import { actionJob as job, cli, drop, issueAdd, issueClose, job as startJob, land, status as statusOf } from "./flow.testkit.ts";
 
 beforeAll(setup);
 afterAll(teardown);
 
-// `aleph status` with no issue keeps its CLI test: it is built in jobs/cli.ts. The other cases call the library in-process.
+// Every case calls `aleph` in-process (flow.testkit.ts).
 describe("milestone 2", () => {
   const remoteGit = (...a: string[]) => sh(base, "git", "--git-dir", remote, ...a);
   const status = async (item: string) => (await statusOf(item)).json;
@@ -42,14 +42,14 @@ describe("milestone 2", () => {
 
   test("aleph status with no item gives the stage of each open item in the recent repos", async () => {
     const id = (await issueAdd("fac", "listed by status")).json.added;
-    const r = await aleph(["status", "--json"]);
+    const r = await cli(["status", "--json"]);
     expect(r.code).toBe(0);
     expect(r.json.find((s: any) => s.id === `fac-${id}`)).toMatchObject({ stage: "new" });
-    const text = (await aleph(["status"])).stdout;
+    const text = (await cli(["status"])).stdout;
     expect(text.split("\n")).toContain("fac");
     expect(text).toContain(`\n  fac-${id} new intake`);
     await issueClose("fac", id, "done");
-    expect((await aleph(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
+    expect((await cli(["status", "--json"])).json.find((s: any) => s.id === `fac-${id}`)).toBeUndefined();
   }, 30_000);
 
   test("aleph status reads a short ID like the full one", async () => {
@@ -57,7 +57,7 @@ describe("milestone 2", () => {
     const repos = readFileSync(join(base, "repos.json"), "utf8");
     writeFileSync(join(base, "repos.json"), JSON.stringify({ ...JSON.parse(repos), fac: { ...JSON.parse(repos).fac, code: "f" } }));
     try {
-      const full = await aleph(["status", `fac-${id}`, "--json"]), short = await aleph(["status", `f${id}`, "--json"]);
+      const full = await cli(["status", `fac-${id}`, "--json"]), short = await cli(["status", `f${id}`, "--json"]);
       expect(short.code).toBe(0);
       expect(short.json.stage).toBe(full.json.stage);
       expect(short.json.id).toBe(`fac-${id}`);

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { seedPart, setup, teardown } from "../../jobs/cli.helpers";
-import { issueAdd, issueClose, issueEdit, issueNote, issueShow, status } from "../../jobs/inproc";
+import { issueAdd, issueClose, issueEdit, issueNote, issueShow, status } from "../../jobs/flow.testkit.ts";
 
 // The verbs of `aleph issue` on a part `<n>.<k>`, and the drop of a part, called in-process as the CLI calls them.
 beforeAll(setup);

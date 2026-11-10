@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CLI, base, env, file, jobRuns, jobsDir, moveMain, remote, sh, state, stateNow, setup, teardown, waitCmd, when } from "./cli.helpers";
-import { issueAdd, issueShow, job, land as landJob } from "./inproc";
+import { issueAdd, issueShow, job, land as landJob } from "./flow.testkit.ts";
 
 beforeAll(setup);
 afterAll(teardown);

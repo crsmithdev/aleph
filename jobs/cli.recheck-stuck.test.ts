@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { aleph, jobRuns, other, repo, sh, state, setup, teardown } from "./cli.helpers";
-import { job, land } from "./inproc";
+import { job, land } from "./flow.testkit.ts";
 
 beforeAll(setup);
 afterAll(teardown);

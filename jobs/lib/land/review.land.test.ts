@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, fakeLog, jobsDir, remote, repo, sh, state, setup, teardown } from "../../cli.helpers";
-import { actionJob, drop, issueAdd, issueShow, job, jobView, land } from "../../inproc.ts";
+import { actionJob, drop, issueAdd, issueShow, job, jobView, land } from "../../flow.testkit.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.
 // `aleph report --hook` keeps its CLI test in jobs/cli.reviewer-land.test.ts.

@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { aleph, base, file, state, setup, teardown, seedItem } from "./cli.helpers";
+import { base, file, state, setup, teardown, seedItem } from "./cli.helpers";
 import { eventsOf } from "./lib/infra/layout";
-import { dispatch, job, land } from "./inproc";
+import { cli, dispatch, job, land } from "./flow.testkit.ts";
 
 beforeAll(setup);
 afterAll(teardown);
@@ -15,7 +15,7 @@ describe("a factory run", () => {
   // `aleph tick` keeps its CLI test in jobs/cli.reviewer-sweep.test.ts.
   test("pause stops the tick and the unit's follow-up land, but not Chris's land", async () => {
     mkdirSync(join(base, "factory"), { recursive: true });
-    expect((await aleph(["pause"])).json).toEqual({ paused: true });
+    expect((await cli(["pause"])).json).toEqual({ paused: true });
     const id = seedItem("fac", "while paused", { kind: "goal" }, "ACTION: commit paused.txt\n".trim());
     expect((await dispatch()).json).toMatchObject({ started: [], paused: true });
     expect(readdirSync(join(base, "factory", "events")).flatMap((f) => eventsOf(readFileSync(join(base, "factory", "events", f), "utf8"))).some((e) => e.action === "paused" && e.subject === "factory")).toBe(true);
@@ -26,7 +26,7 @@ describe("a factory run", () => {
     expect(file(r.json.run, "paused-next")).toBe("land\n");
     const l = await land("fpaused");
     expect(state(l.json.run).condition).toBe("landed");
-    expect((await aleph(["resume"])).json).toEqual({ paused: false });
+    expect((await cli(["resume"])).json).toEqual({ paused: false });
     // The start command only logs the issue: the test is about the tick's choice, not about the run it would start.
     const startCmd = join(base, "pause-start"), startLog = join(base, "pause-start.log");
     writeFileSync(startCmd, `#!/bin/sh\necho "$2" >> ${startLog}\n`, { mode: 0o755 });

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { join } from "node:path";
 import { base, repo, setup, sh, state, teardown } from "../../cli.helpers";
-import { actionJob } from "../../inproc";
+import { actionJob } from "../../flow.testkit.ts";
 
 beforeAll(setup);
 afterAll(teardown);

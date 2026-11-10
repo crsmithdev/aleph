@@ -2,8 +2,7 @@ import { afterAll, beforeAll, describe, expect, setSystemTime, test } from "bun:
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { base, branchExists, fakeLog, file, jobRuns, jobsDir, repo, sh, state, told, worktree, setup, teardown } from "../../cli.helpers";
-import { actionJob, drop, job, jobView } from "../../inproc.ts";
-import { dropAs, run } from "../../flow.testkit.ts";
+import { actionJob, drop, dropAs, job, jobView, run } from "../../flow.testkit.ts";
 import { putRun } from "../records/record.ts";
 
 // The runs start in-process, as `aleph job` and `aleph run` start them; each run's unit is a process of its own.

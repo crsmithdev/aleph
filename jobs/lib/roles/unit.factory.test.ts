@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fakeLog, file, repo, sh, state, told, setup, teardown, worktree } from "../../cli.helpers";
-import { actionJob, drop, issueAdd, issueClose, issueList, issueShow } from "../../inproc.ts";
+import { actionJob, drop, issueAdd, issueClose, issueList, issueShow } from "../../flow.testkit.ts";
 import { AGENT_SETTINGS } from "../routing/models.ts";
 
 // The runs start in-process, as `aleph job` starts them; each run's unit is a process of its own.

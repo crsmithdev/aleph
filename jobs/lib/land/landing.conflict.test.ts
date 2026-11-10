@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { base, file, jobsDir, other, remote, sh, state, told, setup, teardown } from "../../cli.helpers";
-import { actionJob, land } from "../../inproc";
+import { actionJob, land } from "../../flow.testkit.ts";
 
 beforeAll(setup);
 afterAll(teardown);
