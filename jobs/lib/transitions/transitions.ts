@@ -21,7 +21,7 @@ import { onMain } from "../records/status.ts";
 import { Refusal, refuse } from "../../../lib/refusal.ts";
 import { factoryGates, liveEntries, onLocal } from "../gates/factory-status.ts";
 import { readModels } from "../routing/models.ts";
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { route, TIER_MODEL, type Tier } from "../routing/route.ts";
 import type { Gate, Hold } from "../gates/issue-decision.ts";
 import { dispatchDetached, startUnit, type Output } from "./launch.ts";

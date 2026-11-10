@@ -22,7 +22,7 @@
 import { existsSync, mkdirSync, readFileSync, watch, writeFileSync, type FSWatcher } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
-import { eventsDir, layout } from "../jobs/lib/infra/layout.ts";
+import { eventsDir, layout } from "../lib/layout.ts";
 import { recordsDir } from "../jobs/lib/records/record.ts";
 import { reposFile, skillsDir } from "../jobs/lib/infra/settings.ts";
 import { annotationsFile, handoffsDir, vaultDir } from "../lib/paths.ts";

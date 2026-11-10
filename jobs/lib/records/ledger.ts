@@ -7,7 +7,7 @@ import { loadavg } from "node:os";
 import { join } from "node:path";
 import { readJsonOr } from "../infra/json.ts";
 import { needsOf, type Ask } from "../asks/ask.ts";
-import { layout } from "../infra/layout.ts";
+import { layout } from "../../../lib/layout.ts";
 import * as record from "./record.ts";
 import { lock } from "../infra/locks.ts";
 import { isLive } from "../infra/process.ts";

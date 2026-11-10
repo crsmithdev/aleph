@@ -14,7 +14,7 @@
  */
 import * as record from "../../jobs/lib/records/record.ts";
 import { fetchOrigin, followMain, git, spawnGit, treeWithFiles } from "../../lib/git.ts";
-import { layout, logEvent } from "../../jobs/lib/infra/layout.ts";
+import { layout, logEvent } from "../../lib/layout.ts";
 import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";

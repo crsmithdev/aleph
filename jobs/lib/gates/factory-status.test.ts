@@ -4,7 +4,7 @@ import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts
 import { firefighterLines, issueFacts, nextRun, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
 import { issueDecision } from "./issue-decision.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
-import { logEvent, readEvents } from "../infra/layout.ts";
+import { logEvent, readEvents } from "../../../lib/layout.ts";
 
 const NOW = Date.parse("2026-11-04T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();

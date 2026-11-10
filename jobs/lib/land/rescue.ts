@@ -21,12 +21,12 @@ import { LAND_STUCK_MS, factoryRepos as sandboxRepos } from "../gates/factory-st
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allJobs, isOpen, issue as issueOf, type Job } from "../records/job.ts";
 import { askedQuestion, claimStep, clearRerun, conflictStep, duplicateStep, infraStep, killedStep, lostStep, markRescued, rerunStep, rescueCase, rescued, writeRerun, type Step, type Stuck as StuckRun } from "../transitions/continuation.ts";
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { allRuns, isAgentRun, loadRegistry, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
 import { bootedAt, markEnded, runHealth, type Health } from "../infra/process.ts";
 import { causeOf, type Fate } from "../records/outcome.ts";
-import type { Baseline } from "../transitions/factory.ts";
+import type { MainState } from "../gates/factory-status.ts";
 import { onMain } from "../records/status.ts";
 import { rescueWaitMs } from "../infra/settings.ts";
 import { ciLine, redCi } from "../gates/ci.ts";
@@ -44,7 +44,7 @@ export interface Rescue {
 /** Land the job again: returns the refusal, or null. */
 type Land = (name: string) => Promise<string | null>;
 /** The state of the repo's main (factory.ts `baseline`). */
-type CheckMain = (repo: Repo) => Promise<Baseline>;
+type CheckMain = (repo: Repo) => Promise<MainState>;
 
 const RERUN_OPTIONS = [
   { label: "Rerun", line: "Drop the stuck run and start the goal again as it is" },
@@ -316,7 +316,7 @@ async function rescueJob(runs: Job, act: Rescue, land?: Land, checkMain?: CheckM
   if (key === "claimed") {
     // The worker says the issue is met: the repo's checks on origin/<main> decide. Green closes the item; red reruns
     // the issue with the claim as its note. An unchecked main is waited on: the run stays for the next dispatch.
-    const main: Baseline = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
+    const main: MainState = checkMain ? await checkMain(repo) : { state: "unchecked", line: "main is unchecked: no checks" };
     if (main.state === "unchecked" || main.state === "running") { logEvent({ by: "firefighter", subject: name, action: "waiting", sub: "rescue", note: `the claim waits: ${main.line}` }); return; }
     // An issue a red CI started is met only when GitHub CI on main is green too: the checks here may pass where CI fails.
     const ci = r.on ? readRecord(r.on)?.ci : undefined;

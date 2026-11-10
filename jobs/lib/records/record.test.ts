@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Entry, Run } from "./ledger.ts";
 import { fixRounds } from "../infra/settings.ts";
-import { eventsDir, readEvents } from "../infra/layout.ts";
+import { eventsDir, readEvents } from "../../../lib/layout.ts";
 import * as record from "./record.ts";
 
 let dir: string;

@@ -6,7 +6,7 @@
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { type Repo } from "../records/ledger.ts";
-import { layout } from "../infra/layout.ts";
+import { layout } from "../../../lib/layout.ts";
 import { readJsonOr, writeJson } from "../infra/json.ts";
 
 /** A repo's CI on main: green, or red since the first failed run of the current streak. */

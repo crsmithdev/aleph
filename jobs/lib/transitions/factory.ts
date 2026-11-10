@@ -10,12 +10,11 @@ import * as issues from "../../../issues/lib/todo.ts";
 import { byPriority, afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { itemOnMain } from "../records/status.ts";
 import { intakeIssue, type Counts } from "../roles/intake.ts";
 import { allRuns, isWaiting, loadRegistry, type Entry, type Repo } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
-import { readJsonOr, writeJson } from "../infra/json.ts";
 import { holdsWork, isLive, isRunning } from "../infra/process.ts";
 import { rescueStuck, type Rescue } from "../land/rescue.ts";
 import { clearRerun, issueBrief } from "./continuation.ts";
@@ -33,7 +32,7 @@ import { drop, land, recheck, refusal, startIssue, type Refused } from "./transi
 import { startKept } from "../roles/unit.ts";
 import { directorDetached, dispatchDetached, intakeDetached } from "./launch.ts";
 import { route, type Tier } from "../routing/route.ts";
-import { appendSuiteHistory, mainRed, writeBaseline, clearCap, issueFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
+import { appendSuiteHistory, recordRan, type MainState, mainRed, writeBaseline, clearCap, issueFacts, issueJob, markCap, markStreak, setPaused, baselines, changedLinesOf, factoryDir, factoryRepos as sandboxRepos, gates, liveRuns, paused, recordHold, redLine, redMains, stallLines, runsToday, spentToday } from "../gates/factory-status.ts";
 export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
@@ -298,13 +297,12 @@ export async function episodeStep(): Promise<string[]> {
 }
 
 /** Main's baseline as a closed state: `line` is the sentence for logs and skip lines. */
-export type Baseline = { state: "green" } | { state: "red" | "unchecked" | "running"; line: string };
 
 /**
  * Main's state as the last suite run recorded it in baseline.json. A red record stays red until a later suite run
  * is green, also when main has moved since; a repo with no record is unchecked.
  */
-export function mainState(repo: Repo): Baseline {
+export function mainState(repo: Repo): MainState {
   const b = baselines()[repo.key];
   if (!b) return { state: "unchecked", line: "main is unchecked: no suite run yet" };
   return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
@@ -320,8 +318,8 @@ export const baselineConfig = (repo: Repo): string => JSON.stringify([repo.setup
  * taken leaves it. A pass and a failed check are recorded: an error that kept
  * the checks from running (no verdict) is reported, and the next suite run tries again.
  */
-export async function baseline(repo: Repo, checks: Checks): Promise<Baseline> {
-  const unchecked = (line: string): Baseline => ({ state: "unchecked", line });
+export async function baseline(repo: Repo, checks: Checks): Promise<MainState> {
+  const unchecked = (line: string): MainState => ({ state: "unchecked", line });
   if (!fetchOrigin(repo.path).ok) return unchecked("main is unchecked: fetch failed");
   const commit = git(repo.path, "rev-parse", `origin/${repo.main}`).out;
   if (!commit) return unchecked(`main is unchecked: no origin/${repo.main}`);
@@ -353,26 +351,6 @@ export async function baseline(repo: Repo, checks: Checks): Promise<Baseline> {
   }
   return b.ok ? { state: "green" } : { state: "red", line: redLine(b) };
 }
-
-/**
- * The one write of tick.json. The tick, the suite and the monitor each write it from their own processes: under one
- * lock it reads the file, lets `change` make the new record, and puts it in place with a rename, so no write loses
- * the keys of another and no reader sees half a file.
- */
-export async function editTick(change: (s: any) => any): Promise<void> {
-  const file = join(factoryDir(), "tick.json");
-  const release = await lock("tick-file");
-  if (!release) throw new Error("tick.json lock busy");
-  try {
-    writeJson(file, change(readJsonOr(file, {})));
-  } finally {
-    release();
-  }
-}
-
-/** The result of a scheduled step (`suite <repo>`, `monitor`) and its time, in `ran` of tick.json. */
-export const recordRan = (key: string, result: string): Promise<void> =>
-  editTick((s) => ({ ...s, ran: { ...s.ran, [key]: { at: new Date().toISOString(), result } } }));
 
 /**
  * `aleph suite`, from its own timer: the full checks on origin/<main> of each factory repo whose main moved since

@@ -5,9 +5,9 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { event, type Event } from "../../../lib/naming.ts";
-import { alephPath } from "../../../lib/paths.ts";
-import { touch } from "../../../lib/sources.ts";
+import { event, type Event } from "./naming.ts";
+import { alephPath } from "./paths.ts";
+import { touch } from "./sources.ts";
 
 export interface Layout { store: string; ledger: string; factory: string }
 

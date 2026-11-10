@@ -9,7 +9,7 @@ import { readList, writeList } from "../../../issues/lib/store.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
 import { markAsked, plainAsk, setAsk, askOf } from "../asks/ask.ts";
 import { intakeNow, runDispatch, type Starts } from "./factory.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { setPaused, writeBaseline, writeStalls } from "../gates/factory-status.ts";
 import { git } from "../infra/git.ts";
 import { specVersion } from "../roles/issue-spec.ts";

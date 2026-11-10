@@ -13,7 +13,7 @@ import { ciLine, redCi } from "./ci.ts";
 import { isOpen, openJob, type Job } from "../records/job.ts";
 import type { Bound, Gate, Hold } from "./issue-decision.ts";
 import { event, type Event } from "../../../lib/naming.ts";
-import { layout, logEvent, readEvents } from "../infra/layout.ts";
+import { layout, logEvent, readEvents } from "../../../lib/layout.ts";
 import * as record from "../records/record.ts";
 import { allRuns, isWaiting, isBuild, loadRegistry, onOf, tell, type Entry, type Repo, type Run } from "../records/ledger.ts";
 import { held, lock } from "../infra/locks.ts";
@@ -533,3 +533,26 @@ export function factorySnapshot(now: number, jobs: Job[]) {
     baselines: baselines(),
   };
 }
+
+/** The state of a factory repo's main: green, or red, unchecked or running with its line. */
+export type MainState = { state: "green" } | { state: "red" | "unchecked" | "running"; line: string };
+
+/**
+ * The one write of tick.json. The tick, the suite and the monitor each write it from their own processes: under one
+ * lock it reads the file, lets `change` make the new record, and puts it in place with a rename, so no write loses
+ * the keys of another and no reader sees half a file.
+ */
+export async function editTick(change: (s: any) => any): Promise<void> {
+  const file = join(factoryDir(), "tick.json");
+  const release = await lock("tick-file");
+  if (!release) throw new Error("tick.json lock busy");
+  try {
+    writeJson(file, change(readJsonOr(file, {})));
+  } finally {
+    release();
+  }
+}
+
+/** The result of a scheduled step (`suite <repo>`, `monitor`) and its time, in `ran` of tick.json. */
+export const recordRan = (key: string, result: string): Promise<void> =>
+  editTick((s) => ({ ...s, ran: { ...s.ran, [key]: { at: new Date().toISOString(), result } } }));

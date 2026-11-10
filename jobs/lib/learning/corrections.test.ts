@@ -8,7 +8,7 @@ import { approve, decline, explainLesson, mine, proposals, readStore } from "./c
 import { missingSections } from "../roles/issue-spec.ts";
 import { storeRepos } from "../../../tests/git-fixture.ts";
 import { putRun } from "../records/record.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 

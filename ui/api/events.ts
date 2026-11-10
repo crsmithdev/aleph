@@ -8,7 +8,7 @@
  */
 import { existsSync, closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { eventsDir } from "../../jobs/lib/infra/layout.ts";
+import { eventsDir } from "../../lib/layout.ts";
 import { eventIn, projectOf } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";

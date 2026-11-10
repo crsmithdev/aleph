@@ -11,7 +11,7 @@ import { ciStep, type GhRun } from "./ci.ts";
 import { ciFailure, firefight, LOG_CHARS, settleCi, type Ports } from "./firefighter.ts";
 import * as record from "../records/record.ts";
 import { loadRegistry } from "../records/ledger.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { base, calls, fresh, key, repoPath, run, sh, useDirectorFixture } from "../roles/director.fixture.ts";
 
 useDirectorFixture();

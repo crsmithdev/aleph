@@ -1,0 +1,14 @@
+{
+  "accepted": [
+    {
+      "concept": "issue store reads an issue's Ask from jobs/",
+      "copies": ["issues/lib/store.ts:15", "jobs/lib/records/record.ts:73"],
+      "reason": "An issue's Ask lives in its job record, and record.ts is its one writer. The buildable and sorted predicates read it with record.issueAsk; the edge is one read with no runtime cycle (improve S1, 2026-11-10)."
+    },
+    {
+      "concept": "the issue verbs import Asks, the registry and recent repos",
+      "copies": ["issues/lib/issues.ts:16-20"],
+      "reason": "issues.ts is the `aleph issue` verb layer: it sits above both the store and the factory's Asks and decides an Ask on close or drop. The store itself (store.ts, todo.ts) stays free of jobs/ (improve S1, 2026-11-10)."
+    }
+  ]
+}

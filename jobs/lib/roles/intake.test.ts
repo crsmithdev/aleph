@@ -11,7 +11,7 @@ import { allRuns, stamp, type Repo } from "../records/ledger.ts";
 import { getRun, putRun } from "../records/record.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
 import { factoryRepos } from "../../../tests/git-fixture.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
 
 // The test's clock: the counts and the fixtures read it.
 const NOW = Date.parse("2026-11-04T12:00:00Z");

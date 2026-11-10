@@ -10,7 +10,7 @@ import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { alephPath, expand, home, vaultDir } from "../../../lib/paths.ts";
 import { readJsonOr, writeJson } from "./json.ts";
-import { layout } from "./layout.ts";
+import { layout } from "../../../lib/layout.ts";
 
 const num = (name: string, dflt: number): number => Number(process.env[name] ?? dflt);
 

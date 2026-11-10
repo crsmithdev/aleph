@@ -12,7 +12,7 @@ import { allHolds, backendHold, baselines, factoryRepos, gates, redLine, stopsSt
 import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
-import { layout, readEvents } from "../../jobs/lib/infra/layout.ts";
+import { layout, readEvents } from "../../lib/layout.ts";
 import { eventIn, inProject, scopeOf } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import type { Event } from "../../lib/naming.ts";

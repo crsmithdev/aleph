@@ -11,7 +11,7 @@
  * `always.json` in the factory dir maps a reason to `{ action, at }`.
  */
 import { join } from "node:path";
-import { layout, logEvent } from "../infra/layout.ts";
+import { layout, logEvent } from "../../../lib/layout.ts";
 import { readJsonOr, writeJson } from "../infra/json.ts";
 import { FULL, SUBS, word, type Event } from "../../../lib/naming.ts";
 import { specVersion } from "../roles/issue-spec.ts";

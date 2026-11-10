@@ -4,7 +4,7 @@
  */
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../infra/json.ts";
-import { layout } from "../infra/layout.ts";
+import { layout } from "../../../lib/layout.ts";
 import { uiPort } from "../infra/settings.ts";
 import { factoryCookie } from "../infra/ui-token.ts";
 

@@ -10,7 +10,7 @@ import * as issues from "./todo.ts";
 import { renderItem } from "./todo.ts";
 import { addPart } from "./parts.fixture.ts";
 import * as verbs from "./issues.ts";
-import { readEvents } from "../../jobs/lib/infra/layout.ts";
+import { readEvents } from "../../lib/layout.ts";
 import { askOf, refIn, setAsk } from "../../jobs/lib/asks/ask.ts";
 
 setDefaultTimeout(30000);

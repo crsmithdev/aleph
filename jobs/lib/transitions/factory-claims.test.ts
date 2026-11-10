@@ -14,7 +14,7 @@ import { markRescued } from "./continuation.ts";
 import { ciStep } from "../gates/ci.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import * as record from "../records/record.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
 
 beforeEach(setup);
 afterEach(teardown);

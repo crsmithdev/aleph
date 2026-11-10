@@ -7,7 +7,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "../infra/json.ts";
-import { layout } from "../infra/layout.ts";
+import { layout } from "../../../lib/layout.ts";
 import { openRouterKey } from "../../../lib/env.ts";
 import { NO_SKILLS } from "../roles/role-skill.ts";
 

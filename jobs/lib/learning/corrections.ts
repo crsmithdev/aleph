@@ -12,7 +12,7 @@ import { decide, nouls } from "../../../lib/jev.ts";
 import type { Observation } from "../../../lib/otlp.ts";
 import { factoryDir } from "../gates/factory-status.ts";
 import { readJsonOr, writeJson } from "../infra/json.ts";
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 
 const fail = (subject: string, note: string) => logEvent({ by: "rule", subject, action: "failed", note });
 import { allRuns, loadRegistry, type Repo } from "../records/ledger.ts";

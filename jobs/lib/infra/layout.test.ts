@@ -7,7 +7,7 @@ import { renderItem } from "../../../issues/lib/todo.ts";
 import { config, storeDir } from "../../../issues/lib/store.ts";
 import { runsDir } from "../records/ledger.ts";
 import { putRun } from "../records/record.ts";
-import { layout } from "./layout.ts";
+import { layout } from "../../../lib/layout.ts";
 
 // A temporary HOME and no layout variables: the paths follow what is on disk.
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };

@@ -11,7 +11,7 @@ import type { Ports } from "./director.ts";
 import { stamp, type Run } from "../records/ledger.ts";
 import { putRun } from "../records/record.ts";
 import { askOf, setAsk } from "../asks/ask.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
 
 const gitEnv = { GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" };
 export let base: string;

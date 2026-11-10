@@ -3,7 +3,7 @@
  * the ledger, the factory directory and the work store. It marks no run
  * `shown` and does not reconcile the ledger with git: both are the CLI's.
  */
-import { readEvents } from "../jobs/lib/infra/layout.ts";
+import { readEvents } from "../lib/layout.ts";
 import { issueHref, parseId, type Event } from "../lib/naming.ts";
 import { judgeChoice } from "../lib/jev.ts";
 import { factorySnapshot, issueFacts, mainRed } from "../jobs/lib/gates/factory-status.ts";

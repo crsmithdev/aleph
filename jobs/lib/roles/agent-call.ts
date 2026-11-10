@@ -10,7 +10,7 @@ import { BACKENDS, modelArgv, modelEnv, onGpu, viaOf } from "../routing/models.t
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { policyOf } from "../records/outcome.ts";
 import { roleCmd } from "../infra/settings.ts";
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { costDetails, type Usage } from "../../../lib/pricing.ts";
 
 /** The roles that call `claude`. */

@@ -11,7 +11,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { FULL } from "../../lib/naming.ts";
 import { Refusal, refuse } from "../../lib/refusal.ts";
-import { logEvent } from "../../jobs/lib/infra/layout.ts";
+import { logEvent } from "../../lib/layout.ts";
 import { git } from "../../lib/git.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { recentRepos } from "../../jobs/lib/records/status.ts";

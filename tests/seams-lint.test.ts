@@ -32,3 +32,11 @@ test("lib/, vault/, jobs/ and issues/ do not import ui/", () => {
 test("only lib/langfuse.ts builds Langfuse's authorization", () => {
   expect(offenders(/publicKey\}:\$\{cfg\.secretKey|Basic \$\{/, ["lib/langfuse.ts"])).toEqual([]);
 });
+
+test("roles, land and gates do not import the orchestrator", () => {
+  expect(offenders(/from "\.\.\/transitions\/factory\.ts"/, [], ["jobs/lib/roles/**", "jobs/lib/land/**", "jobs/lib/gates/**"])).toEqual([]);
+});
+
+test("the issue store reads from jobs/ only an issue's Ask in its job record", () => {
+  expect(offenders(/from "(?:\.\.\/)+jobs\/(?!lib\/records\/record\.ts")/, ["issues/lib/issues.ts"], ["issues/**"])).toEqual([]);
+});

@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { readJsonOr } from "../infra/json.ts";
 import { allRuns, loadRegistry, type Entry } from "../records/ledger.ts";
 import { allHolds, flakeNames, flakes, stopsStart, type Flake, type HoldRecord } from "../gates/factory-status.ts";
-import { layout } from "../infra/layout.ts";
+import { layout } from "../../../lib/layout.ts";
 import { git } from "../infra/git.ts";
 import { causeOf } from "../records/outcome.ts";
 import { usageFile } from "../infra/settings.ts";

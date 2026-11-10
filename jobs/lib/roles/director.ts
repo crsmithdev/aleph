@@ -32,7 +32,7 @@ import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";
 import { explainLesson, proposals, type Lesson } from "../learning/corrections.ts";
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { FULL, refs as idsIn, word } from "../../../lib/naming.ts";
 import type { Hold } from "../gates/issue-decision.ts";
 import { DIRECTOR_CAP, needsYouLog } from "../infra/settings.ts";

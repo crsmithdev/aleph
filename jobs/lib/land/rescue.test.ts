@@ -3,7 +3,7 @@ import { writeList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { dispatchIssues } from "../transitions/factory.ts";
 import { applyActions, pendingCases } from "../roles/director.ts";
-import { readEvents } from "../infra/layout.ts";
+import { readEvents } from "../../../lib/layout.ts";
 import { loadRegistry } from "../records/ledger.ts";
 import { askOf } from "../asks/ask.ts";
 import { newIssue, mk, ask, fakes, setup, teardown } from "../transitions/factory.helpers.ts";

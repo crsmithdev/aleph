@@ -16,7 +16,7 @@ import type { Ask } from "../asks/ask.ts";
 import type { Entry, Run } from "./ledger.ts";
 import { causeOf, policyOf } from "./outcome.ts";
 import { fixRounds } from "../infra/settings.ts";
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { lockSync } from "../infra/locks.ts";
 import { once, touch } from "../../../lib/sources.ts";
 import { alephPath } from "../../../lib/paths.ts";

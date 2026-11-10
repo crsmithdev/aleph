@@ -7,7 +7,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { readJsonOr, writeJson } from "./json.ts";
-import { layout } from "./layout.ts";
+import { layout } from "../../../lib/layout.ts";
 
 export const sessionsPath = () => join(layout().factory, "ui-sessions.json");
 

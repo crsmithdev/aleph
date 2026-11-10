@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ACTIONS, subjectOf, word } from "../../../lib/naming.ts";
-import { eventsDir, layout } from "../infra/layout.ts";
+import { eventsDir, layout } from "../../../lib/layout.ts";
 import { lastTagged, runsDir, type Review } from "./ledger.ts";
 import { archiveDir, lockRecord, recordsDir, type JobRecord } from "./record.ts";
 import type { Cause } from "./outcome.ts";

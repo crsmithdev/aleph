@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ACTIONS } from "../../../lib/naming.ts";
-import { eventsDir } from "../infra/layout.ts";
+import { eventsDir } from "../../../lib/layout.ts";
 import { markFile, migrateWords } from "./migrate.ts";
 import { archiveDir, recordsDir } from "./record.ts";
 

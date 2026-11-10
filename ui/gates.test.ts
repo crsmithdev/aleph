@@ -14,7 +14,7 @@ import * as gates from "./views/gates.js";
 import * as record from "../jobs/lib/records/record.ts";
 import { allHolds, recordHold, type HoldRecord } from "../jobs/lib/gates/factory-status.ts";
 import { issueDecision } from "../jobs/lib/gates/issue-decision.ts";
-import { eventsDir, logEvent } from "../jobs/lib/infra/layout.ts";
+import { eventsDir, logEvent } from "../lib/layout.ts";
 import { contentText, setCodes } from "../lib/naming.ts";
 
 /** Make `rows` the only hold records: each issue's `hold` and `started` events in its job record. */

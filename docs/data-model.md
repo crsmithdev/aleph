@@ -1,6 +1,6 @@
 # Data model
 
-Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdown with frontmatter, and two git repos. The only database is the vault's search index. `lib/paths.ts` resolves home, `~` and each path under `~/.aleph`; `jobs/lib/infra/layout.ts` and `jobs/lib/infra/settings.ts` read it. An environment variable moves each store for tests.
+Aleph keeps its state in files under `~/.aleph/`: JSON, append-only logs, markdown with frontmatter, and two git repos. The only database is the vault's search index. `lib/paths.ts` resolves home, `~` and each path under `~/.aleph`; `lib/layout.ts` and `jobs/lib/infra/settings.ts` read it. An environment variable moves each store for tests.
 
 ```text
 ~/.aleph/

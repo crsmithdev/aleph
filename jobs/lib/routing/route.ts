@@ -1,5 +1,5 @@
 /** Jev picks the model tier for a factory run, from the item's spec. */
-import { logEvent } from "../infra/layout.ts";
+import { logEvent } from "../../../lib/layout.ts";
 import { decide, judgeChoice } from "../../../lib/jev.ts";
 import { readModels } from "./models.ts";
 

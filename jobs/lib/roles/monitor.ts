@@ -8,7 +8,7 @@ import { existsSync } from "node:fs";
 import { endLost, openRun } from "./agent-run.ts";
 import { lock } from "../infra/locks.ts";
 import { writeJson } from "../infra/json.ts";
-import { recordRan } from "../transitions/factory.ts";
+import { recordRan } from "../gates/factory-status.ts";
 import { addDays, measure, readSources, renderTable, reportFile, type Report, type Table } from "../learning/monitor-table.ts";
 import { monitorOn } from "../infra/settings.ts";
 import * as issues from "../../../issues/lib/todo.ts";
