@@ -183,6 +183,8 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
   test("at phone width the nav wraps, the page does not scroll sideways, and group headers hide", async () => {
     await page.go("#/");
     await page.width(420);
+    // The charts shrink when their ResizeObserver fires: wait until the page width fits, or holds for 30 frames.
+    await page.ev(`new Promise((ok) => { let n = 0, w = -1; const f = () => { const s = document.documentElement.scrollWidth; n = s === w ? n + 1 : 0; w = s; s <= 420 || n >= 30 ? ok() : requestAnimationFrame(f); }; f(); })`);
     expect(await page.ev('document.documentElement.scrollWidth')).toBeLessThanOrEqual(420);
     expect(await page.ev('getComputedStyle(document.querySelector("#nav li.head")).display')).toBe("none");
     await page.width(1200);
