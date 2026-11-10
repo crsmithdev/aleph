@@ -146,7 +146,7 @@ export async function endLost(role: Opening["role"], lockOf: (run: Run) => strin
 }
 
 /** The roles that call `claude` through `agentCall`. */
-export type AgentRole = "worker" | "reviewer" | Opening["role"];
+export type AgentRole = "worker" | "reviewer" | "title" | "judge" | Opening["role"];
 
 /** Why a call gave no usable reply, and its kind. */
 export interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string }

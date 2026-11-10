@@ -3,6 +3,11 @@
  * It lives apart from models.ts, which factory-status.ts imports.
  */
 import { modelArgv, modelEnv, onGpu, readModels, type Tier } from "./models.ts";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { agentCall, stallSeconds, type AgentRole } from "../roles/agent-run.ts";
+import { replyOf } from "../gates/gate.ts";
 import { gpuSlot } from "../gates/factory-status.ts";
 import { logEvent } from "../infra/layout.ts";
 
@@ -13,7 +18,7 @@ export type Ask = (system: string, input: string, box: number) => Promise<{ code
  * The wait for the slot lasts `wait` ms (`waited` names it in the log); when it ends, the asks fall back to haiku.
  * `ask` kills the call after `box` ms; its `result` is the text of the reply.
  */
-export async function oneShot<T>(tier: Tier, cmd: string, label: string, wait: number, waited: string, use: (ask: Ask) => Promise<T>): Promise<T> {
+export async function oneShot<T>(tier: Tier & AgentRole, cmd: string, label: string, wait: number, waited: string, use: (ask: Ask) => Promise<T>): Promise<T> {
   const env = { ...process.env };
   delete env.CLAUDECODE;
   delete env.CLAUDE_CODE_ENTRYPOINT;
@@ -29,14 +34,15 @@ export async function oneShot<T>(tier: Tier, cmd: string, label: string, wait: n
   Object.assign(env, modelEnv(model));
   try {
     return await use(async (system, input, box) => {
-      const proc = Bun.spawn(modelArgv(cmd, model, ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input]), { env, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
-      const timer = setTimeout(() => proc.kill(), Math.max(box, 0));
-      const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
-      const code = await proc.exited;
-      clearTimeout(timer);
-      let result = stdout;
-      try { result = JSON.parse(stdout).result ?? stdout; } catch { /* plain text */ }
-      return { code, stderr, result: String(result) };
+      const dir = mkdtempSync(join(tmpdir(), "aleph-one-shot-"));
+      const [stdout, stderr] = [join(dir, "out"), join(dir, "err")];
+      try {
+        const argv = modelArgv(cmd, model, ["--setting-sources", "", "--max-turns", "1", "--tools", "", "--output-format", "json", "--system-prompt", system, input]);
+        const w = await agentCall(tier, argv, { env, stdin: "", stdout, stderr, limit: Math.max(box, 0) / 1000, stall: stallSeconds() });
+        return { code: w.step.code, stderr: readFileSync(stderr, "utf8"), result: replyOf(readFileSync(stdout, "utf8")).text };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   } finally {
     release?.();
