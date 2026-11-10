@@ -79,10 +79,12 @@ test("a stream with a project sends only the ev events of that project, and a ch
   expect(subjects).not.toContain("p-x-1");
 }, 10_000);
 
-test("a change drops the kept speed answer, so the fetch it brings builds a new one", async () => {
+test("a change keeps the speed answer for one read, which builds a new one after it", async () => {
   const before = cachedSpeed("week");
   expect(cachedSpeed("week")).toBe(before);
   expect(await changeAfter(() => putRun("s1", run("r-8")))).not.toBeNull();
+  expect(cachedSpeed("week")).toBe(before);
+  await new Promise((r) => setTimeout(r, 0));
   expect(cachedSpeed("week")).not.toBe(before);
 });
 

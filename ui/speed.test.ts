@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, expect, setSystemTime, test } from "bun:test";
+import { afterAll, beforeAll, expect, setSystemTime, spyOn, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv } from "./test-server.ts";
-import { agentStats, CLASSES, classify, clearCache, filed, phaseTimes, phases, routes, speed } from "./api/speed.ts";
+import { agentStats, CLASSES, classify, clearCache, filed, staleCache, phaseTimes, phases, routes, speed } from "./api/speed.ts";
 import { activeEnd } from "../jobs/lib/infra/process.ts";
 // @ts-ignore plain JS shared with the page
 import { bar, statusCards, weekText, xLabel } from "./views/speed.js";
@@ -408,6 +408,32 @@ test("serve() warms /api/speed: week, day and month are computed before the firs
     const r = await at("/api/speed?window=week&baseline=1");
     expect(r.status).toBe(200);
   } finally { stop(); }
+});
+
+test("a change signal answers /api/speed from the kept values and rebuilds one speed() per turn after it", async () => {
+  const restoreTtl = withEnv({ ALEPH_UI_FETCH_TTL: "60" });
+  setSystemTime(new Date(2026, 9, 28, 15));
+  const get = async () => (await routes["GET /api/speed"](new Request("http://x/api/speed?window=day&baseline=1"), {}, new URL("http://x/api/speed?window=day&baseline=1"))).json();
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const real = record.all;
+  let calls = 0;
+  const spy = spyOn(record, "all").mockImplementation((...a: []) => { calls++; return real(...a); });
+  try {
+    clearCache();
+    const old = await get();
+    await tick();
+    run({ kind: "land", condition: "landed", ...secs(0, 13, 60) });
+    calls = 0;
+    staleCache();
+    expect((await get()).kinds.land.count).toBe(old.kinds.land.count);
+    expect(calls).toBe(0);
+    // Each tick is a turn of other work: the rebuild gives way to it after each speed().
+    const turns: number[] = [];
+    for (let i = 0; i < 12; i++) { const at = calls; await tick(); turns.push(calls - at); }
+    expect(calls).toBe(9); // day, month and the 7 spans of the day baseline
+    expect(Math.max(...turns)).toBe(1);
+    expect((await get()).kinds.land.count).toBe(old.kinds.land.count + 1);
+  } finally { spy.mockRestore(); setSystemTime(); restoreTtl(); clearCache(); }
 });
 
 test("cardTrend writes a sub-point change with pct() and keeps the flat marker for 0", async () => {

@@ -15,7 +15,7 @@ import { parseId } from "../../lib/naming.ts";
 import { inProject, known } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
-import { clearCache } from "./speed.ts";
+import { staleCache } from "./speed.ts";
 
 /** Changes this close together send one event. */
 const SETTLE_MS = 500;
@@ -41,12 +41,12 @@ function send(bytes: Uint8Array, subject?: string): void {
   }
 }
 
-/** The kept speed answers are from before the change; the fetch that `change` brings builds them again. */
+/** The kept speed answers are from before the change; the fetch that `change` brings answers them and builds them again after it. */
 function changed(): void {
   settle ??= setTimeout(() => {
     settle = undefined;
     sentAt = Date.now();
-    clearCache();
+    staleCache();
     send(event("change", JSON.stringify({ at: sentAt })));
   }, Math.max(SETTLE_MS, sentAt + GAP_MS - Date.now()));
 }

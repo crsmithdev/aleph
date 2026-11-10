@@ -102,3 +102,16 @@ test("staleSync: a value older than ten TTLs waits for a fresh load; a failed lo
   fail = false;
   expect(c.get("k", 10, load)).toBe(3);
 });
+
+test("staleSync: stale() keeps the old value for the next read, which reloads after the current task", async () => {
+  const c = staleSync<number>();
+  let loads = 0;
+  const load = () => ++loads;
+  expect(c.get("k", 1000, load)).toBe(1);
+  c.stale();
+  expect(c.get("k", 1000, load)).toBe(1);
+  expect(loads).toBe(1);
+  await pass(0);
+  expect(c.get("k", 1000, load)).toBe(2);
+  expect(loads).toBe(2);
+});

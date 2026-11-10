@@ -39,9 +39,13 @@ export function staleAsync<T>(max = Infinity, idleMs = Infinity) {
   };
 }
 
+// The reloads of every staleSync, one per timer turn: the event loop serves other requests between two of them.
+const queue: (() => void)[] = [];
+const drain = () => { queue[0](); queue.shift(); if (queue.length) setTimeout(drain, 0); };
+
 /** The same for a synchronous load: the reload runs after the current request has answered. */
 export function staleSync<T>() {
-  const map = new Map<string, Entry<T> & { queued?: boolean }>();
+  const map = new Map<string, Entry<T> & { queued?: boolean; old?: boolean }>();
   return {
     get(key: string, ttlMs: number, load: () => T): T {
       if (!ttlMs) return load();
@@ -52,15 +56,18 @@ export function staleSync<T>() {
         map.set(key, { at: Date.now(), value: { v } });
         return v;
       }
-      if (Date.now() - e.at >= ttlMs && !e.queued) {
+      if ((e.old || Date.now() - e.at >= ttlMs) && !e.queued) {
         e.queued = true;
-        setTimeout(() => {
+        const reload = () => {
           try { e.value = { v: load() }; e.at = Date.now(); } catch {}
-          e.queued = false;
-        }, 0);
+          e.queued = e.old = false;
+        };
+        if (queue.push(reload) === 1) setTimeout(drain, 0);
       }
       return e.value.v;
     },
+    /** Mark every kept value old: the next read of each answers it and reloads it after the current task. */
+    stale: () => map.forEach((e) => { e.old = true; }),
     clear: () => map.clear(),
   };
 }

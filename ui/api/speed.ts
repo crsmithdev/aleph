@@ -656,7 +656,9 @@ function asksOf(records: JobRecord[], since: number, now: number): Speed["asks"]
 
 const cache = staleSync<Speed>();
 /** Drop the kept answers and baselines: the next request builds them from the files as they are now. */
-export const clearCache = () => { cache.clear(); baselines.clear(); };
+export const clearCache = () => { cache.clear(); spans.clear(); };
+/** The files changed: the next request answers the kept values, and each is built again in its own turn after the answer. */
+export const staleCache = () => { cache.stale(); spans.stale(); };
 /** `speed`, kept `ALEPH_UI_FETCH_TTL` seconds like the other fetches. */
 export const cachedSpeed = (window: Window, fit: Fit | null = null, project?: string): Speed => cache.get(project ? `${window}:${project}` : window, uiFetchTtl() * 1000, () => speed(window, new Date(), fit, project));
 
@@ -697,14 +699,16 @@ const BASELINE: Record<Window, { step: number; n: number; avg: boolean; basis: s
   month: { step: 30 * 24 * HOUR, n: 1, avg: false, basis: "the previous 30 days", prev: "the previous 30 days" },
 };
 
-export function baseline(window: Window, now = new Date(), fit: Fit | null = null, project?: string): Baseline {
+export function baseline(window: Window, now = new Date(), fit: Fit | null = null, project?: string, span = (_i: number, at: Date) => figures(speed(window, at, fit, project))): Baseline {
   const b = BASELINE[window];
-  const spans = Array.from({ length: b.n }, (_, i) => figures(speed(window, new Date(now.getTime() - (i + 1) * b.step), fit, project)));
+  const spans = Array.from({ length: b.n }, (_, i) => span(i, new Date(now.getTime() - (i + 1) * b.step)));
   return { prev: spans[0], base: b.avg ? averageFigures(spans) : spans[0], basis: b.basis };
 }
 
-const baselines = staleSync<Baseline>();
-const cachedBaseline = (window: Window, fit: Fit | null = null, project?: string): Baseline => baselines.get(project ? `${window}:${project}` : window, uiFetchTtl() * 1000, () => baseline(window, new Date(), fit, project));
+// Each span is kept alone, so the reload of a baseline builds one span (one `speed()`) in each turn of the event loop.
+const spans = staleSync<Figures>();
+const cachedBaseline = (window: Window, fit: Fit | null = null, project?: string): Baseline =>
+  baseline(window, new Date(), fit, project, (i, at) => spans.get(`${window}:${project ?? ""}:${i}`, uiFetchTtl() * 1000, () => figures(speed(window, at, fit, project))));
 
 /**
  * Fills the cache for the windows the Status page reads (week, day, month) once the server is up, so the
