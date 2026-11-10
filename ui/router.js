@@ -10,7 +10,7 @@
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
 import { setCodes } from "../lib/naming.ts";
-import { issueApi, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, withProject } from "./lib.js";
+import { issueApi, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
@@ -109,7 +109,7 @@ export function loader(env) {
     events = null;
     if (!shown?.view?.live || env.hidden()) return;
     let lost = false;
-    const es = events = new env.EventSource(withProject("/api/events", shown.query));
+    const es = events = new env.EventSource(scope(shown.query).url("/api/events"));
     heardAt = Date.now();
     const heard = () => { heardAt = Date.now(); };
     es.addEventListener("ping", heard);

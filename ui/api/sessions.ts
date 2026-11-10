@@ -2,7 +2,8 @@
 import { clip } from "../../lib/naming.ts";
 import { LangfuseError, config, observations, traceList, traces } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { traceIn, traceProject } from "./scope.ts";
+import { projectOf as projectOfUrl, scopeOf, traceIn, traceProject } from "./scope.ts";
+import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { currentFit, share } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page
@@ -181,8 +182,9 @@ const LIMIT = 100, MAX = 2000;
 /** The sessions of a window, for `GET /api/sessions`: newest last turn first, `?limit=` of them before the `?before=` time, and `next`, the `before` of the next page. */
 export async function listSessions(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const days = Number(url.searchParams.get("window") ?? 7);
-  const project = url.searchParams.get("project") || null;
+  const sc = scopeOf(url, "week", SESSIONS);
+  if (sc instanceof Response) return sc;
+  const { days, project } = sc;
   const limit = Number(url.searchParams.get("limit") ?? LIMIT), before = url.searchParams.get("before");
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX) return Response.json({ error: `limit must be 1 to ${MAX}` }, { status: 400 });
   if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
@@ -219,7 +221,7 @@ export async function listSessions(req: Request): Promise<Response> {
 export const routes: Routes = {
   "GET /api/sessions/:id": async (_req, params, url) => {
     try {
-      const { cfg, ts } = await sessionTraces(params.id, url.searchParams.get("project") || null);
+      const { cfg, ts } = await sessionTraces(params.id, projectOfUrl(url));
       if (!ts.length) return Response.json({ error: `No session ${params.id}` }, { status: 404 });
       const all = await Promise.all(ts.map((t) => observations(cfg, t.id)));
       const fit = await currentFit().catch(() => null);
@@ -241,7 +243,7 @@ export const routes: Routes = {
 
   "GET /api/sessions/:id/chat": async (_req, params, url) => {
     try {
-      const { cfg, ts } = await sessionTraces(params.id, url.searchParams.get("project") || null);
+      const { cfg, ts } = await sessionTraces(params.id, projectOfUrl(url));
       if (!ts.length) return Response.json({ error: `No session ${params.id}` }, { status: 404 });
       const from = Math.max(1, Math.floor(Number(url.searchParams.get("from")) || 1));
       const limit = Math.min(50, Math.max(1, Math.floor(Number(url.searchParams.get("limit")) || 20)));
@@ -274,7 +276,7 @@ export const routes: Routes = {
 
   "GET /api/sessions/:id/turns/:n": async (_req, params, url) => {
     try {
-      const { cfg, ts } = await sessionTraces(params.id, url.searchParams.get("project") || null);
+      const { cfg, ts } = await sessionTraces(params.id, projectOfUrl(url));
       const n = Number(params.n);
       const t = Number.isInteger(n) ? ts[n - 1] : undefined;
       if (!t) return Response.json({ error: `No turn ${params.n} in session ${params.id}` }, { status: 404 });

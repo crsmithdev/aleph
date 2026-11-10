@@ -467,17 +467,19 @@ export const setQuery = (changes) => history.replaceState(null, "", withQuery(ch
 /** Change the hash's query and load the route again: for a filter that changes what the API returns. */
 export const goQuery = (changes) => { location.hash = withQuery(changes); };
 
+// ---------- the page scope: the project and the window of a page, in the address and in storage ----------
+
 /** The `.fbar` in `.ph` holds what scopes the whole page; each change goes to the hash and loads the route again. */
 export function wireScope(root) {
   const ph = root.querySelector?.(".ph");
   if (!ph) return;
   ph.addEventListener("click", (e) => {
     const b = e.target.closest?.(".seg button");
-    if (b) { if (b.parentElement.dataset.name === "window") storeWindow(b.dataset.value); goQuery({ [b.parentElement.dataset.name]: b.dataset.value }); }
+    if (b) { remember(b.parentElement.dataset.name, b.dataset.value); goQuery({ [b.parentElement.dataset.name]: b.dataset.value }); }
   });
   ph.addEventListener("change", (e) => {
     if (!e.target.matches?.("select")) return;
-    if (e.target.name === "project") storeProject(e.target.value);
+    remember(e.target.name, e.target.value);
     goQuery({ [e.target.name]: e.target.value });
   });
   const select = ph.querySelector?.('select[name="project"]');
@@ -487,23 +489,12 @@ export function wireScope(root) {
   });
 }
 
-/** The windows of the Factory pages, and the /api/jobs `days` of each. */
-export const WINDOWS = [{ value: "hour", label: "Hour" }, { value: "day", label: "Day" }, { value: "week", label: "Week" }, { value: "month", label: "Month" }];
-export const WINDOW_DAYS = { hour: 1 / 24, day: 1, week: 7, month: 30 };
-const isWindow = (w) => Object.hasOwn(WINDOW_DAYS, w);
-/** Remember the window across the pages. */
-export function storeWindow(w) { if (isWindow(w)) keep("window", w); }
-/** The window of a page: the address first, then the last one chosen, else week. */
-export function windowOf(q) {
-  const w = q?.get?.("window");
-  if (isWindow(w)) return w;
-  const t = kept("window");
-  return isWindow(t) ? t : "week";
-}
-/** Keep the window in storage and in the address (replaced in place, with no reload); week is the default and stays out of the address. */
-export function keepWindow(w) {
-  storeWindow(w);
-  if (w !== "week" && hashQuery().get("window") !== w) setQuery({ window: w });
+const OPTIONS = FACTORY.map((w) => ({ value: w, label: w[0].toUpperCase() + w.slice(1) }));
+const isWindow = (w) => FACTORY.includes(w);
+/** Remember the project ("" is All) or a window of the Factory pages across the pages; any other control is not kept. */
+export function remember(name, value) {
+  if (name === "project") keep("project", value || "");
+  if (name === "window" && isWindow(value)) keep("window", value);
 }
 
 let projectKeys = [];
@@ -515,28 +506,38 @@ export const projectKeysOnce = () => keysLoad ??= fetch("/api/projects").then((r
   return keys;
 });
 const projectChoices = (cur, more = []) => [...new Set([...projectKeys, ...more, cur].filter(Boolean))].sort().map((p) => ({ value: p, label: p }));
-/** Remember the project across the pages; "" is All. */
-export function storeProject(p) { keep("project", p || ""); }
-/** The project of a page: the address first, then the last one chosen, else "" for All. */
-export const projectOf = (q) => q?.get?.("project") || kept("project", "");
-/** Keep the project in storage and in the address (replaced in place, with no reload). */
-export function keepProject(p) {
-  storeProject(p);
-  if (p && hashQuery().get("project") !== p) setQuery({ project: p });
-}
-/** The project of the address now, for a request made outside a route call. */
-export const projectNow = () => (typeof location === "undefined" ? "" : projectOf(hashQuery()));
-/** A request URL with the page's project added, when there is one. */
-export const withProject = (url, q) => { const p = projectOf(q); return p ? `${url}${url.includes("?") ? "&" : "?"}project=${encodeURIComponent(p)}` : url; };
+
 /**
- * The head's scope: the Project select, then the window control, then `after` (html for a control of the page). `more` adds project names the page knows.
- * `o.label(p)` names a project option ("" is All); `o.name` and `o.options` replace the window control (a window other than `window` stays out of aleph.window).
+ * The scope of a page from its query `q`, the address's by default. The project ("" is All) and the window come from the
+ * address first, then the last one chosen, else All and week.
+ * - `url(path)`: the request URL of `path` in the project.
+ * - `bar(o)`: the head's Project select, then the window control, then `o.after` (html for a control of the page). `o.more`
+ *   adds project names the page knows, `o.label(p)` names a project option, `o.project` and `o.value` replace the two
+ *   values shown, and `o.name` and `o.options` replace the window control (a window other than `window` is not kept).
+ * - `wire(root)`: keep the project and the window in storage and in the address (replaced in place, with no reload; week
+ *   stays out of it), and send each change of the bar to the address, which loads the route again.
  */
-export const scopeBar = (project, win, more = [], o = {}) => filterBar([
-  { label: "Project", name: "project", data: true, value: project, options: [{ value: "", label: "All" }, ...projectChoices(project, more)].map((c) => ({ value: c.value, label: o.label ? o.label(c.value) : c.label })) },
-  { label: "Window", bare: true, name: o.name ?? "window", value: win, options: o.options ?? WINDOWS },
-  ...(o.after ? [{ html: o.after }] : []),
-]);
+export function scope(q = typeof location === "undefined" ? new URLSearchParams() : hashQuery()) {
+  const w = q.get("window"), t = kept("window");
+  const project = q.get("project") || kept("project", ""), window = isWindow(w) ? w : isWindow(t) ? t : "week";
+  return {
+    project,
+    window,
+    url: (path) => (project ? `${path}${path.includes("?") ? "&" : "?"}project=${encodeURIComponent(project)}` : path),
+    bar: (o = {}) => filterBar([
+      { label: "Project", name: "project", data: true, value: o.project ?? project, options: [{ value: "", label: "All" }, ...projectChoices(o.project ?? project, o.more)].map((c) => ({ value: c.value, label: o.label ? o.label(c.value) : c.label })) },
+      { label: "Window", bare: true, name: o.name ?? "window", value: o.value ?? window, options: o.options ?? OPTIONS },
+      ...(o.after ? [{ html: o.after }] : []),
+    ]),
+    wire: (root) => {
+      remember("window", window);
+      remember("project", project);
+      if (window !== "week" && hashQuery().get("window") !== window) setQuery({ window });
+      if (project && hashQuery().get("project") !== project) setQuery({ project });
+      wireScope(root);
+    },
+  };
+}
 
 // ---------- the blocks of a page: tile, card, table, bar list ----------
 
@@ -731,6 +732,7 @@ export const fact = (k, v) => (v ? `<div><dt>${esc(k)}</dt><dd>${v}</dd></div>` 
 /** The facts list of `[label, html]` pairs. */
 export const facts = (rows) => `<dl class="facts">${rows.map(([k, v]) => fact(k, v)).join("")}</dl>`;
 import { shortId, shortText } from "../lib/naming.ts";
+import { FACTORY } from "../lib/windows.ts";
 
 /** The API path of issue `<repo>-<ref>`: `/api/issues/a1430`. */
 export const issueApi = (repo, ref) => `/api/issues/${encodeURIComponent(shortId(`${repo}-${ref}`))}`;

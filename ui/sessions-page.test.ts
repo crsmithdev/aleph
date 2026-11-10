@@ -20,7 +20,7 @@ const ids = (q: string) => v.shownSessions(data(), opts(q)).map((s: any) => s.id
 describe("the Sessions page", () => {
   test("the view replaces the three old addresses and keeps their window and project", () => {
     expect(v.view).toMatchObject({ path: "/sessions", title: "Sessions", group: "claude" });
-    expect(v.view.api({}, new URLSearchParams("days=30&project=x&pick=tool:Bash"))).toBe("/api/sessions?window=30&limit=2000&project=x");
+    expect(v.view.api({}, new URLSearchParams("days=30&project=x&pick=tool:Bash"))).toBe("/api/sessions?window=month&limit=2000&project=x");
     expect(v.redirect("#/agents")).toBe("#/sessions");
     expect(v.redirect("#/activity?days=30&project=x&q=y")).toBe("#/sessions?days=30&project=x");
     expect(v.redirect("#/skills")).toBe("#/sessions");

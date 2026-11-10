@@ -1,7 +1,8 @@
 // The Issues view: a browser for the issues of every repo: tiles, three charts, filters, fuzzy search, a sortable
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
-import { actButton, issueApi, issueHref, jobHref, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, scopeBar, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, projectOf, storeProject, storeWindow, tiles, when, WINDOW_DAYS, windowOf } from "../lib.js";
+import { actButton, issueApi, issueHref, jobHref, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember } from "../lib.js";
+import { FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { askRow } from "./now.js";
 import { costText, detailPanel, fromTo, gaps, laneRow, noteEvent, panel, renderKpis, renderTimeline, spans } from "../timeline.js";
@@ -36,9 +37,10 @@ const statusOf = (s) => (s === null || s === undefined || s === "" ? DEFAULT_STA
 
 /** The filters and the sort, from the route's query: ?status=open&project=x&stage=x&priority=x&label=x&q=text&sort=title&dir=asc&limit=100. With a search and no sort, the best match comes first. */
 export function hashOptions(q = new URLSearchParams()) {
+  const s = scope(q);
   return {
     limit: limitOf(q, PAGE),
-    status: statusOf(q.get("status")), project: projectOf(q), stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: windowOf(q),
+    status: statusOf(q.get("status")), project: s.project, stage: q.get("stage") ?? "", priority: q.get("priority") ?? "", label: q.get("label") ?? "", q: q.get("q") ?? "", tile: q.get("tile") || "open", window: s.window,
     sort: q.get("sort") ? { key: q.get("sort"), dir: q.get("dir") === "asc" ? 1 : -1 } : null,
   };
 }
@@ -49,6 +51,7 @@ export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => issueHref(ref(r));
 
 const DAY = 86_400_000;
+const WINDOW_DAYS = Object.fromEntries(FACTORY.map((w) => [w, WINDOWS[w] / DAY]));
 const ms = (s) => Date.parse(s) || 0;
 /** A store date `YYYY-MM-DD` as local midnight in ms, as the CLI writes it; 0 for none. */
 /** An ISO UTC time from the store as ms; 0 for none. */
@@ -399,7 +402,7 @@ const PRIORITY_OPTIONS = [{ value: "", label: "All" }, "critical", "high", "medi
 export function renderProjects(projects, rows, o = {}) {
   const left = filterRows(rows, o, ["project"]);
   const n = (p) => left.filter((r) => !p || r.project === p).length;
-  return scopeBar(o.project ?? "", o.window ?? "week", projects, { label: (p) => `${p || "All"} (${n(p)})` });
+  return scope().bar({ project: o.project ?? "", value: o.window ?? "week", more: projects, label: (p) => `${p || "All"} (${n(p)})` });
 }
 
 export function renderFilters(rows, o = {}) {
@@ -701,11 +704,11 @@ if (typeof document !== "undefined") {
     const seg = t?.closest("#inv-filters .seg button");
     if (seg) return setQuery({ [seg.closest(".seg").dataset.name]: seg.dataset.value, limit: "" });
     const win = t?.closest("#inv-scope .seg button");
-    if (win) { storeWindow(win.dataset.value); return setQuery({ window: win.dataset.value }); }
+    if (win) { remember("window", win.dataset.value); return setQuery({ window: win.dataset.value }); }
   });
   document.addEventListener("change", (e) => {
     const f = e.target.closest?.("#inv-filters select[name], #inv-scope select[name]");
-    if (f) { if (f.name === "project") storeProject(f.value); setQuery({ [f.name]: f.value, limit: "" }); }
+    if (f) { remember(f.name, f.value); setQuery({ [f.name]: f.value, limit: "" }); }
   });
   // Edit mode: the page shows the editors in place of the values; Cancel puts the saved values back.
   document.addEventListener("click", (e) => {

@@ -33,7 +33,7 @@ With the gate on, `/` shows a login form. The right password sets the `aleph_ses
 
 ## Routes
 
-`GET /` is `ui/index.html`, with its styles in `ui/app.css`. Pages use hash routes, such as `#/jobs/a1430%231`. The pages send no project in the hash; each `/api` route takes `?project=<key>` as its own filter.
+`GET /` is `ui/index.html`, with its styles in `ui/app.css`. Pages use hash routes, such as `#/jobs/a1430%231`. The pages send no project in the hash; each `/api` route takes `?project=<key>` as its own filter. `?window=` is a window name of `lib/windows.ts` (`hour`, `day`, `week`, `month`, `quarter`); `scopeOf` in `ui/api/scope.ts` reads both, and a window the route does not take is a 400.
 
 A URL names the data it returns in the terms of `docs/naming.md`. An action is a POST under the thing it acts on. An `/api` path with no route answers 404, whatever the method.
 
@@ -51,7 +51,7 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 | `GET /api/jobs` | One row per job, newest first; `?window=`, `?state=`, `?limit=` and `?before=` (the `next` of the last page) |
 | `GET /api/jobs/:id`, `/diff`, `/logs/:file` | One job by its ID (`a1430#2`, sent as `a1430%232`) |
 | `POST /api/jobs/:id/{land,recheck,drop,wait,answer}` | Acts on that job only |
-| `GET /api/sessions` | The Sessions page; `?window=` in days, and `?limit=` and `?before=` for the session list. `partial` says Langfuse held more pages than a read takes |
+| `GET /api/sessions` | The Sessions page; `?window=` (week, month or quarter), and `?limit=` and `?before=` for the session list. `partial` says Langfuse held more pages than a read takes |
 | `GET /api/sessions/:id`, `/chat`, `/turns/:n`, `GET /api/skills/:name` | One session, its chat, one turn, one skill |
 | `GET /api/projects` | A map of each project key to its code |
 | `GET /api/views` | The files under `ui/views/` |

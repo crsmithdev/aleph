@@ -19,7 +19,8 @@ import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
 import { clip, issueHref, NAMES, parseId } from "../../lib/naming.ts";
-import { inProject, repoIn } from "./scope.ts";
+import { inProject, repoIn, scopeOf } from "./scope.ts";
+import type { Window } from "../../lib/windows.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 
@@ -168,8 +169,6 @@ const histOf = (xs: number[]): number[] => {
 const phaseStat = (xs: number[]): PhaseStat => ({ ...stat(xs), hist: histOf(xs), worst: xs.length ? round(Math.max(...xs)) : 0 });
 const isTests = (name: string) => /^tests?$/.test(name);
 
-export const WINDOWS = ["hour", "day", "week", "month"] as const;
-export type Window = (typeof WINDOWS)[number];
 const STEP: Record<Window, number> = { hour: 60_000, day: HOUR, week: DAY, month: DAY };
 const COUNT: Record<Window, number> = { hour: 60, day: 24, week: 7, month: 30 };
 
@@ -696,15 +695,15 @@ export function baseline(window: Window, now = new Date(), fit: Fit | null = nul
 
 export const routes: Routes = {
   "GET /api/flow": async (_req, _params, url) => {
-    const w = url.searchParams.get("window") ?? "week";
-    if (!(WINDOWS as readonly string[]).includes(w)) return Response.json({ error: "window must be hour, day, week or month" }, { status: 400 });
+    const sc = scopeOf(url);
+    if (sc instanceof Response) return sc;
     // `project`: only the runs and issues of that repo count.
-    const project = url.searchParams.get("project") || undefined;
-    const fit = await currentFit().catch(() => null), inp = inputs(), now = new Date(), d = speed(w as Window, now, fit, project, inp);
+    const w = sc.window as Window, project = sc.project ?? undefined;
+    const fit = await currentFit().catch(() => null), inp = inputs(), now = new Date(), d = speed(w, now, fit, project, inp);
     // `baseline=1`: the trend baseline of the window in the same answer, so the Status page makes one request.
     if (url.searchParams.get("baseline") !== "1") return Response.json(d);
     // `day` and `month` are the answers the Efficiency page reads (its last-24-h and 30-day-average trends).
     const others = Object.fromEntries((["day", "month"] as const).filter((k) => k !== w).map((k) => [k, speed(k, now, fit, project, inp)]));
-    return Response.json({ ...d, baseline: baseline(w as Window, now, fit, project, inp), others });
+    return Response.json({ ...d, baseline: baseline(w, now, fit, project, inp), others });
   },
 };

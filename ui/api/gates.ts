@@ -14,7 +14,7 @@ import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { layout, readEvents } from "../../jobs/lib/infra/layout.ts";
-import { eventIn, inProject } from "./scope.ts";
+import { eventIn, inProject, scopeOf } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import type { Event } from "../../lib/naming.ts";
 import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
@@ -22,13 +22,12 @@ import { reader } from "../../issues/lib/store.ts";
 
 import { aleph, fail, post } from "../action.ts";
 import { state, type State } from "../state.ts";
-import { forProject, WINDOWS } from "./now.ts";
+import { forProject } from "./now.ts";
 import type { Routes } from "../server.ts";
 
 /** The log keeps the entries of the last LOG_DAYS days, newest first, at most LOG_MAX of each actor. */
 const LOG_DAYS = 7; export const LOG_MAX = 200;
 const DAY = 86_400_000;
-/** The windows that `?window=` takes. */
 /** Whether `item` (`<repo>-<id>`) belongs to `project`; no project keeps every item. */
 
 /** One log row: an event. A run of equal gate events is one row: `times` is how many, `first` the first one's time. */
@@ -294,11 +293,10 @@ export function gatesBody(state: Pick<State, "now" | "asks">, security: { held: 
 }
 
 export const routes: Routes = {
-  "GET /api/automation": async (req) => {
-    const q = new URL(req.url).searchParams, w = q.get("window");
-    if (w !== null && !(w in WINDOWS)) return Response.json({ error: `window must be one of ${Object.keys(WINDOWS).join(", ")}` }, { status: 400 });
-    const project = q.get("project") || undefined;
-    return Response.json(gatesBody(forProject(state(), project ?? null), await securityFacts(), w === null ? undefined : WINDOWS[w], project));
+  "GET /api/automation": async (_req, _params, url) => {
+    const sc = scopeOf(url);
+    if (sc instanceof Response) return sc;
+    return Response.json(gatesBody(forProject(state(), sc.project), await securityFacts(), sc.ms, sc.project ?? undefined));
   },
   "POST /api/automation/caps": post((body) => {
     if (typeof body !== "object" || Array.isArray(body)) fail(422, "body must be a JSON object");

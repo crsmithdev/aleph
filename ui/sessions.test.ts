@@ -359,8 +359,9 @@ test("a missing token count or recall figure shows – and not ?", async () => {
   expect(h + d).not.toContain("?");
 });
 
-test("?days= is capped at 90 days", async () => {
-  await listSessions(new Request("http://localhost/api/sessions?window=100000"));
+test("?window= is week, month or quarter, and quarter reads 90 days", async () => {
+  for (const w of ["100000", "7", "day"]) expect((await listSessions(new Request(`http://localhost/api/sessions?window=${w}`))).status, w).toBe(400);
+  await listSessions(new Request("http://localhost/api/sessions?window=quarter"));
   const from = Date.parse(new URL("http://x" + hits.find((h) => h.startsWith("/api/public/traces"))!).searchParams.get("fromTimestamp")!);
   expect(from).toBeGreaterThanOrEqual(Math.floor((NOW - 90 * 86400_000) / 3600_000) * 3600_000);
 });

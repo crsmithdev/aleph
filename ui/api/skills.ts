@@ -10,7 +10,8 @@ import { dirname, join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../lib/env.ts";
 import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
-import { traceProject } from "./scope.ts";
+import { scopeOf, traceProject } from "./scope.ts";
+import { SESSIONS } from "../../lib/windows.ts";
 import type { Routes } from "../server.ts";
 import { once, touch } from "../../jobs/lib/infra/sources.ts";
 import { allPages } from "../langfuse-pages.ts";
@@ -258,9 +259,9 @@ function detail(a: Analysis, name: string) {
 }
 
 async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<Response> {
-  const d = Number(url.searchParams.get("window"));
-  const days = d > 0 ? Math.min(Math.floor(d), 365) : 30;
-  const project = url.searchParams.get("project") || null;
+  const sc = scopeOf(url, "month", SESSIONS);
+  if (sc instanceof Response) return sc;
+  const { days, project } = sc;
   let a: Analysis;
   try { a = await once(`skills:${process.env.LANGFUSE_BASE_URL}:${days}:${project}`, ["langfuse", "registry", "skills"], () => analyse(days, project)); }
   catch (e) { return Response.json({ error: `Langfuse failed: ${(e as Error).message}` }, { status: 502 }); }

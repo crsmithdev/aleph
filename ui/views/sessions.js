@@ -1,7 +1,8 @@
 // The Agents view: Sessions, Tools and Skills on one page. It answers what the agents did and what fails: the highest
 // failure rates, ranked tools and skills, and the sessions list, which a selected tool or skill narrows.
 // `data` is /api/sessions. The session and skill detail routes stay in their own views.
-import { actButton, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, scopeBar, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope } from "../lib.js";
+import { actButton, barList, count, barRow, meter, card, chips, costHtml, dataTable, empty, error, esc, heads, idLink, money, onTile, pageHead, pager, pct, searchBox, sectionHead, setQuery, sortHead, hashQuery, limitOf, sortRows, wireTable, statCard, tiles, when, wireScope, scope } from "../lib.js";
+import { DAY, SESSIONS, WINDOWS } from "../../lib/windows.ts";
 
 export const view = {
   path: "/sessions",
@@ -11,13 +12,16 @@ export const view = {
   order: 0,
   api: (_params, q = new URLSearchParams()) => {
     // The table sorts and filters the whole window, so it asks for the most rows a page holds.
-    const out = new URLSearchParams({ window: q.get("days") || "7", limit: "2000" });
+    const out = new URLSearchParams({ window: named(q.get("days")), limit: "2000" });
     if (q.get("project")) out.set("project", q.get("project"));
     return `/api/sessions?${out}`;
   },
   render: (d, _params, query) => renderSessions(d, options(query)),
   mount: (root, d) => mount(root, d),
 };
+
+/** The window name of the address's day count: 7, 30 or 90 days, else week. */
+const named = (days) => SESSIONS.find((w) => WINDOWS[w] === Number(days) * DAY) ?? "week";
 
 /** The old addresses `#/agents`, `#/activity` and `#/skills` keep their window and project. The detail routes are left alone. */
 export function redirect(hash) {
@@ -130,8 +134,8 @@ const DAYS = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }
 export function renderSessions(d, o = options()) {
   const projects = d?.sessions?.projects ?? d?.activity?.projects ?? [];
   const total = sum(d?.sessions?.sessions ?? [], (s) => s.cost ?? 0);
-  const scope = scopeBar(projects.includes(o.project) ? o.project : "", o.days, projects, { name: "days", options: DAYS });
-  return `<div class="page sp agents">${pageHead("Sessions", { count: `last ${o.days} days`, aside: scope })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
+  const head = scope().bar({ project: projects.includes(o.project) ? o.project : "", value: o.days, more: projects, name: "days", options: DAYS });
+  return `<div class="page sp agents">${pageHead("Sessions", { count: `last ${o.days} days`, aside: head })}<div id="ag-live" class="sp">${renderLive(d, o)}</div>` +
     `<p class="hint">${esc(money(total))} recorded across these sessions.</p></div>`;
 }
 

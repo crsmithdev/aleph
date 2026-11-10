@@ -19,7 +19,7 @@ import { memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../jobs/lib/infra/sources.ts";
-import { memoryIn } from "./scope.ts";
+import { memoryIn, projectOf } from "./scope.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
 const scopeOf = (n: Note) => String(n.fm.scope ?? "");
@@ -114,7 +114,7 @@ function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: stri
 
 async function overview(url: URL): Promise<Response> {
   const slow = misses();
-  const project = url.searchParams.get("project") || null;
+  const project = projectOf(url);
   const root = vaultDir();
   const all = existsSync(join(root, "Home.md")) ? await vaultNotes(root) : [];
   const keep = inScope(project);
@@ -156,7 +156,7 @@ async function memoryItems(root: string) {
 /** Every memory that matches `q`, of every type; all of them when `q` is empty. It filters and ranks the items only. */
 async function search(url: URL): Promise<Response> {
   const q = (url.searchParams.get("q") ?? "").trim();
-  const project = url.searchParams.get("project") || null;
+  const project = projectOf(url);
   const root = vaultDir();
   const { wiki, items: all } = await memoryItems(root);
   return json({ q, results: searchItems(all, q, project, root, wiki) });
@@ -164,7 +164,7 @@ async function search(url: URL): Promise<Response> {
 
 async function note(raw: string, url: URL): Promise<Response> {
   const title = raw.trim();
-  const project = url.searchParams.get("project") || null;
+  const project = projectOf(url);
   const all = await allNotes(vaultDir());
   const targets = linkTargets(all);
   const hit = title ? targets.get(title.toLowerCase()) : undefined;

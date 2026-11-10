@@ -3,7 +3,7 @@
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
 import { get } from "../router.js";
-import { actButton, codeText, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, withProject } from "../lib.js";
+import { actButton, codeText, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, scope } from "../lib.js";
 
 export const view = {
   path: "/memory",
@@ -11,7 +11,7 @@ export const view = {
   icon: "brain",
   group: "claude",
   order: 1,
-  api: (_params, q = new URLSearchParams()) => withProject("/api/memory", q),
+  api: (_params, q = new URLSearchParams()) => scope(q).url("/api/memory"),
   live: true,
   render: (m, _params, query) => renderMemory(m, options(query)),
   mount: (root, m) => mount(root, m),
@@ -266,7 +266,7 @@ function redraw() {
 /** `/api/memory/search` for the query; the router drops an answer that a later query or another page made old. */
 async function search() {
   try {
-    const res = await get(withProject(`/api/memory/search?q=${encodeURIComponent(here().q)}`, hashQuery()), "mem-search");
+    const res = await get(scope().url(`/api/memory/search?q=${encodeURIComponent(here().q)}`), "mem-search");
     if (!res) return;
     live.results = (await res.json()).results ?? [];
   } catch (e) { live.results = []; live.root.querySelector("#mem-results").innerHTML = error(`Could not search: ${e.message}`); return; }

@@ -9,7 +9,7 @@
 import { existsSync, closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { eventsDir } from "../../jobs/lib/infra/layout.ts";
-import { eventIn } from "./scope.ts";
+import { eventIn, projectOf } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
 import { eventFiles, updater } from "../updater.ts";
@@ -86,7 +86,7 @@ function stop(): void {
 
 export const routes: Routes = {
   "GET /api/events": (req) => {
-    const project = new URL(req.url).searchParams.get("project") || "";
+    const project = projectOf(new URL(req.url)) ?? "";
     let mine: ReadableStreamDefaultController<Uint8Array>;
     const body = new ReadableStream<Uint8Array>({
       start(c) {

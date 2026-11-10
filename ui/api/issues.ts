@@ -28,7 +28,7 @@ import { issueHref, jobHref, parseId } from "../../lib/naming.ts";
 import type { Stage } from "../../jobs/lib/records/stage.ts";
 import { filed } from "./speed.ts";
 import { readHolds, suiteHistory } from "../../jobs/lib/gates/factory-status.ts";
-import { repoIn } from "./scope.ts";
+import { projectOf, repoIn } from "./scope.ts";
 
 const str = (v: unknown): string | null => (v === undefined || v === null || v === "" ? null : String(v));
 
@@ -62,7 +62,7 @@ function totals(): Map<string, { runs: number; cost: number }> {
 }
 
 function list(url: URL): Response {
-  const project = url.searchParams.get("project");
+  const project = projectOf(url);
   const repos = Object.values(loadRegistry()).filter((r) => repoIn(r.key, project));
   let docs: (todos.Doc | null)[];
   try { docs = readLists(repos); } catch (e: any) { return Response.json({ error: e?.message ?? String(e) }, { status: 500 }); }
@@ -95,7 +95,7 @@ const isOfIssue = (on: number | string | undefined, n: number): boolean =>
   typeof on === "number" ? on === n : typeof on === "string" && Number(on.split(".")[0]) === n;
 
 function detail(params: Record<string, string>, url: URL): Response {
-  const project = url.searchParams.get("project");
+  const project = projectOf(url);
   const at = issueOf(params.id);
   if (!at || !repoIn(at.repo.key, project)) return Response.json({ error: "no such issue" }, { status: 404 });
   const { repo, ref } = at;
@@ -200,7 +200,7 @@ function media(params: Record<string, string>): Response {
 }
 
 const create = post(async (b, _p, url) => {
-  const project = url.searchParams.get("project");
+  const project = projectOf(url);
   const repo = String(b.repo ?? b.project ?? project ?? "");
   const title = String(b.title ?? "").trim();
   if (!title) fail(400, "give the issue a title");

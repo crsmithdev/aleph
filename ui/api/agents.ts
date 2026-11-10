@@ -1,5 +1,5 @@
 /**
- * `GET /api/sessions?window=7&project=<key>&limit=&before=` (a day count: 7, 30 or 90; the paging is of the session list): the Agents view's data over one window: the tools, hooks and denials of `ui/activity.ts`,
+ * `GET /api/sessions?window=week&project=<key>&limit=&before=` (week, month or quarter; the paging is of the session list): the Agents view's data over one window: the tools, hooks and denials of `ui/activity.ts`,
  * its skills, its sessions, and `toolSessions`, the sessions each tool ran in.
  * A part that fails gives its own error, so the other parts still show.
  */
@@ -7,8 +7,8 @@ import type { Routes } from "../server.ts";
 import { activity } from "../activity.ts";
 import { listSessions, windowTraces } from "./sessions.ts";
 import { listSkills } from "./skills.ts";
-
-const WINDOWS = [7, 30, 90];
+import { scopeOf } from "./scope.ts";
+import { SESSIONS } from "../../lib/windows.ts";
 
 const partOf = async (res: Response | Promise<Response>) => {
   const r = await res;
@@ -23,11 +23,11 @@ async function toolSessions(toolTraces: Record<string, string[]>, days: number, 
 
 /** The response of `GET /api/sessions` for `url`. */
 async function load(req: Request, url: URL): Promise<Response> {
-    const asked = Number(url.searchParams.get("window"));
-    const days = WINDOWS.includes(asked) ? asked : 7;
-    const project = url.searchParams.get("project") || null;
+    const sc = scopeOf(url, "week", SESSIONS);
+    if (sc instanceof Response) return sc;
+    const { days, project } = sc;
     const inner = new URL(url);
-    inner.searchParams.set("window", String(days));
+    inner.searchParams.set("window", sc.window);
     const innerReq = new Request(inner, req);
     const [act, skills, sessions] = await Promise.all([
       activity(days, project),

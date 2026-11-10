@@ -1,7 +1,7 @@
 import { setCodes } from "../lib/naming.ts";
 import { afterEach, describe, expect, test } from "bun:test";
 // @ts-ignore lib.js is plain JS, shared with the page
-import { clamp, moreFold, actButton, postJson, legendHtml, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scopeBar, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
+import { clamp, moreFold, actButton, postJson, legendHtml, meter, localId, repoIdLink, repoOf, STATES, badge, priorityBadge, chart, chips, filterBar, seg, scope, wireScope, projectKeysOnce, idLink, pageHead, pager, sortHead, sectionHead, card, shortModel, when, chartTheme, clock, cmd, diffHtml, loadDiff, empty, error, esc, failMessage, loading, md, money, pct, mountView, recordState, restoreState, wireFolds, restoreFolds, span, dur, tone, searchBox, nextSort, limitOf, sortRows, keep, kept } from "./lib.js";
 // @ts-ignore lib.js is plain JS, shared with the page
 import * as lib from "./lib.js";
 
@@ -245,19 +245,19 @@ test("the legend of the Tests and the Live chart ends above the grid at 390 and 
   }
 });
 
-test("seg draws a labelled group, and scopeBar names its window group", () => {
+test("seg draws a labelled group, and the scope bar names its window group", () => {
   const h = seg("Who", [{ label: "A", on: false, attrs: ' data-x="1"' }, { label: "B", on: true, attrs: "" }]);
   expect(h).toContain('<div class="seg" role="group" aria-label="Who">');
   expect(h.match(/aria-pressed="(true|false)"/g)).toEqual(['aria-pressed="false"', 'aria-pressed="true"']);
-  const groups = scopeBar("", "week").match(/<div class="seg"[^>]*>/g)!;
+  const groups = scope(new URLSearchParams()).bar().match(/<div class="seg"[^>]*>/g)!;
   expect(groups.length).toBe(1);
   expect(groups[0]).toMatch(/aria-label="[^"]+"/);
-  expect(scopeBar("", "week")).not.toContain('class="fl">Window');
+  expect(scope(new URLSearchParams()).bar()).not.toContain('class="fl">Window');
 });
 
-test("scopeBar takes a window name, its choices and an extra control; a click on days stays out of aleph.window", () => {
+test("the scope bar takes a window name, its choices and an extra control; a click on days stays out of aleph.window", () => {
   const days = [{ value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }];
-  const h = scopeBar("", "7", [], { name: "days", options: days, after: "<button>Pause</button>", label: (p: string) => `${p || "All"} (2)` });
+  const h = scope(new URLSearchParams()).bar({ value: "7", name: "days", options: days, after: "<button>Pause</button>", label: (p: string) => `${p || "All"} (2)` });
   expect(h).toContain('data-name="days"');
   expect(h.match(/data-value="(7|30|90)"/g)).toHaveLength(3);
   expect(h).toContain('<option value="" selected>All (2)</option>');

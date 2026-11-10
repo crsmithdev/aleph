@@ -1,13 +1,10 @@
 /** `GET /api/factory`: the Status view's data, narrowed to one project by `?project=<key>`, with the Done count of `?window=`. */
 import type { Routes } from "../server.ts";
 import { proposals } from "../../jobs/lib/learning/corrections.ts";
-import { eventIn, inProject, known, repoIn } from "./scope.ts";
+import { eventIn, inProject, known, repoIn, scopeOf } from "./scope.ts";
+import { WINDOWS } from "../../lib/windows.ts";
 import { state, type State } from "../state.ts";
 import { annotate, currentFit, summary } from "../usage.ts";
-
-const DAY = 86_400_000;
-/** The length of each `?window=` in ms. */
-export const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DAY, month: 30 * DAY };
 
 /** The state with only `project`'s jobs, issues, asks and Herald events; the factory and ticks stay whole. */
 export function forProject(s: State, project: string | null): State {
@@ -29,8 +26,8 @@ export async function stateBody(project: string | null, ms = WINDOWS.week) {
 
 export const routes: Routes = {
   "GET /api/factory": async (_req, _params, url) => {
-    const w = url.searchParams.get("window") ?? "week";
-    if (!(w in WINDOWS)) return Response.json({ error: `window must be one of ${Object.keys(WINDOWS).join(", ")}` }, { status: 400 });
-    return Response.json(await stateBody(url.searchParams.get("project"), WINDOWS[w]));
+    const sc = scopeOf(url);
+    if (sc instanceof Response) return sc;
+    return Response.json(await stateBody(sc.project, sc.ms));
   },
 };

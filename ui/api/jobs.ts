@@ -12,7 +12,7 @@ import { jobProjector, type Job, type Wait } from "../state.ts";
 import type { Routes } from "../server.ts";
 import { annotate, currentFit, share, type Fit, type Wk } from "../usage.ts";
 import { contentText, issueHref, parseId, subjectOf } from "../../lib/naming.ts";
-import { repoIn } from "./scope.ts";
+import { projectOf, repoIn, scopeOf } from "./scope.ts";
 import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
@@ -92,7 +92,6 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   return out;
 }
 
-const DAY = 24 * 3600_000;
 const KIND = { build: "worker", recheck: "worker", land: "land", plain: "plain", intake: "intake", director: "director", monitor: "monitor" } as const;
 /** The actor a run belongs to, by its kind. */
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
@@ -136,8 +135,6 @@ async function traceUrl(runs: Entry[]): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-/** The windows of `?window=`, in ms. */
-const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DAY, month: 30 * DAY };
 /** `?limit=`: the rows of one page by default, and the most a page holds. */
 const LIMIT = 100, MAX = 2000;
 
@@ -210,15 +207,15 @@ const none = () => Response.json({ error: "no such job" }, { status: 404 });
 export const routes: Routes = {
   // One row per job, newest first: `?project=`, `?window=` (default week), `?state=`, and the page `?limit=`, `?before=` (an ISO start).
   "GET /api/jobs": (_req, _p, url) => {
-    const q = url.searchParams;
-    const project = q.get("project"), state = q.get("state"), w = q.get("window") || "week", before = q.get("before");
+    const q = url.searchParams, sc = scopeOf(url);
+    if (sc instanceof Response) return sc;
+    const state = q.get("state"), before = q.get("before");
     const limit = q.has("limit") ? Number(q.get("limit")) : LIMIT;
-    if (!(w in WINDOWS)) return Response.json({ error: `window must be one of ${Object.keys(WINDOWS).join(", ")}` }, { status: 400 });
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX) return Response.json({ error: `limit must be a whole number from 1 to ${MAX}` }, { status: 400 });
     if (before !== null && Number.isNaN(Date.parse(before))) return Response.json({ error: "before must be an ISO time" }, { status: 400 });
     loadRegistry();
-    const since = Date.now() - WINDOWS[w], all = allRuns();
-    const hit = all.filter(({ run: r }) => repoIn(r.repo, project) && (!state || r.condition === state) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)))
+    const since = Date.now() - sc.ms, all = allRuns();
+    const hit = all.filter(({ run: r }) => repoIn(r.repo, sc.project) && (!state || r.condition === state) && Date.parse(r.ended ?? r.started) >= since && (!before || Date.parse(r.started) < Date.parse(before)))
       .sort((a, b) => Date.parse(b.run.started) - Date.parse(a.run.started));
     const page = hit.slice(0, limit);
     return Response.json({ jobs: rowsOf(page, all), next: hit.length > limit ? page.at(-1)!.run.started : null });
@@ -228,7 +225,7 @@ export const routes: Routes = {
   "GET /api/issues/:id/jobs": (_req, params, url) => {
     loadRegistry();
     const p = parseId(params.id);
-    if (!p || !repoIn(p.repo, url.searchParams.get("project"))) return Response.json({ error: "no such issue" }, { status: 404 });
+    if (!p || !repoIn(p.repo, projectOf(url))) return Response.json({ error: "no such issue" }, { status: 404 });
     const all = allRuns(), ref = p.sub === undefined ? String(p.n) : `${p.n}.${p.sub}`;
     const mine = all.filter(({ run: r }) => {
       const on = String(onOf(r) ?? "");
@@ -238,12 +235,12 @@ export const routes: Routes = {
   },
 
   "GET /api/jobs/:id": async (_req, params, url) => {
-    const at = located(params.id, url.searchParams.get("project"));
+    const at = located(params.id, projectOf(url));
     return at ? Response.json(await detailOf(params.id, at.runs)) : none();
   },
 
   "GET /api/jobs/:id/diff": (_req, params, url) => {
-    const at = located(params.id, url.searchParams.get("project"));
+    const at = located(params.id, projectOf(url));
     if (!at) return none();
     const d = jobDiff(at.runs);
     if (!d) return Response.json({ error: NO_DIFF }, { status: 404 });
@@ -252,7 +249,7 @@ export const routes: Routes = {
 
   // A log file of the job's run: whole as text, or with `?as=transcript` as the steps of a stream-json log. Only known names.
   "GET /api/jobs/:id/logs/:file": (_req, params, url) => {
-    const at = located(params.id, url.searchParams.get("project"));
+    const at = located(params.id, projectOf(url));
     if (!at || !(LOGS as readonly string[]).includes(params.file)) return Response.json({ error: "no such log" }, { status: 404 });
     const path = join(at.e.folder, params.file);
     if (!existsSync(path)) return Response.json({ error: "no such log" }, { status: 404 });

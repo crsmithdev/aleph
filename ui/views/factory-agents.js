@@ -1,6 +1,6 @@
 // The Agents page: the usage, the slots and who used them. `s` is /api/factory; the agents come from /api/flow for the window.
 import { get } from "../router.js";
-import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, hashQuery, heads, keepProject, keepWindow, loadingLine, money, pageHead, pct, projectNow, say, scopeBar, shortModel, statCard, tiles, windowOf, wireScope, withProject } from "../lib.js";
+import { postJson, card, cardTrend, count, dataTable, dur, empty, error, esc, heads, loadingLine, money, pageHead, pct, say, shortModel, statCard, tiles, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { panelOf } from "../chart.js";
 import { lastPeriod, loadSpeed, usable, usageCard } from "./speed.js";
@@ -114,8 +114,8 @@ const key = (k) => `factory/agents/${k}`;
 export function renderFactoryAgents(s, d, _key = "live", window = "week", m = null) {
   const win = d?.window ?? window, w = { window: win }, a = d?.agents ?? null;
   const wait = d?.error ? error(d.error) : loadingLine("the agents");
-  const scope = scopeBar(projectNow(), win);
-  return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: scope })}${tiles("Scorecard", scorecard(s, m, win))}` +
+  const head = scope().bar({ value: win });
+  return `<div class="page sp" id="capacity">${pageHead("Agents", { count: lastPeriod(w), aside: head })}${tiles("Scorecard", scorecard(s, m, win))}` +
     (a ? `<div class="trio">${Object.entries(FRAMES).map(([k, fr]) => panelOf(key(k), fr(d))).join("")}</div>` : card("Agents", wait)) +
     card("Roles", a ? roles(a, m) : wait, { id: "roles" }) + `</div>`;
 }
@@ -123,7 +123,7 @@ export function renderFactoryAgents(s, d, _key = "live", window = "week", m = nu
 /** The old address. */
 export const redirect = (hash) => (String(hash ?? "").split("?")[0] === "#/status/capacity" ? "#/factory/agents" : null);
 
-const windowNow = () => windowOf(hashQuery());
+const windowNow = () => scope().window;
 let modelsNow = null;
 
 export const view = {
@@ -132,14 +132,14 @@ export const view = {
   group: "factory",
   order: 2,
   icon: "robot",
-  api: (_params, q = new URLSearchParams()) => withProject("/api/factory", q),
+  api: (_params, q = new URLSearchParams()) => scope(q).url("/api/factory"),
   live: true,
   refresh: 60,
-  render: (s, _params, q) => renderFactoryAgents(s, usable(windowOf(q)), "live", windowOf(q)),
+  render: (s, _params, q) => renderFactoryAgents(s, usable(scope(q).window), "live", scope(q).window),
   mount: async (root, s) => {
     const draw = (d) => {
       root.innerHTML = renderFactoryAgents(s, d, "live", windowNow(), modelsNow);
-      wireScope(root);
+      scope().wire(root);
       if (!d?.agents) return;
       for (const [k, fr] of Object.entries(FRAMES)) root.querySelector(`aleph-chart[key="${key(k)}"]`).frame = fr(d);
     };
@@ -149,8 +149,6 @@ export const view = {
       const m = await postJson("/api/models", { tier: b.dataset.tier, ...(b.type === "checkbox" ? { enabled: b.checked } : { model: b.value }) }).catch((err) => say(b, err.message));
       if (m) { modelsNow = m; if (root.querySelector("#capacity")) draw(usable(windowNow())); }
     };
-    keepWindow(windowNow());
-    keepProject(projectNow());
     draw(usable(windowNow()));
     modelsNow = await get("/api/models").then((r) => r.json()).catch(() => null);
     if (root.querySelector("#capacity")) draw(usable(windowNow()));

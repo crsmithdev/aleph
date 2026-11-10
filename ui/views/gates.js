@@ -1,7 +1,7 @@
 // The Automation view: metrics, caps, schedules, rules and the log. Each render function takes the /api/automation object and returns an HTML
 // string, so tests can call them. The shell's click handler (router.js) runs the Waiting-for-you buttons; `mount` runs the rule switches.
 import { dataOf, get } from "../router.js";
-import { clamp, contentText, issueHref, parseId, parseJob, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, keepProject, keepWindow, limitOf, pager, pageHead, projectNow, recordState, restoreState, scopeBar, seg, sectionHead, setQuery, statCard, tiles, when, windowOf, withProject, wireScope } from "../lib.js";
+import { clamp, contentText, issueHref, parseId, parseJob, shownId, actButton, postJson, say, count, badge, card, tag, dataTable, pagedTable, empty, error, esc, filterBar, goQuery, hashQuery, heads, hours, pct, chip, idLink, limitOf, pager, pageHead, recordState, restoreState, seg, sectionHead, setQuery, statCard, tiles, when, scope } from "../lib.js";
 import { askRow, findingHtml } from "./now.js";
 
 export const view = {
@@ -12,7 +12,7 @@ export const view = {
   order: -2,
   icon: "shield-halved",
   // The caps' use and the live counts come from the factory block of /api/factory.
-  api: (_params, q = new URLSearchParams()) => [withProject(`/api/automation?window=${windowOf(q)}`, q), withProject("/api/factory", q)],
+  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/automation?window=${s.window}`), s.url("/api/factory")]; },
   combine: ([d, s]) => ({ ...d, factory: { ...s.factory, capEnv: d.capEnv, settings: d.settings } }),
   live: true,
   refresh: 60,
@@ -51,7 +51,7 @@ export const BY = { human: "need", rule: "done", director: "parked", firefighter
 const PAGE = 50;
 
 export function renderGates(d, q = new URLSearchParams()) {
-  return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days`, aside: scopeBar(projectNow(), windowOf(q)) })}` +
+  return `<div class="page gates">${pageHead("Automation", { count: `last ${d.metrics.days} days`, aside: scope(q).bar() })}` +
     renderNow(d) + (d.backend ? `<p class="quiet" id="gates-backend">Waiting for ${esc(d.backend.via)}: ${esc(d.backend.why)}</p>` : "") + renderSchedules(d) + renderMonitor(d) + renderWaiting(d) + renderRepeats(d) + renderRules(d) +
     `<div class="gates-two">${renderCaps(d)}${renderHeld(d)}</div>` + renderLog(d, q.get("by"), limitOf(q, PAGE)) + `</div>`;
 }
@@ -205,14 +205,12 @@ async function redraw(root) {
   const saved = recordState(root);
   root.innerHTML = renderGates(d, hashQuery());
   restoreState(root, saved);
-  wireScope(root);
+  scope().wire(root);
 }
 
 /** The rule switches. `root.onclick`, so a refresh does not add a second handler and the shell clears it on a route change. */
 export function mount(root) {
-  keepWindow(windowOf(hashQuery()));
-  keepProject(projectNow());
-  wireScope(root);
+  scope().wire(root);
   root.onsubmit = async (e) => {
     const sched = e.target.closest?.("form.schedform");
     if (sched) {

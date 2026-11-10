@@ -2,7 +2,7 @@
 // /api/factory object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { get } from "../router.js";
-import { actButton, jobHref, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, windowOf, wireScope, withProject, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, jobHref, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, idLink, mean, loadingLine, pageHead, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when, scope } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
@@ -15,11 +15,11 @@ export const view = {
   order: -3,
   icon: "gauge-high",
   // The asks come from /api/automation, the one answer that carries them.
-  api: (_params, q = new URLSearchParams()) => [withProject(`/api/factory?window=${windowOf(q)}`, q), withProject(`/api/automation?window=${windowOf(q)}`, q)],
+  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/factory?window=${s.window}`), s.url(`/api/automation?window=${s.window}`)]; },
   combine: ([s, a]) => ({ ...s, asks: a.asks }),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = scope(q).window; return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s)}</div>${renderHerald(s)}</div></div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -178,10 +178,8 @@ function wireHeraldJump(root) {
 
 /** Fetch the window with its baseline in one request, then fill the scorecard. */
 export async function mountStatus(root, s, fetcher = get, q) {
-  const w = windowOf(q ?? (typeof location === "undefined" ? undefined : hashQuery()));
-  keepWindow(w);
-  keepProject(projectNow());
-  wireScope(root);
+  const sc = scope(q), w = sc.window;
+  sc.wire(root);
   wireHeraldJump(root);
   await loadSpeed(w, fetcher, true);
   const tiles = root.querySelector("#scorecard");
@@ -209,7 +207,7 @@ function statLines(stat) {
 
 /** The page head: the time and the status sentence in place of a title, then the window control with Pause or Resume next to it. */
 function renderStatusLine(s, stale = false, w = "day") {
-  const bar = scopeBar(projectNow(), w, [], { after: renderControls(s) });
+  const bar = scope().bar({ value: w, after: renderControls(s) });
   return `<header class="ph shead"><span class="asof">${renderAsOf(s)}</span>${renderLede(s, stale)}<div class="aside">${bar}</div></header>`;
 }
 

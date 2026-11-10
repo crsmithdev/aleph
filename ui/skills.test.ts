@@ -160,7 +160,7 @@ test("pages are fetched concurrently, and a restart builds the saved keys at onc
   clearCache();
   // The keys the last process kept: the restart builds them before any request.
   mkdirSync(join(tmp, "ui"), { recursive: true });
-  writeFileSync(join(tmp, "ui", "keys.json"), JSON.stringify({ "/api/skills/aleph:pickup": NOW, "/api/sessions?window=7": NOW }));
+  writeFileSync(join(tmp, "ui", "keys.json"), JSON.stringify({ "/api/skills/aleph:pickup": NOW, "/api/sessions?window=week": NOW }));
   const { at, stop } = await withServer();
   try {
     const r = await at("/api/skills/aleph:pickup"); // shares the build the restart started
@@ -171,9 +171,9 @@ test("pages are fetched concurrently, and a restart builds the saved keys at onc
     expect((await at("/api/skills/aleph:pickup")).status).toBe(200);
     expect(calls).toBe(12);
     // The Agents page: its build started at the restart too, so a request waits for it and reads nothing more.
-    expect((await at("/api/sessions?window=7")).status).toBe(200);
+    expect((await at("/api/sessions?window=week")).status).toBe(200);
     const allSeen = all;
-    const a = await at("/api/sessions?window=7");
+    const a = await at("/api/sessions?window=week");
     expect(a.status).toBe(200);
     const b = await a.json() as any;
     for (const k of ["activity", "skills", "sessions", "toolSessions"]) expect(b[k]).toBeDefined();

@@ -4,9 +4,23 @@
  * is a filter that matches nothing.
  */
 import { parseId } from "../../lib/naming.ts";
+import { DAY, FACTORY, WINDOWS } from "../../lib/windows.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 
 type Project = string | null | undefined;
+
+/** The scope of a request: its project (null for all) and its window, by name and by length. */
+export interface Scope { project: string | null; window: string; ms: number; days: number }
+
+/** The project of `?project=`; null when it is missing or "". */
+export const projectOf = (url: URL) => url.searchParams.get("project") || null;
+
+/** The scope of `url`: `?window=` is a name of `names`, `fallback` when missing or "", and any other value is a 400. */
+export function scopeOf(url: URL, fallback = "week", names: readonly string[] = FACTORY): Scope | Response {
+  const window = url.searchParams.get("window") || fallback;
+  if (!names.includes(window)) return Response.json({ error: `window must be one of ${names.join(", ")}` }, { status: 400 });
+  return { project: projectOf(url), window, ms: WINDOWS[window], days: WINDOWS[window] / DAY };
+}
 
 /** Whether `project` is a registry key. */
 export const known = (project: string) => Object.hasOwn(loadRegistry(), project);

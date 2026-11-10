@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 // @ts-ignore plain JS shared with the page
 import { loadSpeed, speedOf } from "./views/speed.js";
 // @ts-ignore plain JS shared with the page
-import { goQuery, parseHash, projectOf, storeWindow, windowOf, wireScope } from "./lib.js";
+import { parseHash, remember, scope, wireScope } from "./lib.js";
 // @ts-ignore plain JS shared with the page
 import * as eff from "./views/efficiency.js";
 // @ts-ignore plain JS shared with the page
@@ -40,7 +40,7 @@ const PAGES: Record<string, { path: string; view: any; render: (w: string) => st
 const request = (p: { view: any }, q: URLSearchParams): string => {
   if (typeof p.view.api === "function" && p.view !== now.view && p.view !== agents.view) return [p.view.api(null, q)].flat().join(" ");
   let url = "";
-  void loadSpeed(windowOf(q), async (u: string) => { url = u; return { ok: true, json: async () => ({}) } as any; });
+  void loadSpeed(scope(q).window, async (u: string) => { url = u; return { ok: true, json: async () => ({}) } as any; });
   return url;
 };
 const query = () => new URLSearchParams(location.hash.split("?")[1] ?? "");
@@ -74,10 +74,10 @@ test("picking an option on each page asks for that window and the page says its 
 });
 
 test("the window stays when the reader moves to another page, and an address beats the store", () => {
-  storeWindow("month");
+  remember("window", "month");
   for (const p of Object.values(PAGES)) expect(request(p, new URLSearchParams())).toBe(p === PAGES.efficiency ? "/api/flow?window=month&baseline=1" : "/api/flow?window=month");
   expect(request(PAGES.jobs, new URLSearchParams("window=hour"))).toBe("/api/flow?window=hour");
-  expect(windowOf(new URLSearchParams("window=nope"))).toBe("month");
+  expect(scope(new URLSearchParams("window=nope")).window).toBe("month");
 });
 
 test("a picked window asks for the jobs of the same window, and the state goes along", () => {
@@ -89,7 +89,7 @@ test("the route of #?window=day is Status, on the day window", () => {
   const { path, query } = parseHash("#?window=day");
   expect(path).toBe("/");
   expect(path).toBe(now.view.path);
-  expect(windowOf(query)).toBe("day");
+  expect(scope(query).window).toBe("day");
   expect(parseHash("")).toEqual({ path: "/", query: new URLSearchParams() });
   expect(parseHash("#/jobs/a?x=1").path).toBe("/jobs/a");
 });
@@ -111,14 +111,31 @@ test("a chosen project is in the address, in each request, and on the next page"
     change({ target: { name: "project", value: "alpha", matches: () => true } });
     expect(query().get("project"), name).toBe("alpha");
     expect(request(p, query()), name).toContain("project=alpha");
-    expect(request(p, query()), name).toContain(`window=${windowOf(query())}`);
+    expect(request(p, query()), name).toContain(`window=${scope(query()).window}`);
     g.location.hash = "#/other";
     expect(request(p, new URLSearchParams()), name).toContain("project=alpha");
     change({ target: { name: "project", value: "", matches: () => true } });
     expect(request(p, new URLSearchParams()), name).not.toContain("project=");
   }
-  expect(projectOf(new URLSearchParams("project=beta"))).toBe("beta");
+  expect(scope(new URLSearchParams("project=beta")).project).toBe("beta");
   expect(PAGES.status.view.api(null, new URLSearchParams("project=alpha"))).toEqual(["/api/factory?window=week&project=alpha", "/api/automation?window=week&project=alpha"]);
+});
+
+test("scope wire keeps the window and the project in storage and in the address; week and All stay out of it", () => {
+  const root = { querySelector: () => null };
+  g.location.hash = "#/flow?window=day&project=alpha";
+  scope().wire(root);
+  g.location.hash = "#/factory/jobs";
+  const s = scope();
+  expect([s.window, s.project, s.url("/api/flow?window=day"), s.url("/api/factory")]).toEqual(["day", "alpha", "/api/flow?window=day&project=alpha", "/api/factory?project=alpha"]);
+  s.wire(root);
+  expect(g.location.hash).toBe("#/factory/jobs?window=day&project=alpha");
+  remember("window", "week");
+  remember("project", "");
+  g.location.hash = "#/flow";
+  scope().wire(root);
+  expect(g.location.hash).toBe("#/flow");
+  expect(scope().url("/api/factory")).toBe("/api/factory");
 });
 
 test("the Automation page asks for the chosen window and project", () => {

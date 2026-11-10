@@ -1,20 +1,17 @@
 // The Jobs view (the list) and the Job view (a job's header, KPI strip, timeline, spec, result, and the
 // review, checks and diff in Detail panels). Render functions take the /api/jobs objects and return HTML
 // strings, with no DOM, so tests can call them.
-import { pageHead, sectionHead, blockersHtml, issueHref, jobHref, bytes, chip, codeText, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, projectOf, scopeBar, shortModel, sortHead, sortRows, span, wireTable, windowOf, when, wkText } from "../lib.js";
+import { pageHead, sectionHead, blockersHtml, issueHref, jobHref, bytes, chip, codeText, tag, count, STATES, badge, cmd, crumb, dataTable, heads, pagedTable, dur, empty, esc, filterBar, goQuery, hashQuery, idLink, limitOf, loadDiff, loadingLine, localId, md, money, pager, priorityBadge, shortModel, sortHead, sortRows, span, wireTable, when, wkText, scope } from "../lib.js";
 import { barLabel, detailPanel, fromTo, laneRow, panel, renderKpis, renderTimeline, runEvent, spans } from "../timeline.js";
 import { ACTORS } from "../../lib/naming.ts";
-
-/** The window a list shows. */
-export const windowShown = (f = {}) => windowOf({ get: (k) => f[k] });
 
 /** The most rows the list asks for: one page of the API holds the whole window. */
 const ALL = 2000;
 /** The list's data URL: the project, the window and the state in the hash go to the API; the role filters on the page. */
 export const listUrl = (_params, q = new URLSearchParams()) => {
-  const out = new URLSearchParams();
-  if (projectOf(q)) out.set("project", projectOf(q));
-  if (windowOf(q) !== "week") out.set("window", windowOf(q));
+  const s = scope(q), out = new URLSearchParams();
+  if (s.project) out.set("project", s.project);
+  if (s.window !== "week") out.set("window", s.window);
   if (q.get("state")) out.set("state", q.get("state"));
   out.set("limit", String(ALL));
   return `/api/jobs?${out}`;
@@ -35,7 +32,7 @@ const PAGE = 50;
 /** What scopes the page and goes to the API: the project and the window. */
 export function renderScope(jobs, f = {}) {
   const repos = [...new Set(jobs.map((j) => j.repo).filter(Boolean))].sort();
-  return scopeBar(projectOf({ get: (k) => f[k] }), windowShown(f), repos);
+  return scope({ get: (k) => f[k] }).bar({ more: repos });
 }
 
 const ROLES = ACTORS.filter((a) => !["human", "rule", "gate", "check"].includes(a));
