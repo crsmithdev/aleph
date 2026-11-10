@@ -56,10 +56,11 @@
 
 <p class="sr" role="status" aria-live="polite" id="copied"></p>
 <script type="module">import { start } from "/router.js"; start();</script>
-<!-- The font picker and the annotations: copies of ~/aleph-tools (65aeec5). The picker stays; only Chris decides when it goes. -->
+<!-- The font picker, the annotations and the chat: copies of ~/aleph-tools (fb4f48d). The picker stays; only Chris decides when it goes. -->
 <script type="module">
   import { fontPicker, SANS, SERIF, MONO } from "/vendor/kit/font-picker.js";
   import { annotate, remote } from "/vendor/kit/annotate.js";
+  import { chat } from "/vendor/kit/chat.js";
   const role = (name, label, fonts, def, fallback, steps) => ({ name, label, fonts, default: def, fallback, steps });
   fontPicker({
     key: "aleph-fonts",
@@ -80,6 +81,8 @@
     headers: { "X-Aleph-UI": "1" },
     watch: (fn) => addEventListener("aleph:change", (e) => { if (e.detail.includes("/api/annotations")) fn(); }),
   }) });
+  // The chat agent (ui/api/chat.ts) gets the open notes of the page in view, named as annotate.js names a page.
+  chat({ headers: { "X-Aleph-UI": "1" }, context: () => ({ page: location.origin + location.pathname + (/^#!?\//.test(location.hash) ? location.hash : "") }) });
 </script>
 </body>
 </html>

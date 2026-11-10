@@ -9,7 +9,7 @@ This page is the standard for the names, IDs and status words that aleph shows a
 | Project | A repo in `~/.aleph/repos.json`. It has a unique `code` of 1 or 2 lower-case letters. |
 | Issue | One record in the work store: title, spec, status, priority and links. |
 | Link | A relation between two issues: `from` (split from), `after` or `related`. A hierarchy is a link, never part of an ID. |
-| Routine | Scheduled work with no issue, from a fixed list in code. The only routine is `monitor`. |
+| Routine | Work with no issue, from a fixed list in code: `monitor`, which runs on a schedule, and `chat`, one turn of the UI chat agent. |
 | Subject | What a job works on: an issue or a routine. |
 | Job | One attempt that the factory starts on a subject. It has a folder, a log, a cost and a state. |
 | Work state | The factory's state for one issue: branch, worktree, next step. It is stored in `~/.aleph/jobs/<issue>.json`. |
@@ -79,12 +79,12 @@ Every value is lower case, in storage and on the page. A word means one thing in
 | Action | yes | the job states; paused, red, after, full, gpu, busy, looping, starting, parent, parked, credit, protected, question, incomplete, capped, proposal; reran, filed, escalated, changed, answered |
 | Sub | yes | no-commit, timeout, stalled, infra, locked, credit, check, conflict, moved, review, unanswered, duplicate, met, manual, protected, question, intake, capped, override, error, rescue, local, starts, other |
 | Actor | yes | human, rule, gate, worker, reviewer, check, intake, director, monitor, firefighter |
-| Kind | yes, never shown | build, recheck, land, intake, director, monitor |
+| Kind | yes, never shown | build, recheck, land, intake, director, monitor, chat |
 | Stage | derived | new, queued, held, working, waiting, failed, landing, done, dropped, parked |
 | Report lane | derived | landed, waiting, failed, other |
 | Flow class | derived | landed, returned, failed, reran, dropped |
 
-`done` is a job that ended with no land: an intake, director or monitor job. `returned` is a job that a reviewer or a check sent back. `failed` is a job that broke.
+`done` is a job that ended with no land: an intake, director, monitor or chat job. `returned` is a job that a reviewer or a check sent back. `failed` is a job that broke.
 
 ### Old words
 

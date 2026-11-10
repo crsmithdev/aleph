@@ -19,17 +19,17 @@ export const SUBS = [
   "local", "starts",
 ];
 export const ACTORS = ["human", "rule", "gate", "worker", "reviewer", "check", "intake", "director", "monitor", "firefighter"];
-export const KINDS = ["build", "recheck", "land", "intake", "director", "monitor"];
+export const KINDS = ["build", "recheck", "land", "intake", "director", "monitor", "chat"];
 /** One display name for each pipeline step and agent role. */
 export const NAMES: Record<string, string> = {
   lead: "Lead Time", intake: "Intake", queue: "Queue", triage: "Triage", plan: "Plan", "spec-check": "Spec Check", build: "Build",
   review: "Review", recheck: "Recheck", land: "Land", worker: "Worker", planner: "Planner", merge: "Merge", reviewer: "Reviewer",
-  director: "Director", monitor: "Monitor", title: "Title", judge: "Judge",
+  director: "Director", monitor: "Monitor", chat: "Chat", title: "Title", judge: "Judge",
 };
 export const STAGES = ["new", "queued", "held", "working", "waiting", "failed", "landing", "done", "dropped", "parked"];
 export const LANES = ["landed", "waiting", "failed", "other"];
 export const SPEEDS = ["landed", "returned", "failed", "reran", "dropped"] as const;
-export const ROUTINES = ["monitor"];
+export const ROUTINES = ["monitor", "chat"];
 
 /** Old words, per set, that live code still writes or reads, and the new word each reads as. A word not listed is already new. */
 export const OLD: Record<string, Record<string, string>> = {

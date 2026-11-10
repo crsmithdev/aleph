@@ -15,7 +15,7 @@ import { logEvent } from "../infra/layout.ts";
 import { costDetails } from "../../../lib/pricing.ts";
 
 /** The roles that call `claude`. */
-export type AgentRole = "worker" | "reviewer" | "title" | "judge" | "intake" | "director" | "monitor";
+export type AgentRole = "worker" | "reviewer" | "title" | "judge" | "intake" | "director" | "monitor" | "chat";
 
 /** Why a call gave no usable reply, and its kind. */
 export interface AgentCause { kind: "stalled" | "timeout" | "credit" | "other"; reason: string }

@@ -17,7 +17,7 @@ import { parentOf, partsOf, readList } from "../../issues/lib/store.ts";
 import * as todos from "../../issues/lib/todo.ts";
 
 /** `id` is the run folder's name, the key of its logs; `job` is the job ID that the page shows, `a1375#6`. */
-interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
+interface RunInfo { id: string; job?: string; kind: "worker" | "land" | "review" | "plain" | "intake" | "director" | "monitor" | "chat"; condition: string; started: string; ended?: string; cost?: number; model?: string; reason?: string; wk?: Wk; logs?: LogFile[] }
 /** A log file of a run, with its size in bytes. */
 export interface LogFile { name: string; size: number }
 /** The log files the Job page serves, and no others. */
@@ -92,7 +92,7 @@ function fromStore(repo: string, id: number | string): Pick<JobDetail, "spec" | 
   return out;
 }
 
-const KIND = { build: "worker", recheck: "worker", land: "land", plain: "plain", intake: "intake", director: "director", monitor: "monitor" } as const;
+const KIND = { build: "worker", recheck: "worker", land: "land", plain: "plain", intake: "intake", director: "director", monitor: "monitor", chat: "chat" } as const;
 /** The actor a run belongs to, by its kind. */
 const RUN_ACTOR: Partial<Record<RunInfo["kind"], string>> = {
   worker: "worker", review: "reviewer", intake: "intake", director: "director", monitor: "monitor",
