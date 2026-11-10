@@ -22,7 +22,8 @@ import { factoryDir } from "../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../jobs/lib/infra/layout.ts";
 import { expand } from "../jobs/lib/records/ledger.ts";
 import { recordsDir } from "../jobs/lib/records/record.ts";
-import { reposFile } from "../jobs/lib/infra/settings.ts";
+import { handoffsDir, reposFile, vaultDir } from "../jobs/lib/infra/settings.ts";
+import { episodesDir } from "../jobs/lib/learning/episode.ts";
 import { fetchStore } from "../issues/lib/store.ts";
 import { build as workerBuild, type Answer, type Built } from "./build.ts";
 
@@ -33,6 +34,7 @@ export const POLL_MS = 30_000, SKILLS_EVERY = 4, FETCH_MS = 30_000, SWEEP_MS = 6
 export const KEYED = new Set([
   "/api/state", "/api/speed", "/api/gates", "/api/contents", "/api/issues", "/api/issues/:repo/:n", "/api/jobs", "/api/jobs/:name",
   "/api/agents", "/api/skills/:name", "/api/sessions/:id", "/api/sessions/:id/chat", "/api/sessions/:id/turns/:n",
+  "/api/memory", "/api/memory/search", "/api/memory/notes/:title", "/api/memory/files/:source/:key",
 ]);
 
 /** The key of a request: its path and its non-empty query parameters, sorted. */
@@ -226,10 +228,10 @@ let stops: (() => void)[] = [];
 /** Files of the event log that grew, for the `ev` stream (ui/api/events.ts). */
 export const eventFiles: ((file: string) => void)[] = [];
 
-function follow(dir: string, counts: (file: string) => boolean, source: string): void {
+function follow(dir: string, counts: (file: string) => boolean, source: string, recursive = false): void {
   if (!existsSync(dir)) return;
   let w: FSWatcher;
-  try { w = watch(dir, {}, (_e, f) => { if (f && counts(String(f))) updater.changed(source); }); }
+  try { w = watch(dir, { recursive }, (_e, f) => { if (f && counts(String(f))) updater.changed(source); }); }
   catch (e) { console.error(`ui/updater: cannot watch ${dir}: ${(e as Error).message}`); return; }
   w.on("error", (e) => console.error(`ui/updater: watch of ${dir} failed: ${e.message}`));
   stops.push(() => w.close());
@@ -239,6 +241,9 @@ function follow(dir: string, counts: (file: string) => boolean, source: string):
 export const countsInRecords = (file: string): boolean => file.endsWith(".json");
 /** The logs change on every line of output and the page does not show them; a temporary file is renamed into place, and the rename counts. */
 export const countsInFactory = (file: string): boolean => !file.endsWith(".log") && !file.endsWith(".tmp");
+
+/** A note, a daily note, MEMORY.md or the recall log counts; git, the search index and Obsidian's settings do not. */
+export const countsInVault = (file: string): boolean => !/^\.(git|index|obsidian)(\/|$)/.test(file) && (file.endsWith(".md") || /^\.recall(-log)?\.json(l)?$/.test(file));
 
 /** Watch the sources, poll Langfuse, fetch the store and sweep the keys until `stopUpdater`; with `restore`, build the saved keys. */
 export function startUpdater({ restore = true }: { restore?: boolean } = {}): void {
@@ -256,6 +261,9 @@ export function startUpdater({ restore = true }: { restore?: boolean } = {}): vo
     for (const tail of eventFiles) tail(f);
     return true;
   }, "events");
+  follow(vaultDir(), countsInVault, "vault", true);
+  follow(handoffsDir(), (f) => f.endsWith(".md"), "handoffs", true);
+  follow(episodesDir(), (f) => f.endsWith(".md"), "episodes");
   const every = (ms: number, f: () => unknown) => { const t = setInterval(f, ms); t.unref?.(); stops.push(() => clearInterval(t)); };
   every(POLL_MS, () => updater.poll());
   every(FETCH_MS, () => updater.fetchStore());

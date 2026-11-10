@@ -33,10 +33,16 @@ export function loader(env) {
   let shown = null, seq = 0, drawn = Promise.resolve(), pending = false, reloading = false, again = false, events = null, heardAt = 0;
   const read = new Set(); // the keys the shown view's loads returned
 
-  /** A GET for the shown view: its keys join the ones a `change` reloads it for. */
-  async function get(url) {
-    const route = shown, res = await env.fetch(url);
-    if (route === shown) for (const k of keysOf(res)) read.add(k);
+  const slots = new Map(); // a view's own load by name: the number of its newest call
+
+  /** A GET for the shown view: its keys join the ones a `change` reloads it for. With a `slot`, the answer is null when
+   * the route changed or a newer call of the same slot started meanwhile, so an older answer never draws. */
+  async function get(url, slot) {
+    const route = shown, mine = slot ? (slots.get(slot) ?? 0) + 1 : 0;
+    if (slot) slots.set(slot, mine);
+    const res = await env.fetch(url);
+    if (route !== shown || (slot && slots.get(slot) !== mine)) return slot ? null : res;
+    for (const k of keysOf(res)) read.add(k);
     return res;
   }
 
@@ -145,8 +151,9 @@ export function match(views, path, query) {
 
 let page = null;
 
-/** A view's own GET: through the page's loader, so a `change` of its keys reloads the view; a view a test mounts with no page fetches plainly. */
-export const get = (url) => (page ? page.get(url) : fetch(url, { cache: "no-store" }));
+/** A view's own GET: through the page's loader, so a `change` of its keys reloads the view, and with a `slot` an older
+ * answer comes back null. A view a test mounts with no page fetches plainly. */
+export const get = (url, slot) => (page ? page.get(url, slot) : fetch(url, { cache: "no-store" }));
 
 /** Wire the shell to the page and route to the hash. */
 export async function start() {

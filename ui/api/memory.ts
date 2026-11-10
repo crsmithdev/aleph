@@ -1,23 +1,24 @@
 /**
- * `GET /api/memory`, `/api/memory/search?q=`, `/api/memory/note?title=`, `/api/memory/file?source=&key=`: the Memory view.
- * `?project=<key>` keeps what `memoryIn` in ui/api/scope.ts puts in that project: its own notes and the global ones. The POST routes are its writes: a note goes through
- * `vault write`, `archive` or `delete`, so each is validated, committed and pushed; a handoff or an episode is a file.
+ * `GET /api/memory`, `/api/memory/search?q=`, `/api/memory/notes/:title`, `/api/memory/files/:source/:key`: the Memory view.
+ * `?project=<key>` keeps what `memoryIn` in ui/api/scope.ts puts in that project: its own notes and the global ones.
+ * The updater (ui/updater.ts) builds every GET in its Worker. The vault's notes, `vault misses` and the memory items are
+ * each read once and shared by every build until one of their sources changes; a search only filters and ranks the items.
+ * The POST routes are its writes: a note goes through `vault write`, `archive` or `delete`, so each is validated,
+ * committed and pushed; a handoff or an episode is a file. A write clears nothing: the updater's watchers see it.
  */
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { aleph, fail, post } from "../action.ts";
-import { staleAsync } from "../stale.ts";
 import { items, search as searchItems } from "../memory-items.ts";
 import { handoffsDir } from "../memory-types.ts";
 import { episodesDir } from "../../jobs/lib/learning/episode.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
-import { uiFetchTtl } from "../../issues/lib/store.ts";
-import { clearTypesCache, memoryTypes } from "../memory-types.ts";
+import { memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
 import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
-import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
+import { once } from "../../jobs/lib/infra/sources.ts";
 import { memoryIn } from "./scope.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
@@ -44,12 +45,12 @@ function homeSections(notes: Note[], keep: (n: Note) => boolean, project: string
   return project ? sections.filter((s) => s.entries.length) : sections;
 }
 
-/** The last 20 lines the vault's CLI appended to its daily notes, newest first. */
+/** The last 20 lines the vault's CLI appended to its daily notes, newest first; `at` is the line's local time as ISO UTC. */
 function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, project: string | null) {
   const dir = join(root, "daily");
   if (!existsSync(dir)) return [];
   const targets = linkTargets(notes);
-  const out: { date: string; time: string; text: string }[] = [];
+  const out: { at: string; text: string }[] = [];
   for (const f of readdirSync(dir).filter((f) => /^\d{4}-\d{2}-\d{2}\.md$/.test(f)).sort().reverse()) {
     const lines = readFileSync(join(dir, f), "utf8").split("\n").reverse();
     for (const l of lines) {
@@ -60,31 +61,20 @@ function recentWrites(root: string, notes: Note[], keep: (n: Note) => boolean, p
         const hit = t ? targets.get(t.toLowerCase()) : undefined;
         if (!hit || !keep(hit)) continue;
       }
-      out.push({ date: f.slice(0, 10), time: m[1], text: m[2] });
+      out.push({ at: new Date(`${f.slice(0, 10)}T${m[1]}`).toISOString(), text: m[2] });
       if (out.length === 20) return out;
     }
   }
   return out;
 }
 
-/** `vault misses --days 7`'s JSON with when it was fetched, or null when it fails (no Langfuse keys, offline). */
-async function misses(): Promise<{ value: unknown; cachedAt: string } | null> {
-  return missesCache.get("misses", uiCacheMs(), async () => {
-    const value = await runMisses();
-    return value == null ? null : { value, cachedAt: new Date().toISOString() };
-  });
-}
-
-/** Fills the misses cache; throws when `vault misses` fails. */
-export async function warm(): Promise<void> {
-  if (!(await misses())) throw new Error("memory warm-up: vault misses failed");
-}
-/** `vault misses` is slow (Langfuse), so its answer is kept `ALEPH_UI_CACHE_TTL` seconds (default 300; 0 turns it off); an older one is served while it reloads. */
-const missesCache = staleAsync<{ value: unknown; cachedAt: string } | null>();
-/** The vault's notes, reloaded at most every ALEPH_UI_FETCH_TTL seconds: a load stats every file, which is slow on /mnt/c. */
-const notes = staleAsync<Note[]>();
-const vaultNotes = (root: string): Promise<Note[]> => notes.get(root, uiFetchTtl() * 1000, () => loadVault(root));
-export const clearCache = () => { missesCache.clear(); notes.clear(); clearTypesCache(); };
+/** `vault misses --days 7`'s JSON, or null when it fails (no Langfuse keys, offline). It runs in a subprocess that reads
+ * Langfuse for about 45 s, so it declares the source `usage`: one run serves every build until the 10 min usage poll,
+ * and the 30 s Langfuse poll does not hold the build Worker with it. */
+const misses = (): Promise<unknown | null> => once("memory:misses", ["usage"], runMisses);
+/** The vault's notes, read once until a file in the vault changes or the UI writes: a page that wrote reads its write
+ * even when the watcher's event comes after its request. */
+const vaultNotes = (root: string): Promise<Note[]> => once(`memory:notes:${root}`, ["vault", "action"], () => loadVault(root));
 async function runMisses(): Promise<unknown | null> {
   try {
     const p = Bun.spawn(["bun", CLI, "misses", "--days", "7"], { env: process.env, stdout: "pipe", stderr: "ignore", timeout: 60_000 });
@@ -146,31 +136,40 @@ async function overview(url: URL): Promise<Response> {
   };
   body.notes = noteRows(wiki, root, lint.refuse);
   const m = await slow;
-  if (m) { body.misses = m.value; body.cachedAt = m.cachedAt; }
-  body.types = await memoryTypes(root, wiki, m?.value, all);
+  if (m) body.misses = m;
+  body.types = await memoryTypes(root, wiki, m, all);
   return json(body);
 }
 
-/** Every memory that matches `q`, of every type; all of them when `q` is empty. */
+/** The vault's notes, or none when it has no Home.md. */
+const allNotes = async (root: string) => (existsSync(join(root, "Home.md")) ? await vaultNotes(root) : []);
+
+/** Every memory item of every type, built once until one of its sources changes. */
+const ITEM_SOURCES = ["vault", "handoffs", "episodes", "usage", "store", "registry", "factory", "action"];
+async function memoryItems(root: string) {
+  return once(`memory:items:${root}`, ITEM_SOURCES, async () => {
+    const wiki = wikiNotes(await allNotes(root));
+    return { wiki, items: await items(root, wiki, readLog(root), await misses()) };
+  });
+}
+
+/** Every memory that matches `q`, of every type; all of them when `q` is empty. It filters and ranks the items only. */
 async function search(url: URL): Promise<Response> {
   const q = (url.searchParams.get("q") ?? "").trim();
   const project = url.searchParams.get("project") || null;
   const root = vaultDir();
-  const all = existsSync(join(root, "Home.md")) ? await vaultNotes(root) : [];
-  const wiki = wikiNotes(all);
-  const m = await misses();
-  return json({ q, results: searchItems(await items(root, wiki, readLog(root), m?.value), q, project, root, wiki) });
+  const { wiki, items: all } = await memoryItems(root);
+  return json({ q, results: searchItems(all, q, project, root, wiki) });
 }
 
-async function note(url: URL): Promise<Response> {
-  const title = (url.searchParams.get("title") ?? "").trim();
+async function note(raw: string, url: URL): Promise<Response> {
+  const title = raw.trim();
   const project = url.searchParams.get("project") || null;
-  const root = vaultDir();
-  const all = existsSync(join(root, "Home.md")) ? await vaultNotes(root) : [];
+  const all = await allNotes(vaultDir());
   const targets = linkTargets(all);
   const hit = title ? targets.get(title.toLowerCase()) : undefined;
   // Under a project filter, a note outside the project does not exist.
-  if (!hit || (project && scopeOf(hit) !== project)) return json({ error: `no note titled ${title || "(none)"}` }, 404);
+  if (!hit || !memoryIn(scopeOf(hit), project)) return json({ error: `no note titled ${title || "(none)"}` }, 404);
   const keep = inScope(project);
   const to = [...new Set(links(hit.body))].map((t) => targets.get(t.toLowerCase())).filter((n): n is Note => !!n && keep(n) && n !== hit);
   const from = all.filter((n) => n !== hit && keep(n) && !n.archived && links(n.body).some((t) => targets.get(t.toLowerCase()) === hit));
@@ -183,12 +182,7 @@ async function note(url: URL): Promise<Response> {
 const WHY = "edited on the Memory page";
 
 /** `vault <args>` through ui/action.ts. */
-async function vault(...args: string[]): Promise<unknown> {
-  try { return await aleph(args, { cli: "vault" }); } finally {
-    // The notes only: the misses cache stays, since reloading it waits on Langfuse.
-    notes.clear();
-  }
-}
+const vault = (...args: string[]): Promise<unknown> => aleph(args, { cli: "vault" });
 
 /** A note's text, rewritten by `change`, through `vault write`. */
 async function rewrite(title: string, change: (text: string) => string, why = WHY): Promise<unknown> {
@@ -228,9 +222,10 @@ export function withoutLink(text: string, target: string): string {
 }
 
 /** The body's fields as text: a boolean is "1" or "". */
-const strings = (b: object): Record<string, string> => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, typeof v === "boolean" ? (v ? "1" : "") : String(v ?? "")]));
+const strings = (b: object): Record<string, string> => Object.fromEntries(Object.entries(b ?? {}).map(([k, v]) => [k, typeof v === "boolean" ? (v ? "1" : "") : String(v ?? "")]));
 type Post = (b: Record<string, string>) => Promise<unknown>;
-const write = (f: Post) => post((b) => f(strings(b)));
+/** A write: the body's fields and the URL's (`title`, `source`, `key`); the URL's win. */
+const write = (f: Post) => post((b, params) => f({ ...strings(b), ...params }));
 
 /** The file a handoff, an episode or MEMORY.md is, or null for a key outside its folder. */
 function fileOf(source: string, key: string): string | null {
@@ -240,8 +235,8 @@ function fileOf(source: string, key: string): string | null {
   return null;
 }
 
-async function file(url: URL): Promise<Response> {
-  const path = fileOf(url.searchParams.get("source") ?? "", url.searchParams.get("key") ?? "");
+function file(source: string, key: string): Response {
+  const path = fileOf(source, key);
   return path && existsSync(path) ? json({ text: readFileSync(path, "utf8") }) : json({ error: "no such file" }, 404);
 }
 
@@ -265,14 +260,14 @@ const deleteFile: Post = async ({ source, key }) => {
 export const routes: Routes = {
   "GET /api/memory": (_req, _p, url) => overview(url),
   "GET /api/memory/search": (_req, _p, url) => search(url),
-  "GET /api/memory/note": (_req, _p, url) => note(url),
-  "GET /api/memory/file": (_req, _p, url) => file(url),
-  "POST /api/memory/note/edit": write(({ title, text }) => rewrite(title, () => text)),
-  "POST /api/memory/note/core": write(({ title, core }) => rewrite(title, (t) => withCore(t, core))),
-  "POST /api/memory/note/alias": write(async ({ title, alias }) => (alias.trim() ? rewrite(title, (t) => withAlias(t, alias.trim())) : fail(422, "no alias"))),
-  "POST /api/memory/note/link": write(({ title, target, unlink }) => rewrite(title, (t) => (unlink ? withoutLink(t, target) : withLink(t, target)))),
-  "POST /api/memory/note/archive": write(({ title, why }) => vault("archive", title, "--why", why || WHY)),
-  "POST /api/memory/note/delete": write(({ title, why }) => vault("delete", title, "--why", why || WHY)),
-  "POST /api/memory/file/edit": write(editFile),
-  "POST /api/memory/file/delete": write(deleteFile),
+  "GET /api/memory/notes/:title": (_req, { title }, url) => note(title, url),
+  "GET /api/memory/files/:source/:key": (_req, { source, key }) => file(source, key),
+  "POST /api/memory/notes/:title/edit": write(({ title, text }) => rewrite(title, () => text)),
+  "POST /api/memory/notes/:title/core": write(({ title, core }) => rewrite(title, (t) => withCore(t, core))),
+  "POST /api/memory/notes/:title/alias": write(async ({ title, alias }) => (alias?.trim() ? rewrite(title, (t) => withAlias(t, alias.trim())) : fail(422, "no alias"))),
+  "POST /api/memory/notes/:title/link": write(({ title, target, unlink }) => rewrite(title, (t) => (unlink ? withoutLink(t, target) : withLink(t, target)))),
+  "POST /api/memory/notes/:title/archive": write(({ title, why }) => vault("archive", title, "--why", why || WHY)),
+  "POST /api/memory/notes/:title/delete": write(({ title, why }) => vault("delete", title, "--why", why || WHY)),
+  "POST /api/memory/files/:source/:key/edit": write(editFile),
+  "POST /api/memory/files/:source/:key/delete": write(deleteFile),
 };

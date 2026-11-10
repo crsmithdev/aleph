@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
-import { clearCache, warm } from "./api/memory.ts";
+import { updater } from "./updater.ts";
 import { memoryTypes } from "./memory-types.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
@@ -22,6 +22,8 @@ afterAll(() => setSystemTime());
 
 let base: string, server: TestServer, stop: () => void, restoreEnv: () => void;
 const at = (p: string) => fetch(`http://127.0.0.1:${server.port}${p}`);
+/** Build the kept keys that read `source` again, as the watcher would after a write. */
+const fresh = async (source = "vault") => { updater.changed(source); await updater.flush(); };
 const today = new Date(NOW).toISOString().slice(0, 10);
 
 /** The registry: a project filter names a key in it, or it matches nothing. */
@@ -62,7 +64,6 @@ beforeAll(async () => {
   mkdirSync(join(base, "jobs"));
   const restoreStore = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_FACTORY_DIR: join(base, "factory") });
   restoreEnv = () => { restoreStore(); restoreVault(); restoreHandoffs(); };
-  clearCache();
   ({ server, stop } = await withServer());
 });
 afterAll(() => {
@@ -87,8 +88,8 @@ test("?project= keeps only that project's data", async () => {
   expect(s.results.filter((r: any) => r.source === "note").map((r: any) => r.title)).toEqual(["Other trap"]);
   // A rule or a skill is global: it is in every project.
   expect(s.results.every((r: any) => ["other", "global", ""].includes(r.scope))).toBe(true);
-  expect((await at("/api/memory/note?title=Use%20Bun&project=other")).status).toBe(404);
-  const n: any = await (await at("/api/memory/note?title=Other%20trap&project=other")).json();
+  expect((await at("/api/memory/notes/Use%20Bun?project=other")).status).toBe(404);
+  const n: any = await (await at("/api/memory/notes/Other%20trap?project=other")).json();
   expect(n.links).toEqual([]);  // Use Bun is another project's
 });
 
@@ -100,57 +101,63 @@ test("?project= with a key not in the registry shows no notes", async () => {
 });
 
 test("a note has its links and backlinks; a missing note is 404", async () => {
-  const n: any = await (await at("/api/memory/note?title=Use%20Bun")).json();
+  const n: any = await (await at("/api/memory/notes/Use%20Bun")).json();
   expect(n.frontmatter.kind).toBe("decision");
   expect(n.links.map((l: any) => l.title)).toEqual(["Other trap"]);
   expect(n.backlinks.map((l: any) => l.title)).toContain("Other trap");
   expect(n.backlinks.map((l: any) => l.title)).toContain("Home");
-  expect((await at("/api/memory/note?title=Nope")).status).toBe(404);
+  expect((await at("/api/memory/notes/Nope")).status).toBe(404);
 });
 
-test("warm() fills the misses cache, so the first request runs vault misses zero more times", async () => {
-  const bin = join(base, "bin-warm"), log = join(base, "calls-warm");
+test("one vault misses run serves the overview and every search until the usage poll", async () => {
+  const bin = join(base, "bin-once"), log = join(base, "calls-once");
   mkdirSync(bin);
   writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\necho '{"days":7,"recalls":3}'\n`);
   chmodSync(join(bin, "bun"), 0o755);
   const saveEnv = { PATH: process.env.PATH };
   process.env.PATH = `${bin}:${process.env.PATH}`;
-  clearCache();
+  updater.reset();
+  const runs = () => readFileSync(log, "utf8").trim().split("\n").length;
   try {
-    await warm();
-    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
     const a: any = await (await at("/api/memory")).json();
     expect(a.misses).toEqual({ days: 7, recalls: 3 });
-    expect(readFileSync(log, "utf8").trim().split("\n")).toHaveLength(1);
+    await at("/api/memory/search?q=bun");
+    await at("/api/memory/search?q=trap");
+    expect(runs()).toBe(1);
+    // vault misses reads Langfuse in its subprocess for ~45 s: the 10 min usage poll runs it again, and a vault change does not.
+    await fresh("vault");
+    expect(runs()).toBe(1);
+    await fresh("usage");
+    expect(runs()).toBe(2);
   } finally {
     process.env.PATH = saveEnv.PATH;
-    clearCache();
+    updater.reset();
   }
 });
 
 /** A stub `bun` that fails and logs each call, and a Langfuse that answers 500 and counts requests. */
-async function failing(name: string, ttl: string) {
+async function failing(name: string) {
   const bin = join(base, name), log = join(base, `${name}-calls`);
   mkdirSync(bin);
   writeFileSync(join(bin, "bun"), `#!/bin/sh\necho x >> ${log}\nexit 1\n`);
   chmodSync(join(bin, "bun"), 0o755);
   let requests = 0;
   const lf = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => { requests++; return new Response("boom", { status: 500 }); } });
-  const keys = ["PATH", "ALEPH_UI_CACHE_TTL", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"];
+  const keys = ["PATH", "LANGFUSE_BASE_URL", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"];
   const saveEnv = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
-  Object.assign(process.env, { PATH: `${bin}:${process.env.PATH}`, ALEPH_UI_CACHE_TTL: ttl, LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
-  clearCache();
+  Object.assign(process.env, { PATH: `${bin}:${process.env.PATH}`, LANGFUSE_BASE_URL: `http://127.0.0.1:${lf.port}`, LANGFUSE_PUBLIC_KEY: "pk", LANGFUSE_SECRET_KEY: "sk" });
+  updater.reset();
   const calls = () => { try { return readFileSync(log, "utf8").trim().split("\n").length; } catch { return 0; } };
   const done = () => {
     lf.stop(true);
     for (const [k, val] of Object.entries(saveEnv)) { if (val === undefined) delete process.env[k]; else process.env[k] = val; }
-    clearCache();
+    updater.reset();
   };
   return { calls, requests: () => requests, done };
 }
 
-test("failed loads are kept for the TTL: no second spawn, no second Langfuse request", async () => {
-  const f = await failing("bin-fail", "300");
+test("a failed load is kept until its source changes: no second spawn, no second Langfuse request", async () => {
+  const f = await failing("bin-fail");
   try {
     const a = await at("/api/memory");
     expect(a.status).toBe(200);
@@ -159,11 +166,12 @@ test("failed loads are kept for the TTL: no second spawn, no second Langfuse req
     expect(body.types.episodic.sessions).toBeNull();
     const seen = f.requests();
     expect(seen).toBeGreaterThan(0);
+    await at("/api/memory/search?q=bun");
+    await fresh("vault");
     const b = await at("/api/memory");
     expect(b.status).toBe(200);
     expect(f.calls()).toBe(1);
     expect(f.requests()).toBe(seen);
-    await expect(warm()).rejects.toThrow();
   } finally { f.done(); }
 });
 
@@ -179,6 +187,7 @@ test("a note's status: a refusal first, then recent, earlier, never", () => {
 test("/api/memory lists the notes with their read date, and a page search logs no read", async () => {
   const log = join(base, "vault", ".recall.json");
   writeFileSync(log, JSON.stringify({ "Use Bun": "2026-10-30" }));
+  await fresh();
   const m = await (await at("/api/memory")).json() as any;
   expect(m.notes.find((n: any) => n.title === "Use Bun")).toMatchObject({ read: "2026-10-30", problems: expect.any(Array) });
   expect(m.notes.some((n: any) => n.read === null)).toBe(true);
@@ -190,6 +199,7 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
   const log = join(base, "vault", ".recall-log.jsonl");
   const day = (n: number) => new Date(NOW - n * 86400_000).toISOString().slice(0, 10);
   writeFileSync(log, [day(0), day(0), day(3)].map((date) => JSON.stringify({ date, title: "Use Bun", query: "q" })).join("\n") + "\n");
+  await fresh();
   try {
     const m = await (await at("/api/memory")).json() as any;
     const bun = m.notes.find((n: any) => n.title === "Use Bun");
@@ -198,7 +208,7 @@ test("/api/memory gives each note its recall count per day over 30 days, and the
     expect(bun.history[26]).toBe(1);
     expect(bun.history.reduce((a: number, b: number) => a + b)).toBe(3);
     expect(m.notes.find((n: any) => n.title !== "Use Bun").history).toEqual(Array(30).fill(0));
-  } finally { rmSync(log, { force: true }); }
+  } finally { rmSync(log, { force: true }); await fresh(); }
   const n = { title: "N", path: "wiki/N.md", frontmatter: {}, body: "x", links: [], backlinks: [] };
   const hist = Array(30).fill(0); hist[29] = 2; hist[26] = 1;
   const note = { type: "semantic", source: "note", key: "N", title: "N", text: "", scope: "", at: "", read: null, effect: "" };
@@ -213,13 +223,13 @@ test("/api/memory lint gives no stale finding to an old note that the read log s
   const file = join(base, "vault", "wiki", "concepts", "Old idea.md");
   const log = join(base, "vault", ".recall.json");
   writeFileSync(file, `---\nkind: concept\nscope: aleph\nconfidence: measured\nupdated: 2025-01-01\nsupersedes: []\nsources: [trace:abc123]\n---\n**Claim.** Old.\n`);
-  const stale = async () => { clearCache(); return ((await (await at("/api/memory")).json() as any).lint.warn as any[]).filter((f) => f.rule === "stale" && f.note === "Old idea"); };
+  const stale = async () => { await fresh(); return ((await (await at("/api/memory")).json() as any).lint.warn as any[]).filter((f) => f.rule === "stale" && f.note === "Old idea"); };
   try {
     writeFileSync(log, JSON.stringify({ "Old idea": "2026-11-02" }));
     expect(await stale()).toEqual([]);
     writeFileSync(log, "{}");
     expect(await stale()).toHaveLength(1);
-  } finally { rmSync(file); rmSync(log, { force: true }); clearCache(); }
+  } finally { rmSync(file); rmSync(log, { force: true }); await fresh(); }
 });
 
 test("prospective issues carry their priority, medium when they have none", async () => {

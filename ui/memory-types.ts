@@ -14,13 +14,8 @@ import { activity } from "./activity.ts";
 import { skillsDir } from "./api/skills.ts";
 import { config, traces } from "./langfuse.ts";
 import { traceProject } from "./api/scope.ts";
-import { staleAsync } from "./stale.ts";
-import { handoffsDir as handoffsSetting, uiCacheMs } from "../jobs/lib/infra/settings.ts";
-
-/** Langfuse-backed loads, kept `ALEPH_UI_CACHE_TTL` seconds like `vault misses`; a failure is kept as an answer with no data (null). */
-const sessionsCache = staleAsync<Sessions | null>();
-const callsCache = staleAsync<Map<string, number> | null>();
-export const clearTypesCache = () => { sessionsCache.clear(); callsCache.clear(); };
+import { once } from "../jobs/lib/infra/sources.ts";
+import { handoffsDir as handoffsSetting } from "../jobs/lib/infra/settings.ts";
 
 const mtime = (p: string): string => { try { return statSync(p).mtime.toISOString(); } catch { return ""; } };
 const newest = (xs: (string | undefined | null)[]): string => xs.filter(Boolean).sort().at(-1) ?? "";
@@ -67,9 +62,10 @@ function semantic(root: string, wiki: Note[], all: Note[]) {
   };
 }
 
-/** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. */
+/** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. One read serves every build
+ * until the 10 min usage poll: Memory's Langfuse reads are slow, so they do not run on the 30 s Langfuse poll. */
 type Sessions = { id: string; project: string; firstPrompt: string; turns: number; last: string }[];
-export const sessions = (): Promise<Sessions | null> => sessionsCache.get("sessions", uiCacheMs(), loadSessions);
+export const sessions = (): Promise<Sessions | null> => once("memory:sessions", ["usage"], loadSessions);
 async function loadSessions(): Promise<Sessions | null> {
   if (!langfuseConfig()) return null;
   try {
@@ -105,7 +101,8 @@ export async function hooks() {
   const file = claudeSettings();
   let cfg: any = {};
   try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch {}
-  const counts = await callsCache.get("calls", uiCacheMs(), async () => {
+  // activity() reads Langfuse for about 100 s cold: the counts refresh with the usage poll, as `sessions` do.
+  const counts = await once("memory:calls", ["usage"], async () => {
     try {
       const a = await activity(7, null);
       return a.langfuse === "ok" ? new Map(a.hooks.map((h) => [h.name, h.calls] as const)) : null;

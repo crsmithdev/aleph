@@ -2,6 +2,7 @@
 // the results come grouped by type, each type in its own layout; the inspector shows the selected memory, how it
 // reaches the agent, when it was written and read, its links, and the writes it takes. Health is at the bottom.
 // `renderNote` serves #/memory/<title> too, from the `noteView` route exported in `views` at the bottom of this file.
+import { get } from "../router.js";
 import { actButton, codeText, priorityBadge, barList, barRow, card, crumb, day, empty, error, esc, filterBar, hashQuery, legendHtml, loadingLine, localMs, md, meter, moreFold, pageHead, pager, pct, postJson, say, searchBox, sectionHead, setQuery, statCard, tiles, when, wireScope, withProject } from "../lib.js";
 
 export const view = {
@@ -11,6 +12,7 @@ export const view = {
   group: "claude",
   order: 1,
   api: (_params, q = new URLSearchParams()) => withProject("/api/memory", q),
+  live: true,
   render: (m, _params, query) => renderMemory(m, options(query)),
   mount: (root, m) => mount(root, m),
 };
@@ -161,7 +163,7 @@ const links = (n) => `<h4>Links to</h4>${n.links?.length ? `<ul>${n.links.map((l
 const coreForm = (n) => `<label class="mform col"><span>Core line, in every ${esc(n.frontmatter?.scope ?? "")} session's start context</span>` +
   `<input name="core" value="${esc(n.frontmatter?.core ?? "")}" placeholder="None: the note is reached by recall only" maxlength="160"></label>${act("Save core line", "core")}`;
 
-/** The inspector for `it`; `n` is /api/memory/note's answer when `it` is a note, `hist` its recalls per day. */
+/** The inspector for `it`; `n` is /api/memory/notes/:title's answer when `it` is a note, `hist` its recalls per day. */
 export function renderInspector(it, n = null, status = "", hist = []) {
   if (!it) return `<p class="quiet">Select a memory to see what it says, how it reaches the agent and what you can change.</p>`;
   const fm = n?.frontmatter ?? {};
@@ -179,7 +181,7 @@ export function renderInspector(it, n = null, status = "", hist = []) {
 
 export function renderWrites(m) {
   return (m.writes.length
-    ? moreFold(m.writes, (w) => `${q(esc(when(`${w.date}T${w.time}`) || `${w.date} ${w.time}`))} ${md(w.text).replace(/^<p>|<\/p>$/g, "")}`)
+    ? moreFold(m.writes, (w) => `${q(esc(when(w.at) || w.at))} ${md(w.text).replace(/^<p>|<\/p>$/g, "")}`)
     : empty("No writes recorded.", "The vault CLI logs each write in the daily note."));
 }
 
@@ -245,26 +247,29 @@ export function renderMemory(m, o = options(), results = null) {
 
 let live = null;
 const here = () => options(hashQuery());
+/** The URL of one note, and of a handoff's, an episode's or MEMORY.md's text. */
+const noteUrl = (title, act = "") => `/api/memory/notes/${encodeURIComponent(title)}${act ? `/${act}` : ""}`;
+const fileUrl = (it, act = "") => `/api/memory/files/${encodeURIComponent(it.source)}/${encodeURIComponent(it.key)}${act ? `/${act}` : ""}`;
 
-/** True while the Memory page is the one shown: `root` is the shell's container, which stays when the route changes. */
-const shown = () => !!live?.root.querySelector(".page.memory");
+/** True while the Memory page is drawn: `root` is the shell's container, and its handlers outlive the page. Loads need
+ * no such check (the router drops an answer that comes after the route changed); a click and a typing pause do. */
+const onPage = () => !!live?.root.querySelector(".page.memory");
 
 function redraw() {
-  if (!shown()) return;
+  if (!onPage()) return;
   const o = here();
   live.root.querySelector("#mem-fresh").innerHTML = freshBar(o);
   live.root.querySelector("#mem-board").innerHTML = renderTiles(typeCounts(live.results ?? [], o, live.status), o, live.results !== null);
   live.root.querySelector("#mem-results").innerHTML = renderResults(live.results, o, live.status);
 }
 
-/** `/api/memory/search` for the query; a later query wins over a slower answer. */
+/** `/api/memory/search` for the query; the router drops an answer that a later query or another page made old. */
 async function search() {
-  const want = here().q;
   try {
-    const r = await (await fetch(withProject(`/api/memory/search?q=${encodeURIComponent(want)}`, hashQuery()), { cache: "no-store" })).json();
-    if (here().q !== want) return;
-    live.results = r.results ?? [];
-  } catch (e) { live.results = []; if (shown()) live.root.querySelector("#mem-results").innerHTML = error(`Could not search: ${e.message}`); return; }
+    const res = await get(withProject(`/api/memory/search?q=${encodeURIComponent(here().q)}`, hashQuery()), "mem-search");
+    if (!res) return;
+    live.results = (await res.json()).results ?? [];
+  } catch (e) { live.results = []; live.root.querySelector("#mem-results").innerHTML = error(`Could not search: ${e.message}`); return; }
   redraw();
   if (here().item) inspect(here().item);
 }
@@ -277,9 +282,9 @@ async function inspect(id) {
   if (it.source !== "note") { box.innerHTML = renderInspector(it); return; }
   box.innerHTML = loadingLine("the note");
   try {
-    const res = await fetch(`/api/memory/note?title=${encodeURIComponent(it.key)}`, { cache: "no-store" });
+    const res = await get(noteUrl(it.key), "mem-note");
+    if (!res) return;
     const n = await res.json();
-    if (here().item !== id) return;
     live.note = res.ok ? n : null;
     const row = live.m.notes?.find((x) => x.title === it.key);
     box.innerHTML = res.ok ? renderInspector(it, n, live.status.get(it.key), row?.history) : error(n.error ?? `answered ${res.status}`, "The note may have left the vault.");
@@ -292,7 +297,9 @@ const refresh = () => { live.results = null; redraw(); return search(); };
 /** The editor for the selected memory's whole text. */
 async function edit(btn, it) {
   const box = btn.closest(".ins").querySelector(".medit");
-  const text = it.source === "note" ? live.note?.text : (await (await fetch(`/api/memory/file?source=${encodeURIComponent(it.source)}&key=${encodeURIComponent(it.key)}`, { cache: "no-store" })).json()).text;
+  const res = it.source === "note" ? null : await get(fileUrl(it), "mem-file");
+  if (it.source !== "note" && !res) return;
+  const text = it.source === "note" ? live.note?.text : (await res.json()).text;
   box.innerHTML = `<label class="mform col"><span>The whole text${it.source === "note" ? ", frontmatter first. vault write checks it" : ""}</span><textarea name="text" rows="16" spellcheck="false">${esc(text ?? "")}</textarea></label>` +
     `<div class="macts">${act("Save", "save", { primary: true })}${act("Cancel", "cancel")}</div>`;
   box.hidden = false;
@@ -300,14 +307,14 @@ async function edit(btn, it) {
 }
 
 const WRITES = {
-  save: (it, f) => (it.source === "note" ? ["/api/memory/note/edit", { title: it.key, text: f.text }] : ["/api/memory/file/edit", { source: it.source, key: it.key, text: f.text }]),
-  core: (it, f) => ["/api/memory/note/core", { title: it.key, core: f.core }],
-  link: (it, f) => ["/api/memory/note/link", { title: it.key, target: f.target }],
-  unlink: (it, _f, b) => ["/api/memory/note/link", { title: it.key, target: b.dataset.target, unlink: true }],
-  archive: (it, f) => ["/api/memory/note/archive", { title: it.key, why: f.why }],
-  delete: (it, f) => ["/api/memory/note/delete", { title: it.key, why: f.why }],
-  "file-delete": (it) => ["/api/memory/file/delete", { source: it.source, key: it.key }],
-  alias: (it, f) => ["/api/memory/note/alias", { title: f.target, alias: it.title }],
+  save: (it, f) => (it.source === "note" ? [noteUrl(it.key, "edit"), { text: f.text }] : [fileUrl(it, "edit"), { text: f.text }]),
+  core: (it, f) => [noteUrl(it.key, "core"), { core: f.core }],
+  link: (it, f) => [noteUrl(it.key, "link"), { target: f.target }],
+  unlink: (it, _f, b) => [noteUrl(it.key, "link"), { target: b.dataset.target, unlink: true }],
+  archive: (it, f) => [noteUrl(it.key, "archive"), { why: f.why }],
+  delete: (it, f) => [noteUrl(it.key, "delete"), { why: f.why }],
+  "file-delete": (it) => [fileUrl(it, "delete"), {}],
+  alias: (it, f) => [noteUrl(f.target, "alias"), { alias: it.title }],
   drop: (it) => [`/api/issues/${it.key}/drop`, {}],
   approve: (it) => [`/api/approve/${encodeURIComponent(it.key)}`, {}],
   decline: (it) => [`/api/decline/${encodeURIComponent(it.key)}`, {}],
@@ -341,7 +348,7 @@ function mount(root, m) {
   root.oninput = (e) => {
     if (!e.target.matches?.('[data-ui="mem-search"]')) return;
     clearTimeout(timer);
-    timer = setTimeout(() => { if (!shown()) return; setQuery({ q: e.target.value }); live.results = null; redraw(); search(); }, 200);
+    timer = setTimeout(() => { if (!onPage()) return; setQuery({ q: e.target.value }); live.results = null; redraw(); search(); }, 200);
   };
   root.onclick = (e) => {
     const t = e.target;
@@ -391,7 +398,8 @@ export const noteView = {
   path: "/memory/:title",
   title: "Note",
   group: "claude",
-  api: (params) => `/api/memory/note?title=${encodeURIComponent(params.title)}`,
+  api: (params) => noteUrl(params.title),
+  live: true,
   render: (n) => renderNote(n),
 };
 export const views = [view, noteView];

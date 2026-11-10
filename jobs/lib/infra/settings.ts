@@ -11,6 +11,7 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs";
 import { availableParallelism, homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { layout } from "./layout.ts";
+import { touch } from "./sources.ts";
 
 const num = (name: string, dflt: number): number => Number(process.env[name] ?? dflt);
 
@@ -101,7 +102,6 @@ export const LOAD_LIMIT_DEFAULT = "cores";
 /** A check, a worker or a land starts only while the 1-minute load average is under this. */
 export const loadLimit = () => cap("ALEPH_LOAD_LIMIT", "loadLimit", availableParallelism());
 /** How long the UI keeps a computed read, 0 when off. */
-export const uiCacheMs = () => { const n = num("ALEPH_UI_CACHE_TTL", 300); return Number.isFinite(n) && n > 0 ? n * 1000 : 0; };
 
 export const dispatchOn = () => process.env.ALEPH_DISPATCH !== "off";
 /** The tick's daily monitor step; tests turn it off, as a tick there must not start the reader. */
@@ -112,11 +112,11 @@ export const workerCmd = () => process.env.ALEPH_WORKER_CMD ?? "claude";
 export const reviewerCmd = () => process.env.ALEPH_REVIEWER_CMD ?? workerCmd();
 
 /** The vault folder. */
-export function vaultDir(): string { return process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault"); }
+export function vaultDir(): string { touch("vault"); return process.env.ALEPH_VAULT ?? join(homedir(), ".aleph", "vault"); }
 /** The handoffs folder: beside the vault (the link, not its target) unless the environment names it. */
 /** Chris's log of what reached him and why: the director reads it, and code does not. */
 export const needsYouLog = (): string => process.env.ALEPH_NEEDS_YOU_LOG ?? join(dirname(resolve(vaultDir())), "needs-you-log.md");
-export const handoffsDir = (): string => process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), "handoffs");
+export const handoffsDir = (): string => { touch("handoffs"); return process.env.ALEPH_HANDOFFS_DIR ?? join(dirname(resolve(vaultDir())), "handoffs"); };
 
 /** The id of the job this process runs for, if any. */
 export const jobId = (): string | undefined => process.env.ALEPH_JOB_ID;
@@ -137,7 +137,6 @@ export const reposFile = () => process.env.ALEPH_REPOS ?? "~/.aleph/repos.json";
 export const uiPort = (): string => process.env.ALEPH_UI_PORT ?? "3020";
 export const startCmd = (): string | undefined => process.env.ALEPH_START_CMD;
 export const runEnvFile = (): string | undefined => process.env.ALEPH_RUN_ENV;
-export const uiFetchTtl = () => Number(process.env.ALEPH_UI_FETCH_TTL ?? 30);
 export const nowOverride = (): string | undefined => process.env.ALEPH_NOW;
 export const skillsDir = () => process.env.ALEPH_SKILLS_DIR ?? join(import.meta.dir, "..", "..", "..", "skills");
 /** The skills store. */

@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { withEnv, withServer } from "./test-server.ts";
-import { clearCache, withAlias, withCore, withLink, withoutLink } from "./api/memory.ts";
+import { withAlias, withCore, withLink, withoutLink } from "./api/memory.ts";
+import { updater } from "./updater.ts";
 
 // The Memory page's search and writes against a real vault: `vault init`, then notes through `vault write`.
 const CLI = join(import.meta.dir, "..", "vault", "cli.ts");
@@ -12,6 +13,8 @@ let base: string, vault: string, hand: string, eps: string, restore: () => void,
 let at: (p: string, init?: RequestInit) => Promise<Response>;
 const post = (p: string, b: unknown, headers: Record<string, string> = { "X-Aleph-UI": "1" }) =>
   at(p, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify(b) });
+const noteAt = (title: string, act = "") => `/api/memory/notes/${encodeURIComponent(title)}${act ? `/${act}` : ""}`;
+const fileAt = (source: string, key: string, act = "") => `/api/memory/files/${source}/${encodeURIComponent(key)}${act ? `/${act}` : ""}`;
 const noteFile = (kind: string, title: string) => readFileSync(join(vault, "wiki", kind, `${title}.md`), "utf8");
 const gitLog = () => Bun.spawnSync(["git", "-C", vault, "log", "--format=%s"], { stdout: "pipe" }).stdout.toString();
 
@@ -38,7 +41,6 @@ beforeAll(async () => {
   write("Land From The Main Checkout", body("A squash merge from inside the worktree lands nothing"));
   write("Worktree Serve Needs A Port", body("A worktree serve needs its own port", "[[Land From The Main Checkout]]"));
   write("Unrelated Fact", body("Bun runs the tests"), "decision");
-  clearCache();
   const s = await withServer();
   at = s.at; stop = s.stop;
 });
@@ -72,54 +74,69 @@ test("the text changes: core, alias, link and unlink", () => {
 
 test("a note's core line, alias and links are written through vault write and committed", async () => {
   const title = "Worktree Serve Needs A Port";
-  expect((await post("/api/memory/note/core", { title, core: "A worktree serve takes its own port." })).status).toBe(200);
+  expect((await post(noteAt(title, "core"), { core: "A worktree serve takes its own port." })).status).toBe(200);
   expect(noteFile("gotchas", title)).toContain("core: A worktree serve takes its own port.");
-  expect((await post("/api/memory/note/alias", { title, alias: "worktree port clash" })).status).toBe(200);
+  expect((await post(noteAt(title, "alias"), { alias: "worktree port clash" })).status).toBe(200);
   expect(noteFile("gotchas", title)).toContain("aliases: [worktree port clash]");
-  expect((await post("/api/memory/note/link", { title, target: "Unrelated Fact" })).status).toBe(200);
+  expect((await post(noteAt(title, "link"), { target: "Unrelated Fact" })).status).toBe(200);
   expect(noteFile("gotchas", title)).toContain("[[Unrelated Fact]]");
-  expect((await post("/api/memory/note/link", { title, target: "Land From The Main Checkout", unlink: true })).status).toBe(200);
+  expect((await post(noteAt(title, "link"), { target: "Land From The Main Checkout", unlink: true })).status).toBe(200);
   expect(noteFile("gotchas", title)).not.toContain("[[Land From The Main Checkout]]");
   expect(gitLog()).toContain(`write: ${title}`);
-  const n: any = await (await at(`/api/memory/note?title=${encodeURIComponent(title)}`)).json();
+  const n: any = await (await at(noteAt(title))).json();
   expect(n.text).toContain("core: A worktree serve takes its own port.");
 });
 
 test("an edit that vault write refuses changes nothing and says why", async () => {
   const title = "Unrelated Fact", before = noteFile("decisions", title);
-  const r = await post("/api/memory/note/edit", { title, text: before.replace(/^kind: decision$/m, "kind: nonsense") });
+  const r = await post(noteAt(title, "edit"), { text: before.replace(/^kind: decision$/m, "kind: nonsense") });
   expect(r.status).toBe(422);
   expect(((await r.json()) as any).error).toContain("refuse");
   expect(noteFile("decisions", title)).toBe(before);
-  expect((await post("/api/memory/note/edit", { title, text: before.replace("Bun runs the tests", "Bun runs every test") })).status).toBe(200);
+  expect((await post(noteAt(title, "edit"), { text: before.replace("Bun runs the tests", "Bun runs every test") })).status).toBe(200);
   expect(noteFile("decisions", title)).toContain("Bun runs every test");
 });
 
 test("delete refuses a note with a caller; archive and delete commit", async () => {
-  const r = await post("/api/memory/note/delete", { title: "Unrelated Fact" });
+  const r = await post(noteAt("Unrelated Fact", "delete"), {});
   expect(r.status).toBe(422);
   expect(((await r.json()) as any).error).toContain("inbound");
-  expect((await post("/api/memory/note/archive", { title: "Unrelated Fact", why: "over" })).status).toBe(200);
+  expect((await post(noteAt("Unrelated Fact", "archive"), { why: "over" })).status).toBe(200);
   expect(existsSync(join(vault, "archive", "Unrelated Fact.md"))).toBe(true);
-  expect((await post("/api/memory/note/delete", { title: "Land From The Main Checkout" })).status).toBe(200);
+  expect((await post(noteAt("Land From The Main Checkout", "delete"), {})).status).toBe(200);
   expect(existsSync(join(vault, "wiki", "gotchas", "Land From The Main Checkout.md"))).toBe(false);
   expect(gitLog()).toContain("delete: Land From The Main Checkout");
 });
 
 test("handoffs and episodes are edited and deleted as files; MEMORY.md through vault write; a key outside its folder is 404", async () => {
-  expect(((await (await at("/api/memory/file?source=handoff&key=current.md")).json()) as any).text).toContain("worktree serve");
-  expect((await post("/api/memory/file/edit", { source: "handoff", key: "current.md", text: "## Intent\n\nNew.\n" })).status).toBe(200);
+  expect(((await (await at(fileAt("handoff", "current.md"))).json()) as any).text).toContain("worktree serve");
+  expect((await post(fileAt("handoff", "current.md", "edit"), { text: "## Intent\n\nNew.\n" })).status).toBe(200);
   expect(readFileSync(join(hand, "current.md"), "utf8")).toBe("## Intent\n\nNew.\n");
-  expect((await post("/api/memory/file/delete", { source: "episode", key: "aleph-9 Port.md" })).status).toBe(200);
+  expect((await post(fileAt("episode", "aleph-9 Port.md", "delete"), {})).status).toBe(200);
   expect(existsSync(join(eps, "aleph-9 Port.md"))).toBe(false);
-  expect((await post("/api/memory/file/delete", { source: "handoff", key: "../vault/Home.md" })).status).toBe(404);
-  expect((await post("/api/memory/file/delete", { source: "memory-md", key: "MEMORY.md" })).status).toBe(404);
+  expect((await post(fileAt("handoff", "../vault/Home.md", "delete"), {})).status).toBe(404);
+  expect((await post(fileAt("memory-md", "MEMORY.md", "delete"), {})).status).toBe(404);
   const mem = readFileSync(join(vault, "MEMORY.md"), "utf8");
-  expect((await post("/api/memory/file/edit", { source: "memory-md", key: "MEMORY.md", text: `${mem}\n- Chris likes short answers.\n` })).status).toBe(200);
+  expect((await post(fileAt("memory-md", "MEMORY.md", "edit"), { text: `${mem}\n- Chris likes short answers.\n` })).status).toBe(200);
   expect(gitLog()).toContain("write: MEMORY");
 });
 
 test("a write without the UI header is forbidden", async () => {
-  expect((await post("/api/memory/note/archive", { title: "Worktree Serve Needs A Port" }, {})).status).toBe(403);
+  expect((await post(noteAt("Worktree Serve Needs A Port", "archive"), { }, {})).status).toBe(403);
   expect(existsSync(join(vault, "wiki", "gotchas", "Worktree Serve Needs A Port.md"))).toBe(true);
+});
+
+test("a vault write outside the UI: the watcher sees it, and change names the memory keys once they hold the new text", async () => {
+  const title = "Fresh From The CLI", key = noteAt(title);
+  await at("/api/memory");
+  expect((await at(key)).status).toBe(404);
+  const heard = new Promise<string[]>((ok) => updater.onChange((keys) => { if (keys.includes(key)) ok(keys); }));
+  write(title, body("The watcher sees a note the CLI writes"));
+  expect(await heard).toContain("/api/memory");
+  expect(((await (await at(key)).json()) as any).title).toBe(title);
+});
+
+test("the old Memory paths are gone", async () => {
+  expect((await at("/api/memory/note?title=Unrelated%20Fact")).status).toBe(404);
+  expect((await at("/api/memory/file?source=handoff&key=current.md")).status).toBe(404);
 });

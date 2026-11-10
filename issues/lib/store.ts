@@ -18,7 +18,6 @@ import * as issues from "./todo.ts";
 import { labels, parseItem, renderItem, status, type Doc, type Floor, type Issue } from "./todo.ts";
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { uiFetchTtl as fetchTtlSetting } from "../../jobs/lib/infra/settings.ts";
 
 export { labels };
 
@@ -38,12 +37,6 @@ const itemPath = (key: string, item: issues.Issue | string): string => `${tasksD
 
 /** The file that marks a repo as having a list in the store. */
 export const config = (key: string): string => `project_name: "${key}"\ntask_prefix: "${key}"\n`;
-
-/** Seconds the UI keeps the vault's notes ($ALEPH_UI_FETCH_TTL, default 30). */
-export function uiFetchTtl(): number {
-  const n = fetchTtlSetting();
-  return Number.isFinite(n) && n >= 0 ? n : 30;
-}
 
 let fetches = true;
 

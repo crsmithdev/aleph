@@ -97,18 +97,20 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.fetch = (u, o) => {
         if (!String(u).startsWith("/api/memory/search")) return f(u, o);
         window.__pending = true;
-        return gate.then(() => f(u, o)).then((res) => { const j = res.json.bind(res); res.json = () => j().then((x) => { window.__parsed = true; return x; }); return res; });
+        return gate.then(() => f(u, o)).then((res) => { window.__answered = true; return res; });
       };
       const i = document.querySelector("[data-ui=mem-search]");
-      i.value = "";  // the empty query: still the query after the reader leaves, so only the page check stops the redraw
+      i.value = "";  // the empty query: still the query after the reader leaves, so only the route check drops the answer
       i.dispatchEvent(new Event("input", { bubbles: true }));
     })()`);
     await page.when("window.__pending");
     await page.ev('location.hash = "#/issues"');
     await page.when('document.querySelector("#view h1")?.textContent === "Issues"');
     await page.ev("window.__release()");
-    await page.when("window.__parsed");
+    await page.when("window.__answered");
+    await page.ev("new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))"); // the dropped answer's handlers have run
     expect(page.errors).toEqual([]);
+    expect(await page.ev<string>('document.querySelector("#view h1")?.textContent')).toBe("Issues");
   }, 30_000);
 
   test("Automation: a log row's clamp button opens and closes the text from the keyboard", async () => {

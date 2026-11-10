@@ -84,6 +84,25 @@ test("a view's own GET adds its keys, and a new route forgets them", async () =>
   expect(p.router.keys).toEqual([]);
 });
 
+test("a view's own GET in a slot: an older answer, or one that comes after the route changed, is null", async () => {
+  const p = page();
+  const shown = p.router.show(p.route);
+  p.answer(0, {});
+  await shown;
+  const old = p.router.get("/api/memory/search?q=b", "search"), now = p.router.get("/api/memory/search?q=bu", "search");
+  p.answer(2, { q: "bu" }, "/api/memory/search?q=bu");
+  expect(await (await now).json()).toEqual({ q: "bu" });
+  p.answer(1, { q: "b" }, "/api/memory/search?q=b");
+  expect(await old).toBeNull();
+  expect(p.router.keys).toEqual(["/api/memory/search?q=bu"]);
+  const left = p.router.get("/api/memory/notes/N", "note");
+  const moved = p.router.show({ ...p.route });
+  p.answer(3, { title: "N" });
+  expect(await left).toBeNull();
+  p.answer(4, {});
+  await moved;
+});
+
 test("a change while an input has focus reloads after the focus ends", async () => {
   const p = page();
   const shown = p.router.show(p.route);

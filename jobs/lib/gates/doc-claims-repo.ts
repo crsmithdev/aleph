@@ -59,8 +59,6 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_FIX_ROUNDS: () => s.FIX_ROUNDS_DEFAULT,
   ALEPH_LAND_BATCH: () => s.LAND_BATCH_DEFAULT,
   ALEPH_LOAD_LIMIT: () => s.LOAD_LIMIT_DEFAULT,
-  ALEPH_UI_CACHE_TTL: plain("ALEPH_UI_CACHE_TTL", () => s.uiCacheMs() / 1000),
-  ALEPH_UI_FETCH_TTL: plain("ALEPH_UI_FETCH_TTL", s.uiFetchTtl),
   ALEPH_UI_PORT: plain("ALEPH_UI_PORT", s.uiPort),
   ALEPH_WORKER_CMD: plain("ALEPH_WORKER_CMD", s.workerCmd),
   ALEPH_REVIEWER_CMD: () => bare("ALEPH_REVIEWER_CMD", () => s.reviewerCmd() === "worker-sentinel" ? "the worker command" : s.reviewerCmd(), { ALEPH_WORKER_CMD: "worker-sentinel" }),

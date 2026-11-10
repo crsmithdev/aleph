@@ -13,12 +13,13 @@ import { partsOf, readList } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
 import { section } from "../../../issues/lib/todo.ts";
 import { factoryDir } from "../gates/factory-status.ts";
+import { touch } from "../infra/sources.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { allRuns, onOf, type Entry, type Repo } from "../records/ledger.ts";
 import { landedCommits, repoStages } from "../records/status.ts";
 
 export const KEEP_DAYS = 14;
-export const episodesDir = () => join(factoryDir(), "episodes");
+export const episodesDir = () => { touch("episodes"); return join(factoryDir(), "episodes"); };
 const today = () => new Date().toISOString().slice(0, 10);
 const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
