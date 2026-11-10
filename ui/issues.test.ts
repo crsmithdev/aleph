@@ -331,7 +331,7 @@ describe("views", () => {
       { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-21"), closedTime: iso("2026-10-30T12:00"), runs: 3, cost: 0.5, own: { runs: 3, cost: 0.5 } },
       { id: 3, repo: "f", title: "c", status: "dropped", labels: [], createdTime: iso("2026-10-26"), closedTime: iso("2026-10-25"), runs: 0, cost: 0 },
     ] });
-    expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 6, oldest: 12, runs: 5, cost: 1.5 });
+    expect(v.stats(rows, now)).toMatchObject({ total: 4, open: 2, stages: { new: 1, working: 1 }, filed: 2, filedBefore: 2, closed: 1, done: 1, dropped: 0, closedBefore: 1, medianAge: 0, oldest: 12, runs: 5, cost: 1.5 });
     const f = v.flow(rows, "month", now);
     expect(f.ats).toHaveLength(30);
     expect(lib.day(f.ats.at(-1), now)).toBe("Nov 01");
@@ -352,7 +352,7 @@ describe("views", () => {
     ], "month", new Date("2026-10-10T12:00"));
     expect(c.kinds).toEqual(["task", "bug", "check", "proposal", "flake"]);
     expect(c.p50).toEqual([4, 3, null, null, null]);
-    expect(c.p90[1]).toBeCloseTo(4.6);
+    expect(c.p90[1]).toBe(5);
     expect(v.flow(rows, "week", now).ats).toHaveLength(7);
     expect(lib.day(v.flow(rows, "week", now).ats.at(-1), now)).toBe("Nov 01");
     // The frame carries every bucket: the four priorities, then the filed and closed counts of the same buckets.
@@ -389,7 +389,8 @@ describe("views", () => {
     expect(lib.day(w.ats.at(-1), now)).toBe("Nov 04");
     expect(m.ats).toHaveLength(30);
     expect(v.closeTimes(rows, "week", now).p50[1]).toBe(24);
-    expect(v.closeTimes(rows, "month", now).p50[1]).toBe(3);
+    // A p50 is the nearest rank: of 1 and 5 days, the lower.
+    expect(v.closeTimes(rows, "month", now).p50[1]).toBe(1);
     const d = await getJson("/api/issues");
     const page = v.view.render(d, {}, new URLSearchParams("window=week"));
     expect(page).toContain("<h2>Open Backlog, Filed and Closed</h2>");
@@ -420,7 +421,7 @@ describe("views", () => {
       { status: "done", kind: "bug", createdTime: iso("2026-11-04T08:00"), closedTime: iso("2026-11-04T13:00") },
     ], "week", now);
     expect(c.unit).toBe("hours");
-    expect(c.p50[1]).toBe(4);
+    expect(c.p50[1]).toBe(3);
     const t = { muted: "#123456" };
     // The frame keeps the p50 and the p90 in seconds, so the axis formats them as a duration, and its note names the unit.
     expect(option(v.closeFrame({ ...c, unit: "days" }), "grouped", t).xAxis.axisLabel.formatter(4320)).toBe("1h 12m");
@@ -435,9 +436,9 @@ describe("views", () => {
       { id: 1, repo: "f", title: "a", status: "done", labels: [], createdTime: iso("2026-11-01"), closedTime: iso("2026-11-01"), runs: 0, cost: 0 },
       { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-10-28"), closedTime: iso("2026-10-28"), runs: 0, cost: 0 },
     ] });
-    expect(v.stats(rows, now, 1)).toMatchObject({ filed: 1, closed: 1 });
-    expect(v.stats(rows, now, 1 / 24)).toMatchObject({ filed: 0, closed: 0 });
-    expect(v.stats(rows, now, 7)).toMatchObject({ filed: 2, closed: 2 });
+    expect(v.stats(rows, now, "day")).toMatchObject({ filed: 1, closed: 1 });
+    expect(v.stats(rows, now, "hour")).toMatchObject({ filed: 0, closed: 0 });
+    expect(v.stats(rows, now, "week")).toMatchObject({ filed: 2, closed: 2 });
     // The table under a Filed or Closed tile follows the window too; the test's clock is NOW, 2026-11-04.
     const recent = v.issueRows({ issues: ["2026-11-04", "2026-11-01"].map((d, i) => ({ id: i, repo: "f", title: "t", status: "done", labels: [], createdTime: iso(d), closedTime: iso(d), runs: 0, cost: 0 })) });
     for (const tile of ["filed", "closed"]) {
@@ -445,14 +446,14 @@ describe("views", () => {
       expect(v.filterRows(recent, { tile, window: "day" })).toHaveLength(1);
       expect(v.filterRows(recent, { tile, window: "week" })).toHaveLength(2);
     }
-    const html = v.renderTiles(v.stats(rows, now, 1), "open", "day");
+    const html = v.renderTiles(v.stats(rows, now, "day"), "open", "day");
     for (const k of ["Filed", "Closed", "Open Age"]) expect(html).toContain(`>${k}<`);
     for (const k of ["Filed, last", "Closed, last", "Median open age"]) expect(html).not.toContain(k);
     expect(html).toContain("<span>open</span><span class=\"m\"> / in store</span>");
-    const bare = v.renderTiles({ ...v.stats(rows, now, 1), medianAge: null, oldest: null, runs: undefined, cost: undefined } as any, "open", "day");
+    const bare = v.renderTiles({ ...v.stats(rows, now, "day"), medianAge: null, oldest: null, runs: undefined, cost: undefined } as any, "open", "day");
     expect(bare).not.toMatch(/undefined|NaN/);
     expect(bare).toContain("<b>–</b>");
-    const up = v.renderTiles({ ...v.stats(rows, now, 1), filed: 3, filedBefore: 1, closed: 3, closedBefore: 1, medianAge: 2, oldest: 5 }, "open", "day");
+    const up = v.renderTiles({ ...v.stats(rows, now, "day"), filed: 3, filedBefore: 1, closed: 3, closedBefore: 1, medianAge: 2, oldest: 5 }, "open", "day");
     expect(up).toContain("<span>open age</span><span class=\"m\"> / oldest</span>");
     expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Closed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bgood\b/);
     expect(up.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Filed[\s\S]*?<\/button>/)![0]).toMatch(/class="[^"]*\bwarn\b/);
@@ -858,8 +859,8 @@ describe("exact times in the Hour window", () => {
       { id: 2, repo: "f", title: "b", status: "done", labels: [], createdTime: iso("2026-11-04T09:00"), closedTime: iso("2026-11-04T08:00"), runs: 0, cost: 0 },
       { id: 3, repo: "f", title: "c", status: "done", labels: [], createdTime: iso("2026-11-04"), closedTime: iso("2026-11-04"), runs: 0, cost: 0 },
     ] });
-    expect(v.stats(rows, now, 1 / 24)).toMatchObject({ filed: 1, closed: 1 });
-    expect(v.stats(rows, now, 1)).toMatchObject({ filed: 3, closed: 3 });
+    expect(v.stats(rows, now, "hour")).toMatchObject({ filed: 1, closed: 1 });
+    expect(v.stats(rows, now, "day")).toMatchObject({ filed: 3, closed: 3 });
   });
 });
 

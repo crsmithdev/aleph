@@ -1,14 +1,14 @@
 // What the Status pages share: formats, the /api/flow load, the merged causes, tiles and the usage pace.
 import { get } from "../router.js";
 import { count, cardTrend, empty, meter, day, dur, hourLabel, esc, hours, pct, statCard, when, scope } from "../lib.js";
+import { BUCKETS } from "../../lib/windows.ts";
 
 export const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 /** The period an answer covers, in words. */
-export const period = (d) => PERIODS[d?.window] ?? PERIODS.week;
-const PERIODS = { hour: "hour", day: "24 hours", week: "7 days", month: "30 days" };
+export const period = (d) => (d?.window === "hour" ? "hour" : plural(BUCKETS[d?.window]?.n ?? 7, bucketOf(d)));
 /** The bucket of a window: a minute, an hour or a day. */
-export const bucketOf = (d) => ({ hour: "minute", day: "hour" })[d?.window] ?? "day";
+export const bucketOf = (d) => BUCKETS[d?.window]?.name ?? "day";
 /** The last 24 hours are a different span from the window only in week and month. */
 export const trendOn = (d) => d?.window === "week" || d?.window === "month" || !d?.window;
 /** "last 7 days": the span as the page says it. */

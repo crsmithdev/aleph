@@ -18,6 +18,7 @@ import { causeOf } from "../records/outcome.ts";
 import { usageFileSetting } from "../infra/settings.ts";
 import { flakeTracker, reader, storeDir, type Reader } from "../../../issues/lib/store.ts";
 import * as issues from "../../../issues/lib/todo.ts";
+import { quantile } from "../../../lib/windows.ts";
 
 const DAY = 24 * 3600_000;
 
@@ -107,15 +108,6 @@ export function addDays(day: string, n: number): string {
 }
 
 
-const median = (xs: number[]): number | null => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b), k = Math.floor(s.length / 2);
-  return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2;
-};
-
-/** The nearest-rank 90th percentile of `xs`, as `pct` in ui/api/speed.ts gives it; null for none. */
-const p90 = (xs: number[]): number | null => (xs.length ? [...xs].sort((a, b) => a - b)[Math.ceil(0.9 * xs.length) - 1] : null);
-
 const inside = (iso: string | undefined, from: number, to: number): boolean => {
   const t = Date.parse(iso ?? "");
   return t >= from && t < to;
@@ -165,8 +157,8 @@ export function stageRows(src: Pick<Sources, "runs" | "specChecks">, from: numbe
     s.cost = (s.cost ?? 0) + c.cost;
   }
   return STAGES.filter((k) => by.has(k)).map((stage) => {
-    const s = by.get(stage)!, med = median(s.secs);
-    return { stage, runs: s.runs, items: s.items.size, unusable: s.unusable, cost: s.cost, minutes: med === null ? null : med / 60, p90: p90(s.secs) };
+    const s = by.get(stage)!, med = quantile(s.secs, 0.5);
+    return { stage, runs: s.runs, items: s.items.size, unusable: s.unusable, cost: s.cost, minutes: med === null ? null : med / 60, p90: quantile(s.secs, 0.9) };
   });
 }
 

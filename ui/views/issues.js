@@ -2,7 +2,7 @@
 // table and a form that files an issue. `data` is /api/issues: { issues, projects, tests }.
 // The issue detail (renderIssue) is routed at #/issues/:repo/:n.
 import { actButton, issueApi, issueHref, jobHref, postJson, say, count, days, barList, barRow, blockersHtml, badge, tag, priorityBadge, card, chip, chips, crumb, dataTable, heads, pagedTable, day, dur, empty, esc, filterBar, idLink, labelName, localId, localMs, md, money, onTile, pageHead, pager, projectKeysOnce, searchBox, setQuery as setHash, hashQuery, limitOf, sortRows as sortBy, wireTable, cardTrend, sortHead, statCard, tiles, when, scope, remember } from "../lib.js";
-import { FACTORY, WINDOWS } from "../../lib/windows.ts";
+import { buckets, DAY, FACTORY, quantile } from "../../lib/windows.ts";
 import { panelOf } from "../chart.js";
 import { shortId } from "../../lib/naming.ts";
 import { askCard } from "./cards.js";
@@ -51,8 +51,8 @@ const own = (r) => r.ref ?? r.id;
 export const ref = (r) => `${r.repo}-${own(r)}`;
 export const href = (r) => issueHref(ref(r));
 
-const DAY = 86_400_000;
-const WINDOW_DAYS = Object.fromEntries(FACTORY.map((w) => [w, WINDOWS[w] / DAY]));
+/** A Factory window, or week for any other value. */
+const winOf = (w) => (FACTORY.includes(w) ? w : "week");
 const ms = (s) => Date.parse(s) || 0;
 /** A store date `YYYY-MM-DD` as local midnight in ms, as the CLI writes it; 0 for none. */
 /** An ISO UTC time from the store as ms; 0 for none. */
@@ -143,9 +143,8 @@ function markHits(title, hits = []) {
 /** The rows that pass every filter but the ones named in `skip`, each with its search `score` and `hits`. */
 export function filterRows(rows, o = {}, skip = []) {
   const want = (k, v) => skip.includes(k) || !o[k] || v === o[k];
-  const q = (o.q ?? "").trim(), now = new Date(), end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[o.window] ?? 7)) * DAY;
-  const at = inSpan(now.getTime(), WINDOW_DAYS[o.window] ?? 7);
-  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? at(r.createdTime, 0, from, end) : o.tile === "closed" ? CLOSED.includes(r.status) && at(r.closedTime, 0, from, end) : true);
+  const q = (o.q ?? "").trim(), at = within(buckets(winOf(o.window), Date.now()));
+  const inTile = (r) => skip.includes("tile") || (o.tile === "filed" ? at(r.createdTime) : o.tile === "closed" ? CLOSED.includes(r.status) && at(r.closedTime) : true);
   return rows.flatMap((r) => {
     if (!inTile(r)) return [];
     if (!want("status", r.status) || !want("project", r.project) || !want("stage", r.stage) || !want("priority", r.priority)) return [];
@@ -223,33 +222,25 @@ export function renderTable(rows, o = {}) {
 
 // ---- The tiles and charts ----
 
-const median = (xs) => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-};
-/** For the hour window a time counts `k` hours-windows back from `now`; for longer windows, inside `from` to `to`. */
-const inSpan = (now, days) => (time, k, from, to) => {
-  const t = isoMs(time), span = Math.round(days * DAY);
-  return days < 1 ? t > now - (k + 1) * span && t <= now - k * span : t >= from && t < to;
-};
+/** Whether a stored time is inside the span of `b`, the buckets of a window. */
+const within = (b) => (time) => { const t = isoMs(time); return t >= b.since && t < b.until; };
 
 /** The numbers over `rows`: what the status and stage filters leave out still counts here, so the tiles do not empty when the table narrows. */
-export function stats(rows, now = new Date(), days = 7) {
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), end = today + DAY;
-  // The store keeps whole dates, so the window is whole days back from tonight, at least today.
-  const span = Math.max(1, Math.ceil(days)) * DAY, week = end - span, before = week - span, at = inSpan(now.getTime(), days);
+export function stats(rows, now = new Date(), window = "week") {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), b = buckets(window, now.getTime());
+  // `at` is the window; `prior` is the window before it.
+  const at = within(b), prior = within(buckets(window, b.since - 1));
   const open = rows.filter((r) => r.status === "open");
   const ages = open.map((r) => isoMs(r.createdTime)).filter(Boolean).map((t) => (today - t) / DAY);
-  const closedIn = (k, from, to) => rows.filter((r) => CLOSED.includes(r.status) && at(r.closedTime, k, from, to));
-  const closed = closedIn(0, week, end);
+  const closedIn = (inside) => rows.filter((r) => CLOSED.includes(r.status) && inside(r.closedTime));
+  const closed = closedIn(at);
   const stages = {};
   for (const r of open) stages[r.stage] = (stages[r.stage] ?? 0) + 1;
   return {
     total: rows.length, open: open.length, stages,
-    filed: rows.filter((r) => at(r.createdTime, 0, week, end)).length, filedBefore: rows.filter((r) => at(r.createdTime, 1, before, week)).length,
-    closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(1, before, week).length,
-    medianAge: median(ages), oldest: ages.length ? Math.max(...ages) : null,
+    filed: rows.filter((r) => at(r.createdTime)).length, filedBefore: rows.filter((r) => prior(r.createdTime)).length,
+    closed: closed.length, done: closed.filter((r) => r.status === "done").length, dropped: closed.filter((r) => r.status === "dropped").length, closedBefore: closedIn(prior).length,
+    medianAge: quantile(ages, 0.5), oldest: ages.length ? Math.max(...ages) : null,
     runs: rows.reduce((n, r) => n + r.own.runs, 0), cost: rows.reduce((n, r) => n + r.own.cost, 0),
   };
 }
@@ -258,7 +249,7 @@ export function stats(rows, now = new Date(), days = 7) {
 const change = (now, before, w, lowerIsGood) => cardTrend(now, before, before, { kind: "relative", lowerIsGood, tip: `${before} the ${w} before` });
 
 export function renderTiles(s, key = "open", win = "week") {
-  const w = win in WINDOW_DAYS ? win : "week";
+  const w = winOf(win);
   const on = (k) => ({ key: k, on: key === k });
   return tiles("Issue numbers",
     statCard({ k: "Open", v: count(s.open), v2: count(s.total), q: ["open", "in store"], ...on("open") }) +
@@ -270,48 +261,33 @@ export function renderTiles(s, key = "open", win = "week") {
 
 /** The window's buckets (60 minutes, 24 hours, 7 or 30 days): the time of each and how many rows were filed and closed in it. A stored time counts to its minute. */
 export function flow(rows, window = "month", now = new Date()) {
-  const unit = { hour: 60000, day: 3600000 }[window], n = { hour: 60, day: 24, week: 7 }[window] ?? 30;
-  const edge = (i) => unit ? Math.floor(now.getTime() / unit) * unit - i * unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i).getTime();
-  const out = { ats: [], filed: [], closed: [] };
-  for (let i = n - 1; i >= 0; i--) {
-    const from = edge(i), to = unit ? from + unit : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i + 1).getTime();
-    out.ats.push(from);
-    out.filed.push(rows.filter((r) => { const t = isoMs(r.createdTime); return t >= from && t < to; }).length);
-    out.closed.push(rows.filter((r) => { const t = isoMs(r.closedTime); return CLOSED.includes(r.status) && t >= from && t < to; }).length);
+  const b = buckets(window, now.getTime()), out = { ats: b.starts, filed: b.starts.map(() => 0), closed: b.starts.map(() => 0) };
+  for (const r of rows) {
+    const f = b.slotOf(isoMs(r.createdTime)), c = b.slotOf(isoMs(r.closedTime));
+    if (f >= 0) out.filed[f]++;
+    if (c >= 0 && CLOSED.includes(r.status)) out.closed[c]++;
   }
   return out;
 }
 
 const PRIORITY_ORDER = ["low", "medium", "high", "critical"];
-/** The window's buckets: how many rows were open in each, per priority. Hour is 60 minutes and day is 24 hours, sampled at each bucket's end; week and month are days. A row is open from its created time to its closed time. */
+/** The window's buckets: how many rows were open at the start of each, per priority. A row is open from its created time to its closed time. */
 export function backlog(rows, win = "month", now = new Date()) {
-  const ats = [], counts = Object.fromEntries(PRIORITY_ORDER.map((p) => [p, []]));
-  const fine = { hour: [60, 60_000], day: [24, 3_600_000] }[win];
-  const [n, step] = fine ?? [WINDOW_DAYS[win], DAY];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = fine ? new Date(now.getTime() - i * step) : new Date(now.getFullYear(), now.getMonth(), now.getDate() - i), t = d.getTime();
-    ats.push(t);
-    for (const p of PRIORITY_ORDER) counts[p].push(rows.filter((r) => {
-      if (r.priority !== p) return false;
-      const from = isoMs(r.createdTime), to = isoMs(r.closedTime);
-      return from && from <= t && (!to || t < to);
-    }).length);
-  }
-  return { ats, counts };
+  const ats = buckets(win, now.getTime()).starts;
+  const open = (p, t) => rows.filter((r) => {
+    if (r.priority !== p) return false;
+    const from = isoMs(r.createdTime), to = isoMs(r.closedTime);
+    return from && from <= t && (!to || t < to);
+  }).length;
+  return { ats, counts: Object.fromEntries(PRIORITY_ORDER.map((p) => [p, ats.map((t) => open(p, t))])) };
 }
 
 const KINDS = ["task", "bug", "check", "proposal", "flake"];
-/** The p-th share (0 to 1) of `xs`, by linear interpolation; null for none. */
-const quantile = (xs, p) => {
-  if (!xs.length) return null;
-  const s = [...xs].sort((a, b) => a - b), at = (s.length - 1) * p, lo = Math.floor(at);
-  return s[lo] + (s[Math.ceil(at)] - s[lo]) * (at - lo);
-};
 /** For each kind, the p50 and p90 from created to closed over the rows closed inside the window; null for a kind with none. `unit` is "hours" when a row counts and every value is under 2 days; else "days". */
 export function closeTimes(rows, win = "month", now = new Date()) {
   const out = { kinds: KINDS, unit: "days", p50: [], p90: [] };
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() + DAY, from = end - Math.max(1, Math.ceil(WINDOW_DAYS[win])) * DAY, at = inSpan(now.getTime(), WINDOW_DAYS[win]);
-  const spans = KINDS.map((k) => rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && isoMs(r.createdTime) && isoMs(r.closedTime) && at(r.closedTime, 0, from, end)).map((r) => isoMs(r.closedTime) - isoMs(r.createdTime)));
+  const at = within(buckets(win, now.getTime()));
+  const spans = KINDS.map((k) => rows.filter((r) => r.kind === k && CLOSED.includes(r.status) && isoMs(r.createdTime) && isoMs(r.closedTime) && at(r.closedTime)).map((r) => isoMs(r.closedTime) - isoMs(r.createdTime)));
   const hours = spans.flat().length > 0 && spans.flat().every((ms) => ms < 2 * DAY);
   if (hours) out.unit = "hours";
   for (const xs of spans) {
@@ -334,13 +310,13 @@ export const backlogFrame = (b, f, win) => ({
 
 /** The suite records of `tests` ({ project: records }) of `project` (all when empty) within the window: one row per run time, the test count of each project and the tests that passed only on rerun. */
 export function testsFrame(tests, project = "", win = "month", now = new Date()) {
-  const from = now.getTime() - WINDOW_DAYS[win in WINDOW_DAYS ? win : "week"] * 86400000, keys = [], rows = new Map();
+  const at = within(buckets(winOf(win), now.getTime())), keys = [], rows = new Map();
   for (const [k, records] of Object.entries(tests ?? {})) {
     if (project && k !== project) continue;
     keys.push({ key: `${k} tests`, name: `${k} tests` }, { key: `${k} passed on rerun`, name: `${k} passed on rerun` });
     for (const r of records) {
       const t = Date.parse(r.at);
-      if (!(t >= from && t <= now.getTime())) continue;
+      if (!at(r.at)) continue;
       const row = rows.get(t) ?? { at: t };
       row[`${k} tests`] = r.ran;
       row[`${k} passed on rerun`] = r.rerunPassed;
@@ -389,7 +365,7 @@ function renderDetail(rows, o) {
 
 /** The three chart panels under the tiles, on every tile. The backlog and the Tests charts take two columns. */
 const renderCharts = (o, rows, tests) => {
-  const win = o.window in WINDOW_DAYS ? o.window : "week", now = new Date();
+  const win = winOf(o.window), now = new Date();
   return `<div class="trio">${panelOf(chartKey("backlog"), backlogFrame(backlog(rows, win, now), flow(rows, win, now), win), "wide")}` +
     panelOf(chartKey("close"), closeFrame(closeTimes(rows, win, now))) +
     panelOf(chartKey("tests"), testsFrame(tests, o.project, win, now), "wide") + `</div>`;
@@ -425,10 +401,10 @@ function renderLive(projects, rows, o, tests) {
   return {
     scope: renderProjects(projects, rows, o),
     filters: renderFilters(rows, o),
-    numbers: renderTiles(stats(scoped, new Date(), WINDOW_DAYS[o.window] ?? 7), o.tile, o.window),
+    numbers: renderTiles(stats(scoped, new Date(), winOf(o.window)), o.tile, o.window),
     detail: renderCharts(o, scoped, tests) + renderDetail(scoped, o),
     count: shown,
-    window: `last ${o.window in WINDOW_DAYS ? o.window : "week"}`,
+    window: `last ${winOf(o.window)}`,
     table: renderTable(rows, o),
   };
 }

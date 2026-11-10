@@ -20,9 +20,9 @@ import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
 import { clip, issueHref, NAMES, parseId, SPEEDS, tail } from "../../lib/naming.ts";
 import { inProject, repoIn, scopeOf } from "./scope.ts";
-import type { Window } from "../../lib/windows.ts";
+import { BUCKETS, buckets, quantile, WINDOWS, type Window } from "../../lib/windows.ts";
 
-const HOUR = 3600_000, DAY = 24 * HOUR;
+const HOUR = 3600_000;
 
 /** The repo and the ref inside it of a whole issue key: `aleph-1359.1` is `aleph` and `1359.1`; "" and "" for any other text. */
 const splitId = (s: string): [string, string] => {
@@ -148,14 +148,8 @@ interface ClassStat extends Measure {
   top: (Omit<Measure, "week"> & { goal: string; title?: string; href?: string; reason: string })[];
 }
 
-/** The nearest-rank percentile `p` (0..1) of `xs`; 0 for none. */
-export function pct(xs: number[], p: number): number {
-  if (!xs.length) return 0;
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.max(0, Math.ceil(p * s.length) - 1)];
-}
 const round = (n: number, d = 0) => { const k = 10 ** d; return Math.round(n * k) / k; };
-const stat = (xs: number[]): Pct => ({ count: xs.length, p50: round(pct(xs, 0.5)), p90: round(pct(xs, 0.9)) });
+const stat = (xs: number[]): Pct => ({ count: xs.length, p50: round(quantile(xs, 0.5) ?? 0), p90: round(quantile(xs, 0.9) ?? 0) });
 const HIST_EDGES = [60, 300, 900, 1800, 3600, 14400];
 const histOf = (xs: number[]): number[] => {
   const h = new Array(HIST_EDGES.length + 1).fill(0);
@@ -164,9 +158,6 @@ const histOf = (xs: number[]): number[] => {
 };
 const phaseStat = (xs: number[]): PhaseStat => ({ ...stat(xs), hist: histOf(xs), worst: xs.length ? round(Math.max(...xs)) : 0 });
 const isTests = (name: string) => /^tests?$/.test(name);
-
-const STEP: Record<Window, number> = { hour: 60_000, day: HOUR, week: DAY, month: DAY };
-const COUNT: Record<Window, number> = { hour: 60, day: 24, week: 7, month: 30 };
 
 const HOUR_MS = HOUR;
 const passedState = (st: string) => st === "passed" || st === "landed" || st === "done";
@@ -421,7 +412,7 @@ function outcomeRows(entries: Entry[], since: number, now: number): OutcomeRow[]
   return [...rows.values()].map(({ secs, verdicts, landed, ...x }) => {
     const ended = x.succeeded + x.failed + x.stuck;
     return {
-      ...x, cost: round(x.cost, 2), rate: ended ? round(x.succeeded / ended, 4) : null, p50: secs.length ? round(pct(secs, 0.5)) : null,
+      ...x, cost: round(x.cost, 2), rate: ended ? round(x.succeeded / ended, 4) : null, p50: secs.length ? round(quantile(secs, 0.5)!) : null,
       ...(x.role === "worker" ? { firstPass: x.firstPass ?? 0, built: x.built ?? 0, reviewPass: verdicts ? round(landed / verdicts, 4) : null } : {}),
       ...(x.role === "reviewer" ? { pass: x.pass ?? 0, fail: x.fail ?? 0 } : {}),
     };
@@ -457,7 +448,7 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
         points[i][key] = (points[i][key] ?? 0) + part / step;
       }
     }
-    return { key, name, live, runs, hours: round(ms / HOUR, 1), p50: times.length ? round(pct(times, 0.5)) : null, models: [...models].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([m]) => m) };
+    return { key, name, live, runs, hours: round(ms / HOUR, 1), p50: times.length ? round(quantile(times, 0.5)!) : null, models: [...models].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0])).map(([m]) => m) };
   });
   // An end before a start at the same moment: a run that follows another does not add one.
   edges.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
@@ -493,9 +484,6 @@ export function agentStats(entries: Entry[], since: number, now: number, step: n
   };
 }
 
-// The width of an agents point: fine enough that a short burst shows.
-const AGENT_STEP: Record<Window, number> = { hour: 60_000, day: 15 * 60_000, week: HOUR, month: 6 * HOUR };
-
 /** `project` names one repo: then only its runs, Asks and flakes count. */
 /** What `speed` reads: the job records, the store's lists and history at origin/main, and the flakes. A baseline reads them once for all its spans. */
 export interface Inputs { read: JobRecord[]; head: string; lists: ReturnType<typeof reader>; filed: Filed; flakes: ReturnType<typeof flakes> }
@@ -505,14 +493,7 @@ export function inputs(): Inputs {
 }
 
 export function speed(window: Window, now = new Date(), fit: Fit | null = null, project?: string, inp = inputs()): Speed {
-  const n = COUNT[window];
-  const daily = window === "week" || window === "month";
-  const stepMs = STEP[window];
-  // The first bucket starts at the local midnight (week, month), the full hour (day) or the minute mark (hour), n - 1 steps before the bucket that holds `now`.
-  const last = daily ? new Date(now.getFullYear(), now.getMonth(), now.getDate()) : new Date(Math.floor(now.getTime() / stepMs) * stepMs);
-  const startOf = (i: number) => (daily ? new Date(last.getFullYear(), last.getMonth(), last.getDate() - (n - 1 - i)) : new Date(last.getTime() - (n - 1 - i) * stepMs));
-  const since = startOf(0);
-  const slot = (t: number): number => (daily ? Math.round((new Date(t).setHours(0, 0, 0, 0) - since.getTime()) / DAY) : Math.floor((t - since.getTime()) / stepMs));
+  const b = buckets(window, now.getTime()), n = b.starts.length, since = new Date(b.since);
   const times: Record<string, number[]> = { land: [], intake: [] };
   const checks = new Map<string, number[]>();
   const agents: { name: string; condition: string; model: string; tests: number | null; cost: number; took: number }[] = [];
@@ -556,7 +537,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   const issues: Speed["issues"] = {
     landed: issuesLanded,
     firstPass: issuesLanded ? round(fixes.filter((f) => f === 0).length / issuesLanded, 4) : null,
-    fixRounds: issuesLanded ? pct(fixes, 0.5) : null,
+    fixRounds: quantile(fixes, 0.5),
     week: null,
     usage: [],
   };
@@ -572,7 +553,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
       const [repo, n] = splitId(g);
       return { goal: g, href: issueHref(`${repo}-${n}`), week: round(weekOf.get(g) ?? 0, 2), runs: nRuns.get(g) ?? 0 };
     }).sort((a, b) => b.week - a.week).slice(0, 8);
-    issues.week = per.length ? round(pct(per, 0.5), 2) : null;
+    issues.week = per.length ? round(quantile(per, 0.5)!, 2) : null;
   }
   const statusOf = (ref: string): string | undefined => {
     const [repo, n] = splitId(ref);
@@ -599,17 +580,17 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
   }
   const ended = phaseTimes(all, inp.filed, since.getTime(), now.getTime());
   const med = (xs: { at: number; secs: number }[], i: number, q = 0.5) => {
-    const inBucket = xs.filter((x) => Math.min(n - 1, Math.max(0, slot(x.at))) === i).map((x) => x.secs);
-    return inBucket.length ? round(pct(inBucket, q)) : null;
+    const inBucket = xs.filter((x) => b.slotOf(x.at) === i).map((x) => x.secs);
+    return inBucket.length ? round(quantile(inBucket, q)!) : null;
   };
   const recent = inp.flakes.filter((f) => Date.parse(f.at) >= since.getTime() && repoIn(f.repo, project));
   const started = Array.from({ length: n }, () => 0);
   const costs = Array.from({ length: n }, () => ({} as Record<string, number>));
   for (const e of entries) {
     const t = Date.parse(e.run.started);
-    if (t >= since.getTime() && t < now.getTime()) started[Math.min(n - 1, Math.max(0, slot(t)))]++;
+    if (t >= since.getTime() && t < now.getTime()) started[b.slotOf(t)]++;
     if (!isAgentRun(e.run.kind) || !(t >= since.getTime() && t < now.getTime())) continue;
-    const spent = costs[Math.min(n - 1, Math.max(0, slot(t)))], model = e.run.model || "unset";
+    const spent = costs[b.slotOf(t)], model = e.run.model || "unset";
     spent[model] = round((spent[model] ?? 0) + (e.run.cost ?? 0), 4);
   }
   return {
@@ -619,20 +600,17 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     phases: Object.fromEntries(PHASE_KEYS.map((k) => [k, phaseStat(ended[k].map((x) => x.secs))])) as Speed["phases"],
     asks: asksOf(records, since.getTime(), now.getTime()),
     checks: [...checks].map(([name, xs]) => ({ name, ...stat(xs) })).sort((a, b) => a.name.localeCompare(b.name)),
-    buckets: Array.from({ length: n }, (_, i) => {
-      const d = startOf(i);
-      return { at: d.toISOString(), runs: started[i], cost: costs[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) } as Speed["buckets"][number];
-    }),
+    buckets: b.starts.map((at, i) => ({ at: new Date(at).toISOString(), runs: started[i], cost: costs[i], p90: Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i, 0.9)])), ...Object.fromEntries(PHASE_KEYS.map((k) => [k, med(ended[k], i)])) }) as Speed["buckets"][number]),
     times: ended.issues,
     slowest: agents.sort((a, b) => b.took - a.took).slice(0, 6),
     stages,
-    models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(pct(xs, 0.5)) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
+    models: [...models].map(([model, xs]) => ({ model, count: xs.length, p50: round(quantile(xs, 0.5)!) })).sort((a, b) => b.count - a.count || a.model.localeCompare(b.model)),
     issues,
     classes: cls.classes,
     notCounted: cls.notCounted,
     lost: cls.lost,
     hasWeek: fit !== null,
-    agents: agentStats(entries, since.getTime(), now.getTime(), AGENT_STEP[window], LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * BASELINE[window].step, now.getTime() - (i + 1) * BASELINE[window].step])),
+    agents: agentStats(entries, since.getTime(), now.getTime(), BUCKETS[window].fine, LIVE_CAP(), undefined, Array.from({ length: BASELINE[window].n }, (_, i): [number, number] => [since.getTime() - (i + 1) * WINDOWS[window], now.getTime() - (i + 1) * WINDOWS[window]])),
     flaky: recent.length,
     flakes: [...Map.groupBy(recent.flatMap(flakeNames), (f) => f.name)].map(([name, xs]) => ({ name, count: xs.length })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
   };
@@ -675,17 +653,17 @@ export function averageFigures(xs: Figures[]): Figures {
 const figures0 = (): Figures => ({ lost: null, hours: null, leadP50: null, leadP90: null, asks: null, landed: null, firstPass: null });
 
 // Hour: the average of the last 12 hours; day: of the last 7 days; week and month: the span before.
-const BASELINE: Record<Window, { step: number; n: number; avg: boolean; basis: string; prev: string }> = {
-  hour: { step: HOUR, n: 12, avg: true, basis: "average of the last 12 hours with data", prev: "the hour before" },
-  day: { step: 24 * HOUR, n: 7, avg: true, basis: "average of the last 7 days with data", prev: "the day before" },
-  week: { step: 7 * 24 * HOUR, n: 1, avg: false, basis: "the previous 7 days", prev: "the previous 7 days" },
-  month: { step: 30 * 24 * HOUR, n: 1, avg: false, basis: "the previous 30 days", prev: "the previous 30 days" },
+const BASELINE: Record<Window, { n: number; avg: boolean; basis: string; prev: string }> = {
+  hour: { n: 12, avg: true, basis: "average of the last 12 hours with data", prev: "the hour before" },
+  day: { n: 7, avg: true, basis: "average of the last 7 days with data", prev: "the day before" },
+  week: { n: 1, avg: false, basis: "the previous 7 days", prev: "the previous 7 days" },
+  month: { n: 1, avg: false, basis: "the previous 30 days", prev: "the previous 30 days" },
 };
 
 /** The baseline in one read of its inputs: each span is computed from the same records and store. */
 export function baseline(window: Window, now = new Date(), fit: Fit | null = null, project?: string, inp = inputs()): Baseline {
   const b = BASELINE[window];
-  const spans = Array.from({ length: b.n }, (_, i) => figures(speed(window, new Date(now.getTime() - (i + 1) * b.step), fit, project, inp)));
+  const spans = Array.from({ length: b.n }, (_, i) => figures(speed(window, new Date(now.getTime() - (i + 1) * WINDOWS[window]), fit, project, inp)));
   return { prev: spans[0], base: b.avg ? averageFigures(spans) : spans[0], basis: b.basis };
 }
 

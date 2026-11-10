@@ -38,7 +38,7 @@ describe("stages", () => {
 
   test("runs per item, runs with no usable result, cost, the median time and the p90; a live run is left out", () => {
     expect(row("build")).toEqual({ stage: "build", runs: 3, items: 2, unusable: 1, cost: 6, minutes: 20, p90: 1800 });
-    expect(row("build", t.trailing)).toEqual({ stage: "build", runs: 2, items: 1, unusable: 1, cost: 14, minutes: 50, p90: 3600 });
+    expect(row("build", t.trailing)).toEqual({ stage: "build", runs: 2, items: 1, unusable: 1, cost: 14, minutes: 40, p90: 3600 });
   });
 
   test("the p90 is the stage's own slowest runs, and a stage with no recorded end has none", () => {
@@ -58,7 +58,7 @@ describe("stages", () => {
 
   test("the table puts the day's value first and the trailing mean per day in brackets", () => {
     const text = renderTable(t);
-    expect(text).toContain("| build | 3 (0.3) | 1.5 (2) | 1, 33% (50%) | $6.00 ($2.00) | $3.00 ($14.00) | 20 (50) |");
+    expect(text).toContain("| build | 3 (0.3) | 1.5 (2) | 1, 33% (50%) | $6.00 ($2.00) | $3.00 ($14.00) | 20 (40) |");
     expect(text).toContain("| spec-check | 2 (0) | 2 (-) | - |");
   });
 });
