@@ -927,7 +927,7 @@ describe("the labels say sub-issue and job", () => {
     expect(labels(h).filter((t) => OLD.test(t))).toEqual([]);
   });
 
-  // Flaky under the parallel suite: the Cost tile shows "0 jobs" (aleph-920).
+  // Flaky under the parallel suite: the Cost tile shows "0 jobs" (aleph-1156).
   test.skip("the Issue page says Sub-issues and Sub-issues done, and no label keeps the old words", async () => {
     const n = writeList({ key: "fac" }, "seed", (doc) => {
       const i = add(doc, "label parent", { request: "Do it." });
