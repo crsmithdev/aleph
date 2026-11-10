@@ -10,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { FULL } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { areasOf, isSorted, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
+import { areasOf, labels, mediaDir, mediaFiles, mediaOf, noteFlake, partsOf, planSet, priorityOf, reader, sort, sourceOf } from "../../../issues/lib/store.ts";
 import { always, askNote, awaitsChris, refIn, setAsk, logAlways, normalizeAsk, plainAsk, type Ask } from "../asks/ask.ts";
 import { allRuns, onOf, type Repo, type Run } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -24,6 +24,7 @@ import { itemOnMain } from "../records/status.ts";
 import { INTAKE_TRIES } from "../infra/settings.ts";
 import { OPUS_MODEL, readModels } from "../routing/models.ts";
 import { NO_OUTPUT } from "../gates/gate.ts";
+import { decideIntake } from "../gates/intake-decision.ts";
 
 /** The model an intake run asks for. */
 const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;
@@ -460,7 +461,7 @@ function byCode(repo: Repo, item: issues.Issue): { applied: Applied | null; line
 }
 
 /** One intake of one item and its route applied; counts and skipped lines are added to. */
-async function intakeItem(repo: Repo, id: number, counts: Counts, skipped: string[]): Promise<void> {
+async function intakeItem(repo: Repo, id: number, done: (ref: string) => boolean, counts: Counts, skipped: string[]): Promise<void> {
   const name = `${repo.key}-${id}`;
   // One intake of an item at a time: an issue write's run and the tick may meet.
   const release = await lock(`intake-${name}`, 0);
@@ -469,7 +470,7 @@ async function intakeItem(repo: Repo, id: number, counts: Counts, skipped: strin
     // Read again under the lock: an intake that just ended may have sorted it.
     const doc = reader().list(repo.key);
     const item = doc ? issues.find(doc, id) : undefined;
-    if (!doc || !item || issues.status(item) !== "open" || isSorted(doc, item, repo)) return;
+    if (!doc || !item || decideIntake(repo, item, { doc, done, red: mainRed()(repo) }).kind === "none") return;
     const coded = byCode(repo, item);
     if (coded) {
       if (coded.applied) counts[coded.applied] = (counts[coded.applied] ?? 0) + 1;
@@ -525,14 +526,14 @@ async function intakeItem(repo: Repo, id: number, counts: Counts, skipped: strin
 const lockOf = (run: Run): string | null => (run.repo && onOf(run) !== undefined ? `intake-${run.repo}-${onOf(run)}` : null);
 const endLostIntakes = () => endLost("intake", lockOf, "a verdict");
 
-/** Take in one open issue now, if it is one the tick would take in. */
-export async function intakeIssue(repo: Repo, id: number): Promise<{ counts: Counts; skipped: string[] }> {
+/** Take in one open issue now, if it is one the tick would take in; `done` says whether an `after` ref is done. */
+export async function intakeIssue(repo: Repo, id: number, done: (ref: string) => boolean): Promise<{ counts: Counts; skipped: string[] }> {
   const counts: Counts = {};
   const skipped: string[] = [];
   await endLostIntakes();
   const blocked = gates({ only: ["live-cap"] });
   if (blocked) { skipped.push(`intake: ${blocked.why}`); return { counts, skipped }; }
-  await intakeItem(repo, id, counts, skipped);
+  await intakeItem(repo, id, done, counts, skipped);
   return { counts, skipped };
 }
 

@@ -86,7 +86,7 @@ async function run(): Promise<{ counts: Counts; skipped: string[] }> {
   const doc = readList(repo)!;
   for (const i of doc.items) {
     if (issues.status(i) !== "open" || isSorted(doc, i, repo)) continue;
-    const t = await intakeIssue(repo, i.id);
+    const t = await intakeIssue(repo, i.id, () => true);
     for (const [k, v] of Object.entries(t.counts)) counts[k as keyof Counts] = (counts[k as keyof Counts] ?? 0) + (v ?? 0);
     skipped.push(...t.skipped);
   }
@@ -372,7 +372,7 @@ test("an intake run whose process ended before a verdict is ended as failed by t
   const folder = join(base, "jobs", `${stamp()}-intake-${repo.key}-1-intake`);
   mkdirSync(folder, { recursive: true });
   putRun(basename(folder), { kind: "intake", job: folder.split("/").at(-1)!, name: `intake-${repo.key}-1`, repo: repo.key, on: `${repo.key}-1`, condition: "running", phase: "intake", told: true, shown: true, started: new Date(NOW).toISOString(), made: NOW });
-  await intakeIssue(repo, 1);
+  await intakeIssue(repo, 1, () => true);
   expect(getRun(basename(folder))).toMatchObject({ condition: "done", reason: "failed: its process ended before a verdict" });
 });
 

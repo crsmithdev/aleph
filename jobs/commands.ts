@@ -23,10 +23,11 @@ import * as store from "../issues/lib/store.ts";
 import * as verbs from "../issues/lib/issues.ts";
 import * as notes from "../lib/annotations.ts";
 import { askOf, refIn, grant, readAlways, revoke } from "./lib/asks/ask.ts";
-import { behind, directorStep, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
+import { behind, directorStep, doneChecker, hookLines, report, runDispatch, setPaused, suiteStep, intakeNow } from "./lib/transitions/factory.ts";
 import { runTick } from "./lib/transitions/tick.ts";
 import { dispatchDetached, intakeDetached } from "./lib/transitions/launch.ts";
-import { health } from "./lib/gates/factory-status.ts";
+import { health, mainRed } from "./lib/gates/factory-status.ts";
+import { decideIntake } from "./lib/gates/intake-decision.ts";
 import { addDays, flakeLines, renderTable, reportLine } from "./lib/learning/monitor-table.ts";
 import { runMonitor, tableOf } from "./lib/roles/monitor.ts";
 import { fit } from "./lib/roles/title.ts";
@@ -248,7 +249,7 @@ async function todoCmd(ctx: Ctx): Promise<void> {
       ctx.out(a.result);
       dispatchAfterIssue(repo, a.item);
       const list = store.reader().list(repo.key);
-      if (list && !store.isSorted(list, a.item, repo)) intakeDetached(repo, a.item.id);
+      if (list && decideIntake(repo, a.item, { doc: list, done: doneChecker(false), red: mainRed()(repo) }).kind !== "none") intakeDetached(repo, a.item.id);
       return;
     }
     case "list": {

@@ -7,7 +7,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { join } from "node:path";
 import { LANES, lane, shortId } from "../../../lib/naming.ts";
 import * as issues from "../../../issues/lib/todo.ts";
-import { byPriority, afterOf, buildableIssue, buildableIssues, isSorted, note, partsOf, planSet, priorityOf, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
+import { byPriority, afterOf, buildableIssue, buildableIssues, note, partsOf, planSet, priorityOf, readFetched, readList, readLists, reader, type Reader } from "../../../issues/lib/store.ts";
 import { fetchOrigin, git } from "../infra/git.ts";
 import { askChris, askOf, needsOf, plainAsk, refIn } from "../asks/ask.ts";
 import { logEvent } from "../infra/layout.ts";
@@ -36,6 +36,7 @@ export { setPaused };
 
 import { issueDecision, NO_COMMIT_LIMIT, pendingWaits, refDone, type Gate, type Hold, type IssueDecision } from "../gates/issue-decision.ts";
 import { decideStart, unrouted } from "../gates/start-decision.ts";
+import { decideIntake } from "../gates/intake-decision.ts";
 import { INTAKE_CAP, issueLockWaitMs, rescueOn } from "../infra/settings.ts";
 
 
@@ -111,14 +112,13 @@ export async function dispatchIssues(start: Start, land?: Land, rescue?: Rescue,
   // A parent whose parts all landed closes without a green main.
   for (const repo of sandboxRepos()) for (const l of await closeIssues(repo, done)) skipped.push(l);
   const ready = openIssues();
-  // An issue to plan goes to intake, which splits it. Intake starts an agent run, so the baseline gate holds it as it holds an issue.
+  // An issue to plan goes to intake, which splits it.
   const planners: { repo: Repo; item: issues.Issue }[] = [];
   for (const repo of sandboxRepos()) {
-    if (redOf(repo)) continue;
-    for (const item of reader({ fetch: false }).list(repo.key)?.items ?? []) if (planSet(item)) planners.push({ repo, item });
+    const doc = reader({ fetch: false }).list(repo.key);
+    for (const item of doc?.items ?? []) if (decideIntake(repo, item, { doc: doc!, done, red: redOf(repo) }).kind === "plan") planners.push({ repo, item });
   }
   for (const { repo, item } of byPriority(planners)) {
-    if (issues.status(item) !== "open" || askOf(refIn(repo.key, item)) || pendingWaits(afterOf(item), done).length) continue;
     intake(repo, item.id);
     planned.push(issueJob(repo, item.id));
     logEvent({ by: "rule", subject: issueJob(repo, item.id), action: "started", sub: "intake", note: "planning" });
@@ -264,16 +264,17 @@ const starts: Starts = { intake: intakeDetached, director: directorDetached };
 const running = (runs: Entry[], kind: string, on: string) => runs.some((e) => e.run.kind === kind && e.run.on === on && e.run.condition === "running");
 
 /**
- * The intake queue: an intake for each open issue that is not sorted, oldest first, at most `ALEPH_INTAKE_CAP`,
+ * The intake queue: an intake for each issue that decideIntake lets in, oldest first, at most `ALEPH_INTAKE_CAP`,
  * each detached. While the live cap binds it starts none: the dispatch at the end of the next run calls it again.
  * Returns the issues it started an intake for.
  */
-export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false })): string[] {
+export function intakeQueued(start: (repo: Repo, id: number) => void = intakeDetached, runs: Entry[] = allRuns(), lists: Reader = reader({ fetch: false }), done = doneChecker(false)): string[] {
   if (gates({ only: ["pause", "live-cap"], jobs: [runs] })) return [];
   const queue: { repo: Repo; item: issues.Issue }[] = [];
+  const redOf = mainRed();
   for (const repo of sandboxRepos()) {
     const doc = lists.list(repo.key);
-    for (const item of doc?.items ?? []) if (issues.status(item) === "open" && !isSorted(doc!, item, repo)) queue.push({ repo, item });
+    for (const item of doc?.items ?? []) if (decideIntake(repo, item, { doc: doc!, done, red: redOf(repo) }).kind !== "none") queue.push({ repo, item });
   }
   queue.sort((a, b) => (issues.created(a.item) ?? "").localeCompare(issues.created(b.item) ?? "") || a.repo.key.localeCompare(b.repo.key) || a.item.id - b.item.id);
   const started: string[] = [];
@@ -442,11 +443,7 @@ export async function stalled(jobs = allJobs(), lists = reader(), done = doneChe
   if (!live("intake") && !gates({ only: ["live-cap"], jobs })) {
     for (const repo of sandboxRepos()) {
       const doc = lists.list(repo.key);
-      for (const item of doc?.items ?? []) {
-        if (issues.status(item) !== "open") continue;
-        const toPlan = planSet(item) && !askOf(refIn(repo.key, item)) && !pendingWaits(afterOf(item), done).length && !redOf(repo);
-        if (toPlan || (!planSet(item) && !isSorted(doc!, item, repo))) out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
-      }
+      for (const item of doc?.items ?? []) if (decideIntake(repo, item, { doc: doc!, done, red: redOf(repo) }).kind !== "none") out.push(`ingest:${issueJob(repo, issues.idOf(item))}`);
     }
   }
   return out;
@@ -594,7 +591,7 @@ function runLines(now: number): string[] {
  * Take in one issue at once, as `aleph issue add`, a note that answers an Ask, a
  * worker's follow-ups, the dispatch for an issue to plan and the intake queue do. The gate is the factory's pause. An
  * issue the live cap holds is started by the queue (`intakeQueued`) when a run ends. A run of this call that ended
- * with no reply starts the retry at once, while the issue is still unsorted with no Ask (after `ALEPH_INTAKE_TRIES`
+ * with no reply starts the retry at once, while decideIntake still lets intake run (after `ALEPH_INTAKE_TRIES`
  * such runs, intake sets the Ask). An Ask that intake set goes to the director at once.
  */
 export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Promise<{ counts: Counts; skipped: string[] }> {
@@ -602,13 +599,15 @@ export async function intakeNow(repo: Repo, id: number, p: Starts = starts): Pro
   const name = `${repo.key}-${id}`;
   const mine = () => allRuns().filter((e) => e.run.kind === "intake" && e.run.on === name);
   const before = new Set(mine().map((e) => e.id));
-  const t = await intakeIssue(repo, id);
+  const done = doneChecker();
+  const t = await intakeIssue(repo, id, done);
   for (const l of t.skipped) logEvent({ by: "intake", subject: name, action: "skipped", sub: "intake", note: l });
   if (t.counts.build) dispatchDetached();
   const failed = mine().some((e) => !before.has(e.id) && causeOf(e.run) === "unanswered");
   const doc = reader({ fetch: false }).list(repo.key);
   const item = doc ? issues.find(doc, id) : undefined;
-  if (failed && item && issues.status(item) === "open" && !askOf(refIn(repo.key, item)) && !isSorted(doc!, item, repo)) {
+  // Only an intake of this call that ended with no reply starts the retry.
+  if (failed && item && decideIntake(repo, item, { doc: doc!, done, red: mainRed()(repo) }).kind !== "none") {
     logEvent({ by: "rule", subject: name, action: "started", sub: "intake", note: "no reply; intake again now" });
     p.intake(repo, id);
   }
