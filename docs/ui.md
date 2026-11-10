@@ -21,7 +21,7 @@ If the host already has a plain file at `~/.config/systemd/user/aleph-ui.service
 
 ## Log in
 
-Set `ALEPH_UI_PASSWORD` in `~/.aleph/.env` to turn on the password gate. With it unset, the UI has no login, which is the state for tests and a private machine.
+Set `ALEPH_UI_PASSWORD` in `~/.aleph/.env` to turn on the password gate. With it unset, the UI has no login and answers only requests whose Host header names this machine (`127.0.0.1`, `localhost` or `[::1]`); any other Host, such as `aleph.home`, gets a 403 page.
 
 With the gate on, `/` shows a login form. The right password sets the `aleph_session` cookie, which keeps the device logged in for a year. The sessions are in `~/.aleph/factory/ui-sessions.json`, so a restart keeps every device logged in.
 

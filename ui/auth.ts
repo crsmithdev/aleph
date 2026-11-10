@@ -1,5 +1,6 @@
 /**
- * The UI's password gate. ALEPH_UI_PASSWORD unset or empty: the gate is off.
+ * The UI's password gate. ALEPH_UI_PASSWORD unset or empty: the UI answers only
+ * a request whose Host header names this machine, with no login; any other Host gets a 403 page.
  * Otherwise a request needs the `aleph_session` cookie, whose token is in
  * `<ALEPH_FACTORY_DIR>/ui-sessions.json`, so a restart keeps every device logged in.
  */
@@ -72,9 +73,18 @@ document.getElementById("f").addEventListener("submit", async (e) => {
 `;
 }
 
+const local = (req: Request) => /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/i.test(req.headers.get("host") ?? "");
+
+const noPassword = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Aleph — password needed</title></head>
+<body><p>Set ALEPH_UI_PASSWORD in ~/.aleph/.env first.</p></body></html>
+`;
+
 /** null: let the request through. Otherwise the refusal. */
 export function gate(req: Request): Response | null {
-  if (!gateOn()) return null;
+  if (!gateOn()) {
+    return local(req) ? null : new Response(noPassword, { status: 403, headers: { "content-type": "text/html; charset=utf-8" } });
+  }
   const path = new URL(req.url).pathname;
   if (path === "/api/login") return null;
   if (hasSession(req)) return null;

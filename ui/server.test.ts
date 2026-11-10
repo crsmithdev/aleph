@@ -133,6 +133,15 @@ test("x-aleph-login is on every API answer behind the gate, and absent without a
   }
 });
 
+test("without a password, a Host that is not this machine gets a 403 that names ALEPH_UI_PASSWORD", async () => {
+  for (const path of ["/", "/api/state"]) {
+    const r = await at(path, { headers: { host: "aleph.home" } });
+    expect(r.status).toBe(403);
+    expect(await r.text()).toContain("ALEPH_UI_PASSWORD");
+    expect((await at(path)).status).toBe(200);
+  }
+});
+
 test("x-aleph-version changes when a page file changes, is added or is removed", async () => {
   const pages = mkdtempSync(join(tmpdir(), "aleph-ui-pages-"));
   mkdirSync(join(pages, "views"));
