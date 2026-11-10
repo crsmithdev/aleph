@@ -12,7 +12,8 @@ import { alephPath, expand, home, vaultDir } from "../../../lib/paths.ts";
 import { readJsonOr, writeJson } from "./json.ts";
 import { layout } from "../../../lib/layout.ts";
 
-const num = (name: string, dflt: number): number => Number(process.env[name] ?? dflt);
+/** A numeric setting: an empty or missing variable is unset and gives the default. */
+const num = (name: string, dflt: number): number => Number(process.env[name] || dflt);
 
 /** `caps.json` in the factory directory: the caps and settings of CAP_KEYS. A missing file is empty; other keys are left alone. */
 const capsFile = (): Record<string, unknown> => readJsonOr(join(layout().factory, "caps.json"), {});
@@ -44,8 +45,7 @@ export const capEnvSet = (envName: string): boolean => (process.env[envName] ?? 
 
 /** The environment variable first, then caps.json, then the default. */
 function cap(envName: string, key: string, dflt: number): number {
-  const e = process.env[envName];
-  if (e !== undefined && e !== "") return Number(e);
+  if (capEnvSet(envName)) return num(envName, 0);
   const f = capsFile()[key];
   return typeof f === "number" && Number.isFinite(f) ? f : dflt;
 }
@@ -69,12 +69,14 @@ export const INTAKE_TRIES_DEFAULT = 2;
 export const INTAKE_TRIES = () => cap("ALEPH_INTAKE_TRIES", "intakeTries", INTAKE_TRIES_DEFAULT);
 /** How many signals make a lesson a proposal. */
 export const PROPOSE_AT = (): number => {
-  const n = Number(process.env.ALEPH_PROPOSE_AT);
+  const n = num("ALEPH_PROPOSE_AT", 3);
   return Number.isFinite(n) && n >= 1 ? n : 3;
 };
 
 export const JOB_SECONDS_DEFAULT = 1800;
 export const jobSeconds = () => cap("ALEPH_JOB_TIMEOUT", "jobSeconds", JOB_SECONDS_DEFAULT);
+/** How long an agent call may print nothing before the stall watch stops it. */
+export const stallSeconds = (): number => num("ALEPH_STALL_SECONDS", 600);
 export const checkSeconds = () => num("ALEPH_CHECK_TIMEOUT", 1200);
 /** The seconds a repo's full suite may take before the Status page warns. */
 export const suiteBudgetSeconds = () => num("ALEPH_SUITE_BUDGET_S", 120);
@@ -85,7 +87,7 @@ export const fixRounds = () => cap("ALEPH_FIX_ROUNDS", "fixRounds", FIX_ROUNDS_D
 /** How long a dispatch waits for another dispatch's issue lock before it skips the issue. */
 export const issueLockWaitMs = () => num("ALEPH_GOAL_LOCK_WAIT_MS", 20_000);
 export const rescueWaitMs = () => num("ALEPH_RESCUE_WAIT_MS", 60_000);
-export const pidWaitMs = () => Number(process.env.ALEPH_PID_WAIT_MS) || 10_000;
+export const pidWaitMs = () => num("ALEPH_PID_WAIT_MS", 10_000);
 export const LAND_BATCH_DEFAULT = 8;
 export const landBatch = () => Math.max(1, Math.floor(cap("ALEPH_LAND_BATCH", "landBatch", LAND_BATCH_DEFAULT)) || 1);
 /** The load limit's default as the docs state it; the number depends on the machine. */
@@ -110,10 +112,10 @@ export const jobId = (): string | undefined => process.env.ALEPH_JOB_ID;
 /** The command for an agent role (`worker`, `reviewer`, ...), `claude` by default. */
 export const roleCmd = (role: string): string => process.env[`ALEPH_${role}_CMD`] ?? "claude";
 /** The time limit in seconds for an agent role, given the call's own default. */
-export const roleSeconds = (role: string, dflt: number): number => Number(process.env[`ALEPH_${role}_TIMEOUT`] ?? dflt);
+export const roleSeconds = (role: string, dflt: number): number => num(`ALEPH_${role}_TIMEOUT`, dflt);
 export const windowsTimeCmd = (): string | undefined => process.env.ALEPH_WINDOWS_TIME_CMD;
 export const ruleCmd = () => process.env.ALEPH_RULE_CMD ?? "claude";
-export const doctorClockMs = () => Number(process.env.ALEPH_DOCTOR_CLOCK_MS ?? 15_000);
+export const doctorClockMs = () => num("ALEPH_DOCTOR_CLOCK_MS", 15_000);
 export const homeUrl = () => process.env.ALEPH_HOME_URL ?? "http://aleph.home/";
 export const unitDir = () => process.env.ALEPH_UNIT_DIR ?? join(home(), ".config", "systemd", "user");
 export const systemctlBin = () => process.env.ALEPH_SYSTEMCTL ?? "systemctl";
@@ -129,7 +131,7 @@ export const skillsDir = () => process.env.ALEPH_SKILLS_DIR ?? join(import.meta.
 export const skillsStore = () => alephPath("ALEPH_SKILLS_STORE", "skills-store.json");
 export const uiPassword = () => process.env.ALEPH_UI_PASSWORD ?? "";
 export const cliOverride = (): string | undefined => process.env.ALEPH_CLI;
-export const stateSlowMs = () => Number(process.env.ALEPH_STATE_SLOW_MS ?? 0);
+export const stateSlowMs = () => num("ALEPH_STATE_SLOW_MS", 0);
 /** The usage file. */
 export const usageFile = () => alephPath("ALEPH_USAGE_FILE", "usage.jsonl");
 export const usageFileSet = (): boolean => !!process.env.ALEPH_USAGE_FILE;

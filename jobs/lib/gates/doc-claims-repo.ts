@@ -8,7 +8,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { docProblems, type Doc, type Truth } from "./doc-claims.ts";
 import * as s from "../infra/settings.ts";
-import { stallSeconds } from "../roles/agent-call.ts";
 import { JEV_PASS_BELOW } from "../../../hooks/lib/judge.ts";
 import { judgeChoice } from "../../../lib/jev.ts";
 import { spoolDir } from "../../../hooks/lib/handshake.ts";
@@ -55,7 +54,7 @@ export const DEFAULTS: Truth["defaults"] = {
   ALEPH_CHECK_TIMEOUT: plain("ALEPH_CHECK_TIMEOUT", s.checkSeconds),
   ALEPH_REVIEW_TIMEOUT: plain("ALEPH_REVIEW_TIMEOUT", s.reviewSeconds),
   ALEPH_REVIEW_DIFF_MAX: plain("ALEPH_REVIEW_DIFF_MAX", s.reviewDiffMax),
-  ALEPH_STALL_SECONDS: plain("ALEPH_STALL_SECONDS", stallSeconds),
+  ALEPH_STALL_SECONDS: plain("ALEPH_STALL_SECONDS", s.stallSeconds),
   ALEPH_FIX_ROUNDS: () => s.FIX_ROUNDS_DEFAULT,
   ALEPH_LAND_BATCH: () => s.LAND_BATCH_DEFAULT,
   ALEPH_LOAD_LIMIT: () => s.LOAD_LIMIT_DEFAULT,

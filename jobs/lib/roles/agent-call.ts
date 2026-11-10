@@ -9,7 +9,7 @@ import { closeSync, openSync, readFileSync, statSync } from "node:fs";
 import { BACKENDS, modelArgv, modelEnv, onGpu, viaOf } from "../routing/models.ts";
 import { gpuSlot, holdBackend } from "../gates/factory-status.ts";
 import { policyOf } from "../records/outcome.ts";
-import { roleCmd } from "../infra/settings.ts";
+import { roleCmd, stallSeconds } from "../infra/settings.ts";
 import { logEvent } from "../../../lib/layout.ts";
 import { costDetails, type Usage } from "../../../lib/pricing.ts";
 
@@ -52,8 +52,6 @@ export interface Reply { text: string; data: unknown; session?: string; cost?: n
 /** How long a call that the time box or the stall watch stopped gets after SIGTERM before SIGKILL. */
 const KILL_AFTER_MS = 30_000;
 
-/** How long an agent call may print nothing before the stall watch stops it. */
-export const stallSeconds = (): number => Number(process.env.ALEPH_STALL_SECONDS ?? 600);
 /** The reason of a call that the stall watch stopped. */
 export const stallReason = (): string => {
   const s = stallSeconds();
