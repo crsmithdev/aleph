@@ -16,7 +16,7 @@ import { handoffsDir } from "../../lib/paths.ts";
 import { episodesDir } from "../../jobs/lib/learning/episode.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { coreNotes, KINDS, linkTargets, links, lintVault, loadVault, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { backlinks, coreNotes, KINDS, linkTargets, links, lintVault, loadVault, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
@@ -179,7 +179,7 @@ async function note(raw: string, url: URL): Promise<Response> {
   if (!hit || !memoryIn(scopeOf(hit), project)) return json({ error: `no note titled ${title || "(none)"}` }, 404);
   const keep = inScope(project);
   const to = [...new Set(links(hit.body))].map((t) => targets.get(t.toLowerCase())).filter((n): n is Note => !!n && keep(n) && n !== hit);
-  const from = all.filter((n) => n !== hit && keep(n) && !n.archived && links(n.body).some((t) => targets.get(t.toLowerCase()) === hit));
+  const from = backlinks(all, hit).filter((n) => keep(n) && !n.archived);
   const ref = (n: Note) => ({ title: n.title, kind: String(n.fm.kind ?? ""), scope: scopeOf(n) });
   return json({ title: hit.title, path: hit.rel, archived: hit.archived, frontmatter: hit.fm, body: hit.body, text: hit.text, links: [...new Map(to.map((n) => [n.title, ref(n)])).values()], backlinks: from.map(ref).sort((a, b) => a.title.localeCompare(b.title)) });
 }

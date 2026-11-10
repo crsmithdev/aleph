@@ -568,6 +568,19 @@ describe("archive", () => {
     expect(gitLog()).toContain("delete: Deleted Outright");
     expect(gitStatus()).toBe("");
   });
+  test("delete refuses and archive names a note that a caller links by an alias", async () => {
+    const body = (to: string) => `**Claim.** a caller, as of 2026-09-04.\n\n## Details\nd\n\n## Evidence\ne\n\n## Related\n[[${to}]]\n`;
+    (await cli("write", note("Known By Alias", { kind: "decision", aliases: "[the alias]" }), "--why", "x"));
+    (await cli("write", note("Also Known By Alias", { kind: "decision", aliases: "[other alias]" }), "--why", "x"));
+    (await cli("write", note("Calls By Alias", {}, body("the alias")), "--why", "x"));
+    (await cli("write", note("Calls Other Alias", {}, body("other alias")), "--why", "x"));
+    const no = await cli("delete", "Known By Alias", "--why", "y");
+    expect(no.code).toBe(1);
+    expect(no.stderr).toMatch(/refuse inbound Calls By Alias/);
+    expect(existsSync(join(vault, "wiki/decisions/Known By Alias.md"))).toBe(true);
+    const r = await cli("archive", "Also Known By Alias", "--why", "y");
+    expect(r.json.inbound).toEqual(["Calls Other Alias"]);
+  });
   test("a note deleted by hand is named, and points at archive", async () => {
     (await cli("write", note("Deleted By Hand"), "--why", "x"));
     rmSync(join(vault, "wiki/gotchas/Deleted By Hand.md"));

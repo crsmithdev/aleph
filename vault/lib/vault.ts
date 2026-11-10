@@ -144,6 +144,12 @@ export function linkTargets(notes: Note[]): Map<string, Note> {
   return m;
 }
 
+/** The notes, other than `hit`, whose links resolve to `hit` by its title or an alias. */
+export function backlinks(notes: Note[], hit: Note): Note[] {
+  const targets = linkTargets(notes);
+  return notes.filter((n) => n !== hit && links(n.body).some((t) => targets.get(t.toLowerCase()) === hit));
+}
+
 /** Every note a name resolves to, in note order: `linkTargets` keeps only the last of them. */
 function nameIndex(notes: Note[]): Map<string, Note[]> {
   const m = new Map<string, Note[]>();

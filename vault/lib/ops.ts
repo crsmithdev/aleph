@@ -13,7 +13,7 @@ import { handoffsFor, traceDigest } from "./compile.ts";
 import { GITIGNORE, MEMORY_MD, OBSIDIAN, VAULT_MD } from "./templates.ts";
 import { claimLine, openIndex, rankNotes } from "./index.ts";
 import { recallQuery } from "./recall-query.ts";
-import { budgetFindings, citedTraces, clock, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, links, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
+import { backlinks, budgetFindings, citedTraces, clock, coreNotes, fixFrontmatter, folderFor, health, healthLine, homeText, lintVault, loadVault, readNote, relativeDates, renameScope, screenCandidates, stampProvenance, START_BUDGET, startContext, today, validateNote, vaultDir, wikiNotes, type Finding, type Note } from "./vault.ts";
 import { handoffsDir } from "../../lib/paths.ts";
 
 /** An op's end with an exit code: 1 for a refusal, 2 for a usage error. */
@@ -477,7 +477,7 @@ async function archive(): Promise<void> {
 
   // Wiki notes only. Home's line goes with the plan below, and a daily note is
   // a record of what happened on a day; neither is a caller to warn about.
-  const inbound = wikiNotes(notes).filter((n) => n.path !== hit.path && links(n.body).some((t) => t.toLowerCase() === hit.title.toLowerCase()));
+  const inbound = backlinks(notes, hit).filter((n) => n.wiki);
   const dest = join(root, "archive", `${hit.title}.md`);
   const fm = { ...hit.fm, archived: today(), archived_reason: why };
   writeFileSync(dest, serializeFrontmatter(fm) + hit.body);
@@ -504,7 +504,7 @@ async function del(): Promise<void> {
   const notes = await loadVault(root);
   const hit = wikiNotes(notes).find((n) => n.title.toLowerCase() === title.toLowerCase());
   if (!hit) refuse([{ note: title, rule: "delete", detail: "no live wiki note has that title" }]);
-  const inbound = wikiNotes(notes).filter((n) => n.path !== hit.path && links(n.body).some((t) => t.toLowerCase() === hit.title.toLowerCase()));
+  const inbound = backlinks(notes, hit).filter((n) => n.wiki);
   if (inbound.length) refuse(inbound.map((n) => ({ note: n.title, rule: "inbound", detail: `links [[${hit.title}]]; unlink it or archive [${hit.title}] instead` })));
   unlinkSync(hit.path);
   appendDaily(`delete ${hit.title} — ${why}`);
