@@ -44,6 +44,10 @@ const OBS: Record<string, any[]> = {
 let lf: ReturnType<typeof Bun.serve>;
 let hits: string[] = [];
 let status = 200;
+// When set, the fake answers traces one page per entry.
+let paged: any[][] | null = null;
+// The fake answers 500 to this many requests, then answers as usual.
+let flaky = 0;
 let fixtures: string;
 let savedRepos: string | undefined;
 let savedJobs: string | undefined;
@@ -67,8 +71,10 @@ beforeAll(() => {
       const u = new URL(req.url);
       hits.push(u.pathname + u.search);
       if (status !== 200) return new Response("boom", { status });
+      if (flaky > 0) { flaky--; return new Response("boom", { status: 500 }); }
       if (u.pathname === "/api/public/traces") {
         const s = u.searchParams.get("sessionId");
+        if (paged) return Response.json({ data: paged[Number(u.searchParams.get("page")) - 1] ?? [], meta: { totalPages: paged.length } });
         return Response.json({ data: TRACES.filter((t) => !s || t.sessionId === s), meta: { totalPages: 1 } });
       }
       return Response.json({ data: OBS[u.searchParams.get("traceId")!] ?? [], meta: { totalPages: 1 } });
@@ -85,13 +91,37 @@ afterAll(() => {
   if (savedUsage === undefined) delete process.env.ALEPH_USAGE_FILE; else process.env.ALEPH_USAGE_FILE = savedUsage;
   rmSync(fixtures, { recursive: true, force: true });
 });
-beforeEach(() => { clearCache(); clearFit(); hits = []; status = 200; });
+beforeEach(() => { clearCache(); clearFit(); hits = []; status = 200; paged = null; flaky = 0; });
 
 const TABLE = new URLSearchParams("view=table");
 const call = (key: string, path: string, params: Record<string, string> = {}) => {
   const url = new URL("http://x" + path);
   return routes[key](new Request(url), params, url) as Promise<Response>;
 };
+
+test("the sessions list holds the traces of every page, and a page that fails once is tried again", async () => {
+  paged = [[TRACES[0]], [TRACES[1]], [TRACES[2]]];
+  flaky = 1;
+  const d: any = await (await listSessions(new Request("http://localhost/api/sessions"))).json();
+  expect(d.sessions.map((s: any) => [s.id, s.turns]).sort()).toEqual([["s1", 2], ["s2", 1]]);
+});
+
+test("a failed Langfuse makes the sessions list answer 502 with a message that names Langfuse, after two tries", async () => {
+  status = 500;
+  const res = await listSessions(new Request("http://localhost/api/sessions"));
+  expect(res.status).toBe(502);
+  expect(((await res.json()) as any).error).toContain("Langfuse");
+  expect(hits.filter((h) => h.startsWith("/api/public/traces?")).length).toBe(2);
+});
+
+test("a second sessions list inside 30 s reads the cache and not Langfuse", async () => {
+  flaky = 1;
+  expect((await listSessions(new Request("http://localhost/api/sessions"))).status).toBe(200);
+  const n = hits.length;
+  expect(n).toBeGreaterThan(0);
+  await listSessions(new Request("http://localhost/api/sessions"));
+  expect(hits.length).toBe(n);
+});
 
 test("the project filter narrows every route", async () => {
   const d: any = await (await listSessions(new Request("http://localhost"+"/api/sessions?project=sidetone"))).json();
