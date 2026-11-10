@@ -95,6 +95,7 @@ in \`wiki/\`.
 `;
 
 export const GITIGNORE = `.recall.json
+.recall-log.jsonl
 .index/
 .obsidian/workspace*.json
 .obsidian/plugins/*/main.js

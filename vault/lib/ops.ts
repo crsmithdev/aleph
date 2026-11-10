@@ -98,13 +98,18 @@ const READ_LOG = () => join(root, ".recall.json");
 function readLog(): Record<string, string> {
   try { return JSON.parse(readFileSync(READ_LOG(), "utf8")); } catch { return {}; }
 }
-function noteRead(titles: string[]): void {
+/** Every logged return, one JSON line of date, title and query, for 30 days. Also outside git. */
+const RECALL_LOG = () => join(root, ".recall-log.jsonl");
+function noteRead(titles: string[], query: string): void {
   // `--unlogged`: a person browsing is not a read by an agent, and the Memory page shows the log as use.
   if (!titles.length || rest.includes("--unlogged")) return;
   try {
     const log = readLog();
     for (const t of titles) log[t] = today();
     writeFileSync(READ_LOG(), JSON.stringify(log, null, 0));
+    const cut = today(new Date(Date.now() - 30 * 86400_000));
+    const old = existsSync(RECALL_LOG()) ? readFileSync(RECALL_LOG(), "utf8").split("\n").filter((l) => l && JSON.parse(l).date >= cut) : [];
+    writeFileSync(RECALL_LOG(), [...old, ...titles.map((title) => JSON.stringify({ date: today(), title, query }))].join("\n") + "\n");
   } catch { /* a read must never fail on its own bookkeeping */ }
 }
 
@@ -283,7 +288,7 @@ async function recall(): Promise<void> {
   const hits = q
     ? rankNotes(openIndex(root, notes), scoped, q, scope).map(({ note, rank }) => ({ n: note, r: rank }))
     : scoped.map((n) => ({ n, r: 4 })).sort((a, b) => a.n.title.localeCompare(b.n.title));
-  noteRead(hits.map(({ n }) => n.title));
+  noteRead(hits.map(({ n }) => n.title), q);
   // A scope nobody uses is almost always a misspelling of one that exists, and
   // the vault has five names for one project. Say so rather than return [].
   if (scope !== undefined && !hits.length) {

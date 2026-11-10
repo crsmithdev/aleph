@@ -95,6 +95,7 @@ describe("init", () => {
     expect(daily).toEqual({ folder: "daily", format: "YYYY-MM-DD" });
     expect(JSON.parse(readFileSync(join(vault, ".obsidian/app.json"), "utf8")).attachmentFolderPath).toBe("attachments");
     expect(readFileSync(join(vault, ".gitignore"), "utf8")).toContain("workspace*.json");
+    expect(readFileSync(join(vault, ".gitignore"), "utf8")).toContain(".recall-log.jsonl");
     expect(Bun.spawnSync(["git", "-C", vault, "remote"], { stdout: "pipe" }).stdout.toString().trim()).toBe("");
     expect(readFileSync(join(vault, "Home.md"), "utf8").trim().split("\n").at(-1)).toMatch(/^Health: 0 notes, 0 dangling, 0 stale, lint \d{4}-\d{2}-\d{2}$/);
   });
@@ -620,6 +621,19 @@ describe("decay", () => {
 });
 
 describe("recall", () => {
+  test("a logged recall adds one entry per returned note, drops entries over 30 days, and --unlogged adds none", async () => {
+    const file = join(vault, ".recall-log.jsonl");
+    const lines = () => readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    (await cli("write", note("Log Probe"), "--why", "x"));
+    writeFileSync(file, JSON.stringify({ date: "2000-01-01", title: "Ancient", query: "old" }) + "\n");
+    (await cli("recall", "log probe"));
+    (await cli("recall", "probe"));
+    const day = JSON.parse(readFileSync(join(vault, ".recall.json"), "utf8"))["Log Probe"];
+    expect(day).toMatch(/^\d{4}-\d\d-\d\d$/);
+    expect(lines()).toEqual([{ date: day, title: "Log Probe", query: "log probe" }, { date: day, title: "Log Probe", query: "probe" }]);
+    (await cli("recall", "log probe", "--unlogged"));
+    expect(lines()).toHaveLength(2);
+  });
   test("ranks title, alias, contains, body; empty list otherwise", async () => {
     // The CLI test of this op: it spawns vault/cli.ts.
     (await cli("write", note("Verify Gate", { aliases: "[stop gate]" }, "**Claim.** judged at Stop, as of 2026-09-04.\n\n## Details\nnested claude -p haiku\n\n## Evidence\n\n## Related\n[[Home]]\n"), "--why", "x"));

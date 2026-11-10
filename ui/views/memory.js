@@ -266,10 +266,12 @@ export function renderInspector(n, row) {
   if (!n) return `<p class="quiet">Select a note to see its claim, sources and links.</p>`;
   const fm = n.frontmatter ?? {}, sources = [].concat(fm.sources ?? []);
   const list = (title, xs, item) => (xs.length ? `<h4>${title}</h4><ul>${xs.map((x) => `<li>${item(x)}</li>`).join("")}</ul>` : "");
+  const hist = row?.history ?? [], top = Math.max(...hist, 1);
+  const strip = row ? (hist.some(Boolean) ? `<h4>Recalls, 30 Days</h4><div class="spark recall-strip">${hist.map((c) => `<i title="${c}" data-n="${c}" style="height:${c ? Math.max(12, c / top * 100) : 4}%"></i>`).join("")}</div>` : `<p class="quiet">No recall in the last 30 days.</p>`) : "";
   return (row ? pill(row.status) : "") + `<h3>${esc(n.title)}</h3>` +
     (row?.problems?.length ? `<div class="warnbox">${row.problems.map((p) => esc(`${p.rule}: ${p.detail}`)).join("<br>")}</div>` : "") +
     facts([["Kind", esc([fm.kind, fm.scope].filter(Boolean).join(", "))], ["Confidence", esc(fm.confidence)], ["Written", fm.updated && esc(shortDay(fm.updated))], ["Last read", row && esc(row.read ? shortDay(row.read) : "never")]]) +
-    `<article class="note">${md(n.body)}</article>` +
+    strip + `<article class="note">${md(n.body)}</article>` +
     list("Sources", sources, (s) => `<code>${esc(s)}</code>`) + list("Links to", n.links ?? [], (l) => link(l.title)) + list("Linked From", n.backlinks ?? [], (l) => link(l.title)) +
     `<p class="hint"><code>${esc(n.path)}</code> · ${`<a href="#/memory/${encodeURIComponent(n.title)}">Open the page</a>`}</p>`;
 }

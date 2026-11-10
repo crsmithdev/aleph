@@ -243,6 +243,27 @@ test("/api/memory lists the notes with their read date, and a page search logs n
   expect(JSON.parse(readFileSync(log, "utf8"))).toEqual({ "Use Bun": "2026-10-30" });
 });
 
+test("/api/memory gives each note its recall count per day over 30 days, and the inspector draws them", async () => {
+  const log = join(base, "vault", ".recall-log.jsonl");
+  const day = (n: number) => new Date(NOW - n * 86400_000).toISOString().slice(0, 10);
+  writeFileSync(log, [day(0), day(0), day(3)].map((date) => JSON.stringify({ date, title: "Use Bun", query: "q" })).join("\n") + "\n");
+  try {
+    const m = await (await at("/api/memory")).json() as any;
+    const bun = m.notes.find((n: any) => n.title === "Use Bun");
+    expect(bun.history).toHaveLength(30);
+    expect(bun.history[29]).toBe(2);
+    expect(bun.history[26]).toBe(1);
+    expect(bun.history.reduce((a: number, b: number) => a + b)).toBe(3);
+    expect(m.notes.find((n: any) => n.title !== "Use Bun").history).toEqual(Array(30).fill(0));
+  } finally { rmSync(log, { force: true }); }
+  const n = { title: "N", path: "wiki/N.md", frontmatter: {}, body: "x" };
+  const hist = Array(30).fill(0); hist[29] = 2; hist[26] = 1;
+  const h = v.renderInspector(n, row({ history: hist }));
+  expect(h.match(/<i /g)).toHaveLength(30);
+  expect(h).toContain('data-n="2"');
+  expect(v.renderInspector(n, row({ history: Array(30).fill(0) }))).toContain("No recall in the last 30 days.");
+});
+
 test("/api/memory lint gives no stale finding to an old note that the read log shows read lately", async () => {
   const file = join(base, "vault", "wiki", "concepts", "Old idea.md");
   const log = join(base, "vault", ".recall.json");

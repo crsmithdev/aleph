@@ -6,7 +6,7 @@ import { staleAsync } from "../stale.ts";
 import { uiFetchTtl } from "../../issues/lib/store.ts";
 import { clearTypesCache, memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { uiCacheMs } from "../../jobs/lib/infra/settings.ts";
 
 const CLI = join(import.meta.dir, "..", "..", "vault", "cli.ts");
@@ -88,12 +88,27 @@ function readLog(root: string): Record<string, string> {
   try { return JSON.parse(readFileSync(join(root, ".recall.json"), "utf8")); } catch { return {}; }
 }
 
+/** Each note's recall count per day for the last 30 days, oldest first, from the recall log. */
+function recallDays(root: string): Map<string, number[]> {
+  const days = Array.from({ length: 30 }, (_, i) => today(new Date(Date.now() - (29 - i) * 86400_000)));
+  const by = new Map<string, number[]>();
+  let lines: string[] = [];
+  try { lines = readFileSync(join(root, ".recall-log.jsonl"), "utf8").split("\n"); } catch { /* no log yet */ }
+  for (const l of lines) {
+    try {
+      const e = JSON.parse(l), i = days.indexOf(e.date);
+      if (i >= 0) { const c = by.get(e.title) ?? Array(30).fill(0); c[i]++; by.set(e.title, c); }
+    } catch { /* a bad line is skipped */ }
+  }
+  return by;
+}
+
 /** One row per note for the note browser: what it is, when it was written and last returned, and its refusals. */
 function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: string; detail: string }[]) {
-  const read = readLog(root);
+  const read = readLog(root), hist = recallDays(root);
   const problems = new Map<string, { rule: string; detail: string }[]>();
   for (const f of refuse) problems.set(f.note, [...(problems.get(f.note) ?? []), { rule: f.rule, detail: f.detail }]);
-  return wiki.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? "none"), scope: scopeOf(n), updated: String(n.fm.updated ?? ""), read: read[n.title] ?? null, problems: problems.get(n.title) ?? [] }));
+  return wiki.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? "none"), scope: scopeOf(n), updated: String(n.fm.updated ?? ""), read: read[n.title] ?? null, history: hist.get(n.title) ?? Array(30).fill(0), problems: problems.get(n.title) ?? [] }));
 }
 
 async function overview(url: URL): Promise<Response> {
