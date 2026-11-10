@@ -303,17 +303,17 @@ describe("git-guard", () => {
 
 describe("handshake prune", () => {
   test("drops stale files and keeps fresh ones", async () => {
-    const { put, prune, peek } = await import("./lib/handshake.ts");
+    const { tool, prune } = await import("./lib/handshake.ts");
     const dir = mkdtempSync(join(tmpdir(), "aleph-prune-"));
     process.env.ALEPH_SPOOL = dir;
-    put("tool:old", { start: 1 });
-    put("tool:new", { start: 2 });
+    tool("old").set({ start: 1, input: null });
+    tool("new").set({ start: 2, input: null });
     const { utimesSync } = await import("node:fs");
     const old = new Date(0);
     utimesSync(join(dir, "tool:old.json"), old, old);
     prune();
-    expect(peek("tool:old")).toBeNull();
-    expect(peek("tool:new")).toEqual({ start: 2 });
+    expect(tool("old").get()).toBeNull();
+    expect(tool("new").get()).toEqual({ start: 2, input: null });
     delete process.env.ALEPH_SPOOL;
     rmSync(dir, { recursive: true, force: true });
   });

@@ -11,7 +11,7 @@
  * Stop hook already continued is never blocked.
  */
 import { createHash } from "node:crypto";
-import { peek, put } from "../../hooks/lib/handshake.ts";
+import { once } from "../../hooks/lib/handshake.ts";
 import { scan } from "./clones.ts";
 import { accepted, base, changed, history, holes, isAccepted, rules } from "./cochange.ts";
 
@@ -43,8 +43,8 @@ if (import.meta.main) {
   if (top.exitCode !== 0) process.exit(0);
   const text = reason(top.stdout.toString().trim());
   if (!text) process.exit(0);
-  const key = `oneway:${input.session_id}:${createHash("sha1").update(text).digest("hex").slice(0, 12)}`;
-  if (peek(key)) process.exit(0);
-  put(key, { start: Date.now() });
+  const blocked = once(`oneway:${input.session_id}:${createHash("sha1").update(text).digest("hex").slice(0, 12)}`);
+  if (blocked.seen()) process.exit(0);
+  blocked.mark();
   console.log(JSON.stringify({ decision: "block", reason: text }));
 }

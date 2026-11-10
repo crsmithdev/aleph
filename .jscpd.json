@@ -77,6 +77,22 @@
       "disable": [
         "semantic"
       ]
+    },
+    {
+      "name": "turn span",
+      "code": [
+        "hooks/lib/trace.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "hooks/lib/trace.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
     }
   ]
 }

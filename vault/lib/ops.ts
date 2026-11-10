@@ -4,7 +4,7 @@
  */
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { decide, judgeChoice, type Question } from "../../lib/jev.ts";
+import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { langfuseConfig } from "../../lib/env.ts";
 import { fetchObservations, type Observation } from "../../lib/otlp.ts";
 import { serializeFrontmatter } from "../../lib/frontmatter.ts";
@@ -225,16 +225,13 @@ async function write(): Promise<void> {
   if (judgeChoice() !== "haiku") {
     const candidates = screenCandidates(placed, notes);
     if (candidates.length) {
-      const questions: Record<string, Question> = {};
+      const questions: Record<string, Noul> = {};
       candidates.forEach((n, i) => {
         questions[`n${i}`] = { type: "noul", instructions: `Does the draft's claim contradict the note's claim? Draft \`${draft.title}\` (its claim line: ${claimLine(draft)}). Note \`${n.title}\` (its claim line: ${claimLine(n)}).` };
       });
       try {
-        const d = await decide({ draft: draft.title }, questions);
-        const hits = candidates.filter((_, i) => {
-          const a = d.answers[`n${i}`];
-          return a.type === "noul" && a.noul >= 0.7;
-        });
+        const { p } = await nouls({ draft: draft.title }, questions);
+        const hits = candidates.filter((_, i) => p[`n${i}`] >= 0.7);
         if (hits.length) refuse(hits.map((n) => ({ note: n.title, rule: "contradiction", detail: `the draft [${draft.title}] may contradict [${n.title}]` })), "add it to supersedes or fix the draft: this write changed nothing; name it in consistent_with if the two agree");
       } catch (e) {
         if (e instanceof Exit) throw e; // the refusal above

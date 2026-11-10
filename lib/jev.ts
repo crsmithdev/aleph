@@ -29,9 +29,8 @@ export function setJudgeChoice(choice: JudgeChoice) {
 }
 const URL = () => process.env.ALEPH_JEV_URL ?? "https://openrouter.ai/api/alpha/decisions";
 
-export type Question =
-  | { type: "choice"; instructions: string; criteria: Record<string, string> }
-  | { type: "noul"; instructions: string };
+export type Noul = { type: "noul"; instructions: string; criteria?: { true: string; false: string } };
+export type Question = { type: "choice"; instructions: string; criteria: Record<string, string> } | Noul;
 export type Answer =
   | { type: "choice"; choice: string; probabilities?: Record<string, number>; confidence?: number }
   | { type: "noul"; noul: number };
@@ -55,4 +54,11 @@ export async function decide(state: unknown, questions: Record<string, Question>
     if (a?.type !== questions[id].type) throw new Error(`jev: no ${questions[id].type} answer for ${id}`);
   }
   return { answers: body.answers, cost: body.usage?.cost ?? 0, model: body.model ?? JEV_MODEL, ms: performance.now() - started };
+}
+
+/** decide() for yes-or-no questions: each question's probability of yes, by id. */
+export async function nouls(state: unknown, questions: Record<string, Noul>, timeoutMs?: number): Promise<{ p: Record<string, number>; cost: number }> {
+  const d = await decide(state, questions, timeoutMs);
+  const p = Object.fromEntries(Object.keys(questions).map((id) => [id, (d.answers[id] as { noul: number }).noul]));
+  return { p, cost: d.cost };
 }

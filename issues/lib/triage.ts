@@ -3,7 +3,7 @@
  * which open items it may duplicate. One request; any failure, or
  * `aleph judge haiku`, gives an empty triage.
  */
-import { decide, judgeChoice, type Question } from "../../lib/jev.ts";
+import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { areasOf } from "./store.ts";
 import { status, type Doc } from "./todo.ts";
 
@@ -19,19 +19,18 @@ export async function triage(doc: Doc | null, title: string, body = ""): Promise
   const open = doc.items.filter((i) => status(i) === "open").sort((a, b) => b.id - a.id).slice(0, MAX_QUESTIONS - known.length);
   if (!known.length && !open.length) return none;
 
-  const questions: Record<string, Question> = {};
+  const questions: Record<string, Noul> = {};
   for (const l of known) {
-    questions[`label:${l}`] = { type: "noul", instructions: `Should \`new_item\` carry the label \`${l}\`?`, criteria: { true: `new_item belongs under the label ${l}`, false: `new_item does not belong under the label ${l}` } } as Question;
+    questions[`label:${l}`] = { type: "noul", instructions: `Should \`new_item\` carry the label \`${l}\`?`, criteria: { true: `new_item belongs under the label ${l}`, false: `new_item does not belong under the label ${l}` } };
   }
   for (const i of open) {
     questions[`item:${i.id}`] = { type: "noul", instructions: `Is \`new_item\` the same task as open item ${i.id}: ${i.title}?` };
   }
   try {
-    const { answers } = await decide({ new_item: { title, body } }, questions);
-    const p = (id: string) => (answers[id] as { noul: number }).noul;
+    const { p } = await nouls({ new_item: { title, body } }, questions);
     return {
-      labels: known.filter((l) => p(`label:${l}`) >= CUT),
-      maybeSame: open.filter((i) => p(`item:${i.id}`) >= CUT).map((i) => ({ id: i.id, title: i.title, p: p(`item:${i.id}`) })),
+      labels: known.filter((l) => p[`label:${l}`] >= CUT),
+      maybeSame: open.filter((i) => p[`item:${i.id}`] >= CUT).map((i) => ({ id: i.id, title: i.title, p: p[`item:${i.id}`] })),
     };
   } catch {
     return none;

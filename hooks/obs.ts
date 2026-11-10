@@ -12,9 +12,10 @@
  */
 import { basename } from "node:path";
 import { langfuseConfig, sessionEnvironment } from "../lib/env.ts";
-import { peek, prune, put, take } from "./lib/handshake.ts";
+import { agent, prune, session, tool, turn } from "./lib/handshake.ts";
 import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "../lib/otlp.ts";
 import { parseRating } from "./lib/rating.ts";
+import { traceAttrs } from "./lib/trace.ts";
 import { readEntries } from "./lib/digest.ts";
 import { decide, judgeChoice, type Question } from "../lib/jev.ts";
 import { costDetails, type Usage } from "../lib/pricing.ts";
@@ -29,14 +30,14 @@ if (!cfg || !sessionId) process.exit(0);
 // `ALEPH_NOW` fixes the clock for tests, as in issues/lib/todo.ts `clock`.
 const now = process.env.ALEPH_NOW ? Date.parse(process.env.ALEPH_NOW) : Date.now();
 const event: string = input.hook_event_name ?? "unknown";
-const sessionKey = `session:${sessionId}`;
-const turnKey = input.prompt_id ? `turn:${input.prompt_id}` : null;
-const agentKey = input.agent_id ? `agent:${input.agent_id}` : null;
+const sessionSlot = session(sessionId);
+const turnSlot = input.prompt_id ? turn(input.prompt_id) : null;
+const agentSlot = input.agent_id ? agent(input.agent_id) : null;
 
 // SessionStart posts nothing. It leaves the name, tags and cwd that every turn trace repeats.
 if (event === "SessionStart") {
   prune();
-  put(sessionKey, {
+  sessionSlot.set({
     start: now,
     name: input.cwd ? basename(input.cwd) : undefined,
     cwd: input.cwd,
@@ -50,14 +51,14 @@ if (event === "SessionStart") {
 }
 
 // A span belongs to its turn's trace. Inside a subagent the agent's handshake remembers which.
-const resolvedTraceId = input.prompt_id ? turnTraceIdFor(input.prompt_id) : agentKey ? peek(agentKey)?.traceId : undefined;
+const resolvedTraceId = input.prompt_id ? turnTraceIdFor(input.prompt_id) : agentSlot?.get()?.traceId;
 if (!resolvedTraceId) process.exit(0);
 const traceId: string = resolvedTraceId;
 const turnSpanId = input.prompt_id ? turnSpanIdFor(input.prompt_id) : undefined;
 
 /** Tool spans inside a subagent hang off the agent span; everything else off the turn. */
 function parentForChild(): string | undefined {
-  if (agentKey) return peek(agentKey)?.spanId;
+  if (agentSlot) return agentSlot.get()?.spanId;
   return turnSpanId;
 }
 
@@ -70,17 +71,8 @@ function scalars(payload: Payload, skip: string[]): Record<string, AttrValue> {
   return out;
 }
 
-// Trace attributes ride on every span: a span without them lets Langfuse rename the trace after its root span.
-const session = peek(sessionKey);
-const base: Record<string, AttrValue | undefined> = {
-  "langfuse.session.id": sessionId,
-  "langfuse.user.id": "chris",
-  "langfuse.environment": sessionEnvironment(),
-  "langfuse.trace.name": session?.name ?? (input.cwd ? basename(input.cwd) : undefined),
-  "langfuse.trace.tags": session?.tags,
-  "langfuse.trace.metadata.cwd": session?.cwd ?? input.cwd,
-  "aleph.event": event,
-};
+const known = sessionSlot.get();
+const base = traceAttrs(input);
 
 function span(name: string, type: string, start: number, extra: Record<string, AttrValue | undefined | null>, opts: { id?: string; parent?: string; error?: string; end?: number } = {}): Span {
   const s: Span = {
@@ -103,7 +95,7 @@ function span(name: string, type: string, start: number, extra: Record<string, A
  * output are the trace's, which is what the Sessions page shows.
  */
 function turnSpan(start: number, output: string | undefined, error?: string, extra: Record<string, AttrValue | undefined> = {}): Span {
-  const prompt = peek(turnKey!)?.input;
+  const prompt = turnSlot!.get()?.input;
   const inputText = prompt === undefined ? undefined : truncate(prompt);
   const outputText = output === undefined ? undefined : truncate(output);
   return span("turn", "agent", start, {
@@ -225,23 +217,23 @@ const scores: Score[] = [];
 
 switch (event) {
   case "UserPromptSubmit": {
-    put(turnKey!, { start: now, spanId: turnSpanId, input: input.prompt ?? "" });
+    turnSlot!.set({ start: now, spanId: turnSpanId, input: input.prompt ?? "" });
     spans.push(turnSpan(now, undefined));
     // "N/10" in a prompt rates the previous reply; the session handshake remembers which trace that was
-    const previous = session?.lastTraceId;
-    put(sessionKey, { ...(session ?? { start: now }), lastTraceId: traceId });
+    const previous = known?.lastTraceId;
+    sessionSlot.set({ ...(known ?? { start: now }), lastTraceId: traceId });
     const rating = parseRating(input.prompt ?? "");
     if (rating !== null && previous) scores.push({ traceId: previous, name: "rating", value: rating, comment: input.prompt, environment: sessionEnvironment() });
     break;
   }
 
   case "PreToolUse":
-    if (input.tool_use_id) put(`tool:${input.tool_use_id}`, { start: now, input: input.tool_input });
+    if (input.tool_use_id) tool(input.tool_use_id).set({ start: now, input: input.tool_input });
     process.exit(0);
 
   case "PostToolUse":
   case "PostToolUseFailure": {
-    const hs = input.tool_use_id ? take(`tool:${input.tool_use_id}`) : null;
+    const hs = input.tool_use_id ? tool(input.tool_use_id).take() : null;
     const failed = event === "PostToolUseFailure";
     const toolName: string = input.tool_name ?? "tool";
     const name = toolName === "Skill" && input.tool_input?.skill ? `skill:${input.tool_input.skill}` : toolName;
@@ -258,11 +250,11 @@ switch (event) {
   }
 
   case "SubagentStart":
-    if (agentKey) put(agentKey, { start: now, spanId: spanId(), parentSpanId: turnSpanId, traceId });
+    agentSlot?.set({ start: now, spanId: spanId(), parentSpanId: turnSpanId, traceId });
     process.exit(0);
 
   case "SubagentStop": {
-    const hs = agentKey ? take(agentKey) : null;
+    const hs = agentSlot?.take();
     spans.push(span(input.agent_type ?? "subagent", "agent", hs?.start ?? now, {
       "langfuse.observation.output": truncate(input.last_assistant_message ?? ""),
       "langfuse.observation.metadata.agent_id": input.agent_id,
@@ -273,11 +265,11 @@ switch (event) {
 
   case "Stop":
   case "StopFailure": {
-    // peek, not take: a blocked Stop fires again and the turn keeps its start; prune() clears the file later
-    const start = peek(turnKey!)?.start ?? now;
+    // get, not take: a blocked Stop fires again and the turn keeps its start; prune() clears the file later
+    const start = turnSlot!.get()?.start ?? now;
     const failed = event === "StopFailure";
     const message: string = input.last_assistant_message ?? "";
-    const tag = failed ? {} : await taskType(peek(turnKey!)?.input as string | undefined, message);
+    const tag = failed ? {} : await taskType(turnSlot!.get()?.input, message);
     spans.push(turnSpan(start, message, failed ? (input.error ? `${input.error}: ${message}` : message || "StopFailure") : undefined, tag));
     // a failed turn's message is the API error, which never reaches the transcript, so do not wait for it
     if (input.transcript_path) spans.push(...generations(input.transcript_path, input.prompt_id, failed ? "" : message));

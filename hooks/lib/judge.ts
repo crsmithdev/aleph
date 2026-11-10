@@ -10,7 +10,7 @@
  * command output) and strong where it can be read off the text: see
  * docs/verify-gate.md "Jev screen".
  */
-import { decide, judgeChoice } from "../../lib/jev.ts";
+import { judgeChoice, nouls, type Noul } from "../../lib/jev.ts";
 import { oneShot } from "../../jobs/lib/routing/one-shot.ts";
 
 export interface Verdict { verdict: "pass" | "deny"; reason: string }
@@ -40,8 +40,8 @@ export interface JudgeResult { verdict: Verdict | null; error?: string; ms: numb
 /** Jev passes a turn alone only when its probability of a claim is below this. Measured on 517 stored turns, 27 Oct 2026. */
 export const JEV_PASS_BELOW = () => Number(process.env.ALEPH_JEV_PASS_BELOW ?? 0.05);
 
-const CLAIM = {
-  type: "noul" as const,
+const CLAIM: Noul = {
+  type: "noul",
   instructions: "Does `final_message` claim that some work is complete, fixed, working, passing, landed or verified?",
   criteria: {
     true: "It states or implies that a change, fix, task or check succeeded or is done.",
@@ -52,9 +52,8 @@ const CLAIM = {
 /** Jev's probability that the final message claims completion, or why it gave none. */
 async function jevScreen(finalMessage: string, timeoutMs: number): Promise<{ pClaim: number | null; error?: string; cost: number }> {
   try {
-    const d = await decide({ final_message: finalMessage }, { claim: CLAIM }, timeoutMs);
-    const a = d.answers.claim;
-    return { pClaim: a.type === "noul" ? a.noul : null, cost: d.cost };
+    const { p, cost } = await nouls({ final_message: finalMessage }, { claim: CLAIM }, timeoutMs);
+    return { pClaim: p.claim, cost };
   } catch (e: any) {
     return { pClaim: null, error: e?.message ?? String(e), cost: 0 };
   }

@@ -82,7 +82,7 @@ To skip the scan, put `ALEPH_SKIP_SCAN=1` in the command text.
 
 ### verify gate
 
-`hooks/verify-gate.ts` runs twice per turn. At `UserPromptSubmit` it snapshots the repo and its worktrees into the spool (`hooks/lib/snapshot.ts`). At `Stop` it compares, and decides in this order:
+`hooks/verify-gate.ts` runs twice per turn and hands the event to `gate()` in `hooks/lib/gate.ts`. At `UserPromptSubmit` it snapshots the repo and its worktrees into the spool (`hooks/lib/snapshot.ts`). At `Stop` it compares, and decides in this order:
 
 1. No code file changed (`.md` and `.mdx` do not count): pass.
 2. The prompt says `skip verify`: pass. Factory runs cannot use this.

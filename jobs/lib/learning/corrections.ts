@@ -8,7 +8,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../../lib/env.ts";
-import { decide } from "../../../lib/jev.ts";
+import { decide, nouls } from "../../../lib/jev.ts";
 import { fetchObservations } from "../../../lib/otlp.ts";
 import { allPages } from "../../../ui/langfuse-pages.ts";
 import { factoryDir } from "../gates/factory-status.ts";
@@ -123,16 +123,14 @@ async function chrisSignals(cfg: LangfuseConfig, from: Date, seen: Set<string>):
     const before = text(prev?.output).trim();
     if (!message || !before || seen.has(t.id) || NOT_CHRIS.test(message)) continue;
     try {
-      const d = await decide(
+      const { p } = await nouls(
         { message, previous_assistant_message: before },
         {
           correction: { type: "noul", instructions: "Does `message` correct, reject or push back on what `previous_assistant_message` did or said?" },
           general: { type: "noul", instructions: "Does `message` state a rule for how Claude works across tasks, rather than a choice about this task's output?" },
         },
       );
-      const a = d.answers.correction;
-      const r = d.answers.general;
-      if (a.type !== "noul" || !(a.noul >= CORRECTION_AT) || r.type !== "noul" || !(r.noul >= CORRECTION_AT)) continue;
+      if (!(p.correction >= CORRECTION_AT) || !(p.general >= CORRECTION_AT)) continue;
     } catch (e) {
       fail(t.id, `jev failed on the trace: ${(e as Error).message}`);
       continue;
@@ -163,12 +161,11 @@ async function dropSignals(from: Date, seen: Set<string>): Promise<Signal[]> {
     // The run's own fact: it made no commit, so the drop is no fault in work that does not exist.
     if (causeOf(run) === "no-commit") continue;
     try {
-      const d = await decide(
+      const { p } = await nouls(
         { reason: run.reason },
         { fault: { type: "noul", instructions: "Did the reviewer drop the run for a fault in the agent's own work, rather than because the work is already done or on main, the run made no commit, found nothing to commit or found the goal already met, a duplicate, needs a rebase, or has a stale base?" } },
       );
-      const a = d.answers.fault;
-      if (a.type !== "noul" || !(a.noul >= CORRECTION_AT)) continue;
+      if (!(p.fault >= CORRECTION_AT)) continue;
     } catch (e2) {
       fail(e.id, `jev failed on the drop: ${(e2 as Error).message}`);
       continue;
@@ -248,15 +245,14 @@ async function propose(lessons: Lesson[], effects: Effects): Promise<Lesson[]> {
   for (const l of todo) {
     try {
       if (l.state === "open") {
-        const d = await decide(
+        const { p } = await nouls(
           { lesson: l.sentence, signals: l.signals.map((s) => s.quote) },
           {
             check: { type: "noul", instructions: "Can a test or a lint catch this before a run ends?" },
             rule: { type: "noul", instructions: "Is this one rule a CLAUDE.md line can state?" },
           },
         );
-        const yes = (id: string) => { const a = d.answers[id]; return a?.type === "noul" && a.noul >= 0.5; };
-        const kind: Kind = yes("check") ? "check" : yes("rule") ? "claude-md" : "skill";
+        const kind: Kind = p.check >= 0.5 ? "check" : p.rule >= 0.5 ? "claude-md" : "skill";
         l.target = await targetOf({ ...l, kind }, repo);
         l.kind = kind;
         l.state = "proposed";
