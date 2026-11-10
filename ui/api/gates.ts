@@ -14,6 +14,7 @@ import { latestReport } from "../../jobs/lib/learning/monitor-table.ts";
 import { allJobs } from "../../jobs/lib/records/job.ts";
 import * as record from "../../jobs/lib/records/record.ts";
 import { eventOf, eventsDir, layout, readEvents, readFactoryLog } from "../../jobs/lib/infra/layout.ts";
+import { inProject } from "./scope.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import { ACTIONS, refs, word, type Event } from "../../lib/naming.ts";
@@ -32,7 +33,7 @@ const DAY = 86_400_000;
 /** The windows that `?window=` takes. */
 const WINDOWS: Record<string, number> = { hour: DAY / 24, day: DAY, week: 7 * DAY, month: 30 * DAY };
 /** Whether `item` (`<repo>-<id>`) belongs to `project`; no project keeps every item. */
-const inProject = (item: string, project?: string) => !project || item.startsWith(`${project}-`);
+const inScope = (item: string, project?: string) => !project || inProject(item, project);
 
 /** One log row: an event. A run of equal gate events is one row: `times` is how many, `first` the first one's time. */
 type LogEntry = Event & { times?: number; first?: string };
@@ -245,7 +246,7 @@ export function log(now = Date.now(), max = LOG_MAX, ms = LOG_DAYS * DAY, projec
   const seen: Record<string, number> = {};
   const set: LogEntry[] = Object.entries(readAlways()).map(([reason, g]) => ({ at: g.at, by: "human", subject: reason, action: "changed", ...(askSub(reason) ? { sub: askSub(reason) } : {}), note: `set to ${g.action}` }));
   return [...holds, ...set, ...tickEntries(now - ms), ...noteEntries()]
-    .filter((e) => now - Date.parse(e.at) < ms && (!project || inProject(e.subject, project)))
+    .filter((e) => now - Date.parse(e.at) < ms && (!project || inScope(e.subject, project)))
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
     .filter((e) => (seen[e.by] = (seen[e.by] ?? 0) + 1) <= max);
 }
@@ -367,7 +368,7 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
 /** The page's data from the Status page's state (its factory snapshot, its asks and its Queued lane) and the security facts. */
 export function gatesBody(state: Pick<State, "now" | "factory" | "asks" | "queued">, security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
   const jobs = allJobs(), entries = log(Date.now(), LOG_MAX, ms, project), all = log(Date.now(), Infinity, ms, project);
-  const records = record.all().filter((r) => inProject(r.issue, project)), holds = allHolds().filter((h) => inProject(h.name, project));
+  const records = record.all().filter((r) => inScope(r.issue, project)), holds = allHolds().filter((h) => inScope(h.name, project));
   const f = state.factory, hold = backendHold();
   return {
     now: state.now,

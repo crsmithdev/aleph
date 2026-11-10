@@ -60,7 +60,7 @@ beforeAll(() => {
   // The chat route adds `wk` from the usage fit: read no snapshots from ~/.aleph. The file is never written.
   savedUsage = process.env.ALEPH_USAGE_FILE;
   fixtures = mkdtempSync(join(tmpdir(), "sessions-fixtures-"));
-  writeFileSync(join(fixtures, "repos.json"), JSON.stringify({ aleph: { path: join(fixtures, "aleph") }, sidetone: { path: join(fixtures, "sidetone") } }));
+  writeFileSync(join(fixtures, "repos.json"), JSON.stringify({ aleph: { path: "/w/aleph" }, sidetone: { path: "/w/sidetone" } }));
   mkdirSync(join(fixtures, "jobs"));
   process.env.ALEPH_REPOS = join(fixtures, "repos.json");
   process.env.ALEPH_JOBS_DIR = join(fixtures, "jobs");
@@ -129,6 +129,22 @@ test("the project filter narrows every route", async () => {
   expect((await call("GET /api/sessions/:id", "/api/sessions/s1?project=sidetone", { id: "s1" })).status).toBe(404);
   expect((await call("GET /api/sessions/:id/turns/:n", "/api/sessions/s1/turns/1?project=sidetone", { id: "s1", n: "1" })).status).toBe(404);
   expect((await call("GET /api/sessions/:id", "/api/sessions/s1?project=aleph", { id: "s1" })).status).toBe(200);
+});
+
+test("a session's project is the registry key over its cwd, as on the Skills page, and not the trace name", async () => {
+  TRACES.push(trace("t8", "s8", "other", iso(5), { metadata: { cwd: "/w/sidetone/sub" } }));
+  try {
+    const d: any = await (await listSessions(new Request("http://localhost/api/sessions"))).json();
+    expect(d.sessions.find((s: any) => s.id === "s8").project).toBe("sidetone");
+  } finally { TRACES.pop(); }
+});
+
+test("a trace whose cwd basename is a key but is not under its registry path is not in that project", async () => {
+  TRACES.push(trace("t9", "s9", "x", iso(5), { metadata: { cwd: "/elsewhere/sidetone" } }));
+  try {
+    const d: any = await (await listSessions(new Request("http://localhost/api/sessions?project=sidetone"))).json();
+    expect(d.sessions.map((s: any) => s.id)).toEqual(["s2"]);
+  } finally { TRACES.pop(); }
 });
 
 test("a turn is a tree of tools, hook spans and errors", async () => {

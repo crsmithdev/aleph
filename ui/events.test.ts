@@ -16,7 +16,9 @@ beforeAll(async () => {
   runs = join(base, "runs"); factory = join(base, "factory");
   ref = join(base, "issues", ".git", "refs", "remotes", "origin");
   for (const d of [join(runs, "old"), factory, ref]) mkdirSync(d, { recursive: true });
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: runs, ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
+  // The project filter matches only registry keys.
+  writeFileSync(join(base, "repos.json"), JSON.stringify({ p: { path: join(base, "p") }, q: { path: join(base, "q") }, "p-x": { path: join(base, "p-x") } }));
+  restoreEnv = withEnv({ ALEPH_REPOS: join(base, "repos.json"), ALEPH_JOBS_DIR: runs, ALEPH_ISSUES: join(base, "issues"), ALEPH_FACTORY_DIR: factory });
   ({ server, stop } = await withServer({ warm: false }));
 });
 

@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 import { langfuseConfig, type LangfuseConfig } from "../../lib/env.ts";
 import type { Observation } from "../../lib/otlp.ts";
 import { loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { traceProject } from "./scope.ts";
 import type { Routes } from "../server.ts";
 import { staleAsync } from "../stale.ts";
 import { allPages } from "../langfuse-pages.ts";
@@ -43,16 +44,6 @@ const short = (name: string) => name.split(":").pop()!;
 function slashCommand(prompt: string): string | null {
   const m = prompt.match(/^\s*(?:<command-message>[\s\S]*?<\/command-message>\s*)?<command-name>\s*\/?([^<\s]+)\s*<\/command-name>/) ?? prompt.match(/^\s*\/([\w][\w:.-]*)/);
   return m ? m[1] : null;
-}
-
-function projectOf(cwd: string | undefined, tags: string[] | undefined): string {
-  if (cwd) {
-    for (const r of Object.values(loadRegistry())) if (cwd === r.path || cwd.startsWith(r.path.replace(/\/+$/, "") + "/")) return r.key;
-    return ""; // sandbox and test directories are not projects
-  }
-  // The stored traces carry only a project tag, which is a name too: a tag that is no registry key is not a project either.
-  const tag = tags?.find((t) => t.startsWith("project:"))?.slice(8) ?? "";
-  return Object.keys(loadRegistry()).includes(tag) ? tag : "";
 }
 
 /** Like Promise.all, but a failure waits for the other promises to end first, then throws the first error: no request outlives its caller. */
@@ -197,8 +188,8 @@ async function analyse(days: number, project: string | null): Promise<Analysis> 
     const t = info.get(trace);
     const meta = { ...list.find((o) => o.metadata?.cwd)?.metadata, ...t?.metadata };
     const session = t?.sessionId ?? (list.find((o) => (o as any).sessionId) as any)?.sessionId ?? list.find((o) => o.metadata?.session_id)?.metadata?.session_id ?? "";
-    const proj = projectOf(meta.cwd, t?.tags);
-    if (project && proj !== project) continue;
+    const proj = traceProject(meta.cwd, t?.tags);
+    if (project && proj !== project) continue; // an unknown project matches nothing
     const turn = list.find((o) => o.name === "turn");
     const prompt = turn ? text(turn.input) : "";
     const isTool = (o: Observation) => o !== turn && (o.metadata?.tool || String(o.type).toUpperCase() === "TOOL");
@@ -275,8 +266,7 @@ export async function warm(): Promise<void> {
 async function cached(url: URL, make: (a: Analysis) => unknown | null): Promise<Response> {
   const d = Number(url.searchParams.get("days"));
   const days = d > 0 ? Math.min(Math.floor(d), 365) : 30;
-  const asked = url.searchParams.get("project");
-  const project = asked && Object.hasOwn(loadRegistry(), asked) ? asked : null; // an unknown project is no filter
+  const project = url.searchParams.get("project") || null;
   const key = `${process.env.LANGFUSE_BASE_URL}\0${days}\0${project}`;
   let a: Analysis;
   try { a = await cache.get(key, TTL, () => analyse(days, project)); }

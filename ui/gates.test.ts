@@ -40,6 +40,7 @@ beforeAll(async () => {
   writeFileSync(join(base, "repos.json"), JSON.stringify({
     held: { path: join(base, "held-repo"), sandbox: true, held: ["src/auth/**"] },
     plain: { path: join(base, "plain-repo"), sandbox: true },
+    alpha: { path: join(base, "alpha"), sandbox: true }, "alpha-ui": { path: join(base, "alpha-ui"), sandbox: true }, beta: { path: join(base, "beta"), sandbox: true },
   }));
   const factory = join(base, "factory");
   mkdirSync(factory);
@@ -587,6 +588,8 @@ test("GET /api/gates takes window and project: the log and the metrics keep that
     const alpha = await get("?project=alpha");
     expect(items(alpha.d)).toEqual(["alpha-1", "alpha-2"]);
     expect(alpha.d.metrics.rate.total).toBe(2);
+    logEvent({ at: ago(30), by: "rule", subject: "alpha-ui-2", action: "reran", sub: "rescue" });
+    expect(items((await get("?project=alpha")).d)).toEqual(["alpha-1", "alpha-2"]);
     expect(items((await get("?project=beta&window=month")).d)).toEqual(["beta-1", "beta-2"]);
     expect((await get("?window=year")).status).toBe(400);
   } finally {

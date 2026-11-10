@@ -4,7 +4,7 @@
  * apart send one `change`, and two `change` events are at least 2 s apart, with the last change always sent. It sends
  * an `ev` event for each line added to the event log, with the event as JSON, at once, and a `ping` every 25 s, so
  * that the page can tell a quiet stream from a dead one. With `?project=<key>` the `ev` events are only those of an issue
- * or job of that project and those whose subject names no project (a routine); `change` and `ping` go to every client. The watchers run only while a client is connected.
+ * or job of that project and those whose subject names no project (a routine), and none for a key that is not in the registry; `change` and `ping` go to every client. The watchers run only while a client is connected.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readSync, statSync, watch, type FSWatcher, type WatchOptions } from "node:fs";
 import { join } from "node:path";
@@ -12,6 +12,7 @@ import { factoryDir } from "../../jobs/lib/gates/factory-status.ts";
 import { eventsDir, layout } from "../../jobs/lib/infra/layout.ts";
 import { recordsDir } from "../../jobs/lib/records/record.ts";
 import { parseId } from "../../lib/naming.ts";
+import { inProject, known } from "./scope.ts";
 import { cookieToken, gateOn, onLogout } from "../auth.ts";
 import type { Routes } from "../server.ts";
 import { clearCache } from "./speed.ts";
@@ -35,8 +36,7 @@ let ping: Timer | undefined, settle: Timer | undefined, sentAt = 0;
 
 function send(bytes: Uint8Array, subject?: string): void {
   for (const [c, project] of clients) {
-    const repo = parseId(subject)?.repo;
-    if (project && repo && repo !== project) continue;
+    if (project && subject !== undefined && !(parseId(subject) ? inProject(subject, project) : known(project))) continue;
     try { c.enqueue(bytes); } catch { clients.delete(c); }
   }
 }

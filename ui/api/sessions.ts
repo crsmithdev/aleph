@@ -1,8 +1,8 @@
 /** `/api/sessions`, `/api/sessions/:id`, `/api/sessions/:id/turns/:n`: the Sessions views' data, from Langfuse. */
-import { basename } from "node:path";
 import { clip } from "../../lib/naming.ts";
 import { LangfuseError, config, observations, traces } from "../langfuse.ts";
 import { allRuns, loadRegistry } from "../../jobs/lib/records/ledger.ts";
+import { traceIn, traceProject } from "./scope.ts";
 import type { Routes } from "../server.ts";
 import { currentFit, share } from "../usage.ts";
 // @ts-ignore plain JS, shared with the page
@@ -15,10 +15,9 @@ const cut = (s: unknown, max: number) => {
 const text = (s: unknown) => (typeof s === "string" ? s : s == null ? "" : JSON.stringify(s));
 const ms = (iso?: string) => Date.parse(iso ?? "") || 0;
 
-/** A trace's project: its name, else the cwd's basename. */
-const projectOf = (t: any): string => t.name || (t.metadata?.cwd ? basename(String(t.metadata.cwd)) : "");
-const matches = (t: any, project: string | null) =>
-  !project || projectOf(t) === project || (t.metadata?.cwd ? basename(String(t.metadata.cwd)) === project : false);
+/** A trace's project, by the rule that the Skills page uses too. */
+const projectOf = (t: any): string => traceProject(t.metadata?.cwd, t.tags);
+const matches = (t: any, project: string | null) => !project || traceIn(t, project);
 
 const taskTypes = (ts: any[]): string[] => {
   const out = new Set<string>();

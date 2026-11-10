@@ -81,8 +81,9 @@ beforeEach(() => { clearCache(); rmSync(join(tmp, "store.json"), { force: true }
 
 const get = async (p: string) => { const r = await (/^\/api\/skills(\?|$)/.test(p) ? listSkills(new Request(`http://localhost${p}`)) : appAt(p)); return { status: r.status, body: r.headers.get("content-type")?.includes("json") ? await r.json() as any : await r.text() }; };
 
-test("?project= that is no registry key is no filter", async () => {
-  expect((await get("/api/skills?project=junk")).body.skills).toEqual((await get("/api/skills")).body.skills);
+test("?project= that is no registry key matches nothing", async () => {
+  expect((await get("/api/skills")).body.skills.length).toBeGreaterThan(0);
+  expect((await get("/api/skills?project=zeta")).body.skills).toEqual([]);
 });
 
 test("a 502 goes out only after every request of the failed fetch has ended", async () => {

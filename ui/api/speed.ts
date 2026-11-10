@@ -20,6 +20,7 @@ import { status } from "../../issues/lib/todo.ts";
 import { currentFit, share, type Fit } from "../usage.ts";
 import { LIVE_CAP } from "../../jobs/lib/infra/settings.ts";
 import { clip, NAMES, parseId } from "../../lib/naming.ts";
+import { inProject } from "./scope.ts";
 
 const HOUR = 3600_000, DAY = 24 * HOUR;
 
@@ -597,7 +598,7 @@ export function speed(window: Window, now = new Date(), fit: Fit | null = null, 
     const item = repo ? lists.item(repo, n) : undefined;
     if (item) Object.assign(t, { title: item.title, href: `#/issues/${encodeURIComponent(repo)}/${n}` });
   }
-  const records = read.filter((r) => !project || r.issue.startsWith(`${project}-`));
+  const records = read.filter((r) => !project || inProject(r.issue, project));
   const stages = { rows: stageRows({ runs: entries, specChecks: specChecksOf(records) }, since.getTime(), now.getTime()), worst };
   for (const u of issues.usage) {
     const [repo, n] = splitId(u.goal);
