@@ -148,12 +148,14 @@ const COMMANDS = new Set(["bun", "bunx", "npm", "npx", "pnpm", "yarn", "node", "
 export function realOracle(text: string): boolean {
   if (/\baleph check\b/.test(text)) return false;
   if (/[\w./-]+\.(test|spec)\.[a-z]+\b|(^|[\s`/])(tests?|__tests__)\/[\w./-]+|\btest_[\w-]+\.py\b|_test\.(go|py)\b/m.test(text)) return true;
-  for (const c of commandsIn(text)) {
-    const word = c.split(/\s+/)[0];
-    if (COMMANDS.has(word) || word.startsWith("./") || (word && Bun.which(word))) return true;
-  }
-  return false;
+  return commandsIn(text).some(isCommand);
 }
+
+/** Whether a backtick span is a command a shell runs, by its first word. */
+const isCommand = (span: string): boolean => {
+  const word = span.split(/\s+/)[0];
+  return COMMANDS.has(word) || word.startsWith("./") || (!!word && !!Bun.which(word));
+};
 
 /** A test file, which sits beside the code it tests. */
 const TEST_FILE = /\.(test|spec|accept)\.[a-z]+$|(^|\/)test_[\w-]+\.py$|_test\.(go|py)$/;
@@ -183,9 +185,11 @@ function specProblems(repo: Repo, s: Spec, at: string): string[] {
     if (hasPlaceholder(cmd)) out.push(`${at}: the Oracle command \`${cmd}\` holds a placeholder`);
     for (const arg of nameFilters(cmd)) out.push(`${at}: \`${cmd}\` names ${arg}, which bun reads as a name filter: write ./${arg}`);
   }
-  // A test file the Oracle names must be on main, or in the Edit surface for the run to make.
+  // A test file the Oracle names, in its prose or in a command, must be on main, or in the Edit surface for the run to
+  // make. A name in another backtick span (such as a fixture name in test data) is not a file.
   const surface = s.surface.map((p) => p.path);
-  for (const m of new Set([...oracle.matchAll(/(?:^|[\s`(])\.?\/?([\w.@-]+(?:\/[\w.@-]+)*\.(?:test|spec)\.[jt]sx?)\b/g)].map((m) => m[1]))) {
+  const named = [oracle.replace(/`[^`\n]+`/g, " "), ...commandsIn(oracle).filter(isCommand)].join("\n");
+  for (const m of new Set([...named.matchAll(/(?:^|[\s`(])\.?\/?([\w.@-]+(?:\/[\w.@-]+)*\.(?:test|spec)\.[jt]sx?)\b/g)].map((m) => m[1]))) {
     if (!onMainTree(repo, m) && !inSurface(m, surface)) out.push(`${at}: the Oracle names ${m}, which is not on main and not in the Edit surface`);
   }
   return out;

@@ -290,6 +290,8 @@ test("the code checks of a spec", () => {
   expect(check({ oracle: ["`bun test ./a/b.accept.ts` passes"] })).toEqual([]);
   expect(check({ oracle: ["`bun test w.test.ts` passes"] })).toEqual(["the spec: the Oracle names w.test.ts, which is not on main and not in the Edit surface"]);
   expect(check({ edit_surface: [{ path: "x.ts", new: false }, { path: "w.test.ts", new: true }], oracle: ["`bun test w.test.ts` passes"] })).toEqual([]);
+  expect(check({ oracle: ["`bun run test`: a test writes a report for the file `w.test.ts` and expects `passed([\"w.test.ts\"])` to hold it"] })).toEqual([]);
+  expect(check({ oracle: ["`bun run test` passes and the new w.test.ts passes"] })).toEqual(["the spec: the Oracle names w.test.ts, which is not on main and not in the Edit surface"]);
   expect(check({ edit_surface: [{ path: "../etc/x", new: true }] })[0]).toContain("is not a path in the repo");
   expect(check({}, [`${repo.key}-1`, `${repo.key}-2`, `${repo.key}-77`])).toEqual([`after names this issue, ${repo.key}-1`, `after names ${repo.key}-77, which is not an issue of ${repo.key}`]);
   const part = (title: string, after: number[] = []) => ({ title, spec: parseSpec(spec()), after });
