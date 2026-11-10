@@ -23,12 +23,12 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
     done: [{ id: "string", title: "string", href: "string", finished: "string", jobs: "array" }], doneCount: "number",
     stuck: [job], running: [job], runningIssues: "array",
     queued: [{ repo: "string", id: "number|string", title: "string", stage: "string", kind: "string" }],
+    asks: [{ key: "string", kind: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }],
     usage: "object?", proposals: "array",
   },
   "/api/automation": {
     now: "time", capEnv: { "*": "boolean" }, settings: { "*": "number?" }, metrics: { days: "number", rate: "object?", catches: "object", held: "object" },
-    schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", gated: "object?", baseline: "array",
-    asks: [{ key: "string", kind: "string", card: "string", label: "string", id: "string", title: "string", at: "string" }], rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
+    schedules: [{ name: "string", every: "string?" }], monitor: "object?", backend: "object?", gated: "object?", baseline: "array", rules: [{ reason: "string", name: "string", line: "string", mode: "string" }],
     repeats: [{ reason: "string", name: "string", answer: "string" }], held: ["string"], repoHeld: "array", log: { days: "number", max: "number", entries: "array" },
   },
   "/api/flow": {
@@ -70,7 +70,7 @@ export const SCHEMAS: Record<string, Schema | "text"> = {
   "/api/specs/:project/:file": { project: "string", file: "string", date: "string", title: "string", body: "string" },
   "/api/memory": {
     project: "string?", exists: "boolean", total: "number", byKind: { "*": "number" }, byScope: { "*": "number" }, scopes: ["string"], home: "array",
-    lint: "object", writes: "array", notes: "array", types: "object", "misses?": "any", "cachedAt?": "time",
+    lint: "object", writes: "array", notes: "array", start: "object", "misses?": "any", "cachedAt?": "time",
   },
   "/api/memory/search": { q: "string", results: [{ type: "string", source: "string", key: "string", title: "string" }] },
   "/api/memory/notes/:title": "object",

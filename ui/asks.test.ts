@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { asks, clean, stuckBlocker } from "./asks.ts";
+import { asks, stuckBlocker } from "./asks.ts";
 import { ASK_REASONS, type Ask } from "../jobs/lib/asks/ask.ts";
 import type { Lesson } from "../jobs/lib/learning/corrections.ts";
 import type { Job, NewIssue } from "./state.ts";
@@ -38,7 +38,7 @@ const CASES: Record<string, () => ReturnType<typeof asks>> = {
 describe("asks", () => {
 
 
-  const key = (a: { act: string; args: Record<string, string> }) => (a.act === "decide" && a.args.option ? `decide:${a.args.option}` : a.act);
+  const key = (a: { act: string; body: Record<string, unknown> }) => (a.act === "decide" && a.body.label ? `decide:${a.body.label}` : a.act);
   for (const reason of Object.keys(ASK_REASONS)) {
     /** The case's first entry once the director escalated it with this case text. */
     const escalated = (text: Partial<Ask>) => { STORE = text; try { return CASES[reason]()[0]; } finally { STORE = undefined; } };
@@ -64,6 +64,26 @@ describe("asks", () => {
       } finally { STORE = undefined; }
     });
   }
+
+  test("each action carries the POST its button sends", () => {
+    STORE = { situation: "Stored situation." };
+    try {
+      const req = (reason: string) => CASES[reason]()[0].actions.map(({ act, path, body, confirm, input }) => ({ act, path, body, confirm, input }));
+      expect(ofRuns(run("question", { question: "Which port?", id: "a#27" }))[0].actions.map(({ act, path, body, confirm, input }) => ({ act, path, body, confirm, input }))).toEqual([
+        { act: "answer", path: "/api/jobs/a%2327/answer", body: {}, confirm: undefined, input: { name: "answer" } },
+        { act: "drop", path: "/api/jobs/a%2327/drop", body: {}, confirm: true, input: undefined },
+      ]);
+      expect(req("rescue")).toEqual([
+        { act: "decide", path: "/api/issues/aleph-387/decide", body: { label: "B" }, confirm: undefined, input: undefined },
+        { act: "decide", path: "/api/issues/aleph-387/decide", body: { label: "A" }, confirm: undefined, input: undefined },
+        { act: "drop", path: "/api/issues/aleph-387/drop", body: {}, confirm: true, input: undefined },
+      ]);
+      expect(req("intake-failed").map((a) => [a.path, a.body])).toEqual([["/api/issues/aleph-387/retriage", {}], ["/api/issues/aleph-387/drop", { reason: "Chris closed it" }]]);
+      expect(req("proposal-check").map((a) => a.path)).toEqual(["/api/proposals/L1/approve", "/api/proposals/L1/decline"]);
+      const deny = ofIssues(issue({ reason: "question", decision, question: "Should it be A or B?" }))[0].actions.find((a) => a.act === "deny");
+      expect(deny).toMatchObject({ path: "/api/issues/aleph-387/drop", body: { reason: "Chris denied it" }, input: { name: "reason", lead: "Chris denied: " } });
+    } finally { STORE = undefined; }
+  });
 
   test("the part-dropped card reads as a sub-issue, with no goal", () => {
     const [a] = CASES["part-dropped"]();
@@ -107,11 +127,8 @@ describe("asks", () => {
     expect(ofIssues(issue({ reason: "nope", question: "what now?" }))[0].reason).toBe("question");
   });
 
-  test("an old note's timestamp is not part of the detail or the Problem", () => {
-    expect(clean("- 2026-10-27 12:34: which helper?")).toBe("which helper?");
-    expect(clean("- 2026-11-04T09:30:00.000Z: which helper?")).toBe("which helper?");
-    expect(clean("- 2026-10-27 12:34:56: triage: for Chris: pick one")).toBe("pick one");
-    const [t] = ofIssues(issue({ reason: "intake-failed", question: "- 2026-10-27 12:34: Intake failed: no verdict in 2 runs" }));
+  test("a failed intake's Problem names why it failed", () => {
+    const [t] = ofIssues(issue({ reason: "intake-failed", question: "Intake failed: no verdict in 2 runs" }));
     expect(t.problem).toBe("Intake of aleph-387 failed: no verdict in 2 runs, so no one has decided what to do with this issue.");
   });
 });

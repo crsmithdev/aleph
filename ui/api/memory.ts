@@ -12,12 +12,11 @@ import { join } from "node:path";
 import type { Routes } from "../server.ts";
 import { aleph, fail, post } from "../action.ts";
 import { items, search as searchItems } from "../memory-items.ts";
-import { handoffsDir } from "../memory-types.ts";
+import { handoffsDir } from "../../lib/paths.ts";
 import { episodesDir } from "../../jobs/lib/learning/episode.ts";
 import { parseFrontmatter, serializeFrontmatter, splitFrontmatter } from "../../lib/frontmatter.ts";
-import { memoryTypes } from "../memory-types.ts";
 import { trackedFiles } from "../../vault/lib/git.ts";
-import { KINDS, linkTargets, links, lintVault, loadVault, relativeDates, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
+import { coreNotes, KINDS, linkTargets, links, lintVault, loadVault, relativeDates, START_BUDGET, startContext, today, vaultDir, wikiNotes, type Note } from "../../vault/lib/vault.ts";
 import { later, once } from "../../lib/sources.ts";
 import { memoryIn, projectOf } from "./scope.ts";
 
@@ -112,6 +111,14 @@ function noteRows(wiki: Note[], root: string, refuse: { note: string; rule: stri
   return wiki.map((n) => ({ title: n.title, kind: String(n.fm.kind ?? "none"), scope: scopeOf(n), updated: String(n.fm.updated ?? ""), read: read[n.title] ?? null, history: hist.get(n.title) ?? Array(30).fill(0), problems: problems.get(n.title) ?? [] }));
 }
 
+/** Each scope's core lines and the bytes of its start context against the budget. */
+function start(root: string, all: Note[]) {
+  return Object.fromEntries(["aleph", "global"].map((scope) => {
+    const { text, cut } = startContext(root, all, scope);
+    return [scope, { core: coreNotes(all, scope).map((n) => ({ title: n.title, core: String(n.fm.core).trim() })), bytes: Buffer.byteLength(text), budget: START_BUDGET, cut }];
+  }));
+}
+
 async function overview(url: URL): Promise<Response> {
   const slow = misses();
   const project = projectOf(url);
@@ -135,9 +142,9 @@ async function overview(url: URL): Promise<Response> {
     writes: recentWrites(root, all, keep, project),
   };
   body.notes = noteRows(wiki, root, lint.refuse);
+  body.start = start(root, all);
   const m = await slow;
   if (m) body.misses = m;
-  body.types = await memoryTypes(root, wiki, m, all);
   return json(body);
 }
 

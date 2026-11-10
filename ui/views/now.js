@@ -13,9 +13,7 @@ export const view = {
   group: "factory",
   order: -3,
   icon: "gauge-high",
-  // The asks come from /api/automation, the one answer that carries them.
-  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/factory?window=${s.window}`), s.url(`/api/automation?window=${s.window}`)]; },
-  combine: ([s, a]) => ({ ...s, asks: a.asks }),
+  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return s.url(`/api/factory?window=${s.window}`); },
   refresh: 60,
   live: true,
   // `s.flow` is /api/flow for the window with its baseline, which `more` adds; the page draws without it first.
@@ -318,11 +316,12 @@ const stuckRow = (s) => (j) => {
   const b = j.blocker;
   const blocker = b && localId(b.id, j.repo);
   const hold = b ? holdLine({ action: "after", on: [b.id] }) : stuckSentence(j);
-  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, job: j.id, on: b.id, label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, job: j.id, label: "Re-check" });
+  const job = (verb) => `/api/jobs/${encodeURIComponent(j.id)}/${verb}`;
+  const first = b ? actButton(`Wait for ${blocker}`, { act: "wait", name: j.name, path: job("wait"), body: JSON.stringify({ on: b.id }), label: `Wait for ${blocker}` }, { primary: true }) : actButton("Re-check", { act: "recheck", name: j.name, path: job("recheck"), label: "Re-check" });
   const meta = metaRow({ id: repoIdLink(j.name, jobHref(j.id), j.repo), chips: j.item?.priority ? priorityBadge(j.item.priority) : "", part: j.part, at: j.run?.started ?? j.started, since: j.started, now: s.now });
   const opt = (button, hint) => `<div class="choice">${button}<div class="choice-text"><span class="effect">${codeText(hint)}</span></div></div>`;
   return alertCard("stuck", j.name, meta, j.item?.title || j.name, hold,
-    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(actButton("Drop", { act: "drop", name: j.name, job: j.id, label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
+    `<div class="actions choices">${opt(first, b ? `Makes the issue run after ${blocker} and drops the stuck job; nothing starts until ${blocker} lands.` : "Runs the job again.")}${opt(actButton("Drop", { act: "drop", name: j.name, path: job("drop"), confirm: "1", label: "Drop" }), "Discards the job's branch; the issue stays open.")}${actMsg(j.name)}</div>` +
     agentLine(j) + jobDetails(s, j));
 };
 
@@ -338,4 +337,4 @@ export function renderControls(s) {
   return s.factory.paused ? ctl("resume", "Resume") : ctl("pause", "Pause");
 }
 const ctl = (verb, label) =>
-  actButton(label, { act: verb, label }, { cls: "warn" });
+  actButton(label, { act: verb, path: `/api/factory/${verb}`, ...(verb === "pause" ? { confirm: "1" } : {}), label }, { cls: "warn" });

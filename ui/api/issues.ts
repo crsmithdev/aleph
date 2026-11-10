@@ -131,7 +131,7 @@ function detail(params: Record<string, string>, url: URL): Response {
   let ask: unknown;
   if (stored && todos.status(item) === "open" && (mine?.stage ?? "waiting") === "waiting") ask = attend({ runs: [], issues: [card(repo.key, item, "waiting", stored)] }, []).items[0];
 
-  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes, media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
+  return Response.json({ ...row(repo.key, item, mine), id: n, ref, blockers, ...(ask ? { ask } : {}), request: item.request || null, spec: item.spec || null, goals: parts, ...(parent ? { issue: { id: parent, href: issueHref(parent) } } : {}), notes: item.notes.map(todos.noteOf), media: mediaOf(item), frontmatter: item.fm, derived: state, jobs, timeline, holds, commits, specs: specs(repo.key).map((s) => s.file) });
 }
 
 /**
@@ -220,7 +220,7 @@ const decide = post((b, params) => {
   if (todos.status(item) !== "open" || !d) return fail(409, "this issue is not waiting for a decision");
   const o = d.options.find((x) => x.label === b.label);
   if (d.options.length && !o) fail(400, `no option named ${JSON.stringify(b.label ?? null)}`);
-  const rec = b.recommendation === true ? proseDecision(item.notes.at(-1)).recommendation : null;
+  const rec = b.recommendation === true ? proseDecision(todos.noteOf(item.notes.at(-1) ?? "").text).recommendation : null;
   const note = o ? `Chris decided: ${o.label}: ${o.line}` : b.approve === true ? "Chris approved it" : rec ? `Chris decided: ${rec}` : fail(400, "this issue has no recommendation to approve");
   return aleph(["issue", "decide", ...(o?.after ? ["--after", o.after] : []), "--", repo.key, String(n), note]);
 });

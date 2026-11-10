@@ -262,30 +262,3 @@ describe("a stuck job whose last run failed a check", () => {
     }
   });
 });
-
-describe("factory.nextTick and tickInProgress read systemctl show and is-active", () => {
-  function withSystemctl(script: string) {
-    const dir = mkdtempSync(join(tmpdir(), "aleph-ui-systemctl-"));
-    writeFileSync(join(dir, "systemctl"), `#!/bin/sh\n${script}\n`);
-    Bun.spawnSync(["chmod", "+x", join(dir, "systemctl")]);
-    const restorePath = withEnv({ PATH: `${dir}:${process.env.PATH}` });
-    try { const s = state(); return { nextTick: s.factory.nextTick, tickInProgress: s.factory.tickInProgress }; }
-    finally { restorePath(); rmSync(dir, { recursive: true, force: true }); }
-  }
-  const noNext = `if [ "$2" = show ]; then printf 'NextElapseUSecRealtime=\\nNextElapseUSecMonotonic=0\\n'; exit 0; fi`;
-  test("a next elapse is the next tick", () => {
-    expect(withSystemctl(`[ "$2" = show ] && echo 'NextElapseUSecRealtime=Fri 2026-10-30 18:00:00 UTC' && echo NextElapseUSecMonotonic=0 && exit 0\nexit 1`))
-      .toEqual({ nextTick: "2026-10-30T18:00:00.000Z", tickInProgress: false });
-  });
-  test("a monotonic elapse alone is the next tick, read from list-timers", () => {
-    const show = `[ "$2" = show ] && printf 'NextElapseUSecRealtime=\\nNextElapseUSecMonotonic=1d 18h 33min\\n' && exit 0`;
-    expect(withSystemctl(`${show}\n[ "$2" = list-timers ] && echo 'Sun 2026-11-01 17:29:05 UTC 2min left Sun 2026-11-01 17:24:05 UTC 3min ago aleph-tick.timer aleph-tick.service' && exit 0\nexit 1`))
-      .toEqual({ nextTick: "2026-11-01T17:29:05.000Z", tickInProgress: false });
-  });
-  test("no next elapse and the service failed or inactive is a dead timer", () => {
-    for (const word of ["failed", "inactive"]) expect(withSystemctl(`${noNext}\necho ${word}; exit 3`)).toEqual({ nextTick: null, tickInProgress: false });
-  });
-  test("systemctl failing gives null and false", () => {
-    expect(withSystemctl("exit 1")).toEqual({ nextTick: null, tickInProgress: false });
-  });
-});

@@ -110,7 +110,7 @@ describe("the Issue page", () => {
     expect((await post("note", { text: "a page note" })).status).toBe(200);
     const d = await getJson("/api/issues/fac-1");
     expect(d).toMatchObject({ title: "[Group] A new title", priority: "high", labels: ["ui", "bug"], frontmatter: { source: "worker" }, request: "New words." });
-    expect(d.notes.join("\n")).toContain("a page note");
+    expect(d.notes.map((n: any) => n.text).join("\n")).toContain("a page note");
     expect((await post("edit", { title: "t", priority: "high", source: "nobody", areas: "", description: "x" })).status).toBe(422);
     await post("edit", { title: before.title, priority: before.priority ?? "medium", source: before.frontmatter.source ?? "chris", areas: before.labels.join(","), description: before.request ?? before.body });
   }, 60_000);

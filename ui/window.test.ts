@@ -119,7 +119,7 @@ test("a chosen project is in the address, in each request, and on the next page"
     expect(request(p, new URLSearchParams()), name).not.toContain("project=");
   }
   expect(scope(new URLSearchParams("project=beta")).project).toBe("beta");
-  expect(PAGES.status.view.api(null, new URLSearchParams("project=alpha"))).toEqual(["/api/factory?window=week&project=alpha", "/api/automation?window=week&project=alpha"]);
+  expect(PAGES.status.view.api(null, new URLSearchParams("project=alpha"))).toBe("/api/factory?window=week&project=alpha");
 });
 
 test("scope wire keeps the window and the project in storage and in the address; week and All stay out of it", () => {
@@ -139,7 +139,7 @@ test("scope wire keeps the window and the project in storage and in the address;
   expect(scope().url("/api/factory")).toBe("/api/factory");
 });
 
-test("the Automation page asks for the chosen window and project", () => {
-  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?project=alpha"]);
+test("the Automation page asks for the chosen window and project, and the Status page's answer for its asks", () => {
+  expect(gates.view.api(null, new URLSearchParams("window=day&project=alpha"))).toEqual(["/api/automation?window=day&project=alpha", "/api/factory?window=day&project=alpha"]);
 });
 

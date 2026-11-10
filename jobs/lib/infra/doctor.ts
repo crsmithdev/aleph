@@ -9,7 +9,8 @@ import { factoryCookie } from "./ui-token.ts";
 import { allRuns, loadRegistry } from "../records/ledger.ts";
 import { isLost } from "./process.ts";
 import { SKEW_LIMIT_MS, STEP_LIMIT_MS, watchWall, windowsSkew } from "./clock.ts";
-import { doctorClockMs, homeUrl, systemctlBin, unitDir } from "./settings.ts";
+import { doctorClockMs, homeUrl, unitDir } from "./settings.ts";
+import { systemctl, timer } from "./systemd.ts";
 
 export interface Check { name: string; ok: boolean; detail: string }
 
@@ -18,16 +19,6 @@ const bad = (name: string, detail: string): Check => ({ name, ok: false, detail 
 
 const CLOCK_WINDOW_MS = () => doctorClockMs();
 const HOME_URL = () => homeUrl();
-
-function systemctl(...args: string[]): { ok: boolean; out: string } {
-  const bin = systemctlBin();
-  try {
-    const p = Bun.spawnSync([bin, "--user", ...args], { stdout: "pipe", stderr: "pipe", stdin: "ignore", timeout: 15_000 });
-    return { ok: p.exitCode === 0, out: (p.stdout.toString() + p.stderr.toString()).trim() };
-  } catch (e: any) {
-    return { ok: false, out: e?.message ?? String(e) };
-  }
-}
 
 /** The repo's object directory (a worktree's .git is a file, so ask git), or null when it is not a repo. */
 function objectsDir(path: string): string | null {
@@ -97,22 +88,14 @@ export function gitChecks(): Check[] {
 /** The timers whose next run doctor checks: the tick and the suite. */
 const TIMERS = ["aleph-tick.timer", "aleph-suite.timer"];
 
-/**
- * The time to each timer's next run, from `systemctl list-timers --output=json`, whose `next` is wall-clock
- * microseconds. `NextElapseUSecMonotonic` is not that time: for an `OnUnitActiveSec` timer it is a point on the
- * monotonic clock, counted from boot, so it reads as the uptime plus the wait.
- */
+/** The time to each timer's next run, or that its service runs now. */
 export function timerChecks(now = Date.now()): Check[] {
-  const r = systemctl("list-timers", "--all", "--output=json", ...TIMERS);
-  let rows: { unit: string; next?: number | null }[] = [];
-  try { rows = r.ok ? JSON.parse(r.out) : []; } catch {}
   return TIMERS.map((unit) => {
     const name = `${unit} next run`;
-    const next = rows.find((x) => x.unit === unit)?.next;
-    if (next) return ok(name, `in ${wait(next / 1000 - now)} (${new Date(next / 1000).toISOString()})`);
-    const service = unit.replace(/\.timer$/, ".service");
-    if (r.ok && inProgress(service)) return ok(name, `${service} is running`);
-    return bad(name, r.ok ? `${unit} has no next run` : r.out.split("\n")[0] || "systemctl failed");
+    const t = timer(unit);
+    if (t.next) return ok(name, `in ${wait(t.next - now)} (${new Date(t.next).toISOString()})`);
+    if (t.running) return ok(name, `${unit.replace(/\.timer$/, ".service")} is running`);
+    return bad(name, t.err ?? `${unit} has no next run`);
   });
 }
 
@@ -129,12 +112,6 @@ export function unitChecks(now = Date.now()): Check[] {
     checks.push(r.ok && r.out === "active" ? ok(`unit ${unit}`, "active") : bad(`unit ${unit}`, r.out.split("\n")[0] || "not active"));
   }
   return [...checks, ...timerChecks(now)];
-}
-
-/** A oneshot service reports `activating` while it runs (exit 3), so read the state word and ignore the exit code. */
-function inProgress(service: string): boolean {
-  const state = systemctl("is-active", service).out.split("\n")[0]?.trim();
-  return state === "activating" || state === "active";
 }
 
 export async function homeCheck(): Promise<Check> {

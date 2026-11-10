@@ -79,6 +79,54 @@
       ]
     },
     {
+      "name": "systemd",
+      "code": [
+        "jobs/lib/infra/systemd.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "jobs/lib/infra/systemd.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
+    },
+    {
+      "name": "memory sources",
+      "code": [
+        "ui/memory-items.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "ui/memory-items.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
+    },
+    {
+      "name": "session rows",
+      "code": [
+        "ui/api/sessions.ts"
+      ],
+      "notIn": [
+        "**"
+      ],
+      "allow": [
+        "ui/api/sessions.ts",
+        "**/*.test.ts"
+      ],
+      "disable": [
+        "semantic"
+      ]
+    },
+    {
       "name": "stream-json",
       "code": [
         "jobs/lib/roles/agent-call.ts"

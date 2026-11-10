@@ -23,3 +23,9 @@ test("a card that waits on an Ask carries the Ask, its reason and the question",
   expect(card("alpha", item(), "waiting")).toMatchObject({ id: "alpha-7", href: "#/issues/alpha/7", priority: "high", stage: "waiting" });
   expect(card("alpha", item(), "waiting", ask)).toMatchObject({ ask, reason: "question", askKind: "input", question: "what now?" });
 });
+
+test("a card's question from the last note leaves out the note's stamp", () => {
+  const ask = { kind: "input", reason: "intake-failed", question: "", options: [] } as unknown as Ask;
+  const it = { ...item(), notes: ["- 2026-10-27T12:34:00.000Z: Intake failed: no verdict in 2 runs"] } as Issue;
+  expect(card("alpha", it, "waiting", ask).question).toBe("Intake failed: no verdict in 2 runs");
+});

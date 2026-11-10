@@ -36,14 +36,12 @@ beforeAll(() => setSystemTime(Date.parse("2026-11-04T00:00:00Z")));
 afterAll(() => { setSystemTime(); restoreEnv(); rmSync(base, { recursive: true, force: true }); });
 
 test("log() shows an issue note `Chris dropped: <reason>` as a human drop on the issue, the note its text", async () => {
-  const stub: any = { now: "2026-11-04T00:00:00.000Z", asks: [], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };
-  const d: any = JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
+  const d: any = JSON.parse(JSON.stringify(gatesBody(await securityFacts())));
   expect(d.log.entries.find((x: any) => x.by === "human" && x.subject === "fac-1")).toMatchObject({ action: "dropped", note: "Chris dropped: not needed" });
 });
 
 test("log() finds a Chris decision note with an ISO UTC stamp, and not one with a local stamp", async () => {
-  const stub: any = { now: "2026-11-04T00:00:00.000Z", asks: [], factory: { paused: false, liveRuns: 0, liveCap: 5, runsToday: 0 }, queued: [] };
-  const d: any = JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
+  const d: any = JSON.parse(JSON.stringify(gatesBody(await securityFacts())));
   expect(d.log.entries.find((x: any) => x.subject === "fac-2")).toMatchObject({ at: "2026-11-03T10:00:00.000Z", action: "answered", note: "Chris decided: go on" });
   expect(d.log.entries.find((x: any) => x.subject === "fac-3")).toBeUndefined();
 });

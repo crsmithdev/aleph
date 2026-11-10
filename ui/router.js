@@ -11,7 +11,7 @@
 //
 // `loader(env)` holds what a test can drive with a fake fetch and a fake EventSource; `start()` wires it to the page.
 import { setCodes } from "../lib/naming.ts";
-import { issueApi, postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
+import { postJson, say, actMessages, denyReasons, loadDiff, empty, error, esc, failMessage, loading, markLine, mountView, openDiffs, parseHash, recordState, restoreState, wireFolds, restoreFolds, scope } from "./lib.js";
 
 const GROUPS = ["factory", "claude"], HEADERS = { factory: "Factory", claude: "Claude" };
 
@@ -367,13 +367,12 @@ export async function start() {
   route();
 }
 
-// Diff, Land, Drop and Checked: each is an `aleph` command the server runs.
-// Land and Drop ask for a second click, then the view reloads.
+// Diff opens the run's diff, Always grants a rule; every other button posts the request its data names
+// (path, body, confirm), then the view reloads. A button with confirm asks for a second click.
 async function dispatch(e) {
   const b = e.target.closest && e.target.closest("button.act[data-act]");
   if (!b) return;
-  const { act, label } = b.dataset;
-  const name = b.dataset.name ?? (act === "approve" || act === "decline" ? b.dataset.id : undefined);
+  const { act, label, name } = b.dataset;
   // A draw that came while the action ran (a first load's `more`) replaced the row: draw again, and the row shows the kept message.
   const note = (m) => { say(b.parentElement.lastElementChild, m); if (name) actMessages.set(name, m); if (!b.isConnected) redraw(); };
   if (act === "diff") {
@@ -385,19 +384,16 @@ async function dispatch(e) {
     if (t === null) openDiffs.delete(name); else openDiffs.set(name, t);
     return;
   }
-  if ((act === "deny" || act === "answer") && !b.classList.contains("ask")) {
-    const inp = b.closest(".choice")?.querySelector("input.reason");
-    if (inp?.hidden) {
-      inp.hidden = false;
-      b.classList.add("ask");
-      b.textContent = "Confirm";
-      inp.focus();
-      return;
-    }
+  // A choice with a text box: the first click shows the box, the next one posts.
+  const box = b.closest(".choice")?.querySelector("input.reason");
+  if (box?.hidden) {
+    box.hidden = false;
+    b.classList.add("ask");
+    b.textContent = "Confirm";
+    box.focus();
+    return;
   }
-  const answerText = act === "answer" ? b.closest(".actions").querySelector("input[name=answer]")?.value.trim() ?? "" : "";
-  if (act === "answer" && !answerText) { note("Type an answer first"); return; }
-  if (((act === "land" && !b.closest(".choice")) || act === "drop" || act === "pause" || ((act === "deny" || act === "answer") && !b.closest(".choice")?.querySelector("input.reason"))) && !b.classList.contains("ask")) {
+  if (b.dataset.confirm && !b.classList.contains("ask")) {
     b.classList.add("ask");
     b.textContent = name ? `${label} ${name}? Click again` : `${label}? Click again`;
     clearTimeout(b._t);
@@ -418,37 +414,17 @@ async function dispatch(e) {
     page.reload();
     return;
   }
-  if (act === "retriage" || act === "unblock" || act === "rerun" || act === "checked" || act === "close" || (act === "drop" && b.dataset.repo)) {
-    const { repo, id } = b.dataset;
-    b.disabled = true;
-    try {
-      await postJson(`${issueApi(repo, id)}/${act === "close" ? "drop" : act}`, act === "close" ? { reason: "Chris closed it" } : {});
-    } catch (err) { b.disabled = false; note(`${act} failed: ${err.message}`); return; }
-    b.closest("article.issue-row")?.remove();
-    page.reload();
-    return;
-  }
-  if (act === "decide" || act === "deny") {
-    // A Decide row: approve one option, or deny with the reason typed beside the button.
-    const { repo, id, option, recommendation, approve } = b.dataset;
-    const reason = b.closest(".actions").querySelector("input.reason")?.value.trim() ?? "";
-    const bs = [...b.closest(".actions").querySelectorAll("button.act")];
-    bs.forEach((x) => { x.disabled = true; });
-    try {
-      await postJson(`${issueApi(repo, id)}/${act === "deny" ? "drop" : "decide"}`,
-        act === "deny" ? { reason: reason ? `Chris denied: ${reason}` : "Chris denied it" } : approve ? { approve: true } : recommendation ? { recommendation: true } : { label: option });
-      denyReasons.delete(`${repo}-${id}`);
-    } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
-    b.closest("article.issue-row")?.remove();
-    page.reload();
-    return;
-  }
-  b.disabled = true;
+  // The button's request: its body, and the box's text under the box's name after its lead.
+  const body = JSON.parse(b.dataset.body || "{}"), typed = box?.value.trim() ?? "";
+  if (typed) body[box.name] = (box.dataset.lead ?? "") + typed;
+  if (box && body[box.name] === undefined) { note("Type an answer first"); return; }
+  const bs = [...(b.closest(".actions") ?? b.parentElement).querySelectorAll("button.act")];
+  bs.forEach((x) => { x.disabled = true; });
   if (name) actMessages.delete(name);
   try {
-    const url = !name ? `/api/factory/${act}` : act === "approve" || act === "decline" ? `/api/proposals/${encodeURIComponent(name)}/${act}` : `/api/jobs/${encodeURIComponent(b.dataset.job)}/${act}`;
-    await postJson(url, { ...(act === "answer" ? { answer: answerText } : act === "wait" ? { on: b.dataset.on } : {}) });
-  } catch (err) { b.disabled = false; b.classList.remove("ask"); b.textContent = label; note(`${act} failed: ${err.message}`); return; }
+    await postJson(b.dataset.path, body);
+    if (box?.dataset.id) denyReasons.delete(`${box.dataset.repo}-${box.dataset.id}`);
+  } catch (err) { bs.forEach((x) => { x.disabled = false; x.classList.remove("ask"); x.textContent = x.dataset.label; }); note(`${act} failed: ${err.message}`); return; }
   b.closest("article.issue-row")?.remove();
   page.reload();
 }

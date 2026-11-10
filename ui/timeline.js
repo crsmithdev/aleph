@@ -7,11 +7,8 @@ import { word } from "../lib/naming.ts";
 /** A gap between two runs that is longer than this is a wait. */
 export const GAP = 60_000;
 
-/** The time and text of a note line `- 2026-11-01T08:06:00.000Z: text`; null for one with no stamp. */
-export function noteEvent(line) {
-  const m = /^- (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z): (.*)$/s.exec(String(line));
-  return m ? { at: Date.parse(m[1]), text: m[2] } : null;
-}
+/** A note of the issue answer (`{ at, text }`, issues/lib/todo.ts noteOf) as an event at its time in ms; null for one with no stamp. */
+export const noteEvent = (n) => (n.at ? { at: Date.parse(n.at), text: n.text } : null);
 
 /**
  * The position of each time as a share of the axis. Each span between two neighbouring times takes the

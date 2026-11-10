@@ -69,9 +69,9 @@ function decisionBody(d) {
 
 const isUrl = (u) => /^https?:\/\//.test(u);
 
-/** One button of an ask row: the action's args as data attributes. */
-function actionButton(a) {
-  return actButton(a.label, { act: a.act, ...a.args, label: a.label }, { primary: a.primary });
+/** One button of an ask row: the request it posts as data attributes; `name` keys the row's message. */
+function actionButton(a, name) {
+  return actButton(a.label, { act: a.act, path: a.path, body: JSON.stringify(a.body ?? {}), ...(a.confirm ? { confirm: "1" } : {}), ...(name ? { name } : {}), label: a.label }, { primary: a.primary });
 }
 
 /** The Technical details of an ask card: what the limits moved out, the raw note, the options, the signals, the stat and the review note. Closed until opened. */
@@ -91,8 +91,8 @@ function askDetails(i) {
 
 
 /** One choice of an Ask card: the button, then what it does and the recommended mark, shown when the card is open. */
-const askChoice = (a, input) =>
-  `<div class="choice${a.recommended ? " rec" : ""}">${actionButton(a)}<div class="choice-text"><span class="effect">${codeText(a.hint)}</span>${a.recommended ? '<span class="rec-note">Recommended</span>' : ""}${input}</div></div>`;
+const askChoice = (a, input, name) =>
+  `<div class="choice${a.recommended ? " rec" : ""}">${actionButton(a, name)}<div class="choice-text"><span class="effect">${codeText(a.hint)}</span>${a.recommended ? '<span class="rec-note">Recommended</span>' : ""}${input}</div></div>`;
 
 /**
  * An Ask card from a server `asks` entry. Compact: the meta row, the title (the kind, then the headline, and the tag
@@ -102,14 +102,15 @@ const askChoice = (a, input) =>
 export function askCard(i, now = new Date().toISOString()) {
   const acts = i.actions ?? [];
   const inputFor = (a) => {
-    if (a.act === "deny") {
+    if (a.input?.name === "reason") {
       const p = parseId(i.id);
       const n = p ? `${p.n}${p.sub === undefined ? "" : `.${p.sub}`}` : "";
-      return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
+      return `<input class="reason" type="text" name="reason" maxlength="200" placeholder="Reason (optional)" hidden aria-label="Reason to deny ${esc(i.id)}" data-repo="${esc(p?.repo ?? "")}" data-id="${esc(n)}" data-lead="${esc(a.input.lead ?? "")}" value="${esc(denyReasons.get(i.id) ?? "")}">`;
     }
-    return a.act === "answer" ? `<input class="reason" type="text" name="answer" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}">` : "";
+    return a.input ? `<input class="reason" type="text" name="${esc(a.input.name)}" maxlength="500" placeholder="Your answer" hidden aria-label="Answer for ${esc(i.id)}">` : "";
   };
-  const choices = acts.map((a) => askChoice(a, inputFor(a)));
+  const name = i.key?.startsWith("run:") ? i.id : undefined;
+  const choices = acts.map((a) => askChoice(a, inputFor(a), name));
   if (i.always) choices.splice(acts.length ? 1 : 0, 0, `<div class="choice">${actButton(i.always.label, { act: "always", reason: i.always.reason ?? i.reason, action: i.always.action, first: acts[0]?.act ?? "", label: i.always.label }, { cls: "always" })}<div class="choice-text"><span class="effect">${codeText(i.always.hint)}</span></div></div>`);
   const key = i.key ?? i.id, msg = i.key?.startsWith("run:") ? actMsg(i.id) : "";
   const idHtml = i.href ? repoIdLink(i.id, i.href, i.repo) : `<span class="id">${esc(i.id)}</span>`;

@@ -22,6 +22,7 @@ import type { Stage } from "../jobs/lib/records/stage.ts";
 import { summary, type Wk } from "./usage.ts";
 import { card, stageOf } from "./issue.ts";
 import { verdict } from "../lib/status-words.ts";
+import { timer } from "../jobs/lib/infra/systemd.ts";
 
 /** A wait that has not ended. `dead` names why it never will: the blocker is dropped, or is a tracker that never closes. */
 export interface Wait { id: string; href: string; title: string; state: string | null; dead: "dropped" | "tracker" | null }
@@ -147,36 +148,11 @@ export interface State {
 
 const DONE = 10;
 
-function systemctlUser(...args: string[]): { ok: boolean; out: string } {
-  try {
-    const p = Bun.spawnSync(["systemctl", "--user", ...args], { env: process.env, stdout: "pipe", stderr: "ignore" });
-    return { ok: p.exitCode === 0, out: p.stdout.toString() };
-  } catch { return { ok: false, out: "" }; }
-}
-
-/** The next firing of aleph-tick.timer and whether a tick is running, as jobs/lib/infra/doctor.ts reads them: `systemctl show` for the next elapse, `is-active` for the oneshot service. */
+/** The next firing of aleph-tick.timer, and with none whether a tick runs now: a running tick is not a dead timer. */
 function tickTimer(): { nextTick: string | null; tickInProgress: boolean } {
-  const t = systemctlUser("show", "aleph-tick.timer", "-p", "NextElapseUSecRealtime", "-p", "NextElapseUSecMonotonic");
-  if (!t.ok) return { nextTick: null, tickInProgress: false };
-  const lines = t.out.split("\n");
-  const value = (key: string) => lines.find((l) => l.startsWith(`${key}=`))?.slice(key.length + 1).trim() ?? "";
-  const set = (v: string) => !!v && v !== "0" && v !== "n/a" && v !== "infinity";
-  const dated = (text: string): string | null => {
-    const m = text.match(/(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})(?: (UTC|GMT|Z))?/);
-    const d = m && new Date(m[3] ? `${m[1]}T${m[2]}Z` : `${m[1]}T${m[2]}`);
-    return d && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
-  };
-  // An OnUnitActiveSec timer has only a monotonic elapse, as time since boot: list-timers gives it as a date.
-  const real = value("NextElapseUSecRealtime");
-  const next = set(real) ? dated(real) : set(value("NextElapseUSecMonotonic")) ? dated(systemctlUser("list-timers", "aleph-tick.timer", "--no-pager").out) : null;
-  if (next) return { nextTick: next, tickInProgress: false };
-  // A oneshot service reports `activating` while it runs (exit 3): read the word, ignore the exit code.
-  const state = systemctlUser("is-active", "aleph-tick.service").out.split("\n")[0]?.trim();
-  return { nextTick: null, tickInProgress: state === "activating" || state === "active" };
+  const t = timer("aleph-tick.timer");
+  return { nextTick: t.next ? new Date(t.next).toISOString() : null, tickInProgress: t.running };
 }
-
-/** The next firing of aleph-tick.timer, or null when there is none (a tick running, a dead timer, or systemctl failing). */
-export function nextTick(): string | null { return tickTimer().nextTick; }
 
 /** `https://github.com/<owner>/<name>` from an origin URL in https or git@github.com: form. */
 export function githubBase(url: string): string | null {

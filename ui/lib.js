@@ -354,7 +354,7 @@ export function blockersHtml(waits, repo, id) {
   const dead = waits.filter((b) => b.dead);
   if (!dead.length) return rows;
   const label = `Stop waiting on ${dead.map((b) => localId(b.id, repo)).join(", ")}`;
-  return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> ${actButton(label, { act: "unblock", repo, id, label })}</div>`;
+  return rows + `<div class="blocker blocker-dead"><span>A dropped issue or a tracker never finishes, so this wait never ends.</span> ${actButton(label, { act: "unblock", path: `${issueApi(repo, id)}/unblock`, label })}</div>`;
 }
 
 export const idLink = (id, href, { title } = {}) => `<a class="idl"${title === undefined ? "" : ` title="${esc(title)}"`} href="${esc(safeHref(href))}">${esc(id)}</a>`;

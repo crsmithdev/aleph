@@ -21,7 +21,7 @@ test("an old prose note gets a Problem with no tag or lead, Approve recommendati
   const [row] = rows(withAttn(s));
   expect(problem(row)).not.toContain("triage: for Chris");
   expect(row).toContain('data-label="Approve recommendation"');
-  expect(row).toContain('data-recommendation="true"');
+  expect(row).toContain('data-path="/api/issues/aleph-152/decide" data-body="{&quot;recommendation&quot;:true}"');
   expect(row).toContain('data-label="Deny"');
   expect(row).toContain('class="reason"');
   expect(row.match(/<details class="more"/g)?.length).toBe(1);

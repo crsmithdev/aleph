@@ -13,8 +13,8 @@ export const view = {
   order: -2,
   icon: "shield-halved",
   // The caps' use and the live counts come from the factory block of /api/factory.
-  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/automation?window=${s.window}`), s.url("/api/factory")]; },
-  combine: ([d, s]) => ({ ...d, factory: { ...s.factory, capEnv: d.capEnv, settings: d.settings } }),
+  api: (_params, q = new URLSearchParams()) => { const s = scope(q); return [s.url(`/api/automation?window=${s.window}`), s.url(`/api/factory?window=${s.window}`)]; },
+  combine: ([d, s]) => ({ ...d, asks: s.asks, factory: { ...s.factory, capEnv: d.capEnv, settings: d.settings } }),
   live: true,
   refresh: 60,
   render: (d, _params, q) => renderGates(d, q),

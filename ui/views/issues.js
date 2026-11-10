@@ -547,16 +547,13 @@ const renderNoteForm = (d, ref) => `<form data-ui="issue-note" class="stack" dat
 const MACHINE = /^(?:intake|triage|acceptance|planner|standing|always|firefighter|sealed checks|its goals are all done):/;
 /** The notes a person or a job needs to read, which stay visible. */
 const READ = /^(?:intake: for Chris:|triage: for Chris:|triage: a live check:|acceptance rerun by hand)/;
-/** True when a note line is a machine line: the prefix at the start of the text after the `- ` and the stamp. */
-const isMachineNote = (n) => {
-  const t = String(n).replace(/^- /, "").replace(/^\d{4}-\d\d-\d\d[ T]\d\d:\d\d(?::\d\d(?:\.\d+)?Z?)?: /, "");
-  return MACHINE.test(t) && !READ.test(t);
-};
+/** True when a note (`{ at, text }`) is a machine line: the prefix at the start of its text. */
+const isMachineNote = (n) => MACHINE.test(n.text) && !READ.test(n.text);
 
 /** A note as an event: a machine note's prefix is its tag, any other note is tagged "note". */
 function noteItem(e) {
   const m = /^([a-z ]+): (.*)$/s.exec(e.text);
-  return m && isMachineNote(`- ${e.text}`) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(localId(m[2])) } : { at: e.at, tag: "note", tone: "quiet", html: esc(localId(e.text)) };
+  return m && isMachineNote(e) ? { at: e.at, tag: m[1], tone: "quiet", html: esc(localId(m[2])) } : { at: e.at, tag: "note", tone: "quiet", html: esc(localId(e.text)) };
 }
 
 /** The filing time: the store's, else the created date unless a job that day starts the issue (midnight would draw a false wait). */
@@ -653,7 +650,7 @@ export function renderIssue(d) {
     ? panel(id, title, `<div class="md view-only" id="${id}">${linkSpecs(md(text ?? ""), d.repo, d.specs)}</div><textarea class="edit-only body-edit" name="${name}" ${FORM} rows="12" aria-label="${title}">${esc(text ?? "")}</textarea>`, "", text ? "" : " edit-only")
     : "");
   const noteRow = (n) => {
-    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(localId(n.replace(/^- /, ""))) };
+    const e = noteEvent(n), it = e ? noteItem(e) : { tag: "note", tone: "quiet", html: esc(localId(n.text)) };
     return `<li class="dp-ev"><span class="dp-at">${esc(e ? when(new Date(e.at)) : "")}</span><span>${tag(it.tag, it.tone)}</span><div class="dp-evt">${it.html}</div></li>`;
   };
   const folded = tracker ? [] : d.notes.filter(isMachineNote), shown = tracker ? d.notes : d.notes.filter((n) => !isMachineNote(n));

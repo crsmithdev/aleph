@@ -222,6 +222,14 @@ export function add(doc: Doc, title: string, o: { kind?: string; priority?: stri
   return item;
 }
 
+/** A note line as note() writes it: `- <ISO stamp>: <text>`. */
+const NOTE = new RegExp(`^- (${ISO.source.slice(1, -1)}): (.*)$`, "s");
+/** A note line's stamp (ISO UTC; null when the line has none) and its text after the stamp. */
+export function noteOf(line: string): { at: string | null; text: string } {
+  const m = NOTE.exec(line);
+  return m ? { at: m[1], text: m[3] } : { at: null, text: line.replace(/^\s*-\s*/, "") };
+}
+
 /** Append-only: an existing note line is never rewritten, which is the lost update this format exists to stop. */
 export function note(item: Issue, text: string, now = new Date()): string {
   const line = `- ${minute(now)}: ${text}`;

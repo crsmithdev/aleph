@@ -16,7 +16,7 @@ test("a Queued card names a dead blocker and offers to remove only that wait", (
   expect(q).toContain('<a href="#/issues/aleph/963">a963</a> <span>Old &lt;work&gt;</span> <span class="badge stuck">dropped</span>');
   expect(q).not.toContain("Live");
   expect(q).toContain("this wait never ends");
-  expect(q).toContain('data-act="unblock" data-repo="aleph" data-id="964"');
+  expect(q).toContain('data-act="unblock" data-path="/api/issues/a964/unblock"');
   expect(q).toContain('data-annotate="a964"');
   expect(q).toContain(">Stop waiting on a963</button>");
 });

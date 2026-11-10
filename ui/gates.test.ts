@@ -52,7 +52,7 @@ beforeAll(async () => {
   // systemctl answers `show` with a 1min tick and a 1h suite, and logs every call.
   const systemctl = join(base, "systemctl");
   writeFileSync(systemctl, `#!/bin/sh\necho "$@" >> ${join(base, "systemctl.log")}\ncase "$*" in *"show aleph-tick"*) echo "TimersMonotonic={ OnUnitActiveUSec=1min ; next_elapse=1min }";; *"show aleph-suite"*) echo "TimersMonotonic={ OnUnitActiveUSec=1h ; next_elapse=1h }";; esac\n`, { mode: 0o755 });
-  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, XDG_CONFIG_HOME: join(base, "config") });
+  restoreEnv = withEnv({ ALEPH_JOBS_DIR: join(base, "jobs"), ALEPH_REPOS: join(base, "repos.json"), ALEPH_ISSUES: join(base, "items"), ALEPH_FACTORY_DIR: factory, ALEPH_CLI: fake, ALEPH_SYSTEMCTL: systemctl, ALEPH_UNIT_DIR: join(base, "config/systemd/user") });
   logEvent({ at: ago(3), by: "rule", subject: "r-5", action: "reran", sub: "rescue", result: "dropped" });
   logEvent({ at: ago(2), by: "firefighter", subject: "r-6", action: "answered", note: "r-6: picked the plain option" });
   logEvent({ at: ago(2.5), by: "director", subject: "r-8", action: "reran", sub: "capped", note: "the cause is fixed" });
@@ -71,15 +71,12 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-// The body of GET /api/automation from a stub of the Status page's state. The route itself adds only the state build, which
-// this file leaves alone: a build here would share the worker with ui/state-load.test.ts in the same test process.
-const queued = (kind: string) => ({ repo: "plain", id: 1, title: "t", priority: "medium", stage: "queued", kind }) as any;
-const stub = { now: new Date(NOW).toISOString(), asks: [] as AskItem[], factory: { paused: false, liveRuns: 0, liveCap: 5, runCap: 3, runStarts: 0, runsToday: 0 } as any, queued: [queued("not-ready"), queued("not-ready"), queued("busy-file"), queued("credit-wait"), queued("ready")] };
-const body = async () => JSON.parse(JSON.stringify(gatesBody(stub, await securityFacts())));
+// The body of GET /api/automation.
+const body = async () => JSON.parse(JSON.stringify(gatesBody(await securityFacts())));
 
 test("the body of /api/automation has every section, one rule per Ask reason with only its supported modes, and the held paths of gate.ts", async () => {
   const d: any = await body();
-  expect(Object.keys(d).sort()).toEqual(["asks", "backend", "baseline", "capEnv", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules", "settings"]);
+  expect(Object.keys(d).sort()).toEqual(["backend", "baseline", "capEnv", "gated", "held", "log", "metrics", "monitor", "now", "repeats", "repoHeld", "rules", "schedules", "settings"]);
   expect(d.baseline).toEqual([]);
   expect(d.rules.map((r: any) => r.reason)).toEqual(Object.keys(ASK_REASONS));
   for (const r of d.rules) expect(r.mode).toBe(ASK_REASONS[r.reason].always);
@@ -158,7 +155,7 @@ test("POST /api/automation/rules/:reason/revoke runs `aleph always revoke`, and 
 });
 
 const askItem = (reason: string, id: string): AskItem => ({ key: `issue:${id}`, reason, kind: "input", card: "decide", label: "Decide", headline: `t ${id}`, tag: "", id, href: `#/issues/r/${id.split("-")[1]}`, title: `t ${id}`, problem: `p ${id}`, situation: `p ${id}`, escalated: true,
-  actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, args: { repo: "r", id: id.split("-")[1] }, recommended: false }], details: {}, repo: "r" });
+  actions: [{ act: "checked", label: "Mark it checked", hint: "Records it.", primary: true, path: `/api/issues/${id}/checked`, body: {}, recommended: false }], details: {}, repo: "r" });
 
 const data = () => ({
   now: new Date(NOW).toISOString(),

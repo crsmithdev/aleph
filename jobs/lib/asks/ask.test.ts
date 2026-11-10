@@ -223,3 +223,12 @@ test("ASK_REASONS names no reason that no code raises, and a stored one reads as
   for (const k of ["proposal", "triage-failed", "host-check", "spec-check", "acceptance-failed"]) expect(Object.keys(ASK_REASONS)).not.toContain(k);
   expect(reasonOf("triage-failed")).toBe("question");
 });
+
+test("every reason has a card, a name, a line and a problem text, and one that offers rerun says what rerun does", () => {
+  for (const [reason, r] of Object.entries(ASK_REASONS)) {
+    expect([reason, ["approve", "decide", "unstick"].includes(r.card)]).toEqual([reason, true]);
+    expect([reason, !!r.name && !!r.line && !!r.problem]).toEqual([reason, true]);
+    const offers = [...actionsOn(reason, { run: false, decision: false }), ...actionsOn(reason, { run: true, decision: false })];
+    expect([reason, offers.includes("rerun") ? !!r.rerun : true]).toEqual([reason, true]);
+  }
+});

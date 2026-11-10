@@ -39,6 +39,9 @@ export interface Ask {
   recommend?: { action: string; why: string };
 }
 
+/** The three kinds of card. Approve: finished work that waits for an OK. Decide: a choice only Chris can make. Unstick: work that stopped and needs a direction. */
+export type Card = "approve" | "decide" | "unstick";
+
 export interface Reason {
   kind: Ask["kind"];
   actions: string[];
@@ -46,29 +49,49 @@ export interface Reason {
   always: string;
   /** The word a run's news and prompts use for this wait: a word of the sub set (lib/naming.ts). */
   needs?: "question" | "protected" | "review";
+  /** The card's kind, and the name and one line the Automation page names the reason by. */
+  card: Card; name: string; line: string;
+  /** The card's fixed problem text; `{id}` is the issue or run it is about. */
+  problem: string;
+  /** What the `rerun` action is called and does for this reason. */
+  rerun?: { label: string; hint: string };
 }
 export interface Granted { action: string; at: string }
 
-const proposal: Reason = { kind: "approval", actions: ["approve", "decline"], always: "approve" };
+const proposal = (name: string, line: string): Reason =>
+  ({ kind: "approval", actions: ["approve", "decline"], always: "approve", card: "approve", name, line, problem: "The correction memory proposes a change." });
 
 /**
- * Every reason the factory asks Chris. The first group is the spec's Ask reasons. The second group is kept as it was,
- * because the spec names no new home for it: run-cap and the `proposal-<kind>:<place>` keys.
+ * Every reason the factory asks Chris, in the order the page lists the runs that wait. The first group is the spec's Ask
+ * reasons. The second group is kept as it was, because the spec names no new home for it: run-cap and the
+ * `proposal-<kind>:<place>` keys.
  */
 const REASONS = {
-  "held-path": { kind: "approval", actions: ["land", "drop"], always: "", needs: "protected" },
-  "review": { kind: "approval", actions: ["land", "drop"], always: "", needs: "review" },
+  "held-path": { kind: "approval", actions: ["land", "drop"], always: "", needs: "protected", card: "approve", name: "Lands on held paths",
+    line: "A job that changes a held path, after its checks and review pass.", problem: "The run for {id} changes a path the repo holds for your review, so the factory did not land it." },
+  "review": { kind: "approval", actions: ["land", "drop"], always: "", needs: "review", card: "approve", name: "Reviewer holds",
+    line: "The reviewer held the job and no fix rounds are left.", problem: "The reviewer could not reach a verdict on {id} in two tries." },
   // Was `decision` (decide, deny; recommended) and `question` (answer, drop): one reason now, so it lists both.
-  "question": { kind: "input", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question" },
-  "no-commit": { kind: "input", actions: ["rerun", "close"], always: "" },
-  "part-dropped": { kind: "input", actions: ["rerun", "close"], always: "" },
-  "intake-failed": { kind: "input", actions: ["retry", "close"], always: "retry" },
-  "rescue": { kind: "input", actions: ["decide", "drop"], always: "recommended" },
+  "question": { kind: "input", actions: ["answer", "drop", "decide", "deny"], always: "recommended", needs: "question", card: "decide", name: "Questions",
+    line: "A job or an intake stopped on a choice that the spec leaves open.", problem: "Your answer is needed." },
+  "no-commit": { kind: "input", actions: ["rerun", "close"], always: "", card: "unstick", name: "Jobs with no commit",
+    line: "The last 3 jobs of an issue ended with nothing committed.", problem: "The last 3 runs of {id} ended with no commit, so the factory stopped starting it.",
+    rerun: { label: "Start a new run", hint: "Clears the Ask and lets the factory start a new run of the issue." } },
+  // Its `rerun` answer closes the issue as done (decideAsk); `close` drops it.
+  "part-dropped": { kind: "input", actions: ["rerun", "close"], always: "", card: "decide", name: "Dropped sub-issues",
+    line: "A sub-issue of an issue was dropped and no other sub-issue is open.", problem: "A sub-issue of {id} was dropped and no other sub-issue of it is open.",
+    rerun: { label: "Close as done", hint: "Sets the issue to done; nothing more runs for it." } },
+  "intake-failed": { kind: "input", actions: ["retry", "close"], always: "retry", card: "unstick", name: "Failed intake",
+    line: "Intake of an issue failed twice.", problem: "Intake of {id} failed: it gave no verdict, so no one has decided what to do with this issue." },
+  "rescue": { kind: "input", actions: ["decide", "drop"], always: "recommended", card: "unstick", name: "Rescue of a stuck job",
+    line: "A stuck job with more than one way out.", problem: "Your answer is needed." },
   // Not Ask reasons of the spec; no new home is named for them.
-  "run-cap": { kind: "input", actions: ["rerun", "close"], always: "" },
-  "proposal-check": proposal,
-  "proposal-claude-md": proposal,
-  "proposal-skill": proposal,
+  "run-cap": { kind: "input", actions: ["rerun", "close"], always: "", card: "unstick", name: "Job cap",
+    line: "An issue started 3 times in one hour.", problem: "The factory started {id} 3 times in one hour, so it stopped starting it until you run it again.",
+    rerun: { label: "Start it again", hint: "Clears the Ask and lets the factory start the issue again." } },
+  "proposal-check": proposal("Proposed checks", "The correction memory proposes a check for a repo."),
+  "proposal-claude-md": proposal("Proposed CLAUDE.md lines", "The correction memory proposes a line in a CLAUDE.md."),
+  "proposal-skill": proposal("Proposed skill changes", "The correction memory proposes a change to a skill."),
 } satisfies Record<string, Reason>;
 
 /** The limits on the text a card shows, in words: the title phrase, the case text, and each choice's text. */

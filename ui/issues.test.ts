@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { readList, writeList } from "../issues/lib/store.ts";
 import { setCodes } from "../lib/naming.ts";
-import { add, setStatus, type Doc } from "../issues/lib/todo.ts";
+import { add, noteOf, setStatus, type Doc } from "../issues/lib/todo.ts";
 import { addPart } from "../issues/lib/parts.fixture.ts";
 import * as todos from "../issues/lib/todo.ts";
 import { askOf, setAsk, refIn } from "../jobs/lib/asks/ask.ts";
@@ -898,7 +898,7 @@ test("the Issue page's notes show an issue id in its short form", () => {
   setCodes({ aleph: "a" });
   try {
     const d = { repo: "fac", id: 1, ref: "1", status: "open", frontmatter: { created: "2026-11-01" }, commits: [], jobs: [], goals: [], timeline: { runs: [] },
-      notes: ["- 2026-11-05T11:02:00.000Z: intake: filed aleph-1443 for x", "- 2026-11-05T11:03:00.000Z: director: filed aleph-1441 for x", "director: filed aleph-1444 for z"] };
+      notes: ["- 2026-11-05T11:02:00.000Z: intake: filed aleph-1443 for x", "- 2026-11-05T11:03:00.000Z: director: filed aleph-1441 for x", "director: filed aleph-1444 for z"].map(noteOf) };
     const h = v.renderIssue(d);
     expect(h).toContain("filed a1443 for x");
     expect(h).toContain("director: filed a1441 for x");

@@ -11,7 +11,15 @@ import { episodesDir, KEEP_DAYS } from "../jobs/lib/learning/episode.ts";
 import { claimLine, openIndex, rankNotes } from "../vault/lib/index.ts";
 import type { Note } from "../vault/lib/vault.ts";
 import { skillsDir } from "./api/skills.ts";
-import { handoffsDir, hooks, intent, prospectiveIssues, sessions } from "./memory-types.ts";
+import { claudeSettings } from "../hooks/lib/context.ts";
+import { loadRegistry } from "../jobs/lib/records/ledger.ts";
+import { afterOf, priorityOf, readLists } from "../issues/lib/store.ts";
+import * as todos from "../issues/lib/todo.ts";
+import { activity } from "./activity.ts";
+import { langfuse } from "../lib/langfuse.ts";
+import { sessionRows, windowTraces } from "./api/sessions.ts";
+import { later } from "../lib/sources.ts";
+import { handoffsDir } from "../lib/paths.ts";
 import { memoryIn } from "./api/scope.ts";
 
 export const TYPES = ["semantic", "procedural", "episodic", "working", "prospective", "retrieval"] as const;
@@ -27,6 +35,68 @@ const mtime = (p: string): string => { try { return statSync(p).mtime.toISOStrin
 const read = (p: string): string => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
 const files = (dir: string, re: RegExp): string[] => { try { return readdirSync(dir).filter((f) => re.test(f)).sort(); } catch { return []; } };
 const IDENTITY = join(import.meta.dir, "..", "identity");
+
+/** A handoff's `summary:` line, else the first non-blank line under its `## Intent`, else its first line. */
+function intent(text: string): string {
+  const summary = text.match(/^summary:[ \t]*(.+)/m)?.[1].trim();
+  if (summary) return clip(summary, 160);
+  const lines = text.split("\n");
+  const at = lines.findIndex((l) => /^##\s+intent\s*$/i.test(l));
+  const from = at < 0 ? lines : lines.slice(at + 1);
+  return clip(from.find((l) => l.trim() && !/^#/.test(l)) ?? "", 160);
+}
+
+/** The last 7 days' sessions from Langfuse, newest first; null when Langfuse is off or fails. One read serves every build
+ * until the 10 min usage poll: Memory's Langfuse reads are slow, so they do not run on the 30 s Langfuse poll. */
+type Sessions = Awaited<ReturnType<typeof sessionRows>>;
+const sessions = (): Promise<Sessions | null> => later("memory:sessions", ["usage"], loadSessions, null);
+async function loadSessions(): Promise<Sessions | null> {
+  if (!langfuse()) return null;
+  try { return (await sessionRows((await windowTraces(7, null)).rows)).slice(0, 10); } catch { return null; }
+}
+
+const HOOK_NAMES: Record<string, string> = { "verify-gate": "verify-gate", "vault-context": "vault-context", "vault-recall": "vault-recall" };
+
+/** Hooks in Claude Code's settings file (`claudeSettings()`): event, matcher and command, with 7-day call counts where Langfuse has them. */
+async function hooks() {
+  const file = claudeSettings();
+  let cfg: any = {};
+  try { cfg = JSON.parse(readFileSync(file, "utf8")); } catch {}
+  // activity() reads Langfuse for about 100 s cold: a build answers without the counts until the read ends.
+  const counts = await later("memory:calls", ["usage"], async () => {
+    try {
+      const a = await activity(7, null);
+      return a.langfuse === "ok" ? new Map(a.hooks.map((h) => [h.name, h.calls] as const)) : null;
+    } catch { return null; }
+  }, null);
+  const counted = counts !== null, calls = counts ?? new Map<string, number>();
+  const out: { event: string; matcher: string; command: string; calls: number | null }[] = [];
+  for (const [event, groups] of Object.entries<any>(cfg.hooks ?? {}))
+    for (const g of Array.isArray(groups) ? groups : [])
+      for (const h of g.hooks ?? []) {
+        const command = String(h.command ?? h.type ?? "");
+        const stem = Object.keys(HOOK_NAMES).find((k) => command.includes(k));
+        out.push({ event, matcher: String(g.matcher ?? ""), command, calls: counted ? (stem ? calls.get(stem) ?? 0 : null) : null });
+      }
+  return out;
+}
+
+/** Open issues with an after. */
+function prospectiveIssues() {
+  const registry = Object.values(loadRegistry());
+  let docs: (todos.Doc | null)[] = [];
+  try { docs = readLists(registry); } catch {}
+  const open: { repo: string; id: number; title: string; after: string[]; priority: string }[] = [];
+  registry.forEach((r, n) => {
+    for (const i of docs[n]?.items ?? []) {
+      if (todos.status(i) !== "open") continue;
+      const after = afterOf(i);
+      if (after.length) open.push({ repo: r.key, id: i.id, title: i.title, after, priority: priorityOf(i) });
+    }
+  });
+  return open.sort((a, b) => a.repo.localeCompare(b.repo) || a.id - b.id);
+}
+
 
 function semantic(root: string, wiki: Note[], log: Record<string, string>): Item[] {
   const out: Item[] = wiki.map((n) => {

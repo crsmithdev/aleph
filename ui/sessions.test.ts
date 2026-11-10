@@ -7,6 +7,7 @@ import { memory, use } from "../lib/langfuse.ts";
 // @ts-ignore plain JS, shared with the page
 import { idLink, pageHead, when } from "./lib.js";
 import { listSessions, routes } from "./api/sessions.ts";
+import { putRun, removeRun } from "../jobs/lib/records/record.ts";
 // @ts-ignore plain JS, shared with the page
 import * as v from "./views/session.js";
 // @ts-ignore plain JS, shared with the page
@@ -218,6 +219,21 @@ test("the chat route gives whole prompts and replies and each turn's tool calls 
   expect(d.turns[0].tools.map((c: any) => [c.name, c.args, c.error])).toEqual([["Bash", "ls", null], ["Read", "", "nope"]]);
   expect(d.turns[0].tools[0].output).toBe("y".repeat(900));
   expect((await call("GET /api/sessions/:id/chat", "/api/sessions/nope/chat", { id: "nope" })).status).toBe(404);
+});
+
+test("a one-turn worker session that Langfuse prices at 0 has its ledger cost on the list, the session and the chat", async () => {
+  TRACES.push(trace("w1", "worker-1", "aleph", iso(5), { totalCost: 0 }));
+  putRun("20261104-115500-worker-1", { kind: "build", condition: "done", started: iso(5), name: "worker-1", job: "worker-1", repo: "aleph", cost: 2 } as any);
+  try {
+    const list: any = await (await listSessions(new Request("http://localhost/api/sessions"))).json();
+    expect(list.sessions.find((x: any) => x.id === "worker-1")).toMatchObject({ label: "worker-1", cost: 2 });
+    const one: any = await (await call("GET /api/sessions/:id", "/api/sessions/worker-1", { id: "worker-1" })).json();
+    expect(one.turns[0].cost).toBe(2);
+    expect((await chat("worker-1")).turns[0].cost).toBe(2);
+  } finally {
+    TRACES.pop();
+    removeRun("20261104-115500-worker-1");
+  }
 });
 
 test("argSummary picks the key argument, also out of cut JSON", async () => {

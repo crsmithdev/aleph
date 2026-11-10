@@ -39,10 +39,10 @@ A URL names the data it returns in the terms of `docs/naming.md`. An action is a
 
 | Route | Returns |
 |---|---|
-| `GET /api/factory` | The Status page: the factory, the live jobs, the queue, the Done lane and its count for `?window=` |
+| `GET /api/factory` | The Status page: the factory, the asks, the live jobs, the queue, the Done lane and its count for `?window=` |
 | `POST /api/factory/pause`, `/resume` | Pauses or resumes the factory |
 | `GET /api/flow` | The Flow page and the Jobs page charts, for `?window=` |
-| `GET /api/automation` | The Automation page: the asks, the rules, the caps' settings, held paths and the decision log |
+| `GET /api/automation` | The Automation page: the rules, the caps' settings, held paths and the decision log |
 | `POST /api/automation/caps`, `/schedules`, `/rules/:reason/grant`, `/rules/:reason/revoke` | Changes a cap, a schedule or a standing rule |
 | `POST /api/proposals/:id/approve`, `/decline` | Decides a proposal |
 | `GET /api/issues` | The Issues page rows, with stage, job count and cost |

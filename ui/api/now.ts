@@ -15,9 +15,9 @@ export function forProject(s: State, project: string | null): State {
   return { ...s, stuck: mine(s.stuck), running: mine(s.running), done: ours(s.done), doneStamps: ours(s.doneStamps), queued: mine(s.queued), runningIssues: ours(s.runningIssues), asks: s.asks.filter((a) => a.repo === undefined ? known(project) : repoIn(a.repo, project)), ...(herald ? { herald } : {}) };
 }
 
-/** The `/api/factory` body for one project (null for all): no asks, which `/api/automation` carries, and the count of issues done in the last `ms`. */
+/** The `/api/factory` body for one project (null for all), with its asks and the count of issues done in the last `ms`. */
 export async function stateBody(project: string | null, ms = WINDOWS.week) {
-  const { asks: _asks, doneStamps, ...s } = forProject(state(), project);
+  const { doneStamps, ...s } = forProject(state(), project);
   const from = Date.now() - ms;
   const fit = await currentFit().catch(() => null);
   annotate([...s.stuck, ...s.running], fit);

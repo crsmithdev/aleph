@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { withEnv, withServer, type TestServer } from "./test-server.ts";
 import { updater } from "./updater.ts";
 import { onLater } from "./build.ts";
-import { memoryTypes } from "./memory-types.ts";
+import { items } from "./memory-items.ts";
 import { writeList } from "../issues/lib/store.ts";
 import { add } from "../issues/lib/todo.ts";
 // @ts-ignore plain JS, shared with the page
@@ -64,7 +64,7 @@ beforeAll(async () => {
   writeFileSync(join(root, "daily", `${today}.md`), `# ${today}\n\n- 10:00 write [[Use Bun]] — why\n- 10:05 write [[Other trap]] — why\n`);
   // A closed port makes `vault misses` fail whatever keys a dotenv file supplies; the cache is cleared so no answer from an earlier file in this worker is served.
   const restoreVault = withEnv({ ALEPH_VAULT: root, LANGFUSE_BASE_URL: "http://127.0.0.1:9", LANGFUSE_PUBLIC_KEY: "", LANGFUSE_SECRET_KEY: "" });
-  // memoryTypes reads the repo registry, the work store and the job runs: point them at small fixtures so the first request is quick and the TTL test's clock is not spent on the network or ~/.aleph.
+  // The memory items read the repo registry, the work store and the job runs: point them at small fixtures so the first request is quick and the TTL test's clock is not spent on the network or ~/.aleph.
   const git = (cwd: string, ...a: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd, stdio: "ignore" });
   git(base, "init", "-q", "--bare", "-b", "main", join(base, "items.git"));
   git(base, "clone", "-q", join(base, "items.git"), join(base, "items"));
@@ -82,10 +82,9 @@ afterAll(() => {
   rmSync(base, { recursive: true, force: true });
 });
 
-test("the episodic block lists the pages in the factory's episodes folder", async () => {
-  const m: any = await (await at("/api/memory")).json();
-  expect(m.types.episodic.episodes).toEqual([{ title: "aleph-1 Goal", scope: "aleph", updated: today }]);
-  expect(m.types.episodic.keepDays).toBe(14);
+test("the search lists the pages in the factory's episodes folder", async () => {
+  const r: any = await (await at("/api/memory/search?q=")).json();
+  expect(r.results.filter((x: any) => x.source === "episode").map((x: any) => [x.title, x.scope, x.at, x.text])).toEqual([["aleph-1 Goal", "aleph", today, "Ship it."]]);
 });
 
 test("?project= keeps only that project's data", async () => {
@@ -179,7 +178,8 @@ test("a failed load is kept until its source changes: no second spawn, no second
     expect(a.status).toBe(200);
     const body: any = await a.json();
     expect(body.misses).toBeUndefined();
-    expect(body.types.episodic.sessions).toBeNull();
+    const r: any = await (await at("/api/memory/search?q=")).json();
+    expect(r.results.filter((x: any) => x.source === "session")).toEqual([]);
     // The slow reads run after the answer: wait until each has failed.
     await read;
     await updater.flush();
@@ -263,29 +263,28 @@ test("prospective issues carry their priority, medium when they have none", asyn
       delete b.fm.priority;
       return true;
     }, true);
-    const t: any = await memoryTypes(join(base, "vault"), [], null);
-    expect(t.prospective.issues.map((i: any) => i.priority)).toEqual(["critical", "medium"]);
+    const all = await items(join(base, "vault"), [], {}, null);
+    expect(all.filter((i) => i.source === "issue").map((i) => i.priority)).toEqual(["critical", "medium"]);
   } finally {
     writeFileSync(join(base, "repos.json"), REPOS);
   }
 });
 
-test("working lists the per-project handoffs", async () => {
+test("a project handoff shows its summary line", async () => {
   const dir = mkdtempSync(join(tmpdir(), "proj-"));
   mkdirSync(join(dir, "projects"));
   writeFileSync(join(dir, "projects", "aleph.md"), "summary: Fix the memory tab\n\nBody.\n");
   const restore = withEnv({ ALEPH_HANDOFFS_DIR: dir });
   try {
-    const t: any = await memoryTypes(join(base, "vault"), [], null);
-    expect(t.working.projects.map((x: any) => [x.name, x.text])).toEqual([["aleph", "Fix the memory tab"]]);
-    expect(t.working.total).toBe(1);
+    const all = await items(join(base, "vault"), [], {}, null);
+    expect(all.filter((i) => i.source === "handoff").map((i) => [i.key, i.scope, i.text])).toEqual([["projects/aleph.md", "aleph", "Fix the memory tab"]]);
   } finally {
     restore();
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test("semantic lists each scope's core lines and the start-context bytes against the budget", async () => {
+test("/api/memory lists each scope's core lines and the start-context bytes against the budget", async () => {
   const { loadVault, startContext, coreNotes } = await import("../vault/lib/vault.ts");
   const root = join(base, "vault");
   const core = (dir: string, title: string, scope: string, line: string) => note(dir, title, "decision", scope, "**Claim.** x", line);
@@ -294,23 +293,25 @@ test("semantic lists each scope's core lines and the start-context bytes against
   core("decisions", "Core O", "other", "line for other");
   try {
     const all = await loadVault(root);
-    const t: any = await memoryTypes(root, [], null, all);
+    await fresh("vault");
+    const t: any = await (await at("/api/memory")).json();
     for (const scope of ["aleph", "global"]) {
-      const s = t.semantic.start[scope];
+      const s = t.start[scope];
       expect(s.core.map((c: any) => c.title)).toEqual(coreNotes(all, scope).map((n: any) => n.title));
       expect(s.bytes).toBe(Buffer.byteLength(startContext(root, all, scope).text));
     }
-    expect(t.semantic.start.aleph.core.map((c: any) => c.core).sort()).toEqual(["line for aleph", "line for global"]);
-    expect(JSON.stringify(t.semantic.start)).not.toContain("line for other");
+    expect(t.start.aleph.core.map((c: any) => c.core).sort()).toEqual(["line for aleph", "line for global"]);
+    expect(JSON.stringify(t.start)).not.toContain("line for other");
   } finally {
     for (const t of ["Core A", "Core G", "Core O"]) rmSync(join(root, "wiki", "decisions", `${t}.md`));
+    await fresh("vault");
   }
 });
 
 
 const it = (over: object) => ({ type: "semantic", source: "note", key: "N", title: "N", text: "claim", scope: "aleph", at: "2026-10-01", read: null, effect: "Reaches a session when vault recall returns it.", ...over });
 const page = { exists: true, total: 1, byKind: {}, byScope: {}, scopes: ["aleph", "other"], home: [], lint: { refuse: [], warn: [] }, writes: [], notes: [row({ title: "N", read: "2026-11-03" }), row({ title: "Never" })],
-  types: { semantic: { start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } } } };
+  start: { aleph: { bytes: 3000, budget: 6000, cut: 0, core: [{ title: "N", core: "c" }] } } };
 
 test("the page is the search, the freshness filter, seven type tiles, the results and the inspector, then health", () => {
   const h = v.renderMemory(page, v.options(new URLSearchParams("q=work")), [it({}), it({ type: "working", source: "handoff", key: "current.md", title: "current handoff" })]);

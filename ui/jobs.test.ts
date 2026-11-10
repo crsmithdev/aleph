@@ -188,7 +188,7 @@ describe("GET /api/jobs/:id", () => {
     expect(closed.blockers).toBeUndefined();
     const html = v.renderJob(j);
     expect(html).toContain('<span class="quiet">Waits on</span>');
-    expect(html).toContain(`data-act="unblock" data-repo="oth" data-id="${open}"`);
+    expect(html).toContain(`data-act="unblock" data-path="/api/issues/oth-${open}/unblock"`);
   });
   test("404 for an unknown name, or another project's job", async () => {
     expect((await get(jp("nope#1"))).status).toBe(404);

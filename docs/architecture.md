@@ -82,7 +82,7 @@ The modules of `jobs/lib/`, one folder per concern:
 | Routing | `routing/` | `route.ts`, `models.ts`, `gpt-oss-start.ts` |
 | Asks | `asks/` | `ask.ts`; the director (`jobs/lib/roles/director.ts`) answers the asks |
 | Learning | `learning/` | `corrections.ts`, `episode.ts`, `monitor-table.ts`, `trace.ts` |
-| Infrastructure | `infra/` | `git.ts`, `process.ts`, `clock.ts`, `settings.ts`, `layout.ts`, `main-clone.ts`, `ui-graph.ts`, `doctor.ts` |
+| Infrastructure | `infra/` | `git.ts`, `process.ts`, `clock.ts`, `settings.ts`, `layout.ts`, `main-clone.ts`, `ui-graph.ts`, `doctor.ts`, `systemd.ts` |
 
 The tests, fixtures and testkits of a module are in its folder.
 

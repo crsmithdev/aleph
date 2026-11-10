@@ -247,15 +247,12 @@ export function flakeSection(rows: Flake[], trackers: Sources["trackers"], now: 
   for (const t of trackers) {
     const files = new Set<string>();
     let k = 0;
-    for (const line of t.notes) {
-      const m = /^- (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z): (.*)$/.exec(line);
-      if (!m) continue;
-      const at = Date.parse(m[1]);
-      if (!(now - at < 7 * DAY)) continue;
+    for (const { at, text } of t.notes.map(issues.noteOf)) {
+      if (!at || !(now - Date.parse(at) < 7 * DAY)) continue;
       k++;
-      const cut = m[2].indexOf(" > ");
+      const cut = text.indexOf(" > ");
       // The caller's prefix ("job x: ", "firefighter: ") is not part of the file name.
-      if (cut >= 0) files.add(m[2].slice(0, cut).split(": ").at(-1)!.trim());
+      if (cut >= 0) files.add(text.slice(0, cut).split(": ").at(-1)!.trim());
     }
     if (k) out.trackers.push({ ref: t.ref, notes: k, files: files.size });
   }

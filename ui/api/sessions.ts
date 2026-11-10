@@ -182,6 +182,39 @@ export async function windowTraces(days: number, project: string | null): Promis
 
 const LIMIT = 100, MAX = 2000;
 
+/** One row per session of `traces`, newest last turn first: a factory worker's session has its job's name, and its ledger cost when Langfuse prices it at 0. */
+export async function sessionRows(traces: any[]) {
+  const groups = new Map<string, any[]>();
+  for (const t of traces) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
+  const ledger = jobs();
+  const fit = await currentFit().catch(() => null);
+  return [...groups].map(([id, ts]) => {
+    ts.sort(byTime);
+    const job = ledger.get(id);
+    const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
+    const wk = share(fit, langfuse || job?.cost || 0, job?.model);
+    return {
+      ...(wk ? { wk } : {}),
+      id,
+      ...(job ? { label: job.name } : {}),
+      project: projectOf(ts[0]),
+      firstPrompt: clip(text(firstTyped(ts)), 160),
+      turns: ts.length,
+      start: ts[0].timestamp as string,
+      last: ts[ts.length - 1].timestamp as string,
+      cost: langfuse || job?.cost || 0,
+      taskTypes: taskTypes(ts),
+    };
+  }).sort((a, b) => ms(b.last) - ms(a.last));
+}
+
+/** The fields of turn `i` that the session and chat views share. A factory worker's session is one turn Langfuse prices at 0: it has the ledger's cost, as on the list. */
+function turnOf(id: string, ts: any[], i: number, obs: any[], fit: Parameters<typeof share>[0]) {
+  const t = ts[i], job = ts.length === 1 && !t.totalCost ? jobs().get(id) : undefined;
+  const model = modelOf(obs), cost = t.totalCost || job?.cost || 0;
+  return { n: i + 1, ...wkOf(fit, cost, job?.cost ? job.model : model), traceId: t.id, start: t.timestamp, model, seconds: secondsOf(t), cost };
+}
+
 /** The sessions of a window, for `GET /api/sessions`: newest last turn first, `?limit=` of them before the `?before=` time, and `next`, the `before` of the next page. */
 export async function listSessions(req: Request): Promise<Response> {
   const url = new URL(req.url);
@@ -194,28 +227,7 @@ export async function listSessions(req: Request): Promise<Response> {
   try {
     const lf = need();
     const { rows: all, partial } = await windowTraces(days, project);
-    const groups = new Map<string, any[]>();
-    for (const t of all) groups.set(t.sessionId, [...(groups.get(t.sessionId) ?? []), t]);
-    const ledger = jobs();
-    const fit = await currentFit().catch(() => null);
-    const sessions = [...groups].map(([id, ts]) => {
-      ts.sort(byTime);
-      const job = ledger.get(id);
-      const langfuse = ts.reduce((n, t) => n + (t.totalCost ?? 0), 0);
-      const wk = share(fit, langfuse || job?.cost || 0, job?.model);
-      return {
-        ...(wk ? { wk } : {}),
-        id,
-        ...(job ? { label: job.name } : {}),
-        project: projectOf(ts[0]),
-        firstPrompt: clip(text(firstTyped(ts)), 160),
-        turns: ts.length,
-        start: ts[0].timestamp,
-        last: ts[ts.length - 1].timestamp,
-        cost: langfuse || job?.cost || 0,
-        taskTypes: taskTypes(ts),
-      };
-    }).sort((a, b) => ms(b.last) - ms(a.last)).filter((x) => before === null || ms(x.last) < Date.parse(before));
+    const sessions = (await sessionRows(all)).filter((x) => before === null || ms(x.last) < Date.parse(before));
     const page = sessions.slice(0, limit), next = sessions.length > limit ? page.at(-1)!.last : null;
     return Response.json({ base: lf.base, projects: Object.keys(loadRegistry()).sort(), sessions: page, next, partial });
   } catch (e) { return fail(e); }
@@ -229,16 +241,10 @@ export const routes: Routes = {
       const all = await Promise.all(ts.map((t) => observationsOf(lf, t.id)));
       const fit = await currentFit().catch(() => null);
       const turns = ts.map((t, i) => ({
-        n: i + 1,
-        ...wkOf(fit, t.totalCost, modelOf(all[i])),
-        traceId: t.id,
-        start: t.timestamp,
+        ...turnOf(params.id, ts, i, all[i], fit),
         prompt: clip(text(t.input), 300),
         output: cut(t.output, 400),
         tools: all[i].filter((o) => isType(o, "tool")).length,
-        seconds: secondsOf(t),
-        cost: t.totalCost ?? 0,
-        model: modelOf(all[i]),
       }));
       return Response.json({ base: lf.base, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), turns });
     } catch (e) { return fail(e); }
@@ -255,24 +261,15 @@ export const routes: Routes = {
       const fit = await currentFit().catch(() => null);
       const t0 = ms(ts[0].timestamp); // the waterfall's axis starts at the session's first turn
       const turns = page.map((t, i) => ({
-        n: from + i,
+        ...turnOf(params.id, ts, from - 1 + i, all[i], fit),
         from: sec(Math.max(0, ms(t.timestamp) - t0)),
         to: sec(Math.max(0, ms(t.timestamp) - t0) + (durationMs(t) ?? 0)),
-        ...wkOf(fit, t.totalCost, modelOf(all[i])),
-        traceId: t.id,
-        start: t.timestamp,
         prompt: text(t.input),
         output: text(t.output),
-        model: modelOf(all[i]),
-        seconds: secondsOf(t),
-        cost: t.totalCost ?? 0,
         tools: toolCalls(all[i], t0),
         generations: generations(all[i], t0),
         texts: textBlocks(all[i], text(t.output)),
       }));
-      // A factory worker's session is one turn Langfuse prices at 0; the ledger has its cost, as on the list.
-      const job = jobs().get(params.id);
-      if (ts.length === 1 && turns.length === 1 && !turns[0].cost && job?.cost) Object.assign(turns[0], { cost: job.cost }, wkOf(fit, job.cost, job.model));
       return Response.json({ base: lf.base, id: params.id, ...labelOf(params.id), project: projectOf(ts[0]), taskTypes: taskTypes(ts), total: ts.length, from, turns });
     } catch (e) { return fail(e); }
   },

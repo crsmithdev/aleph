@@ -391,7 +391,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
       window.fetch = (u, o) => o?.method === "POST" ? (window.posts.push([u, o.body]), Promise.resolve(new Response("{}"))) : window.posts.length ? new Promise(() => {}) : f(u, o);
       document.querySelector("#view > *").dataset.mark = "1";
       document.querySelector("#view > *").insertAdjacentHTML("afterbegin", askCard({ id: "tools-4", reason: "question", kind: "question", card: "decide", label: "Decide", headline: "Support a second input file",
-        situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", args: { repo: "tools", id: "4" } }] }));
+        situation: "Decide it.", escalated: true, actions: [{ act: "deny", label: "Deny", hint: "closes the question", path: "/api/issues/tools-4/drop", body: { reason: "Chris denied it" }, input: { name: "reason", lead: "Chris denied: " } }] }));
       const b = document.querySelector('#view article.issue-row button.act[data-act="deny"]');
       window.card = b.closest("article");
       b.click();

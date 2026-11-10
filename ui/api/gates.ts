@@ -6,7 +6,6 @@
  * `POST /api/automation/rules/:reason/grant` (`{ "action": "<action>" }`): `aleph always grant`, the Always side.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { ASK_REASONS, askSub, readAlways } from "../../jobs/lib/asks/ask.ts";
 import { allHolds, backendHold, baselines, factoryRepos, gates, redLine, stopsStart } from "../../jobs/lib/gates/factory-status.ts";
@@ -17,13 +16,13 @@ import { layout, readEvents } from "../../jobs/lib/infra/layout.ts";
 import { eventIn, inProject, scopeOf } from "./scope.ts";
 import { BACKENDS } from "../../jobs/lib/routing/models.ts";
 import type { Event } from "../../lib/naming.ts";
-import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, systemctlBin, writeCaps } from "../../jobs/lib/infra/settings.ts";
+import { CAP_ENV, CAP_KEYS, INTAKE_TRIES, LIVE_CAP, RUN_CAP, capEnvSet, fixRounds, jobSeconds, landBatch, loadLimit, unitDir, writeCaps } from "../../jobs/lib/infra/settings.ts";
 import { reader } from "../../issues/lib/store.ts";
+import { noteOf } from "../../issues/lib/todo.ts";
+import { systemctl } from "../../jobs/lib/infra/systemd.ts";
 
 import { aleph, fail, post } from "../action.ts";
 import { reasonText } from "../asks.ts";
-import { state, type State } from "../state.ts";
-import { forProject } from "./now.ts";
 import type { Routes } from "../server.ts";
 
 /** The log keeps the entries of the last LOG_DAYS days, newest first, at most LOG_MAX of each actor. */
@@ -116,12 +115,10 @@ function noteEntries(): LogEntry[] {
     const doc = lists.list(repo.key);
     for (const item of doc?.items ?? []) {
       const ref = `${repo.key}-${item.sub === undefined ? item.id : `${item.id}.${item.sub}`}`;
-      for (const n of item.notes) {
-        const m = /^- (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z): (Chris(?::| decided:| approved| denied| dropped).*)$/.exec(n);
-        if (!m) continue;
-        const t = m[2];
+      for (const { at, text: t } of item.notes.map(noteOf)) {
+        if (!at || !/^Chris(?::| decided:| approved| denied| dropped)/.test(t)) continue;
         const action = /^Chris: run (it|intake) again$/.test(t) ? "reran" : /^Chris: checked/.test(t) ? "done" : /^Chris (denied|dropped)/.test(t) ? "dropped" : "answered";
-        out.push({ at: new Date(m[1]).toISOString(), by: "human", subject: ref, action, ...(/intake again$/.test(t) ? { sub: "intake" } : {}), note: t });
+        out.push({ at, by: "human", subject: ref, action, ...(/intake again$/.test(t) ? { sub: "intake" } : {}), note: t });
       }
     }
   }
@@ -178,13 +175,6 @@ const TIMERS: Record<string, string> = { tick: "aleph-tick.timer", suite: "aleph
 /** An interval the Schedules form takes: a whole number of seconds, minutes or hours, as systemd writes it. */
 const INTERVAL = /^[1-9]\d*(s|min|h)$/;
 
-const systemctl = (...args: string[]): { ok: boolean; out: string } => {
-  try {
-    const p = Bun.spawnSync([systemctlBin(), "--user", ...args], { stdout: "pipe", stderr: "pipe" });
-    return { ok: p.exitCode === 0, out: p.stdout.toString() + p.stderr.toString() };
-  } catch (e) { return { ok: false, out: (e as Error).message }; }
-};
-
 /** A timer's interval: its OnUnitActiveSec as systemd shows it ("1min", "1h"), or null when systemd does not answer. */
 function intervalOf(timer: string): string | null {
   const m = /OnUnitActiveUSec=(\S+)/.exec(systemctl("show", timer, "-p", "TimersMonotonic", "--no-pager").out);
@@ -202,7 +192,7 @@ export function setTimerInterval(name: string, every: string): string | null {
   if (!INTERVAL.test(every)) return `the interval is a whole number with s, min or h, as in 5min, not "${every}"`;
   const unit = readFileSync(join(import.meta.dir, "../../jobs/systemd", timer), "utf8");
   const keep = unit.split("\n").filter((l) => /^On(Boot|Startup)Sec=/.test(l));
-  const dir = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "systemd/user", `${timer}.d`);
+  const dir = join(unitDir(), `${timer}.d`);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "interval.conf"), ["# Written by the Automation page. An empty assignment clears every monotonic trigger,", "# so the boot and startup triggers of the unit file follow it.", "[Timer]", "OnUnitActiveSec=", ...keep, `OnUnitActiveSec=${every}`, ""].join("\n"));
   for (const args of [["daemon-reload"], ["restart", timer]]) {
@@ -268,13 +258,13 @@ export function metrics(entries: LogEntry[], holds = allHolds(), now = Date.now(
   };
 }
 
-/** The page's data from the Status page's state (its asks) and the security facts. */
-export function gatesBody(state: Pick<State, "now" | "asks">, security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
+/** The page's data and the security facts. The asks come from `/api/factory`, which the page also reads. */
+export function gatesBody(security: { held: string[] }, ms = LOG_DAYS * DAY, project?: string) {
   const jobs = allJobs(), entries = log(Date.now(), LOG_MAX, ms, project), all = log(Date.now(), Infinity, ms, project);
   const records = record.all().filter((r) => inProject(r.issue, project)), holds = allHolds().filter((h) => inProject(h.name, project));
   const hold = backendHold();
   return {
-    now: state.now,
+    now: new Date().toISOString(),
     capEnv: Object.fromEntries(CAP_KEYS.map((k) => [k, capEnvSet(CAP_ENV[k])])),
     settings: settingsNow(),
     metrics: metrics(all, holds, Date.now(), records, ms),
@@ -284,7 +274,6 @@ export function gatesBody(state: Pick<State, "now" | "asks">, security: { held: 
     // The backend gate of FACTORY_GATES: the dispatch binds it for a run on the held backend, and the page binds it while the hold is up.
     gated: gates({ jobs }) ?? (hold ? { gate: "backend", why: `waits for ${BACKENDS[hold.via]}: ${hold.why}`, text: `Waiting for ${BACKENDS[hold.via]}: ${hold.why}` } : null),
     baseline: baselineGate(),
-    asks: state.asks,
     rules: rules(all, records, Date.now(), ms),
     repeats: repeats(all, records, Date.now(), ms),
     ...security,
@@ -297,7 +286,7 @@ export const routes: Routes = {
   "GET /api/automation": async (_req, _params, url) => {
     const sc = scopeOf(url);
     if (sc instanceof Response) return sc;
-    return Response.json(gatesBody(forProject(state(), sc.project), await securityFacts(), sc.ms, sc.project ?? undefined));
+    return Response.json(gatesBody(await securityFacts(), sc.ms, sc.project ?? undefined));
   },
   "POST /api/automation/caps": post((body) => {
     if (typeof body !== "object" || Array.isArray(body)) fail(422, "body must be a JSON object");

@@ -2,6 +2,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Entry, Run } from "../records/ledger.ts";
+import { systemctl } from "./systemd.ts";
 
 /**
  * A run's process: `starting` (made, no `pid` yet, for STARTING_MS), `live` (`pid`, no `exit`, and that process names
@@ -111,7 +112,7 @@ async function gone(folder: string, ms: number): Promise<boolean> {
  */
 export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
   // The unit is `aleph-<subject>-<n>`, the folder name after its stamp; a run from before job IDs has no `n` and its unit has the whole folder name.
-  Bun.spawnSync(["systemctl", "--user", "stop", `aleph-${e.run.n === undefined ? e.id : e.id.slice(16)}`], { stdout: "ignore", stderr: "ignore" });
+  systemctl("stop", `aleph-${e.run.n === undefined ? e.id : e.id.slice(16)}`);
   const pid = pidOf(e.folder);
   if (pid === null || !unitAlive(e.folder)) return true;
   const signal = (s: NodeJS.Signals) => { for (const p of [-pid, pid]) try { process.kill(p, s); } catch {} };

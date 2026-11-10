@@ -39,7 +39,8 @@ export function card(repo: string, item: todos.Issue, stage: string, ask?: Ask):
   const id = `${repo}-${todos.refOf(item)}`;
   const c: NewIssue = { id, title: item.title, priority: priorityOf(item), status: "open", href: issueHref(id), labels: areasOf(item), notes: item.notes.length, created: todos.created(item) ?? "", updated: todos.updated(item) ?? "", stage };
   if (!ask) return c;
-  const q = ask.question || item.notes.at(-1)?.replace(/^\s*-\s*/, "").trim();
+  const last = item.notes.at(-1);
+  const q = ask.question || (last && todos.noteOf(last).text.trim());
   if (q) c.question = q;
   if (ask.options.length) c.decision = ask;
   return { ...c, ask, reason: ask.reason, askKind: ask.kind };
