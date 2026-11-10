@@ -102,8 +102,8 @@ export async function stop(e: Entry, ms = 35_000): Promise<boolean> {
 }
 
 /**
- * The run with `ended` pulled back to its last worker activity: the newest file in its folder (state.json and `exit` aside),
- * and no later than the `exit` file. `ended` is stamped when something notices the run stopped, which can be hours after a
+ * The run with `ended` pulled back to its last worker activity: the newest file in its folder (`exit` aside),
+ * and no later than the record's `ended`. `ended` is stamped when something notices the run stopped, which can be hours after a
  * killed worker. A run with no such file keeps its `ended`; the end never goes before `started`.
  */
 export function activeEnd(e: Entry): Run {
@@ -115,9 +115,8 @@ export function activeEnd(e: Entry): Run {
   let end = b;
   try {
     let last = -Infinity;
-    for (const f of readdirSync(e.folder)) if (f !== "state.json" && f !== "exit") last = Math.max(last, statSync(join(e.folder, f)).mtimeMs);
+    for (const f of readdirSync(e.folder)) if (f !== "exit") last = Math.max(last, statSync(join(e.folder, f)).mtimeMs);
     if (last > -Infinity) end = Math.min(end, last);
-    if (existsSync(join(e.folder, "exit"))) end = Math.min(end, statSync(join(e.folder, "exit")).mtimeMs);
   } catch { return r; }
   end = Math.max(a, end);
   if (Date.now() - b > SETTLED_MS) ends.set(key, end);

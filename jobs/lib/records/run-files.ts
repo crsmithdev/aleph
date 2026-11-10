@@ -4,11 +4,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * The files and folders a run folder holds. `state.json` belongs to ledger.ts and `pid`/`exit` to process.ts;
+ * The files and folders a run folder holds. `pid`/`exit` belong to process.ts;
  * they are listed so that the names stay in one place.
  */
 export type RunFile =
-  | "state.json" | "pid" | "exit"
+  | "pid" | "exit"
   | "spec.md" | "command.txt" | "prompt.md" | "review-prompt.md" | "call-prompt.md"
   | "output.log" | "stderr.log" | "setup.log" | "next.log" | "dispatch.log" | "trace.log" | "checks.log" | "land.log"
   | "result.md" | "review.md" | "review.json" | "call.md" | "review.log" | "review.err"

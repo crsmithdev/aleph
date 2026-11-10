@@ -1,7 +1,7 @@
 /**
  * `aleph unit <run-folder>`: the body of one run, inside its systemd unit.
  * An agent run is setup, the worker, then the state rule; a plain run is one
- * command. Both end with state.json, then `exit`, then the news.
+ * command. Both end with the job record, then `exit`, then the news.
  */
 import * as jobRecord from "../records/record.ts";
 import { skillSection } from "./role-skill.ts";

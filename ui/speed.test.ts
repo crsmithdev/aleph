@@ -374,11 +374,11 @@ test("activeEnd pulls ended back to the last worker activity", () => {
     return { id: name, folder, run: { kind: "build", job: name, name, told: true, started: new Date(t0).toISOString(), ended: new Date(t0 + 180 * min).toISOString() } as any };
   };
   // killed: last output at 24 min, noticed at 180 min
-  expect(Date.parse(activeEnd(mk("a", { "state.json": 180, log: 24, exit: 180 })).ended!)).toBe(t0 + 24 * min);
-  // exit before later review files
-  expect(Date.parse(activeEnd(mk("b", { log: 20, exit: 30, "call.md": 100 })).ended!)).toBe(t0 + 30 * min);
+  expect(Date.parse(activeEnd(mk("a", { log: 24, exit: 180 })).ended!)).toBe(t0 + 24 * min);
+  // exit older than later review files: the newest non-exit file counts
+  expect(Date.parse(activeEnd(mk("b", { log: 20, exit: 30, "call.md": 100 })).ended!)).toBe(t0 + 100 * min);
   // no activity files: keeps ended
-  expect(Date.parse(activeEnd(mk("c", { "state.json": 180 })).ended!)).toBe(t0 + 180 * min);
+  expect(Date.parse(activeEnd(mk("c", { exit: 180 })).ended!)).toBe(t0 + 180 * min);
   rmSync(dir, { recursive: true, force: true });
 });
 
