@@ -13,10 +13,10 @@ export function readJsonOr<T>(file: string, fallback: T): T {
   return JSON.parse(text);
 }
 
-/** Writes `value` to `file` as JSON: to a temp file, then a rename over `file`. */
-export function writeJson(file: string, value: unknown): void {
+/** Writes `value` to `file` as JSON: to a temp file, then a rename over `file`. `mode` sets the new file's permissions. */
+export function writeJson(file: string, value: unknown, mode?: number): void {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n");
+  writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", { mode });
   renameSync(tmp, file);
 }
