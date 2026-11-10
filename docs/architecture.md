@@ -76,7 +76,7 @@ The modules of `jobs/lib/`, one folder per concern:
 |---|---|---|
 | Records and runs | `records/` | `record.ts`, `ledger.ts`, `job.ts`, `run-files.ts`, `outcome.ts`, `stage.ts`, `status.ts`, `jobdiff.ts` |
 | Transitions | `transitions/` | `transitions.ts`, `continuation.ts`, `factory.ts`, `tick.ts`, `launch.ts` |
-| Agent roles | `roles/` | `agent-run.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `structured.ts`, `issue-spec.ts`, `role-skill.ts` |
+| Agent roles | `roles/` | `agent-call.ts`, `agent-run.ts`, `intake.ts`, `unit.ts`, `director.ts`, `monitor.ts`, `title.ts`, `issue-spec.ts`, `role-skill.ts` |
 | Gates and checks | `gates/` | `issue-decision.ts`, `factory-status.ts`, `checks.ts`, `keep-earn.ts`, `gate.ts`, `worker-verdict.ts`, `ci.ts`, `firefighter.ts`, `smoke.ts`, `doc-claims.ts`, `doc-claims-repo.ts`, `related.ts` |
 | Land and recovery | `land/` | `landing.ts`, `rescue.ts` |
 | Routing | `routing/` | `route.ts`, `models.ts`, `gpt-oss-start.ts` |

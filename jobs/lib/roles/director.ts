@@ -23,11 +23,10 @@ import { allRuns, isAgentRun, loadRegistry, type Entry, type Repo, type Run } fr
 import { lock } from "../infra/locks.ts";
 import { missingVerdict } from "../gates/worker-verdict.ts";
 import { endLost, openRun } from "./agent-run.ts";
-import { NO_OUTPUT } from "./structured.ts";
 import { allJobs, isOpen, issue as issueOf, openJob, readFile } from "../records/job.ts";
 import { isLive, isStarting } from "../infra/process.ts";
 import { git } from "../infra/git.ts";
-import { securityChange } from "../gates/gate.ts";
+import { NO_OUTPUT, securityChange } from "../gates/gate.ts";
 import { missingSections } from "./issue-spec.ts";
 import { onMain, itemOnMain } from "../records/status.ts";
 import { writeRerun } from "../transitions/continuation.ts";

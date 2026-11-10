@@ -10,10 +10,9 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import * as issues from "../../../issues/lib/todo.ts";
 import { file as fileIssues, note, noteFlake, priorityOf, reader } from "../../../issues/lib/store.ts";
-import { agentCall, stallReason, stallSeconds } from "./agent-run.ts";
+import { callAgent, stallReason, type Reply } from "./agent-call.ts";
 import { addWorktree, fetchOrigin, git, jobGrep } from "../infra/git.ts";
 import { heldRule, parseReview, parseWorker, REVIEW_SCHEMA, WORKER_SCHEMA, securityChange, testFindings } from "../gates/gate.ts";
-import { schemaFlags, structuredOf } from "./structured.ts";
 import { waiting, workerVerdict, type NoVerdict, type Outcome, type ReviewCall, type VerdictPorts } from "../gates/worker-verdict.ts";
 import { admit, isAgentRun, onOf, allRuns, loadRegistry, newsLine, readEnvFile, tell, trailerOf, type CheckResult, type Entry, type Repo, type Run, type TestRecord } from "../records/ledger.ts";
 import { lock } from "../infra/locks.ts";
@@ -25,9 +24,7 @@ import { gates, holdBackend } from "../gates/factory-status.ts";
 import { keepDiff } from "../records/jobdiff.ts";
 import { land, removeBranch, waitingToLand, type LandPorts } from "../land/landing.ts";
 import { buildChecks } from "../gates/related.ts";
-import { modelArgv, modelEnv, onGpu, OPUS_MODEL, readModels, viaOf, viaOfRun, WORKER_TIER } from "../routing/models.ts";
-import { gpuSlot } from "../gates/factory-status.ts";
-import { costDetails } from "../../../lib/pricing.ts";
+import { OPUS_MODEL, readModels, viaOf, viaOfRun, WORKER_TIER } from "../routing/models.ts";
 import { brief, earlierRounds, FOREGROUND, MERGE_MODEL, MERGE_SECONDS, nextStep, questionOf, repeatedFailure, nextBrief } from "../transitions/continuation.ts";
 import { oracleCommands, outsideSurface } from "./issue-spec.ts";
 import { docClaimProblems } from "../../../hooks/lib/docclaims.ts";
@@ -36,7 +33,7 @@ import { runLogged, runPath, startUnit } from "../transitions/launch.ts";
 import { land as startLand, recheck as startRecheck, startJob } from "../transitions/transitions.ts";
 import { onMain } from "../records/status.ts";
 import { writeTitle } from "./title.ts";
-import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile, workerCmd } from "../infra/settings.ts";
+import { checkSeconds, dispatchOn, fixRounds, jobSeconds, reviewDiffMax, reviewSeconds, reviewerCmd, runEnvFile } from "../infra/settings.ts";
 import { jobSpec, jobSpecFile, runFile } from "../records/run-files.ts";
 
 let child: ReturnType<typeof Bun.spawn> | null = null;
@@ -359,15 +356,14 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
   // A tier set to a model Claude does not serve runs on it; the run keeps its Claude model as its tier.
   const pick = tier !== undefined ? readModels()[tier].model : undefined;
   if (pick !== undefined && viaOf(pick) !== "claude") { jobRecord.patchRun(basename(folder), { model: pick, tier: run.model }); run = { ...run, model: pick }; }
-  const argv = modelArgv(workerCmd(), run.model, ["--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob",
-    "--session-id", run.session!, "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-    ...(repo.sandbox ? schemaFlags(WORKER_SCHEMA) : [])]);
   const text = brief(id, folder, run, repo);
   writeFileSync(runFile(folder, "prompt.md"), text);
   phase("worker");
-  const w = await agentCall("worker", argv, {
-    cwd: wt, env: { ...agentEnv(env, folder), ...modelEnv(run.model) }, stdin: text, stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
-    limit: workSeconds(run), stall: stallSeconds(), onSpawn: (p) => { child = p; },
+  // No GPU slot: a worker's run on the local backend counts against LOCAL_CAP itself, and the live cap admitted it.
+  const w = await callAgent("worker", text, {
+    model: run.model, flags: ["--tools", "Read", "Write", "Edit", "Bash", "Grep", "Glob", "--session-id", run.session!, "--permission-mode", "bypassPermissions"],
+    schema: repo.sandbox ? WORKER_SCHEMA : undefined, cwd: wt, env: agentEnv(env, folder), stdout: runFile(folder, "output.log"), stderr: runFile(folder, "stderr.log"),
+    limit: workSeconds(run), slot: false, onSpawn: (p) => { child = p; },
   });
   child = null;
   if (repo.sandbox) return factoryVerdict(id, folder, run, repo, w, env);
@@ -411,16 +407,13 @@ async function agent(id: string, folder: string, run: Run, repo: Repo, env: Reco
  * A factory worker's run after its worker: the fields of its structured output, then the worker verdict on its branch.
  * A reply with no structured output fails. Only the branch's commits count: what the worker left uncommitted is not checked.
  */
-async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, w: Awaited<ReturnType<typeof agentCall>>, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
+async function factoryVerdict(id: string, folder: string, run: Run, repo: Repo, w: Reply, env: Record<string, string | undefined>): Promise<{ outcome: Outcome; code: number }> {
   const tip = `refs/heads/${run.branch!}`;
   const main = `refs/remotes/origin/${repo.main}`;
   const stop = (cause: Cause, reason: string, extra: Partial<Outcome> = {}) => ({ outcome: { condition: "failed" as const, cause, reason, ...extra }, code: 1 });
-  const o = w.outcome;
-  const reply = parseWorker(structuredOf(readFileSync(runFile(folder, "output.log"), "utf8")));
-  writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? o.result : reply.summary);
-  // Claude Code knows Claude's prices only: a run on another model is priced from its tokens.
-  const cost = viaOf(run.model) === "claude" ? o.cost : costDetails(run.model!, o.usage ?? { input: 0, output: 0 })?.total;
-  const facts: Partial<Outcome> = cost !== undefined ? { cost } : {};
+  const reply = parseWorker(w.data);
+  writeFileSync(runFile(folder, "result.md"), typeof reply === "string" ? w.text : reply.summary);
+  const facts: Partial<Outcome> = w.cost !== undefined ? { cost: w.cost } : {};
   if (typeof reply !== "string") {
     Object.assign(facts, { defaults: reply.defaults, followups: reply.followups }, reply.alreadyMet !== null ? { alreadyMet: reply.alreadyMet } : {}, reply.question !== null ? { question: reply.question } : {});
     await fileFollowups(repo, run, reply.followups);
@@ -660,24 +653,18 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
   const text = reviewPrompt(run.name, spec, diff, findings, { outside: outsideSurface(spec, changed), merge: range.merge });
   writeFileSync(runFile(folder, "review-prompt.md"), text);
   const model = readModels().reviewer?.model ?? OPUS_MODEL;
-  const argv = modelArgv(reviewerCmd(), model, ["--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions",
-    "--tools", "Read", "Grep", "Glob", "Bash", ...schemaFlags(REVIEW_SCHEMA)]);
-  const log = runFile(folder, "review.log");
-  const err = runFile(folder, "review.err");
   const tip = git(repo.path, "rev-parse", `refs/heads/${branch}`).out;
-  let release: (() => void) | null = null;
-  if (onGpu(model)) release = await gpuSlot(reviewSeconds() * 1000);
   try {
     return await atCommit(repo, tip, async (wt) => {
-      const w = await agentCall("reviewer", argv, {
-        cwd: wt, env: { ...agentEnv(env, folder), ...modelEnv(model) }, stdin: text, stdout: log, stderr: err, limit: reviewSeconds(), stall: stallSeconds(),
+      const w = await callAgent("reviewer", text, {
+        model, cmd: reviewerCmd(), flags: ["--permission-mode", "bypassPermissions", "--tools", "Read", "Grep", "Glob", "Bash"], schema: REVIEW_SCHEMA,
+        cwd: wt, env: agentEnv(env, folder), stdout: runFile(folder, "review.log"), stderr: runFile(folder, "review.err"), limit: reviewSeconds(),
         onSpawn: (p) => { child = p; },
       });
       child = null;
-      const o = w.outcome;
-      const v = parseReview(structuredOf(existsSync(log) ? readFileSync(log, "utf8") : ""));
-      writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? o.result : v.text);
-      const cost = o.cost;
+      const v = parseReview(w.data);
+      writeFileSync(runFile(folder, "review.md"), typeof v === "string" ? w.text : v.text);
+      const cost = w.cost;
       const none = (why: string) => ({ reason: `reviewer: no verdict (${why})`, cost, none: true });
       if (w.cause?.kind === "credit") return { ...none(w.cause.reason), credit: w.cause.reason };
       if (w.cause) return none(w.cause.reason);
@@ -687,8 +674,6 @@ async function review(folder: string, run: Run, repo: Repo, base: string, branch
     });
   } catch (e) {
     return { reason: `reviewer: no verdict (${e instanceof Error ? e.message : e})`, none: true };
-  } finally {
-    release?.();
   }
 }
 

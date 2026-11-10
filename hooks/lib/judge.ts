@@ -75,16 +75,14 @@ export async function judge(digestText: string, finalMessage: string, budgetMs =
 }
 
 async function haiku(digestText: string, left: () => number, started: number): Promise<JudgeResult> {
-  return oneShot("judge", process.env.ALEPH_JUDGE_CMD ?? "claude", "judge", left(), "budget", async (ask) => {
-    let error = "";
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      if (left() <= 0) return { verdict: null, error: `judge budget spent${error ? `: ${error}` : ""}`, ms: Date.now() - started };
-      const { code, stderr, result } = await ask(RUBRIC, digestText, left());
-      if (code !== 0) { error = `exit ${code}: ${stderr.slice(0, 200)}`; continue; }
-      const verdict = parseVerdict(result);
-      if (verdict) return { verdict, ms: Date.now() - started };
-      error = `unparseable: ${result.slice(0, 200)}`;
-    }
-    return { verdict: null, error, ms: Date.now() - started };
-  });
+  let error = "";
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    if (left() <= 0) return { verdict: null, error: `judge budget spent${error ? `: ${error}` : ""}`, ms: Date.now() - started };
+    const { code, stderr, result } = await oneShot("judge", process.env.ALEPH_JUDGE_CMD ?? "claude", RUBRIC, digestText, left());
+    if (code !== 0) { error = `exit ${code}: ${stderr.slice(0, 200)}`; continue; }
+    const verdict = parseVerdict(result);
+    if (verdict) return { verdict, ms: Date.now() - started };
+    error = `unparseable: ${result.slice(0, 200)}`;
+  }
+  return { verdict: null, error, ms: Date.now() - started };
 }

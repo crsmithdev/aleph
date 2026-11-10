@@ -24,7 +24,7 @@ describe("a factory run", () => {
     expect(sh(repo, "git", "log", "-1", "--format=%s", "factory/fpass")).toBe("add fpass.txt");
     expect(detached()).toEqual([]);
     expect(file(r.json.run, "prompt.md")).toContain(`in \`${worktree("fpass")}\`, branch \`factory/fpass\`.\nWork only there.`);
-    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain(`--disable-slash-commands --settings ${AGENT_SETTINGS} --tools Read Write Edit Bash Grep Glob`);
+    expect(readFileSync(join(fakeLog, "args"), "utf8")).toContain(`--disable-slash-commands --settings ${AGENT_SETTINGS} --output-format stream-json --verbose --tools Read Write Edit Bash Grep Glob`);
     expect(s.checks.map((c: any) => c.name)).toEqual(["tests", "tree"]);
     for (const c of s.checks) expect(c).toMatchObject({ ok: true, seconds: expect.any(Number) });
   });

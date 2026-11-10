@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, expect, setSystemTime, test } from "bun
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { agentCause, endLost, openRun, type Opening } from "./agent-run.ts";
+import { endLost, openRun, type Opening } from "./agent-run.ts";
 import { allRuns, runsDir, stamp } from "../records/ledger.ts";
 import { getRun, jobIdOf, putRun } from "../records/record.ts";
 import { backendHold } from "../gates/factory-status.ts";
@@ -158,9 +158,4 @@ test("an agent gets no API key and no CLAUDECODE, so it bills the subscription",
   expect(await openRun(opening).ask("x")).toBe("key=[] code=[] path=[set]\n");
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.CLAUDECODE;
-});
-
-test("a call the API refused for credit states the credit cause, not other", () => {
-  const line = "API Error: 402 This request would exceed your available credits";
-  expect(agentCause({ code: 1, timedOut: false, stalled: false }, { ok: false, line, result: "" })).toEqual({ kind: "credit", reason: line });
 });

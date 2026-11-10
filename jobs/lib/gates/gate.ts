@@ -3,8 +3,10 @@
  * needs Chris. See docs/workflow.md.
  */
 import { git } from "../infra/git.ts";
-import { NO_OUTPUT } from "../roles/structured.ts";
 import type { Usage } from "../../../lib/pricing.ts";
+
+/** The reason a parser gives when the reply has no structured output. */
+export const NO_OUTPUT = "no structured output";
 
 /** `usage` is the result event's tokens, in the shape `costDetails` takes. */
 export interface Outcome { ok: boolean; line: string; result: string; cost?: number; usage?: Usage }

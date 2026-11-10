@@ -17,10 +17,8 @@ const BOX = 30_000;
  */
 export async function writeLine(system: string, input: string, max: number): Promise<string> {
   try {
-    return await oneShot("title", ruleCmd(), "title", BOX, `${BOX / 1000} s`, async (ask) => {
-      const { code, result } = await ask(system, input, BOX);
-      return code !== 0 ? "" : result.trim().split("\n")[0].trim().slice(0, max);
-    });
+    const { code, result } = await oneShot("title", ruleCmd(), system, input, BOX);
+    return code !== 0 ? "" : result.trim().split("\n")[0].trim().slice(0, max);
   } catch {
     return "";
   }

@@ -23,7 +23,7 @@ import { withMainClone } from "../infra/main-clone.ts";
 import { itemOnMain } from "../records/status.ts";
 import { INTAKE_TRIES } from "../infra/settings.ts";
 import { OPUS_MODEL, readModels } from "../routing/models.ts";
-import { NO_OUTPUT } from "./structured.ts";
+import { NO_OUTPUT } from "../gates/gate.ts";
 
 /** The model an intake run asks for. */
 const INTAKE_MODEL = () => readModels().intake?.model ?? OPUS_MODEL;

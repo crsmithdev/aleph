@@ -21,7 +21,7 @@ Corrections, episodes and the firefighter start no agent. Corrections asks Jev t
 
 ## How a run starts
 
-`openRun` in `jobs/lib/roles/agent-run.ts` starts each one-reply role:
+`callAgent` in `jobs/lib/roles/agent-call.ts` makes every role's call: the one-reply roles through `openRun` in `jobs/lib/roles/agent-run.ts`, the worker and the reviewer, and the title writer and the judge through `oneShot`:
 
 ```bash
 claude -p --strict-mcp-config --disable-slash-commands \
@@ -29,10 +29,12 @@ claude -p --strict-mcp-config --disable-slash-commands \
 ```
 
 - The environment drops `ANTHROPIC_API_KEY` and `CLAUDECODE`, so each run uses the subscription.
-- The time box sends SIGTERM, then SIGKILL after 30 seconds, to the process group.
+- The time box and the stall watch (`ALEPH_STALL_SECONDS`, 600) send SIGTERM, then SIGKILL after 30 seconds, to the process group.
+- A call on the local model waits for the GPU slot as long as its time box. The worker takes no slot: its run counts against `LOCAL_CAP`.
+- A call that ends with the API credit error holds its model's backend (`holdBackend`).
+- The cost is Claude Code's `total_cost_usd` for a Claude model, else the model's tokens at its price in `MODELS`.
 - `askAgain` resumes the same session with `--resume` for a send-back, such as intake's second try.
-- `jobs/lib/roles/structured.ts` reads `structured_output` from the stream's `result` event.
-- The worker and reviewer go through `agentCall`, which adds the stall watch (`ALEPH_STALL_SECONDS`, 600).
+- `callAgent` reads `structured_output` and `session_id` from the stream's `result` event.
 
 The worker's environment (`agentEnv`) rewrites a push to `git@github.com:` to a dead remote, gives `gh` a private config with no token, and sets `ALEPH_JOB_ID` and `ALEPH_JOB_RUN`.
 

@@ -8,7 +8,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { docProblems, type Doc, type Truth } from "./doc-claims.ts";
 import * as s from "../infra/settings.ts";
-import { stallSeconds } from "../roles/agent-run.ts";
+import { stallSeconds } from "../roles/agent-call.ts";
 import { JEV_PASS_BELOW } from "../../../hooks/lib/judge.ts";
 import { judgeChoice } from "../../../lib/jev.ts";
 import { spoolDir } from "../../../hooks/lib/handshake.ts";

@@ -1,5 +1,5 @@
 /**
- * Only the runner (jobs/lib/roles/agent-run.ts) spawns a `claude` process. A source file that gives a claude
+ * Only the runner (jobs/lib/roles/agent-call.ts) spawns a `claude` process. A source file that gives a claude
  * command to a spawn starts claude by itself, and this test lists it. A claude command is a `modelArgv` call,
  * an argv or a command line that starts with `claude`, or a name that one of these is assigned to.
  */
@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
-const RUNNER = "jobs/lib/roles/agent-run.ts";
+const RUNNER = "jobs/lib/roles/agent-call.ts";
 const SKIPPED = /^(node_modules|vendor|\.worktrees)\/|\.test\.ts$/;
 const CLAUDE = String.raw`(?:modelArgv\(|\[\s*["'\`]claude(?![\w-])|["'\`]claude(?![\w-]))`;
 const SPAWN = String.raw`(?<!function\s+)(?:\bspawn|\bspawnSync|\bexecFile|\bexecFileSync|\bexecSync|(?<![.\w])exec)\(\s*(?:\{\s*cmd:\s*)?`;
