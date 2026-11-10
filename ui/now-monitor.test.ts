@@ -19,7 +19,7 @@ test("the Pipeline card shows the 8 stages of the window in order with runs per 
     { stage: "build", runs: 9, items: 5, unusable: 2, p90: 804 },
     { stage: "intake", runs: 3, items: 3, unusable: 0, p90: null },
   ];
-  const h = view.renderPipeline({ window: "week", stages: { rows, worst: {} } }, "");
+  const h = view.renderPipeline({ window: "week", stages: { rows } });
   const names = [...h.matchAll(/<span class="pn">([^<]*)</g)].map((m) => m[1]);
   expect(names).toEqual(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"]);
   expect(h).toContain('<span class="pv">1.8<span class="pu"> / issue</span></span><span class="pt">13m 24s</span>');
@@ -28,26 +28,6 @@ test("the Pipeline card shows the 8 stages of the window in order with runs per 
   expect(h.match(/class="pnode idle"/g)).toHaveLength(6);
   expect(h).not.toContain(">monitor<");
   expect(view.renderPipeline(null)).toContain("Loading the pipeline…");
-});
-
-test("the Pipeline card lists the picked stage's Reliability and Performance, and all stages' with none picked", () => {
-  const t = (n: number, runs: number, unusable: number, secs: number) => ({ issue: `aleph-${n}`, runs, unusable, secs, title: `T${n}`, href: `#/issues/aleph/${n}` });
-  const d = { window: "day", stages: { rows: [{ stage: "triage", runs: 4, items: 2, unusable: 1, p90: 60 }], worst: {
-    all: { errors: [t(1, 4, 3, 100)], slow: [t(2, 1, 0, 7200), t(1, 4, 3, 100)] },
-    triage: { errors: [], slow: [t(1, 4, 3, 100)] },
-  } } };
-  const all = view.renderPipeline(d, "");
-  expect(all).toContain("<span>Pipeline Reliability</span><span>failed runs</span>");
-  expect(all).toContain("<span>Pipeline Performance</span><span>time in all runs</span>");
-  expect(all).toContain('<div class="worst-row"><a class="idl" href="#/issues/aleph/1">aleph-1</a><span class="t" title="T1">T1</span><span class="num">3 of 4</span></div>');
-  expect([...all.matchAll(/class="t" title="([^"]*)"/g)].map((m) => m[1])).toEqual(["T1", "T2", "T1"]);
-  expect(all).toContain('<span class="num">2h 00m</span>');
-  expect(all).not.toContain('aria-pressed="true"');
-  const tri = view.renderPipeline(d, "triage");
-  expect(tri).toContain("<span>Triage Reliability</span>");
-  expect(tri).toContain("No run failed in this window.");
-  expect(tri).toContain('data-stage="triage" aria-pressed="true"');
-  expect(view.renderPipeline({ error: "no data" })).toContain("no data");
 });
 
 test("the Monitor panel shows the findings with numbers and **text** in bold, other HTML escaped, and no table", () => {

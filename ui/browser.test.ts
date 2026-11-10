@@ -436,23 +436,18 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     await page.ev('document.querySelector("#obar-probe").remove()');
   }, 30_000);
 
-  test("the empty Pipeline list text is muted and smaller than the body, and the second tile figure is a share of the value", async () => {
+  test("the second tile figure is a share of the value", async () => {
     await page.go("#/");
-    const m = await page.ev<{ color: string; want: string; size: number; body: number; em: number; val: number }>(`import("/views/now.js").then(async (n) => {
-      const { statCard } = await import("/lib.js");
+    const m = await page.ev<{ em: number; val: number }>(`import("/lib.js").then(({ statCard }) => {
       const host = document.createElement("div");
-      host.id = "worst-probe";
+      host.id = "tile-probe";
       document.querySelector("#view").prepend(host);
-      host.innerHTML = n.renderPipeline({ window: "week", stages: { rows: [], worst: {} } }, "") + '<section class="tiles">' + statCard({ k: "Landed", v: "5", v2: "9" }) + "</section>";
-      const css = (e) => getComputedStyle(e);
-      const probe = (v) => { const p = document.createElement("i"); p.style.color = v; host.append(p); return css(p).color; };
+      host.innerHTML = '<section class="tiles">' + statCard({ k: "Landed", v: "5", v2: "9" }) + "</section>";
       const em = host.querySelector(".tile.sc b em"), val = host.querySelector(".tile.sc b");
-      return { color: css(host.querySelector(".worst .empty p")).color, want: probe("var(--muted)"), size: parseFloat(css(host.querySelector(".worst .empty p")).fontSize), body: parseFloat(css(document.body).fontSize), em: parseFloat(css(em).fontSize), val: parseFloat(css(val).fontSize) };
+      return { em: parseFloat(getComputedStyle(em).fontSize), val: parseFloat(getComputedStyle(val).fontSize) };
     })`);
-    expect(m.color).toBe(m.want);
-    expect(m.size).toBeLessThan(m.body);
     expect(m.em / m.val).toBeCloseTo(0.62, 2);
-    await page.ev('document.querySelector("#worst-probe").remove()');
+    await page.ev('document.querySelector("#tile-probe").remove()');
   }, 30_000);
 
   test("every indented list takes its left padding from --indent-list", async () => {

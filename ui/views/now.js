@@ -2,9 +2,8 @@
 // /api/state object and returns an HTML string. No DOM, so tests can call them.
 // The page's click handler (router.js) runs the buttons `act` makes.
 import { get } from "../router.js";
-import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keep, kept, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
+import { actButton, clock, codeText, contentText, shownId, facts, tiles, badge, card, sectionHead, meter, dataTable, blockersHtml, denyReasons, diffHtml, dur, costHtml, empty, error, esc, hashQuery, idLink, mean, keepProject, keepWindow, loadingLine, pageHead, projectNow, scopeBar, WINDOW_DAYS, windowOf, wireScope, withProject, localId, openDiffs, issueHref, parseId, priorityBadge, repoIdLink, shortModel, sortHead, sortRows, nextSort, tag, when } from "../lib.js";
 import { NAMES } from "../../lib/naming.ts";
-import { panelOf } from "../chart.js";
 import { bar, loadSpeed, speedOf, statusCards, usable } from "./speed.js";
 import { act, actMsg, checkFacts, itemId, shell as jobCard, trailerLine } from "./cards.js";
 import { ALERT, ASK, FINE, JOBS_UNHEALTHY, labelOf, lead, PAUSED, TICK_STOPPED, WEEKLY_WARN, weekly } from "../../lib/status-words.ts";
@@ -18,7 +17,7 @@ export const view = {
   api: (_params, q = new URLSearchParams()) => withProject("/api/state", q),
   refresh: 60,
   live: true,
-  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderActive(speedOf(w))}${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s, w)}</div>${renderHerald(s)}</div></div>`; },
+  render: (s, _params, q) => { lastState = s; const w = windowOf(q); return `<div class="page sp">${renderStatusLine(s, outOfDateNow, w)}${tiles("Scorecard", renderTiles(s, usable(w), w), "scorecard")}<div class="rail"><div class="rail-main">${renderOutcome(speedOf(w))}${renderPipeline(speedOf(w))}${renderLanes(s, w)}</div>${renderHerald(s)}</div></div>`; },
   // The shell calls this when the out-of-date verdict changes: the sentence is drawn again from the last state.
   outOfDate: (root, b) => { outOfDateNow = b; const el = root.querySelector(".shead .say"); if (el && lastState) el.outerHTML = renderLede(lastState, b); },
   mount: (root, s, q) => mountStatus(root, s, fetch, q),
@@ -42,23 +41,6 @@ export function renderTiles(s, d, win = d?.window ?? "week") {
   return statusCards(s, d, { efficiency: withWindow(EFFICIENCY, win), performance: withWindow(PERFORMANCE, win) });
 }
 
-/** The active jobs over the window as one line: the jobs live in each bucket, all roles summed. */
-export const activeFrame = (d) => ({
-  measure: { name: "Active Jobs", unit: "count", agg: "max" },
-  over: { kind: "time", window: d.window },
-  by: { keys: [{ key: "jobs", name: "Active Jobs" }] },
-  rows: (d.agents?.points ?? []).map((p) => ({ at: p.at, jobs: Object.entries(p).reduce((n, [k, v]) => (k !== "at" && typeof v === "number" ? n + v : n), 0) })),
-  form: "lines",
-  legend: false,
-});
-
-/** The Active Jobs chart above Agent Time. `d` is null while it loads, `{ error }` on a failed load. */
-function renderActive(d) {
-  if (!d) return card("Active Jobs", loadingLine("the active jobs"), { id: "active" });
-  if (d.error) return card("Active Jobs", error(d.error), { id: "active" });
-  return panelOf("status/active", activeFrame(d), "active");
-}
-
 /** The outcome bar. `d` is null while it loads, `{ error }` on a failed load. */
 function renderOutcome(d) {
   const outcome = (body) => card("Agent Time", body, { id: "outcome", label: "Agent time" });
@@ -69,43 +51,18 @@ function renderOutcome(d) {
 
 /** The pipeline stages in order, with their names; the monitor's other roles (facts, director, monitor…) are not stages of an issue. */
 const PIPE = Object.fromEntries(["intake", "triage", "plan", "spec-check", "build", "review", "recheck", "land"].map((k) => [k, NAMES[k]]));
-/** The stage the Pipeline card shows the worst issues of; "" for all stages. It stays per reader through keep(). */
-const PIPE_KEY = "status/pipeline";
-const pipeOn = () => { const k = kept(PIPE_KEY, ""); return Object.hasOwn(PIPE, k) ? k : ""; };
-
-/**
- * The Pipeline card for the window: each stage with its runs per issue and p90 runtime, and a button that picks it;
- * then the picked stage's (or all stages') Reliability, the issues with the most failed runs, and Performance, the
- * issues with the most time. `d` is /api/speed for the window, null while it loads, or `{ error }`.
- */
-export function renderPipeline(d, on = pipeOn()) {
+/** The Pipeline card for the window: each stage with its runs per issue and p90 runtime. `d` is /api/speed for the window, null while it loads, or `{ error }`. */
+export function renderPipeline(d) {
   const box = (body, aside = "") => card("Pipeline", body, { id: "pipeline", aside });
   if (!d) return box(loadingLine("the pipeline"));
   if (d.error) return box(error(d.error));
   const by = new Map((d.stages?.rows ?? []).map((r) => [r.stage, r]));
   const node = ([k, name]) => {
     const r = by.get(k), n = r?.items ? r.runs / r.items : null, tip = r ? `${name}: ${r.runs} runs on ${r.items} issues${r.unusable ? `, ${r.unusable} failed` : ""}` : `${name}: no run`;
-    return `<button type="button" class="pnode${n === null ? " idle" : ""}" data-stage="${esc(k)}" aria-pressed="${k === on}" title="${esc(tip)}"><span class="pn">${esc(k)}</span>` +
-      `<span class="pv">${n === null ? "–" : `${mean(n)}<span class="pu"> / issue</span>`}</span><span class="pt">${n === null ? "idle" : esc(dur(r.p90))}</span></button>`;
+    return `<div class="pnode${n === null ? " idle" : ""}" title="${esc(tip)}"><span class="pn">${esc(k)}</span>` +
+      `<span class="pv">${n === null ? "–" : `${mean(n)}<span class="pu"> / issue</span>`}</span><span class="pt">${n === null ? "idle" : esc(dur(r.p90))}</span></div>`;
   };
-  const w = d.stages?.worst?.[on || "all"] ?? { errors: [], slow: [] }, name = on ? PIPE[on] : "Pipeline";
-  const row = (t, value) => `<div class="worst-row">${repoIdLink(t.issue, t.href)}<span class="t" title="${esc(t.title ?? t.issue)}">${esc(t.title ?? t.issue)}</span><span class="num">${value}</span></div>`;
-  const list = (title, what, rows, none) => `<div class="worst"><div class="worst-head"><span>${esc(title)}</span><span>${what}</span></div>${rows.join("") || empty(none)}</div>`;
-  const worst = `<div class="worsts">` +
-    list(`${name} Reliability`, "failed runs", w.errors.map((t) => row(t, `${t.unusable} of ${t.runs}`)), "No run failed in this window.") +
-    list(`${name} Performance`, "time in all runs", w.slow.map((t) => row(t, esc(dur(t.secs)))), "No run ended in this window.") + `</div>`;
-  return box(`<div class="pflow" role="group" aria-label="Stages">${Object.entries(PIPE).map(node).join("")}</div>${worst}`, `<span class="asof">runs / issue · p90 runtime</span>`);
-}
-
-/** A click on a stage picks it, and a click on the picked stage picks all stages; the card is drawn again from the last speed. The listener sits on `.rail`, which each render replaces. */
-function wirePipeline(root, w) {
-  root.querySelector?.(".rail")?.addEventListener?.("click", (e) => {
-    const b = e.target.closest?.("#pipeline button[data-stage]");
-    if (!b) return;
-    keep(PIPE_KEY, b.dataset.stage === pipeOn() ? "" : b.dataset.stage);
-    root.querySelector("#pipeline").outerHTML = renderPipeline(speedOf(w));
-    root.querySelector(`#pipeline button[data-stage="${b.dataset.stage}"]`)?.focus();
-  });
+  return box(`<div class="pflow" role="group" aria-label="Stages">${Object.entries(PIPE).map(node).join("")}</div>`, `<span class="asof">runs / issue · p90 runtime</span>`);
 }
 
 /** A finding as HTML: **text** and each number or percentage in bold; all other text escaped. */
@@ -261,14 +218,9 @@ export async function mountStatus(root, s, fetcher = get, q) {
   keepProject(projectNow());
   wireScope(root);
   wireHeraldJump(root);
-  wirePipeline(root, w);
   await loadSpeed(w, fetcher, true);
   const tiles = root.querySelector("#scorecard");
   if (tiles) tiles.innerHTML = renderTiles(s, usable(w), w);
-  const active = root.querySelector("#active, aleph-chart.active");
-  if (active) active.outerHTML = renderActive(speedOf(w));
-  const line = root.querySelector('aleph-chart[key="status/active"]');
-  if (line && !speedOf(w)?.error) line.frame = activeFrame(speedOf(w));
   const outcome = root.querySelector("#outcome");
   if (outcome) outcome.outerHTML = renderOutcome(speedOf(w));
   const pipe = root.querySelector("#pipeline");

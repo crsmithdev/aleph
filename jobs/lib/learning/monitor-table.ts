@@ -170,33 +170,6 @@ export function stageRows(src: Pick<Sources, "runs" | "specChecks">, from: numbe
   });
 }
 
-/** One issue's runs in a stage: how many, how many gave nothing usable, and their seconds in all. */
-export interface IssueTally { issue: string; runs: number; unusable: number; secs: number }
-
-/**
- * The worst issues of each stage in `from`..`to`, and of all stages under `all`: `errors` has the issues with the most
- * runs that gave nothing usable (at least one), `slow` the issues with the most seconds; at most `n` of each.
- */
-export function stageWorst(runs: Entry[], from: number, to: number, n = 5): Record<string, { errors: IssueTally[]; slow: IssueTally[] }> {
-  const by = new Map<string, Map<string, IssueTally>>();
-  const add = (stage: string, x: StageRun) => {
-    if (!by.has(stage)) by.set(stage, new Map());
-    const m = by.get(stage)!, t = m.get(x.item) ?? { issue: x.item, runs: 0, unusable: 0, secs: 0 };
-    t.runs++;
-    if (x.unusable) t.unusable++;
-    t.secs += x.secs ?? 0;
-    m.set(x.item, t);
-  };
-  for (const x of stageRuns(runs, from, to)) if (x.issue) { add(x.stage, x); add("all", x); }
-  return Object.fromEntries([...by].map(([stage, m]) => {
-    const ts = [...m.values()];
-    return [stage, {
-      errors: ts.filter((t) => t.unusable).sort((a, b) => b.unusable - a.unusable || b.unusable / b.runs - a.unusable / a.runs || a.issue.localeCompare(b.issue)).slice(0, n),
-      slow: ts.filter((t) => t.secs > 0).sort((a, b) => b.secs - a.secs || a.issue.localeCompare(b.issue)).slice(0, n),
-    }];
-  }));
-}
-
 function holdRows(holds: HoldRecord[], from: number, to: number): { rows: HoldRow[]; held: Window["held"] } {
   const byName = new Map<string, HoldRecord[]>();
   for (const h of holds) byName.set(h.name, [...(byName.get(h.name) ?? []), h]);
