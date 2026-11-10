@@ -66,7 +66,7 @@ describe.skipIf(!chromeUsable)("the UI in Chrome", () => {
     await page.go("#/");
     const root = () => page.ev<string>('getComputedStyle(document.documentElement).getPropertyValue("--display")');
     expect(await root()).toContain("Merriweather");
-    await page.ev('(() => { const s = document.querySelector(".fontpick select[data-role=display]:not([data-prop])"); s.value = "Lora"; s.dispatchEvent(new Event("change", { bubbles: true })); })()');
+    await page.ev('(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector("select[data-role=display]:not([data-prop])"); s.value = "Lora"; s.dispatchEvent(new Event("change", { bubbles: true })); })()');
     expect(await root()).toContain("Lora");
     expect(await page.ev<string>('getComputedStyle(document.querySelector(".mark")).fontFamily')).toContain("Merriweather");
     expect(page.errors).toEqual([]);
@@ -458,6 +458,30 @@ describe.skipIf(!chromeUsable)("Status page", () => {
     })`);
     expect(m.em / m.val).toBeCloseTo(0.62, 2);
     await page.ev('document.querySelector("#tile-probe").remove()');
+  }, 30_000);
+
+  test("the font picker and the annotations mount in the dock and work", async () => {
+    await page.width(1200);
+    await page.go("#/");
+    expect(await page.ev('[...document.querySelectorAll("#kit-dock > div")].map((d) => d.id)')).toEqual(["kit-fonts", "kit-annotate"]);
+    const pick = (role: string, v: string) => page.ev(`(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector('select[data-role="${role}"]:not([data-prop])'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    await pick("sans", "Inter");
+    expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("'Inter', system-ui, sans-serif");
+    // Charts read --chart-scale, which the picker sets from the Charts size step.
+    await page.ev(`(() => { const s = document.getElementById("kit-fonts").shadowRoot.querySelector('select[data-role="chart"][data-prop="size"]'); s.value = "1.08"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+    expect(await page.ev('document.documentElement.style.getPropertyValue("--chart-scale")')).toBe("1.08");
+    await page.ev('document.getElementById("kit-fonts").shadowRoot.querySelector(".reset").click()');
+    expect(await page.ev('document.documentElement.style.getPropertyValue("--sans")')).toBe("");
+    // A click in pick mode opens a note instead of following the link; the saved note shows a pin and the Markdown names it.
+    await page.ev('document.getElementById("kit-annotate").shadowRoot.querySelector(".pick").click()');
+    const before = await page.ev<string>("location.hash");
+    await page.ev('document.querySelector("#nav li a").click()');
+    expect(await page.ev<string>("location.hash")).toBe(before);
+    await page.ev('(() => { const l = document.getElementById("kit-annotate-layer").shadowRoot; l.querySelector("textarea").value = "rename this"; l.querySelector(".save").click(); })()');
+    await page.when('document.getElementById("kit-annotate").shadowRoot.querySelector(".count").textContent === "1"');
+    expect(await page.ev('document.getElementById("kit-annotate-layer").shadowRoot.querySelectorAll(".pin").length')).toBe(1);
+    await page.ev('document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }))');
+    await page.ev('localStorage.removeItem("annotations")');
   }, 30_000);
 
   test("every indented list takes its left padding from --indent-list", async () => {

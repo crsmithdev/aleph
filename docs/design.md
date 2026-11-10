@@ -102,7 +102,7 @@ Type, size and effect tokens (`ui/app.css`):
 | `--bar-h` | 10px | `height` of `.meter` and `.wf-bar` |
 | `--z-rowlink` | 1 | `tr.rowlink` links above the row link |
 | `--z-sticky` | 2 | sticky bar, waterfall axis |
-| `--z-overlay` | 50 | font picker |
+| `--z-overlay` | 50 | kit widgets: font picker, annotations |
 | `--gap-in` | 16px | between metric cards and side-by-side cards |
 | `--gap` | 24px | between page blocks |
 | `--indent-list` | 18px | `padding-left` of an indented list |
