@@ -89,6 +89,21 @@ describe("obs hook", () => {
     expect(JSON.parse(readFileSync(join(spool, `session:${session}.json`), "utf8"))).toMatchObject({ name: "proj", cwd: "/tmp/proj", tags: ["source:startup", "mode:auto", "project:proj"] });
   });
 
+  test("SessionStart names a worktree session for its main checkout", async () => {
+    const root = mkdtempSync(join(tmpdir(), "aleph-obs-wt-"));
+    try {
+      const run = (...args: string[]) => { const p = Bun.spawnSync(["git", ...args], { stdout: "ignore", stderr: "pipe" }); if (p.exitCode !== 0) throw new Error(p.stderr.toString()); };
+      const repo = join(root, "x");
+      run("init", "-q", "-b", "main", repo);
+      run("-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init");
+      const wt = join(repo, ".worktrees", "foo");
+      run("-C", repo, "worktree", "add", "-q", wt);
+      const id = "99999999-2222-3333-4444-555555555555";
+      expect((await fire({ hook_event_name: "SessionStart", session_id: id, cwd: wt, source: "startup", permission_mode: "auto" })).code).toBe(0);
+      expect(JSON.parse(readFileSync(join(spool, `session:${id}.json`), "utf8"))).toMatchObject({ name: "x", cwd: wt, tags: ["source:startup", "mode:auto", "project:x"] });
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+
   test("a prompt opens a turn trace whose root carries the prompt, name, tags and auth headers", async () => {
     await fire({ hook_event_name: "UserPromptSubmit", prompt_id: "p1", prompt: "hello" });
     const spans = lastSpans();

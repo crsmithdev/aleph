@@ -10,8 +10,8 @@
  *
  *   turn (root)  →  tool | agent → tool | generation | event
  */
-import { basename } from "node:path";
 import { langfuseConfig, sessionEnvironment } from "../lib/env.ts";
+import { repoScope } from "../vault/lib/vault.ts";
 import { agent, prune, session, tool, turn } from "./lib/handshake.ts";
 import { attrs, nano, postScore, postSpans, spanId, truncate, turnSpanIdFor, turnTraceIdFor, type AttrValue, type Score, type Span } from "../lib/otlp.ts";
 import { parseRating } from "./lib/rating.ts";
@@ -37,14 +37,15 @@ const agentSlot = input.agent_id ? agent(input.agent_id) : null;
 // SessionStart posts nothing. It leaves the name, tags and cwd that every turn trace repeats.
 if (event === "SessionStart") {
   prune();
+  const project = input.cwd ? repoScope(input.cwd) : undefined;
   sessionSlot.set({
     start: now,
-    name: input.cwd ? basename(input.cwd) : undefined,
+    name: project,
     cwd: input.cwd,
     tags: [
       `source:${input.source ?? "unknown"}`,
       `mode:${input.permission_mode ?? "unknown"}`,
-      ...(input.cwd ? [`project:${basename(input.cwd)}`] : []),
+      ...(project ? [`project:${project}`] : []),
     ],
   });
   process.exit(0);
