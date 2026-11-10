@@ -61,8 +61,10 @@ export function option(f, form, t, hidden = []) {
   const none = f.over.kind === "time" && form === "points" ? null : 0;
   // A share point with nothing to divide is a gap, not 0%.
   const data = (k) => f.rows.map((r, i) => item(r, share ? (sums[i] ? ((r[k.key] ?? 0) / sums[i]) * 100 : null) : (r[k.key] ?? none)));
-  const value = { type: "value", min: 0, ...(share ? { max: 100 } : {}), minInterval: f.measure.unit === "count" && !share ? 1 : 0, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: fmt } };
+  const value = { type: "value", min: 0, ...(share ? { max: 100 } : {}), minInterval: f.measure.unit === "count" && !share ? 1 : 0, splitLine: { lineStyle: { opacity: 0.5 } }, axisTick: { show: false }, axisLabel: { formatter: fmt, hideOverlap: true } };
   const base = (k) => ({ name: k.name, data: data(k), ...(k.color ? { color: t[k.color] } : {}) });
+  // A hidden legend frees the top band it takes; 8 px keeps the top y label inside the box.
+  const top = f.legend === false ? 8 : 28;
   const o = { animation: false, legend: { ...legend, ...(f.legend === false ? { show: false } : {}), selected: Object.fromEntries(hidden.map((n) => [n, false])) }, tooltip: { trigger: "axis", confine: true, valueFormatter: fmt } };
   if (f.over.kind === "time") {
     const bars = form === "columns", points = form === "points", stack = !bars && !points && form !== "lines";
@@ -72,7 +74,7 @@ export function option(f, form, t, hidden = []) {
     return {
       ...o,
       tooltip: { ...o.tooltip, ...(bars ? { axisPointer: { type: "shadow" } } : {}) },
-      grid: { left: 40, right: 16, top: 28, bottom: 20 },
+      grid: { left: 40, right: 16, top, bottom: 20 },
       xAxis: { type: "category", boundaryGap: bars, data: labels, axisTick: { show: false }, axisLabel: { hideOverlap: true, formatter: perDay } },
       yAxis: value,
       series: ks.map((k) => bars
@@ -86,7 +88,7 @@ export function option(f, form, t, hidden = []) {
   return {
     ...o,
     tooltip: { ...o.tooltip, axisPointer: { type: "shadow" } },
-    grid: { left: 64, right: 16, top: 28, bottom: 20 },
+    grid: { left: 64, right: 16, top, bottom: 20 },
     xAxis: { ...value, splitLine: { show: true, lineStyle: { opacity: 0.5 } } },
     // A linked row is named on the axis and is its own link, so every label shows and a click on one is an event.
     yAxis: { type: "category", inverse: true, data: f.rows.map((r) => r.name), axisTick: { show: false }, ...(linked ? { triggerEvent: true, axisLabel: { interval: 0 } } : {}) },
