@@ -25,7 +25,7 @@ const epoch = (t?: string) => Date.parse(t ?? "") || 0;
 
 /** The ledger runs of an item: its own runs, a part's under `on: <repo>-<n>.<k>`. */
 const runsOf = (repo: Repo, item: issues.Issue): Entry[] =>
-  allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === issues.idOf(item)).sort((a, b) => epoch(a.run.started) - epoch(b.run.started));
+  allRuns().filter((e) => e.run.repo === repo.key && onOf(e.run) === issues.idOf(item));
 
 /** Whether a page exists for the item: under its ref, or for a part, under the old `<repo>-<parent> ` name. */
 function written(repo: Repo, item: issues.Issue, pages: string[]): boolean {

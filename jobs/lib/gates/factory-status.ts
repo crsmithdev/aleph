@@ -445,13 +445,16 @@ function busyWait(repo: Repo, item: issues.Issue, jobs: Job[], now = Date.now())
   return file ?? (usesGptOss(item) ? openWait(repo, jobs, (theirs) => usesGptOss(theirs) ? { file: "gpt-oss", what: "both use the gpt-oss server" } : undefined) : null);
 }
 
+/** Orders entries by run ID, the order of `allRunRecords`: a clock step back leaves `started` out of order. */
+export const byId = (a: Entry, b: Entry): number => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
 /**
  * The run an issue would start next: its newest build run, whose model says which backend the issue runs on. Null when the
  * issue has no run yet, so a gate that asks the run to start reads nothing.
  */
 export function nextRun(repoKey: string, name: string, jobs: Job[]): Run | null {
   return jobs.flat().filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind))
-    .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started)).at(-1)?.run ?? null;
+    .sort(byId).at(-1)?.run ?? null;
 }
 
 /** The facts of an issue that the jobs and the factory's marks give; `issueDecision` takes them with the caller's own. */
@@ -484,7 +487,7 @@ const streakMark = (name: string): number | null => {
 function noCommitStreak(repoKey: string, name: string, all: Entry[]): number {
   const mark = streakMark(name) ?? -Infinity;
   const runs = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.condition !== "running" && Date.parse(e.run.started) > mark)
-    .sort((a, b) => Date.parse(a.run.started) - Date.parse(b.run.started));
+    .sort(byId);
   let n = 0;
   for (const e of runs.reverse()) { if (causeOf(e.run) !== "no-commit") break; n++; }
   return n;
@@ -507,7 +510,7 @@ const capMarked = (name: string): boolean =>
 /** How long ago the issue's newest build run that ended with the API credit error ended, or null when it has none. */
 function creditWait(repoKey: string, name: string, all: Entry[], now: number): number | null {
   const last = all.filter((e) => e.run.repo === repoKey && e.run.name === name && isBuild(e.run.kind) && e.run.ended && causeOf(e.run) === "credit")
-    .sort((a, b) => Date.parse(a.run.ended!) - Date.parse(b.run.ended!)).at(-1);
+    .sort(byId).at(-1);
   return last ? now - Date.parse(last.run.ended!) : null;
 }
 

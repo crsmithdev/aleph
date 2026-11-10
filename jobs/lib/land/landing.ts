@@ -62,7 +62,7 @@ export function waitingToLand(jobs = allJobs()): string[] {
   return jobs.filter((j) => {
     const last = record.counting(j);
     return isOpen(j) && isAgentRun(last.run.kind) && !isLive(last.folder) && record.stepOf(j).step === "land";
-  }).sort((a, b) => Date.parse(a[0].run.started) - Date.parse(b[0].run.started)).map((j) => j.at(-1)!.run.name);
+  }).sort((a, b) => (a[0].id < b[0].id ? -1 : 1)).map((j) => j.at(-1)!.run.name);
 }
 
 /**

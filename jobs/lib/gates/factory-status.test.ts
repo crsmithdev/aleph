@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readList } from "../../../issues/lib/store.ts";
 import { setup, teardown, mk, newIssue } from "../transitions/factory.helpers.ts";
-import { firefighterLines, issueFacts, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
+import { firefighterLines, issueFacts, nextRun, backendHold, gates, heldGoal, holdBackend, probeHold, recordHold } from "./factory-status.ts";
 import { allJobs, loadRegistry } from "../records/ledger.ts";
 import { logEvent, readEvents } from "../infra/layout.ts";
 
@@ -97,4 +97,13 @@ test("recordHold logs its hold event once, and not again for the same kind and t
 test("firefighterLines returns the line of a firefighter event", () => {
   logEvent({ by: "firefighter", subject: "fac", action: "filed", note: "from the event log" });
   expect(firefighterLines().map((l) => l.line)).toEqual(["firefighter: from the event log"]);
+});
+
+test("after a clock step back, nextRun returns the build run with the higher ID though it started earlier", () => {
+  const id = newIssue();
+  mk(`fac-${id}`, "build", "failed", { started: ago(10 * MIN) });
+  mk(`fac-${id}`, "build", "passed", { started: ago(50 * MIN) });
+  const run = nextRun("fac", `fac-${id}`, allJobs());
+  expect(run?.condition).toBe("passed");
+  expect(run?.started).toBe(ago(50 * MIN));
 });

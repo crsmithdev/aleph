@@ -53,6 +53,18 @@ test("after a land that failed 'job lock busy' the passed agent run is waiting t
   expect(waitingToLand([[agent, entry("land", "failed", "not landed")]])).toEqual([]);
 });
 
+test("waitingToLand lists the job whose first run has the lower ID first, though it started later", () => {
+  const job = (id: string, name: string, started: string): any => {
+    const e = entry("build", "passed");
+    Object.assign(e, { id });
+    Object.assign(e.run, { name, started, land: true, next: "land" });
+    return [e];
+  };
+  const low = job("20261028-000001-fac-a", "a", "2026-10-28T02:00:00Z");
+  const high = job("20261028-000002-fac-b", "b", "2026-10-28T01:00:00Z");
+  expect(waitingToLand([high, low])).toEqual(["a", "b"]);
+});
+
 test("the first dispatch after the resume starts a next step the pause kept, once", async () => {
   const kept = mk("kept-1", "build", "failed", { failed: "test", next: "worker" }, { "paused-next": "worker\n" });
   mk("history-2", "build", "failed", { failed: "test", next: "worker" });
